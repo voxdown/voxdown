@@ -43,19 +43,24 @@ export const scriptTheme = EditorView.theme({
     fontFamily: "var(--am-mono, ui-monospace, Menlo, monospace)",
     fontSize: "0.82em",
   },
+  // A speaker's words and a direction's words each get their own lane under the text, so when
+  // both apply the solid line sits just under the words and the dashes just under that. Each
+  // lane is set by the span's own bottom padding, so it holds whichever span CodeMirror nests.
   ".am-speech": {
-    textDecoration: "underline",
-    textDecorationColor: "color-mix(in srgb, var(--am-speaker, #b45309) 55%, transparent)",
-    textDecorationThickness: "2px",
-    textUnderlineOffset: "4px",
-  },
-  ".am-directed": {
     backgroundImage:
-      "linear-gradient(to right, color-mix(in srgb, var(--am-direction, #7c3aed) 55%, transparent) 50%, transparent 50%)",
-    backgroundSize: "6px 1.5px",
+      "linear-gradient(color-mix(in srgb, var(--am-speaker, #b45309) 60%, transparent), color-mix(in srgb, var(--am-speaker, #b45309) 60%, transparent))",
+    backgroundSize: "100% 2px",
     backgroundRepeat: "repeat-x",
     backgroundPosition: "0 100%",
     paddingBottom: "1px",
+  },
+  ".am-directed": {
+    backgroundImage:
+      "linear-gradient(to right, color-mix(in srgb, var(--am-direction, #7c3aed) 60%, transparent) 50%, transparent 50%)",
+    backgroundSize: "6px 1.5px",
+    backgroundRepeat: "repeat-x",
+    backgroundPosition: "0 100%",
+    paddingBottom: "5px",
   },
   ".cm-line.am-blank": { lineHeight: "0.75" },
   ".am-warning": {

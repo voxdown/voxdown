@@ -35,8 +35,8 @@ export type EditorMark =
       message: string;
       /** The parser's warning code, or `open-bracket` for a sound or instruction left open. */
       code: string;
-      /** What "Did you mean …?" means, as an edit one click can make. */
-      fix?: { from: number; to: number; insert: string };
+      /** What "Did you mean …?" means, as an edit one click can make, and what to call it. */
+      fix?: { from: number; to: number; insert: string; label?: string };
     };
 
 /** Warnings worth an underline while typing (the rest are for whole-file checks). */
@@ -121,6 +121,11 @@ function unclosedBrackets(story: Story): EditorMark[] {
           l.items.some((i) => i.kind === "note" && i.range.from <= at && at < i.range.to),
         ),
     );
+  // Names the story knows: its cast, and every name it writes with @ (Studio's text has no cast
+  // list, but every character speaks with their @ somewhere).
+  const handles = new Set(story.cast.map((c) => c.handle.toLowerCase()));
+  for (const m of story.source.matchAll(/(?:^|[^\p{L}\p{N}\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)/gu))
+    handles.add((m[1] ?? "").toLowerCase());
   let offset = body;
   for (const line of story.source.slice(body).split("\n")) {
     for (const [open, close, what] of [
@@ -165,7 +170,6 @@ function unclosedBrackets(story: Story): EditorMark[] {
           insert: "@",
         },
       });
-    const handles = new Set(story.cast.map((c) => c.handle.toLowerCase()));
     const named =
       /(^|[\s“"])(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]+\(([^()\n]{1,60})\)[ \t]*[“"]/u.exec(line);
     if (
@@ -182,6 +186,51 @@ function unclosedBrackets(story: Story): EditorMark[] {
         message: `Did you mean @${named[2]} (${named[3]})? Without @ the name and direction are read aloud.`,
         code: "bare-direction",
         fix: { from: at(from), to: at(from), insert: "@" },
+      });
+    }
+    // A `:::` line holds the group's direction and nothing else: speech on it is lost.
+    const groupHead = /^[ \t]*:::[ \t]*(?:@\p{L}[\p{L}\p{M}\p{N}_'’-]*)?/u.exec(line);
+    if (groupHead) {
+      const head = groupHead[0].length;
+      const k = line.slice(head).search(/[@“"]/u);
+      if (k >= 0) {
+        let cut = head + k;
+        while (cut > head && /[ \t]/u.test(line[cut - 1] ?? "")) cut--;
+        out.push({
+          kind: "warning",
+          from: at(head + k),
+          to: at(line.length),
+          message: "A ::: line holds only the group's direction. Put the words on the next line.",
+          code: "group-words",
+          fix: {
+            from: at(cut),
+            to: at(head + k),
+            insert: "\n",
+            label: "Move the words to the next line",
+          },
+        });
+      }
+    }
+    // A direction without its brackets is read aloud: `@Rupert softly “…”`.
+    const unbracketed =
+      /(^|[^\p{L}\p{N}\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]+(\p{L}[\p{L}’'-]*(?:,?[ \t]+\p{L}[\p{L}’'-]*){0,3})[ \t]*[“"]/u.exec(
+        line,
+      );
+    if (unbracketed && !inNote(at(unbracketed.index))) {
+      const words = unbracketed[3] ?? "";
+      const from =
+        unbracketed.index +
+        unbracketed[0].indexOf(
+          words,
+          (unbracketed[1] ?? "").length + 1 + (unbracketed[2] ?? "").length,
+        );
+      out.push({
+        kind: "warning",
+        from: at(from),
+        to: at(from + words.length),
+        message: `Did you mean @${unbracketed[2]} (${words})? Without brackets the narrator reads “${words}”.`,
+        code: "bare-direction",
+        fix: { from: at(from), to: at(from + words.length), insert: `(${words})` },
       });
     }
     const loose = /(^|[^\p{L}\p{N}\\])@\s+\p{L}/u.exec(line);

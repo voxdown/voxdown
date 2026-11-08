@@ -12,6 +12,8 @@ export function smartQuotes(): Extension {
   return EditorView.inputHandler.of((view, from, to, text) => {
     if (view.state.readOnly) return false;
     if (text === "%") return closeNote(view, from, to);
+    if (/^\d$/u.test(text) && pauseLength(view, from, to, text)) return true;
+    if (text === " " && leavePause(view, from, to)) return true;
     if (text === " ") return noteSpace(view, from, to);
     if (text !== '"' && text !== "'") return false;
     const before = view.state.sliceDoc(Math.max(0, from - 1), from);
@@ -34,6 +36,39 @@ export function smartQuotes(): Extension {
     });
     return true;
   });
+}
+
+/**
+ * A length typed straight after a finished `{pause}` is its length: `{pause} 1` becomes
+ * `{pause 1}`, the cursor inside, so `{pau` ⏎ `1s` gives `{pause 1s}`.
+ */
+function pauseLength(view: EditorView, from: number, to: number, digit: string): boolean {
+  if (from !== to) return false;
+  const before = view.state.sliceDoc(Math.max(0, from - 9), from);
+  const m = /\{pause\}( ?)$/iu.exec(before);
+  if (!m) return false;
+  const close = from - 1 - (m[1] ?? "").length;
+  view.dispatch({
+    changes: { from: close, to: from, insert: ` ${digit}}` },
+    selection: { anchor: close + 1 + digit.length },
+    userEvent: "input.type",
+  });
+  return true;
+}
+
+/** A space after a pause's length leaves the pause: `{pause 1s|}` ␣ gives `{pause 1s} |`. */
+function leavePause(view: EditorView, from: number, to: number): boolean {
+  if (from !== to || view.state.sliceDoc(from, from + 1) !== "}") return false;
+  const line = view.state.doc.lineAt(from);
+  const before = line.text.slice(0, from - line.from);
+  if (!/\{pause \d+(?:\.\d*)?\s*(?:ms|s)?$/iu.test(before)) return false;
+  const spaced = view.state.sliceDoc(from + 1, from + 2) === " ";
+  view.dispatch({
+    ...(spaced ? {} : { changes: { from: from + 1, insert: " " } }),
+    selection: { anchor: from + 2 },
+    userEvent: "input.type",
+  });
+  return true;
 }
 
 /** The second `%` of a note's opening `%%` closes the note too: `%% | %%`, cursor inside. */
@@ -70,20 +105,18 @@ function closeNote(view: EditorView, from: number, to: number): boolean {
   return true;
 }
 
-/** Inside a note that closed itself: a space before the closing ` %%` steps over it. */
+/**
+ * Inside a note that closed itself: right after the opening `%% ` the space is there already, so
+ * a space typed there isn't doubled. Anywhere else a space is a space between the note's words
+ * (`%`, or Enter at the end, leaves the note).
+ */
 function noteSpace(view: EditorView, from: number, to: number): boolean {
   if (from !== to) return false;
   const line = view.state.doc.lineAt(from);
   const before = line.text.slice(0, from - line.from);
   const after = line.text.slice(from - line.from);
   if (!/^ %%/u.test(after) || (before.match(/%%/gu) ?? []).length % 2 !== 1) return false;
-  // Right after the opening `%% ` the space is there already; after the words it leads to the
-  // closing marks, so the cursor steps over it.
-  view.dispatch({
-    selection: { anchor: /%% $/u.test(before) ? from : from + 1 },
-    userEvent: "input.type",
-  });
-  return true;
+  return /%% $/u.test(before);
 }
 
 /**

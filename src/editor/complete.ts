@@ -98,6 +98,28 @@ function spaced(handle: string) {
   };
 }
 
+/** A group's direction ends its `:::` line: words already after it go to the next line. */
+function groupDirection(label: string) {
+  return (view: EditorView, _completion: Completion, from: number, to: number) => {
+    const line = view.state.doc.lineAt(to);
+    const rest = view.state.sliceDoc(to, line.to);
+    if (!rest.trim()) {
+      view.dispatch({
+        changes: { from, to, insert: label },
+        selection: { anchor: from + label.length },
+        userEvent: "input.complete",
+      });
+      return;
+    }
+    const lead = rest.length - rest.trimStart().length;
+    view.dispatch({
+      changes: { from, to: to + lead, insert: `${label}\n` },
+      selection: { anchor: from + label.length + 1 },
+      userEvent: "input.complete",
+    });
+  };
+}
+
 export function completions(characters: () => readonly Character[]): Extension {
   const source = (context: CompletionContext): CompletionResult | null => {
     const before = context.state.sliceDoc(Math.max(0, context.pos - 200), context.pos);
@@ -177,7 +199,7 @@ export function completions(characters: () => readonly Character[]): Extension {
       return {
         from: context.pos - typed.length,
         filter: false,
-        options: fits.map((label) => ({ label, type: "text", apply: label })),
+        options: fits.map((label) => ({ label, type: "text", apply: groupDirection(label) })),
       };
     }
 

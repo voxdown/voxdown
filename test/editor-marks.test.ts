@@ -99,10 +99,35 @@ describe("runs of one direction", () => {
   it("draws lines that each carry the same direction like a group, the direction once", () => {
     const source = "@(whispering) One.\n@(whispering) Two.\n\n@(whispering) Three.\nLoud.";
     const marks = editorMarks(source);
-    expect(marks.filter((m) => m.kind === "in-group")).toHaveLength(3);
+    // Three lines, and the blank line between Two and Three so the bar doesn't break.
+    expect(
+      marks
+        .filter((m) => m.kind === "in-group")
+        .map((m) => m.from)
+        .sort((a, b) => a - b),
+    ).toEqual([0, 19, 38, 39]);
     expect(marks.filter((m) => m.kind === "run-repeat")).toHaveLength(2);
     expect(marks.filter((m) => m.kind === "direction")).toHaveLength(1);
     expect(marks.some((m) => m.kind === "directed")).toBe(false);
+  });
+
+  it("carries the bar through blank lines within a run or group, never between two", () => {
+    const bars = (source: string) =>
+      editorMarks(source)
+        .filter((m) => m.kind === "in-group")
+        .sort((a, b) => a.from - b.from)
+        .map((m) => source.slice(m.from, source.indexOf("\n", m.from) + 1 || undefined));
+    expect(bars("::: whispering\nOne.\n\n\nTwo.\n:::")).toEqual(["One.\n", "\n", "\n", "Two.\n"]);
+    expect(
+      bars("@(whispering) One.\n\n@(whispering) Two.\n\n@(loudly) Three.\n\n@(loudly) Four."),
+    ).toEqual([
+      "@(whispering) One.\n",
+      "\n",
+      "@(whispering) Two.\n",
+      "@(loudly) Three.\n",
+      "\n",
+      "@(loudly) Four.",
+    ]);
   });
 
   it("leaves a single directed line, and lines with different directions, as they are", () => {

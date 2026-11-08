@@ -208,12 +208,28 @@ function lineIsOnly(story: Story, line: Line, item: Item) {
 }
 
 /**
+ * The bar runs unbroken through the blank lines between two lines of one group, so a group set
+ * one line to a paragraph reads as one stretch. Only gaps that hold nothing but blank lines.
+ */
+function bridge(out: EditorMark[], source: string, a: number, b: number) {
+  const end = source.indexOf("\n", a);
+  if (end < 0 || end >= b) return;
+  const gap = source.slice(end + 1, b);
+  if (gap.trim()) return;
+  for (let at = end + 1; at < b; at = source.indexOf("\n", at) + 1) {
+    out.push({ kind: "in-group", from: at, to: at });
+    if (source.indexOf("\n", at) < 0) break;
+  }
+}
+
+/**
  * Two or more lines in a row that each carry the same direction of their own read as a group
  * (§7.1), so they are drawn as one: the bar beside them, the direction once at the top, and no
  * dashes under each line. The text stays as written; the line being edited shows its own mark.
  */
 function drawRuns(
   out: EditorMark[],
+  source: string,
   rows: ReadonlyArray<{
     from: number;
     start: number;
@@ -256,6 +272,8 @@ function drawRuns(
   for (const lines of runs) {
     lines.forEach((row, i) => {
       out.push({ kind: "in-group", from: row.from, to: row.from });
+      const next = lines[i + 1];
+      if (next) bridge(out, source, row.from, next.from);
       for (let k = row.start; k < row.end; k++) {
         const mark = out[k] as EditorMark;
         if (mark.kind === "directed") drop.add(k);
@@ -373,6 +391,8 @@ export function marksOf(story: Story): EditorMark[] {
   // Lines in order, for runs of lines that each carry the same direction of their own.
   type Row = { from: number; start: number; end: number; carries: string | null; speaks: boolean };
   const rows: Array<Row | null> = [];
+  // The last line drawn inside a group, so blank lines between two of its lines carry the bar.
+  let grouped: { inner: unknown; from: number } | null = null;
   for (const block of story.blocks) {
     if (block.kind !== "paragraph" || block.groups.length) rows.push(null);
     if (block.kind === "break") out.push({ kind: "break", ...block.range });
@@ -391,8 +411,13 @@ export function marksOf(story: Story): EditorMark[] {
       });
     } else {
       for (const line of block.lines) {
-        if (block.groups.length)
+        if (block.groups.length) {
           out.push({ kind: "in-group", from: line.range.from, to: line.range.from });
+          const inner = block.groups[block.groups.length - 1];
+          if (grouped && grouped.inner === inner)
+            bridge(out, story.source, grouped.from, line.range.from);
+          grouped = { inner, from: line.range.from };
+        }
         const start = out.length;
         visit(line);
         if (block.groups.length) continue;
@@ -411,7 +436,7 @@ export function marksOf(story: Story): EditorMark[] {
       }
     }
   }
-  drawRuns(out, rows);
+  drawRuns(out, story.source, rows);
 
   const unclosed = new Set(
     story.warnings.filter((w) => w.code === "unclosed-quote").map((w) => w.range.from),

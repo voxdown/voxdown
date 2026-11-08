@@ -2,7 +2,7 @@ import { type Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { completions } from "./complete";
 import { type PreviewOptions, livePreview, setShowMarks, showMarksField } from "./decorations";
-import { noteEnter, smartQuotes } from "./quotes";
+import { noteEnter, quoteEnter, smartQuotes } from "./quotes";
 import { scriptTheme } from "./theme";
 
 /**
@@ -18,7 +18,9 @@ export function scriptEditor(options: ScriptEditorOptions): Extension {
     EditorView.lineWrapping,
     livePreview(options),
     completions(options.characters),
-    ...(options.smartQuotes === false ? [] : [smartQuotes(), Prec.high(noteEnter)]),
+    ...(options.smartQuotes === false
+      ? []
+      : [smartQuotes(), Prec.high(noteEnter), Prec.high(quoteEnter)]),
     Prec.low(
       keymap.of([
         {

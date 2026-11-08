@@ -42,6 +42,11 @@ function closeNote(view: EditorView, from: number, to: number): boolean {
   const line = view.state.doc.lineAt(from);
   const before = line.text.slice(0, from - line.from);
   const after = line.text.slice(from - line.from);
+  // `%` typed just before a note's own ` %%`: it closes the note, keeping the space.
+  if (after.startsWith(" %%") && (before.match(/%%/gu) ?? []).length % 2 === 1) {
+    view.dispatch({ selection: { anchor: from + 2 }, userEvent: "input.type" });
+    return true;
+  }
   // Typing the closing marks of a note that closed itself steps over them.
   if (
     after.startsWith("%") &&
@@ -98,6 +103,52 @@ export const noteEnter = keymap.of([
       view.dispatch({
         changes: { from: line.to, insert: "\n" },
         selection: { anchor: line.to + 1 },
+        userEvent: "input",
+      });
+      return true;
+    },
+  },
+]);
+
+/**
+ * Enter inside a quote splits it: the quote closes, and the next line opens it again for the same
+ * speaker and direction (`@Rupert “No toast.” ⏎ @Rupert “No bread either.”`). What a mark does
+ * ends with its line, so a quote never runs on into the next one.
+ */
+export const quoteEnter = keymap.of([
+  {
+    key: "Enter",
+    run: (view) => {
+      const { from, to } = view.state.selection.main;
+      if (from !== to || view.state.readOnly) return false;
+      const line = view.state.doc.lineAt(from);
+      const head = line.text.slice(0, from - line.from);
+      const tail = line.text.slice(from - line.from);
+      const open = head.lastIndexOf("“");
+      if (open < 0 || head.indexOf("”", open) >= 0 || head[open - 1] === "\\") return false;
+      if (!/[\p{L}\p{N}]/u.test(head.slice(open + 1))) return false;
+      const marks = [
+        ...head
+          .slice(0, open)
+          .matchAll(/(?:^|[^\p{L}\p{N}\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]*(\([^()]*\))?/gu),
+      ];
+      const mark = marks[marks.length - 1];
+      if (!mark) return false;
+      const rest = tail.replace(/^[ \t]+/u, "");
+      // Right before the line's closing mark the quote is finished: the new line goes after it.
+      if (/^”\s*$/u.test(rest)) {
+        view.dispatch({
+          changes: { from: line.to, insert: "\n" },
+          selection: { anchor: line.to + 1 },
+          userEvent: "input",
+        });
+        return true;
+      }
+      if (rest.startsWith("”")) return false;
+      const insert = `”\n@${mark[1]} ${mark[2] ? `${mark[2]} ` : ""}“`;
+      view.dispatch({
+        changes: { from, to: from + (tail.length - rest.length), insert },
+        selection: { anchor: from + insert.length },
         userEvent: "input",
       });
       return true;

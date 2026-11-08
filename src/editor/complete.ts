@@ -74,6 +74,16 @@ function matching(typed: string, labels: readonly string[]): string[] {
   });
 }
 
+/**
+ * What was typed, offered first whenever it isn't a label already, so Enter finishes the mark as
+ * typed and a longer existing label is a deliberate pick (↓, then Enter).
+ */
+function asTyped(typed: string, labels: readonly string[], closer: string): Completion[] {
+  const t = typed.trim();
+  if (!t || labels.some((l) => l.toLowerCase() === t.toLowerCase())) return [];
+  return [{ label: t, detail: "as typed", type: "text", apply: closing(t, closer), boost: 99 }];
+}
+
 /** A name picked from the list is followed by a space, ready for `(how)` or the quote. */
 function spaced(handle: string) {
   return (view: EditorView, _completion: Completion, from: number, to: number) => {
@@ -128,17 +138,20 @@ export function completions(characters: () => readonly Character[]): Extension {
       return {
         from: context.pos - typed.length,
         filter: false,
-        options: [...used.entries()]
-          .filter(([label]) => fits.has(label))
-          .sort((a, b) => b[1] - a[1])
-          .map(
-            ([label, n]): Completion => ({
-              label,
-              ...(n > 1 ? { detail: `used ${n}×` } : {}),
-              type: "text",
-              apply: closing(label, ")"),
-            }),
-          ),
+        options: [
+          ...asTyped(typed, [...fits], ")"),
+          ...[...used.entries()]
+            .filter(([label]) => fits.has(label))
+            .sort((a, b) => b[1] - a[1])
+            .map(
+              ([label, n]): Completion => ({
+                label,
+                ...(n > 1 ? { detail: `used ${n}×` } : {}),
+                type: "text",
+                apply: closing(label, ")"),
+              }),
+            ),
+        ],
       };
     }
 
@@ -183,11 +196,14 @@ export function completions(characters: () => readonly Character[]): Extension {
       if (!fits.length) return null;
       return {
         from: context.pos - typed.length,
-        options: fits.map((label) => ({
-          label,
-          type: "constant",
-          apply: closing(label, "]"),
-        })),
+        options: [
+          ...asTyped(typed, fits, "]"),
+          ...fits.map((label) => ({
+            label,
+            type: "constant",
+            apply: closing(label, "]"),
+          })),
+        ],
         filter: false,
       };
     }

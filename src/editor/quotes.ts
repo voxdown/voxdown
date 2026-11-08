@@ -124,6 +124,16 @@ export const quoteEnter = keymap.of([
       const line = view.state.doc.lineAt(from);
       const head = line.text.slice(0, from - line.from);
       const tail = line.text.slice(from - line.from);
+      // Enter on a split's empty new line (`@Rupert “` and nothing yet) ends the speech there,
+      // as Enter on an empty list item ends a list.
+      if (!tail.trim() && /^@\p{L}[\p{L}\p{M}\p{N}_'’-]*[ \t]*(\([^()]*\))?[ \t]*“$/u.test(head)) {
+        view.dispatch({
+          changes: { from: line.from, to: line.to, insert: "" },
+          selection: { anchor: line.from },
+          userEvent: "delete",
+        });
+        return true;
+      }
       const open = head.lastIndexOf("“");
       if (open < 0 || head.indexOf("”", open) >= 0 || head[open - 1] === "\\") return false;
       if (!/[\p{L}\p{N}]/u.test(head.slice(open + 1))) return false;

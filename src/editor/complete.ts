@@ -6,6 +6,7 @@ import {
   closeBrackets,
 } from "@codemirror/autocomplete";
 import { EditorState, type Extension } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import type { Character } from "./decorations";
 import { marksField } from "./decorations";
 
@@ -29,6 +30,33 @@ const INSTRUCTIONS: Array<{ label: string; detail: string }> = [
   { label: "audio only", detail: "read aloud, not printed" },
   { label: "hidden", detail: "a label for tools" },
 ];
+
+/**
+ * Picking a direction, sound or instruction finishes the mark: its closing bracket (unless one
+ * is there already, as `( [ {` close themselves before a space) and a space before the words that
+ * follow, so `{book only}` typed in front of a line reads `{book only} Bread was fine.`
+ */
+function closing(label: string, closer: string) {
+  return (view: EditorView, _completion: Completion, from: number, to: number) => {
+    const next = view.state.sliceDoc(to, to + 1);
+    const closed = next === closer;
+    const after = view.state.sliceDoc(to + (closed ? 1 : 0), to + (closed ? 2 : 1));
+    const space = after === "" || /\s/u.test(after) ? "" : " ";
+    const insert = closed ? label : `${label}${closer}${space}`;
+    const changes =
+      closed && space
+        ? [
+            { from, to, insert },
+            { from: to + 1, insert: space },
+          ]
+        : [{ from, to, insert }];
+    view.dispatch({
+      changes,
+      selection: { anchor: from + label.length + 1 + space.length },
+      userEvent: "input.complete",
+    });
+  };
+}
 
 export function completions(characters: () => readonly Character[]): Extension {
   const source = (context: CompletionContext): CompletionResult | null => {
@@ -69,7 +97,7 @@ export function completions(characters: () => readonly Character[]): Extension {
               label,
               ...(n > 1 ? { detail: `used ${n}×` } : {}),
               type: "text",
-              apply: label,
+              apply: closing(label, ")"),
             }),
           ),
         validFor: /^[^()]*$/u,
@@ -85,7 +113,11 @@ export function completions(characters: () => readonly Character[]): Extension {
       if (!used.size || (!typed && !context.explicit)) return null;
       return {
         from: context.pos - typed.length,
-        options: [...used].map((label) => ({ label, type: "constant", apply: label })),
+        options: [...used].map((label) => ({
+          label,
+          type: "constant",
+          apply: closing(label, "]"),
+        })),
         validFor: /^[^\]]*$/u,
       };
     }
@@ -99,7 +131,7 @@ export function completions(characters: () => readonly Character[]): Extension {
           label: i.label,
           detail: i.detail,
           type: "keyword",
-          apply: i.label,
+          apply: closing(i.label, "}"),
         })),
         validFor: /^[^}]*$/u,
       };

@@ -67,4 +67,14 @@ describe("editor warnings", () => {
     expect(messages).toContain("A sound needs its closing ]");
     expect(warnings).toHaveLength(2);
   });
+
+  it("underlines marks that would read as words", () => {
+    const codes = (source: string) =>
+      editorMarks(source).flatMap((m) => (m.kind === "warning" ? [m.code] : []));
+    expect(codes("@ Rupert “Hello.”")).toContain("loose-at");
+    expect(codes("@Rupert (sleepily “I am tired.”")).toContain("open-direction");
+    expect(codes("@Rupert (sleepily “I am tired.”)")).toContain("direction-quote");
+    expect(codes("@Rupert (sleepily) “I am tired.”")).toEqual([]);
+    expect(codes("Mail me at me@ example.")).toEqual([]);
+  });
 });

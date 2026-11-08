@@ -130,6 +130,12 @@ export const scriptTheme = EditorView.theme({
     borderRadius: "6px",
     margin: "0 0.2em",
   },
+  ".am-chip-warning": {
+    color: "var(--am-warning, #dc2626)",
+    border: "1px dashed var(--am-warning, #dc2626)",
+    borderRadius: "6px",
+    margin: "0 0.2em",
+  },
   ".am-chip-cleared": {
     color: "var(--am-muted, #6b7280)",
     border: "1px solid var(--am-line, #d0d4da)",

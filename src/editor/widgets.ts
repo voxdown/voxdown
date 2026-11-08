@@ -14,7 +14,8 @@ export type ChipKind =
   | "pause"
   | "page"
   | "note"
-  | "instruction";
+  | "instruction"
+  | "warning";
 
 export class ChipWidget extends WidgetType {
   constructor(

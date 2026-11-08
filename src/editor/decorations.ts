@@ -280,7 +280,11 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             }),
           );
         break;
-      case "instruction":
+      case "instruction": {
+        // A mistyped instruction looks like one: drawn as a warning, not a quiet chip.
+        const wrong = marks.find(
+          (m) => m.kind === "warning" && m.from < mark.to && mark.from < m.to,
+        );
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-note am-raw" }));
         else
           add(
@@ -288,16 +292,17 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             mark.to,
             Decoration.replace({
               widget: new ChipWidget(
-                "instruction",
+                wrong ? "warning" : "instruction",
                 mark.text,
                 undefined,
-                mark.raw,
+                wrong && wrong.kind === "warning" ? wrong.message : mark.raw,
                 undefined,
                 mark.from,
               ),
             }),
           );
         break;
+      }
       case "note":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-note" }));
         else

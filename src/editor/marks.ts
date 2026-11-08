@@ -131,6 +131,38 @@ function unclosedBrackets(story: Story): EditorMark[] {
           code: "open-bracket",
         });
     }
+    // Marks that read as words: `@ Rupert`, a direction never closed, one closed after its quote.
+    const at = (i: number) => offset + i;
+    const loose = /(^|[^\p{L}\p{N}\\])@\s+\p{L}/u.exec(line);
+    if (loose && !inNote(at(loose.index)))
+      out.push({
+        kind: "warning",
+        from: at(loose.index + (loose[1] ?? "").length),
+        to: at(loose.index + loose[0].length),
+        message: "@ needs the name straight after it (@Rupert), or the narrator reads it out.",
+        code: "loose-at",
+      });
+    const open = /(^|[^\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\([^)]*$/u.exec(line);
+    if (open && !inNote(at(open.index)))
+      out.push({
+        kind: "warning",
+        from: at(open.index + (open[1] ?? "").length),
+        to: at(line.length),
+        message: "This direction needs its closing ) before the words: @Rupert (sleepily) “…”",
+        code: "open-direction",
+      });
+    const swallowed = /(^|[^\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\([^)]*[“"«„][^)]*\)/u.exec(
+      line,
+    );
+    if (swallowed && !open && !inNote(at(swallowed.index)))
+      out.push({
+        kind: "warning",
+        from: at(swallowed.index + (swallowed[1] ?? "").length),
+        to: at(swallowed.index + swallowed[0].length),
+        message:
+          "The direction runs into the quote: close it with ) before the quote, (sleepily) “…”",
+        code: "direction-quote",
+      });
     offset += line.length + 1;
   }
   return out;

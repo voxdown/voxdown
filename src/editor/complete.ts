@@ -3,8 +3,9 @@ import {
   type CompletionContext,
   type CompletionResult,
   autocompletion,
+  closeBrackets,
 } from "@codemirror/autocomplete";
-import type { Extension } from "@codemirror/state";
+import { EditorState, type Extension } from "@codemirror/state";
 import type { Character } from "./decorations";
 import { marksField } from "./decorations";
 
@@ -44,7 +45,7 @@ export function completions(characters: () => readonly Character[]): Extension {
             label: c.handle,
             ...(c.name !== c.handle ? { detail: c.name } : {}),
             type: "variable",
-            apply: `${c.handle} `,
+            apply: c.handle,
           }),
         ),
         validFor: /^[\p{L}\p{M}\p{N}_'’-]*$/u,
@@ -68,7 +69,7 @@ export function completions(characters: () => readonly Character[]): Extension {
               label,
               ...(n > 1 ? { detail: `used ${n}×` } : {}),
               type: "text",
-              apply: `${label})`,
+              apply: label,
             }),
           ),
         validFor: /^[^()]*$/u,
@@ -84,7 +85,7 @@ export function completions(characters: () => readonly Character[]): Extension {
       if (!used.size || (!typed && !context.explicit)) return null;
       return {
         from: context.pos - typed.length,
-        options: [...used].map((label) => ({ label, type: "constant", apply: `${label}]` })),
+        options: [...used].map((label) => ({ label, type: "constant", apply: label })),
         validFor: /^[^\]]*$/u,
       };
     }
@@ -98,7 +99,7 @@ export function completions(characters: () => readonly Character[]): Extension {
           label: i.label,
           detail: i.detail,
           type: "keyword",
-          apply: `${i.label}}`,
+          apply: i.label,
         })),
         validFor: /^[^}]*$/u,
       };
@@ -106,17 +107,22 @@ export function completions(characters: () => readonly Character[]): Extension {
     return null;
   };
 
-  return autocompletion({
-    override: [source],
-    icons: false,
-    addToOptions: [
-      {
-        render: (completion) => {
-          const person = characters().find((c) => c.handle === completion.label);
-          return person ? dot(person.color) : null;
+  return [
+    // ( [ { close themselves; quotes are left to smart quotes.
+    EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "[", "{"] } }]),
+    closeBrackets(),
+    autocompletion({
+      override: [source],
+      icons: false,
+      addToOptions: [
+        {
+          render: (completion) => {
+            const person = characters().find((c) => c.handle === completion.label);
+            return person ? dot(person.color) : null;
+          },
+          position: 20,
         },
-        position: 20,
-      },
-    ],
-  });
+      ],
+    }),
+  ];
 }

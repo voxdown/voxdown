@@ -13,6 +13,8 @@ export function smartQuotes(): Extension {
     if (text !== '"' && text !== "'") return false;
     if (view.state.readOnly) return false;
     const before = view.state.sliceDoc(Math.max(0, from - 1), from);
+    // 6" and 5' are measurements, not quotes.
+    if (/\d/u.test(before)) return false;
     const opening = from === 0 || before === "" || OPENS_AFTER.test(before);
     const insert = text === '"' ? (opening ? "“" : "”") : opening ? "‘" : "’";
     view.dispatch({

@@ -35,6 +35,8 @@ export type EditorMark =
       message: string;
       /** The parser's warning code, or `open-bracket` for a sound or instruction left open. */
       code: string;
+      /** What "Did you mean …?" means, as an edit one click can make. */
+      fix?: { from: number; to: number; insert: string };
     };
 
 /** Warnings worth an underline while typing (the rest are for whole-file checks). */
@@ -72,7 +74,10 @@ function distance(a: string, b: string): number {
 }
 
 /** Warnings in the words of someone writing a story, with a likely fix where there is one. */
-function plain(warning: Story["warnings"][number], source: string): string {
+function plain(
+  warning: Story["warnings"][number],
+  source: string,
+): { message: string; fix?: { from: number; to: number; insert: string } } {
   if (warning.code === "unknown-instruction") {
     const raw = source.slice(warning.range.from, warning.range.to);
     const name =
@@ -85,11 +90,21 @@ function plain(warning: Story["warnings"][number], source: string): string {
       d: distance(name.toLowerCase(), i.split(" ")[0] ?? i),
     })).sort((x, y) => x.d - y.d);
     const near = scored[0] && scored[0].d <= 2 ? scored[0].i : undefined;
-    return near
-      ? `${raw} isn't an instruction. Did you mean {${near}}?`
-      : `${raw} isn't an instruction this editor knows: it's kept, but does nothing.`;
+    if (!near)
+      return {
+        message: `${raw} isn't an instruction this editor knows: it's kept, but does nothing.`,
+      };
+    // Only the misspelt word changes: `{pasue 2s}` becomes `{pause 2s}`.
+    const head = near.split(" ")[0] ?? near;
+    const insert = name ? raw.replace(name, head) : `{${near}}`;
+    return {
+      message: `${raw} isn't an instruction. Did you mean ${insert === raw ? `{${near}}` : insert}?`,
+      ...(insert !== raw
+        ? { fix: { from: warning.range.from, to: warning.range.to, insert } }
+        : {}),
+    };
   }
-  return warning.message;
+  return { message: warning.message };
 }
 
 export { distance as editDistance };
@@ -144,6 +159,11 @@ function unclosedBrackets(story: Story): EditorMark[] {
         to: at(bare[0].trimEnd().length),
         message: `Did you mean @(${bare[2]})? Without @ it's read aloud.`,
         code: "bare-direction",
+        fix: {
+          from: at((bare[1] ?? "").length),
+          to: at((bare[1] ?? "").length),
+          insert: "@",
+        },
       });
     const handles = new Set(story.cast.map((c) => c.handle.toLowerCase()));
     const named =
@@ -161,6 +181,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
         to: at(named.index + named[0].length - 1),
         message: `Did you mean @${named[2]} (${named[3]})? Without @ the name and direction are read aloud.`,
         code: "bare-direction",
+        fix: { from: at(from), to: at(from), insert: "@" },
       });
     }
     const loose = /(^|[^\p{L}\p{N}\\])@\s+\p{L}/u.exec(line);
@@ -457,7 +478,7 @@ export function marksOf(story: Story): EditorMark[] {
       kind: "warning",
       from: warning.range.from,
       to,
-      message: plain(warning, story.source),
+      ...plain(warning, story.source),
       code: warning.code,
     });
   }

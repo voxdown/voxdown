@@ -92,6 +92,19 @@ describe("editor warnings", () => {
     expect(warnings(`${cast}@Rupert (softly) “Hello.”`)).toEqual([]);
     expect(warnings("He paused (for effect) and went on.")).toEqual([]);
   });
+
+  it("carries the edit each “Did you mean” suggests", () => {
+    const fixed = (source: string) => {
+      const fix = editorMarks(source).find((m) => m.kind === "warning" && m.fix);
+      if (fix?.kind !== "warning" || !fix.fix) return null;
+      return source.slice(0, fix.fix.from) + fix.fix.insert + source.slice(fix.fix.to);
+    };
+    expect(fixed("(whispering) Line one.")).toBe("@(whispering) Line one.");
+    const cast = "---\ncast:\n  Rupert: King Rupert\n---\n";
+    expect(fixed(`${cast}Rupert (softly) “Hello.”`)).toBe(`${cast}@Rupert (softly) “Hello.”`);
+    expect(fixed("A line. {pasue 2s}")).toBe("A line. {pause 2s}");
+    expect(fixed("A line. {zzzzzz}")).toBeNull();
+  });
 });
 
 describe("runs of one direction", () => {

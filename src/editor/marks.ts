@@ -52,6 +52,10 @@ export function marksOf(story: Story): EditorMark[] {
   }
 
   const visit = (line: Line) => {
+    // A character's sound and the mark before it are one chip: "Pickle · peep".
+    const vocalMarks = new Set(
+      line.items.flatMap((i) => (i.kind === "vocal" && i.mark ? [i.mark.range.from] : [])),
+    );
     for (const item of line.items) {
       switch (item.kind) {
         case "speech":
@@ -61,6 +65,11 @@ export function marksOf(story: Story): EditorMark[] {
             out.push({ kind: "directed", ...item.textRange });
           break;
         case "mark":
+          if (vocalMarks.has(item.range.from)) {
+            if (item.directionRange)
+              out.push({ kind: "direction", ...item.directionRange, text: item.direction ?? "" });
+            break;
+          }
           // The chip stands for `@Name`, the at sign included.
           out.push({
             kind: "name",
@@ -76,7 +85,20 @@ export function marksOf(story: Story): EditorMark[] {
           else out.push({ kind: "cleared", ...item.range });
           break;
         case "vocal":
-          out.push({ kind: "vocal", ...item.range, speaker: item.speaker, text: item.description });
+          out.push({
+            kind: "vocal",
+            from: item.mark && !item.mark.directionRange ? item.mark.range.from : item.range.from,
+            to: item.range.to,
+            speaker: item.speaker,
+            text: item.description,
+          });
+          if (item.mark?.directionRange)
+            out.push({
+              kind: "name",
+              from: item.mark.range.from,
+              to: item.mark.nameRange.to,
+              speaker: item.speaker,
+            });
           break;
         case "sound":
           out.push({ kind: "sound", ...item.range, text: item.description });

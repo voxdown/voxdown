@@ -57,6 +57,7 @@ export const scriptTheme = EditorView.theme({
     backgroundPosition: "0 100%",
     paddingBottom: "1px",
   },
+  ".cm-line.am-blank": { lineHeight: "0.75" },
   ".am-in-group": {
     boxShadow: "inset 3px 0 0 color-mix(in srgb, var(--am-direction, #7c3aed) 45%, transparent)",
   },

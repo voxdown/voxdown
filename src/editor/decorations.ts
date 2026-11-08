@@ -81,6 +81,20 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
       color ? { class: cls, attributes: { style: `--am-speaker: ${color}` } } : { class: cls },
     );
 
+  // A blank line between paragraphs reads as a paragraph's gap, not a whole empty line.
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to; ) {
+      const line = state.doc.lineAt(pos);
+      if (
+        !line.text.trim() &&
+        !active.has(line.number) &&
+        !touchesSelection(state, line.from, line.to)
+      )
+        add(line.from, line.from, Decoration.line({ class: "am-blank" }));
+      pos = line.to + 1;
+    }
+  }
+
   for (const mark of marks) {
     const lineNo = state.doc.lineAt(mark.from).number;
     const showRaw =

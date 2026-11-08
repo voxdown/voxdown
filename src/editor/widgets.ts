@@ -42,7 +42,8 @@ export class ChipWidget extends WidgetType {
   toDOM(view: EditorView) {
     const el = document.createElement("span");
     el.className = `am-chip am-chip-${this.kind}`;
-    el.textContent = this.text;
+    if (this.kind === "sound" || this.kind === "vocal") el.append(soundIcon());
+    el.append(document.createTextNode(this.text));
     el.title = this.title;
     el.dataset.amChip = this.kind;
     if (this.color) el.style.setProperty("--am-speaker", this.color);
@@ -88,4 +89,23 @@ export class LineWidget extends WidgetType {
   override ignoreEvent() {
     return false;
   }
+}
+
+/** A waveform, as Voice Lab's icon draws it: a sound chip starts with it. */
+const WAVEFORM = "M2 10v3 M6 6v11 M10 3v18 M14 8v7 M18 5v13 M22 10v3";
+
+function soundIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  svg.classList.add("am-chip-icon");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", WAVEFORM);
+  svg.append(path);
+  return svg;
 }

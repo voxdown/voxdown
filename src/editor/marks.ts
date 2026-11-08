@@ -25,6 +25,8 @@ export type EditorMark =
   | { kind: "escape"; from: number; to: number }
   | { kind: "frontmatter"; from: number; to: number }
   | { kind: "in-group"; from: number; to: number }
+  /** A direction repeated on the next lines of a run (§7.1 by hand): drawn once, like a group's. */
+  | { kind: "run-repeat"; from: number; to: number; text: string }
   /** Something that probably isn't what was meant: an unclosed quote, a bracket left open. */
   | {
       kind: "warning";
@@ -133,6 +135,34 @@ function unclosedBrackets(story: Story): EditorMark[] {
     }
     // Marks that read as words: `@ Rupert`, a direction never closed, one closed after its quote.
     const at = (i: number) => offset + i;
+    // A direction without its `@` is read aloud: `(whispering) line`, `Rupert (softly) “…”`.
+    const bare = /^([ \t]*)\(([^()\n]{1,60})\)[ \t]+(?=[\p{L}\p{N}“"‘])/u.exec(line);
+    if (bare && !inNote(at(bare.index)))
+      out.push({
+        kind: "warning",
+        from: at((bare[1] ?? "").length),
+        to: at(bare[0].trimEnd().length),
+        message: `Did you mean @(${bare[2]})? Without @ it's read aloud.`,
+        code: "bare-direction",
+      });
+    const handles = new Set(story.cast.map((c) => c.handle.toLowerCase()));
+    const named =
+      /(^|[\s“"])(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]+\(([^()\n]{1,60})\)[ \t]*[“"]/u.exec(line);
+    if (
+      named &&
+      handles.has((named[2] ?? "").toLowerCase()) &&
+      line[named.index + (named[1] ?? "").length - 1] !== "@" &&
+      !inNote(at(named.index))
+    ) {
+      const from = named.index + (named[1] ?? "").length;
+      out.push({
+        kind: "warning",
+        from: at(from),
+        to: at(named.index + named[0].length - 1),
+        message: `Did you mean @${named[2]} (${named[3]})? Without @ the name and direction are read aloud.`,
+        code: "bare-direction",
+      });
+    }
     const loose = /(^|[^\p{L}\p{N}\\])@\s+\p{L}/u.exec(line);
     if (loose && !inNote(at(loose.index)))
       out.push({
@@ -175,6 +205,70 @@ function lineIsOnly(story: Story, line: Line, item: Item) {
     story.source.slice(line.range.from, line.range.to).trim() ===
     story.source.slice(item.range.from, item.range.to)
   );
+}
+
+/**
+ * Two or more lines in a row that each carry the same direction of their own read as a group
+ * (§7.1), so they are drawn as one: the bar beside them, the direction once at the top, and no
+ * dashes under each line. The text stays as written; the line being edited shows its own mark.
+ */
+function drawRuns(
+  out: EditorMark[],
+  rows: ReadonlyArray<{
+    from: number;
+    start: number;
+    end: number;
+    carries: string | null;
+    speaks: boolean;
+  } | null>,
+) {
+  const runs: Array<typeof rows extends ReadonlyArray<infer R> ? NonNullable<R>[] : never> = [];
+  let run: NonNullable<(typeof rows)[number]>[] = [];
+  let direction: string | null = null;
+  const close = () => {
+    // Trailing lines with nothing to say aren't part of it.
+    while (run.length && !run[run.length - 1]?.speaks) run.pop();
+    if (run.filter((r) => r.carries).length >= 2) runs.push(run);
+    run = [];
+    direction = null;
+  };
+  for (const row of rows) {
+    if (!row) {
+      close();
+      continue;
+    }
+    if (!row.speaks) {
+      if (run.length) run.push(row);
+      continue;
+    }
+    if (row.carries && row.carries === direction) {
+      run.push(row);
+      continue;
+    }
+    close();
+    if (row.carries) {
+      run = [row];
+      direction = row.carries;
+    }
+  }
+  close();
+  const drop = new Set<number>();
+  for (const lines of runs) {
+    lines.forEach((row, i) => {
+      out.push({ kind: "in-group", from: row.from, to: row.from });
+      for (let k = row.start; k < row.end; k++) {
+        const mark = out[k] as EditorMark;
+        if (mark.kind === "directed") drop.add(k);
+        else if (mark.kind === "direction" && i > 0)
+          out[k] = { kind: "run-repeat", from: mark.from, to: mark.to, text: mark.text };
+      }
+    });
+  }
+  if (drop.size) {
+    const kept = out.filter((_, k) => !drop.has(k));
+    out.length = 0;
+    out.push(...kept);
+  }
 }
 
 export function marksOf(story: Story): EditorMark[] {
@@ -276,7 +370,11 @@ export function marksOf(story: Story): EditorMark[] {
     }
   };
 
+  // Lines in order, for runs of lines that each carry the same direction of their own.
+  type Row = { from: number; start: number; end: number; carries: string | null; speaks: boolean };
+  const rows: Array<Row | null> = [];
   for (const block of story.blocks) {
+    if (block.kind !== "paragraph" || block.groups.length) rows.push(null);
     if (block.kind === "break") out.push({ kind: "break", ...block.range });
     else if (block.kind === "heading") {
       const words = block.line.items
@@ -295,10 +393,25 @@ export function marksOf(story: Story): EditorMark[] {
       for (const line of block.lines) {
         if (block.groups.length)
           out.push({ kind: "in-group", from: line.range.from, to: line.range.from });
+        const start = out.length;
         visit(line);
+        if (block.groups.length) continue;
+        const speech = line.items.flatMap((i) =>
+          i.kind === "speech" && /[\p{L}\p{N}]/u.test(i.text) ? [i] : [],
+        );
+        const own = new Set(speech.map((i) => (i.ownDirection ? i.direction : null)));
+        const only = own.size === 1 ? [...own][0] : null;
+        rows.push({
+          from: line.range.from,
+          start,
+          end: out.length,
+          carries: only ?? null,
+          speaks: speech.length > 0,
+        });
       }
     }
   }
+  drawRuns(out, rows);
 
   const unclosed = new Set(
     story.warnings.filter((w) => w.code === "unclosed-quote").map((w) => w.range.from),

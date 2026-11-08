@@ -185,6 +185,13 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             }),
           );
         break;
+      case "run-repeat":
+        // A run's later lines: the bar beside them carries the direction, drawn once above.
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-direction am-raw" }));
+        else if (mark.to < state.doc.length && state.sliceDoc(mark.to, mark.to + 1) === " ")
+          add(mark.from, mark.to + 1, Decoration.replace({}));
+        else add(mark.from, mark.to, Decoration.replace({}));
+        break;
       case "cleared":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-direction am-raw" }));
         // The dashes under a direction's words already show where it ends.

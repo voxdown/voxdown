@@ -130,6 +130,15 @@ export const scriptTheme = EditorView.theme({
     borderRadius: "6px",
     margin: "0 0.2em",
   },
+  ".am-chip-icon": {
+    // Inline even where a page's base styles make every SVG a block.
+    display: "inline-block",
+    width: "0.95em",
+    height: "0.95em",
+    marginRight: "0.3em",
+    verticalAlign: "-0.13em",
+    flex: "none",
+  },
   ".am-chip-warning": {
     color: "var(--am-warning, #dc2626)",
     border: "1px dashed var(--am-warning, #dc2626)",

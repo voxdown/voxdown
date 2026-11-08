@@ -77,4 +77,36 @@ describe("editor warnings", () => {
     expect(codes("@Rupert (sleepily) “I am tired.”")).toEqual([]);
     expect(codes("Mail me at me@ example.")).toEqual([]);
   });
+
+  it("warns when a direction has lost its @, as it would be read aloud", () => {
+    const warnings = (source: string) =>
+      editorMarks(source).flatMap((m) => (m.kind === "warning" ? [m] : []));
+    expect(warnings("(whispering) Line one.").map((w) => w.message)).toEqual([
+      "Did you mean @(whispering)? Without @ it's read aloud.",
+    ]);
+    const cast = "---\ncast:\n  Rupert: King Rupert\n---\n";
+    expect(warnings(`${cast}Rupert (softly) “Hello.”`).map((w) => w.message)).toEqual([
+      "Did you mean @Rupert (softly)? Without @ the name and direction are read aloud.",
+    ]);
+    expect(warnings("@(whispering) Line one.")).toEqual([]);
+    expect(warnings(`${cast}@Rupert (softly) “Hello.”`)).toEqual([]);
+    expect(warnings("He paused (for effect) and went on.")).toEqual([]);
+  });
+});
+
+describe("runs of one direction", () => {
+  const kinds = (source: string) => editorMarks(source).map((m) => m.kind);
+  it("draws lines that each carry the same direction like a group, the direction once", () => {
+    const source = "@(whispering) One.\n@(whispering) Two.\n\n@(whispering) Three.\nLoud.";
+    const marks = editorMarks(source);
+    expect(marks.filter((m) => m.kind === "in-group")).toHaveLength(3);
+    expect(marks.filter((m) => m.kind === "run-repeat")).toHaveLength(2);
+    expect(marks.filter((m) => m.kind === "direction")).toHaveLength(1);
+    expect(marks.some((m) => m.kind === "directed")).toBe(false);
+  });
+
+  it("leaves a single directed line, and lines with different directions, as they are", () => {
+    expect(kinds("@(whispering) One.\nTwo.")).not.toContain("in-group");
+    expect(kinds("@(whispering) One.\n@(loudly) Two.")).not.toContain("run-repeat");
+  });
 });

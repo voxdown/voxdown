@@ -41,7 +41,8 @@ function closing(label: string, closer: string) {
     const next = view.state.sliceDoc(to, to + 1);
     const closed = next === closer;
     const after = view.state.sliceDoc(to + (closed ? 1 : 0), to + (closed ? 2 : 1));
-    const space = after === "" || /\s/u.test(after) ? "" : " ";
+    // A direction is always followed by words or a quote, so it gets its space even at a line's end.
+    const space = (after === "" && closer !== ")") || /\s/u.test(after) ? "" : " ";
     const insert = closed ? label : `${label}${closer}${space}`;
     const changes =
       closed && space
@@ -53,6 +54,19 @@ function closing(label: string, closer: string) {
     view.dispatch({
       changes,
       selection: { anchor: from + label.length + 1 + space.length },
+      userEvent: "input.complete",
+    });
+  };
+}
+
+/** A name picked from the list is followed by a space, ready for `(how)` or the quote. */
+function spaced(handle: string) {
+  return (view: EditorView, _completion: Completion, from: number, to: number) => {
+    const after = view.state.sliceDoc(to, to + 1);
+    const insert = /\s/u.test(after) ? handle : `${handle} `;
+    view.dispatch({
+      changes: { from, to, insert },
+      selection: { anchor: from + handle.length + 1 },
       userEvent: "input.complete",
     });
   };
@@ -73,7 +87,7 @@ export function completions(characters: () => readonly Character[]): Extension {
             label: c.handle,
             ...(c.name !== c.handle ? { detail: c.name } : {}),
             type: "variable",
-            apply: c.handle,
+            apply: spaced(c.handle),
           }),
         ),
         validFor: /^[\p{L}\p{M}\p{N}_'’-]*$/u,

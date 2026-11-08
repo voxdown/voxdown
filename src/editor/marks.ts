@@ -126,7 +126,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
         out.push({
           kind: "warning",
           from: offset + first,
-          to: offset + first + 1,
+          to: offset + Math.max(first + 1, line.length),
           message: what,
           code: "open-bracket",
         });
@@ -307,7 +307,14 @@ export function marksOf(story: Story): EditorMark[] {
     if (warning.severity !== "warning" || !WARNED.has(warning.code)) continue;
     // One underline per mistake: a quote never closed also runs over a line break.
     if (warning.code === "quote-over-line-break" && unclosed.has(warning.range.from)) continue;
-    const to = Math.max(warning.range.to, Math.min(story.source.length, warning.range.from + 1));
+    // A quote left open is underlined to the end of its line, not by a tick under the mark.
+    const lineEnd = story.source.indexOf("\n", warning.range.from);
+    const opened = warning.code === "unclosed-quote" || warning.code === "quote-over-line-break";
+    const to = opened
+      ? lineEnd < 0
+        ? story.source.length
+        : Math.max(lineEnd, warning.range.from + 1)
+      : Math.max(warning.range.to, Math.min(story.source.length, warning.range.from + 1));
     out.push({
       kind: "warning",
       from: warning.range.from,

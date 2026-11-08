@@ -82,8 +82,9 @@ export const scriptTheme = EditorView.theme({
   },
   ".am-chip-name": {
     fontWeight: "600",
-    color: "var(--am-speaker, #b45309)",
-    backgroundColor: "color-mix(in srgb, var(--am-speaker, #b45309) 14%, transparent)",
+    color: "color-mix(in srgb, var(--am-speaker, #b45309) 42%, var(--am-ink, #1f2328))",
+    backgroundColor: "color-mix(in srgb, var(--am-speaker, #b45309) 18%, transparent)",
+    boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--am-speaker, #b45309) 40%, transparent)",
   },
   ".am-chip-direction": {
     fontStyle: "italic",
@@ -92,13 +93,13 @@ export const scriptTheme = EditorView.theme({
     borderRadius: "0",
   },
   ".am-chip-sound": {
-    color: "var(--am-sound, #15803d)",
+    color: "color-mix(in srgb, var(--am-sound, #15803d) 70%, var(--am-ink, #1f2328))",
     border: "1px solid color-mix(in srgb, var(--am-sound, #15803d) 45%, transparent)",
     borderRadius: "6px",
     margin: "0 0.2em",
   },
   ".am-chip-vocal": {
-    color: "var(--am-speaker, #b45309)",
+    color: "color-mix(in srgb, var(--am-speaker, #b45309) 42%, var(--am-ink, #1f2328))",
     border: "1px solid color-mix(in srgb, var(--am-speaker, #b45309) 45%, transparent)",
     borderRadius: "6px",
     margin: "0 0.2em",
@@ -178,9 +179,11 @@ export const scriptTheme = EditorView.theme({
     color: "var(--am-direction, #7c3aed)",
     cursor: "pointer",
   },
-  ".cm-tooltip.cm-tooltip-autocomplete": {
+  ".cm-tooltip.cm-tooltip-autocomplete, .cm-tooltip.cm-tooltip-autocomplete > ul": {
     fontFamily: "var(--am-ui-font, system-ui, sans-serif)",
+    fontSize: "13px",
   },
+  ".am-chip-inactive": { opacity: "0.55", textDecoration: "line-through" },
   ".am-option-dot": {
     display: "inline-block",
     width: "8px",

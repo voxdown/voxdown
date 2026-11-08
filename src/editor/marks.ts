@@ -42,6 +42,41 @@ const WARNED = new Set([
   "stray-group-close",
 ]);
 
+const INSTRUCTIONS = ["page", "pause", "book only", "audio only", "hidden"];
+
+function distance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0] ?? 0;
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const was = row[j] ?? 0;
+      row[j] = Math.min(was + 1, (row[j - 1] ?? 0) + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = was;
+    }
+  }
+  return row[b.length] ?? 0;
+}
+
+/** Warnings in the words of someone writing a story, with a likely fix where there is one. */
+function plain(warning: Story["warnings"][number], source: string): string {
+  if (warning.code === "unknown-instruction") {
+    const raw = source.slice(warning.range.from, warning.range.to);
+    const name =
+      raw
+        .replace(/^\{|\}$/gu, "")
+        .trim()
+        .split(/\s+/u)[0] ?? "";
+    const near = INSTRUCTIONS.find((i) => distance(name.toLowerCase(), i.split(" ")[0] ?? i) <= 2);
+    return near
+      ? `${raw} isn't an instruction. Did you mean {${near}}?`
+      : `${raw} isn't an instruction this editor knows: it's kept, but does nothing.`;
+  }
+  return warning.message;
+}
+
+export { distance as editDistance };
+
 /** A `[` or `{` with no partner on its line reads aloud as text: say so where it is. */
 function unclosedBrackets(story: Story): EditorMark[] {
   const out: EditorMark[] = [];
@@ -220,7 +255,12 @@ export function marksOf(story: Story): EditorMark[] {
     // One underline per mistake: a quote never closed also runs over a line break.
     if (warning.code === "quote-over-line-break" && unclosed.has(warning.range.from)) continue;
     const to = Math.max(warning.range.to, Math.min(story.source.length, warning.range.from + 1));
-    out.push({ kind: "warning", from: warning.range.from, to, message: warning.message });
+    out.push({
+      kind: "warning",
+      from: warning.range.from,
+      to,
+      message: plain(warning, story.source),
+    });
   }
   for (const open of unclosedBrackets(story)) out.push(open);
 

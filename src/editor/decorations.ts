@@ -23,6 +23,10 @@ export type PreviewOptions = {
   onNameClick?: (view: EditorView, at: { from: number; to: number; speaker: string }) => void;
   /** Start with every mark shown raw. */
   showMarks?: boolean;
+  /** Type “ ” and ’ for " and ' (on unless false). */
+  smartQuotes?: boolean;
+  /** Whether page turns do anything where this text goes; when not, they're drawn inactive. */
+  pageTurns?: () => boolean;
 };
 
 export const setShowMarks = StateEffect.define<boolean>();
@@ -69,13 +73,24 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
   const { state } = view;
   const marks = state.field(marksField);
   const raw = state.field(showMarksField);
+  const pagesOff = options.pageTurns ? !options.pageTurns() : false;
   const active = activeLines(state);
   const people = new Map(options.characters().map((c) => [c.handle.toLowerCase(), c]));
   const colorOf = (speaker?: string) =>
     speaker ? people.get(speaker.toLowerCase())?.color : undefined;
   const nameOf = (speaker: string) => people.get(speaker.toLowerCase())?.name ?? speaker;
   const decorations: Array<{ from: number; to: number; deco: Decoration }> = [];
-  const add = (from: number, to: number, deco: Decoration) => decorations.push({ from, to, deco });
+  // A replacement may never cross a line break (CodeMirror refuses, and the editor stops). A mark
+  // that does, like a note still being typed, is drawn as a styled mark instead.
+  const crossesLine = (from: number, to: number) =>
+    to > from && state.doc.lineAt(from).number !== state.doc.lineAt(Math.max(from, to - 1)).number;
+  const add = (from: number, to: number, deco: Decoration) => {
+    if (from < to && isReplace(deco) && crossesLine(from, to)) {
+      decorations.push({ from, to, deco: Decoration.mark({ class: "am-note am-raw" }) });
+      return;
+    }
+    decorations.push({ from, to, deco });
+  };
   const tinted = (cls: string, color?: string) =>
     Decoration.mark(
       color ? { class: cls, attributes: { style: `--am-speaker: ${color}` } } : { class: cls },
@@ -222,7 +237,11 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             Decoration.replace({
               widget: new LineWidget(
                 "turn",
-                mark.label ? `page turn · ${mark.label}` : "page turn",
+                pagesOff
+                  ? "page turn · this story has no pages yet"
+                  : mark.label
+                    ? `page turn · ${mark.label}`
+                    : "page turn",
                 "{page}",
               ),
             }),
@@ -234,9 +253,9 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             Decoration.replace({
               widget: new ChipWidget(
                 "page",
-                "page turn",
+                pagesOff ? "page turn (no pages yet)" : "page turn",
                 undefined,
-                "{page}",
+                pagesOff ? "This story has no pages yet: set them up in Pages" : "{page}",
                 undefined,
                 mark.from,
               ),

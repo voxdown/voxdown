@@ -110,6 +110,13 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
       case "directed":
         add(mark.from, mark.to, Decoration.mark({ class: "am-directed" }));
         break;
+      case "warning":
+        add(
+          mark.from,
+          mark.to,
+          Decoration.mark({ class: "am-warning", attributes: { title: mark.message } }),
+        );
+        break;
       case "in-group":
         add(mark.from, mark.from, Decoration.line({ class: "am-in-group" }));
         break;

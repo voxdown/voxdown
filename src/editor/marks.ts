@@ -24,7 +24,61 @@ export type EditorMark =
   | { kind: "break"; from: number; to: number }
   | { kind: "escape"; from: number; to: number }
   | { kind: "frontmatter"; from: number; to: number }
-  | { kind: "in-group"; from: number; to: number };
+  | { kind: "in-group"; from: number; to: number }
+  /** Something that probably isn't what was meant: an unclosed quote, a bracket left open. */
+  | { kind: "warning"; from: number; to: number; message: string };
+
+/** Warnings worth an underline while typing (the rest are for whole-file checks). */
+const WARNED = new Set([
+  "unclosed-quote",
+  "quote-over-line-break",
+  "stray-quote",
+  "idle-mark",
+  "unknown-instruction",
+  "pause-value",
+  "sound-looks-like-link",
+  "unclosed-note",
+  "unclosed-group",
+  "stray-group-close",
+]);
+
+/** A `[` or `{` with no partner on its line reads aloud as text: say so where it is. */
+function unclosedBrackets(story: Story): EditorMark[] {
+  const out: EditorMark[] = [];
+  const body = story.frontMatter ? story.frontMatter.range.to : 0;
+  const inNote = (at: number) =>
+    story.blocks.some(
+      (b) =>
+        b.kind === "paragraph" &&
+        b.lines.some((l) =>
+          l.items.some((i) => i.kind === "note" && i.range.from <= at && at < i.range.to),
+        ),
+    );
+  let offset = body;
+  for (const line of story.source.slice(body).split("\n")) {
+    for (const [open, close, what] of [
+      ["[", "]", "A sound needs its closing ]"],
+      ["{", "}", "An instruction needs its closing }"],
+    ] as const) {
+      let depth = 0;
+      let first = -1;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === "\\") {
+          i++;
+          continue;
+        }
+        if (line[i] === open) {
+          if (depth === 0) first = i;
+          depth++;
+        } else if (line[i] === close && depth > 0) depth--;
+      }
+      if (depth > 0 && first >= 0 && !inNote(offset + first))
+        out.push({ kind: "warning", from: offset + first, to: offset + first + 1, message: what });
+    }
+    offset += line.length + 1;
+  }
+  return out;
+}
 
 const ESCAPE = /\\[!-/:-@[-`{-~“”‘’„‚«»‹›「」『』]/gu;
 
@@ -157,6 +211,18 @@ export function marksOf(story: Story): EditorMark[] {
       }
     }
   }
+
+  const unclosed = new Set(
+    story.warnings.filter((w) => w.code === "unclosed-quote").map((w) => w.range.from),
+  );
+  for (const warning of story.warnings) {
+    if (warning.severity !== "warning" || !WARNED.has(warning.code)) continue;
+    // One underline per mistake: a quote never closed also runs over a line break.
+    if (warning.code === "quote-over-line-break" && unclosed.has(warning.range.from)) continue;
+    const to = Math.max(warning.range.to, Math.min(story.source.length, warning.range.from + 1));
+    out.push({ kind: "warning", from: warning.range.from, to, message: warning.message });
+  }
+  for (const open of unclosedBrackets(story)) out.push(open);
 
   const body = story.frontMatter ? story.frontMatter.range.to : 0;
   for (const m of story.source.slice(body).matchAll(ESCAPE))

@@ -56,3 +56,15 @@ describe("editor marks", () => {
     expect(escapes.map((m) => source.slice(m.from, m.to + 1))).toEqual(["\\[", "\\]"]);
   });
 });
+
+describe("editor warnings", () => {
+  it("underlines an unclosed quote and a bracket left open, but not a closed one", () => {
+    const source =
+      "@Rupert “Please pass the butter.\nThe plate waited. [a spoon clatters\nAll fine. [a bell]";
+    const warnings = editorMarks(source).filter((m) => m.kind === "warning");
+    const messages = warnings.map((w) => (w.kind === "warning" ? w.message : ""));
+    expect(messages.some((m) => /quote/i.test(m))).toBe(true);
+    expect(messages).toContain("A sound needs its closing ]");
+    expect(warnings).toHaveLength(2);
+  });
+});

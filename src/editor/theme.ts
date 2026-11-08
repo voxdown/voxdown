@@ -58,6 +58,12 @@ export const scriptTheme = EditorView.theme({
     paddingBottom: "1px",
   },
   ".cm-line.am-blank": { lineHeight: "0.75" },
+  ".am-warning": {
+    textDecoration: "underline wavy",
+    textDecorationColor: "var(--am-warning, #dc2626)",
+    textDecorationThickness: "1.5px",
+    textUnderlineOffset: "3px",
+  },
   ".am-in-group": {
     boxShadow: "inset 3px 0 0 color-mix(in srgb, var(--am-direction, #7c3aed) 45%, transparent)",
   },

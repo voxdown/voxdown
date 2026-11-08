@@ -358,7 +358,7 @@ A quote that runs over several lines keeps its character and direction until it 
 
 ### 5.4 Quoted speech
 
-A character mark gives the character **the quotes after it on its line**. The character says everything inside the first quote after the mark, up to the matching closing mark, unless another character mark comes between them. Everything outside the quotes is narration. Between the mark and the quote there may be a direction (§6), then sounds the character makes (§8.2), then narration.
+A character mark gives the character **the quotes after it on its line**. The character says everything inside the first quote after the mark, up to the matching closing mark, unless another character mark comes between them. Everything outside the quotes is narration. Between the mark and the quote there may be a direction (§6), then a sound the character makes (§8.2), then narration.
 
 ```example
 @Gerald “Could you not?”
@@ -1139,7 +1139,7 @@ Wanda: oh.
 
 ### 8.2 Sounds a character makes
 
-A character mark followed by a sound, directly or after its direction, gives the sound to that character: a snore, a gasp, a sigh. If the line has a quote after the sound, that quote is the character's, as in §5.4. Text that isn't in quotes stays with the narrator; after its own sound, a mark never makes the character say unquoted text. A sound further along, after some narration, is a sound in the world.
+A character mark followed by a sound, directly or after its direction, gives that one sound to the character: a snore, a gasp, a sigh. A second sound straight after it is a sound in the world; mark the character again for another of theirs. If the line has a quote after the sound, that quote is the character's, as in §5.4. Text that isn't in quotes stays with the narrator; after its own sound, a mark never makes the character say unquoted text. A sound further along, after some narration, is a sound in the world.
 
 ```example
 The dragon was snoring. @Gerald [snores]
@@ -1168,6 +1168,14 @@ Narrator: She stared at the broom.
 Wanda [gasp]
 Narrator: She stared at the broom.
 Wanda: On strike?
+```
+
+```example
+@Pickle [tiny peep] [a brief tumble] @Pickle [yawn]
+.
+Pickle [tiny peep]
+[a brief tumble]
+Pickle [yawn]
 ```
 
 ```example

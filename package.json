@@ -17,5 +17,16 @@
     "@types/node": "^20.0.0",
     "typescript": "^5.5.0",
     "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./editor": "./src/editor/index.ts"
   }
 }

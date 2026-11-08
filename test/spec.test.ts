@@ -1,44 +1,13 @@
 import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { examples, root, spec } from "./examples";
 
 /**
- * The spec's examples are the parser's conformance tests (SPEC.md §3). Until the parser exists,
- * this checks they are well formed: an input, a spoken script written in the §12.1 line
- * grammar, and an optional book text.
+ * The spec's examples are the parser's conformance tests (SPEC.md §3). This checks they are well
+ * formed: an input, a spoken script written in the §12.1 line grammar, and an optional book text.
+ * `conformance.test.ts` checks that the parser produces them.
  */
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const spec = readFileSync(join(root, "SPEC.md"), "utf8");
-
-type Example = { line: number; parts: number; input: string; script: string; book?: string };
-
-function examples(markdown: string): Example[] {
-  const found: Example[] = [];
-  const lines = markdown.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i] !== "```example") continue;
-    const start = i + 1;
-    let end = start;
-    while (end < lines.length && lines[end] !== "```") end++;
-    const parts: string[][] = [[]];
-    for (const line of lines.slice(start, end)) {
-      if (line === ".") parts.push([]);
-      else parts[parts.length - 1]?.push(line);
-    }
-    const [input = [], script = [], book] = parts;
-    found.push({
-      line: start,
-      parts: parts.length,
-      input: input.join("\n"),
-      script: script.join("\n"),
-      ...(book ? { book: book.join("\n") } : {}),
-    });
-    i = end;
-  }
-  return found;
-}
-
 const HANDLE = String.raw`\p{L}[\p{L}\p{M}\p{N}_-]*(?:['’]\p{L}[\p{L}\p{M}\p{N}_-]*)*`;
 const DIRECTION = String.raw`\((?:[^()]|\([^()]*\))+\)`;
 const SCRIPT_LINE = new RegExp(

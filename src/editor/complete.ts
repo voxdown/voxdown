@@ -60,6 +60,20 @@ function closing(label: string, closer: string) {
   };
 }
 
+/**
+ * The suggestions that really match what's typed: a word of the label starting with it, or (from
+ * three letters) the label containing it. Never a loose fuzzy match, so Enter can't swap in an
+ * unrelated sound or direction.
+ */
+function matching(typed: string, labels: readonly string[]): string[] {
+  const t = typed.trim().toLowerCase();
+  if (!t) return [...labels];
+  return labels.filter((label) => {
+    const l = label.toLowerCase();
+    return l.split(/[\s;,]+/u).some((w) => w.startsWith(t)) || (t.length >= 3 && l.includes(t));
+  });
+}
+
 /** A name picked from the list is followed by a space, ready for `(how)` or the quote. */
 function spaced(handle: string) {
   return (view: EditorView, _completion: Completion, from: number, to: number) => {
@@ -109,9 +123,13 @@ export function completions(characters: () => readonly Character[]): Extension {
         )
           used.set(mark.text, (used.get(mark.text) ?? 0) + 1);
       if (!used.size) return null;
+      const fits = new Set(matching(typed, [...used.keys()]));
+      if (!fits.size) return null;
       return {
         from: context.pos - typed.length,
+        filter: false,
         options: [...used.entries()]
+          .filter(([label]) => fits.has(label))
           .sort((a, b) => b[1] - a[1])
           .map(
             ([label, n]): Completion => ({
@@ -121,7 +139,32 @@ export function completions(characters: () => readonly Character[]): Extension {
               apply: closing(label, ")"),
             }),
           ),
-        validFor: /^[^()]*$/u,
+      };
+    }
+
+    // A group's direction: `::: whispering`, `::: @Rupert grandly`.
+    const line = context.state.doc.lineAt(context.pos);
+    const groupHead = /^:::[ \t]*(?:@\p{L}[\p{L}\p{M}\p{N}_'’-]*[ \t]+)?([^:]*)$/u.exec(
+      line.text.slice(0, context.pos - line.from),
+    );
+    if (groupHead) {
+      const typed = groupHead[1] ?? "";
+      const used = new Map<string, number>();
+      for (const mark of context.state.field(marksField, false) ?? [])
+        if (mark.kind === "direction" && mark.text)
+          used.set(mark.text, (used.get(mark.text) ?? 0) + 1);
+      const fits = matching(typed, [...used.keys()]);
+      if (
+        !fits.length ||
+        (!typed &&
+          !context.explicit &&
+          !/[ \t]$/u.test(line.text.slice(0, context.pos - line.from)))
+      )
+        return null;
+      return {
+        from: context.pos - typed.length,
+        filter: false,
+        options: fits.map((label) => ({ label, type: "text", apply: label })),
       };
     }
 
@@ -136,14 +179,16 @@ export function completions(characters: () => readonly Character[]): Extension {
         )
           used.add(mark.text);
       if (!used.size || (!typed && !context.explicit)) return null;
+      const fits = matching(typed, [...used]);
+      if (!fits.length) return null;
       return {
         from: context.pos - typed.length,
-        options: [...used].map((label) => ({
+        options: fits.map((label) => ({
           label,
           type: "constant",
           apply: closing(label, "]"),
         })),
-        validFor: /^[^\]]*$/u,
+        filter: false,
       };
     }
 

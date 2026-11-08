@@ -135,8 +135,9 @@ export const quoteEnter = keymap.of([
       const mark = marks[marks.length - 1];
       if (!mark) return false;
       const rest = tail.replace(/^[ \t]+/u, "");
-      // Right before the line's closing mark the quote is finished: the new line goes after it.
-      if (/^”\s*$/u.test(rest)) {
+      // Right before the closing mark the quote is finished: the new line goes after the whole
+      // line, whatever follows the quote (a sound, "he said").
+      if (rest.startsWith("”")) {
         view.dispatch({
           changes: { from: line.to, insert: "\n" },
           selection: { anchor: line.to + 1 },
@@ -144,11 +145,89 @@ export const quoteEnter = keymap.of([
         });
         return true;
       }
-      if (rest.startsWith("”")) return false;
       const insert = `”\n@${mark[1]} ${mark[2] ? `${mark[2]} ` : ""}“`;
       view.dispatch({
         changes: { from, to: from + (tail.length - rest.length), insert },
         selection: { anchor: from + insert.length },
+        userEvent: "input",
+      });
+      return true;
+    },
+  },
+]);
+
+/**
+ * Backspace straight after a split quote's new `@Name “` joins the two lines back into one quote,
+ * in one step (Enter's split undone by the key that undoes typing).
+ */
+export const quoteBackspace = keymap.of([
+  {
+    key: "Backspace",
+    run: (view) => {
+      const { from, to } = view.state.selection.main;
+      if (from !== to || view.state.readOnly) return false;
+      const line = view.state.doc.lineAt(from);
+      if (line.number < 2) return false;
+      const head = line.text.slice(0, from - line.from);
+      const opened = /^@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]*(\([^()]*\))?[ \t]*“$/u.exec(head);
+      if (!opened) return false;
+      const prev = view.state.doc.line(line.number - 1);
+      if (!prev.text.endsWith("”") || !prev.text.includes(`@${opened[1]}`)) return false;
+      const before = prev.text.slice(-2, -1);
+      const after = line.text.slice(from - line.from, from - line.from + 1);
+      const space = /\s/u.test(before) || !after || /\s/u.test(after) ? "" : " ";
+      view.dispatch({
+        changes: { from: prev.to - 1, to: from, insert: space },
+        selection: { anchor: prev.to - 1 + space.length },
+        userEvent: "delete.backward",
+      });
+      return true;
+    },
+  },
+]);
+
+/** The closing mark for each mark opened on a line: `[` sounds, `{` instructions, `(` directions. */
+const CLOSER: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
+
+/**
+ * Enter inside a mark that isn't finished (`[hiccup`, `{pause 3s`, `@Rupert (softly`) closes it as
+ * typed rather than breaking the line inside it. A suggestion picked from the list comes first.
+ */
+export const markEnter = keymap.of([
+  {
+    key: "Enter",
+    run: (view) => {
+      const { from, to } = view.state.selection.main;
+      if (from !== to || view.state.readOnly) return false;
+      const line = view.state.doc.lineAt(from);
+      const head = line.text.slice(0, from - line.from);
+      // The innermost mark opened before the cursor and not closed.
+      const stack: { char: string; at: number }[] = [];
+      for (let i = 0; i < head.length; i++) {
+        const c = head[i] as string;
+        if (c === "\\") {
+          i++;
+          continue;
+        }
+        if (c === "[" || c === "{") stack.push({ char: c, at: i });
+        else if (c === "(" && /@[\p{L}\p{M}\p{N}_'’-]*[ \t]*$/u.test(head.slice(0, i)))
+          stack.push({ char: c, at: i });
+        else if ((c === "]" || c === "}" || c === ")") && stack.length) {
+          const top = stack[stack.length - 1];
+          if (top && CLOSER[top.char] === c) stack.pop();
+        }
+      }
+      const open = stack[stack.length - 1];
+      if (!open) return false;
+      const closer = CLOSER[open.char] as string;
+      if (!/\S/u.test(head.slice(open.at + 1))) return false;
+      const next = line.text.slice(from - line.from, from - line.from + 1);
+      const closed = next === closer;
+      const after = line.text.slice(from - line.from + (closed ? 1 : 0)).slice(0, 1);
+      const space = after === " " ? "" : " ";
+      view.dispatch({
+        changes: closed ? { from: from + 1, insert: space } : { from, insert: `${closer}${space}` },
+        selection: { anchor: from + 1 + space.length },
         userEvent: "input",
       });
       return true;

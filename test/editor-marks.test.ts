@@ -103,6 +103,8 @@ describe("editor warnings", () => {
     const cast = "---\ncast:\n  Rupert: King Rupert\n---\n";
     expect(fixed(`${cast}Rupert (softly) “Hello.”`)).toBe(`${cast}@Rupert (softly) “Hello.”`);
     expect(fixed("A line. {pasue 2s}")).toBe("A line. {pause 2s}");
+    expect(fixed("A line. {pau}")).toBe("A line. {pause}");
+    expect(fixed("A line. {boo}")).toBe("A line. {book only}");
     // A name the text writes with @ elsewhere counts as known, with no cast list.
     expect(fixed("@Rupert “Hi.”\nRupert (softly) “No crumbs.”")).toBe(
       "@Rupert “Hi.”\n@Rupert (softly) “No crumbs.”",

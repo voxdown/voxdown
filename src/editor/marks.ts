@@ -85,9 +85,13 @@ function plain(
         .replace(/^\{|\}$/gu, "")
         .trim()
         .split(/\s+/u)[0] ?? "";
+    // What was typed is most likely the start of one (`{pau}` is `{pause}`, not `{page}`).
     const scored = INSTRUCTIONS.map((i) => ({
       i,
-      d: distance(name.toLowerCase(), i.split(" ")[0] ?? i),
+      d:
+        name && i.startsWith(name.toLowerCase())
+          ? -1
+          : distance(name.toLowerCase(), i.split(" ")[0] ?? i),
     })).sort((x, y) => x.d - y.d);
     const near = scored[0] && scored[0].d <= 2 ? scored[0].i : undefined;
     if (!near)
@@ -95,8 +99,14 @@ function plain(
         message: `${raw} isn't an instruction this editor knows: it's kept, but does nothing.`,
       };
     // Only the misspelt word changes: `{pasue 2s}` becomes `{pause 2s}`.
+    // With a value after it (`{pasue 2s}`), only the misspelt word changes; alone, the whole name.
     const head = near.split(" ")[0] ?? near;
-    const insert = name ? raw.replace(name, head) : `{${near}}`;
+    const args = raw
+      .replace(/^\{|\}$/gu, "")
+      .trim()
+      .slice(name.length)
+      .trim();
+    const insert = name && args ? raw.replace(name, head) : `{${near}}`;
     return {
       message: `${raw} isn't an instruction. Did you mean ${insert === raw ? `{${near}}` : insert}?`,
       ...(insert !== raw

@@ -9,7 +9,7 @@ import {
 } from "@codemirror/view";
 import { LabelWidget, stackLabels } from "./labels";
 import { type EditorMark, editorMarks } from "./marks";
-import { ChipWidget, LineWidget } from "./widgets";
+import { ChipWidget, LineWidget, type PageTurnTools } from "./widgets";
 
 /**
  * Live preview: every line shows the story as it reads, with a character's name as a chip in their
@@ -56,6 +56,10 @@ export type PreviewOptions = {
   ) => { name: string; title: string } | undefined;
   /** What a page turn turns to (the next page's name), by where its mark starts. */
   pageLabel?: (state: EditorState, from: number) => string | undefined;
+  /** The host's controls on every page turn drawn (Studio's chime and rest, review r15). */
+  pageTurnTools?: PageTurnTools;
+  /** What a scene break opens (a scene's name or number), by where its mark starts. */
+  sceneLabel?: (state: EditorState, from: number) => string | undefined;
 };
 
 /** What the page draws, as Performance's switches choose (1082). */
@@ -113,9 +117,78 @@ export const marksField = StateField.define<EditorMark[]>({
 /** Lines short enough to show raw while you type in them; long paragraphs show only the mark you're in. */
 const SHORT_LINE = 160;
 
+/**
+ * Where the text is open (its marks shown raw), owner, 9 Nov: the cursor, or a selection within
+ * one line. While the pointer is down nothing opens or closes, so a drag never makes the page
+ * move under it; letting go without moving is a click (or tap), and opens where it put the
+ * cursor; letting go after a drag keeps what was open before, as does a selection over several
+ * lines made with the keys.
+ */
+type Open = { ranges: ReadonlyArray<{ from: number; to: number }>; held: boolean };
+
+/** The pointer down (true), or let go: `"click"` without moving, `"drag"` after a drag. */
+export const holdOpen = StateEffect.define<boolean | "click" | "drag">();
+
+const withinLines = (state: EditorState) =>
+  state.selection.ranges.every(
+    (r) => r.empty || state.doc.lineAt(r.from).number === state.doc.lineAt(r.to).number,
+  );
+const rangesOf = (state: EditorState) =>
+  state.selection.ranges.map((r) => ({ from: r.from, to: r.to }));
+
+export const openField = StateField.define<Open>({
+  create: (state) => ({ ranges: withinLines(state) ? rangesOf(state) : [], held: false }),
+  update(value, tr) {
+    const mapped = tr.docChanged
+      ? value.ranges.map((r) => ({
+          from: tr.changes.mapPos(r.from, -1),
+          to: tr.changes.mapPos(r.to, 1),
+        }))
+      : value.ranges;
+    for (const effect of tr.effects) {
+      if (!effect.is(holdOpen)) continue;
+      if (effect.value === true) return { ranges: mapped, held: true };
+      if (effect.value === "drag") return { ranges: mapped, held: false };
+      return { ranges: withinLines(tr.state) ? rangesOf(tr.state) : mapped, held: false };
+    }
+    if (value.held) return mapped === value.ranges ? value : { ranges: mapped, held: true };
+    if ((tr.selection || tr.docChanged) && withinLines(tr.state))
+      return { ranges: rangesOf(tr.state), held: false };
+    return mapped === value.ranges ? value : { ranges: mapped, held: false };
+  },
+});
+
+/** The pointer's press and release, told to `openField`: a release after moving is a drag. */
+const pointerHold = ViewPlugin.fromClass(
+  class {
+    constructor(readonly view: EditorView) {}
+  },
+  {
+    eventHandlers: {
+      pointerdown(event, view) {
+        if (event.button !== 0) return false;
+        const x = event.clientX;
+        const y = event.clientY;
+        view.dispatch({ effects: holdOpen.of(true) });
+        const up = (end: PointerEvent) => {
+          window.removeEventListener("pointerup", up, true);
+          window.removeEventListener("pointercancel", up, true);
+          const moved = Math.hypot(end.clientX - x, end.clientY - y) > 4;
+          // After the editor has set the selection for this press.
+          queueMicrotask(() => view.dispatch({ effects: holdOpen.of(moved ? "drag" : "click") }));
+        };
+        window.addEventListener("pointerup", up, true);
+        window.addEventListener("pointercancel", up, true);
+        return false;
+      },
+    },
+  },
+);
+
 function activeLines(state: EditorState): Set<number> {
   const lines = new Set<number>();
-  for (const range of state.selection.ranges) {
+  for (const range of state.field(openField).ranges) {
+    if (range.to > state.doc.length) continue;
     const a = state.doc.lineAt(range.from).number;
     const b = state.doc.lineAt(range.to).number;
     for (let n = a; n <= b; n++) if (state.doc.line(n).length <= SHORT_LINE) lines.add(n);
@@ -124,7 +197,7 @@ function activeLines(state: EditorState): Set<number> {
 }
 
 function touchesSelection(state: EditorState, from: number, to: number) {
-  return state.selection.ranges.some((r) => r.from <= to && r.to >= from);
+  return state.field(openField).ranges.some((r) => r.from <= to && r.to >= from);
 }
 
 const shortSound = (text: string) => {
@@ -171,11 +244,11 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
   for (const { from, to } of view.visibleRanges) {
     for (let pos = from; pos <= to; ) {
       const line = state.doc.lineAt(pos);
-      if (
-        !line.text.trim() &&
-        !active.has(line.number) &&
-        !touchesSelection(state, line.from, line.to)
-      )
+      // Open only with the cursor on it: a selection passing over leaves it compact (owner, 9 Nov).
+      const cursorHere = state
+        .field(openField)
+        .ranges.some((r) => r.from === r.to && r.from >= line.from && r.from <= line.to);
+      if (!line.text.trim() && !cursorHere)
         add(line.from, line.from, Decoration.line({ class: "am-blank" }));
       pos = line.to + 1;
     }
@@ -255,6 +328,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 "Direction: click to change it",
                 mark.from,
                 mark.to,
+                mark.speaker,
               ),
             }),
           );
@@ -310,6 +384,8 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 undefined,
                 mark.from,
                 options.chipStatus?.(state, mark.from, mark.to),
+                undefined,
+                mark.speaker,
               ),
             }),
           );
@@ -318,19 +394,23 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         const turnsTo = mark.label ?? options.pageLabel?.(state, mark.from);
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-page am-raw" }));
         else if (!shown.pages) leaveOut(mark.from, mark.to);
-        else if (mark.ownLine)
+        else if (
+          mark.ownLine ||
+          // Ending its paragraph's words, it is drawn below them across the page, as
+          // Performance draws it (review r15).
+          !state.sliceDoc(mark.to, state.doc.lineAt(mark.to).to).trim()
+        )
           add(
             mark.from,
             mark.to,
             Decoration.replace({
               widget: new LineWidget(
                 "turn",
-                pagesOff
-                  ? "page turn · this story has no pages yet"
-                  : turnsTo
-                    ? `page turn · ${turnsTo}`
-                    : "page turn",
-                "{page}",
+                // The page it turns to, as Performance's markers say it (owner, 9 Nov).
+                pagesOff ? "page turn · this story has no pages yet" : (turnsTo ?? "page turn"),
+                "Page turn: {page}",
+                pagesOff ? undefined : options.pageTurnTools,
+                !mark.ownLine,
               ),
             }),
           );
@@ -350,6 +430,8 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 pagesOff ? "This story has no pages yet: set them up in Pages" : "{page}",
                 undefined,
                 mark.from,
+                undefined,
+                pagesOff ? undefined : options.pageTurnTools,
               ),
             }),
           );
@@ -441,6 +523,9 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                       .filter(Boolean)
                       .join(" · ") || "group",
                 mark.close ? ":::" : "Applies to the lines below, until :::",
+                undefined,
+                false,
+                mark.close ? undefined : mark.voice,
               ),
             }),
           );
@@ -466,7 +551,13 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           add(
             mark.from,
             mark.to,
-            Decoration.replace({ widget: new LineWidget("break", "scene break", "---") }),
+            Decoration.replace({
+              widget: new LineWidget(
+                "break",
+                options.sceneLabel?.(state, mark.from) ?? "scene break",
+                "Scene break: ---",
+              ),
+            }),
           );
         break;
     }
@@ -551,6 +642,8 @@ export function livePreview(options: PreviewOptions): Extension {
     showMarksField.init(() => options.showMarks ?? false),
     viewField.init(() => ({ ...ALL_ON, ...options.view })),
     marksField,
+    openField,
+    pointerHold,
     frontMatterField,
     stackLabels,
     ViewPlugin.fromClass(

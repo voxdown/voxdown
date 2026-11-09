@@ -11,7 +11,8 @@ export type EditorMark =
   /** Words a direction of their own applies to: dashed, as on Performance's page. */
   | { kind: "directed"; from: number; to: number }
   | { kind: "name"; from: number; to: number; speaker: string }
-  | { kind: "direction"; from: number; to: number; text: string }
+  /** `speaker`: whose words it directs (the name it sits with, else the next speech on its line). */
+  | { kind: "direction"; from: number; to: number; text: string; speaker?: string }
   | { kind: "cleared"; from: number; to: number }
   | { kind: "sound"; from: number; to: number; text: string }
   | { kind: "vocal"; from: number; to: number; speaker: string; text: string }
@@ -19,7 +20,16 @@ export type EditorMark =
   | { kind: "pause"; from: number; to: number; value?: string }
   | { kind: "instruction"; from: number; to: number; text: string; raw: string }
   | { kind: "note"; from: number; to: number; text: string }
-  | { kind: "group"; from: number; to: number; text: string; speaker?: string; close?: boolean }
+  | {
+      kind: "group";
+      from: number;
+      to: number;
+      text: string;
+      speaker?: string;
+      close?: boolean;
+      /** Whose lines it holds: its character's, else the narrator's (for Listen as). */
+      voice?: string;
+    }
   | { kind: "heading"; from: number; to: number; text: string; hidden: boolean }
   | { kind: "break"; from: number; to: number }
   | { kind: "escape"; from: number; to: number }
@@ -547,6 +557,7 @@ export function marksOf(story: Story): EditorMark[] {
       to: group.range.to,
       text: group.direction ?? "",
       ...(group.character ? { speaker: group.character } : {}),
+      voice: group.character ?? story.meta.narrator,
     });
     if (group.closeRange) out.push({ kind: "group", ...group.closeRange, text: "", close: true });
   }
@@ -567,7 +578,12 @@ export function marksOf(story: Story): EditorMark[] {
         case "mark":
           if (vocalMarks.has(item.range.from)) {
             if (item.directionRange)
-              out.push({ kind: "direction", ...item.directionRange, text: item.direction ?? "" });
+              out.push({
+                kind: "direction",
+                ...item.directionRange,
+                text: item.direction ?? "",
+                speaker: item.speaker,
+              });
             break;
           }
           // The chip stands for `@Name`, the at sign included.
@@ -578,12 +594,29 @@ export function marksOf(story: Story): EditorMark[] {
             speaker: item.speaker,
           });
           if (item.directionRange)
-            out.push({ kind: "direction", ...item.directionRange, text: item.direction ?? "" });
+            out.push({
+              kind: "direction",
+              ...item.directionRange,
+              text: item.direction ?? "",
+              speaker: item.speaker,
+            });
           break;
-        case "direction":
-          if (item.direction) out.push({ kind: "direction", ...item.range, text: item.direction });
+        case "direction": {
+          // Whose words it directs: the next speech on its line.
+          const next = line.items.find(
+            (other) => other.kind === "speech" && other.range.from >= item.range.to,
+          );
+          const speaker = next?.kind === "speech" ? next.speaker : undefined;
+          if (item.direction)
+            out.push({
+              kind: "direction",
+              ...item.range,
+              text: item.direction,
+              ...(speaker ? { speaker } : {}),
+            });
           else out.push({ kind: "cleared", ...item.range });
           break;
+        }
         case "vocal":
           out.push({
             kind: "vocal",

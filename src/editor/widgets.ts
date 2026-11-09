@@ -18,6 +18,38 @@ export type ChipKind =
   | "tool"
   | "warning";
 
+/**
+ * The host's own controls inside a page turn's mark (Studio's chime and rest, 1077): mounted into
+ * the element given, and taken down by what it returns when the mark goes (review r15).
+ */
+export type PageTurnTools = (
+  el: HTMLElement,
+  /** Either side of the page turn's label, as Performance's markers have them. */
+  place: "before" | "after",
+) => (() => void) | undefined;
+
+const toolsDone = new WeakMap<HTMLElement, () => void>();
+
+/** The host's controls, in a box of their own either side of a mark's label. */
+function mountTools(el: HTMLElement, tools: PageTurnTools | undefined) {
+  if (!tools) return;
+  const dones: Array<() => void> = [];
+  for (const place of ["before", "after"] as const) {
+    const box = document.createElement("span");
+    box.className = "am-page-tools";
+    box.dataset.place = place;
+    box.contentEditable = "false";
+    if (place === "before") el.prepend(box);
+    else el.append(box);
+    const done = tools(box, place);
+    if (done) dones.push(done);
+  }
+  if (dones.length) toolsDone.set(el, () => dones.forEach((done) => done()));
+}
+
+const inTools = (event: Event) =>
+  event.target instanceof Element && Boolean(event.target.closest(".am-page-tools"));
+
 export class ChipWidget extends WidgetType {
   constructor(
     readonly kind: ChipKind,
@@ -28,6 +60,10 @@ export class ChipWidget extends WidgetType {
     readonly from = 0,
     /** The host's status for what the chip stands for (a take's), drawn as a dot inside it. */
     readonly status?: { name: string; title: string },
+    /** The host's controls inside it (a page turn's chime and rest). */
+    readonly tools?: PageTurnTools,
+    /** Whose it is (a character's sound), for a host that picks out one speaker (Listen as). */
+    readonly speaker?: string,
   ) {
     super();
   }
@@ -40,8 +76,14 @@ export class ChipWidget extends WidgetType {
       other.title === this.title &&
       other.from === this.from &&
       other.status?.name === this.status?.name &&
-      other.status?.title === this.status?.title
+      other.status?.title === this.status?.title &&
+      Boolean(other.tools) === Boolean(this.tools) &&
+      other.speaker === this.speaker
     );
+  }
+
+  override destroy(dom: HTMLElement) {
+    toolsDone.get(dom)?.();
   }
 
   toDOM(view: EditorView) {
@@ -51,20 +93,26 @@ export class ChipWidget extends WidgetType {
     el.append(document.createTextNode(this.text));
     el.title = this.status ? `${this.title} · ${this.status.title}` : this.title;
     el.dataset.amChip = this.kind;
+    // Whose name it is, for a host that picks out one speaker (Listen as).
+    if (this.speaker) el.dataset.speaker = this.speaker.toLowerCase();
+    else if (this.kind === "name" && this.title.startsWith("@"))
+      el.dataset.speaker = this.title.slice(1).toLowerCase();
     if (this.status) el.dataset.status = this.status.name;
     if (this.color) el.style.setProperty("--am-speaker", this.color);
     if (this.onClick) {
       const onClick = this.onClick;
       el.addEventListener("mousedown", (event) => {
+        if (inTools(event)) return;
         event.preventDefault();
         onClick(view, this.from);
       });
     }
+    mountTools(el, this.tools);
     return el;
   }
 
-  override ignoreEvent() {
-    return Boolean(this.onClick);
+  override ignoreEvent(event: Event) {
+    return Boolean(this.onClick) || inTools(event);
   }
 }
 
@@ -74,26 +122,49 @@ export class LineWidget extends WidgetType {
     readonly kind: "turn" | "break" | "heading" | "group",
     readonly text: string,
     readonly title: string,
+    /** The host's controls inside it (a page turn's chime and rest). */
+    readonly tools?: PageTurnTools,
+    /** After a paragraph's words (a page turn ending it): drawn below them, across the page. */
+    readonly trailing = false,
+    /** Whose lines it holds (a group's), for a host that picks out one speaker (Listen as). */
+    readonly speaker?: string,
   ) {
     super();
   }
 
   override eq(other: LineWidget) {
-    return other.kind === this.kind && other.text === this.text && other.title === this.title;
+    return (
+      other.kind === this.kind &&
+      other.text === this.text &&
+      other.title === this.title &&
+      other.trailing === this.trailing &&
+      other.speaker === this.speaker &&
+      Boolean(other.tools) === Boolean(this.tools)
+    );
   }
 
   toDOM() {
     const el = document.createElement("span");
     el.className = `am-line-${this.kind}`;
-    el.textContent = this.text;
+    const label = document.createElement("span");
+    label.textContent = this.text;
+    el.append(label);
     el.title = this.title;
     el.dataset.amLine = this.kind;
-    if (this.kind === "turn" || this.kind === "break") el.style.display = "flex";
+    if (this.trailing) el.dataset.trailing = "";
+    if (this.speaker) el.dataset.speaker = this.speaker.toLowerCase();
+    if (this.kind === "turn" || this.kind === "break" || this.kind === "heading")
+      el.style.display = "flex";
+    mountTools(el, this.tools);
     return el;
   }
 
-  override ignoreEvent() {
-    return false;
+  override destroy(dom: HTMLElement) {
+    toolsDone.get(dom)?.();
+  }
+
+  override ignoreEvent(event: Event) {
+    return inTools(event);
   }
 }
 

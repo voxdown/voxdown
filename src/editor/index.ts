@@ -99,6 +99,7 @@ export {
   viewField,
 } from "./decorations";
 export { completions } from "./complete";
+export type { PageTurnTools } from "./widgets";
 export { smartQuotes } from "./quotes";
 export { type EditorMark, editDistance, editorMarks } from "./marks";
 export { startCompletion } from "@codemirror/autocomplete";

@@ -18,7 +18,7 @@ export const scriptTheme = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
     fontFamily: "var(--am-font, Georgia, 'Iowan Old Style', serif)",
-    lineHeight: "1.65",
+    lineHeight: "var(--am-leading, 1.65)",
   },
   ".cm-content": { padding: "12px 0 40vh", caretColor: "var(--am-ink, #1f2328)" },
   ".cm-line": { padding: "0 18px 0 6px" },
@@ -54,6 +54,9 @@ export const scriptTheme = EditorView.theme({
   // both apply the solid line sits just under the words and the dashes just under that. Each
   // lane is set by the span's own bottom padding, so it holds whichever span CodeMirror nests.
   ".am-speech": {
+    // Performance's tint under a character's words (review r15), translucent so the selection
+    // drawn behind the text still shows.
+    backgroundColor: "color-mix(in oklab, var(--am-speaker, #b45309) 16%, transparent)",
     backgroundImage:
       "linear-gradient(color-mix(in srgb, var(--am-speaker, #b45309) 60%, transparent), color-mix(in srgb, var(--am-speaker, #b45309) 60%, transparent))",
     backgroundSize: "100% 2px",
@@ -202,42 +205,60 @@ export const scriptTheme = EditorView.theme({
     borderRadius: "6px",
     fontStyle: "italic",
   },
+  // A page turn across the page, as Performance draws it (owner, 9 Nov): its controls either side
+  // of the page it turns to, a rule out to each edge.
   ".am-line-turn": {
     display: "flex",
     alignItems: "center",
     gap: "8px",
+    margin: "12px 0",
     fontFamily: "var(--am-ui-font, system-ui, sans-serif)",
-    fontSize: "0.7em",
-    color: "var(--am-page, #b7791f)",
+    fontSize: "10.5px",
+    fontWeight: "600",
+    lineHeight: "1",
+    letterSpacing: "0.03em",
+    color: "var(--am-page, #a35b0e)",
     cursor: "pointer",
   },
   ".am-line-turn::before, .am-line-turn::after": {
     content: '""',
     flex: "1",
-    borderTop: "1px dashed color-mix(in srgb, var(--am-page, #b7791f) 60%, transparent)",
+    borderTop: "1px solid color-mix(in srgb, var(--am-page, #a35b0e) 45%, transparent)",
   },
-  ".am-line-break": {
+  // A page turn ending a paragraph: below its words, across the page (review r15).
+  ".am-line-turn[data-trailing]": { margin: "14px 0 4px" },
+  // The host's controls on a page turn: never the text's.
+  ".am-page-tools": {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "1px",
+    cursor: "default",
+    userSelect: "none",
+  },
+  ".am-chip .am-page-tools": { marginLeft: "3px" },
+  // A scene's break and its name, as Performance heads a scene (owner, 9 Nov): small capitals,
+  // spaced, a rule out to each edge.
+  ".am-line-break, .am-line-heading": {
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "12px",
+    margin: "14px 0 12px",
     fontFamily: "var(--am-ui-font, system-ui, sans-serif)",
-    fontSize: "0.7em",
+    fontSize: "12px",
+    fontWeight: "700",
+    lineHeight: "1.4",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
     color: "var(--am-muted, #6b7280)",
     cursor: "pointer",
   },
-  ".am-line-break::before, .am-line-break::after": {
-    content: '""',
-    flex: "1",
-    borderTop: "1px solid var(--am-line, #d0d4da)",
-  },
-  ".am-line-heading": {
-    fontFamily: "var(--am-ui-font, system-ui, sans-serif)",
-    fontWeight: "600",
-    fontSize: "0.82em",
-    color: "var(--am-muted, #6b7280)",
-    letterSpacing: "0.01em",
-    cursor: "pointer",
-  },
+  ".am-line-break::before, .am-line-break::after, .am-line-heading::before, .am-line-heading::after":
+    {
+      content: '""',
+      flex: "1",
+      height: "1px",
+      background: "var(--am-line, #d0d4da)",
+    },
   ".am-line-group": {
     fontFamily: "var(--am-ui-font, system-ui, sans-serif)",
     fontSize: "0.74em",

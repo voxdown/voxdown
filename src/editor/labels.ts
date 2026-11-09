@@ -12,6 +12,8 @@ export class LabelWidget extends WidgetType {
     readonly from: number,
     /** Where the direction's mark ends, so a click can pick its words. */
     readonly to = from,
+    /** Whose words it directs, for a host that picks out one speaker (Listen as). */
+    readonly speaker?: string,
   ) {
     super();
   }
@@ -21,7 +23,8 @@ export class LabelWidget extends WidgetType {
       other.text === this.text &&
       other.title === this.title &&
       other.from === this.from &&
-      other.to === this.to
+      other.to === this.to &&
+      other.speaker === this.speaker
     );
   }
 
@@ -33,6 +36,7 @@ export class LabelWidget extends WidgetType {
     label.textContent = this.text;
     label.title = this.title;
     label.dataset.amChip = "direction";
+    if (this.speaker) label.dataset.speaker = this.speaker.toLowerCase();
     // Hovering it shows the words it directs.
     const directed = () => {
       let el = anchor.nextElementSibling;

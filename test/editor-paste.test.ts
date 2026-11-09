@@ -20,5 +20,10 @@ describe("pasted text (r7)", () => {
       userEvent: "input.paste",
     }).state;
     expect(elided.doc.toString()).toBe("’Twas rock ’n’ roll, ’em all.");
+    const decade = state.update({
+      changes: { from: 0, insert: "Back in the '90s." },
+      userEvent: "input.paste",
+    }).state;
+    expect(decade.doc.toString()).toBe("Back in the ’90s.");
   });
 });

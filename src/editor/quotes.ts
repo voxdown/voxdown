@@ -26,7 +26,7 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
       .replace(/"/gu, "”")
       // A word cut short at its start ('Twas, 'n', 'em) keeps an apostrophe (review r9).
       .replace(
-        /(^|[\s([{—–-])'(?=(?:twas|tis|em|n|cause|til|round|bout|ere)(?![\p{L}]))/gimu,
+        /(^|[\s([{—–-])'(?=(?:twas|tis|em|n|cause|til|round|bout|ere)(?![\p{L}])|\d)/gimu,
         "$1’",
       )
       .replace(/(^|[\s([{—–-])'/gmu, "$1‘")
@@ -48,8 +48,29 @@ export function smartQuotes(): Extension {
   return [pastedApostrophes, smartQuoteInput];
 }
 
+/** A word cut short at its start ('Twas, 'n', 'em, '90s): its mark is an apostrophe. */
+const ELIDED = /(^|[\s([{—–-])‘((?:twas|tis|em|n|cause|til|round|bout|ere)|\d+s?)$/iu;
+
 const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   if (view.state.readOnly) return false;
+  // Typed, the ‘ came before the word was known (review r10): once the word ends it becomes ’.
+  if (/^[\s,.;:!?'’]$/u.test(text) && from === to) {
+    const line = view.state.doc.lineAt(from);
+    const before = line.text.slice(0, from - line.from);
+    const elided = ELIDED.exec(before);
+    if (elided) {
+      const mark = from - (elided[2] ?? "").length - 1;
+      view.dispatch({
+        changes: [
+          { from: mark, to: mark + 1, insert: "’" },
+          { from, to, insert: text === "'" ? "’" : text },
+        ],
+        selection: { anchor: from + 1 },
+        userEvent: "input.type",
+      });
+      return true;
+    }
+  }
   if (text === "%") return closeNote(view, from, to);
   if (/^\d$/u.test(text) && pauseLength(view, from, to, text)) return true;
   if (text === " " && leavePause(view, from, to)) return true;

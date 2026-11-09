@@ -24,6 +24,11 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
       .replace(/(?<=\p{L})'(?=\p{L})/gu, "’")
       .replace(/(^|[\s([{—–-])"/gmu, "$1“")
       .replace(/"/gu, "”")
+      // A word cut short at its start ('Twas, 'n', 'em) keeps an apostrophe (review r9).
+      .replace(
+        /(^|[\s([{—–-])'(?=(?:twas|tis|em|n|cause|til|round|bout|ere)(?![\p{L}]))/gimu,
+        "$1’",
+      )
       .replace(/(^|[\s([{—–-])'/gmu, "$1‘")
       .replace(/'/gu, "’");
     if (curly !== text) found = true;
@@ -200,11 +205,12 @@ export const quoteEnter = keymap.of([
       const head = line.text.slice(0, from - line.from);
       const tail = line.text.slice(from - line.from);
       // Enter on a split's empty new line (`@Rupert “` and nothing yet) ends the speech there,
-      // as Enter on an empty list item ends a list.
+      // as Enter on an empty list item ends a list: a new paragraph follows (review r9), so two
+      // Enters after a quote make one, as they do anywhere else.
       if (!tail.trim() && /^@\p{L}[\p{L}\p{M}\p{N}_'’-]*[ \t]*(\([^()]*\))?[ \t]*“$/u.test(head)) {
         view.dispatch({
-          changes: { from: line.from, to: line.to, insert: "" },
-          selection: { anchor: line.from },
+          changes: { from: line.from, to: line.to, insert: "\n" },
+          selection: { anchor: line.from + 1 },
           userEvent: "delete",
         });
         return true;

@@ -15,5 +15,10 @@ describe("pasted text (r7)", () => {
       userEvent: "input.paste",
     }).state;
     expect(single.doc.toString()).toBe("He said ‘no’ and left.");
+    const elided = state.update({
+      changes: { from: 0, insert: "'Twas rock 'n' roll, 'em all." },
+      userEvent: "input.paste",
+    }).state;
+    expect(elided.doc.toString()).toBe("’Twas rock ’n’ roll, ’em all.");
   });
 });

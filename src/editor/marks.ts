@@ -408,15 +408,37 @@ function unclosedBrackets(story: Story): EditorMark[] {
     const swallowed = /(^|[^\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\([^)]*[“"«„][^)]*\)/u.exec(
       line,
     );
-    if (swallowed && !open && !inNote(at(swallowed.index)))
+    if (swallowed && !open && !inNote(at(swallowed.index))) {
+      // One click (review r9): the ) moved to just before the quote, as `(` auto-closes it after.
+      const start = swallowed.index + (swallowed[1] ?? "").length;
+      const end = swallowed.index + swallowed[0].length;
+      const paren = line.indexOf("(", start);
+      const inside = line.slice(paren + 1, end - 1);
+      const quote = inside.search(/[“"«„]/u);
+      const how = inside.slice(0, quote).trimEnd();
+      const said = inside.slice(quote).trimEnd();
       out.push({
         kind: "warning",
-        from: at(swallowed.index + (swallowed[1] ?? "").length),
-        to: at(swallowed.index + swallowed[0].length),
+        from: at(start),
+        to: at(end),
         message:
           "The direction runs into the quote: close it with ) before the quote, (sleepily) “…”",
         code: "direction-quote",
+        ...(how
+          ? {
+              fix: {
+                from: at(paren),
+                to: at(end),
+                insert: `(${how}) ${said}`,
+                label: `Close it before “${said
+                  .replace(/^[“"«„]+/u, "")
+                  .split(/\s/u)[0]
+                  ?.slice(0, 20)}”`,
+              },
+            }
+          : {}),
       });
+    }
     offset += line.length + 1;
   }
   return out;
@@ -698,7 +720,11 @@ export function editorMarks(source: string): EditorMark[] {
   // A direction left open after a name is the mistake (review r8): its mark then gives the name
   // nothing to say, but that follows from it, and the fix is to close the direction.
   const open = new Set(
-    marks.flatMap((m) => (m.kind === "warning" && m.code === "open-direction" ? [m.from] : [])),
+    marks.flatMap((m) =>
+      m.kind === "warning" && (m.code === "open-direction" || m.code === "direction-quote")
+        ? [m.from]
+        : [],
+    ),
   );
   return open.size
     ? marks.filter((m) => !(m.kind === "warning" && m.code === "idle-mark" && open.has(m.from)))

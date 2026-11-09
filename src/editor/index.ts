@@ -95,13 +95,15 @@ export {
   livePreview,
   marksField,
   openField,
+  sceneNumbers,
   setShowMarks,
   setView,
   showMarksField,
   viewField,
 } from "./decorations";
 export { completions } from "./complete";
-export type { PageTurnTools } from "./widgets";
+export type { PageTurnTools, ReadAloud } from "./widgets";
+export { readSceneName, sceneNameChange, spokenName } from "./scene-names";
 export { smartQuotes } from "./quotes";
 export { type EditorMark, editDistance, editorMarks } from "./marks";
 export { startCompletion } from "@codemirror/autocomplete";

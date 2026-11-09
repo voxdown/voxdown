@@ -1,4 +1,5 @@
 import { type EditorView, WidgetType } from "@codemirror/view";
+import { readSceneName } from "./scene-names";
 
 /**
  * The small pieces the editor draws in place of raw marks on lines you aren't typing in: a
@@ -28,6 +29,18 @@ export type PageTurnTools = (
   place: "before" | "after",
 ) => (() => void) | undefined;
 
+/**
+ * The speaker on a scene's mark (owner, 9 Nov): the scene's name, and what the line after the
+ * mark says aloud, if anything.
+ */
+export type ReadAloud = {
+  name: string;
+  /** What the line reading it aloud says, or null when there is none. */
+  said: string | null;
+  /** It says an old name (the scene's number changed since). */
+  stale: boolean;
+};
+
 const toolsDone = new WeakMap<HTMLElement, () => void>();
 
 /** The host's controls, in a box of their own either side of a mark's label. */
@@ -48,7 +61,8 @@ function mountTools(el: HTMLElement, tools: PageTurnTools | undefined) {
 }
 
 const inTools = (event: Event) =>
-  event.target instanceof Element && Boolean(event.target.closest(".am-page-tools"));
+  event.target instanceof Element &&
+  Boolean(event.target.closest(".am-page-tools, .am-read-aloud"));
 
 export class ChipWidget extends WidgetType {
   constructor(
@@ -128,6 +142,8 @@ export class LineWidget extends WidgetType {
     readonly trailing = false,
     /** Whose lines it holds (a group's), for a host that picks out one speaker (Listen as). */
     readonly speaker?: string,
+    /** A scene's speaker, reading its name aloud (owner, 9 Nov). */
+    readonly readAloud?: ReadAloud,
   ) {
     super();
   }
@@ -139,11 +155,14 @@ export class LineWidget extends WidgetType {
       other.title === this.title &&
       other.trailing === this.trailing &&
       other.speaker === this.speaker &&
-      Boolean(other.tools) === Boolean(this.tools)
+      Boolean(other.tools) === Boolean(this.tools) &&
+      other.readAloud?.name === this.readAloud?.name &&
+      other.readAloud?.said === this.readAloud?.said &&
+      other.readAloud?.stale === this.readAloud?.stale
     );
   }
 
-  toDOM() {
+  toDOM(view: EditorView) {
     const el = document.createElement("span");
     el.className = `am-line-${this.kind}`;
     const label = document.createElement("span");
@@ -155,6 +174,7 @@ export class LineWidget extends WidgetType {
     if (this.speaker) el.dataset.speaker = this.speaker.toLowerCase();
     if (this.kind === "turn" || this.kind === "break" || this.kind === "heading")
       el.style.display = "flex";
+    if (this.readAloud) el.append(readAloudButton(view, el, this.readAloud));
     mountTools(el, this.tools);
     return el;
   }
@@ -170,19 +190,54 @@ export class LineWidget extends WidgetType {
 
 /** A waveform, as Voice Lab's icon draws it: a sound chip starts with it. */
 const WAVEFORM = "M2 10v3 M6 6v11 M10 3v18 M14 8v7 M18 5v13 M22 10v3";
+/** A speaker, and the sound coming from it when it's on. */
+const SPEAKER = "M11 5 6 9H2v6h4l5 4V5z";
+const SPEAKING = "M15.5 8.5a5 5 0 0 1 0 7 M19 5a10 10 0 0 1 0 14";
 
-function soundIcon(): SVGSVGElement {
+function icon(path: string, className: string): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("fill", "none");
   svg.setAttribute("stroke", "currentColor");
   svg.setAttribute("stroke-width", "2");
   svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
-  svg.classList.add("am-chip-icon");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", WAVEFORM);
-  svg.append(path);
+  svg.classList.add(className);
+  const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  shape.setAttribute("d", path);
+  svg.append(shape);
   return svg;
+}
+
+const soundIcon = () => icon(WAVEFORM, "am-chip-icon");
+
+/**
+ * The speaker beside a scene's name (owner, 9 Nov): pressed, the scene's name is read aloud as
+ * the scene starts, written as a line of its own after the mark; pressed again, it isn't.
+ */
+function readAloudButton(view: EditorView, line: HTMLElement, read: ReadAloud) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "am-read-aloud";
+  const on = read.said !== null;
+  button.setAttribute("aria-pressed", String(on));
+  button.setAttribute("aria-label", `Read “${read.name}” aloud`);
+  if (read.stale) button.dataset.stale = "";
+  button.title = !on
+    ? `Read “${read.name}” aloud as the scene starts: a line of its own after this mark`
+    : read.stale
+      ? `Reads “${read.said}” aloud, but the scene is ${read.name} now: click to say its name now`
+      : `Reads “${read.said}” aloud as the scene starts. Click to take the line out`;
+  button.append(icon(on ? `${SPEAKER} ${SPEAKING}` : SPEAKER, "am-read-aloud-icon"));
+  // The text keeps its cursor and the line stays as it reads.
+  button.addEventListener("mousedown", (event) => event.preventDefault());
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    const at = view.posAtDOM(line);
+    readSceneName(view, at, read.name);
+    view.focus();
+  });
+  return button;
 }

@@ -9,7 +9,8 @@ import {
 } from "@codemirror/view";
 import { LabelWidget, stackLabels } from "./labels";
 import { type EditorMark, editorMarks } from "./marks";
-import { ChipWidget, LineWidget, type PageTurnTools } from "./widgets";
+import { spokenName } from "./scene-names";
+import { ChipWidget, LineWidget, type PageTurnTools, type ReadAloud } from "./widgets";
 
 /**
  * Live preview: every line shows the story as it reads, with a character's name as a chip in their
@@ -58,8 +59,16 @@ export type PreviewOptions = {
   pageLabel?: (state: EditorState, from: number) => string | undefined;
   /** The host's controls on every page turn drawn (Studio's chime and rest, review r15). */
   pageTurnTools?: PageTurnTools;
-  /** What a scene break opens (a scene's name or number), by where its mark starts. */
-  sceneLabel?: (state: EditorState, from: number) => string | undefined;
+  /**
+   * What a scene break opens, by where its mark starts and the scene's number in text order
+   * (`sceneNumbers`). Unless said, `Scene N`.
+   */
+  sceneLabel?: (state: EditorState, from: number, scene: number) => string | undefined;
+  /**
+   * A speaker on every scene break and heading that reads the scene's name aloud (owner, 9 Nov):
+   * it writes `Name.` as a line of its own after the mark, and takes it out again.
+   */
+  readSceneAloud?: boolean;
 };
 
 /** What the page draws, as Performance's switches choose (1082). */
@@ -113,6 +122,22 @@ export const marksField = StateField.define<EditorMark[]>({
     return tr.docChanged ? editorMarks(tr.state.doc.toString()) : marks;
   },
 });
+
+/**
+ * Each scene break's and heading's scene, numbered in text order (owner, 9 Nov), by where its
+ * mark starts: the story's first scene has no mark before it, unless the text opens with one.
+ */
+export function sceneNumbers(state: EditorState): Map<number, number> {
+  const marks = state.field(marksField);
+  const starts = marks
+    .filter((m) => m.kind === "break" || m.kind === "heading")
+    .map((m) => m.from)
+    .sort((a, b) => a - b);
+  const body = marks.find((m) => m.kind === "frontmatter")?.to ?? 0;
+  const first = starts[0];
+  const opensWithOne = first !== undefined && !state.sliceDoc(body, first).trim();
+  return new Map(starts.map((from, index) => [from, index + (opensWithOne ? 1 : 2)]));
+}
 
 /** Lines short enough to show raw while you type in them; long paragraphs show only the mark you're in. */
 const SHORT_LINE = 160;
@@ -208,6 +233,13 @@ const shortSound = (text: string) => {
 function build(view: EditorView, options: PreviewOptions): DecorationSet {
   const { state } = view;
   const marks = state.field(marksField);
+  const scenes = sceneNumbers(state);
+  /** The speaker on a scene's mark, when the host has it (owner, 9 Nov). */
+  const readAloud = (markEnd: number, name: string): ReadAloud | undefined => {
+    if (!options.readSceneAloud) return undefined;
+    const said = spokenName(state, markEnd, name);
+    return { name, said: said?.said ?? null, stale: said?.stale ?? false };
+  };
   const raw = state.field(showMarksField);
   const shown = state.field(viewField);
   const pagesOff = options.pageTurns ? !options.pageTurns() : false;
@@ -541,25 +573,39 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 "heading",
                 mark.text,
                 mark.hidden ? "Scene name (not read aloud)" : "Heading",
+                undefined,
+                false,
+                undefined,
+                readAloud(mark.to, mark.text),
               ),
             }),
           );
         break;
-      case "break":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-break am-raw" }));
-        else
-          add(
-            mark.from,
-            mark.to,
-            Decoration.replace({
-              widget: new LineWidget(
-                "break",
-                options.sceneLabel?.(state, mark.from) ?? "scene break",
-                "Scene break: ---",
-              ),
-            }),
-          );
+      case "break": {
+        if (showRaw) {
+          add(mark.from, mark.to, Decoration.mark({ class: "am-break am-raw" }));
+          break;
+        }
+        // The scene it opens, numbered in text order (owner, 9 Nov).
+        const number = scenes.get(mark.from) ?? 1;
+        const label = options.sceneLabel?.(state, mark.from, number) ?? `Scene ${number}`;
+        add(
+          mark.from,
+          mark.to,
+          Decoration.replace({
+            widget: new LineWidget(
+              "break",
+              label,
+              "Scene break: ---",
+              undefined,
+              false,
+              undefined,
+              readAloud(mark.to, label),
+            ),
+          }),
+        );
         break;
+      }
     }
   }
   // A replacement inside another (an escape inside a note) would fight it: the outer one wins.

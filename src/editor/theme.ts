@@ -259,6 +259,38 @@ export const scriptTheme = EditorView.theme({
       height: "1px",
       background: "var(--am-line, #d0d4da)",
     },
+  // The speaker beside a scene's name (owner, 9 Nov): quiet until wanted, warm when it reads the
+  // name aloud, dashed when the line it wrote says an old name.
+  ".am-read-aloud": {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: "none",
+    width: "22px",
+    height: "22px",
+    margin: "0 -6px",
+    padding: "0",
+    border: "1px solid transparent",
+    borderRadius: "999px",
+    background: "transparent",
+    color: "inherit",
+    opacity: "0.5",
+    cursor: "pointer",
+    transition:
+      "opacity var(--ui-motion-quick, 120ms) ease, background-color var(--ui-motion-quick, 120ms) ease",
+  },
+  ".am-read-aloud:hover, .am-read-aloud:focus-visible": {
+    opacity: "1",
+    backgroundColor: "color-mix(in srgb, currentColor 10%, transparent)",
+  },
+  ".am-read-aloud:focus-visible": {
+    outline: "2px solid var(--am-focus, #2563eb)",
+    outlineOffset: "1px",
+  },
+  '.am-read-aloud[aria-pressed="true"]': { opacity: "1", color: "var(--am-page, #a35b0e)" },
+  ".am-read-aloud[data-stale]": { borderStyle: "dashed", borderColor: "currentColor" },
+  ".am-read-aloud-icon": { width: "14px", height: "14px" },
+  "@media (prefers-reduced-motion: reduce)": { ".am-read-aloud": { transition: "none" } },
   ".am-line-group": {
     fontFamily: "var(--am-ui-font, system-ui, sans-serif)",
     fontSize: "0.74em",

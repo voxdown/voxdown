@@ -6,14 +6,17 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
+import { LabelWidget, stackLabels } from "./labels";
 import { type EditorMark, editorMarks } from "./marks";
 import { ChipWidget, LineWidget } from "./widgets";
 
 /**
  * Live preview: every line shows the story as it reads, with a character's name as a chip in their
- * colour, a direction as a small label, sounds and page turns as chips, and scene breaks and groups
- * drawn across the page. The line you are typing in shows its raw marks instead, and "Show marks"
- * shows them everywhere.
+ * colour, a direction as a small label above the words it directs (Performance's look, 1082),
+ * sounds and page turns as chips, and scene breaks and groups drawn across the page. The line you
+ * are typing in shows its raw marks instead, and "Show marks" shows them everywhere. Switches
+ * (as Performance's) leave out names, directions, sounds, character sounds, page turns or notes,
+ * or the speakers' colours, everywhere but where you type.
  */
 export type Character = {
   handle: string;
@@ -38,7 +41,49 @@ export type PreviewOptions = {
    * with this title instead of as a chip naming them.
    */
   toolMarks?: Readonly<Record<string, { text: string; title: string }>>;
+  /** Which kinds of mark are drawn to begin with (all of them unless said). */
+  view?: Partial<ViewSwitches>;
+  /**
+   * A host's status for a sound or a character's sound, by where its mark starts (a take's, say):
+   * set on its chip as `data-status`, for the host to draw. Read again whenever the host sends an
+   * effect.
+   */
+  chipStatus?: (state: EditorState, from: number) => { name: string; title: string } | undefined;
 };
+
+/** What the page draws, as Performance's switches choose (1082). */
+export type ViewSwitches = {
+  /** Each speaker's words underlined, and their name chip, in their colour. */
+  colour: boolean;
+  names: boolean;
+  directions: boolean;
+  sounds: boolean;
+  /** Sounds a character makes: `@Gerald [snores]`. */
+  vocal: boolean;
+  pages: boolean;
+  notes: boolean;
+};
+
+const ALL_ON: ViewSwitches = {
+  colour: true,
+  names: true,
+  directions: true,
+  sounds: true,
+  vocal: true,
+  pages: true,
+  notes: true,
+};
+
+export const setView = StateEffect.define<Partial<ViewSwitches>>();
+
+export const viewField = StateField.define<ViewSwitches>({
+  create: () => ALL_ON,
+  update(value, tr) {
+    let next = value;
+    for (const e of tr.effects) if (e.is(setView)) next = { ...next, ...e.value };
+    return next;
+  },
+});
 
 export const setShowMarks = StateEffect.define<boolean>();
 
@@ -84,6 +129,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
   const { state } = view;
   const marks = state.field(marksField);
   const raw = state.field(showMarksField);
+  const shown = state.field(viewField);
   const pagesOff = options.pageTurns ? !options.pageTurns() : false;
   const active = activeLines(state);
   const people = new Map(options.characters().map((c) => [c.handle.toLowerCase(), c]));
@@ -106,6 +152,13 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
     Decoration.mark(
       color ? { class: cls, attributes: { style: `--am-speaker: ${color}` } } : { class: cls },
     );
+  /** A mark switched off: left out, with one space so the words either side still read. */
+  const leaveOut = (from: number, to: number) => {
+    const line = state.doc.lineAt(from);
+    const after = state.sliceDoc(to, to + 1) === " ";
+    const before = from > line.from && state.sliceDoc(from - 1, from) === " ";
+    add(from, after && (before || from === line.from) ? to + 1 : to, Decoration.replace({}));
+  };
 
   // A blank line between paragraphs reads as a paragraph's gap, not a whole empty line.
   for (const { from, to } of view.visibleRanges) {
@@ -128,13 +181,14 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
       active.has(lineNo) ||
       touchesSelection(state, mark.from, mark.to) ||
       mark.to > state.doc.length;
-    const color = colorOf("speaker" in mark ? mark.speaker : undefined);
+    const color = shown.colour ? colorOf("speaker" in mark ? mark.speaker : undefined) : undefined;
     switch (mark.kind) {
       case "speech":
-        add(mark.from, mark.to, tinted("am-speech", color));
+        if (shown.colour || showRaw) add(mark.from, mark.to, tinted("am-speech", color));
         break;
       case "directed":
-        add(mark.from, mark.to, Decoration.mark({ class: "am-directed" }));
+        if (shown.directions || showRaw)
+          add(mark.from, mark.to, Decoration.mark({ class: "am-directed" }));
         break;
       case "warning":
         add(
@@ -155,6 +209,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       case "name":
         if (showRaw) add(mark.from, mark.to, tinted("am-name am-raw", color));
+        else if (!shown.names) leaveOut(mark.from, mark.to);
         else
           add(
             mark.from,
@@ -180,21 +235,18 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       case "direction":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-direction am-raw" }));
-        else
+        else if (!shown.directions) leaveOut(mark.from, mark.to);
+        else {
+          // Above the words it directs: the space after it goes too, so the words keep their place.
+          const end = state.sliceDoc(mark.to, mark.to + 1) === " " ? mark.to + 1 : mark.to;
           add(
             mark.from,
-            mark.to,
+            end,
             Decoration.replace({
-              widget: new ChipWidget(
-                "direction",
-                mark.text,
-                undefined,
-                "Direction",
-                undefined,
-                mark.from,
-              ),
+              widget: new LabelWidget(mark.text, "Direction: click to change it", mark.from),
             }),
           );
+        }
         break;
       case "run-repeat":
         // A run's later lines: the bar beside them carries the direction, drawn once above.
@@ -212,6 +264,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       case "sound":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-sound am-raw" }));
+        else if (!shown.sounds) leaveOut(mark.from, mark.to);
         else
           add(
             mark.from,
@@ -224,12 +277,14 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 mark.text,
                 undefined,
                 mark.from,
+                options.chipStatus?.(state, mark.from),
               ),
             }),
           );
         break;
       case "vocal":
         if (showRaw) add(mark.from, mark.to, tinted("am-name am-raw", color));
+        else if (!shown.vocal) leaveOut(mark.from, mark.to);
         else
           add(
             mark.from,
@@ -242,12 +297,14 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 mark.text,
                 undefined,
                 mark.from,
+                options.chipStatus?.(state, mark.from),
               ),
             }),
           );
         break;
       case "page":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-page am-raw" }));
+        else if (!shown.pages) leaveOut(mark.from, mark.to);
         else if (mark.ownLine)
           add(
             mark.from,
@@ -326,6 +383,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
       }
       case "note":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-note" }));
+        else if (!shown.notes) leaveOut(mark.from, mark.to);
         else
           add(
             mark.from,
@@ -410,7 +468,9 @@ const isReplace = (deco: Decoration) =>
 export function livePreview(options: PreviewOptions): Extension {
   return [
     showMarksField.init(() => options.showMarks ?? false),
+    viewField.init(() => ({ ...ALL_ON, ...options.view })),
     marksField,
+    stackLabels,
     ViewPlugin.fromClass(
       class {
         decorations: DecorationSet;
@@ -418,9 +478,8 @@ export function livePreview(options: PreviewOptions): Extension {
           this.decorations = build(view, options);
         }
         update(update: ViewUpdate) {
-          const toggled = update.transactions.some((tr) =>
-            tr.effects.some((e) => e.is(setShowMarks)),
-          );
+          // Any effect may change what is drawn (a switch, or the host's statuses).
+          const toggled = update.transactions.some((tr) => tr.effects.length > 0);
           if (update.docChanged || update.selectionSet || toggled || update.viewportChanged)
             this.decorations = build(update.view, options);
         }

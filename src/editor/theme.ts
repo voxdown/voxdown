@@ -91,6 +91,28 @@ export const scriptTheme = EditorView.theme({
     backgroundColor: "color-mix(in srgb, var(--am-speaker, #b45309) 18%, transparent)",
     boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--am-speaker, #b45309) 40%, transparent)",
   },
+  // A direction above the words it directs (1082): a zero-width anchor as tall as its label
+  // stack, so the row makes room; the label hangs from it, stacked a row up where two would meet.
+  ".am-label-anchor": {
+    display: "inline-block",
+    position: "relative",
+    width: "0",
+    height: "calc(1.15em + (var(--am-row, 0) + 1) * 14px)",
+    verticalAlign: "baseline",
+  },
+  ".am-label": {
+    position: "absolute",
+    left: "0",
+    bottom: "calc(1.05em + var(--am-row, 0) * 14px)",
+    transform: "translateX(var(--am-shift, 0px))",
+    whiteSpace: "nowrap",
+    fontFamily: "var(--am-ui-font, system-ui, sans-serif)",
+    fontStyle: "italic",
+    fontSize: "11.5px",
+    lineHeight: "14px",
+    color: "var(--am-direction, #7c3aed)",
+    cursor: "text",
+  },
   ".am-chip-direction": {
     fontStyle: "italic",
     color: "var(--am-direction, #7c3aed)",

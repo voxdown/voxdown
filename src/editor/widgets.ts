@@ -26,6 +26,8 @@ export class ChipWidget extends WidgetType {
     readonly title: string,
     readonly onClick?: (view: EditorView, from: number) => void,
     readonly from = 0,
+    /** The host's status for what the chip stands for (a take's), drawn as a dot inside it. */
+    readonly status?: { name: string; title: string },
   ) {
     super();
   }
@@ -36,7 +38,9 @@ export class ChipWidget extends WidgetType {
       other.text === this.text &&
       other.color === this.color &&
       other.title === this.title &&
-      other.from === this.from
+      other.from === this.from &&
+      other.status?.name === this.status?.name &&
+      other.status?.title === this.status?.title
     );
   }
 
@@ -45,8 +49,9 @@ export class ChipWidget extends WidgetType {
     el.className = `am-chip am-chip-${this.kind}`;
     if (this.kind === "sound" || this.kind === "vocal") el.append(soundIcon());
     el.append(document.createTextNode(this.text));
-    el.title = this.title;
+    el.title = this.status ? `${this.title} · ${this.status.title}` : this.title;
     el.dataset.amChip = this.kind;
+    if (this.status) el.dataset.status = this.status.name;
     if (this.color) el.style.setProperty("--am-speaker", this.color);
     if (this.onClick) {
       const onClick = this.onClick;

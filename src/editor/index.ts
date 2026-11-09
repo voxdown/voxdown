@@ -46,10 +46,13 @@ export { scriptTheme } from "./theme";
 export {
   type Character,
   type PreviewOptions,
+  type ViewSwitches,
   livePreview,
   marksField,
   setShowMarks,
+  setView,
   showMarksField,
+  viewField,
 } from "./decorations";
 export { completions } from "./complete";
 export { smartQuotes } from "./quotes";

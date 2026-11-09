@@ -35,6 +35,15 @@ describe("editor marks", () => {
     ).toBe(false);
   });
 
+  it("closes the gap in @ Rupert in one click (r4)", () => {
+    const source = "He sighed. @ Rupert “Fine.”";
+    const warning = editorMarks(source).find((m) => m.kind === "warning" && m.code === "loose-at");
+    const fix = warning?.kind === "warning" ? warning.fix : undefined;
+    expect(fix?.label).toBe("Change to @Rupert");
+    const fixed = fix ? source.slice(0, fix.from) + fix.insert + source.slice(fix.to) : source;
+    expect(fixed).toBe("He sighed. @Rupert “Fine.”");
+  });
+
   it("reads a misspelt instruction with a length as a pause, not a page turn (r3)", () => {
     const warning = editorMarks("Then {paws 2s} quiet.").find(
       (m) => m.kind === "warning" && m.code === "unknown-instruction",

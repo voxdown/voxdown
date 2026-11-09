@@ -297,15 +297,25 @@ function unclosedBrackets(story: Story): EditorMark[] {
         fix: { from: at(from), to: at(from + words.length), insert: `(${words})` },
       });
     }
-    const loose = /(^|[^\p{L}\p{N}\\])@\s+\p{L}/u.exec(line);
-    if (loose && !inNote(at(loose.index)))
+    const loose = /(^|[^\p{L}\p{N}\\])@(\s+)(\p{L}[\p{L}\p{M}\p{N}_'’-]*)/u.exec(line);
+    if (loose && !inNote(at(loose.index))) {
+      const sign = loose.index + (loose[1] ?? "").length;
+      const name = loose[3] ?? "";
       out.push({
         kind: "warning",
-        from: at(loose.index + (loose[1] ?? "").length),
-        to: at(loose.index + loose[0].length),
+        from: at(sign),
+        to: at(sign + 1 + (loose[2] ?? "").length + 1),
         message: "@ needs the name straight after it (@Rupert), or the narrator reads it out.",
         code: "loose-at",
+        // One click closes the gap (review r4).
+        fix: {
+          from: at(sign + 1),
+          to: at(sign + 1 + (loose[2] ?? "").length),
+          insert: "",
+          label: `Change to @${name}`,
+        },
       });
+    }
     // An @ with no name, direction or sound after it says nothing, and is left out (review r2).
     for (const lone of line.matchAll(
       /(^|[^\p{L}\p{N}\\])@(?=[ \t]*$|[ \t]*[^\p{L}\p{N}(\[\s])/gu,

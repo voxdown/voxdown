@@ -12,10 +12,35 @@ import { scriptTheme } from "./theme";
  */
 export type ScriptEditorOptions = PreviewOptions;
 
+/**
+ * Typing over a selection (1082, review r4): the browser would replace it itself, and across lines
+ * it reads the chips' labels inside back as words. The editor replaces the selection instead,
+ * through the same typing aids as any keystroke (curly quotes and the rest).
+ */
+const typeOverSelection = EditorView.domEventHandlers({
+  beforeinput(event, view) {
+    if (view.state.readOnly || event.inputType !== "insertText" || !event.data) return false;
+    const { ranges, main } = view.state.selection;
+    if (main.empty || ranges.length > 1) return false;
+    event.preventDefault();
+    const text = event.data;
+    const insert = () =>
+      view.state.update(view.state.replaceSelection(text), {
+        userEvent: "input.type",
+        scrollIntoView: true,
+      });
+    for (const handler of view.state.facet(EditorView.inputHandler))
+      if (handler(view, main.from, main.to, text, insert)) return true;
+    view.dispatch(insert());
+    return true;
+  },
+});
+
 export function scriptEditor(options: ScriptEditorOptions): Extension {
   return [
     scriptTheme,
     EditorView.lineWrapping,
+    typeOverSelection,
     livePreview(options),
     completions(options.characters),
     ...(options.smartQuotes === false

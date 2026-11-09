@@ -35,6 +35,18 @@ describe("editor marks", () => {
     ).toBe(false);
   });
 
+  it("reads a bare pause length as seconds, in one click (r6)", () => {
+    for (const [typed, fixed] of [
+      ["{pause 2}", "{pause 2s}"],
+      ["{pause 1.5 seconds}", "{pause 1.5s}"],
+    ] as const) {
+      const warning = editorMarks(`Then ${typed} quiet.`).find(
+        (m) => m.kind === "warning" && m.code === "pause-value",
+      );
+      expect(warning?.kind === "warning" ? warning.fix?.insert : undefined).toBe(fixed);
+    }
+  });
+
   it("offers to close a quote left open, after its sentence or at the line's end (r5)", () => {
     const close = (source: string) => {
       const warning = editorMarks(source).find(

@@ -116,6 +116,21 @@ function plain(
         : {}),
     };
   }
+  // A pause with a bare number (review r6): seconds, as written most often ({pause 2} → 2s).
+  if (warning.code === "pause-value") {
+    const raw = source.slice(warning.range.from, warning.range.to);
+    const bare = /^\{\s*pause\s+(\d+(?:\.\d+)?)\s*(?:sec|secs|seconds?)?\s*\}$/iu.exec(raw);
+    if (bare)
+      return {
+        message: warning.message,
+        fix: {
+          from: warning.range.from,
+          to: warning.range.to,
+          insert: `{pause ${bare[1]}s}`,
+          label: `Change to {pause ${bare[1]}s}`,
+        },
+      };
+  }
   // A quote never closed (review r5): closed after its first sentence when more follows on the
   // line (narration typed on after it), else at the line's end.
   if (warning.code === "unclosed-quote") {

@@ -374,6 +374,14 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           );
         break;
       case "instruction": {
+        // Words printed but never read aloud, or neither, look quieter than the words heard
+        // (1082, review r2): the line they are on.
+        if (mark.text === "book only" || mark.text === "hidden")
+          add(
+            state.doc.lineAt(mark.from).from,
+            state.doc.lineAt(mark.from).from,
+            Decoration.line({ class: "am-unheard" }),
+          );
         // A mistyped instruction looks like one: drawn as a warning, not a quiet chip.
         const wrong = marks.find(
           (m) => m.kind === "warning" && m.from < mark.to && mark.from < m.to,

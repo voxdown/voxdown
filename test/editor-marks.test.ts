@@ -35,6 +35,17 @@ describe("editor marks", () => {
     ).toBe(false);
   });
 
+  it("points out an @ with nothing after it, and takes it out in one click (r2)", () => {
+    const source = "He looked up. @ “Lovely.” And @. Then @Rupert “Fine.” mail@home";
+    const lone = editorMarks(source).filter((m) => m.kind === "warning" && m.code === "lone-at");
+    expect(lone.map((m) => m.from)).toEqual([source.indexOf("@ “"), source.indexOf("@.")]);
+    const fix = lone[0]?.kind === "warning" ? lone[0].fix : undefined;
+    expect(fix).toMatchObject({ insert: "", label: "Take it out" });
+    expect(editorMarks("Then @").some((m) => m.kind === "warning" && m.code === "lone-at")).toBe(
+      true,
+    );
+  });
+
   it("offers to close a group left open after its paragraph (r1)", () => {
     const source = "::: whispering\nOne.\nTwo.\n\nThree.\n";
     const warning = editorMarks(source).find(

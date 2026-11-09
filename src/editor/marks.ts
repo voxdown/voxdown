@@ -304,6 +304,22 @@ function unclosedBrackets(story: Story): EditorMark[] {
         message: "@ needs the name straight after it (@Rupert), or the narrator reads it out.",
         code: "loose-at",
       });
+    // An @ with no name, direction or sound after it says nothing, and is left out (review r2).
+    for (const lone of line.matchAll(
+      /(^|[^\p{L}\p{N}\\])@(?=[ \t]*$|[ \t]*[^\p{L}\p{N}(\[\s])/gu,
+    )) {
+      const from = (lone.index ?? 0) + (lone[1] ?? "").length;
+      if (inNote(at(from))) continue;
+      out.push({
+        kind: "warning",
+        from: at(from),
+        to: at(from + 1),
+        message:
+          "This @ has no name after it, so it is left out. Write the name straight after it (@Rupert), or take it out.",
+        code: "lone-at",
+        fix: { from: at(from), to: at(from + 1), insert: "", label: "Take it out" },
+      });
+    }
     const open = /(^|[^\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\([^)]*$/u.exec(line);
     if (open && !inNote(at(open.index)))
       out.push({

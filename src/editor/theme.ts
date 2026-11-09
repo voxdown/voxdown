@@ -80,6 +80,10 @@ export const scriptTheme = EditorView.theme({
     textDecorationThickness: "1.5px",
     textUnderlineOffset: "3px",
   },
+  ".cm-line.am-unheard": {
+    color: "color-mix(in srgb, currentColor 55%, transparent)",
+    fontStyle: "italic",
+  },
   ".am-in-group": {
     boxShadow: "inset 3px 0 0 color-mix(in srgb, var(--am-direction, #7c3aed) 45%, transparent)",
   },

@@ -1,4 +1,4 @@
-import type { Extension } from "@codemirror/state";
+import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 
 /**
@@ -8,35 +8,61 @@ import { EditorView, keymap } from "@codemirror/view";
  */
 const OPENS_AFTER = /[\s([{—–\-]$/u;
 
-export function smartQuotes(): Extension {
-  return EditorView.inputHandler.of((view, from, to, text) => {
-    if (view.state.readOnly) return false;
-    if (text === "%") return closeNote(view, from, to);
-    if (/^\d$/u.test(text) && pauseLength(view, from, to, text)) return true;
-    if (text === " " && leavePause(view, from, to)) return true;
-    if (text === " ") return noteSpace(view, from, to);
-    if (text !== '"' && text !== "'") return false;
-    const before = view.state.sliceDoc(Math.max(0, from - 1), from);
-    // 6" and 5' are measurements, not quotes.
-    if (/\d/u.test(before)) return false;
-    // A quote inside the other kind opens (“‘…’”); straight after its own opener, it closes it.
-    const nested = (text === '"' && before === "‘") || (text === "'" && before === "“");
-    // Straight after a name or its direction, a quote is the line it says: it opens.
-    const line = view.state.doc.lineAt(from);
-    const head = line.text.slice(0, from - line.from);
-    const afterMark =
-      text === '"' &&
-      /(^|[^\p{L}\p{N}\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?\s*(\([^()]*\))?\s*$/u.test(head);
-    const opening = from === 0 || before === "" || OPENS_AFTER.test(before) || nested || afterMark;
-    const insert = text === '"' ? (opening ? "“" : "”") : opening ? "‘" : "’";
-    view.dispatch({
-      changes: { from, to, insert },
-      selection: { anchor: from + insert.length },
-      userEvent: "input.type",
-    });
-    return true;
+/**
+ * Pasted words get the apostrophes typing would give them (it's → it’s). Only an apostrophe
+ * between two letters: quotes and measurements (6'2") are left as pasted.
+ */
+const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged || !tr.isUserEvent("input.paste")) return tr;
+  let found = false;
+  const specs: Array<{ from: number; to: number; insert: string }> = [];
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    const text = inserted.toString();
+    const curly = text.replace(/(?<=\p{L})'(?=\p{L})/gu, "’");
+    if (curly !== text) found = true;
+    specs.push({ from: fromA, to: toA, insert: curly });
   });
+  if (!found) return tr;
+  // Same length, so the selection and everything after stay where they were.
+  return {
+    changes: specs,
+    selection: tr.selection,
+    scrollIntoView: tr.scrollIntoView,
+    userEvent: "input.paste",
+  };
+});
+
+export function smartQuotes(): Extension {
+  return [pastedApostrophes, smartQuoteInput];
 }
+
+const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
+  if (view.state.readOnly) return false;
+  if (text === "%") return closeNote(view, from, to);
+  if (/^\d$/u.test(text) && pauseLength(view, from, to, text)) return true;
+  if (text === " " && leavePause(view, from, to)) return true;
+  if (text === " ") return noteSpace(view, from, to);
+  if (text !== '"' && text !== "'") return false;
+  const before = view.state.sliceDoc(Math.max(0, from - 1), from);
+  // 6" and 5' are measurements, not quotes.
+  if (/\d/u.test(before)) return false;
+  // A quote inside the other kind opens (“‘…’”); straight after its own opener, it closes it.
+  const nested = (text === '"' && before === "‘") || (text === "'" && before === "“");
+  // Straight after a name or its direction, a quote is the line it says: it opens.
+  const line = view.state.doc.lineAt(from);
+  const head = line.text.slice(0, from - line.from);
+  const afterMark =
+    text === '"' &&
+    /(^|[^\p{L}\p{N}\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?\s*(\([^()]*\))?\s*$/u.test(head);
+  const opening = from === 0 || before === "" || OPENS_AFTER.test(before) || nested || afterMark;
+  const insert = text === '"' ? (opening ? "“" : "”") : opening ? "‘" : "’";
+  view.dispatch({
+    changes: { from, to, insert },
+    selection: { anchor: from + insert.length },
+    userEvent: "input.type",
+  });
+  return true;
+});
 
 /**
  * A length typed straight after a finished `{pause}` is its length: `{pause} 1` becomes
@@ -44,8 +70,8 @@ export function smartQuotes(): Extension {
  */
 function pauseLength(view: EditorView, from: number, to: number, digit: string): boolean {
   if (from !== to) return false;
-  const before = view.state.sliceDoc(Math.max(0, from - 9), from);
-  const m = /\{pause\}( ?)$/iu.exec(before);
+  const before = view.state.sliceDoc(Math.max(0, from - 12), from);
+  const m = /\{pause\}([ \t]*)$/iu.exec(before);
   if (!m) return false;
   const close = from - 1 - (m[1] ?? "").length;
   view.dispatch({

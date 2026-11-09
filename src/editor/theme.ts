@@ -129,6 +129,15 @@ export const scriptTheme = EditorView.theme({
     whiteSpace: "normal",
     margin: "0 0.2em",
   },
+  // A host's own small mark (Kinu's join, a tie between two sentences): quiet, in the accent.
+  ".am-chip-tool": {
+    color: "var(--am-accent, #3b5bdb)",
+    fontSize: "1em",
+    fontWeight: "600",
+    verticalAlign: "-0.15em",
+    padding: "0",
+    margin: "0",
+  },
   ".am-chip-instruction": {
     color: "var(--am-muted, #6b7280)",
     border: "1px solid var(--am-line, #d0d4da)",

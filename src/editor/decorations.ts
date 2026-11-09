@@ -33,6 +33,11 @@ export type PreviewOptions = {
   smartQuotes?: boolean;
   /** Whether page turns do anything where this text goes; when not, they're drawn inactive. */
   pageTurns?: () => boolean;
+  /**
+   * The host's own instructions (§9.5), by name, such as `kinu:join`: drawn as this small mark
+   * with this title instead of as a chip naming them.
+   */
+  toolMarks?: Readonly<Record<string, { text: string; title: string }>>;
 };
 
 export const setShowMarks = StateEffect.define<boolean>();
@@ -298,20 +303,23 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         const wrong = marks.find(
           (m) => m.kind === "warning" && m.from < mark.to && mark.from < m.to,
         );
+        const tool = wrong ? undefined : options.toolMarks?.[mark.text.split(" ")[0] ?? ""];
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-note am-raw" }));
         else
           add(
             mark.from,
             mark.to,
             Decoration.replace({
-              widget: new ChipWidget(
-                wrong ? "warning" : "instruction",
-                mark.text,
-                undefined,
-                wrong && wrong.kind === "warning" ? wrong.message : mark.raw,
-                undefined,
-                mark.from,
-              ),
+              widget: tool
+                ? new ChipWidget("tool", tool.text, undefined, tool.title, undefined, mark.from)
+                : new ChipWidget(
+                    wrong ? "warning" : "instruction",
+                    mark.text,
+                    undefined,
+                    wrong && wrong.kind === "warning" ? wrong.message : mark.raw,
+                    undefined,
+                    mark.from,
+                  ),
             }),
           );
         break;

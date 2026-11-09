@@ -15,6 +15,7 @@ export type ChipKind =
   | "page"
   | "note"
   | "instruction"
+  | "tool"
   | "warning";
 
 export class ChipWidget extends WidgetType {

@@ -15,6 +15,7 @@ import {
   cleanText,
   codePointAt,
   codePointBefore,
+  holdsAt,
   isEscapable,
   isLetter,
   isLetterOrDigit,
@@ -173,11 +174,12 @@ function lexAtom(source: string, i: number, to: number, warn: Warn): Atom | null
 }
 
 /**
- * `@` is a mark when it is not preceded by a letter or digit and is followed by a name, `(` or
- * `[` (§5.2): a character mark, a direction (§6.2) or a sound for whoever is speaking (§8.2).
+ * `@` is a mark when it is not preceded by a letter or digit (a letter of a script written without
+ * spaces doesn't count) and is followed by a name, `(` or `[` (§5.2): a character mark, a
+ * direction (§6.2) or a sound for whoever is speaking (§8.2).
  */
 function lexAt(source: string, at: number, to: number): Atom | null {
-  if (isLetterOrDigit(codePointBefore(source, at))) return null;
+  if (holdsAt(codePointBefore(source, at))) return null;
   const next = source[at + 1];
   if (next === "(") {
     const close = matchParen(source, at + 1, to);

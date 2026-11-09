@@ -331,12 +331,19 @@ clown: Honk honk!
 Narrator (warmly): Once upon a time.
 ```
 
-`@` is only a mark when it is not preceded by a letter or digit, and when it is followed by a name, `(` or `[`. So email addresses and a lone `@` are just text. Write `\@` for a literal `@` anywhere.
+`@` is only a mark when it is not preceded by a letter or digit, and when it is followed by a name, `(` or `[`. So email addresses and a lone `@` are just text. In a script written without spaces between words (Chinese, Japanese, Thai, Lao, Khmer, Burmese), a mark may follow a letter directly: `最怕打雷的雷公@雷公 [笑]`. Write `\@` for a literal `@` anywhere.
 
 ```example
 Write to tom@example.com, or meet me @ noon.
 .
 Narrator: Write to tom@example.com, or meet me @ noon.
+```
+
+```example
+雷公听见了@雷公 [笑]
+.
+Narrator: 雷公听见了
+雷公 [笑]
 ```
 
 ```example

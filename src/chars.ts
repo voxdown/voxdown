@@ -15,6 +15,18 @@ export function isLetterOrDigit(char: string | undefined): boolean {
   return char !== undefined && LETTER_OR_DIGIT.test(char);
 }
 
+/** Scripts written without spaces between words: Chinese, Japanese, Thai, Lao, Khmer, Burmese. */
+const UNSPACED =
+  /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]$/u;
+
+/**
+ * A letter or digit that keeps a following `@` from being a mark (§5.2): any, except a letter of
+ * a script written without spaces, where a mark follows the word it belongs to directly.
+ */
+export function holdsAt(char: string | undefined): boolean {
+  return isLetterOrDigit(char) && !(char !== undefined && UNSPACED.test(char));
+}
+
 /** Whether a stretch has anything to say: speech with no letters or digits is not spoken (§12.1). */
 export function hasLetterOrDigit(text: string): boolean {
   return ANY_LETTER_OR_DIGIT.test(text);

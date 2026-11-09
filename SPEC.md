@@ -1539,6 +1539,7 @@ The format is meant to be edited both by hand and through a visual editor. A vis
 4. **Changing who says a line.** Replace the name in its mark. If the speech had no mark because it carried on an earlier one (§5.6), add a mark to it. If a later quote on the same line carried this one on, add a mark to that quote too, so its speaker stays the same.
 5. **Removing a direction.** Delete the parentheses, their content and one space. If the remaining character mark is not needed, remove it too.
 6. **Renaming a character.** Changing a full name touches only the front matter. Changing a short name replaces it in the cast and in every mark.
+7. **A tool's own divisions stay outside the text.** How a tool cuts the spoken script into pieces of its own, such as one audio recording per sentence, is the tool's business: it keeps that alongside the file, never as marks or line breaks in it.
 
 ## 14. Rendering
 

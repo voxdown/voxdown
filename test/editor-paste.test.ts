@@ -1,5 +1,6 @@
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
+import { scriptEditor } from "../src/editor";
 import { smartQuotes } from "../src/editor/quotes";
 
 describe("pasted text (r7)", () => {
@@ -25,5 +26,17 @@ describe("pasted text (r7)", () => {
       userEvent: "input.paste",
     }).state;
     expect(decade.doc.toString()).toBe("Back in the ’90s.");
+  });
+
+  it("leaves one space where words were cut from between others (r11)", () => {
+    const state = EditorState.create({
+      doc: "One. Two. Three.",
+      extensions: scriptEditor({ characters: () => [] }),
+    });
+    const cut = state.update({
+      changes: { from: 5, to: 9 },
+      userEvent: "delete.cut",
+    }).state;
+    expect(cut.doc.toString()).toBe("One. Three.");
   });
 });

@@ -1,4 +1,4 @@
-import { type Extension, Prec } from "@codemirror/state";
+import { EditorState, type Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { completions } from "./complete";
 import { type PreviewOptions, livePreview, setShowMarks, showMarksField } from "./decorations";
@@ -17,6 +17,18 @@ export type ScriptEditorOptions = PreviewOptions;
  * it reads the chips' labels inside back as words. The editor replaces the selection instead,
  * through the same typing aids as any keystroke (curly quotes and the rest).
  */
+/** Words cut from between others leave one space, not two (review r11). */
+const tidyCut = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged || !tr.isUserEvent("delete.cut")) return tr;
+  const extra: Array<{ from: number; to: number }> = [];
+  tr.changes.iterChanges((_fromA, _toA, fromB, _toB, inserted) => {
+    if (inserted.length) return;
+    if (tr.newDoc.sliceString(fromB - 1, fromB + 1) === "  ")
+      extra.push({ from: fromB, to: fromB + 1 });
+  });
+  return extra.length ? [tr, { changes: extra, sequential: true }] : tr;
+});
+
 const typeOverSelection = EditorView.domEventHandlers({
   beforeinput(event, view) {
     if (view.state.readOnly || event.inputType !== "insertText" || !event.data) return false;
@@ -41,6 +53,7 @@ export function scriptEditor(options: ScriptEditorOptions): Extension {
     scriptTheme,
     EditorView.lineWrapping,
     typeOverSelection,
+    tidyCut,
     livePreview(options),
     completions(options.characters),
     ...(options.smartQuotes === false

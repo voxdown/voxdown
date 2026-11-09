@@ -2,7 +2,7 @@ import { type Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { completions } from "./complete";
 import { type PreviewOptions, livePreview, setShowMarks, showMarksField } from "./decorations";
-import { markEnter, noteEnter, quoteBackspace, quoteEnter, smartQuotes } from "./quotes";
+import { lineJoin, markEnter, noteEnter, quoteBackspace, quoteEnter, smartQuotes } from "./quotes";
 import { scriptTheme } from "./theme";
 
 /**
@@ -26,6 +26,7 @@ export function scriptEditor(options: ScriptEditorOptions): Extension {
           Prec.high(markEnter),
           Prec.high(quoteEnter),
           Prec.high(quoteBackspace),
+          Prec.high(lineJoin),
         ]),
     Prec.low(
       keymap.of([

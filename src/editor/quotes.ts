@@ -271,6 +271,51 @@ const CLOSER: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
  * Enter inside a mark that isn't finished (`[hiccup`, `{pause 3s`, `@Rupert (softly`) closes it as
  * typed rather than breaking the line inside it. A suggestion picked from the list comes first.
  */
+/** Prose on both sides: words, not a group's `:::`, a heading, a break or a note's line. */
+const PROSE = /^(?!\s*(?::{3}|#{1,6}\s|-{3,}|\*{3,}|%%)).*[\p{L}\p{N}]/u;
+
+/**
+ * Two lines of words joined with Backspace at the start of the second (or Delete at the end of
+ * the first) keep a space between them: "throne," + "sat" is "throne, sat".
+ */
+export const lineJoin = keymap.of([
+  {
+    key: "Backspace",
+    run: (view) => {
+      const { from, to } = view.state.selection.main;
+      if (from !== to || view.state.readOnly) return false;
+      const line = view.state.doc.lineAt(from);
+      if (from !== line.from || line.number === 1) return false;
+      const above = view.state.doc.line(line.number - 1);
+      if (!PROSE.test(above.text) || !PROSE.test(line.text) || /\s$/u.test(above.text))
+        return false;
+      view.dispatch({
+        changes: { from: above.to, to: line.from, insert: " " },
+        selection: { anchor: above.to + 1 },
+        userEvent: "delete.backward",
+      });
+      return true;
+    },
+  },
+  {
+    key: "Delete",
+    run: (view) => {
+      const { from, to } = view.state.selection.main;
+      if (from !== to || view.state.readOnly) return false;
+      const line = view.state.doc.lineAt(from);
+      if (from !== line.to || line.number === view.state.doc.lines) return false;
+      const below = view.state.doc.line(line.number + 1);
+      if (!PROSE.test(line.text) || !PROSE.test(below.text) || /\s$/u.test(line.text)) return false;
+      view.dispatch({
+        changes: { from: line.to, to: below.from, insert: " " },
+        selection: { anchor: line.to },
+        userEvent: "delete.forward",
+      });
+      return true;
+    },
+  },
+]);
+
 /** The instructions a `{` can hold, by name. */
 const INSTRUCTION_NAMES = ["page", "pause", "book only", "audio only", "hidden"];
 

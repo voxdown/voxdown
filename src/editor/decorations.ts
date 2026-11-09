@@ -15,7 +15,13 @@ import { ChipWidget, LineWidget } from "./widgets";
  * drawn across the page. The line you are typing in shows its raw marks instead, and "Show marks"
  * shows them everywhere.
  */
-export type Character = { handle: string; name: string; color?: string };
+export type Character = {
+  handle: string;
+  name: string;
+  color?: string;
+  /** Written in the text but not in the cast yet: coloured, never suggested. */
+  provisional?: boolean;
+};
 
 export type PreviewOptions = {
   characters: () => readonly Character[];

@@ -130,14 +130,16 @@ export function completions(characters: () => readonly Character[]): Extension {
       const from = context.pos - typed.length;
       return {
         from,
-        options: characters().map(
-          (c): Completion => ({
-            label: c.handle,
-            ...(c.name !== c.handle ? { detail: c.name } : {}),
-            type: "variable",
-            apply: spaced(c.handle),
-          }),
-        ),
+        options: characters()
+          .filter((c) => !c.provisional)
+          .map(
+            (c): Completion => ({
+              label: c.handle,
+              ...(c.name !== c.handle ? { detail: c.name } : {}),
+              type: "variable",
+              apply: spaced(c.handle),
+            }),
+          ),
         validFor: /^[\p{L}\p{M}\p{N}_'’-]*$/u,
       };
     }

@@ -10,5 +10,10 @@ describe("pasted text (r7)", () => {
       userEvent: "input.paste",
     }).state;
     expect(pasted.doc.toString()).toBe("@Rupert “It’s mine.” He said “go” -“now”");
+    const single = state.update({
+      changes: { from: 0, insert: "He said 'no' and left." },
+      userEvent: "input.paste",
+    }).state;
+    expect(single.doc.toString()).toBe("He said ‘no’ and left.");
   });
 });

@@ -23,7 +23,9 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
     const curly = text
       .replace(/(?<=\p{L})'(?=\p{L})/gu, "’")
       .replace(/(^|[\s([{—–-])"/gmu, "$1“")
-      .replace(/"/gu, "”");
+      .replace(/"/gu, "”")
+      .replace(/(^|[\s([{—–-])'/gmu, "$1‘")
+      .replace(/'/gu, "’");
     if (curly !== text) found = true;
     specs.push({ from: fromA, to: toA, insert: curly });
   });

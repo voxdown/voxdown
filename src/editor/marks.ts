@@ -397,6 +397,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
                 insert: ")",
                 label: `Close it before “${inside
                   .slice(words.index + words[0].length)
+                  .replace(/^[“"]+/u, "")
                   .split(/\s/u)[0]
                   ?.slice(0, 20)}”`,
               },
@@ -693,5 +694,13 @@ export function marksOf(story: Story): EditorMark[] {
 }
 
 export function editorMarks(source: string): EditorMark[] {
-  return marksOf(parse(source));
+  const marks = marksOf(parse(source));
+  // A direction left open after a name is the mistake (review r8): its mark then gives the name
+  // nothing to say, but that follows from it, and the fix is to close the direction.
+  const open = new Set(
+    marks.flatMap((m) => (m.kind === "warning" && m.code === "open-direction" ? [m.from] : [])),
+  );
+  return open.size
+    ? marks.filter((m) => !(m.kind === "warning" && m.code === "idle-mark" && open.has(m.from)))
+    : marks;
 }

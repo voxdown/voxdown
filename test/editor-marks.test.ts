@@ -47,6 +47,16 @@ describe("editor marks", () => {
     expect(warning?.kind === "warning" ? warning.message : "").toMatch(/@\(sleepily\) Everyone/u);
   });
 
+  it("closes a quote's direction left open after its name, the mistake named first (r8)", () => {
+    const source = "@Beatrice (softly “Wait for me.”";
+    const warnings = editorMarks(source).filter((m) => m.kind === "warning");
+    expect(warnings.map((m) => (m.kind === "warning" ? m.code : ""))).toEqual(["open-direction"]);
+    const fix = warnings[0]?.kind === "warning" ? warnings[0].fix : undefined;
+    expect(fix?.label).toBe("Close it before “Wait”");
+    const fixed = fix ? source.slice(0, fix.from) + fix.insert + source.slice(fix.to) : source;
+    expect(fixed).toBe("@Beatrice (softly) “Wait for me.”");
+  });
+
   it("reads a bare pause length as seconds, in one click (r6)", () => {
     for (const [typed, fixed] of [
       ["{pause 2}", "{pause 2s}"],

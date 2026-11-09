@@ -18,7 +18,12 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
   const specs: Array<{ from: number; to: number; insert: string }> = [];
   tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
     const text = inserted.toString();
-    const curly = text.replace(/(?<=\p{L})'(?=\p{L})/gu, "’");
+    // Straight double quotes too (review r7): one opening where a quote opens (a line's start,
+    // after a space, a bracket or a dash), else closing; pairs on the same line only.
+    const curly = text
+      .replace(/(?<=\p{L})'(?=\p{L})/gu, "’")
+      .replace(/(^|[\s([{—–-])"/gmu, "$1“")
+      .replace(/"/gu, "”");
     if (curly !== text) found = true;
     specs.push({ from: fromA, to: toA, insert: curly });
   });

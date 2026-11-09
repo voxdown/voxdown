@@ -35,6 +35,18 @@ describe("editor marks", () => {
     ).toBe(false);
   });
 
+  it("closes a direction left open before the words it directs (r7)", () => {
+    const source = "@(softly Everyone followed.";
+    const warning = editorMarks(source).find(
+      (m) => m.kind === "warning" && m.code === "open-direction",
+    );
+    const fix = warning?.kind === "warning" ? warning.fix : undefined;
+    expect(fix?.label).toBe("Close it before “Everyone”");
+    const fixed = fix ? source.slice(0, fix.from) + fix.insert + source.slice(fix.to) : source;
+    expect(fixed).toBe("@(softly) Everyone followed.");
+    expect(warning?.kind === "warning" ? warning.message : "").toMatch(/@\(sleepily\) Everyone/u);
+  });
+
   it("reads a bare pause length as seconds, in one click (r6)", () => {
     for (const [typed, fixed] of [
       ["{pause 2}", "{pause 2s}"],

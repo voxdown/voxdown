@@ -373,15 +373,37 @@ function unclosedBrackets(story: Story): EditorMark[] {
         fix: { from: at(from), to: at(from + (spaced ? 2 : 1)), insert: "", label: "Take it out" },
       });
     }
-    const open = /(^|[^\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\([^)]*$/u.exec(line);
-    if (open && !inNote(at(open.index)))
+    const open = /(^|[^\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\(([^)]*)$/u.exec(line);
+    if (open && !inNote(at(open.index))) {
+      // Where the direction most likely ends (review r7): before the first word with a capital,
+      // or a quote mark; one click closes it there.
+      const inside = open[3] ?? "";
+      const insideAt = open.index + open[0].length - inside.length;
+      const words = /[ \t]+(?=[\p{Lu}“"])/u.exec(inside);
+      const named = Boolean(open[2]);
       out.push({
         kind: "warning",
         from: at(open.index + (open[1] ?? "").length),
         to: at(line.length),
-        message: "This direction needs its closing ) before the words: @Rupert (sleepily) “…”",
+        message: named
+          ? "This direction needs its closing ) before the words: @Rupert (sleepily) “…”"
+          : "This direction needs its closing ) before the words: @(sleepily) Everyone…",
         code: "open-direction",
+        ...(words && words.index > 0
+          ? {
+              fix: {
+                from: at(insideAt + words.index),
+                to: at(insideAt + words.index),
+                insert: ")",
+                label: `Close it before “${inside
+                  .slice(words.index + words[0].length)
+                  .split(/\s/u)[0]
+                  ?.slice(0, 20)}”`,
+              },
+            }
+          : {}),
       });
+    }
     const swallowed = /(^|[^\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\([^)]*[“"«„][^)]*\)/u.exec(
       line,
     );

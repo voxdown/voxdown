@@ -79,6 +79,15 @@ function closeNote(view: EditorView, from: number, to: number): boolean {
   const after = line.text.slice(from - line.from);
   // `%` typed just before a note's own ` %%`: it closes the note, keeping the space.
   if (after.startsWith(" %%") && (before.match(/%%/gu) ?? []).length % 2 === 1) {
+    // A space typed after the last word already sits before the closing ` %%`: drop it.
+    if (before.endsWith(" ") && !/%% $/u.test(before)) {
+      view.dispatch({
+        changes: { from: from - 1, to: from },
+        selection: { anchor: from + 1 },
+        userEvent: "input.type",
+      });
+      return true;
+    }
     view.dispatch({ selection: { anchor: from + 2 }, userEvent: "input.type" });
     return true;
   }

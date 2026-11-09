@@ -33,6 +33,14 @@ export class LabelWidget extends WidgetType {
     label.textContent = this.text;
     label.title = this.title;
     label.dataset.amChip = "direction";
+    // Hovering it shows the words it directs.
+    const directed = () => {
+      let el = anchor.nextElementSibling;
+      while (el && el.tagName === "IMG") el = el.nextElementSibling;
+      return el?.classList.contains("am-directed") ? el : null;
+    };
+    label.addEventListener("mouseenter", () => directed()?.classList.add("am-directed-hover"));
+    label.addEventListener("mouseleave", () => directed()?.classList.remove("am-directed-hover"));
     // A click picks the direction's words, ready to type over.
     label.addEventListener("mousedown", (event) => {
       event.preventDefault();
@@ -104,7 +112,10 @@ export const stackLabels = ViewPlugin.fromClass(
             // Its width on one line, kept from before it was wrapped.
             const natural = Number(el.dataset.natural) || el.offsetWidth;
             el.dataset.natural = String(natural);
-            const wrap = natural > column ? column : 0;
+            // Too long for the room right of its word: it wraps there, staying over its word
+            // (review r1); only right at the edge does it slide left, as little as it must.
+            const room = right - box.left;
+            const wrap = natural > room ? (room >= 140 ? room : Math.min(natural, column)) : 0;
             const width = wrap || natural;
             const height = el.offsetHeight || 14;
             const row = rows.get(key) ?? [];

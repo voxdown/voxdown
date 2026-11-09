@@ -69,6 +69,10 @@ export const scriptTheme = EditorView.theme({
     backgroundPosition: "0 100%",
     paddingBottom: "5px",
   },
+  ".am-directed-hover": {
+    backgroundColor: "color-mix(in srgb, var(--am-direction, #7c3aed) 12%, transparent)",
+    borderRadius: "3px",
+  },
   ".cm-line.am-blank": { lineHeight: "0.75" },
   ".am-warning": {
     textDecoration: "underline wavy",

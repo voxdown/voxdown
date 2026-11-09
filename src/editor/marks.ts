@@ -77,7 +77,7 @@ function distance(a: string, b: string): number {
 function plain(
   warning: Story["warnings"][number],
   source: string,
-): { message: string; fix?: { from: number; to: number; insert: string } } {
+): { message: string; fix?: { from: number; to: number; insert: string; label?: string } } {
   if (warning.code === "unknown-instruction") {
     const raw = source.slice(warning.range.from, warning.range.to);
     const name =
@@ -113,6 +113,17 @@ function plain(
         ? { fix: { from: warning.range.from, to: warning.range.to, insert } }
         : {}),
     };
+  }
+  // A group never closed: one click closes it after its paragraph (review r1).
+  if (warning.code === "unclosed-group") {
+    const opener = source.indexOf("\n", warning.range.from);
+    const blank = opener < 0 ? -1 : source.slice(opener).search(/\n[ \t]*\n/u);
+    const end = blank < 0 ? source.replace(/\s+$/u, "").length : opener + blank;
+    if (opener >= 0 && end > opener)
+      return {
+        message: "This group is never closed, so it runs to the end of the text.",
+        fix: { from: end, to: end, insert: "\n:::", label: "Close it after its paragraph" },
+      };
   }
   return { message: warning.message };
 }

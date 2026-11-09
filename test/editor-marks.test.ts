@@ -35,6 +35,17 @@ describe("editor marks", () => {
     ).toBe(false);
   });
 
+  it("offers to close a group left open after its paragraph (r1)", () => {
+    const source = "::: whispering\nOne.\nTwo.\n\nThree.\n";
+    const warning = editorMarks(source).find(
+      (m) => m.kind === "warning" && m.code === "unclosed-group",
+    );
+    const fix = warning?.kind === "warning" ? warning.fix : undefined;
+    expect(fix?.label).toBe("Close it after its paragraph");
+    const fixed = fix ? source.slice(0, fix.from) + fix.insert + source.slice(fix.to) : source;
+    expect(fixed).toBe("::: whispering\nOne.\nTwo.\n:::\n\nThree.\n");
+  });
+
   it("makes a character's sound and its mark one chip", () => {
     const source = "The dragon was snoring. @Gerald [snores] [a distant clang]";
     const marks = editorMarks(source);

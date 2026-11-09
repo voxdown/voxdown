@@ -16,6 +16,25 @@ describe("editor marks", () => {
     ]);
   });
 
+  it("warns about a quote opening while another is still open, with a fix to close it (r0)", () => {
+    const source =
+      "He tied the napkin. @Rupert “Where is my spoon? The cook brought an egg. “Lovely.”";
+    const warning = editorMarks(source).find(
+      (m) => m.kind === "warning" && m.code === "quote-in-quote",
+    );
+    expect(warning && text(source, warning)).toBe("“");
+    expect(warning?.kind === "warning" ? warning.fix : undefined).toMatchObject({ insert: "”" });
+    const fix = warning?.kind === "warning" ? warning.fix : undefined;
+    const fixed = fix ? source.slice(0, fix.from) + fix.insert + source.slice(fix.to) : source;
+    expect(fixed).toContain("“Where is my spoon?” The cook");
+    // A quote closed before the next opens is fine.
+    expect(
+      editorMarks("@Rupert “Where is my spoon?” He sighed. “Lovely.”").some(
+        (m) => m.kind === "warning" && m.code === "quote-in-quote",
+      ),
+    ).toBe(false);
+  });
+
   it("makes a character's sound and its mark one chip", () => {
     const source = "The dragon was snoring. @Gerald [snores] [a distant clang]";
     const marks = editorMarks(source);

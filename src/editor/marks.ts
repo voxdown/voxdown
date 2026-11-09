@@ -163,6 +163,47 @@ function unclosedBrackets(story: Story): EditorMark[] {
           code: "open-bracket",
         });
     }
+    // A quote opening while one is still open: its closing ” was forgotten, and everything up to
+    // the next ” is read in the first speaker's voice (1082, review r0).
+    {
+      let open = -1;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === "\\") {
+          i++;
+          continue;
+        }
+        if (ch === "”" && open >= 0) open = -1;
+        else if (ch === "“") {
+          if (open >= 0 && !inNote(offset + i) && !inNote(offset + open)) {
+            const end = /[.!?…]+[ \t]/u.exec(line.slice(open + 1, i));
+            const close = end ? open + 1 + end.index + end[0].trimEnd().length : -1;
+            out.push({
+              kind: "warning",
+              from: offset + i,
+              to: offset + i + 1,
+              message:
+                "A quote opens here while the one before is still open, so the words between are read in the first speaker's voice. Is its closing ” missing?",
+              code: "quote-in-quote",
+              ...(close > open
+                ? {
+                    fix: {
+                      from: offset + close,
+                      to: offset + close,
+                      insert: "”",
+                      label: `Close it after “${line
+                        .slice(open + 1, close)
+                        .trim()
+                        .slice(-24)}”`,
+                    },
+                  }
+                : {}),
+            });
+          }
+          open = i;
+        }
+      }
+    }
     // Marks that read as words: `@ Rupert`, a direction never closed, one closed after its quote.
     const at = (i: number) => offset + i;
     // A direction without its `@` is read aloud: `(whispering) line`, `Rupert (softly) “…”`.

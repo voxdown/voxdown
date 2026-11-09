@@ -2,9 +2,10 @@ import { type EditorState, type Extension, StateEffect, StateField } from "@code
 import {
   Decoration,
   type DecorationSet,
-  type EditorView,
+  EditorView,
   ViewPlugin,
   type ViewUpdate,
+  WidgetType,
 } from "@codemirror/view";
 import { LabelWidget, stackLabels } from "./labels";
 import { type EditorMark, editorMarks } from "./marks";
@@ -48,7 +49,11 @@ export type PreviewOptions = {
    * set on its chip as `data-status`, for the host to draw. Read again whenever the host sends an
    * effect.
    */
-  chipStatus?: (state: EditorState, from: number) => { name: string; title: string } | undefined;
+  chipStatus?: (
+    state: EditorState,
+    from: number,
+    to: number,
+  ) => { name: string; title: string } | undefined;
   /** What a page turn turns to (the next page's name), by where its mark starts. */
   pageLabel?: (state: EditorState, from: number) => string | undefined;
 };
@@ -245,7 +250,12 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             mark.from,
             end,
             Decoration.replace({
-              widget: new LabelWidget(mark.text, "Direction: click to change it", mark.from),
+              widget: new LabelWidget(
+                mark.text,
+                "Direction: click to change it",
+                mark.from,
+                mark.to,
+              ),
             }),
           );
         }
@@ -279,7 +289,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 mark.text,
                 undefined,
                 mark.from,
-                options.chipStatus?.(state, mark.from),
+                options.chipStatus?.(state, mark.from, mark.to),
               ),
             }),
           );
@@ -299,7 +309,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 mark.text,
                 undefined,
                 mark.from,
-                options.chipStatus?.(state, mark.from),
+                options.chipStatus?.(state, mark.from, mark.to),
               ),
             }),
           );
@@ -473,11 +483,67 @@ const isReplace = (deco: Decoration) =>
   (deco.spec as { widget?: unknown }).widget !== undefined ||
   !(deco.spec as { class?: string }).class;
 
+/** The front matter folded to one line while reading: the story starts the page (1082). */
+class FrontMatterFold extends WidgetType {
+  constructor(readonly text: string) {
+    super();
+  }
+  override eq(other: FrontMatterFold) {
+    return other.text === this.text;
+  }
+  toDOM() {
+    const el = document.createElement("div");
+    el.className = "am-frontmatter-fold";
+    el.textContent = this.text;
+    el.title = "The title, language and cast. Click here, or Show marks, to see them.";
+    return el;
+  }
+  // A click puts the cursor there, which opens it.
+  override ignoreEvent() {
+    return false;
+  }
+}
+
+function foldFrontMatter(state: EditorState): DecorationSet {
+  if (state.field(showMarksField)) return Decoration.none;
+  const fm = state.field(marksField).find((m) => m.kind === "frontmatter");
+  if (!fm) return Decoration.none;
+  const from = state.doc.lineAt(fm.from).from;
+  const to = state.doc.lineAt(Math.max(fm.from, Math.min(fm.to, state.doc.length) - 1)).to;
+  if (to <= from || state.selection.ranges.some((r) => r.from <= to && r.to >= from))
+    return Decoration.none;
+  const text = state.sliceDoc(from, to);
+  const title = /^title:[ \t]*(.+)$/mu
+    .exec(text)?.[1]
+    ?.replace(/^["']|["']$/gu, "")
+    .trim();
+  const cast = /^cast:[ \t]*$/mu.test(text)
+    ? (text.split(/^cast:[ \t]*$/mu)[1] ?? "").split("\n").filter((l) => /^[ \t]+\S/u.test(l))
+        .length
+    : 0;
+  const summary = [title, cast ? `${cast} in the cast` : "", "title, language and cast"]
+    .filter(Boolean)
+    .join(" · ");
+  return Decoration.set([
+    Decoration.replace({ widget: new FrontMatterFold(summary), block: true }).range(from, to),
+  ]);
+}
+
+const frontMatterField = StateField.define<DecorationSet>({
+  create: foldFrontMatter,
+  update: (value, tr) =>
+    tr.docChanged || tr.selection || tr.effects.some((e) => e.is(setShowMarks))
+      ? foldFrontMatter(tr.state)
+      : value,
+  provide: (field) => EditorView.decorations.from(field),
+});
+
 export function livePreview(options: PreviewOptions): Extension {
   return [
     showMarksField.init(() => options.showMarks ?? false),
     viewField.init(() => ({ ...ALL_ON, ...options.view })),
     marksField,
+    frontMatterField,
     stackLabels,
     ViewPlugin.fromClass(
       class {

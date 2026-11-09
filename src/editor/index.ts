@@ -57,3 +57,4 @@ export {
 export { completions } from "./complete";
 export { smartQuotes } from "./quotes";
 export { type EditorMark, editDistance, editorMarks } from "./marks";
+export { startCompletion } from "@codemirror/autocomplete";

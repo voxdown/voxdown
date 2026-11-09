@@ -49,6 +49,8 @@ export type PreviewOptions = {
    * effect.
    */
   chipStatus?: (state: EditorState, from: number) => { name: string; title: string } | undefined;
+  /** What a page turn turns to (the next page's name), by where its mark starts. */
+  pageLabel?: (state: EditorState, from: number) => string | undefined;
 };
 
 /** What the page draws, as Performance's switches choose (1082). */
@@ -302,7 +304,8 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             }),
           );
         break;
-      case "page":
+      case "page": {
+        const turnsTo = mark.label ?? options.pageLabel?.(state, mark.from);
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-page am-raw" }));
         else if (!shown.pages) leaveOut(mark.from, mark.to);
         else if (mark.ownLine)
@@ -314,8 +317,8 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 "turn",
                 pagesOff
                   ? "page turn · this story has no pages yet"
-                  : mark.label
-                    ? `page turn · ${mark.label}`
+                  : turnsTo
+                    ? `page turn · ${turnsTo}`
                     : "page turn",
                 "{page}",
               ),
@@ -328,7 +331,11 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             Decoration.replace({
               widget: new ChipWidget(
                 "page",
-                pagesOff ? "page turn (no pages yet)" : "page turn",
+                pagesOff
+                  ? "page turn (no pages yet)"
+                  : turnsTo
+                    ? `page turn · ${turnsTo}`
+                    : "page turn",
                 undefined,
                 pagesOff ? "This story has no pages yet: set them up in Pages" : "{page}",
                 undefined,
@@ -337,6 +344,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             }),
           );
         break;
+      }
       case "pause":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-page am-raw" }));
         else

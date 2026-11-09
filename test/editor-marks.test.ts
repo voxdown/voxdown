@@ -35,6 +35,18 @@ describe("editor marks", () => {
     ).toBe(false);
   });
 
+  it("offers to close a quote left open, after its sentence or at the line's end (r5)", () => {
+    const close = (source: string) => {
+      const warning = editorMarks(source).find(
+        (m) => m.kind === "warning" && m.code === "unclosed-quote",
+      );
+      const fix = warning?.kind === "warning" ? warning.fix : undefined;
+      return fix ? source.slice(0, fix.from) + fix.insert + source.slice(fix.to) : null;
+    };
+    expect(close("@Rupert “Hi. At a safe distance.")).toBe("@Rupert “Hi.” At a safe distance.");
+    expect(close("@Rupert “Hi there")).toBe("@Rupert “Hi there”");
+  });
+
   it("closes the gap in @ Rupert in one click (r4)", () => {
     const source = "He sighed. @ Rupert “Fine.”";
     const warning = editorMarks(source).find((m) => m.kind === "warning" && m.code === "loose-at");

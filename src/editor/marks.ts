@@ -116,6 +116,29 @@ function plain(
         : {}),
     };
   }
+  // A quote never closed (review r5): closed after its first sentence when more follows on the
+  // line (narration typed on after it), else at the line's end.
+  if (warning.code === "unclosed-quote") {
+    const open = warning.range.from;
+    const lineEnd = source.indexOf("\n", open);
+    const rest = source.slice(open + 1, lineEnd < 0 ? source.length : lineEnd);
+    const end = /[.!?…]+[”"’']?(?=[ \t]+\S)/u.exec(rest);
+    const said = end ? rest.slice(0, end.index + end[0].length) : rest.trimEnd();
+    if (said.trim()) {
+      const at = open + 1 + said.length;
+      return {
+        message: warning.message,
+        fix: {
+          from: at,
+          to: at,
+          insert: "”",
+          label: end
+            ? `Close it after “${said.trim().slice(-24)}”`
+            : "Close it at the end of the line",
+        },
+      };
+    }
+  }
   // A group never closed: one click closes it after its paragraph (review r1).
   if (warning.code === "unclosed-group") {
     const opener = source.indexOf("\n", warning.range.from);

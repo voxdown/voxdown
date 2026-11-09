@@ -39,4 +39,37 @@ describe("pasted text (r7)", () => {
     }).state;
     expect(cut.doc.toString()).toBe("One. Three.");
   });
+
+  it("leaves no space before a stop where a sentence's end was cut (r12)", () => {
+    const state = EditorState.create({
+      doc: "He flipped down the hallway. Then left.",
+      extensions: scriptEditor({ characters: () => [] }),
+    });
+    const at = "He flipped".length;
+    const cut = state.update({
+      changes: { from: at, to: at + " down the hallway".length },
+      userEvent: "delete.cut",
+    }).state;
+    expect(cut.doc.toString()).toBe("He flipped. Then left.");
+    const inner = state.update({
+      changes: { from: at + 1, to: at + 1 + "down the hallway".length },
+      userEvent: "delete.cut",
+    }).state;
+    expect(inner.doc.toString()).toBe("He flipped. Then left.");
+  });
+
+  it("keeps a sound's label as written, pasted or typed (r12)", () => {
+    const state = EditorState.create({ doc: "", extensions: smartQuotes() });
+    const pasted = state.update({
+      changes: { from: 0, insert: "He said \"go\" [Knight's armor clanks] and it's done." },
+      userEvent: "input.paste",
+    }).state;
+    expect(pasted.doc.toString()).toBe("He said “go” [Knight's armor clanks] and it’s done.");
+    const inside = EditorState.create({ doc: "Then [Knight armor]", extensions: smartQuotes() });
+    const intoLabel = inside.update({
+      changes: { from: "Then [Knight".length, insert: "'s" },
+      userEvent: "input.paste",
+    }).state;
+    expect(intoLabel.doc.toString()).toBe("Then [Knight's armor]");
+  });
 });

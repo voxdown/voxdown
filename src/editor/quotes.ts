@@ -18,19 +18,11 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
   const specs: Array<{ from: number; to: number; insert: string }> = [];
   tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
     const text = inserted.toString();
-    // Straight double quotes too (review r7): one opening where a quote opens (a line's start,
-    // after a space, a bracket or a dash), else closing; pairs on the same line only.
-    const curly = text
-      .replace(/(?<=\p{L})'(?=\p{L})/gu, "’")
-      .replace(/(^|[\s([{—–-])"/gmu, "$1“")
-      .replace(/"/gu, "”")
-      // A word cut short at its start ('Twas, 'n', 'em) keeps an apostrophe (review r9).
-      .replace(
-        /(^|[\s([{—–-])'(?=(?:twas|tis|em|n|cause|til|round|bout|ere)(?![\p{L}])|\d)/gimu,
-        "$1’",
-      )
-      .replace(/(^|[\s([{—–-])'/gmu, "$1‘")
-      .replace(/'/gu, "’");
+    // A sound's label keeps its marks as written (review r12): `[Knight's armor]` is the
+    // same sound, its audio kept.
+    const line = tr.startState.doc.lineAt(fromA);
+    const startsInside = inLabel(line.text.slice(0, fromA - line.from));
+    const curly = outsideLabels(text, startsInside, curlQuotes);
     if (curly !== text) found = true;
     specs.push({ from: fromA, to: toA, insert: curly });
   });
@@ -43,6 +35,66 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
     userEvent: "input.paste",
   };
 });
+
+/** Straight quotes and apostrophes in pasted words, as typing would give them. */
+function curlQuotes(text: string): string {
+  // Straight double quotes too (review r7): one opening where a quote opens (a line's start,
+  // after a space, a bracket or a dash), else closing; pairs on the same line only.
+  return (
+    text
+      .replace(/(?<=\p{L})'(?=\p{L})/gu, "’")
+      .replace(/(^|[\s([{—–-])"/gmu, "$1“")
+      .replace(/"/gu, "”")
+      // A word cut short at its start ('Twas, 'n', 'em) keeps an apostrophe (review r9).
+      .replace(
+        /(^|[\s([{—–-])'(?=(?:twas|tis|em|n|cause|til|round|bout|ere)(?![\p{L}])|\d)/gimu,
+        "$1’",
+      )
+      .replace(/(^|[\s([{—–-])'/gmu, "$1‘")
+      .replace(/'/gu, "’")
+  );
+}
+
+/** Whether a line's text up to here leaves a sound's `[` open. */
+function inLabel(head: string): boolean {
+  let inside = false;
+  for (let i = 0; i < head.length; i++) {
+    const c = head[i];
+    if (c === "\\") i++;
+    else if (c === "[") inside = true;
+    else if (c === "]") inside = false;
+  }
+  return inside;
+}
+
+/** `change` applied to the text outside sounds' labels (`[…]`, on one line) only. */
+function outsideLabels(text: string, startsInside: boolean, change: (part: string) => string) {
+  let out = "";
+  let part = "";
+  let inside = startsInside;
+  const flush = () => {
+    out += inside ? part : change(part);
+    part = "";
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i] as string;
+    if (c === "\\") {
+      part += c + (text[i + 1] ?? "");
+      i++;
+    } else if (!inside && c === "[") {
+      flush();
+      inside = true;
+      part = c;
+    } else if (inside && (c === "]" || c === "\n")) {
+      part += c;
+      out += part;
+      part = "";
+      inside = false;
+    } else part += c;
+  }
+  flush();
+  return out;
+}
 
 export function smartQuotes(): Extension {
   return [pastedApostrophes, smartQuoteInput];
@@ -76,6 +128,11 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   if (text === " " && leavePause(view, from, to)) return true;
   if (text === " ") return noteSpace(view, from, to);
   if (text !== '"' && text !== "'") return false;
+  // In a sound's label a mark stays as typed (review r12): the label names the same sound.
+  {
+    const line = view.state.doc.lineAt(from);
+    if (inLabel(line.text.slice(0, from - line.from))) return false;
+  }
   const before = view.state.sliceDoc(Math.max(0, from - 1), from);
   // 6" and 5' are measurements, not quotes.
   if (/\d/u.test(before)) return false;

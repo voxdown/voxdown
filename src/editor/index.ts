@@ -23,8 +23,14 @@ const tidyCut = EditorState.transactionFilter.of((tr) => {
   const extra: Array<{ from: number; to: number }> = [];
   tr.changes.iterChanges((_fromA, _toA, fromB, _toB, inserted) => {
     if (inserted.length) return;
-    if (tr.newDoc.sliceString(fromB - 1, fromB + 1) === "  ")
-      extra.push({ from: fromB, to: fromB + 1 });
+    const around = tr.newDoc.sliceString(fromB - 1, fromB + 1);
+    if (around === "  ") extra.push({ from: fromB, to: fromB + 1 });
+    // A cut ending a sentence leaves no space before its stop (review r12): "flipped ."
+    else if (
+      /^ [.,;:!?…]$/u.test(around) &&
+      /\S/u.test(tr.newDoc.sliceString(fromB - 2, fromB - 1))
+    )
+      extra.push({ from: fromB - 1, to: fromB });
   });
   return extra.length ? [tr, { changes: extra, sequential: true }] : tr;
 });

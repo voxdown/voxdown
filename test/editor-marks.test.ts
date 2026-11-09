@@ -35,12 +35,22 @@ describe("editor marks", () => {
     ).toBe(false);
   });
 
+  it("reads a misspelt instruction with a length as a pause, not a page turn (r3)", () => {
+    const warning = editorMarks("Then {paws 2s} quiet.").find(
+      (m) => m.kind === "warning" && m.code === "unknown-instruction",
+    );
+    expect(warning?.kind === "warning" ? warning.fix?.insert : undefined).toBe("{pause 2s}");
+  });
+
   it("points out an @ with nothing after it, and takes it out in one click (r2)", () => {
     const source = "He looked up. @ “Lovely.” And @. Then @Rupert “Fine.” mail@home";
     const lone = editorMarks(source).filter((m) => m.kind === "warning" && m.code === "lone-at");
     expect(lone.map((m) => m.from)).toEqual([source.indexOf("@ “"), source.indexOf("@.")]);
     const fix = lone[0]?.kind === "warning" ? lone[0].fix : undefined;
     expect(fix).toMatchObject({ insert: "", label: "Take it out" });
+    // Taken out with its space: no double space left behind.
+    const fixed = fix ? source.slice(0, fix.from) + source.slice(fix.to) : source;
+    expect(fixed).toContain("He looked up. “Lovely.”");
     expect(editorMarks("Then @").some((m) => m.kind === "warning" && m.code === "lone-at")).toBe(
       true,
     );

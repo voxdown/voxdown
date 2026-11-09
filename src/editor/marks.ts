@@ -85,13 +85,15 @@ function plain(
         .replace(/^\{|\}$/gu, "")
         .trim()
         .split(/\s+/u)[0] ?? "";
-    // What was typed is most likely the start of one (`{pau}` is `{pause}`, not `{page}`).
+    // What was typed is most likely the start of one (`{pau}` is `{pause}`, not `{page}`). A
+    // length after it (`{paws 2s}`) can only be a pause's (review r3); a page turn takes none.
+    const timed = /^\{\s*\S+\s+\d+(?:\.\d+)?\s*(?:ms|s|sec|secs|seconds?)\s*\}?$/iu.test(raw);
     const scored = INSTRUCTIONS.map((i) => ({
       i,
       d:
         name && i.startsWith(name.toLowerCase())
           ? -1
-          : distance(name.toLowerCase(), i.split(" ")[0] ?? i),
+          : distance(name.toLowerCase(), i.split(" ")[0] ?? i) - (timed && i === "pause" ? 0.5 : 0),
     })).sort((x, y) => x.d - y.d);
     const near = scored[0] && scored[0].d <= 2 ? scored[0].i : undefined;
     if (!near)
@@ -310,6 +312,9 @@ function unclosedBrackets(story: Story): EditorMark[] {
     )) {
       const from = (lone.index ?? 0) + (lone[1] ?? "").length;
       if (inNote(at(from))) continue;
+      // Taken out with the space after it, where a space before it keeps the words apart.
+      const spaced =
+        /[ \t]/u.test(line[from + 1] ?? "") && (from === 0 || /[ \t]/u.test(line[from - 1] ?? ""));
       out.push({
         kind: "warning",
         from: at(from),
@@ -317,7 +322,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
         message:
           "This @ has no name after it, so it is left out. Write the name straight after it (@Rupert), or take it out.",
         code: "lone-at",
-        fix: { from: at(from), to: at(from + 1), insert: "", label: "Take it out" },
+        fix: { from: at(from), to: at(from + (spaced ? 2 : 1)), insert: "", label: "Take it out" },
       });
     }
     const open = /(^|[^\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\([^)]*$/u.exec(line);

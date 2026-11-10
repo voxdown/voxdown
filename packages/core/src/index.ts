@@ -33,6 +33,7 @@ export {
   textByCharacter,
 } from "./lines";
 export { type FountainOptions, fromFountain } from "./fountain";
+export { PALETTE, characterColors } from "./colors";
 export type {
   Block,
   Break,

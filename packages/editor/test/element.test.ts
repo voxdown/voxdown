@@ -1,0 +1,68 @@
+// @vitest-environment happy-dom
+import { describe, expect, it } from "vitest";
+import { VoxdownEditorElement, charactersOf, defineVoxdownEditor } from "../src/element";
+
+defineVoxdownEditor();
+
+/** Puts an element in the page as a page would, and waits for it to read its story. */
+async function mount(html: string): Promise<VoxdownEditorElement> {
+  document.body.innerHTML = html;
+  await Promise.resolve();
+  return document.body.firstElementChild as VoxdownEditorElement;
+}
+
+describe("<voxdown-editor>", () => {
+  it("takes its story from its text, without the page's indentation", async () => {
+    const editor = await mount(`<voxdown-editor>
+      @Gerald “Could you not?”
+        He yawned.
+    </voxdown-editor>`);
+    expect(editor).toBeInstanceOf(VoxdownEditorElement);
+    expect(editor.value).toBe("@Gerald “Could you not?”\n  He yawned.");
+    expect(editor.view?.state.doc.toString()).toBe(editor.value);
+    expect(editor.shadowRoot?.querySelector(".cm-editor")).toBeTruthy();
+  });
+
+  it("takes its story from a value attribute or a script, which keeps < and & as written", async () => {
+    expect((await mount(`<voxdown-editor value="Once."></voxdown-editor>`)).value).toBe("Once.");
+    const editor = await mount(
+      `<voxdown-editor><script type="text/voxdown">\n@Wanda “1 < 2 & 3 > 2.”\n</script></voxdown-editor>`,
+    );
+    expect(editor.value).toBe("@Wanda “1 < 2 & 3 > 2.”");
+  });
+
+  it("sets its value and fires input", async () => {
+    const editor = await mount("<voxdown-editor>One.</voxdown-editor>");
+    let inputs = 0;
+    editor.addEventListener("input", () => inputs++);
+    editor.value = "@Wanda “Two.”";
+    expect(editor.value).toBe("@Wanda “Two.”");
+    expect(inputs).toBe(1);
+    editor.value = "@Wanda “Two.”";
+    expect(inputs).toBe(1);
+  });
+
+  it("keeps a value set before it is in the page", () => {
+    const editor = document.createElement("voxdown-editor");
+    editor.value = "Early.";
+    document.body.replaceChildren(editor);
+    expect(editor.view?.state.doc.toString()).toBe("Early.");
+  });
+
+  it("follows readonly", async () => {
+    const editor = await mount("<voxdown-editor readonly>Fixed.</voxdown-editor>");
+    expect(editor.view?.state.readOnly).toBe(true);
+    editor.removeAttribute("readonly");
+    expect(editor.view?.state.readOnly).toBe(false);
+  });
+});
+
+describe("charactersOf", () => {
+  it("lists the cast, then names the story marks, with colors", () => {
+    const characters = charactersOf("---\ncast:\n  Wanda: Wanda the Witch\n---\n@Gerald “Hi.”");
+    expect(characters).toEqual([
+      { handle: "Wanda", name: "Wanda the Witch", color: "#2563eb" },
+      { handle: "Gerald", name: "Gerald", color: "#c2410c", provisional: true },
+    ]);
+  });
+});

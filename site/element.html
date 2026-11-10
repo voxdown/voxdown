@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoxDown: the editor in your own page</title>
+<link rel="icon" href="./icon.svg">
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 46rem; margin: 3rem auto; padding: 0 1rem; color: #25282d; }
+  voxdown-editor { border: 1px solid #dde1e6; border-radius: 6px; height: 20rem; --vxd-size: 17px; }
+  pre { background: #f3f5f8; padding: 1rem; border-radius: 6px; overflow: auto; }
+</style>
+</head>
+<body>
+<h1>The editor in your own page</h1>
+<p>One import and one tag. The story is the element’s <code>value</code>; it fires <code>input</code> as you type.</p>
+<pre><code>&lt;script type="module"&gt;import "@voxdown/editor/element";&lt;/script&gt;
+
+&lt;voxdown-editor&gt;
+  @Gerald (yawning) “Could you not?” [snores]
+&lt;/voxdown-editor&gt;</code></pre>
+<voxdown-editor id="demo">
+  ---
+  cast:
+    Gerald: Gerald the Dragon
+  ---
+  The dragon opened one eye.
+  @Gerald (deep, polite and utterly unbothered) “Could you not?” [snores]
+  {page}
+  @Percival “Aren’t you going to roar?”
+</voxdown-editor>
+<p>Characters: <span id="count"></span></p>
+<script type="module">
+  import "@voxdown/editor/element";
+  import { parse } from "voxdown";
+  const editor = document.getElementById("demo");
+  const show = () => {
+    document.getElementById("count").textContent = [...new Set(parse(editor.value).cast.map((m) => m.name))].join(", ") || "none";
+  };
+  editor.addEventListener("input", show);
+  customElements.whenDefined("voxdown-editor").then(show);
+</script>
+</body>
+</html>

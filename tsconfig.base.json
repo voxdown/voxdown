@@ -14,7 +14,8 @@
     "paths": {
       "voxdown": ["./packages/core/src/index.ts"],
       "@voxdown/render": ["./packages/render/src/index.ts"],
-      "@voxdown/editor": ["./packages/editor/src/index.ts"]
+      "@voxdown/editor": ["./packages/editor/src/index.ts"],
+      "@voxdown/editor/element": ["./packages/editor/src/define.ts"]
     }
   }
 }

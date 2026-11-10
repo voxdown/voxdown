@@ -4,7 +4,7 @@
   "description": "A CodeMirror 6 editor for VoxDown stories: marks drawn as chips, raw only where you type.",
   "license": "MIT",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": ["./dist/define.js", "./src/define.ts"],
   "keywords": ["voxdown", "vxd", "codemirror", "editor", "audiobook"],
   "repository": {
     "type": "git",
@@ -17,6 +17,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./element": {
+      "types": "./dist/define.d.ts",
+      "default": "./dist/define.js"
     },
     "./package.json": "./package.json"
   },
@@ -36,5 +40,10 @@
     "@codemirror/view": "^6.43.15",
     "voxdown": "workspace:^"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.14.6"
+  }
 }

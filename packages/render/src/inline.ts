@@ -30,7 +30,23 @@ export function safeUrl(url: string, image = false): string {
   return "#";
 }
 
-type Piece = { text: string; literal: boolean };
+/** A character of text, escaped (`literal`) or not; `edge` marks where one piece of text ends. */
+type Piece = { text: string; literal: boolean; edge?: boolean };
+
+/**
+ * A link's address and title, as Markdown reads them: `<address>` or the address up to a space,
+ * then an optional title in quotes or parentheses.
+ */
+function destination(target: string): { url: string; title: string | null } {
+  const text = target.trim();
+  const bracketed = /^<([^<>\n]*)>\s*(.*)$/s.exec(text);
+  const first = text.split(/\s/)[0] ?? "";
+  const [url, rest] = bracketed
+    ? [bracketed[1] ?? "", bracketed[2] ?? ""]
+    : [first, text.slice(first.length).trim()];
+  const title = /^(?:"([^"]*)"|'([^']*)'|\(([^)]*)\))$/s.exec(rest);
+  return { url, title: title ? (title[1] ?? title[2] ?? title[3] ?? null) : null };
+}
 
 /** Splits text into literal characters (escaped ones) and characters that may be Markdown. */
 function pieces(source: string): Piece[] {
@@ -53,23 +69,49 @@ export function inlineHtml(source: string): string {
 }
 
 /**
+ * Pieces of one paragraph's text as HTML, each its own: the lines of a printed paragraph, or a
+ * line's stretches between marks. Emphasis pairs across them as in the paragraph read whole (an
+ * edge counts as a space), and a tag still open at a piece's end is closed there and opened again
+ * at the next, so each piece's HTML stands alone. A link stays within its piece.
+ */
+export function inlineHtmlPieces(sources: readonly string[]): string[] {
+  const chars: Piece[] = [];
+  sources.forEach((source, index) => {
+    if (index > 0) chars.push({ text: " ", literal: true, edge: true });
+    chars.push(...pieces(source));
+  });
+  // A piece of only spaces needs no emphasis around it.
+  return renderPieces(chars).map((html) =>
+    html.replace(/^(?:<(?:em|strong)>)+(\s*)(?:<\/(?:em|strong)>)+$/, "$1"),
+  );
+}
+
+/**
  * Where each `]` and `)` that may close a link is, worked out once so that a long line renders in
  * linear time: for each position, the next `]`; and for each `(`, its `)`, with parentheses
  * inside balanced as the parser reads them (§8.3).
  */
-function closersOf(chars: readonly Piece[]): { bracket: Int32Array; parens: Map<number, number> } {
+function closersOf(chars: readonly Piece[]): {
+  bracket: Int32Array;
+  squares: Map<number, number>;
+  parens: Map<number, number>;
+} {
   const isChar = (at: number, text: string) => chars[at]?.text === text && !chars[at]?.literal;
   const bracket = new Int32Array(chars.length + 1).fill(-1);
   for (let at = chars.length - 1; at >= 0; at--) {
     bracket[at] = isChar(at, "]") ? at : (bracket[at + 1] as number);
   }
   const parens = new Map<number, number>();
+  const squares = new Map<number, number>();
   const open: number[] = [];
+  const openSquare: number[] = [];
   chars.forEach((_, at) => {
     if (isChar(at, "(")) open.push(at);
     else if (isChar(at, ")") && open.length > 0) parens.set(open.pop() as number, at);
+    else if (isChar(at, "[")) openSquare.push(at);
+    else if (isChar(at, "]") && openSquare.length > 0) squares.set(openSquare.pop() as number, at);
   });
-  return { bracket, parens };
+  return { bracket, squares, parens };
 }
 
 /** A run of `*` or `_`, and the tags it becomes once runs are paired. */
@@ -84,7 +126,7 @@ type Run = {
   opens: string[];
   closes: string[];
 };
-type Node = { kind: "html"; html: string } | Run;
+type Node = { kind: "html"; html: string } | { kind: "edge" } | Run;
 
 const SPACE = /\s/u;
 const PUNCTUATION = /[\p{P}\p{S}]/u;
@@ -159,9 +201,19 @@ function pairRuns(nodes: readonly Node[]): void {
 }
 
 function render(chars: Piece[]): string {
+  return renderPieces(chars).join("");
+}
+
+/** The HTML of each piece of `chars`, the pieces being split at their edges. */
+function renderPieces(chars: Piece[]): string[] {
   const nodes: Node[] = [];
   const isChar = (at: number, text: string) => chars[at]?.text === text && !chars[at]?.literal;
   const closers = closersOf(chars);
+  // How many piece edges come before each character: a link can't cross one.
+  const edges = new Int32Array(chars.length + 1);
+  chars.forEach((piece, at) => {
+    edges[at + 1] = (edges[at] as number) + (piece.edge ? 1 : 0);
+  });
   let text = "";
   const flush = () => {
     if (text !== "") nodes.push({ kind: "html", html: escapeHtml(text) });
@@ -170,29 +222,39 @@ function render(chars: Piece[]): string {
   let i = 0;
   while (i < chars.length) {
     const piece = chars[i] as Piece;
+    if (piece.edge) {
+      flush();
+      nodes.push({ kind: "edge" });
+      i++;
+      continue;
+    }
     if (!piece.literal) {
       // Images and links.
       const bang = piece.text === "!" && isChar(i + 1, "[");
       if (piece.text === "[" || bang) {
         const open = bang ? i + 1 : i;
-        const close = closers.bracket[open + 1] ?? -1;
+        // The text runs to the `]` that balances it, as the parser reads a link (§8.3).
+        const balanced = closers.squares.get(open) ?? -1;
+        const close =
+          balanced > 0 && isChar(balanced + 1, "(") ? balanced : (closers.bracket[open + 1] ?? -1);
         if (close > 0 && isChar(close + 1, "(")) {
           const end = closers.parens.get(close + 1) ?? -1;
-          if (end > 0) {
+          if (end > 0 && edges[end + 1] === edges[i]) {
             const label = chars.slice(open + 1, close);
-            const url = safeUrl(
+            const target = destination(
               chars
                 .slice(close + 2, end)
                 .map((c) => c.text)
                 .join(""),
-              bang,
             );
+            const url = safeUrl(target.url, bang);
+            const title = target.title === null ? "" : ` title="${escapeHtml(target.title)}"`;
             flush();
             nodes.push({
               kind: "html",
               html: bang
-                ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(label.map((c) => c.text).join(""))}">`
-                : `<a href="${escapeHtml(url)}">${render(label)}</a>`,
+                ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(label.map((c) => c.text).join(""))}"${title}>`
+                : `<a href="${escapeHtml(url)}"${title}>${render(label)}</a>`,
             });
             i = end + 1;
             continue;
@@ -214,11 +276,31 @@ function render(chars: Piece[]): string {
   }
   flush();
   pairRuns(nodes);
-  return nodes
-    .map((node) =>
-      node.kind === "html"
-        ? node.html
-        : node.closes.join("") + node.char.repeat(node.count) + node.opens.join(""),
-    )
-    .join("");
+  // At a piece's edge, the tags still open close, and open again after it.
+  const open: string[] = [];
+  const done: string[] = [];
+  let html = "";
+  for (const node of nodes) {
+    if (node.kind === "html") html += node.html;
+    else if (node.kind === "edge") {
+      const closing = [...open]
+        .reverse()
+        .map((tag) => `</${tag}>`)
+        .join("");
+      done.push(html + closing);
+      html = open.map((tag) => `<${tag}>`).join("");
+    } else {
+      for (const close of node.closes) {
+        html += close;
+        open.pop();
+      }
+      html += node.char.repeat(node.count);
+      for (const opening of node.opens) {
+        html += opening;
+        open.push(opening.slice(1, -1));
+      }
+    }
+  }
+  done.push(html);
+  return done;
 }

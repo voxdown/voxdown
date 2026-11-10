@@ -34,6 +34,11 @@ export type Spoken = {
   target: boolean;
   /** Whether its stretch carries on a quote from the line or paragraph before (§5.7). */
   carries: boolean;
+  /**
+   * Whether the edit must move this character itself, not just may: a quote's, or a character's
+   * own words. (Narration may hold quotes, of which only the first goes.)
+   */
+  strict: boolean;
 };
 
 /** Names are the same name whatever their case (§5.2): `@gerald` is Gerald. */
@@ -100,7 +105,7 @@ export function quoteOf(story: Story, target: Speech, acrossDirections = true): 
  * sounds characters make (`@Gerald [snores]`); spaces and punctuation aside. `target` marks
  * the characters of the items an edit is made to.
  */
-export function spokenChars(story: Story, target: readonly Item[] = []): Spoken[] {
+export function spokenChars(story: Story, target: readonly Item[] = [], strict = false): Spoken[] {
   const firsts = new Set(
     story.blocks.flatMap((block) => {
       if (block.kind !== "paragraph") return [];
@@ -120,6 +125,7 @@ export function spokenChars(story: Story, target: readonly Item[] = []): Spoken[
       speaker: item.speaker,
       direction: item.direction,
       target: target.includes(item),
+      strict: strict && target.includes(item),
       // A quote that runs over lines, or a paragraph that carries the speech before it on.
       carries:
         item.kind === "speech" &&
@@ -167,7 +173,8 @@ export function brokenPromise(
   for (const [code, count] of counts(edited)) {
     if (count > (was.get(code) ?? 0)) return `a new ${code} warning`;
   }
-  const before = spokenChars(story, quoteOf(story, target, promise.acrossDirections));
+  const narration = !target.quoted && sameName(target.speaker, story.meta.narrator);
+  const before = spokenChars(story, quoteOf(story, target, promise.acrossDirections), !narration);
   const after = spokenChars(edited);
   if (after.map((c) => c.char).join("") !== before.map((c) => c.char).join(""))
     return "the words changed";
@@ -197,7 +204,9 @@ export function brokenPromise(
 export const EDITS: Record<"speaker" | "direction", EditPromise> = {
   speaker: {
     inside: (was, now) =>
-      (now.speaker === "Zed" || sameName(now.speaker, was.speaker)) &&
+      (was.strict
+        ? now.speaker === "Zed"
+        : now.speaker === "Zed" || sameName(now.speaker, was.speaker)) &&
       now.direction === was.direction,
     some: (now) => now.some((c) => c.speaker === "Zed"),
     acrossDirections: true,
@@ -208,3 +217,36 @@ export const EDITS: Record<"speaker" | "direction", EditPromise> = {
     already: (target) => target.direction === "softly",
   },
 };
+
+/**
+ * A mark the changes wrote that nothing needs: taken out (with the space after it), every word is
+ * heard and printed as before. Null if each one is needed.
+ */
+export function spareMark(story: Story, changes: readonly TextChange[]): string | null {
+  const text = applyChanges(story.source, changes);
+  const after = parse(text);
+  let delta = 0;
+  const written = [...changes]
+    .sort((a, b) => a.from - b.from)
+    .map((change) => {
+      const from = change.from + delta;
+      delta += change.insert.length - (change.to - change.from);
+      return { from, to: from + change.insert.length };
+    });
+  const heard = (of: Story) =>
+    spokenChars(of)
+      .map((c) => `${c.char}${c.speaker.toLowerCase()}${c.direction}`)
+      .join("|");
+  const goal = heard(after);
+  const book = bookText(after);
+  for (const item of allItems(after)) {
+    if (item.kind !== "mark" && item.kind !== "direction") continue;
+    if (!written.some((span) => span.from <= item.range.from && item.range.to <= span.to)) continue;
+    const end = text[item.range.to] === " " ? item.range.to + 1 : item.range.to;
+    const without = parse(text.slice(0, item.range.from) + text.slice(end));
+    if (heard(without) === goal && bookText(without) === book) {
+      return `${text.slice(item.range.from, item.range.to)} is spare in ${JSON.stringify(text)}`;
+    }
+  }
+  return null;
+}

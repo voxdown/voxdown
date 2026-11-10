@@ -94,8 +94,19 @@ function guarded(text: string, story: Story, runs: readonly TextChange[][]): str
     }
     return low;
   };
-  const blockOf = (at: number) =>
-    story.blocks.findIndex((block) => block.range.from <= at && at <= block.range.to);
+  // The block holding an offset, by halves: blocks come in order.
+  const blockOf = (at: number) => {
+    let low = 0;
+    let high = story.blocks.length - 1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      const range = (story.blocks[middle] as Story["blocks"][number]).range;
+      if (at < range.from) high = middle - 1;
+      else if (at > range.to) low = middle + 1;
+      else return middle;
+    }
+    return -1;
+  };
   const runLines = runs.map((run) => lineOf((run[0] as TextChange).from));
   const runBlocks = runs.map((run) => blockOf((run[0] as TextChange).from));
   let left = runs.map((_, index) => index);
@@ -322,13 +333,47 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
   const closer = closersAfter(source);
   const changes: TextChange[] = [];
   const decided = new Set<number>();
+  // Where a quote opens, straight or curly: a quote right after one opens too (`"'Hello,'`).
+  const opened = new Set<number>();
+  const afterDigit = (at: number) => /\d/.test(source[at - 1] ?? "");
+  // Lines where the parser reads an apostrophe as a quote's edge (`'Rock 'n' roll,'`): no curly
+  // marks there could be both right and heard as before, so they keep their straight ones.
+  const unsafe = new Set<number>();
+  const lineAt = (at: number) => source.lastIndexOf("\n", at - 1);
+  const paired = new Set<number>();
   for (const token of tokens) {
     if (token.type !== "open" && token.type !== "close") continue;
     if (token.char !== '"' && token.char !== "'") continue;
+    if (paired.has(token.range.from)) continue;
+    decided.add(token.range.from);
+    // A mark after a digit stays as written, whatever it does (§13, rule 8): `6"`.
+    if (afterDigit(token.range.from)) continue;
+    if (isElision(source, token.range.from)) {
+      // An apostrophe the parser reads as a quote's edge. `'n'` read as a quote of its own, or a
+      // decade (`'90s`) opening one, is apostrophes at both edges; a longer quote ending at an
+      // apostrophe can't be written curly and still heard the same.
+      const quotes = tokens.filter((other) => other.type === "open" || other.type === "close");
+      const at = quotes.indexOf(token);
+      const partner = token.type === "open" ? quotes[at + 1] : quotes[at - 1];
+      const own =
+        partner !== undefined &&
+        partner.char === "'" &&
+        partner.type !== token.type &&
+        (Math.abs(partner.range.from - token.range.from) === 2 ||
+          (token.type === "open" && source[token.range.from + 1] !== "n"));
+      if (own && partner) {
+        for (const edge of [token, partner]) {
+          changes.push({ ...edge.range, insert: "’" });
+          decided.add(edge.range.from);
+          paired.add(edge.range.from);
+        }
+      } else unsafe.add(lineAt(token.range.from));
+      continue;
+    }
     const double = token.char === '"';
-    const insert = isElision(source, token.range.from)
-      ? "’"
-      : token.type === "open"
+    if (token.type === "open") opened.add(token.range.from);
+    const insert =
+      token.type === "open"
         ? double
           ? style.open
           : style.innerOpen
@@ -336,41 +381,75 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
           ? style.close
           : style.innerClose;
     changes.push({ ...token.range, insert });
-    decided.add(token.range.from);
   }
+  // The marks the parser doesn't decide: quotes inside quotes, and apostrophes. On each line, an
+  // inner quote opens where a quote can open and a closer follows, and closes with the language's
+  // own inner mark.
+  const openContext = (at: number) => {
+    const before = source[at - 1];
+    return (
+      before === undefined ||
+      before === "\n" ||
+      /[\s([{—–-]/u.test(before) ||
+      isOpening(before) ||
+      opened.has(at - 1)
+    );
+  };
+  let inner = { double: false, single: false };
   for (let i = story.frontMatter?.range.to ?? 0; i < source.length; i++) {
     const char = source[i];
+    if (char === "\n") {
+      inner = { double: false, single: false };
+      continue;
+    }
     if (char === "\\") {
       i++;
       continue;
     }
     if ((char !== '"' && char !== "'") || decided.has(i) || skip[i]) continue;
-    const before = source[i - 1];
+    // Feet and inches (`6'2"`) stay as written.
+    if (afterDigit(i)) continue;
     const after = source[i + 1];
+    const followed = after !== undefined && !/\s/u.test(after);
     if (char === '"') {
-      if (before !== undefined && /\d/.test(before)) continue;
-      const opens = before === undefined || /[\s([{—–-]/u.test(before) || isOpening(before);
-      changes.push({ from: i, to: i + 1, insert: opens ? style.open : style.close });
+      if (inner.double) {
+        changes.push({ from: i, to: i + 1, insert: style.close });
+        inner.double = false;
+      } else if (openContext(i) && followed) {
+        changes.push({ from: i, to: i + 1, insert: style.open });
+        opened.add(i);
+        inner.double = true;
+      } else {
+        changes.push({ from: i, to: i + 1, insert: style.close });
+      }
+      continue;
+    }
+    // `rock 'n' roll` and a word's own apostrophe (`don't`, `dogs'`) are apostrophes.
+    const letterBefore = /[\p{L}\p{N}]/u.test(source[i - 1] ?? "");
+    const letterAfter = after !== undefined && /[\p{L}\p{N}]/u.test(after);
+    if (isElision(source, i) || (letterBefore && letterAfter)) {
+      changes.push({ from: i, to: i + 1, insert: "’" });
+    } else if (inner.single && !letterAfter) {
+      changes.push({ from: i, to: i + 1, insert: style.innerClose });
+      inner.single = false;
+    } else if (!inner.single && openContext(i) && followed && (closer[i + 1] ?? 0) === 1) {
+      changes.push({ from: i, to: i + 1, insert: style.innerOpen });
+      opened.add(i);
+      inner.single = true;
     } else {
-      // Feet (`6'2"`) stay as written, as inches do; `'90s` and the two of `rock 'n' roll` are
-      // apostrophes.
-      if (before !== undefined && /\d/.test(before)) continue;
-      const elided = isElision(source, i);
-      const opens =
-        (before === undefined || /[\s([{—–-]/u.test(before) || isOpening(before)) &&
-        after !== undefined &&
-        /\p{L}/u.test(after) &&
-        !elided &&
-        (closer[i + 1] ?? 0) === 1;
-      changes.push({ from: i, to: i + 1, insert: opens ? style.innerOpen : "’" });
+      changes.push({ from: i, to: i + 1, insert: "’" });
     }
   }
-  return changes;
+  return unsafe.size === 0 ? changes : changes.filter((change) => !unsafe.has(lineAt(change.from)));
 }
 
-/** Whether the `'` at `at` is one of the two apostrophes of ` 'n' `, as in rock 'n' roll. */
+/**
+ * Whether the `'` at `at` is an apostrophe that stands for something left out: the two of
+ * ` 'n' `, as in rock 'n' roll, or a decade's (`'90s`).
+ */
 function isElision(source: string, at: number): boolean {
   const word = /[\p{L}\p{N}]/u;
+  if (source[at] === "'" && /^'\d\ds?(?![\p{L}\p{N}])/u.test(source.slice(at, at + 5))) return true;
   return [at, at - 2].some(
     (from) =>
       /^'n'$/i.test(source.slice(from, from + 3)) &&

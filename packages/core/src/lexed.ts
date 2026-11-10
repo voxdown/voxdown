@@ -10,6 +10,17 @@ import { SourceText } from "./source";
  * stretch.
  */
 export function lexedTokens(source: string): Token[] {
+  // An edit asks for the same text's tokens several times: the last few are kept.
+  for (const [text, tokens] of recent) if (text === source) return tokens;
+  const tokens = lex(source);
+  recent.unshift([source, tokens]);
+  if (recent.length > 4) recent.pop();
+  return tokens;
+}
+
+const recent: Array<[string, Token[]]> = [];
+
+function lex(source: string): Token[] {
   const text = new SourceText(source);
   const ignore = () => {};
   const front = readFrontMatter(text, ignore);

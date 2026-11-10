@@ -42,13 +42,13 @@ export function write(story: Story): string {
   // as asked is an error, never a change quietly left out or one that does something else.
   const edit = (
     make: (current: Story) => TextChange[],
-    made?: (now: Story, before: Story) => boolean,
+    made?: (now: Story, before: Story, changes: TextChange[]) => boolean,
     what?: string,
   ) => {
     const current = parse(text);
     const changes = make(current);
     const next = applyChanges(text, changes);
-    if (made && !made(parse(next), current)) {
+    if (made && !made(parse(next), current, changes)) {
       throw new RangeError(`write() can't make this change as asked: ${what}.`);
     }
     written = afterChanges(written, changes);
@@ -81,7 +81,10 @@ export function write(story: Story): string {
         const heading = current.blocks[index];
         if (heading?.kind !== "heading") shapeError("blocks");
         const hashes = { from: heading.range.from, to: heading.range.from + heading.level };
-        return [{ ...hashes, insert: "#".repeat(Math.min(6, Math.max(1, block.level))) }];
+        if (!Number.isInteger(block.level) || block.level < 1 || block.level > 6) {
+          throw new RangeError(`write() can't make a heading of level ${block.level}: 1 to 6.`);
+        }
+        return [{ ...hashes, insert: "#".repeat(block.level) }];
       });
     }
   });
@@ -90,7 +93,11 @@ export function write(story: Story): string {
       if (after.speaker !== before.speaker) {
         edit(
           (current) => setSpeaker(current, find(current, original, before), after.speaker),
-          (now) => nameKey(find(now, original, before).speaker) === nameKey(after.speaker),
+          // The edit checks its own result (narration that holds a quote gives the quote): it
+          // is made unless it declined, or there was nothing to do.
+          (_, current, changes) =>
+            changes.length > 0 ||
+            nameKey(find(current, original, before).speaker) === nameKey(after.speaker),
           `“${before.text}” said by ${after.speaker}`,
         );
       }
@@ -98,7 +105,8 @@ export function write(story: Story): string {
         const direction = after.ownDirection?.trim() || null;
         edit(
           (current) => setDirection(current, find(current, original, before), direction),
-          (now) => find(now, original, before).ownDirection === direction,
+          (_, current, changes) =>
+            changes.length > 0 || find(current, original, before).ownDirection === direction,
           `“${before.text}” said ${direction ?? "with no direction of its own"}`,
         );
       }
@@ -316,8 +324,8 @@ function shapeError(what: string): never {
 }
 
 /**
- * The smallest changes that turn `a` into `b`: lines compared with Myers' diff, and each run of
- * changed lines narrowed to the characters that differ.
+ * Small changes that turn `a` into `b`: the lines lined up (see `align`), and each changed line,
+ * or run of added and removed ones, narrowed to the characters that differ.
  */
 export function diffChanges(a: string, b: string): TextChange[] {
   if (a === b) return [];

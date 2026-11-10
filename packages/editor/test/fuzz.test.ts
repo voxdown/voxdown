@@ -10,7 +10,20 @@ import { editorMarks, marksField, scriptEditor } from "../src/index";
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
 const SEED =
   process.env.FUZZ_SEED === "random" ? undefined : Number(process.env.FUZZ_SEED ?? 20261110);
-const settings = { numRuns: RUNS, ...(SEED === undefined ? {} : { seed: SEED }) };
+/**
+ * Checks a property in chunks of stories, giving the event loop a turn between them, so a deep
+ * run (FUZZ_RUNS=20000) never blocks the test worker long enough for vitest to give up on it.
+ */
+async function check<T>(property: fc.IProperty<T>, runs = RUNS): Promise<void> {
+  const chunk = 250;
+  for (let done = 0, part = 0; done < runs; done += chunk, part++) {
+    fc.assert(property, {
+      numRuns: Math.min(chunk, runs - done),
+      ...(SEED === undefined ? {} : { seed: SEED + part }),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
 
 const PIECES = [
   "@Gerald",
@@ -64,18 +77,17 @@ const inside = (length: number) => (mark: { from: number; to: number }) =>
   0 <= mark.from && mark.from <= mark.to && mark.to <= length;
 
 describe("the editor, on stories made at random", () => {
-  it("works out what to draw without failing, inside the text", () => {
-    fc.assert(
+  it("works out what to draw without failing, inside the text", async () => {
+    await check(
       fc.property(story, (source) => {
         expect(editorMarks(source).every(inside(source.length))).toBe(true);
       }),
-      settings,
     );
   });
 
-  it("keeps up with typing anywhere, a piece at a time", () => {
+  it("keeps up with typing anywhere, a piece at a time", async () => {
     const characters = () => [{ handle: "Gerald", name: "Gerald the Dragon" }];
-    fc.assert(
+    await check(
       fc.property(
         story,
         fc.array(fc.tuple(fc.nat(), piece, fc.nat(3)), { maxLength: 12 }),
@@ -90,7 +102,7 @@ describe("the editor, on stories made at random", () => {
           }
         },
       ),
-      { ...settings, numRuns: Math.max(20, Math.round(RUNS / 4)) },
+      Math.max(20, Math.round(RUNS / 4)),
     );
   });
 });

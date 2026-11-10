@@ -659,6 +659,54 @@ describe("review, round three", () => {
   });
 });
 
+describe("review, round four", () => {
+  const giveFirst = (source: string, name: string) => {
+    const story = parse(source);
+    const first = speeches(story).find((speech) => /[\p{L}\p{N}]/u.test(speech.text)) as Speech;
+    return applyChanges(source, setSpeaker(story, first, name));
+  };
+
+  it("writes a group's direction into the new mark, the one way §13.3 gives", () => {
+    expect(giveFirst("::: @Tom (sighing)\n@Tom “Hi.”\n:::", "Zed")).toBe(
+      "::: @Tom (sighing)\n@Zed (sighing) “Hi.”\n:::",
+    );
+  });
+
+  it("writes narration's speaker through the model as setSpeaker gives it", () => {
+    const story = parse("He said, “Hi.”");
+    (speeches(story)[0] as Speech).speaker = "Tom";
+    expect(write(story)).toBe("He said, @Tom “Hi.”");
+  });
+
+  it("refuses a heading level it can't write, and a change outside the text", () => {
+    const story = parse("# Title\n\nText.");
+    const heading = story.blocks[0];
+    if (heading?.kind === "heading") heading.level = 9;
+    expect(() => write(story)).toThrow(RangeError);
+    expect(() => applyChanges("abc", [{ from: 2, to: 1, insert: "" }])).toThrow(RangeError);
+    expect(() => applyChanges("abc", [{ from: -1, to: 0, insert: "" }])).toThrow(RangeError);
+    expect(() => applyChanges("abc", [{ from: 3, to: 4, insert: "" }])).toThrow(RangeError);
+  });
+
+  it("puts a sound after a word, never before a mark, inside a line ending or inside a link", () => {
+    const sound = (source: string, at: number) =>
+      applyChanges(source, insertSound(parse(source), at, "clatter"));
+    expect(sound("@Tom “Hello, you,” he said.", 0)).toBe("@Tom “Hello, [clatter] you,” he said.");
+    expect(sound("Tom waved.\r\nNext.", 11)).toBe("Tom waved. [clatter]\r\nNext.");
+    expect(sound("Tom waved.\r\n", 12)).toBe("Tom waved. [clatter]\r\n");
+    expect(sound("See [the old bat](https://e.com) fly.", 9)).toBe(
+      "See [the old bat](https://e.com) [clatter] fly.",
+    );
+  });
+
+  it("takes out a mark the edit wrote that another already covers", () => {
+    // A group character's words holding two quotes: one mark gives them all.
+    expect(giveFirst('::: @Tom (sighing)\n"Yes," "Yes,"\n:::', "Zed")).toBe(
+      '::: @Tom (sighing)\n@Zed (sighing) "Yes," "Yes,"\n:::',
+    );
+  });
+});
+
 describe("the writer, asked for what it can't do", () => {
   const items = (story: Story) =>
     story.blocks.flatMap((block) =>

@@ -40,6 +40,7 @@ import {
   allItems,
   allLines,
   brokenPromise,
+  spareMark,
   speeches,
   spokenChars,
 } from "./voices";
@@ -50,7 +51,20 @@ const PROSE_BUDGET = 0.01;
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
 const SEED =
   process.env.FUZZ_SEED === "random" ? undefined : Number(process.env.FUZZ_SEED ?? 20261110);
-const settings = { numRuns: RUNS, ...(SEED === undefined ? {} : { seed: SEED }) };
+/**
+ * Checks a property in chunks of stories, giving the event loop a turn between them, so a deep
+ * run (FUZZ_RUNS=20000) never blocks the test worker long enough for vitest to give up on it.
+ */
+async function check<T>(property: fc.IProperty<T>, runs = RUNS): Promise<void> {
+  const chunk = 250;
+  for (let done = 0, part = 0; done < runs; done += chunk, part++) {
+    fc.assert(property, {
+      numRuns: Math.min(chunk, runs - done),
+      ...(SEED === undefined ? {} : { seed: SEED + part }),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
 
 /** The pieces stories are made of, the tricky ones as likely as the plain ones. */
 const PIECES = [
@@ -181,7 +195,7 @@ const voice = (speech: Speech) => ({
  * word of the stretch (or every word of narration's first quote), under 1% for a direction. The
  * real books, where every stretch must take both edits, show how they do on prose.
  */
-function editProperty(
+async function editProperty(
   stories: fc.Arbitrary<string>,
   edit: (story: Story, target: Speech) => TextChange[],
   promise: EditPromise,
@@ -189,7 +203,7 @@ function editProperty(
 ) {
   let tried = 0;
   let declined = 0;
-  fc.assert(
+  await check(
     fc.property(stories, fc.nat(), (source, pick) => {
       const story = parse(source);
       const said = speeches(story);
@@ -205,15 +219,14 @@ function editProperty(
       }
       expect(brokenPromise(story, target, changes, promise)).toBe(null);
     }),
-    settings,
   );
   if (process.env.FUZZ_SHOW) console.log(`declined ${declined} of ${tried}`);
   expect(declined).toBeLessThanOrEqual(Math.max(3, tried * budget));
 }
 
 describe("on stories made at random", () => {
-  it("the parser never fails, and its ranges stay inside the text and in order", () => {
-    fc.assert(
+  it("the parser never fails, and its ranges stay inside the text and in order", async () => {
+    await check(
       fc.property(anyStory, (source) => {
         const story = parse(source);
         const inside = (range: { from: number; to: number }) =>
@@ -232,12 +245,11 @@ describe("on stories made at random", () => {
         for (const block of story.blocks) expect(inside(block.range)).toBe(true);
         for (const warning of story.warnings) expect(inside(warning.range)).toBe(true);
       }),
-      settings,
     );
   });
 
-  it("highlighting tokens stay inside the text and come in order", () => {
-    fc.assert(
+  it("highlighting tokens stay inside the text and come in order", async () => {
+    await check(
       fc.property(anyStory, (source) => {
         let previous = 0;
         for (const token of tokens(parse(source))) {
@@ -248,12 +260,11 @@ describe("on stories made at random", () => {
           previous = token.range.from;
         }
       }),
-      settings,
     );
   });
 
-  it("every reading and export can be made", () => {
-    fc.assert(
+  it("every reading and export can be made", async () => {
+    await check(
       fc.property(anyStory, (source) => {
         const story = parse(source);
         spokenScript(story);
@@ -268,21 +279,19 @@ describe("on stories made at random", () => {
           expect(row.column).toBeGreaterThanOrEqual(1);
         }
       }),
-      settings,
     );
   });
 
-  it("an unchanged story writes back byte for byte", () => {
-    fc.assert(
+  it("an unchanged story writes back byte for byte", async () => {
+    await check(
       fc.property(anyStory, (source) => {
         expect(write(parse(source))).toBe(source);
       }),
-      settings,
     );
   });
 
-  it("formatting settles after one run, and never changes who says what", () => {
-    fc.assert(
+  it("formatting settles after one run, and never changes who says what", async () => {
+    await check(
       fc.property(anyStory, fc.boolean(), (source, curly) => {
         const options = curly ? { quotes: "curly" as const } : {};
         const once = format(source, options);
@@ -291,18 +300,17 @@ describe("on stories made at random", () => {
           lines(parse(text)).map((row) => [row.kind, row.speaker, row.direction]);
         expect(who(once)).toEqual(who(source));
       }),
-      settings,
     );
   });
 
-  it("formatting changes words only in their spaces and quotation marks, and never an address", () => {
+  it("formatting changes words only in their spaces and quotation marks, and never an address", async () => {
     const words = (text: string) =>
       text
         .replace(/["'“”‘’„‚«»‹›]/g, "'")
         .replace(/\s+/g, " ")
         .trim();
     const addresses = (text: string) => (text.match(/\]\([^()\s]*\)/g) ?? []).sort();
-    fc.assert(
+    await check(
       fc.property(anyStory, fc.boolean(), (source, curly) => {
         const out = format(source, {
           names: false,
@@ -315,14 +323,13 @@ describe("on stories made at random", () => {
         if (lf.test(source) && !source.includes("\r\n")) expect(out).not.toContain("\r\n");
         if (source.includes("\r\n") && !lf.test(source)) expect(out).not.toMatch(lf);
       }),
-      settings,
     );
   });
 
-  it("giving a stretch to another character changes only that stretch's speaker", () => {
+  it("giving a stretch to another character changes only that stretch's speaker", async () => {
     // The stretch may split: narration that opens with a quote gives that quote to the character
     // and keeps the rest. Each of its words goes to the new speaker or stays; one at least goes.
-    editProperty(
+    await editProperty(
       anyStory,
       (story, target) => setSpeaker(story, target, "Zed"),
       EDITS.speaker,
@@ -330,15 +337,15 @@ describe("on stories made at random", () => {
     );
   });
 
-  it("setting how a stretch is said changes only that stretch's direction", () => {
-    editProperty(
+  it("setting how a stretch is said changes only that stretch's direction", async () => {
+    await editProperty(
       anyStory,
       (story, target) => setDirection(story, target, "softly"),
       EDITS.direction,
       0.04,
     );
   });
-  it("a sound or a line put in adds just that, and everything heard stays as it was", () => {
+  it("a sound or a line put in adds just that, and everything heard stays as it was", async () => {
     // Any offset is tried for safety. How often an edit declines is counted where it is meant to
     // be used: a sound after a word of a stretch, a line anywhere. (A sound has no place on a group
     // line or a scene break, nor after a mark that ends its line, where it would be the character's
@@ -362,7 +369,7 @@ describe("on stories made at random", () => {
       if (story.frontMatter) expect(after.frontMatter?.raw).toBe(story.frontMatter.raw);
       return { out, after };
     };
-    fc.assert(
+    await check(
       fc.property(
         anyStory,
         fc.nat(),
@@ -388,13 +395,12 @@ describe("on stories made at random", () => {
           if (line) expect(line.out.replace(/^\uFEFF/, "").split(/\r?\n/)).toContain(text);
         },
       ),
-      settings,
     );
     if (process.env.FUZZ_SHOW) console.log(`declined ${declined} of ${tried}`);
     expect(declined).toBeLessThanOrEqual(Math.max(3, tried * 0.04));
   });
 
-  it("the writer writes a changed note, instruction or sound as asked, or throws", () => {
+  it("the writer writes a changed note, instruction or sound as asked, or throws", async () => {
     const values = fc.oneof(
       fc.constantFrom(
         "",
@@ -413,7 +419,7 @@ describe("on stories made at random", () => {
       fc.string({ maxLength: 12 }),
     );
     let written = 0;
-    fc.assert(
+    await check(
       fc.property(anyStory, fc.nat(), values, (source, pick, value) => {
         const story = parse(source);
         const changeable = allItems(story).filter(
@@ -452,12 +458,11 @@ describe("on stories made at random", () => {
           spokenChars(of).map((c) => [c.char, c.speaker.toLowerCase(), c.direction]);
         expect(heard(after)).toEqual(heard(before));
       }),
-      settings,
     );
     expect(written).toBeGreaterThan(0);
   });
 
-  it("book details are set exactly as asked, and nothing else in the file moves", () => {
+  it("book details are set exactly as asked, and nothing else in the file moves", async () => {
     const fronts = fc.constantFrom(
       "",
       "---\ntitle: Old\n---\n",
@@ -483,7 +488,7 @@ describe("on stories made at random", () => {
       ),
       fc.string({ maxLength: 10 }),
     );
-    fc.assert(
+    await check(
       fc.property(fronts, pieceStory, values, (front, body, value) => {
         const source = front + body;
         const story = parse(source);
@@ -500,11 +505,10 @@ describe("on stories made at random", () => {
           expect(text.endsWith(body)).toBe(true);
         }
       }),
-      settings,
     );
   });
 
-  it("front matter of every form reads without failing, and its details are set as asked", () => {
+  it("front matter of every form reads without failing, and its details are set as asked", async () => {
     const scalar = fc.oneof(
       fc.constantFrom(
         "plain",
@@ -544,7 +548,7 @@ describe("on stories made at random", () => {
       fc.constantFrom("# a comment", "", "- a list item", "  indented: oddly", "\tcast: tabbed"),
       fc.nat({ max: 60 }).map((depth) => `deep:\n  ${"- ".repeat(depth)}x`),
     );
-    fc.assert(
+    await check(
       fc.property(
         fc.array(entry, { maxLength: 8 }),
         fc.boolean(),
@@ -563,11 +567,10 @@ describe("on stories made at random", () => {
           }
         },
       ),
-      settings,
     );
   });
 
-  it("the changes between two texts turn the one into the other", () => {
+  it("the changes between two texts turn the one into the other", async () => {
     const line = fc.constantFrom(
       "@Alice “Hi.”\n",
       "@Alicia “Hi.”\n",
@@ -577,18 +580,17 @@ describe("on stories made at random", () => {
       "x",
       "\r\n",
     );
-    fc.assert(
+    await check(
       fc.property(fc.array(line, { maxLength: 40 }), fc.array(line, { maxLength: 40 }), (a, b) => {
         const before = a.join("");
         const after = b.join("");
         expect(applyChanges(before, diffChanges(before, after))).toBe(after);
       }),
-      settings,
     );
   });
 
-  it("a Fountain import never fails, and what it makes reads without failing", () => {
-    fc.assert(
+  it("a Fountain import never fails, and what it makes reads without failing", async () => {
+    await check(
       fc.property(fc.string({ unit: "binary", maxLength: 120 }), pieceStory, (text, pieces) => {
         for (const fountain of [
           text,
@@ -598,7 +600,6 @@ describe("on stories made at random", () => {
           parse(fromFountain(fountain));
         }
       }),
-      settings,
     );
   });
 });
@@ -606,8 +607,8 @@ describe("on stories made at random", () => {
 describe("on prose made at random", () => {
   // Stories written the way people write them (stories.ts), where an edit should almost never
   // have to decline.
-  it("giving a stretch to another character changes only that stretch's speaker", () => {
-    editProperty(
+  it("giving a stretch to another character changes only that stretch's speaker", async () => {
+    await editProperty(
       proseStory,
       (story, target) => setSpeaker(story, target, "Zed"),
       EDITS.speaker,
@@ -615,8 +616,8 @@ describe("on prose made at random", () => {
     );
   }, 60_000);
 
-  it("setting how a stretch is said changes only that stretch's direction", () => {
-    editProperty(
+  it("setting how a stretch is said changes only that stretch's direction", async () => {
+    await editProperty(
       proseStory,
       (story, target) => setDirection(story, target, "softly"),
       EDITS.direction,
@@ -624,8 +625,87 @@ describe("on prose made at random", () => {
     );
   }, 60_000);
 
-  it("formatting settles, keeps every word, and never changes who says what", () => {
-    fc.assert(
+  it("every mark an edit writes is needed", async () => {
+    await check(
+      fc.property(proseStory, fc.nat(), fc.boolean(), (source, pick, speaker) => {
+        const story = parse(source);
+        const said = speeches(story);
+        const target = said[pick % Math.max(1, said.length)];
+        if (!target) return;
+        const changes = speaker
+          ? setSpeaker(story, target, "Zed")
+          : setDirection(story, target, "brightly");
+        expect(spareMark(story, changes)).toBe(null);
+      }),
+    );
+  }, 60_000);
+
+  it("the writer makes several changes at once with no mark to spare", async () => {
+    await check(
+      fc.property(
+        proseStory,
+        fc.array(fc.nat(), { minLength: 2, maxLength: 4 }),
+        (source, picks) => {
+          const story = parse(source);
+          const said = speeches(story);
+          if (said.length === 0) return;
+          for (const pick of picks) (said[pick % said.length] as Speech).speaker = "Zed";
+          let text: string;
+          try {
+            text = write(story);
+          } catch (error) {
+            expect(error).toBeInstanceOf(RangeError);
+            return;
+          }
+          const original = parse(source);
+          expect(spareMark(original, diffChanges(source, text))).toBe(null);
+          // Each stretch asked for is Zed's now, and every other word is heard as before.
+          const after = parse(text);
+          expect(
+            spokenChars(after)
+              .map((c) => c.char)
+              .join(""),
+          ).toBe(
+            spokenChars(original)
+              .map((c) => c.char)
+              .join(""),
+          );
+        },
+      ),
+    );
+  }, 60_000);
+
+  it("curly quotes nest: each closing mark closes the quote its kind opened", async () => {
+    // Prose written with straight quotes, made curly in English and in German. In each paragraph,
+    // every closing mark closes the innermost open quote of its kind, and at the end at most one
+    // outer quote is still open (a speech that goes on in the next paragraph, §5.7). In English
+    // the inner closing mark is also the apostrophe, so only the outer marks are followed there.
+    const straight = proseStory.map((text) => text.replace(/[“”]/g, '"').replace(/[‘’]/g, "'"));
+    await check(
+      fc.property(straight, fc.constantFrom("en", "de"), (source, language) => {
+        const out = format(source, { quotes: "curly", language });
+        const pairs: Record<string, string> =
+          language === "de" ? { "„": "“", "‚": "‘" } : { "“": "”" };
+        const closers = new Set(Object.values(pairs));
+        for (const paragraph of out.split(/\r?\n\s*\r?\n/)) {
+          // A line left with its straight quotes, as the formatter must sometimes.
+          if (/["']/.test(paragraph.replace(/(?<=\p{L})'(?=\p{L})/gu, ""))) continue;
+          const open: string[] = [];
+          for (const char of paragraph) {
+            if (char in pairs) open.push(char);
+            else if (closers.has(char)) {
+              const top = open.pop();
+              expect(top && pairs[top], paragraph).toBe(char);
+            }
+          }
+          expect(open.length, paragraph).toBeLessThanOrEqual(1);
+        }
+      }),
+    );
+  }, 60_000);
+
+  it("formatting settles, keeps every word, and never changes who says what", async () => {
+    await check(
       fc.property(proseStory, fc.boolean(), (source, curly) => {
         const options = curly ? { quotes: "curly" as const } : {};
         const once = format(source, options);
@@ -634,12 +714,11 @@ describe("on prose made at random", () => {
           spokenChars(parse(text)).map((c) => [c.char, c.speaker.toLowerCase(), c.direction]);
         expect(heard(once)).toEqual(heard(source));
       }),
-      settings,
     );
   }, 60_000);
 
-  it("renaming a character renames them everywhere and changes nothing else", () => {
-    fc.assert(
+  it("renaming a character renames them everywhere and changes nothing else", async () => {
+    await check(
       fc.property(anyStory, (source) => {
         const story = parse(source);
         const before = speeches(story).map(voice);
@@ -651,7 +730,6 @@ describe("on prose made at random", () => {
           before.map((v) => (v.speaker.toLowerCase() === "gerald" ? { ...v, speaker: "Zed" } : v)),
         );
       }),
-      settings,
     );
   });
 });

@@ -243,4 +243,10 @@ describe("the front matter YAML subset", () => {
     expect(performance.now() - start).toBeLessThan(1000);
     expect(title.startsWith("start continuation")).toBe(true);
   });
+
+  it("opens a quote in a list only at an item's start, and joins an escaped line break", () => {
+    expect(readYaml("tags: [don't, can't, stop]").data.tags).toEqual(["don't", "can't", "stop"]);
+    expect(readYaml('title: "The long\\\n  story"').data.title).toBe("The longstory");
+    expect(readYaml('title: "two\n  lines"').data.title).toBe("two lines");
+  });
 });

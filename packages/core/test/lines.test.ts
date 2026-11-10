@@ -112,6 +112,29 @@ describe("what review found", () => {
   });
 });
 
+describe("links, as Markdown reads them (§8.3)", () => {
+  it("runs a link's text to the bracket that balances it", () => {
+    const story = parse("[a [fine] story](https://example.com) and on.");
+    expect(spokenScript(story)).toBe("Narrator: a [fine] story and on.");
+    expect(story.warnings).toEqual([]);
+  });
+
+  it("reads an image's address without its title or angle brackets", () => {
+    const image = (text: string) =>
+      parse(text)
+        .blocks.flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+        .flatMap((line) => line.items)
+        .find((item) => item.kind === "image");
+    expect(image('![a [b] c](pic.png "A title")')).toMatchObject({
+      alt: "a [b] c",
+      src: "pic.png",
+    });
+    expect(image("![x](<my pic.png>)")).toMatchObject({ src: "my pic.png" });
+    // An address with a title is an address: no warning that a sound reads as a link.
+    expect(parse('[story](https://example.com "A story")').warnings).toEqual([]);
+  });
+});
+
 describe("the Fountain import", () => {
   const screenplay = [
     "Title: The Dragon Who Wouldn't Roar",

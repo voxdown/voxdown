@@ -415,16 +415,19 @@ function endsToken(text: string, index: number): boolean {
 /** In a list in brackets, a comment starts at a `#` after white space outside quotes. */
 function stripFlowComment(text: string): string {
   let quote: string | null = null;
+  let itemStart = true;
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     if (quote) {
       if (char === "\\" && quote === '"') i++;
       else if (char === quote) quote = null;
-    } else if (char === '"' || char === "'") {
+    } else if ((char === '"' || char === "'") && itemStart) {
       quote = char;
     } else if (char === "#" && (i === 0 || /[ \t]/.test(text[i - 1] ?? ""))) {
       return text.slice(0, i).trim();
     }
+    // A quote opens an item only at its start, after `[`, a comma and spaces.
+    if (!quote) itemStart = char === "[" || char === "," || (itemStart && /[ \t]/.test(char ?? ""));
   }
   return text.trim();
 }
@@ -487,7 +490,10 @@ function scanPiece(piece: string, from: number, quote: string): { end: number } 
 /** The value of the quoted scalar that opens `text` and closes just before `end`. */
 function decodeQuoted(text: string, end: number, bad?: () => void): { value: string; end: number } {
   const quote = text[0];
-  const inner = foldLines(text.slice(1, end - 1));
+  let raw = text.slice(1, end - 1);
+  // In double quotes, a backslash at a line's end joins it to the next with nothing between.
+  if (quote === '"') raw = raw.replace(/\\\r?\n[ \t]*/g, "");
+  const inner = foldLines(raw);
   return {
     value: quote === '"' ? unescapeDouble(inner, bad) : inner.replaceAll("''", "'"),
     end,
@@ -584,7 +590,8 @@ function splitFlowItems(inner: string): string[] {
     if (quote) {
       if (char === "\\" && quote === '"') i++;
       else if (char === quote) quote = null;
-    } else if (char === '"' || char === "'") {
+    } else if ((char === '"' || char === "'") && inner.slice(start, i).trim() === "") {
+      // A quote opens only at an item's start: `don't` is a plain word.
       quote = char;
     } else if (char === ",") {
       items.push(inner.slice(start, i).trim());

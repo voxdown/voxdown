@@ -14,7 +14,7 @@ import {
   characterColors,
   parse,
 } from "voxdown";
-import { escapeHtml, inlineHtml, safeUrl } from "./inline";
+import { escapeHtml, inlineHtml, inlineHtmlPieces, safeUrl } from "./inline";
 import { stylesheet } from "./stylesheet";
 
 export { stylesheet };
@@ -101,9 +101,12 @@ export function renderBook(story: Story, options: RenderOptions = {}): string {
           }
     }
     if (block.visibility === "audio" || block.visibility === "hidden") continue;
+    // Emphasis can run over a paragraph's lines: they are rendered together, each its own.
+    const texts = lines.map((line) => printedText(story.source, line));
+    const htmls = inlineHtmlPieces(texts);
     const printed = lines
-      .map((line) => {
-        const html = printedLine(story.source, line);
+      .map((line, index) => {
+        const html = texts[index] === "" ? "" : (htmls[index] ?? "");
         // With positions, each printed line says where it comes from.
         return html && options.positions && block.kind !== "heading"
           ? `<span class="vxd-line"${placed(line.range, options)}>${html}</span>`
@@ -134,6 +137,11 @@ const NOT_PRINTED: ReadonlySet<Item["kind"]> = new Set([
 
 /** A line as printed (§12.2), as HTML. Where a removed mark leaves two spaces, one remains. */
 function printedLine(source: string, line: Line): string {
+  return inlineHtml(printedText(source, line));
+}
+
+/** A line as printed (§12.2), its Markdown not yet read. */
+function printedText(source: string, line: Line): string {
   let printed = "";
   let at = line.range.from;
   let joint = false;
@@ -149,7 +157,7 @@ function printedLine(source: string, line: Line): string {
     joint = true;
   }
   append(line.range.to);
-  return inlineHtml(printed.trim());
+  return printed.trim();
 }
 
 // The script view
@@ -192,6 +200,8 @@ type ScriptContext = {
   last: string | null;
   /** The groups around the block being written, outermost first. */
   groups: readonly Group[];
+  /** The block's text as HTML, by its range (`from:to`), rendered together (see `inlinePieces`). */
+  inline?: Map<string, string>;
 };
 
 /** What the labels of the groups around a block already say: a character, and a direction. */
@@ -244,11 +254,13 @@ function scriptBlock(block: Block, context: ScriptContext): string {
       return `<div class="vxd-heading-label vxd-h${level}" data-visibility="hidden"${placed(block.range, context.options)}><span class="vxd-chip vxd-chip-label">hidden</span> ${printedLine(context.story.source, block.line)}</div>`;
     }
     context.last = null;
+    context.inline = inlinePieces(context.story.source, [block.line]);
     const inner = scriptLine(block.line, context, true);
     return `<h${level} class="vxd-heading"${visibilityAttr(block.visibility)}${placed(block.range, context.options)}>${label}${inner}</h${level}>`;
   }
   // Each paragraph names its speakers afresh, except the character its group's label names.
   context.last = groupSays(context.groups).character ?? null;
+  context.inline = inlinePieces(context.story.source, block.lines);
   // A line holding only a page turn is a rule across the page.
   const lines = block.lines.map((line) => {
     const solid = line.items.filter((item) => !(item.kind === "speech" && item.text === ""));
@@ -294,7 +306,7 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
   let html = "";
   let at = line.range.from;
   const gap = (to: number) => {
-    if (to > at) html += inlineHtml(source.slice(at, to));
+    if (to > at) html += inlineOf(context, at, to);
     at = Math.max(at, to);
   };
   for (const item of items) {
@@ -361,6 +373,35 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
   return html.trim();
 }
 
+/**
+ * The pieces of text a script's lines show (between their items, and each stretch), rendered
+ * together so emphasis can run across a line break or a direction: by range.
+ */
+function inlinePieces(source: string, lines: readonly Line[]): Map<string, string> {
+  const ranges: Array<[number, number]> = [];
+  for (const line of lines) {
+    const items = [...line.items].sort((a, b) => a.range.from - b.range.from);
+    let at = line.range.from;
+    const gap = (to: number) => {
+      if (to > at) ranges.push([at, to]);
+      at = Math.max(at, to);
+    };
+    for (const item of items) {
+      if (item.range.from < at && item.kind !== "speech") continue;
+      gap(item.range.from);
+      if (item.kind === "speech") ranges.push([item.range.from, item.range.to]);
+      at = Math.max(at, item.range.to);
+    }
+    gap(line.range.to);
+  }
+  const htmls = inlineHtmlPieces(ranges.map(([from, to]) => source.slice(from, to)));
+  return new Map(ranges.map(([from, to], index) => [`${from}:${to}`, htmls[index] ?? ""]));
+}
+
+function inlineOf(context: ScriptContext, from: number, to: number): string {
+  return context.inline?.get(`${from}:${to}`) ?? inlineHtml(context.story.source.slice(from, to));
+}
+
 function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): string {
   const { story, colors, options } = context;
   const source = story.source;
@@ -379,7 +420,7 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): s
     speech.direction && spoken && speech.direction !== groupSays(context.groups).direction
       ? `<span class="vxd-direction" aria-label="${escapeHtml(`(${speech.direction})`)}"><span>${escapeHtml(speech.direction)}</span></span>`
       : "";
-  const words = inlineHtml(source.slice(speech.range.from, speech.range.to));
+  const words = inlineOf(context, speech.range.from, speech.range.to);
   const classes = [
     "vxd-speech",
     narrator ? "vxd-narration" : "",

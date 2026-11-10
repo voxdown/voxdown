@@ -42,8 +42,13 @@ describe("the formatter (§13, rule 8)", () => {
   });
 
   it("makes straight quotes curly in the story's language, apostrophes too", () => {
-    expect(format(`@Gerald "Don't," he said, "it's a 6" nail."\n`, { quotes: "curly" })).toBe(
-      "@Gerald “Don’t,” he said, “it’s a 6” nail.”\n",
+    expect(format(`@Gerald "Don't," he said, "it's a six-inch nail."\n`, { quotes: "curly" })).toBe(
+      "@Gerald “Don’t,” he said, “it’s a six-inch nail.”\n",
+    );
+    // A mark after a digit stays as written (§13, rule 8). Here the parser reads `6"` as the
+    // quote's end, so as curly marks the line would be heard differently: it stays as it is.
+    expect(format(`@Gerald "It's a 6" nail," he said.\n`, { quotes: "curly" })).toBe(
+      `@Gerald "It's a 6" nail," he said.\n`,
     );
     expect(format(`@Mother 'Now run along,' she said.\n`, { quotes: "curly" })).toBe(
       "@Mother ‘Now run along,’ she said.\n",
@@ -123,5 +128,29 @@ describe("the formatter (§13, rule 8)", () => {
     );
     // `#` alone is no heading: an empty heading keeps its space, and the rest is tidied.
     expect(format("---\ntitle: X\n---\n# \n\n")).toBe("---\ntitle: X\n---\n\n# \n");
+  });
+
+  it("curls quotes inside quotes with the language's inner marks", () => {
+    const curly = (text: string, language?: string) =>
+      format(text, { quotes: "curly", ...(language ? { language } : {}) }).trimEnd();
+    expect(curly(`@Tom "'Hello,' he said," she told me.`)).toBe(
+      "@Tom “‘Hello,’ he said,” she told me.",
+    );
+    expect(curly(`@Tom "She called it '_The Raven_'."`)).toBe(
+      "@Tom “She called it ‘_The Raven_’.”",
+    );
+    expect(curly(`@Tom "It was '*no*', then '2 o'clock', then '...and so on'."`)).toBe(
+      "@Tom “It was ‘*no*’, then ‘2 o’clock’, then ‘...and so on’.”",
+    );
+    expect(curly(`@Tom "Er sagte 'nein' und ging", sagte sie.`, "de")).toBe(
+      "@Tom „Er sagte ‚nein‘ und ging“, sagte sie.",
+    );
+    expect(curly(`@Tom «Il a dit 'non', puis il est parti», dit-elle.`, "fr")).toBe(
+      "@Tom «Il a dit “non”, puis il est parti», dit-elle.",
+    );
+    // Apostrophes: a word's own, a plural's, a decade's, and rock 'n' roll's.
+    expect(curly(`The '90s were great. The dogs' bowls. Rock 'n' roll.`)).toBe(
+      "The ’90s were great. The dogs’ bowls. Rock ’n’ roll.",
+    );
   });
 });

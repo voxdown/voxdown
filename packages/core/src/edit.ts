@@ -10,7 +10,7 @@ import { lexedTokens } from "./lexed";
 import type { Block, Group, Item, Line, Speech, Story, Vocal } from "./model";
 import { nameKey } from "./names";
 import { parse } from "./parse";
-import { bookText } from "./readings";
+import { bookText as readBook } from "./readings";
 import type { Range } from "./source";
 import { type YamlKey, readYaml } from "./yaml";
 
@@ -19,6 +19,21 @@ export type TextChange = { from: number; to: number; insert: string };
 
 /** Applies changes made against the same text. Overlapping changes are an error. */
 export function applyChanges(source: string, changes: readonly TextChange[]): string {
+  for (const { from, to } of changes) {
+    if (
+      !(
+        Number.isInteger(from) &&
+        Number.isInteger(to) &&
+        0 <= from &&
+        from <= to &&
+        to <= source.length
+      )
+    ) {
+      throw new RangeError(
+        `A change must lie within the text and end where it starts or after: ${from} to ${to} in ${source.length} characters.`,
+      );
+    }
+  }
   const sorted = changes
     .map((change, order) => ({ ...change, order }))
     .sort((a, b) => a.from - b.from || a.to - b.to || a.order - b.order);
@@ -430,7 +445,16 @@ function speakerChanges(
     }
   };
   const own = ownDirectionMark(story, speech);
-  const toBase = nameKey(speaker) === nameKey(baseSpeaker(groups, story.meta.narrator));
+  const base = baseSpeaker(groups, story.meta.narrator);
+  const toBase = nameKey(speaker) === nameKey(base);
+  // A group's direction is its own character's (§7.2): given to someone else, the stretch keeps
+  // it in the new mark, written the one way §13.3 gives (`@Zed (sighing)`).
+  const fromGroup =
+    speech.ownDirection === null &&
+    speech.direction !== null &&
+    nameKey(speech.speaker) === nameKey(base) &&
+    nameKey(base) !== nameKey(story.meta.narrator);
+  const how = speech.ownDirection ?? (fromGroup ? speech.direction : null);
   if (speech.mark && !speech.continued && firstOfMark(line, speech) && !sharesMark(line, speech)) {
     const mark = speech.mark;
     if (toBase && !speech.quoted) {
@@ -440,6 +464,8 @@ function speakerChanges(
       } else {
         changes.push({ ...removeWithSpace(story.source, mark.range), insert: "" });
       }
+    } else if (fromGroup && !mark.directionRange && how) {
+      changes.push({ ...mark.nameRange, insert: `${speaker} (${directionText(how)})` });
     } else {
       changes.push({ ...mark.nameRange, insert: speaker });
     }
@@ -455,7 +481,7 @@ function speakerChanges(
     // A quote carried on from a mark keeps how it is said: `@Zed (yawning) “Very.”`.
     const at = speech.openQuote?.from ?? quoteAt ?? beforeGlued(story, line, speech.textRange.from);
     const escaped = !speech.quoted && quoteAt === undefined && story.source[at] === "(";
-    const mark = markText(speaker, speech.ownDirection);
+    const mark = markText(speaker, how);
     const insert = markAt(story.source, at, mark, escaped ? "\\" : undefined);
     changes.push({ from: at, to: at, insert });
   }
@@ -477,7 +503,7 @@ function speakerChanges(
     );
     if (inner) {
       const at = inner.range.from;
-      const mark = markText(speaker, speech.ownDirection);
+      const mark = markText(speaker, how);
       changes.push({ from: at, to: at, insert: markAt(story.source, at, mark) });
     }
   }
@@ -536,6 +562,35 @@ type Heard = Voice & {
 };
 
 function heard(story: Story, target: readonly Item[] = []): Heard[] {
+  const all = heardCache.get(story) ?? hear(story);
+  heardCache.set(story, all);
+  if (target.length === 0) return all;
+  const targets = new Set(target);
+  return all.map((char) => (targets.has(char.item) ? { ...char, target: true } : char));
+}
+
+// What an edit reads again and again, kept: stories by their text, and what each is heard and
+// printed as. The stories are never changed.
+const heardCache = new WeakMap<Story, Heard[]>();
+const bookCache = new WeakMap<Story, string>();
+const recentStories: Story[] = [];
+
+function parsed(text: string): Story {
+  const known = recentStories.find((story) => story.source === text);
+  if (known) return known;
+  const story = parse(text);
+  recentStories.unshift(story);
+  if (recentStories.length > 8) recentStories.pop();
+  return story;
+}
+
+function bookOf(story: Story): string {
+  const book = bookCache.get(story) ?? readBook(story);
+  bookCache.set(story, book);
+  return book;
+}
+
+function hear(story: Story, target: readonly Item[] = []): Heard[] {
   const out: Heard[] = [];
   const targets = new Set(target);
   for (const line of allLines(story)) {
@@ -643,7 +698,7 @@ function kept(
 ): "kept" | "broken" | Missed {
   let edited: Story;
   try {
-    edited = parse(applyChanges(story.source, changes));
+    edited = parsed(applyChanges(story.source, changes));
   } catch {
     return "broken";
   }
@@ -681,7 +736,7 @@ function tidied(
   const idleBefore = story.warnings.filter((warning) => warning.code === "idle-mark").length;
   let current = changes;
   for (let round = 0; round < 8; round++) {
-    const edited = parse(applyChanges(story.source, current));
+    const edited = parsed(applyChanges(story.source, current));
     const idle = edited.warnings.filter((warning) => warning.code === "idle-mark");
     if (idle.length <= idleBefore) break;
     // Only a mark the edit wrote: the author's own marks stay, idle or not.
@@ -736,7 +791,7 @@ function noNewWarnings(story: Story, changes: readonly TextChange[]): boolean {
     return found;
   };
   const before = counts(story);
-  for (const [code, count] of counts(parse(applyChanges(story.source, changes)))) {
+  for (const [code, count] of counts(parsed(applyChanges(story.source, changes)))) {
     if (count > (before.get(code) ?? 0)) return false;
   }
   return true;
@@ -744,7 +799,7 @@ function noNewWarnings(story: Story, changes: readonly TextChange[]): boolean {
 
 /** Whether the book reads the same after the changes: an edit adds or moves marks, never print. */
 function sameBook(story: Story, changes: readonly TextChange[]): boolean {
-  return bookText(parse(applyChanges(story.source, changes))) === bookText(story);
+  return bookOf(parsed(applyChanges(story.source, changes))) === bookOf(story);
 }
 
 /** Where the changes' own text is, in the text they make. */
@@ -1026,7 +1081,7 @@ export function renameCharacter(story: Story, from: string, to: string): TextCha
   }
   const sorted = changes.sort((a, b) => a.from - b.from);
   // Every word still said by the same character, now under the new name, and in the same way.
-  const after = heard(parse(applyChanges(story.source, sorted)));
+  const after = heard(parsed(applyChanges(story.source, sorted)));
   const before = heard(story);
   const same =
     after.length === before.length &&
@@ -1048,7 +1103,7 @@ export function setFullName(story: Story, handle: string, name: string): TextCha
   checkName(handle);
   const changes = fullNameChanges(story, handle, name);
   // Read back: the character has the name, and everyone else in the cast is as they were.
-  const after = parse(applyChanges(story.source, changes)).cast;
+  const after = parsed(applyChanges(story.source, changes)).cast;
   const key = nameKey(handle);
   const member = after.find((other) => nameKey(other.handle) === key);
   const others = (cast: Story["cast"]) =>
@@ -1100,12 +1155,25 @@ function fullNameChanges(story: Story, handle: string, name: string): TextChange
 /** Book details in the front matter: `title`, `subtitle`, `author`, `language`, `narrator`… */
 export function setMeta(story: Story, key: string, value: string | null): TextChange[] {
   const changes = metaChanges(story, key, value);
-  // Read back: the detail is as asked, and the story is read as before (but for who narrates it,
-  // when that is the detail).
-  const after = parse(applyChanges(story.source, changes));
-  const read = after.frontMatter?.data[key];
   const asked = value === null ? undefined : value;
-  const same = read === asked && (key === "narrator" || sameHearing(after, story));
+  // Read back: the detail is as asked, and every other detail and the cast as they were, so the
+  // story is read as before (but for who narrates it, when that is the detail). The changes are
+  // all in the front matter, so only it is read again.
+  const body = bodyStart(story);
+  if (changes.every((change) => change.to <= body)) {
+    const front = parse(applyChanges(story.source.slice(0, body), changes)).frontMatter;
+    const rest = (data: Record<string, unknown> | undefined) =>
+      JSON.stringify(
+        Object.entries(data ?? {})
+          .filter(([other]) => other !== key)
+          .sort(),
+      );
+    const same = front?.data[key] === asked && rest(front?.data) === rest(story.frontMatter?.data);
+    return same ? changes : [];
+  }
+  const after = parsed(applyChanges(story.source, changes));
+  const same =
+    after.frontMatter?.data[key] === asked && (key === "narrator" || sameHearing(after, story));
   return same ? changes : [];
 }
 
@@ -1144,9 +1212,31 @@ export function insertSound(story: Story, offset: number, description: string): 
         : [],
     ),
   );
+  // On an empty line, or between a carriage return and its line feed, the sound belongs to the
+  // words before: it goes back to them.
+  while (
+    at > 0 &&
+    (source[at - 1] === "\r" ||
+      (source[at - 1] === "\n" && /^\r?\n|^$/.test(source.slice(at, at + 2))))
+  ) {
+    at--;
+  }
+  // A link's text is one: a sound in it goes after the link.
+  const links = lexedTokens(source).filter((token) => token.type === "text" && !token.plain);
   for (let moved = true; moved; ) {
     moved = false;
+    // At a mark, past it: the sound follows the first word the mark gives.
+    const startsMark = marks.get(at);
+    if (startsMark !== undefined && startsMark > at) {
+      at = startsMark;
+      moved = true;
+    }
     while (at < source.length && !/\s/.test(source[at] as string) && !marks.has(at)) at++;
+    const link = links.find((token) => token.range.from < at && at < token.range.to);
+    if (link) {
+      at = link.range.to;
+      moved = true;
+    }
     for (const item of items) {
       if (item.kind === "speech") continue;
       if (item.range.from < at && at < item.range.to) {
@@ -1169,11 +1259,11 @@ export function insertSound(story: Story, offset: number, description: string): 
   }
   const insert = ` [${description.trim().replace(/([[\]\\])/g, "\\$1")}]`;
   const changes = [{ from: at, to: at, insert }];
-  const after = parse(applyChanges(source, changes));
+  const after = parsed(applyChanges(source, changes));
   const added = allLines(after)
     .flatMap((line) => line.items)
     .some((item) => item.kind === "sound" && item.range.from === at + 1);
-  return added && sameHearing(story, after) && bookText(after) === bookText(story) ? changes : [];
+  return added && sameHearing(story, after) && bookOf(after) === bookOf(story) ? changes : [];
 }
 
 /**
@@ -1213,12 +1303,12 @@ export function insertLine(story: Story, offset: number, text: string): TextChan
         ? `${text}${ending}${ending}`
         : `${text}${ending}`;
   const changes = [{ from: at, to: at, insert }];
-  const after = parse(applyChanges(source, changes));
+  const after = parsed(applyChanges(source, changes));
   const all = heard(after);
   const rest = all.filter((char) => char.at < at || char.at >= at + insert.length);
   // The new line is heard as its text would be on its own: a note or a pause, nothing.
   const own = all.filter((char) => char.at >= at && char.at < at + insert.length);
-  const alone = heard(parse(text))
+  const alone = heard(parsed(text))
     .map((char) => char.char)
     .join("");
   const same = sameHeard(heard(story), rest) && own.map((char) => char.char).join("") === alone;

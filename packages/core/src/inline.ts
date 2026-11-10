@@ -163,13 +163,17 @@ type Segment = {
   from: number;
   to: number;
   parens: Map<number, number>;
+  /** For each `[`, its `]`, with brackets inside balanced: a link's text may hold some. */
+  squares: Map<number, number>;
   next: { "]": Int32Array; "}": Int32Array };
 };
 let segment: Segment | null = null;
 
 function scanSegment(source: string, from: number, to: number): Segment {
   const parens = new Map<number, number>();
+  const squares = new Map<number, number>();
   const open: number[] = [];
+  const openSquare: number[] = [];
   const plain = new Uint8Array(to - from);
   for (let i = from; i < to; i++) {
     const char = source[i];
@@ -180,6 +184,8 @@ function scanSegment(source: string, from: number, to: number): Segment {
     plain[i - from] = 1;
     if (char === "(") open.push(i);
     else if (char === ")" && open.length > 0) parens.set(open.pop() as number, i);
+    else if (char === "[") openSquare.push(i);
+    else if (char === "]" && openSquare.length > 0) squares.set(openSquare.pop() as number, i);
   }
   const brackets = new Int32Array(to - from + 1).fill(-1);
   const braces = new Int32Array(to - from + 1).fill(-1);
@@ -188,7 +194,7 @@ function scanSegment(source: string, from: number, to: number): Segment {
     brackets[at] = plain[at] && source[i] === "]" ? i : (brackets[at + 1] as number);
     braces[at] = plain[at] && source[i] === "}" ? i : (braces[at + 1] as number);
   }
-  return { source, from, to, parens, next: { "]": brackets, "}": braces } };
+  return { source, from, to, parens, squares, next: { "]": brackets, "}": braces } };
 }
 
 function inSegment(source: string, from: number, to: number): Segment | null {
@@ -295,20 +301,72 @@ export function scanName(source: string, from: number, to: number): number {
 
 /** `![description](file)`, shown in the book and not heard (§8.3). */
 function lexImage(source: string, at: number, to: number): Atom | null {
-  const close = findUnescaped(source, at + 2, to, "]");
+  const link = linkAt(source, at + 1, to);
+  if (!link) return null;
+  return {
+    type: "image",
+    alt: source.slice(at + 2, link.close),
+    src: destination(link.target).url,
+    range: { from: at, to: link.end + 1 },
+  };
+}
+
+/**
+ * A Markdown link from the `[` at `at`: its text runs to the `]` that balances it (a link's text
+ * may hold brackets), then an address in parentheses, balanced too. Null if there isn't one.
+ */
+function linkAt(
+  source: string,
+  at: number,
+  to: number,
+): { close: number; end: number; target: string } | null {
+  const close = matchSquare(source, at, to);
   if (close < 0 || close + 1 >= to || source[close + 1] !== "(") return null;
   const end = matchParen(source, close + 1, to);
   if (end < 0) return null;
-  return {
-    type: "image",
-    alt: source.slice(at + 2, close),
-    src: source.slice(close + 2, end).trim(),
-    range: { from: at, to: end + 1 },
-  };
+  return { close, end, target: source.slice(close + 2, end).trim() };
+}
+
+/**
+ * A link's address and title, as Markdown reads them: `<address>` or the address up to a space,
+ * then an optional title in quotes or parentheses.
+ */
+export function destination(target: string): { url: string; title: string | null } {
+  const text = target.trim();
+  const bracketed = /^<([^<>\n]*)>\s*(.*)$/s.exec(text);
+  const [url, rest] = bracketed
+    ? [bracketed[1] as string, bracketed[2] as string]
+    : [text.split(/\s/)[0] as string, text.slice((text.split(/\s/)[0] as string).length).trim()];
+  const title = /^(?:"([^"]*)"|'([^']*)'|\(([^)]*)\))$/s.exec(rest);
+  return { url, title: title ? (title[1] ?? title[2] ?? title[3] ?? null) : null };
+}
+
+/** The index of the `]` that balances the `[` at `open`, or -1. Escaped brackets don't count. */
+function matchSquare(source: string, open: number, to: number): number {
+  const known = inSegment(source, open, to);
+  if (known) return known.squares.get(open) ?? -1;
+  let depth = 0;
+  for (let i = open; i < to; i++) {
+    const char = source[i];
+    if (char === "\\" && isEscapable(source[i + 1])) i++;
+    else if (char === "[") depth++;
+    else if (char === "]" && --depth === 0) return i;
+  }
+  return -1;
 }
 
 /** `[a sound]` (§8.1), or a Markdown link, `[text](address)`, whose text is read (§8.3). */
 function lexBracket(source: string, at: number, to: number, warn: Warn): Atom | null {
+  // A link whose text holds brackets: `[a [fine] story](…)`.
+  const link = linkAt(source, at, to);
+  if (link && link.close !== findUnescaped(source, at + 1, to, "]")) {
+    return {
+      type: "text",
+      value: removeEscapes(source.slice(at + 1, link.close)),
+      range: { from: at, to: link.end + 1 },
+      plain: false,
+    };
+  }
   const close = findUnescaped(source, at + 1, to, "]");
   if (close < 0) return null;
   const inner = source.slice(at + 1, close);
@@ -338,7 +396,8 @@ function lexBracket(source: string, at: number, to: number, warn: Warn): Atom | 
 
 /** Whether a link's target looks like an address rather than words, such as `(softly)`. */
 function looksLikeAddress(target: string): boolean {
-  return target !== "" && !/\s/.test(target) && /[./:#?=@]/.test(target);
+  const { url } = destination(target);
+  return url !== "" && !/\s/.test(url) && /[./:#?=@]/.test(url);
 }
 
 /** `{name}` or `{name value}` (§9). Anything else in braces stays text. */

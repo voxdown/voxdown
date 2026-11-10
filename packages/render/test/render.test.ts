@@ -75,6 +75,32 @@ describe("the book view", () => {
     expect(html("**a*")).toContain("*<em>a</em>");
   });
 
+  it("pairs emphasis over a paragraph's lines and across a direction, in both views", () => {
+    const book = (text: string) => renderBook(parse(text), { header: false });
+    const script = (text: string) => renderScript(parse(text), { header: false });
+    expect(book("*one\ntwo*")).toContain("<em>one</em><br>\n<em>two</em>");
+    expect(script("*one\ntwo*")).toContain("<em>one</em>");
+    expect(script("*one\ntwo*")).toContain("<em>two</em>");
+    expect(book("@A “*Hello @(softly) there.*”")).toContain("“<em>Hello there.</em>”");
+    const directed = script("@A “*Hello @(softly) there.*”");
+    expect(directed).toContain("“<em>Hello</em>");
+    expect(directed).toContain("<em>there.</em>”");
+    expect(directed).not.toContain("*");
+  });
+
+  it("reads links with brackets in their text, and an address's title and angle brackets", () => {
+    const html = (text: string) => renderBook(parse(text), { header: false });
+    expect(html("[a [fine] story](https://example.com)")).toContain(
+      '<a href="https://example.com">a [fine] story</a>',
+    );
+    expect(html('[story](https://example.com "A story")')).toContain(
+      '<a href="https://example.com" title="A story">story</a>',
+    );
+    expect(html("[story](<https://example.com>)")).toContain(
+      '<a href="https://example.com">story</a>',
+    );
+  });
+
   it("reads a link's or an image's address to its balancing parenthesis, as the parser does", () => {
     const link = "See [the bat](https://en.wikipedia.org/wiki/Bat_(animal)) here.";
     const image = "![A bat (flying)](bat_(1).png) here.";

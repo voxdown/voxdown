@@ -15,9 +15,11 @@ import {
   applyChanges,
   bookText,
   format,
+  insertSound,
   lines,
   parse,
   setDirection,
+  setMeta,
   setSpeaker,
   spokenScript,
   tokens,
@@ -164,9 +166,14 @@ describe("real books", () => {
     expect(time(() => tokens(story))).toBeLessThan(500);
     expect(time(() => write(story))).toBeLessThan(750);
     expect(time(() => format(long, { quotes: "curly" }))).toBeLessThan(4000);
+    // Each edit about two readings of the whole story (on a laptop, 100 to 150 ms).
     const said = speeches(story);
     const middle = said[Math.floor(said.length / 2)] as (typeof said)[number];
-    expect(time(() => setSpeaker(story, middle, "Zed"))).toBeLessThan(3000);
+    expect(time(() => setSpeaker(story, middle, "Zed"))).toBeLessThan(1500);
+    expect(time(() => setDirection(story, middle, "brightly"))).toBeLessThan(1500);
+    expect(time(() => insertSound(story, middle.range.from + 2, "clatter"))).toBeLessThan(1500);
+    // A book detail touches only the front matter: it reads only that again.
+    expect(time(() => setMeta(story, "title", "A New Title"))).toBeLessThan(100);
   }, 60_000);
 
   it("formats a long manuscript with lines it must leave as they are, in good time", () => {
@@ -200,6 +207,14 @@ describe("real books", () => {
     expect(performance.now() - start).toBeLessThan(10_000);
     expect(alternate.split("\n").filter((line) => line.startsWith("@Ann “")).length).toBe(2000);
   }, 120_000);
+
+  it("formats many short paragraphs in good time", () => {
+    // Each change's paragraph is found by halves, not by a search from the start.
+    const text = Array.from({ length: 64_000 }, () => "The rain fell.  Nobody moved.").join("\n\n");
+    const start = performance.now();
+    format(text);
+    expect(performance.now() - start).toBeLessThan(15_000);
+  }, 60_000);
 
   it("reads lines built to be slow in good time", () => {
     // Each was quadratic once: an opening mark searched the rest of its line for its closing one.

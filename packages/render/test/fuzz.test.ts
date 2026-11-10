@@ -12,7 +12,20 @@ import { renderBook, renderDocument, renderScript } from "../src/index";
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
 const SEED =
   process.env.FUZZ_SEED === "random" ? undefined : Number(process.env.FUZZ_SEED ?? 20261110);
-const settings = { numRuns: RUNS, ...(SEED === undefined ? {} : { seed: SEED }) };
+/**
+ * Checks a property in chunks of stories, giving the event loop a turn between them, so a deep
+ * run (FUZZ_RUNS=20000) never blocks the test worker long enough for vitest to give up on it.
+ */
+async function check<T>(property: fc.IProperty<T>, runs = RUNS): Promise<void> {
+  const chunk = 250;
+  for (let done = 0, part = 0; done < runs; done += chunk, part++) {
+    fc.assert(property, {
+      numRuns: Math.min(chunk, runs - done),
+      ...(SEED === undefined ? {} : { seed: SEED + part }),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
 
 const PIECES = [
   "@Gerald",
@@ -158,9 +171,9 @@ const plain = (text: string) =>
     .replace(/\s+/g, "");
 
 describe("the views, on stories made at random", () => {
-  it("print the book text in the book view, as a reader sees it", () => {
+  it("print the book text in the book view, as a reader sees it", async () => {
     const window = new Window();
-    fc.assert(
+    await check(
       // The book text drops escapes, so a story with one can't be told from one without.
       fc.property(
         story.filter((source) => !source.includes("\\")),
@@ -172,12 +185,11 @@ describe("the views, on stories made at random", () => {
           );
         },
       ),
-      settings,
     );
   });
 
-  it("never fail, and close every tag they open", () => {
-    fc.assert(
+  it("never fail, and close every tag they open", async () => {
+    await check(
       fc.property(story, (source) => {
         const parsed = parse(source);
         for (const html of [
@@ -191,13 +203,12 @@ describe("the views, on stories made at random", () => {
         }
         renderDocument(source, "script");
       }),
-      settings,
     );
   });
 
-  it("place each part inside the text and inside its parent", () => {
+  it("place each part inside the text and inside its parent", async () => {
     const window = new Window();
-    fc.assert(
+    await check(
       fc.property(story, (source) => {
         const parsed = parse(source);
         for (const html of [
@@ -217,7 +228,7 @@ describe("the views, on stories made at random", () => {
           }
         }
       }),
-      { ...settings, numRuns: Math.max(20, Math.round(RUNS / 4)) },
+      Math.max(20, Math.round(RUNS / 4)),
     );
   });
 });

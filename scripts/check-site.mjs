@@ -83,6 +83,18 @@ await page.waitForFunction(() =>
 );
 console.log("typing: the script follows: ok");
 
+// With every mark shown raw, a direction reads in line, not squeezed by the views' stylesheet.
+await page.click(`.example[data-name="${names[0]}"]`);
+await page.check("#show-marks");
+const widths = await page.$$eval(".cm-content .vxd-direction", (marks) =>
+  marks.map((mark) => mark.getBoundingClientRect().width),
+);
+if (widths.length === 0) problems.push("show marks: no raw direction drawn");
+const squeezed = widths.filter((width) => width < 8).length;
+if (squeezed) problems.push(`show marks: ${squeezed} raw direction(s) squeezed`);
+await page.uncheck("#show-marks");
+console.log("show marks: raw directions read in line: ok");
+
 const element = await browser.newPage();
 watch(element, "element.html");
 await element.goto(`${base}/element.html`);

@@ -1,6 +1,6 @@
 {
   "name": "@voxdown/render",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "HTML for VoxDown stories: a book view and a script view, styled with CSS variables. No framework.",
   "license": "MIT",
   "author": "Etienne Ackermann",

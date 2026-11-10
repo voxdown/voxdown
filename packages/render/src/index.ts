@@ -142,7 +142,7 @@ export function renderScript(story: Story, options: RenderOptions = {}): string 
   const colors = characterColors(story, options.colors);
   const out: string[] = [];
   if (options.header !== false) out.push(header(story, true, colors));
-  const context: ScriptContext = { story, colors, options, last: null };
+  const context: ScriptContext = { story, colors, options, last: null, groups: [] };
   const open: Group[] = [];
   for (const block of story.blocks) {
     if (block.kind === "break") {
@@ -158,8 +158,9 @@ export function renderScript(story: Story, options: RenderOptions = {}): string 
     }
     for (const group of groups.slice(keep)) {
       open.push(group);
-      out.push(groupOpen(group, colors));
+      out.push(groupOpen(group, context));
     }
+    context.groups = groups;
     out.push(scriptBlock(block, context));
   }
   while (open.pop()) out.push("</div></div>");
@@ -172,7 +173,21 @@ type ScriptContext = {
   options: RenderOptions;
   /** Who spoke last, so a name is shown only where the speaker changes. */
   last: string | null;
+  /** The groups around the block being written, outermost first. */
+  groups: readonly Group[];
 };
+
+/** What the labels of the groups around a block already say: a character, and a direction. */
+function groupSays(groups: readonly Group[]): {
+  character: string | undefined;
+  direction: string | undefined;
+} {
+  const inner = [...groups].reverse();
+  return {
+    character: inner.find((group) => group.character)?.character,
+    direction: inner.find((group) => group.direction)?.direction,
+  };
+}
 
 function commonGroups(a: readonly Group[], b: readonly Group[]): number {
   let n = 0;
@@ -180,12 +195,14 @@ function commonGroups(a: readonly Group[], b: readonly Group[]): number {
   return n;
 }
 
-function groupOpen(group: Group, colors: Map<string, string>): string {
-  const color = group.character ? colors.get(group.character) : undefined;
+function groupOpen(group: Group, context: ScriptContext): string {
+  const color = group.character ? context.colors.get(group.character) : undefined;
   const style = color ? ` style="--vxd-c: ${color}"` : "";
   const parts: string[] = [];
   if (group.character)
-    parts.push(`<span class="vxd-group-name">${escapeHtml(group.character)}</span>`);
+    parts.push(
+      `<span class="vxd-group-name">${escapeHtml(fullName(context.story, group.character))}</span>`,
+    );
   if (group.direction)
     parts.push(`<span class="vxd-group-direction">${escapeHtml(group.direction)}</span>`);
   for (const instruction of group.instructions)
@@ -213,8 +230,8 @@ function scriptBlock(block: Block, context: ScriptContext): string {
     const inner = scriptLine(block.line, context, true);
     return `<h${level} class="vxd-heading"${visibilityAttr(block.visibility)}>${label}${inner}</h${level}>`;
   }
-  // Each paragraph names its speakers afresh.
-  context.last = null;
+  // Each paragraph names its speakers afresh, except the character its group's label names.
+  context.last = groupSays(context.groups).character ?? null;
   // A line holding only a page turn is a rule across the page.
   const lines = block.lines.map((line) => {
     const solid = line.items.filter((item) => !(item.kind === "speech" && item.text === ""));
@@ -340,8 +357,9 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): s
     spoken && changed && !heading && (!narrator || options.narratorName)
       ? `<span class="vxd-name"${color ? ` style="--vxd-c: ${color}"` : ""}>${escapeHtml(fullName(story, speech.speaker))}</span>`
       : "";
+  // A direction its group's label already says isn't written again over each line.
   const direction =
-    speech.direction && spoken
+    speech.direction && spoken && speech.direction !== groupSays(context.groups).direction
       ? `<span class="vxd-direction" aria-label="${escapeHtml(`(${speech.direction})`)}"><span>${escapeHtml(speech.direction)}</span></span>`
       : "";
   const words = inlineHtml(source.slice(speech.range.from, speech.range.to));

@@ -123,6 +123,31 @@ describe("the script view", () => {
     expect(renderScript(story)).toContain("vxd-cast");
   });
 
+  it("writes a group's direction once, in its label, and a line's own direction over it", () => {
+    const html = renderScript(
+      parse("::: whispering\nSir Percival crept inside.\nClank.\n\n@(louder) Clank!\n:::"),
+      { header: false },
+    );
+    expect(html.match(/whispering/g)?.length).toBe(1);
+    expect(html).toContain('<span class="vxd-group-direction">whispering</span>');
+    expect(html.match(/class="vxd-direction"/g)?.length).toBe(1);
+    expect(html).toContain('aria-label="(louder)"');
+  });
+
+  it("names a group's character once, by their full name, in the group's label", () => {
+    const html = renderScript(
+      parse(
+        "---\ncast:\n  Wind:\n    name: The North Wind\n---\n::: @Wind huffing, louder and louder\nOne puff!\nTwo puffs!\n\nTHREE PUFFS!\n:::\n\n@Wind “Phew.”",
+      ),
+      { header: false },
+    );
+    expect(html).toContain('<span class="vxd-group-name">The North Wind</span>');
+    expect(html.match(/huffing, louder and louder/g)?.length).toBe(1);
+    // In the group, the label names them; after it, their next line does.
+    expect(html.match(/class="vxd-name"/g)?.length).toBe(1);
+    expect(html).toMatch(/class="vxd-name"[^>]*>The North Wind<\/span><span[^>]*>“Phew\.”/);
+  });
+
   it("draws sounds, pauses, page turns, notes, groups and labels", () => {
     const html = renderScript(
       parse(
@@ -168,6 +193,23 @@ describe("pages and the stylesheet", () => {
     expect(html).toMatch(/^<!doctype html>\n<html lang="en-US">/);
     expect(html).toContain("<title>Toast</title>");
     expect(html).toContain(".vxd-speech");
+  });
+
+  it("styles nothing outside a rendered view, so the editor's marks on the same page keep their look", () => {
+    const css = stylesheet.replace(/\/\*[\s\S]*?\*\//g, "");
+    const selectors = [...css.matchAll(/(?:^|[{};])\s*([^{};@]+?)\s*\{/g)].flatMap((match) =>
+      (match[1] ?? "").split(","),
+    );
+    expect(selectors.length).toBeGreaterThan(40);
+    const loose = selectors
+      .map((selector) => selector.trim())
+      .filter(
+        (selector) =>
+          !/^(?:\.vxd(?![\w-])|\.vxd-(?:script|book)(?![\w-])|:where\(\.vxd\) |:where\(:not|\[data-vxd-theme)/.test(
+            selector,
+          ),
+      );
+    expect(loose).toEqual([]);
   });
 
   it("styles every class the renderer writes", () => {

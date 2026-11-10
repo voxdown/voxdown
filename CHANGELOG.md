@@ -7,6 +7,9 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **VS Code extension 1.0.0**
 - Highlighting, snippets, warnings as you type, a script preview, and the cheat sheet.
 
+**The playground**
+- The linked pages glide to their place instead of jumping, unless the system asks for less motion.
+
 ## `@voxdown/render` 1.1.0 and the playground (9 November 2026)
 
 **@voxdown/render**

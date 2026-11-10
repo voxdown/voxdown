@@ -134,6 +134,21 @@ if (!rowLine.includes(rowText))
   problems.push(`linking: a click on row 6 put the cursor on “${rowLine}”`);
 if (!(await row.evaluate((element) => element.classList.contains("linked"))))
   problems.push("linking: the clicked row isn't marked");
+// A click far down the right page glides the editor to that place, and it ends up in view.
+await page.click('.tab[data-tab="script"]');
+const far = page.locator("#output .vxd-speech:not(.vxd-narration)").last();
+await far.scrollIntoViewIfNeeded();
+await far.click();
+await page.waitForTimeout(1200);
+const inView = await page.evaluate(() => {
+  const node = window.getSelection()?.anchorNode;
+  const line = (node instanceof Element ? node : node?.parentElement)?.closest(".cm-line");
+  const frame = document.querySelector(".cm-scroller")?.getBoundingClientRect();
+  const box = line?.getBoundingClientRect();
+  return Boolean(box && frame && box.top >= frame.top && box.bottom <= frame.bottom);
+});
+if (!inView)
+  problems.push("linking: after a click far down the right page, the editor's place isn't in view");
 console.log("linking: right page to editor and back: ok");
 
 const element = await browser.newPage();

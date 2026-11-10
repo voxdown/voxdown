@@ -224,13 +224,44 @@ $<HTMLElement>("#output").addEventListener("click", (event) => {
   if (!place) return;
   following = true;
   const at = Math.min(place.from, view.state.doc.length);
-  view.dispatch({
-    selection: EditorSelection.cursor(at),
-    effects: EditorView.scrollIntoView(at, { y: "center" }),
-  });
+  view.dispatch({ selection: EditorSelection.cursor(at) });
+  glideEditorTo(at);
   // On a phone the keyboard would cover the story; there the editor only scrolls to the place.
   if (!matchMedia("(pointer: coarse)").matches) view.focus();
 });
+
+/** How the pages scroll to a place: gliding, unless the system asks for less motion. */
+function glide(): ScrollBehavior {
+  return matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}
+
+let settle: (() => void) | undefined;
+
+/**
+ * Glides the editor until `at` is in its middle. The editor only estimates the height of lines it
+ * hasn't drawn yet, so once the glide ends, it makes sure the place is in view after all.
+ */
+function glideEditorTo(at: number): void {
+  settle?.();
+  const scroller = view.scrollDOM;
+  const coords = view.coordsAtPos(at);
+  const y = coords ? coords.top : view.documentTop + view.lineBlockAt(at).top;
+  const offset = y - scroller.getBoundingClientRect().top - scroller.clientHeight / 2;
+  if (Math.abs(offset) < 2) return;
+  const correct = () => {
+    settle?.();
+    view.dispatch({ effects: EditorView.scrollIntoView(at, { y: "nearest" }) });
+  };
+  // `scrollend` where the browser has it; a timer where it doesn't.
+  const timer = setTimeout(correct, 900);
+  scroller.addEventListener("scrollend", correct, { once: true });
+  settle = () => {
+    clearTimeout(timer);
+    scroller.removeEventListener("scrollend", correct);
+    settle = undefined;
+  };
+  scroller.scrollTo({ top: scroller.scrollTop + offset, behavior: glide() });
+}
 
 /** Marks the right page's smallest part that holds the cursor, scrolling only that page to it. */
 function markPlace(scroll: boolean): void {
@@ -274,8 +305,8 @@ function markPlace(scroll: boolean): void {
   const box = mark.getBoundingClientRect();
   const frame = sheet.getBoundingClientRect();
   if (box.top < frame.top || box.bottom > frame.bottom) {
-    sheet.scrollTop +=
-      box.top - frame.top - (frame.height - Math.min(box.height, frame.height)) / 2;
+    const offset = box.top - frame.top - (frame.height - Math.min(box.height, frame.height)) / 2;
+    sheet.scrollTo({ top: sheet.scrollTop + offset, behavior: glide() });
   }
 }
 

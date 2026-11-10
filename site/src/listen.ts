@@ -278,6 +278,7 @@ function load(name: string): void {
   player.stop();
   const manifest = manifestOf(name);
   state.name = name;
+  history.replaceState(null, "", `#${name.replace(/\.vxd$/, "")}`);
   state.story = parse(example.text);
   state.colors = characterColors(state.story);
   state.voices = manifest?.voices ?? STORIES[name] ?? {};
@@ -537,4 +538,6 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-load(Object.keys(STORIES)[0] ?? "");
+// The story the address names (listen.html#the-north-wind-and-the-sun), else the first.
+const named = `${decodeURIComponent(location.hash.slice(1))}.vxd`;
+load(named in STORIES ? named : (Object.keys(STORIES)[0] ?? ""));

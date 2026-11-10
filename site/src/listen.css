@@ -1,25 +1,9 @@
 /* The listening page: the script on a page of the book, a card of what is being read beside it,
    and a player that floats at the bottom. */
 
-:root {
-  --brand: #245f61;
-  --brand-ink: #ffffff;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-vxd-theme="light"]) {
-    --brand: #3f9a9d;
-  }
-}
-:root[data-vxd-theme="dark"] {
-  --brand: #3f9a9d;
-}
-
 body.listen {
   display: block;
   padding-bottom: 7rem;
-}
-.listen .masthead nav a[aria-current="page"] {
-  color: var(--pencil);
 }
 
 .listen-intro {

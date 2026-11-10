@@ -22,6 +22,8 @@
   --mark-sound: #0f766e;
   --mark-page: #b45309;
   --mark-note: #a16207;
+  --brand: #245f61;
+  --brand-ink: #ffffff;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -38,6 +40,7 @@
     --mark-sound: #5eead4;
     --mark-page: #fbbf24;
     --mark-note: #fde68a;
+    --brand: #3f9a9d;
     color-scheme: dark;
   }
 }
@@ -65,6 +68,7 @@
   --mark-sound: #5eead4;
   --mark-page: #fbbf24;
   --mark-note: #fde68a;
+  --brand: #3f9a9d;
   color-scheme: dark;
 }
 :root[data-vxd-theme="dark"] .editor .cm-editor {
@@ -159,8 +163,170 @@ select {
 .masthead nav {
   margin-left: auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1.2rem;
+  gap: 0.5rem 1.2rem;
+}
+.masthead nav a {
+  white-space: nowrap;
+}
+
+/* Listen: a play button whose sound bars move, with a soft pulse around it. */
+.masthead nav a.listen-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.28rem 0.95rem 0.28rem 0.7rem;
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-weight: 650;
+  text-decoration: none;
+  animation: listen-pulse 2.4s ease-out infinite;
+}
+.masthead nav a.listen-link:hover {
+  color: var(--brand-ink);
+  text-decoration: none;
+  filter: brightness(1.1);
+}
+.masthead nav a.listen-link[aria-current="page"] {
+  animation: none;
+}
+.listen-link .bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 0.85rem;
+}
+.listen-link .bars i {
+  width: 3px;
+  height: 60%;
+  border-radius: 1px;
+  background: currentColor;
+  animation: listen-bar 1.1s ease-in-out infinite;
+}
+.listen-link .bars i:nth-child(1) {
+  animation-delay: -0.2s;
+}
+.listen-link .bars i:nth-child(2) {
+  animation-delay: -0.65s;
+}
+.listen-link .bars i:nth-child(3) {
+  animation-delay: -0.4s;
+}
+.listen-link .bars i:nth-child(4) {
+  animation-delay: -0.9s;
+}
+.listen-link[aria-current="page"] .bars i {
+  animation: none;
+}
+.listen-link[aria-current="page"] .bars i:nth-child(odd) {
+  height: 40%;
+}
+@keyframes listen-bar {
+  0%,
+  100% {
+    height: 25%;
+  }
+  50% {
+    height: 100%;
+  }
+}
+@keyframes listen-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 45%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 9px color-mix(in srgb, var(--brand) 0%, transparent);
+  }
+}
+
+/* On the playground's front page, a director's pencil note points at Listen, and draws itself in. */
+.listen-note {
+  position: relative;
+  margin: 0 4.2rem 0 auto;
+  color: var(--brand);
+  font: 650 1.08rem / 1.15 var(--ui);
+  font-variation-settings: "CASL" 1, "slnt" -12;
+  white-space: nowrap;
+  transform: rotate(-4deg);
+  animation: listen-note-in 0.5s 0.3s ease-out both;
+}
+.listen-note small {
+  display: block;
+  margin-left: 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 450;
+  color: var(--quiet);
+}
+.listen-note + nav {
+  margin-left: 0;
+}
+.listen-arrow {
+  position: absolute;
+  left: calc(100% + 0.3rem);
+  top: 0.2rem;
+  width: 3.7rem;
+  height: 2.2rem;
+  overflow: visible;
+  transform: rotate(4deg);
+}
+.listen-arrow path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.listen-arrow .stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: listen-draw 0.8s 0.8s ease-out forwards;
+}
+.listen-arrow .head {
+  opacity: 0;
+  animation: listen-appear 0.2s 1.55s forwards;
+}
+@keyframes listen-note-in {
+  from {
+    opacity: 0;
+    transform: rotate(-4deg) translateY(4px);
+  }
+}
+@keyframes listen-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes listen-appear {
+  to {
+    opacity: 1;
+  }
+}
+@media (max-width: 1359px) {
+  .listen-note {
+    display: none;
+  }
+  .listen-note + nav {
+    margin-left: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .masthead nav a.listen-link,
+  .listen-link .bars i,
+  .listen-note {
+    animation: none;
+  }
+  .listen-arrow .stroke {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .listen-arrow .head {
+    animation: none;
+    opacity: 1;
+  }
 }
 .theme-switch {
   background: none;
@@ -208,20 +374,16 @@ select {
   padding: 0;
   display: contents;
 }
-/* Each example: a book or a script page, its title, and who wrote it underneath. */
-.example {
+/* Each example: a book or a script page, its title (the button), and who wrote it underneath, with
+   Listen when it has been recorded. */
+.shelf-item {
   display: grid;
   grid-template-columns: auto auto;
   column-gap: 0.5rem;
   align-items: center;
-  white-space: nowrap;
-  text-align: left;
-  background: none;
-  border: 0;
-  padding: 0.15rem 0;
   cursor: pointer;
 }
-.example .icon {
+.shelf-item .icon {
   grid-row: span 2;
   width: 1.35rem;
   height: 1.35rem;
@@ -231,24 +393,56 @@ select {
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.example .title {
+.example {
   justify-self: start;
-  font: 500 1rem / 1.25 var(--story);
+  padding: 0;
+  background: none;
+  border: 0;
   border-bottom: 1px solid transparent;
+  font: 500 1rem / 1.25 var(--story);
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
 }
-.example .by {
+.shelf-item .by {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.74rem;
   line-height: 1.3;
   color: var(--quiet);
+  white-space: nowrap;
 }
-.example:hover .title {
+.shelf-item:hover .example {
   border-bottom-color: var(--quiet);
 }
-.example[aria-current="true"] .title {
+.example[aria-current="true"] {
   border-bottom-color: var(--pencil);
 }
-.example[aria-current="true"] .icon {
+.shelf-item:has(.example[aria-current="true"]) .icon {
   stroke: var(--pencil);
+}
+.listen-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--brand);
+  border-radius: 999px;
+  color: var(--brand);
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.45;
+  text-decoration: none;
+}
+.listen-chip:hover {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+.listen-chip svg {
+  width: 0.55rem;
+  height: 0.55rem;
+  fill: currentColor;
 }
 .shelf .actions {
   margin-left: auto;

@@ -1,7 +1,7 @@
 // Checks the built playground in a real browser: every example, every tab, no errors.
 // Run after `pnpm site:build`: node scripts/check-site.mjs
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -152,6 +152,19 @@ const inView = await page.evaluate(() => {
 if (!inView)
   problems.push("linking: after a click far down the right page, the editor's place isn't in view");
 console.log("linking: right page to editor and back: ok");
+
+// Every recorded story has its Listen beside it on the shelf, opening the listening page on it.
+const recorded = readdirSync(join(site, "src", "recordings")).filter((file) =>
+  file.endsWith(".json"),
+);
+const chips = await page.$$eval(".listen-chip", (links) =>
+  links.map((link) => link.getAttribute("href")),
+);
+for (const file of recorded) {
+  if (!chips.includes(`./listen.html#${file.replace(/\.json$/, "")}`))
+    problems.push(`playground: no Listen beside ${file.replace(/\.json$/, ".vxd")}`);
+}
+console.log(`shelf: Listen beside ${chips.length} recorded stories: ok`);
 
 // The listening page: each recording was made from the story as it is now, and every part it
 // plays has its place on the page.

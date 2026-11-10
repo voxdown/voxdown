@@ -508,15 +508,28 @@ const ICONS = {
     '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 11.5h7M9 15h7M9 18.5h4"/></svg>',
 };
 
+/** The examples with a recording on the listening page. */
+const RECORDED = new Set(
+  Object.keys(import.meta.glob("./recordings/*.json")).map((path) =>
+    path.replace("./recordings/", "").replace(/\.json$/, ".vxd"),
+  ),
+);
+const PLAY = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1v8l7-4z"/></svg>';
+
 for (const example of examples) {
   const item = document.createElement("li");
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "example";
-  button.dataset.name = example.name;
-  button.innerHTML = `${ICONS[example.kind]}<span class="title">${escapeHtml(example.title)}</span><span class="by">${escapeHtml(example.byline)}</span>`;
+  item.className = "shelf-item";
+  const id = `by-${example.name.replace(/\W+/g, "-")}`;
+  const listen = RECORDED.has(example.name)
+    ? `<a class="listen-chip" href="./listen.html#${example.name.replace(/\.vxd$/, "")}" aria-label="Listen to ${escapeHtml(example.title)}">${PLAY}Listen</a>`
+    : "";
+  item.innerHTML = `${ICONS[example.kind]}<button type="button" class="example" data-name="${escapeHtml(example.name)}" aria-describedby="${id}">${escapeHtml(example.title)}</button><span class="by" id="${id}">${escapeHtml(example.byline)}${listen}</span>`;
+  const button = item.querySelector("button") as HTMLButtonElement;
   button.addEventListener("click", () => load(example.text, example.name));
-  item.append(button);
+  // The book and the byline open the story too; Listen goes to the listening page.
+  item.addEventListener("click", (event) => {
+    if (!(event.target as Element).closest("a, button")) button.click();
+  });
   shelf.append(item);
 }
 

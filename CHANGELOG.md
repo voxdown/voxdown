@@ -10,6 +10,8 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **The playground**
 - The linked pages glide to their place instead of jumping, unless the system asks for less motion.
 - A listening page: two stories read aloud with ElevenLabs voices, each line lit as it is heard, with what each voice was sent. `scripts/speak.mjs` records them from the stories themselves.
+- Listen stands out: a play button in every page's masthead, a pencil note pointing at it on the front page, and Listen beside each recorded example, opening the listening page on that story.
+- On phones, the masthead's links no longer break across lines.
 
 ## `@voxdown/render` 1.1.0 and the playground (9 November 2026)
 

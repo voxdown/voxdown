@@ -3,7 +3,9 @@ import { chromium } from "playwright";
 
 const [url, out, width = "1280", height = "900", ...flags] = process.argv.slice(2);
 if (!url || !out) {
-  console.error("usage: node scripts/screenshot.mjs <url> <out.png> [width] [height] [--full] [--dark]");
+  console.error(
+    "usage: node scripts/screenshot.mjs <url> <out.png> [width] [height] [--full] [--dark]",
+  );
   process.exit(1);
 }
 const browser = await chromium.launch();

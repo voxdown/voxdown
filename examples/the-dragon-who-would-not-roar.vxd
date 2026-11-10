@@ -1,0 +1,105 @@
+---
+voxdown: 1.0
+title: The Dragon Who Would Not Roar
+author: The VoxDown authors
+language: en-US
+cast:
+  Narrator:
+    about: Warm and unhurried, enjoying the joke.
+  Percival:
+    name: Sir Percival
+    about: A young knight. Brave in theory, nervous in practice.
+  Gerald:
+    about: An old dragon. Deep, polite and utterly unbothered.
+  King:
+    name: The King
+    about: Fond of proclamations.
+---
+
+%% A fresh story for the VoxDown examples, free to copy (CC0). %%
+
+# The Dragon Who Would Not Roar
+
+{book only} For everyone who has ever been woken up too early.
+
+## The proclamation {hidden}
+
+@(warmly) Sir Percival had been training his entire life for this day.
+
+He had polished his armor until it squeaked. [armor squeaking] He had practiced his battle cry in front of the mirror. He had even read a book about dragons, although he had skipped the chapter called *Things Dragons Find Annoying*.
+
+@King (grandly, to a crowded hall) “Whoever brings back the dragon of Mount Mumble,” proclaimed the King, “shall have half my kingdom and all of my biscuits.”
+
+@Percival “All of them?” said Sir Percival.
+
+@King (less grandly) “Most of them.”
+
+{page}
+
+## The mountain {hidden}
+
+Mount Mumble was very tall, and very quiet. [wind across rocks] Sir Percival climbed it all morning. Clank, clank, clank.
+
+Then he heard a deep rumble. [deep rumbling, from inside a cave]
+
+The dragon was snoring. @Gerald [snores]
+
+::: whispering
+Sir Percival crept inside.
+Clank.
+Clank.
+{pause}
+The dragon opened one eye.
+:::
+
+@Gerald (deep, polite and utterly unbothered) “Could you not?”
+
+Sir Percival stopped.
+
+@Gerald “I’ve only just got to sleep,” said the dragon. “I was up all night counting sheep.”
+
+@Percival “Real sheep?”
+
+@Gerald “Imaginary ones. They were very difficult to catch.”
+
+{page}
+
+## The battle {hidden}
+
+%% Percival talks himself up here. Let him get louder line by line. %%
+
+::: @Percival trying to sound brave
+I am Sir Percival of the Shining Shield!
+I have come to defeat you!
+Prepare to meet thy doom!
+:::
+
+@Gerald [yawns] “Is it a long doom? Only I’ve got a nap at four.”
+
+@Percival “Aren’t you going to roar?”
+
+The dragon sighed.
+
+@Gerald (with no enthusiasm whatsoever) “Rooooar.”
+
+@Percival “That was the worst roar I have ever heard.”
+
+@Gerald “Thank you,” said the dragon. @(proudly) “I’ve been practicing.”
+
+{pause 2s}
+
+{page}
+
+## Home {hidden}
+
+So Sir Percival went home without a dragon, but with a jar of the dragon’s very best soup, which is better than half a kingdom on a cold night. [door closes; a fire crackling]
+
+@King (suspicious) “Where is the dragon?”
+
+@Percival “Asleep,” said Sir Percival. “I thought it best not to wake him.”
+
+@(fondly) And to this day, if you climb Mount Mumble very quietly, you can hear the dragon snoring. @Gerald [snores, contentedly]
+
+{audio only} Thank you for listening.
+
+{book only} The End

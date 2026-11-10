@@ -1,0 +1,66 @@
+---
+voxdown: 1.0
+title: The North Wind and the Sun
+subtitle: A fable after Aesop
+author: Retold by the VoxDown authors
+language: en-US
+cast:
+  Wind:
+    name: The North Wind
+    about: Loud, proud and gusty.
+  Sun:
+    name: The Sun
+    about: Calm. Smiles while speaking.
+  Traveler:
+    name: The Traveler
+---
+
+%% Aesop’s fable is in the public domain. This retelling is new, and free to copy (CC0). %%
+
+# The North Wind and the Sun
+
+The North Wind and the Sun once argued about which of them was the stronger.
+
+@Wind (booming) “I am,” said the North Wind. “I knock down trees. I push ships across the sea.”
+
+@Sun (mildly) “Strength is not always loud,” said the Sun.
+
+Just then a traveler came along the road, wrapped in a thick wool cloak. [footsteps on gravel]
+
+@Sun “Let us agree,” said the Sun. “Whichever of us can take that cloak off his back is the stronger.”
+
+@Wind “Easy,” said the North Wind. “Watch me.”
+
+{page}
+
+::: @Wind huffing, louder and louder
+One puff!
+Two puffs!
+THREE PUFFS!
+:::
+
+[a howling gale]
+
+But the harder the North Wind blew, the tighter the traveler held his cloak.
+
+@Traveler [shivers] “What a day,” he muttered. “What a dreadful, freezing day.”
+
+At last the North Wind gave up. @Wind [a long, tired sigh]
+
+{pause 1s}
+
+{page}
+
+Then the Sun came out from behind a cloud, and simply shone. [birdsong]
+
+@(slowly, letting it warm up) The air grew mild. Then warm. Then hot.
+
+@Traveler (wiping his brow) “Well! What a lovely afternoon.”
+
+And he took off his cloak and sat down in the shade of a tree.
+
+@Sun (gently) “You see? Gentleness often does what force cannot.”
+
+{book only} *Moral: Persuasion is better than force.*
+
+{audio only} And that is the moral of the story: persuasion is better than force.

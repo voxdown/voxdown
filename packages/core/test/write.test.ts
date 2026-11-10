@@ -4,6 +4,7 @@ import v8 from "node:v8";
 import vm from "node:vm";
 import { describe, expect, it } from "vitest";
 import {
+  type Item,
   type Speech,
   type Story,
   applyChanges,
@@ -915,3 +916,146 @@ describe("review, round five", () => {
     expect((process.memoryUsage().heapUsed - before) / 1e6).toBeLessThan(100);
   }, 60_000);
 });
+
+describe("review, round six", () => {
+  const nth = (source: string, at: number) => {
+    const story = parse(source);
+    return { story, speech: speeches(story)[at] as Speech };
+  };
+  const give = (source: string, at: number, name: string) => {
+    const { story, speech } = nth(source, at);
+    return applyChanges(source, setSpeaker(story, speech, name));
+  };
+  const say = (source: string, at: number, direction: string) => {
+    const { story, speech } = nth(source, at);
+    return applyChanges(source, setDirection(story, speech, direction));
+  };
+
+  it("puts in no line that would hide, unprint or split what it joins", () => {
+    const line = (source: string, at: number, text: string) =>
+      applyChanges(source, insertLine(parse(source), at, text));
+    for (const text of ["{hidden}", "{book only}", "{audio only}", "", "x\ny", "Hello there."]) {
+      expect(line("A b.\nC.", 5, text), JSON.stringify(text)).toBe("A b.\nC.");
+    }
+    expect(line("A.\nB.", 3, "{page}")).toBe("A.\n{page}\nB.");
+    expect(line("A.\nB.", 3, "[thunder]")).toBe("A.\n[thunder]\nB.");
+    // Before a paragraph, as a paragraph of its own, it hides only itself.
+    expect(line("A.\n\nB.", 4, "{hidden}")).toBe("A.\n\n{hidden}\n\nB.");
+  });
+
+  it("gives narration between a mark and its quote, the mark going before the quote (§5.4)", () => {
+    expect(give("@Gerald Gerald put on his spectacles. “I thought so.”", 0, "Zed")).toBe(
+      "@Zed Gerald put on his spectacles. @Gerald “I thought so.”",
+    );
+    expect(
+      give("@Baker (nervously) And out of the blue, “Just a little flame,” he said.", 0, "Zed"),
+    ).toBe("@Zed And out of the blue, @Baker (nervously) “Just a little flame,” he said.");
+    expect(give("@Wanda She stared at the broom. [gasp] “On strike?”", 0, "Zed")).toBe(
+      "@Zed She stared at the broom. [gasp] @Wanda “On strike?”",
+    );
+    expect(give("@Gerald yawning “I’m tired.”", 0, "Zed")).toBe(
+      "@Zed yawning @Gerald “I’m tired.”",
+    );
+  });
+
+  it("sets a direction from the mark for a whole speech, and one of a stretch's own in its place", () => {
+    // A speech over paragraphs takes its direction from its mark: setting it sets the mark's.
+    expect(say("@Gerald “One.\n\n“Two.\n\n“Three.”", 1, "soft")).toBe(
+      "@Gerald (soft) “One.\n\n“Two.\n\n“Three.”",
+    );
+    // A stretch whose direction comes from a `@(…)` gets one of its own, and the rest keep theirs:
+    // in a paragraph that carries the speech on, just inside its opening mark (§13, rule 3).
+    expect(say("@Gerald “One. @(loud) More.\n\n“Two.\n\n“Three.”", 2, "soft")).toBe(
+      "@Gerald “One. @(loud) More.\n\n“@(soft)Two.\n\n“@(loud)Three.”",
+    );
+    // On the next line of a quote, the mark on the line before isn't touched.
+    expect(say("@Gerald “One. @(loud) More,\nAgain.”", 2, "soft")).toBe(
+      "@Gerald “One. @(loud) More,\n@(soft) Again.”",
+    );
+  });
+
+  it("sets a detail to one value, never over the cast, with changes of just where and what", () => {
+    const story = parse("---\ntitle: Old\ncast:\n  Tom: T\n---\n\n@Tom “Hi.”");
+    expect(setMeta(story, "cast", "x")).toEqual([]);
+    expect(setMeta(story, "cast", null)).toEqual([]);
+    for (const changes of [setMeta(story, "title", "New"), setFullName(story, "Tom", "Thomas")]) {
+      for (const change of changes)
+        expect(Object.keys(change).sort()).toEqual(["from", "insert", "to"]);
+    }
+  });
+
+  it("throws for a change on the model it can't write, rather than leave it out", () => {
+    const source =
+      "---\ncast:\n  Tom:\n    name: T\n    about: A cat.\n---\n\n::: softly\n@Tom [snores] “Hi.” ![a](b.png)\n:::\n";
+    const changed: Array<[string, (story: Story) => void]> = [
+      [
+        "vocal",
+        (story) =>
+          findItem(story, "vocal", (item) => {
+            item.speaker = "Ann";
+          }),
+      ],
+      [
+        "speech text",
+        (story) =>
+          findItem(story, "speech", (item) => {
+            item.text = "Bye.";
+          }),
+      ],
+      [
+        "image",
+        (story) =>
+          findItem(story, "image", (item) => {
+            item.alt = "c";
+          }),
+      ],
+      [
+        "narrator",
+        (story) => {
+          story.meta.narrator = "Ann";
+        },
+      ],
+      [
+        "about",
+        (story) => {
+          (story.cast[0] as Story["cast"][number]).about = "A dog.";
+        },
+      ],
+      [
+        "group",
+        (story) => {
+          (story.groups[0] as Story["groups"][number]).direction = "loudly";
+        },
+      ],
+      [
+        "visibility",
+        (story) => {
+          (story.blocks[0] as { visibility: string }).visibility = "book";
+        },
+      ],
+    ];
+    for (const [what, change] of changed) {
+      const story = parse(source);
+      change(story);
+      expect(() => write(story), what).toThrow(RangeError);
+    }
+    expect(write(parse(source))).toBe(source);
+  });
+});
+
+function findItem<K extends Item["kind"]>(
+  story: Story,
+  kind: K,
+  change: (item: Extract<Item, { kind: K }>) => void,
+): void {
+  for (const block of story.blocks) {
+    if (block.kind !== "paragraph") continue;
+    for (const line of block.lines) {
+      const item = line.items.find((other) => other.kind === kind);
+      if (item) {
+        change(item as Extract<Item, { kind: K }>);
+        return;
+      }
+    }
+  }
+}

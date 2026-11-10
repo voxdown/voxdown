@@ -6,7 +6,7 @@ The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
 Clarifications: no file reads differently.
 
-- §13, rule 3: a direction for a paragraph that carries a speech on goes just inside its opening mark, and a mark between two characters with no space between them goes without its space, so the book doesn't change.
+- §13, rule 3: a direction of its own for a paragraph that carries a speech on goes just inside its opening mark, and a mark between two characters with no space between them goes without its space, so the book doesn't change.
 - §13, rule 4: a speech over paragraphs is given away whole, from any of its paragraphs.
 
 ## 1.0 (9 November 2026)

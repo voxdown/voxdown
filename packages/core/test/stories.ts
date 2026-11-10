@@ -66,6 +66,13 @@ const line: fc.Arbitrary<string> = fc.oneof(
   fc
     .tuple(pick(NAMES), pick(SOUNDS), pick(UTTERANCES))
     .map(([name, sound, words]) => `@${name} [${sound}] “${words}.”`),
+  // A mark before the narration that leads up to its quote (§5.4).
+  fc
+    .tuple(pick(NAMES), pick(NAMES), pick(QUOTES), pick(UTTERANCES), fc.option(pick(DIRECTIONS)))
+    .map(
+      ([name, who, [open, close], words, how]) =>
+        `@${name}${how ? ` (${how})` : ""} ${who} put down the cup. ${open}${words}.${close}`,
+    ),
   fc
     .tuple(pick(NAMES), pick(UTTERANCES))
     .map(([name, words]) => `@${name} “He said ‘${words}’, and left.”`),
@@ -119,6 +126,13 @@ const block: fc.Arbitrary<string> = fc.oneof(
     arbitrary: fc
       .tuple(pick(NAMES), pick(UTTERANCES), pick(UTTERANCES))
       .map(([name, a, b]) => `@${name} (softly) “${a},\n${b}.”`),
+  },
+  {
+    // A direction inside a quote that runs on over the next line.
+    weight: 1,
+    arbitrary: fc
+      .tuple(pick(NAMES), pick(UTTERANCES), pick(DIRECTIONS), pick(UTTERANCES), pick(UTTERANCES))
+      .map(([name, a, how, b, c]) => `@${name} “${a}. @(${how}) ${b},\n${c}.”`),
   },
   {
     weight: 1,

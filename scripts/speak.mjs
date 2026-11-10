@@ -262,7 +262,9 @@ function loudnessOf(input, filters) {
     ],
     { encoding: "utf8" },
   );
-  const report = run.stderr.slice(run.stderr.lastIndexOf("{"));
+  // The report is the last {…} in what ffmpeg prints; lines may follow it.
+  const from = run.stderr.lastIndexOf("{");
+  const report = run.stderr.slice(from, run.stderr.indexOf("}", from) + 1);
   try {
     return Number(JSON.parse(report).input_i);
   } catch {

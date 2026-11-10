@@ -101,6 +101,28 @@ describe("the book view", () => {
     );
   });
 
+  it("reads a link's address and title as Markdown does, lone parentheses and all", () => {
+    // Each as CommonMark reads it (checked with markdown-it), and as the parser does.
+    const html = (text: string) =>
+      renderBook(parse(`Read ${text} now.`), { header: false }).match(/<p[^>]*>(.*)<\/p>/s)?.[1];
+    expect(html('[the chapter](book.html "Chapter (one")')).toBe(
+      'Read <a href="book.html" title="Chapter (one">the chapter</a> now.',
+    );
+    expect(html("[this](<https://example.com/a)b>)")).toBe(
+      'Read <a href="https://example.com/a)b">this</a> now.',
+    );
+    expect(html('[a](b "t)")')).toBe('Read <a href="b" title="t)">a</a> now.');
+    expect(html("[a](b (t))")).toBe('Read <a href="b" title="t">a</a> now.');
+    expect(html("[a](b\\)c)")).toBe('Read <a href="b)c">a</a> now.');
+    expect(html("[a](<b\\>c>)")).toBe('Read <a href="b&gt;c">a</a> now.');
+    expect(html('![pic](a.png "A (big" )')).toBe(
+      'Read <img src="a.png" alt="pic" title="A (big"> now.',
+    );
+    // No link: a sound, which the book leaves out, then text.
+    expect(html('[a](b "t" x)')).toBe("Read (b &quot;t&quot; x) now.");
+    expect(html("[a](b(c d)")).toBe("Read (b(c d) now.");
+  });
+
   it("makes the innermost of links inside links the link, as Markdown and the parser do", () => {
     const html = (text: string) => renderBook(parse(text), { header: false });
     expect(html("[a [b](x) c](y)")).toContain('[a <a href="x">b</a> c](y)');
@@ -134,9 +156,46 @@ describe("the book view", () => {
     }
   });
 
+  it("renders a cast of thousands in good time", () => {
+    // Each line's full name was found by a search through the cast, and each color by one
+    // through the names before it.
+    const names = Array.from({ length: 8_000 }, (_, at) => `C${at}`);
+    const cast = names.map((name) => `  ${name}: Name ${name}`).join("\n");
+    const story = parse(
+      `---\ncast:\n${cast}\n---\n\n${names.map((n) => `@${n} “Hi.”`).join("\n\n")}\n`,
+    );
+    const start = performance.now();
+    const html = renderScript(story);
+    expect(performance.now() - start).toBeLessThan(1500);
+    expect(html).toContain("Name C7999");
+  });
+
+  it("renders groups nested thousands deep in good time", () => {
+    const story = parse("::: softly\nHello.\n\n".repeat(8_000));
+    const start = performance.now();
+    const html = renderScript(story) + renderBook(story);
+    expect(performance.now() - start).toBeLessThan(5000);
+    expect(html).toContain("Hello.");
+  });
+
   it("renders lines built to be slow in good time", () => {
     // Each opening mark once searched the rest of its line for its closing one.
-    for (const piece of ["*a ", "_a ", "**a ", "a* ", "*a **b ", "***a ", "[", "![", "[x](", "("]) {
+    for (const piece of [
+      "*a ",
+      "_a ",
+      "**a ",
+      "a* ",
+      "*a **b ",
+      "***a ",
+      "[",
+      "![",
+      "[x](",
+      "(",
+      "[a](<",
+      '[a](b "',
+      "[a](b (",
+      "[a](b      ",
+    ]) {
       const story = parse(piece.repeat(Math.ceil(60_000 / piece.length)));
       const start = performance.now();
       renderBook(story);

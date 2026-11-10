@@ -25,19 +25,21 @@ export function characterColors(
 ): Map<string, string> {
   const colors = new Map<string, string>();
   const names: string[] = [];
+  // Each name once, whatever its case, found by key rather than by a search of those before.
+  const seen = new Set([story.meta.narrator.toLowerCase()]);
   const add = (name: string) => {
-    if (
-      name.toLowerCase() !== story.meta.narrator.toLowerCase() &&
-      !names.some((n) => n.toLowerCase() === name.toLowerCase())
-    )
-      names.push(name);
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    names.push(name);
   };
   story.cast.forEach((member) => add(member.handle));
   for (const item of items(story))
     if (item.kind === "speech" || item.kind === "vocal") add(item.speaker);
   for (const group of story.groups) if (group.character) add(group.character);
+  const members = new Map(story.cast.map((member) => [member.handle, member]));
   names.forEach((name, index) => {
-    const own = story.cast.find((member) => member.handle === name)?.data.color;
+    const own = members.get(name)?.data.color;
     const color =
       overrides[name] ??
       (typeof own === "string" && /^#[0-9a-f]{3,8}$/i.test(own) ? own : undefined);

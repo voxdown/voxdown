@@ -2,7 +2,7 @@ import { hasLetterOrDigit } from "./chars";
 import { baseSpeaker } from "./groups";
 import { scanName } from "./inline";
 import { lexedTokens } from "./lexed";
-import type { Block, Group, Item, Line, Speech, Story, Vocal } from "./model";
+import type { Block, Group, Item, Line, Mark, Speech, Story, Vocal } from "./model";
 import { nameKey } from "./names";
 import { parse } from "./parse";
 import { bookText as readBook } from "./readings";
@@ -413,10 +413,57 @@ function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[]
     if (given.length > 0) return given;
   }
   // Anything else goes whole: every word of the stretch, said as before.
-  return settled(story, quote, speakerChanges(story, first, name), {
+  const whole: Promise = {
     inside: (was, now) => nameKey(now.speaker) === key && now.direction === was.direction,
     wanted: (was) => ({ speaker: spelling, direction: was.direction }),
-  });
+  };
+  // Narration between a mark and the quote it gives (`@Gerald Gerald put on his spectacles.
+  // “I thought…”`, §5.4): a new mark before it would claim that quote instead, so the mark there
+  // becomes the new speaker's, who says the rest of the line up to the next mark, and the mark
+  // it was goes before its quote, as written.
+  const ahead = markAhead(story, first);
+  if (ahead) {
+    const { mark, quote: given } = ahead;
+    const at = given.openQuote?.from ?? given.range.from;
+    const moved = settled(
+      story,
+      quote,
+      [
+        { ...mark.range, insert: markText(spelling, null) },
+        {
+          from: at,
+          to: at,
+          insert: markAt(story.source, at, story.source.slice(mark.range.from, mark.range.to)),
+        },
+      ],
+      whole,
+    );
+    if (moved.length > 0) return moved;
+  }
+  return settled(story, quote, speakerChanges(story, first, name), whole);
+}
+
+/**
+ * The mark just before a stretch of narration on its line, with nothing heard between them, and
+ * the quote later on the line it gives (§5.4); null if the stretch isn't between the two.
+ */
+function markAhead(story: Story, speech: Speech): { mark: Mark; quote: Speech } | null {
+  if (speech.quoted || speech.mark || speech.directionMark) return null;
+  const { line } = place(story, speech);
+  const index = line.items.indexOf(speech);
+  let mark: Mark | undefined;
+  for (let i = index - 1; i >= 0 && !mark; i--) {
+    const item = line.items[i] as Item;
+    if (item.kind === "mark") mark = item;
+    else if (item.kind === "speech" || item.kind === "vocal" || item.kind === "direction") {
+      return null;
+    }
+  }
+  if (!mark) return null;
+  const quote = line.items
+    .slice(index + 1)
+    .find((item): item is Speech => item.kind === "speech" && item.mark === mark && item.quoted);
+  return quote ? { mark, quote } : null;
 }
 
 /**
@@ -611,6 +658,8 @@ type Heard = Voice & {
   first: boolean;
   /** Whether it belongs to the stretch being edited. */
   target: boolean;
+  /** Whether it is read aloud at all: its block isn't `{book only}` or `{hidden}` (§9.3). */
+  audible: boolean;
 };
 
 function heard(story: Story, target: readonly Item[] = []): Heard[] {
@@ -639,7 +688,11 @@ onForget(() => {
   recentStories.length = 0;
 });
 
-function parsed(text: string): Story {
+/**
+ * A text's story, parsed once while work is under way (session.ts). Never to be changed: it may be
+ * handed to whoever asks for the same text. (For the writer; not part of the package's API.)
+ */
+export function parsed(text: string): Story {
   const known = recentStories.find((story) => story.source === text);
   if (known) return known;
   const story = parse(text);
@@ -662,53 +715,69 @@ function bookOf(story: Story): string {
 function hear(story: Story, target: readonly Item[] = []): Heard[] {
   const out: Heard[] = [];
   const targets = new Set(target);
-  for (const line of allLines(story)) {
-    // Marks, directions, instructions and notes can sit inside a stretch's range: not heard.
-    const unheard = line.items
-      .filter((item) => item.kind !== "speech" && item.kind !== "vocal")
-      .map((item) => item.range)
-      .sort((a, b) => a.from - b.from);
-    // Items come in order along the line, so the pointer into what isn't heard only moves on
-    // (and starts over in the odd case that a stretch begins before the last one did).
-    let next = 0;
-    let previous = -1;
-    for (const item of line.items) {
-      let from: number;
-      let to: number;
-      // A stretch with no letter or digit in it isn't read aloud (§12.1), so it isn't heard.
-      if (item.kind === "speech") {
-        if (!hasLetterOrDigit(item.text)) continue;
-        ({ from, to } = item.textRange);
-      } else if (item.kind === "vocal") {
-        from = story.source.indexOf("[", item.range.from) + 1;
-        to = item.range.to - 1;
-      } else continue;
-      if (from < previous) next = 0;
-      previous = from;
-      let first = true;
-      const isTarget = targets.has(item);
-      for (let at = from; at < to; at++) {
-        const char = story.source[at] as string;
-        if (notWord(char)) continue;
-        if (item.kind === "speech") {
-          while (next < unheard.length && (unheard[next] as Range).to <= at) next++;
-          const range = unheard[next];
-          if (range && range.from <= at) continue;
-        }
-        out.push({
-          char,
-          at,
-          item,
-          first,
-          target: isTarget,
-          speaker: item.speaker,
-          direction: item.direction,
-        });
-        first = false;
-      }
+  for (const block of story.blocks) {
+    if (block.kind === "break") continue;
+    const audible = block.visibility === "both" || block.visibility === "audio";
+    for (const line of block.kind === "heading" ? [block.line] : block.lines) {
+      hearLine(story, line, audible, targets, out);
     }
   }
   return out;
+}
+
+/** What is heard of one line, added to `out`. */
+function hearLine(
+  story: Story,
+  line: Line,
+  audible: boolean,
+  targets: ReadonlySet<Item>,
+  out: Heard[],
+): void {
+  // Marks, directions, instructions and notes can sit inside a stretch's range: not heard.
+  const unheard = line.items
+    .filter((item) => item.kind !== "speech" && item.kind !== "vocal")
+    .map((item) => item.range)
+    .sort((a, b) => a.from - b.from);
+  // Items come in order along the line, so the pointer into what isn't heard only moves on
+  // (and starts over in the odd case that a stretch begins before the last one did).
+  let next = 0;
+  let previous = -1;
+  for (const item of line.items) {
+    let from: number;
+    let to: number;
+    // A stretch with no letter or digit in it isn't read aloud (§12.1), so it isn't heard.
+    if (item.kind === "speech") {
+      if (!hasLetterOrDigit(item.text)) continue;
+      ({ from, to } = item.textRange);
+    } else if (item.kind === "vocal") {
+      from = story.source.indexOf("[", item.range.from) + 1;
+      to = item.range.to - 1;
+    } else continue;
+    if (from < previous) next = 0;
+    previous = from;
+    let first = true;
+    const isTarget = targets.has(item);
+    for (let at = from; at < to; at++) {
+      const char = story.source[at] as string;
+      if (notWord(char)) continue;
+      if (item.kind === "speech") {
+        while (next < unheard.length && (unheard[next] as Range).to <= at) next++;
+        const range = unheard[next];
+        if (range && range.from <= at) continue;
+      }
+      out.push({
+        char,
+        at,
+        item,
+        first,
+        target: isTarget,
+        audible,
+        speaker: item.speaker,
+        direction: item.direction,
+      });
+      first = false;
+    }
+  }
 }
 
 const voiceOf = (item: Speech | Vocal): Voice => ({
@@ -786,7 +855,11 @@ function kept(
     return "broken";
   }
   const after = heard(edited);
-  if (after.length !== before.length || after.some((now, i) => now.char !== before[i]?.char)) {
+  // The same words, each read aloud or not as before: no edit changes what a listener hears.
+  if (
+    after.length !== before.length ||
+    after.some((now, i) => now.char !== before[i]?.char || now.audible !== before[i]?.audible)
+  ) {
     return "broken";
   }
   const wrong = before.findIndex((was, i) => {
@@ -931,7 +1004,11 @@ export function hearingDifferences(a: Story, b: Story): number[] {
   for (const [i, was] of first.entries()) {
     const now = second[i];
     if (!now || now.char !== was.char) return [...differences, was.at];
-    if (!sameName(now.speaker, was.speaker) || now.direction !== was.direction) {
+    if (
+      !sameName(now.speaker, was.speaker) ||
+      now.direction !== was.direction ||
+      now.audible !== was.audible
+    ) {
       differences.push(was.at);
     }
   }
@@ -948,7 +1025,8 @@ function sameHeard(first: readonly Heard[], second: readonly Heard[]): boolean {
       return (
         now.char === was.char &&
         sameName(now.speaker, was.speaker) &&
-        now.direction === was.direction
+        now.direction === was.direction &&
+        now.audible === was.audible
       );
     })
   );
@@ -1039,9 +1117,14 @@ function directionChanges(story: Story, speech: Speech, direction: string | null
   if (value === speech.ownDirection) return [];
   const { line, groups } = place(story, speech);
   const own = ownDirectionMark(story, speech);
-  // A mark that also gives a sound of the character's before this stretch keeps its direction.
+  // A mark that also gives a sound of the character's before this stretch keeps its direction,
+  // and one on an earlier line (a quote over lines) is no longer this stretch's to change.
   const markFirst =
-    speech.mark && !speech.continued && firstOfMark(line, speech) && !sharesMark(line, speech);
+    speech.mark &&
+    line.items.includes(speech.mark) &&
+    !speech.continued &&
+    firstOfMark(line, speech) &&
+    !sharesMark(line, speech);
 
   if (value !== null) {
     const text = directionText(value);
@@ -1254,12 +1337,19 @@ function fullNameChanges(story: Story, handle: string, name: string): TextChange
   return [{ ...replaceValue(entry), insert: ` ${yamlScalar(name)}` }];
 }
 
-/** Book details in the front matter: `title`, `subtitle`, `author`, `language`, `narrator`… */
+/**
+ * Book details in the front matter: `title`, `subtitle`, `author`, `language`, `narrator`… set
+ * to one value, or removed with null. A key whose value is a map or list (the cast) is left alone.
+ */
 export function setMeta(story: Story, key: string, value: string | null): TextChange[] {
   return session(() => setMetaNow(story, key, value));
 }
 
 function setMetaNow(story: Story, key: string, value: string | null): TextChange[] {
+  // A detail is one value: a map or a list (the cast, a tool's own data) isn't set or removed
+  // as one.
+  const current = story.frontMatter?.data[key];
+  if (typeof current === "object" && current !== null) return [];
   const changes = metaChanges(story, key, value);
   const asked = value === null ? undefined : value;
   // Read back: the detail is as asked, and every other detail and the cast as they were, so the
@@ -1377,10 +1467,12 @@ function insertSoundNow(story: Story, offset: number, description: string): Text
 }
 
 /**
- * Puts a page turn, pause, note or any other line on a line of its own before the line holding
- * `offset` (§13.3), as in `{page}`, `{pause 2s}` or `%% Slowly. %%`: never in the front matter or
- * inside a note, with the line ending of the lines around it, and before a paragraph as a paragraph
- * of its own. Returns no changes if the rest of the story would then be heard differently.
+ * Puts a page turn, pause, note or sound on a line of its own before the line holding `offset`
+ * (§13.3), as in `{page}`, `{pause 2s}` or `%% Slowly. %%`: never in the front matter or inside a
+ * note, with the line ending of the lines around it, and before a paragraph as a paragraph of its
+ * own. `text` is one line. Returns no changes if the story would then be heard or printed
+ * differently, or warned about more: a line that prints, an empty line that splits a paragraph,
+ * or an instruction that hides the paragraph it joins (`{hidden}`, `{book only}`, `{audio only}`).
  */
 export function insertLine(story: Story, offset: number, text: string): TextChange[] {
   return session(() => insertLineNow(story, offset, text));
@@ -1389,6 +1481,7 @@ export function insertLine(story: Story, offset: number, text: string): TextChan
 function insertLineNow(story: Story, offset: number, text: string): TextChange[] {
   const source = story.source;
   inText(source, offset);
+  if (text.trim() === "" || /[\r\n]/.test(text)) return [];
   let at = Math.max(lineStart(source, offset), bodyStart(story));
   for (const item of allLines(story).flatMap((line) => line.items)) {
     if (item.kind === "note" && item.range.from < at && at < item.range.to) {
@@ -1426,8 +1519,9 @@ function insertLineNow(story: Story, offset: number, text: string): TextChange[]
     .map((char) => char.char)
     .join("");
   const same = sameHeard(heard(story), rest) && own.map((char) => char.char).join("") === alone;
-  // Like every edit, it brings no new warning: a note or quote left open, a stray `:::`.
-  return same && noNewWarnings(story, changes) ? changes : [];
+  // Like every edit, it prints the book as it was and brings no new warning (a note or quote
+  // left open, a stray `:::`).
+  return same && bookOf(after) === bookOf(story) && noNewWarnings(story, changes) ? changes : [];
 }
 
 function inText(source: string, offset: number): void {
@@ -1477,8 +1571,10 @@ function writtenValue(entry: YamlEntry): Range {
  * From just after `key:` to the end of its value, continuation lines and block scalars included.
  * A value on one line ends before a comment after it, so the comment stays.
  */
+/** Where a key's value is written: just after the colon if it has none. */
 function replaceValue(entry: YamlEntry): Range {
-  return entry.value ?? { from: entry.range.to + 1, to: entry.range.to + 1 };
+  const at = entry.value ?? { from: entry.range.to + 1, to: entry.range.to + 1 };
+  return { from: at.from, to: at.to };
 }
 
 /** Adds a line to the front matter: at the top level, or at the end of a top-level map. */

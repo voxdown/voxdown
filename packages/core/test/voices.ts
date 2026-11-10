@@ -34,6 +34,8 @@ export type Spoken = {
   target: boolean;
   /** Whether the edit may leave this character of its stretch as it was (see narrationBefore). */
   optional: boolean;
+  /** Whether it is read aloud: its block isn't `{book only}` or `{hidden}` (§9.3). */
+  audible: boolean;
   /** Whether its stretch carries on a quote from the line or paragraph before (§5.7). */
   carries: boolean;
   /**
@@ -171,6 +173,14 @@ export function spokenChars(
       return first ? [first] : [];
     }),
   );
+  const audible = new Set<Item>();
+  for (const block of story.blocks) {
+    if (block.kind === "break" || (block.visibility !== "both" && block.visibility !== "audio"))
+      continue;
+    for (const line of block.kind === "heading" ? [block.line] : block.lines) {
+      for (const item of line.items) audible.add(item);
+    }
+  }
   return allItems(story).flatMap((item) => {
     if (item.kind !== "speech" && item.kind !== "vocal") return [];
     // A stretch with no letter or digit in it isn't read aloud (§12.1).
@@ -183,6 +193,7 @@ export function spokenChars(
       target: target.includes(item) || optional.includes(item),
       strict: strict && target.includes(item),
       optional: optional.includes(item),
+      audible: audible.has(item),
       // A quote that runs over lines, or a paragraph that carries the speech before it on.
       carries:
         item.kind === "speech" &&
@@ -228,6 +239,9 @@ export function brokenPromise(
   const after = spokenChars(edited);
   if (after.map((c) => c.char).join("") !== before.map((c) => c.char).join(""))
     return "the words changed";
+  const silenced = after.findIndex((now, index) => now.audible !== before[index]?.audible);
+  if (silenced >= 0)
+    return `"${after[silenced]?.char}" at ${silenced} is heard or not as it wasn't`;
   for (const [index, was] of before.entries()) {
     const now = after[index] as Spoken;
     if (
@@ -289,7 +303,8 @@ export const EDITS: Record<"speaker" | "direction", EditPromise> = {
 
 /**
  * A mark the changes wrote that nothing needs: taken out (with the space after it), every word is
- * heard and printed as before. Null if each one is needed.
+ * heard and printed as before. Null if each one is needed. A direction written into a mark counts
+ * on its own, and so does any two of them together (`@Gerald (soft) @() “One.` is no change).
  */
 export function spareMark(story: Story, changes: readonly TextChange[]): string | null {
   const text = applyChanges(story.source, changes);
@@ -304,18 +319,138 @@ export function spareMark(story: Story, changes: readonly TextChange[]): string 
     });
   const heard = (of: Story) =>
     spokenChars(of)
-      .map((c) => `${c.char}${c.speaker.toLowerCase()}${c.direction}`)
+      .map((c) => `${c.char}${c.speaker.toLowerCase()}${c.direction}${c.audible}`)
       .join("|");
   const goal = heard(after);
   const book = bookText(after);
+  const inWritten = (range: { from: number; to: number }) =>
+    written.some((span) => span.from <= range.from && range.to <= span.to);
+  // Each mark and `@(…)` the changes wrote, and each direction they wrote into a mark.
+  const pieces: Array<{ from: number; to: number }> = [];
   for (const item of allItems(after)) {
-    if (item.kind !== "mark" && item.kind !== "direction") continue;
-    if (!written.some((span) => span.from <= item.range.from && item.range.to <= span.to)) continue;
-    const end = text[item.range.to] === " " ? item.range.to + 1 : item.range.to;
-    const without = parse(text.slice(0, item.range.from) + text.slice(end));
-    if (heard(without) === goal && bookText(without) === book) {
-      return `${text.slice(item.range.from, item.range.to)} is spare in ${JSON.stringify(text)}`;
+    if (item.kind === "direction" && inWritten(item.range)) pieces.push(item.range);
+    if (item.kind !== "mark") continue;
+    if (inWritten(item.range)) pieces.push(item.range);
+    else if (item.directionRange && inWritten(item.directionRange)) {
+      // `@Gerald (soft)`: the direction and the space before it.
+      const from =
+        text[item.directionRange.from - 1] === " "
+          ? item.directionRange.from - 1
+          : item.directionRange.from;
+      pieces.push({ from, to: item.directionRange.to });
+    }
+  }
+  const without = (cut: Array<{ from: number; to: number }>) => {
+    let out = text;
+    for (const piece of [...cut].sort((a, b) => b.from - a.from)) {
+      const end = out[piece.to] === " " && out[piece.from - 1] !== " " ? piece.to + 1 : piece.to;
+      out = out.slice(0, piece.from) + out.slice(end);
+    }
+    return parse(out);
+  };
+  const spare = (cut: Array<{ from: number; to: number }>) => {
+    const story = without(cut);
+    return heard(story) === goal && bookText(story) === book;
+  };
+  for (const [index, piece] of pieces.entries()) {
+    if (spare([piece]))
+      return `${text.slice(piece.from, piece.to)} is spare in ${JSON.stringify(text)}`;
+    for (const other of pieces.slice(index + 1)) {
+      if (spare([piece, other])) {
+        return `${text.slice(piece.from, piece.to)} and ${text.slice(other.from, other.to)} are spare in ${JSON.stringify(text)}`;
+      }
     }
   }
   return null;
+}
+
+/** Each character heard, where it is in the source, and who says it and how (spokenChars, placed). */
+export function heardAt(
+  story: Story,
+): Array<{ at: number; speaker: string; direction: string | null }> {
+  const out: Array<{ at: number; speaker: string; direction: string | null }> = [];
+  for (const line of allLines(story)) {
+    const unheard = line.items.filter((item) => item.kind !== "speech" && item.kind !== "vocal");
+    for (const item of line.items) {
+      if (item.kind === "speech" && !/[\p{L}\p{N}]/u.test(item.text)) continue;
+      if (item.kind !== "speech" && item.kind !== "vocal") continue;
+      const from = item.kind === "speech" ? item.textRange.from : item.range.from;
+      const to = item.kind === "speech" ? item.textRange.to : item.range.to;
+      for (let at = from; at < to; at++) {
+        const char = story.source[at] as string;
+        if (/[\s\p{P}]/u.test(char)) continue;
+        if (
+          item.kind === "speech" &&
+          unheard.some((other) => other.range.from <= at && at < other.range.to)
+        )
+          continue;
+        // A character's sound is heard by its description: `@Gerald [snores]`.
+        if (item.kind === "vocal" && at < story.source.indexOf("[", item.range.from)) continue;
+        out.push({ at, speaker: item.speaker, direction: item.direction });
+      }
+    }
+  }
+  return out;
+}
+
+const CLOSERS: Record<string, string> = {
+  "“": "”",
+  "‘": "’",
+  '"': '"',
+  "'": "'",
+  "„": "“”",
+  "‚": "‘’",
+  "«": "»",
+  "»": "«»",
+  "‹": "›",
+  "「": "」",
+  "『": "』",
+};
+
+/**
+ * Where the quote that opens at `open` ends, found in the text alone, as §5.5 and §5.7 describe
+ * it and without the parser's or the edits' code: at its first closing mark (but a `’` or `'`
+ * before a letter or digit, and an escaped mark); over the lines of its paragraph; and on into a
+ * paragraph that opens with the same mark, past paragraphs of only page turns, pauses and notes.
+ * Unclosed, at its last paragraph's end.
+ */
+export function quoteEnd(source: string, open: number): number {
+  const mark = source[open] as string;
+  const closers = CLOSERS[mark] ?? "";
+  let at = open + 1;
+  while (at < source.length) {
+    const char = source[at] as string;
+    if (char === "\\") {
+      at += 2;
+      continue;
+    }
+    if (
+      closers.includes(char) &&
+      !(/['’]/.test(char) && /[\p{L}\p{N}]/u.test(source[at + 1] ?? ""))
+    ) {
+      return at + 1;
+    }
+    // A paragraph's end: the speech goes on only into one that opens with the same mark.
+    const blank = /^\r?\n(?:[ \t]*\r?\n)+/.exec(source.slice(at));
+    if (blank) {
+      const end = at;
+      let next = at + blank[0].length;
+      for (;;) {
+        const paragraph = /^[^\n]*(?:\n(?![ \t]*\r?\n)[^\n]*)*/.exec(source.slice(next))?.[0] ?? "";
+        const only =
+          paragraph.replace(/\{[^}]*\}|%%[\s\S]*?%%/g, "").trim() === "" && paragraph.trim() !== "";
+        if (!only) break;
+        const after = /^(?:\r?\n[ \t]*)+/.exec(source.slice(next + paragraph.length));
+        if (!after) break;
+        next += paragraph.length + after[0].length;
+      }
+      if (source[next] !== mark) return end;
+      at = next + 1;
+      continue;
+    }
+    // A group's line ends what's inside it.
+    if (char === "\n" && /^[ \t]*:{3,}/.test(source.slice(at + 1))) return at;
+    at++;
+  }
+  return source.length;
 }

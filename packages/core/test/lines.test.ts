@@ -141,6 +141,40 @@ describe("links, as Markdown reads them (§8.3)", () => {
     expect(spokenScript(parse("[a](x) [b](y)"))).toBe("Narrator: a b");
   });
 
+  it("reads a link's address and title as Markdown does, lone parentheses and all", () => {
+    // Each as CommonMark reads it (checked with markdown-it): a title may hold a lone `(` or `)`,
+    // an address in `<…>` a `)`, and an escape counts. Where Markdown sees no link, neither does
+    // the parser: a sound, then text.
+    const said = (text: string) => spokenScript(parse(text));
+    for (const link of [
+      '[the chapter](book.html "Chapter (one")',
+      "[the chapter](<https://example.com/a)b>)",
+      '[the chapter](b "t)")',
+      "[the chapter](b 't)')",
+      "[the chapter](b (t))",
+      "[the chapter](<b c>)",
+      "[the chapter]( b )",
+      "[the chapter](<>)",
+      "[the chapter](b(c)d)",
+      "[the chapter](b\\)c)",
+      "[the chapter](<b\\>c>)",
+      '[the chapter](b "t" )',
+      '[the chapter]("t")',
+    ]) {
+      expect(said(`Read ${link} now.`), link).toBe("Narrator: Read the chapter now.");
+    }
+    for (const text of ["(b (t()", '(<b>"t")', "(b(c d)", "(<b<c>)", '(b "t" x)']) {
+      expect(said(`Read [a]${text} now.`), text).toBe(
+        `Narrator: Read\n[a]\nNarrator: ${text} now.`,
+      );
+    }
+    const image = parse('See ![pic](<a b\\>.png> "A (big") here.')
+      .blocks.flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+      .flatMap((line) => line.items)
+      .find((item) => item.kind === "image");
+    expect(image).toMatchObject({ alt: "pic", src: "a b>.png" });
+  });
+
   it("reads brackets nested deep, and lines of many links, in linear time", () => {
     for (const text of [
       `${"[".repeat(150_000)}x${"]".repeat(150_000)}(y)`,

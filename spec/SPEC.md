@@ -1558,7 +1558,7 @@ The format is meant to be edited both by hand and through a visual editor. A vis
 3. **New marks are written in one way:**
    - a character mark and direction go directly before the speech's opening quote, with the cast's spelling: `@Gerald (yawning) “…`;
    - a direction for narration goes before its first word: `@(warmly) Once…`;
-   - a direction for a paragraph that carries a speech on (§5.7) goes just inside its opening mark, so the paragraph still carries the speech on: `“@(softly)Two.”`;
+   - a direction of its own for a paragraph that carries a speech on (§5.7) goes just inside its opening mark, so the paragraph still carries the speech on: `“@(softly)Two.”`;
    - a sound follows the word it belongs to, after one space: `fell over. [clatter]`;
    - a page turn, pause or note between lines goes on a line of its own;
    - between two characters with no space between them, a mark goes without the space after it, which would show in the book: `“Hi.”@Ann—he said.` Where the mark would then run on into what follows, as a name runs on into a word's letters, there is no way to write it without changing the book.

@@ -273,4 +273,27 @@ describe("the front matter YAML subset", () => {
     }
     expect(readYaml("title: first\n  second # c").data).toEqual({ title: "first second" });
   });
+
+  it("keeps an empty block's line breaks with keep chomping, as YAML does", () => {
+    // Each as a YAML library (PyYAML 6) reads it (YAML 1.2, §8.1.1.2). The reader is given the
+    // lines between a file's `---` lines, joined: a document's last line break isn't in them.
+    const cases: Array<[string, unknown]> = [
+      ["title: |+\n\n\n", { title: "\n\n" }],
+      ["title: |+\n\n", { title: "\n" }],
+      ["title: |+\n", { title: "" }],
+      ["title: >+\n\n\n", { title: "\n\n" }],
+      ["title: |-\n\n\n", { title: "" }],
+      ["title: |\n\n\n", { title: "" }],
+      ["title: |+\n\n\nnext: x", { title: "\n\n", next: "x" }],
+      ["title: |+\n  a\n\n\n", { title: "a\n\n\n" }],
+      ["title: >+\n  a\n  b\n\n", { title: "a b\n\n" }],
+      ["a: |+\n\n  \nb: 1", { a: "\n\n", b: 1 }],
+    ];
+    for (const [document, data] of cases) {
+      const lines = document.replace(/\n$/, "");
+      expect(readYaml(lines).data, JSON.stringify(document)).toEqual(data);
+      const file = parse(`---\n${lines}\n---\nHello.`);
+      expect(file.frontMatter?.data, JSON.stringify(document)).toEqual(data);
+    }
+  });
 });

@@ -32,6 +32,7 @@ import {
   tokens,
   write,
 } from "../src/index";
+import { lexedTokens } from "../src/lexed";
 import { diffChanges } from "../src/write";
 import { proseStory } from "./stories";
 import {
@@ -41,8 +42,10 @@ import {
   allItems,
   allLines,
   brokenPromise,
+  heardAt,
   narrationBefore,
   newWarnings,
+  quoteEnd,
   quoteOf,
   sameName,
   spareMark,
@@ -125,6 +128,8 @@ const PIECES = [
   "%% note %%",
   "[link](https://example.com)",
   "![image](a.png)",
+  "[the map](<maps/old  town.png>)",
+  '![a](<a  b.png> "A  (title")',
   "<b>",
   "&amp;",
   // groups, headings, breaks, front matter, lists, quotes
@@ -314,7 +319,16 @@ describe("on stories made at random", () => {
         .replace(/["'“”‘’„‚«»‹›]/g, "'")
         .replace(/\s+/g, " ")
         .trim();
-    const addresses = (text: string) => (text.match(/\]\([^()\s]*\)/g) ?? []).sort();
+    // Every link and image as the parser reads it, address and title included.
+    const addresses = (text: string) =>
+      lexedTokens(text)
+        .filter(
+          (token) =>
+            token.type === "image" ||
+            (token.type === "text" && !token.plain && text[token.range.from] === "["),
+        )
+        .map((token) => text.slice(token.range.from, token.range.to))
+        .sort();
     await check(
       fc.property(anyStory, fc.boolean(), (source, curly) => {
         const out = format(source, {
@@ -347,7 +361,8 @@ describe("on stories made at random", () => {
       anyStory,
       (story, target) => setDirection(story, target, "softly"),
       EDITS.direction,
-      0.015,
+      // About 0.7% over many seeds; a sample of a few hundred stretches can show twice that.
+      0.02,
     );
   });
 
@@ -373,7 +388,7 @@ describe("on stories made at random", () => {
     let tried = 0;
     let declined = 0;
     const heard = (story: Story) =>
-      spokenChars(story).map((c) => [c.char, c.speaker.toLowerCase(), c.direction]);
+      spokenChars(story).map((c) => [c.char, c.speaker.toLowerCase(), c.direction, c.audible]);
     const count = (story: Story, kind: string) =>
       allItems(story).filter((item) => item.kind === kind).length;
     const tryEdit = (source: string, story: Story, edit: TextChange[], counted: boolean) => {
@@ -386,6 +401,8 @@ describe("on stories made at random", () => {
       const out = applyChanges(source, edit);
       const after = parse(out);
       expect(heard(after)).toEqual(heard(story));
+      // Neither a sound nor a page turn, pause or note is printed: the book reads as it did.
+      expect(bookText(after)).toBe(bookText(story));
       if (story.frontMatter) expect(after.frontMatter?.raw).toBe(story.frontMatter.raw);
       return { out, after };
     };
@@ -395,7 +412,17 @@ describe("on stories made at random", () => {
         fc.nat(),
         fc.nat(),
         fc.constantFrom("{page}", "{pause 2s}", "%% Slowly. %%"),
-        (source, pick, word, text) => {
+        fc.constantFrom(
+          "{hidden}",
+          "{book only}",
+          "{audio only}",
+          "",
+          " ",
+          "a\n{page}",
+          "---",
+          "***",
+        ),
+        (source, pick, word, text, wrong) => {
           const story = parse(source);
           const at = pick % (source.length + 1);
           const said = speeches(story);
@@ -413,6 +440,9 @@ describe("on stories made at random", () => {
           }
           const line = tryEdit(source, story, insertLine(story, at, text), true);
           if (line) expect(line.out.replace(/^\uFEFF/, "").split(/\r?\n/)).toContain(text);
+          // Lines heard as nothing on their own that would hide, unprint or split what they join:
+          // put in only where nothing is heard or printed differently, or not at all.
+          tryEdit(source, story, insertLine(story, at, wrong), false);
         },
       ),
     );
@@ -578,8 +608,14 @@ describe("on stories made at random", () => {
           if (crlf) source = source.replace(/\n/g, "\r\n");
           const story = parse(source);
           expect(spokenScript(story)).toContain("Hello.");
-          const text = applyChanges(source, setMeta(story, "title", value));
-          const after = parse(text);
+          const changes = setMeta(story, "title", value);
+          const after = parse(applyChanges(source, changes));
+          // A title written as a map or a list is left alone, rather than written over.
+          const current = story.frontMatter?.data.title;
+          if (typeof current === "object" && current !== null) {
+            expect(changes).toEqual([]);
+            return;
+          }
           // Unless the front matter is too broken to hold a title where it can be read.
           if (!story.warnings.some((warning) => warning.code === "front-matter")) {
             expect(after.meta.title ?? "").toBe(value.trim());
@@ -682,6 +718,43 @@ describe("on prose made at random", () => {
       EDITS.speaker,
       PROSE_BUDGET,
     );
+  }, 60_000);
+
+  it("giving away a quote moves every word between its quotation marks, found in the text alone", async () => {
+    // An oracle that shares no rule with the edits or voices.ts's quoteOf: the quote's words are
+    // those between its opening mark and the closing mark §5.5 gives it, over its lines and the
+    // paragraphs that carry it on (§5.7), sounds made inside it included.
+    let tried = 0;
+    let declined = 0;
+    await check(
+      fc.property(proseStory, fc.nat(), (source, pick) => {
+        const story = parse(source);
+        // A quote that starts a speech: one that carries another on goes with where that starts.
+        const quotes = speeches(story).filter((speech) => speech.openQuote && !speech.continued);
+        const target = quotes[pick % Math.max(1, quotes.length)];
+        if (!target?.openQuote) return;
+        tried++;
+        const changes = setSpeaker(story, target, "Zed");
+        if (changes.length === 0) {
+          declined++;
+          return;
+        }
+        const from = target.openQuote.from;
+        const to = quoteEnd(source, from);
+        const before = heardAt(story);
+        const after = heardAt(parse(applyChanges(source, changes)));
+        expect(after.length).toBe(before.length);
+        for (const [index, was] of before.entries()) {
+          const now = after[index] as (typeof after)[number];
+          const inside = from <= was.at && was.at < to;
+          const why = `${JSON.stringify(source)} at ${was.at}, quote ${from}–${to}`;
+          expect(now.direction, why).toBe(was.direction);
+          if (inside) expect(now.speaker, why).toBe("Zed");
+          else expect(now.speaker.toLowerCase(), why).toBe(was.speaker.toLowerCase());
+        }
+      }),
+    );
+    expect(declined).toBeLessThanOrEqual(Math.max(3, tried * PROSE_BUDGET));
   }, 60_000);
 
   it("setting how a stretch is said changes only that stretch's direction", async () => {

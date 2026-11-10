@@ -4,6 +4,7 @@ import {
   heardIndex,
   heardItem,
   heardVoices,
+  parsed,
   renameCharacter,
   sameHearing,
   setDirection,
@@ -13,7 +14,6 @@ import {
 } from "./edit";
 import type { Block, Item, Line, Speech, Story, Vocal } from "./model";
 import { nameKey } from "./names";
-import { parse } from "./parse";
 /**
  * The lossless writer (§13). A story is written back from its source, so an unchanged story gives
  * back the same bytes. Fields changed in place on the model are written as the edits in `edit.ts`
@@ -32,15 +32,17 @@ import { session } from "./session";
  * - a cast member's `name` (the full name) and `handle` (renames the character everywhere).
  *
  * Adding or removing items is done with the edit functions (`setSpeaker`, `insertSound`, …) on
- * the text instead. A story whose shape no longer matches its source is an error.
+ * the text instead. A story whose shape no longer matches its source is an error, and so is a
+ * change to any other field (a `RangeError`), rather than one quietly left unwritten.
  */
 export function write(story: Story): string {
   return session(() => writeNow(story));
 }
 
 function writeNow(story: Story): string {
-  const original = parse(story.source);
+  const original = parsed(story.source);
   checkShape(story, original);
+  checkWritable(story, original);
   let text = story.source;
   // What the edits wrote, kept up to date as later edits move it.
   let written: Span[] = [];
@@ -53,10 +55,10 @@ function writeNow(story: Story): string {
     made?: (now: Story, before: Story, changes: TextChange[]) => boolean,
     what?: string,
   ) => {
-    const current = parse(text);
+    const current = parsed(text);
     const changes = make(current);
     const next = applyChanges(text, changes);
-    if (made && !made(parse(next), current, changes)) {
+    if (made && !made(parsed(next), current, changes)) {
       throw new RangeError(`write() can't make this change as asked: ${what}.`);
     }
     written = afterChanges(written, changes);
@@ -165,7 +167,7 @@ function writeNow(story: Story): string {
   // Changes made one after another can undo each other (two stretches of one quote given to two
   // characters): every word each one gave must still be said as it gave it.
   if (given.length > 0) {
-    const voices = heardVoices(parse(done));
+    const voices = heardVoices(parsed(done));
     for (const { index, speaker, what } of given) {
       if (nameKey(voices[index]?.speaker ?? "") !== nameKey(speaker)) {
         throw new RangeError(
@@ -184,7 +186,7 @@ function writeNow(story: Story): string {
  */
 function withoutSpareMarks(text: string, spans: readonly Span[]): string {
   if (spans.length === 0) return text;
-  const goal = parse(text);
+  const goal = parsed(text);
   let current = text;
   let story = goal;
   let written = spans;
@@ -198,7 +200,7 @@ function withoutSpareMarks(text: string, spans: readonly Span[]): string {
     )[tried];
     if (!mark) break;
     const found = shorter(current, mark).find((option) =>
-      sameHearing(goal, parse(applyChanges(current, [option]))),
+      sameHearing(goal, parsed(applyChanges(current, [option]))),
     );
     if (!found) {
       tried++;
@@ -206,7 +208,7 @@ function withoutSpareMarks(text: string, spans: readonly Span[]): string {
     }
     written = afterChanges(written, [found]);
     current = applyChanges(current, [found]);
-    story = parse(current);
+    story = parsed(current);
     // A mark cut to its direction is no longer a mark: the next one now has its place.
   }
   return current;
@@ -319,6 +321,62 @@ function checkShape(story: Story, original: Story): void {
       });
     });
   });
+}
+
+/**
+ * Throws for a field changed on the model that the writer doesn't write: a vocal sound's speaker,
+ * a speech's text, the narrator, a group's direction… so that no change is quietly left out.
+ */
+function checkWritable(story: Story, original: Story): void {
+  const refuse = (what: string) => {
+    throw new RangeError(`write() can't change ${what}; use the edit functions on the text.`);
+  };
+  for (const key of ["narrator", "version"] as const) {
+    if (story.meta[key] !== original.meta[key]) refuse(`meta.${key}`);
+  }
+  story.cast.forEach((member, index) => {
+    if (member.about !== original.cast[index]?.about) refuse(`a cast member's about`);
+  });
+  if (story.groups.length !== original.groups.length) shapeError("groups");
+  story.groups.forEach((group, index) => {
+    const before = original.groups[index];
+    for (const key of ["character", "direction", "visibility"] as const) {
+      if (group[key] !== before?.[key]) refuse(`a group's ${key}`);
+    }
+  });
+  story.blocks.forEach((block, index) => {
+    const before = original.blocks[index] as Block;
+    if (
+      block.kind !== "break" &&
+      before.kind !== "break" &&
+      block.visibility !== before.visibility
+    ) {
+      refuse("a block's visibility");
+    }
+  });
+  const fixed: Partial<Record<Item["kind"], readonly string[]>> = {
+    speech: ["text", "quoted"],
+    vocal: ["speaker", "direction"],
+    image: ["alt", "src"],
+    mark: ["speaker", "direction"],
+    direction: ["direction"],
+    instruction: ["name"],
+  };
+  for (const [after, before] of itemPairs(story, original)) {
+    for (const key of fixed[after.kind] ?? []) {
+      const field = key as keyof typeof after;
+      if (after[field] !== before[field as keyof typeof before]) refuse(`a ${after.kind}'s ${key}`);
+    }
+    // A speech's direction follows from its own (`ownDirection`), which is what is written.
+    if (
+      after.kind === "speech" &&
+      before.kind === "speech" &&
+      after.direction !== before.direction &&
+      after.ownDirection === before.ownDirection
+    ) {
+      refuse("a speech's direction (set its ownDirection)");
+    }
+  }
 }
 
 function escapeBrackets(text: string): string {

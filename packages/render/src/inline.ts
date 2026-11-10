@@ -39,13 +39,21 @@ type Piece = { text: string; literal: boolean; edge?: boolean };
  */
 function destination(target: string): { url: string; title: string | null } {
   const text = target.trim();
-  const bracketed = /^<([^<>\n]*)>\s*(.*)$/s.exec(text);
-  const first = text.split(/\s/)[0] ?? "";
+  // `<address>` to the first `>` not escaped, or the address up to a space; backslash escapes
+  // count in both, and in the title.
+  const bracketed = /^<((?:\\.|[^<>\n\\])*)>\s*(.*)$/s.exec(text);
+  const first = /^\S*/.exec(text)?.[0] ?? "";
   const [url, rest] = bracketed
-    ? [bracketed[1] ?? "", bracketed[2] ?? ""]
+    ? [bracketed[1] as string, bracketed[2] as string]
     : [first, text.slice(first.length).trim()];
-  const title = /^(?:"([^"]*)"|'([^']*)'|\(([^)]*)\))$/s.exec(rest);
-  return { url, title: title ? (title[1] ?? title[2] ?? title[3] ?? null) : null };
+  const title = /^(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|\(((?:\\.|[^()\\])*)\))$/s.exec(rest);
+  const said = title ? (title[1] ?? title[2] ?? title[3] ?? null) : null;
+  return { url: withoutEscapes(url), title: said === null ? null : withoutEscapes(said) };
+}
+
+/** Text with its backslash escapes taken out. */
+function withoutEscapes(text: string): string {
+  return text.replace(/\\(.)/gsu, (whole, char: string) => (ESCAPABLE.test(char) ? char : whole));
 }
 
 /** Splits text into literal characters (escaped ones) and characters that may be Markdown. */
@@ -88,13 +96,13 @@ export function inlineHtmlPieces(sources: readonly string[]): string[] {
 
 /**
  * Where each `]` and `)` that may close a link is, worked out once so that a long line renders in
- * linear time: for each position, the next `]`; and for each `(`, its `)`, with parentheses
- * inside balanced as the parser reads them (§8.3).
+ * linear time: for each position, the next `]`; for each `[`, the `]` that balances it; and for
+ * each `(`, the `)` that ends a link's address and title, as the parser reads them (§8.3).
  */
 function closersOf(chars: readonly Piece[]): {
   bracket: Int32Array;
   squares: Map<number, number>;
-  parens: Map<number, number>;
+  links: Int32Array;
   nesting: Set<number>;
 } {
   const isChar = (at: number, text: string) => chars[at]?.text === text && !chars[at]?.literal;
@@ -102,22 +110,23 @@ function closersOf(chars: readonly Piece[]): {
   for (let at = chars.length - 1; at >= 0; at--) {
     bracket[at] = isChar(at, "]") ? at : (bracket[at + 1] as number);
   }
-  const parens = new Map<number, number>();
   const squares = new Map<number, number>();
-  const open: number[] = [];
   const openSquare: number[] = [];
   chars.forEach((_, at) => {
-    if (isChar(at, "(")) open.push(at);
-    else if (isChar(at, ")") && open.length > 0) parens.set(open.pop() as number, at);
-    else if (isChar(at, "[")) openSquare.push(at);
+    if (isChar(at, "[")) openSquare.push(at);
     else if (isChar(at, "]") && openSquare.length > 0) squares.set(openSquare.pop() as number, at);
   });
+  const links = linkEnds(
+    chars.length,
+    (at) => chars[at]?.text,
+    (at) => chars[at]?.literal === false,
+  );
   // A link may not hold another (Markdown): where links nest, the innermost is the link, so a
   // link's text never holds one and rendering it goes one level deep at most.
   const candidates = [...squares.keys()]
     .filter((open) => {
       const close = squares.get(open) as number;
-      return isChar(close + 1, "(") && parens.has(close + 1);
+      return isChar(close + 1, "(") && (links[close + 1] ?? -1) >= 0;
     })
     .sort((a, b) => a - b);
   const nesting = new Set<number>();
@@ -125,7 +134,96 @@ function closersOf(chars: readonly Piece[]): {
     const next = candidates[index + 1];
     if (next !== undefined && next < (squares.get(open) as number)) nesting.add(open);
   });
-  return { bracket, squares, parens, nesting };
+  return { bracket, squares, links, nesting };
+}
+
+/**
+ * Where the parentheses after each would-be link's text close, as Markdown reads a link's address
+ * and title (CommonMark 0.31, §6.3): from a `(`, spaces, then an address (`<…>` on one line, or up
+ * to a space with its own parentheses balanced), then perhaps a title in `"…"`, `'…'` or `(…)`
+ * after a space, then spaces and `)`. So a title may hold a lone `(` and a `<…>` address a `)`.
+ * The parser reads links this way too (`voxdown`'s inline.ts). For each `(` of the `length` characters, the index of that `)`, or -1 where no address and
+ * title close; for every `(` at once, in linear time. `plain` says which characters aren't escaped.
+ */
+function linkEnds(
+  length: number,
+  char: (at: number) => string | undefined,
+  plain: (at: number) => boolean,
+): Int32Array {
+  const is = (at: number, sign: string) => char(at) === sign && plain(at);
+  const space = (code: number) => code === 32 || code === 9 || code === 10 || code === 13;
+  // For each position, the first at or after it of: no space; a space or control character (an
+  // address's end); `<`, `>` or a line break (an `<…>` address's end); each title's closing mark.
+  const solid = new Int32Array(length + 1).fill(length);
+  const gap = new Int32Array(length + 1).fill(length);
+  const angle = new Int32Array(length + 1).fill(length);
+  const double = new Int32Array(length + 1).fill(length);
+  const single = new Int32Array(length + 1).fill(length);
+  const paren = new Int32Array(length + 1).fill(length);
+  for (let at = length - 1; at >= 0; at--) {
+    const sign = char(at) ?? "";
+    const code = sign.charCodeAt(0);
+    solid[at] = space(code) ? (solid[at + 1] as number) : at;
+    gap[at] = code <= 32 || code === 127 ? at : (gap[at + 1] as number);
+    angle[at] =
+      sign === "\n" || (plain(at) && (sign === "<" || sign === ">"))
+        ? at
+        : (angle[at + 1] as number);
+    double[at] = is(at, '"') ? at : (double[at + 1] as number);
+    single[at] = is(at, "'") ? at : (single[at + 1] as number);
+    paren[at] = is(at, "(") || is(at, ")") ? at : (paren[at + 1] as number);
+  }
+  // How deep in parentheses each position is, and the `)` that balances each `(`.
+  const depth = new Int32Array(length + 1);
+  const balance = new Int32Array(length).fill(-1);
+  const open: number[] = [];
+  for (let at = 0; at < length; at++) {
+    depth[at + 1] = (depth[at] as number) + (is(at, "(") ? 1 : is(at, ")") ? -1 : 0);
+    if (is(at, "(")) open.push(at);
+    else if (is(at, ")") && open.length > 0) balance[open.pop() as number] = at;
+  }
+  const ends = new Int32Array(length).fill(-1);
+  for (let start = 0; start < length; start++) {
+    if (!is(start, "(")) continue;
+    const at = solid[start + 1] as number;
+    if (at >= length) continue;
+    let end: number;
+    if (is(at, "<")) {
+      // `<…>`: to the first `>`, with no `<` or line break before it.
+      const close = angle[at + 1] as number;
+      if (!is(close, ">")) continue;
+      end = close + 1;
+    } else {
+      // Up to a space, its parentheses balanced; a `)` that balances the link's own `(` before
+      // then ends the address and the link.
+      const balanced = balance[start] as number;
+      const stop = gap[at] as number;
+      if (balanced >= 0 && balanced < stop) {
+        ends[start] = balanced;
+        continue;
+      }
+      if ((depth[stop] as number) !== (depth[at] as number)) continue;
+      end = stop;
+    }
+    let next = solid[end] as number;
+    if (is(next, ")")) {
+      ends[start] = next;
+      continue;
+    }
+    // A title, after a space if there was an address.
+    if (next === end && end > at) continue;
+    const close = is(next, '"')
+      ? (double[next + 1] as number)
+      : is(next, "'")
+        ? (single[next + 1] as number)
+        : is(next, "(")
+          ? (paren[next + 1] as number)
+          : length;
+    if (close >= length || (is(next, "(") && !is(close, ")"))) continue;
+    next = solid[close + 1] as number;
+    if (is(next, ")")) ends[start] = next;
+  }
+  return ends;
 }
 
 /** A run of `*` or `_`, and the tags it becomes once runs are paired. */
@@ -252,13 +350,14 @@ function renderPieces(chars: Piece[]): string[] {
         const close =
           balanced > 0 && isChar(balanced + 1, "(") ? balanced : (closers.bracket[open + 1] ?? -1);
         if (close > 0 && isChar(close + 1, "(")) {
-          const end = closers.parens.get(close + 1) ?? -1;
+          const end = closers.links[close + 1] ?? -1;
           if (end > 0 && edges[end + 1] === edges[i]) {
             const label = chars.slice(open + 1, close);
+            // Escaped characters are written as escapes again, for `destination` to read.
             const target = destination(
               chars
                 .slice(close + 2, end)
-                .map((c) => c.text)
+                .map((c) => (c.literal && !c.edge ? `\\${c.text}` : c.text))
                 .join(""),
             );
             const url = safeUrl(target.url, bang);

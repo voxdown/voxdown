@@ -337,8 +337,11 @@ class YamlReader {
       body.pop();
       trailing++;
     }
+    // Keep chomping (`+`) keeps the line breaks at the end, of an empty block too (YAML 1.2,
+    // §8.1.1.2): `|+` and two empty lines is two line breaks.
+    if (body.length === 0) return chomping === "+" ? "\n".repeat(trailing) : "";
     const content = folded ? fold(body) : body.join("\n");
-    if (body.length === 0 || chomping === "-") return content;
+    if (chomping === "-") return content;
     return chomping === "+" ? `${content}\n${"\n".repeat(trailing)}` : `${content}\n`;
   }
 

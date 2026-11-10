@@ -206,6 +206,44 @@ describe("the views, on stories made at random", () => {
     );
   });
 
+  it("say in the script view who says each stretch, as the parser does", async () => {
+    const window = new Window();
+    let found = 0;
+    let missing = 0;
+    await check(
+      fc.property(story, (source) => {
+        const parsed = parse(source);
+        window.document.body.innerHTML = renderScript(parsed, { positions: true });
+        const shown = new Map<string, string | null>();
+        for (const element of window.document.querySelectorAll(".vxd-speech[data-from]")) {
+          const at = `${element.getAttribute("data-from")}:${element.getAttribute("data-to")}`;
+          shown.set(at, element.getAttribute("data-speaker"));
+        }
+        for (const block of parsed.blocks) {
+          // A `{hidden}` heading shows only as a label (§14).
+          if (block.kind === "break" || (block.kind === "heading" && block.visibility === "hidden"))
+            continue;
+          for (const line of block.kind === "heading" ? [block.line] : block.lines) {
+            for (const item of line.items) {
+              if (item.kind !== "speech" || !/[\p{L}\p{N}]/u.test(item.text)) continue;
+              const at = `${item.range.from}:${item.range.to}`;
+              if (!shown.has(at)) {
+                missing++;
+                continue;
+              }
+              found++;
+              expect(shown.get(at), JSON.stringify(source)).toBe(item.speaker);
+            }
+          }
+        }
+      }),
+      Math.max(20, Math.round(RUNS / 4)),
+    );
+    // Every stretch with words is shown as one, but in a hidden heading: none goes missing.
+    expect(missing).toBe(0);
+    expect(found).toBeGreaterThan(0);
+  });
+
   it("place each part inside the text and inside its parent", async () => {
     const window = new Window();
     await check(

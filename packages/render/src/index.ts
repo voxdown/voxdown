@@ -81,6 +81,7 @@ ${render(parsed, view, options)}
 
 /** The printed story: the book text typeset, with emphasis, links and images (§12.2). */
 export function renderBook(story: Story, options: RenderOptions = {}): string {
+  fullNames.delete(story);
   const out: string[] = [];
   if (options.header !== false && !opensWithTitle(story)) out.push(header(story, false, new Map()));
   let page = "1";
@@ -169,6 +170,7 @@ function printedText(source: string, line: Line): string {
 
 /** A script for reading aloud (§14): who says what, how, and every sound, pause and page turn. */
 export function renderScript(story: Story, options: RenderOptions = {}): string {
+  fullNames.delete(story);
   const colors = characterColors(story, options.colors);
   const out: string[] = [];
   if (options.header !== false) out.push(header(story, true, colors));
@@ -438,11 +440,24 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): s
 }
 
 function fullName(story: Story, speaker: string): string {
-  return (
-    story.cast.find((member) => member.handle.toLowerCase() === speaker.toLowerCase())?.name ??
-    speaker
-  );
+  let names = fullNames.get(story);
+  if (!names) {
+    names = new Map();
+    // The first member of each name, as a search through the cast would find.
+    for (const member of story.cast) {
+      const key = member.handle.toLowerCase();
+      if (!names.has(key)) names.set(key, member.name);
+    }
+    fullNames.set(story, names);
+  }
+  return names.get(speaker.toLowerCase()) ?? speaker;
 }
+
+/**
+ * Each story's full names by handle, whatever its case: a view looks one up for every line. Made
+ * afresh for each view, so a cast changed in place between two views is read as it is now.
+ */
+const fullNames = new WeakMap<Story, Map<string, string>>();
 
 // Shared
 

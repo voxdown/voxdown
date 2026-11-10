@@ -153,4 +153,13 @@ describe("the formatter (§13, rule 8)", () => {
       "The ’90s were great. The dogs’ bowls. Rock ’n’ roll.",
     );
   });
+
+  it("keeps a link or image as written, the spaces in an address in angle brackets too", () => {
+    expect(format("See  [the map](<maps/old  town.png>)  now.")).toBe(
+      "See [the map](<maps/old  town.png>) now.\n",
+    );
+    expect(format('![a  pic](<a  b.png> "A  title")  x')).toBe(
+      '![a  pic](<a  b.png> "A  title") x\n',
+    );
+  });
 });

@@ -11,7 +11,7 @@ import { parse } from "./parse";
  * each line's line ending stay as written.
  */
 import { session } from "./session";
-import { SourceText } from "./source";
+import { type Range, SourceText } from "./source";
 
 export type FormatOptions = {
   /** Write every name as the cast spells it, or as the file first spells it. Default true. */
@@ -65,9 +65,23 @@ function wordsOf(text: string): string {
 
 /** Changes in runs, one per line: a quote's marks are decided together. */
 function byLine(text: string, changes: readonly TextChange[]): TextChange[][] {
+  // Each change's line, by the line break before it, found by halves: on a long line, searching
+  // back from each change to the line's start would take time with the square of its length.
+  const breaks: number[] = [];
+  for (let at = text.indexOf("\n"); at >= 0; at = text.indexOf("\n", at + 1)) breaks.push(at);
+  const lineOf = (at: number) => {
+    let low = 0;
+    let high = breaks.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if ((breaks[middle] as number) < at) low = middle + 1;
+      else high = middle;
+    }
+    return low === 0 ? -1 : (breaks[low - 1] as number);
+  };
   const runs = new Map<number, TextChange[]>();
   for (const change of changes) {
-    const line = text.lastIndexOf("\n", change.from - 1);
+    const line = lineOf(change.from);
     const run = runs.get(line);
     if (run) run.push(change);
     else runs.set(line, [change]);
@@ -247,6 +261,29 @@ function spacingRuns(source: string): TextChange[][] {
     groupLines.add(text.position(group.range.from).line - 1);
     if (group.closeRange) groupLines.add(text.position(group.closeRange.from).line - 1);
   }
+  // Links and images are kept as written: an address in `<…>` may hold spaces that matter.
+  const kept = lexedTokens(source)
+    .filter(
+      (token) =>
+        token.type === "image" ||
+        (token.type === "text" && !token.plain && source[token.range.from] === "["),
+    )
+    .map((token) => token.range);
+  let nextKept = 0;
+  /** A line's runs of spaces made one, but inside a link or image. */
+  const spaced = (from: number, raw: string) => {
+    while (nextKept < kept.length && (kept[nextKept] as Range).to <= from) nextKept++;
+    let out = "";
+    let at = 0;
+    for (let k = nextKept; k < kept.length; k++) {
+      const range = kept[k] as Range;
+      if (range.from >= from + raw.length) break;
+      const start = Math.max(range.from - from, at);
+      out += raw.slice(at, start).replace(/[ \t]{2,}|\t/g, " ") + raw.slice(start, range.to - from);
+      at = Math.min(range.to - from, raw.length);
+    }
+    return out + raw.slice(at).replace(/[ \t]{2,}|\t/g, " ");
+  };
   /** A line of the result, and the line of the file it comes from (-1: the front matter). */
   type Out = { line: string; ending: string; owner: number };
   const out: Out[] = front
@@ -262,12 +299,14 @@ function spacingRuns(source: string): TextChange[][] {
   const ended = () => out.length === 0 || out[out.length - 1]?.line === "";
   for (let index = firstBody; index < text.lines.length; index++) {
     const line = text.lines[index] as (typeof text.lines)[number];
-    const raw = source.slice(index === 0 ? bom.length : line.from, line.to);
+    const start = index === 0 ? bom.length : line.from;
+    const raw = source.slice(start, line.to);
     const ending = endingOf(index);
     // A stray carriage return or byte order mark at a line's edge is spacing too.
+    const lead = /^[ \t\r\uFEFF]*/.exec(raw)?.[0].length ?? 0;
     const tidy = groupLines.has(index)
       ? raw
-      : raw.replace(/^[ \t\r\uFEFF]+|[ \t\r\uFEFF]+$/g, "").replace(/[ \t]{2,}|\t/g, " ");
+      : spaced(start + lead, raw.slice(lead)).replace(/[ \t\r\uFEFF]+$/, "");
     const owner = index;
     if (tidy === "") {
       if (!ended()) out.push({ line: "", ending, owner });

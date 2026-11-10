@@ -8,6 +8,8 @@
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import v8 from "node:v8";
+import vm from "node:vm";
 import { describe, expect, it } from "vitest";
 import { heardIndex, heardItem } from "../src/edit";
 import {
@@ -232,11 +234,58 @@ describe("real books", () => {
     expect(performance.now() - start).toBeLessThan(15_000);
   }, 60_000);
 
+  it("reads groups nested thousands deep in memory that grows with the file, not its square", () => {
+    // Each block once kept a list of every group around it: 8,000 groups left open one inside
+    // another took 261 MB. Now each keeps a link, and lists them when asked (§7).
+    v8.setFlagsFromString("--expose-gc");
+    const gc = vm.runInNewContext("gc") as () => void;
+    const text = "::: softly\nHello.\n\n".repeat(8_000);
+    gc();
+    const before = process.memoryUsage().heapUsed;
+    const start = performance.now();
+    const story = parse(text);
+    expect(performance.now() - start).toBeLessThan(3000);
+    gc();
+    expect((process.memoryUsage().heapUsed - before) / 1e6).toBeLessThan(60);
+    const last = story.blocks.at(-1);
+    expect(last?.kind === "paragraph" && last.groups.length).toBe(8_000);
+    expect(last?.kind === "paragraph" && last.groups[0]).toBe(story.groups[0]);
+    expect(spokenScript(parse("::: softly\n::: @Ann\nHi.\n:::\nBye.\n:::"))).toBe(
+      "Ann (softly): Hi.\n\nNarrator (softly): Bye.",
+    );
+  }, 60_000);
+
+  it("makes the quotes of one very long line curly in time that grows with its length", () => {
+    // Each change once searched back to its line's start: 40,000 quotes on one line took about
+    // ten seconds, and twice as many four times as long.
+    for (const piece of ['"Hi," he said. ', "'Hi,' she said. "]) {
+      const line = piece.repeat(40_000);
+      const start = performance.now();
+      const curly = format(line, { quotes: "curly" });
+      expect(curly.slice(0, 5)).toBe(piece.startsWith('"') ? "“Hi,”" : "‘Hi,’");
+      expect(performance.now() - start, piece).toBeLessThan(6000);
+    }
+  }, 60_000);
+
   it("reads lines built to be slow in good time", () => {
     // Each was quadratic once: an opening mark searched the rest of its line for its closing one.
-    const worst = ["[", "@(", "{", "![", "[x](", " 'a", "“", '"a ', "%% a ", "@Gerald ", "\\"].map(
-      (piece) => piece.repeat(Math.ceil(100_000 / piece.length)),
-    );
+    const worst = [
+      "[",
+      "@(",
+      "{",
+      "![",
+      "[x](",
+      "[a](<",
+      '[a](b "',
+      "[a](b (",
+      "[a](b      ",
+      " 'a",
+      "“",
+      '"a ',
+      "%% a ",
+      "@Gerald ",
+      "\\",
+    ].map((piece) => piece.repeat(Math.ceil(100_000 / piece.length)));
     for (const line of worst) {
       const start = performance.now();
       format(line, { quotes: "curly" });

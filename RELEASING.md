@@ -33,13 +33,16 @@ How a release is made. Every step that publishes something is done by a maintain
 
 ## The VS Code extension
 
+Pack it, then upload the file to each store:
+
 ```sh
-pnpm --filter voxdown-vscode package                    # writes voxdown-<version>.vsix
-pnpm --filter voxdown-vscode exec vsce publish --packagePath voxdown-<version>.vsix
-npx ovsx publish packages/vscode/voxdown-<version>.vsix -p "$OVSX_TOKEN"   # Open VSX, for VSCodium, Cursor and others
+pnpm --filter voxdown-vscode package     # writes packages/vscode/voxdown-<version>.vsix
 ```
 
-`vsce publish` asks for the `voxdown` publisher’s Azure DevOps token (`vsce login voxdown` stores it), or signs in with a Microsoft account through the Azure CLI with `--azure-credential`.
+- **Visual Studio Marketplace:** at <https://marketplace.visualstudio.com/manage/publishers/voxdown>, the extension's **…** menu → **Update**, and choose the `.vsix` (the first time: **New extension → Visual Studio Code**). No token is needed. A token from the command line (`vsce publish`) now needs an Azure DevOps organization, and a new organization needs an Azure subscription; global tokens end on 1 December 2026.
+- **Open VSX**, for VSCodium, Cursor and others: `npx ovsx publish packages/vscode/voxdown-<version>.vsix -p "$OVSX_TOKEN"`, with a token from <https://open-vsx.org> (Settings → Access Tokens).
+
+To publish from GitHub Actions instead, with no stored token for the Marketplace, set up a policy on the publisher's **Trusted Publishing** tab and run `npx @vscode/vsce@4 publish --oidc` in a job with `permissions: id-token: write`.
 
 ## The spec
 
@@ -91,4 +94,4 @@ Done once, in this order. Steps 1, 5 and 7 are on the web. **Run every command f
    git push origin --tags
    ```
 
-7. **Then, the editor and the extension:** publish `@voxdown/editor` the same way and tag it `@voxdown/editor@1.0.0`; create the `voxdown` publisher at <https://marketplace.visualstudio.com/manage>, then publish the extension as above and tag it `vscode@1.0.0`.
+7. **Then, the editor and the extension:** publish `@voxdown/editor` the same way and tag it `@voxdown/editor@1.0.0`; create the `voxdown` publisher at <https://marketplace.visualstudio.com/manage> (ID `voxdown`, as in the extension's manifest), upload the extension as above, and tag it `vscode@1.0.0`.

@@ -102,15 +102,16 @@ describe.each(packages.map((entry) => [entry.manifest.name, entry] as const))(
 describe("the project names no host application", () => {
   it("has no Kinu names in its packages, spec or examples", () => {
     const roots = [packagesDir, join(repo, "spec"), join(repo, "examples"), join(repo, "site")];
-    const files = roots.flatMap(function walk(dir: string): string[] {
+    const walk = (dir: string): string[] => {
       if (!existsSync(dir)) return [];
       return readdirSync(dir).flatMap((name) => {
-        if (["node_modules", "dist", "CHANGELOG.md"].includes(name)) return [];
+        if (["node_modules", "dist", "dist-mockup", "CHANGELOG.md"].includes(name)) return [];
         const path = join(dir, name);
         if (statSync(path).isDirectory()) return walk(path);
         return /\.(?:[cm]?[jt]sx?|md|vxd|json|css|html|ya?ml)$/.test(name) ? [path] : [];
       });
-    });
+    };
+    const files = roots.flatMap(walk);
     const offending = files.filter(
       (file) => !file.endsWith("boundary.test.ts") && /\bkinu\b/i.test(readFileSync(file, "utf8")),
     );

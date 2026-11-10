@@ -1,0 +1,32 @@
+{
+  "name": "@voxdown/render",
+  "version": "1.0.0",
+  "description": "HTML for VoxDown stories: a book view and a script view, styled with CSS variables. No framework.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": ["voxdown", "vxd", "audiobook", "script", "html", "renderer"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voxdown/voxdown.git",
+    "directory": "packages/render"
+  },
+  "homepage": "https://voxdown.github.io/",
+  "bugs": "https://github.com/voxdown/voxdown/issues",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./voxdown.css": "./dist/voxdown.css",
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsup && node -e \"import('./dist/index.js').then((m) => require('node:fs').writeFileSync('dist/voxdown.css', m.stylesheet.trimStart()))\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": { "voxdown": "workspace:^" },
+  "devDependencies": { "happy-dom": "^20.14.6" },
+  "engines": { "node": ">=20" }
+}

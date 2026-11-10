@@ -1,6 +1,6 @@
 # VoxDown
 
-**Version 1.0, 9 November 2026.** This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
+**Version 1.0, 9 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
 
 VoxDown is a plain-text format for stories that are read aloud. It records:
 

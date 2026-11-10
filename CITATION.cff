@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use VoxDown or its specification, please cite it as below."
+title: "VoxDown: Markdown for stories read aloud"
+type: software
+authors:
+  - given-names: Etienne
+    family-names: Ackermann
+    alias: eackermann
+    website: "https://github.com/eackermann"
+abstract: >-
+  VoxDown is a plain-text format for stories that are read aloud: a Markdown
+  story with light marks for who says each line, how they say it, the sounds a
+  listener hears, where the pages turn, and notes for the performer. This
+  repository holds the specification with its conformance examples, a parser,
+  HTML views, an editor, a command-line tool and a VS Code extension.
+repository-code: "https://github.com/voxdown/voxdown"
+url: "https://voxdown.github.io/"
+keywords:
+  - voxdown
+  - markdown
+  - audiobook
+  - text-to-speech
+  - screenwriting
+  - plain-text format
+license:
+  - MIT
+  - CC-BY-4.0
+version: "1.0"
+date-released: "2026-11-09"

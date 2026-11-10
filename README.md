@@ -104,6 +104,10 @@ The spec and the packages are versioned separately: the spec is 1.0, and each pa
 
 Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how the repository works, how to run the tests, and how a change to the spec is made. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
+## Who made it
+
+VoxDown was created by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). To cite it, use **Cite this repository** on GitHub, from [CITATION.cff](CITATION.cff).
+
 ## License
 
 The code is under the [MIT license](LICENSE). The spec text in `spec/` is under [CC BY 4.0](spec/LICENSE). The examples are in the public domain or, where new, free to copy under CC0.

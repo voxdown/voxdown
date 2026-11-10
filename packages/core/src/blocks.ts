@@ -88,7 +88,8 @@ export function scanBlocks(source: string, lines: readonly Range[]): RawBlock[] 
   };
   for (const line of lines) {
     const text = source.slice(line.from, line.to);
-    const indent = /^[ \t]*/.exec(text)?.[0].length ?? 0;
+    // A byte order mark starting the file is not part of its first line (§4.1).
+    const indent = /^(?:\uFEFF)?[ \t]*/.exec(text)?.[0].length ?? 0;
     const body = text.slice(indent);
     const from = line.from + indent;
     const range = { from, to: line.to };

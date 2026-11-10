@@ -258,3 +258,14 @@ describe("tokens", () => {
     ]);
   });
 });
+
+describe("a byte order mark", () => {
+  it("is not part of the first line, so a heading there is still a heading", () => {
+    expect(spokenScript(parse("\uFEFF# Title\nOnce.\n"))).toBe(
+      "# Narrator: Title\n\nNarrator: Once.",
+    );
+    expect(spokenScript(parse("\uFEFF  ::: whispering\nHush.\n:::"))).toBe(
+      "Narrator (whispering): Hush.",
+    );
+  });
+});

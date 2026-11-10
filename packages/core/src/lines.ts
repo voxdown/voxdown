@@ -126,12 +126,21 @@ export function lines(story: Story, options: LinesOptions = {}): ScriptLine[] {
     if (block.kind === "heading") {
       if (!sceneHasContent) sceneTitle = bookLine(story.source, block.line) || null;
       emit(block, block.line, heard);
+      sceneHasContent = true;
     } else {
       for (const line of block.lines) emit(block, line, heard);
+      // Notes, page turns and other instructions alone don't open a scene.
+      if (block.lines.some((line) => line.items.some(isStory))) sceneHasContent = true;
     }
-    sceneHasContent = true;
   }
   return out;
+}
+
+/** Whether an item is part of the story told, rather than a note or instruction about it. */
+function isStory(item: Item): boolean {
+  return (
+    (item.kind === "speech" && item.text !== "") || ["vocal", "sound", "image"].includes(item.kind)
+  );
 }
 
 /** The page after one labeled `label`: its last number plus one, or the label with " +1". */

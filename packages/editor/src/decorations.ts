@@ -137,7 +137,20 @@ export function sceneNumbers(state: EditorState): Map<number, number> {
   const starts = marks
     .filter((m) => m.kind === "break" || m.kind === "heading")
     .sort((a, b) => a.from - b.from);
-  const blank = (from: number, to: number) => !state.sliceDoc(from, to).trim();
+  // Notes, page turns, pauses and other instructions alone don't make a scene.
+  const quiet = marks
+    .filter((m) => ["note", "page", "pause", "instruction"].includes(m.kind))
+    .sort((a, b) => a.from - b.from);
+  const blank = (from: number, to: number) => {
+    let text = "";
+    let at = from;
+    for (const m of quiet) {
+      if (m.to <= at || m.from >= to) continue;
+      text += state.sliceDoc(at, Math.max(at, m.from));
+      at = Math.max(at, Math.min(to, m.to));
+    }
+    return !(text + state.sliceDoc(at, to)).trim();
+  };
   // A mark with nothing after it before the next (or the end) opens no scene: `---` twice, or
   // `---` straight before a heading, is one scene.
   const opening = starts.filter((m, i) => !blank(m.to, starts[i + 1]?.from ?? state.doc.length));

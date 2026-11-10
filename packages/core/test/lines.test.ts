@@ -56,6 +56,17 @@ describe("lines", () => {
     expect(lines(story)[1]).toMatchObject({ heading: 2 });
   });
 
+  it("starts no scene for notes and page turns alone", () => {
+    const story = parse("%% A note. %%\n\n{page}\n\n# Title\n\nOnce.\n\n## Two\n\nTwice.");
+    expect(lines(story, { speechOnly: true }).map((line) => [line.text, line.scene])).toEqual([
+      ["Title", 1],
+      ["Once.", 1],
+      ["Two", 2],
+      ["Twice.", 2],
+    ]);
+    expect(lines(peter, { speechOnly: true })[0]?.scene).toBe(1);
+  });
+
   it("can list only what is said", () => {
     const kinds = new Set(lines(peter, { speechOnly: true }).map((line) => line.kind));
     expect([...kinds].sort()).toEqual(["speech", "vocal"]);

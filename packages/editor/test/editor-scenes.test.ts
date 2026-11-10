@@ -54,6 +54,13 @@ describe("scenes in text order", () => {
     expect(numbersOf("One.\n\n---\n\n")).toEqual([]);
   });
 
+  it("counts no scene for notes and page turns alone", () => {
+    expect(numbersOf("%% A note. %%\n\n{page}\n\n# Title\n\nOne.\n\n---\n\nTwo.")).toEqual([
+      ["# Title", 1],
+      ["---", 2],
+    ]);
+  });
+
   it("reads past the front matter to see whether the story opens with a scene", () => {
     const front = "---\nvoxdown: 1.0\ntitle: Toast\n---\n\n";
     expect(numbersOf(`${front}---\n\nOne.\n\n---\n\nTwo.`)).toEqual([

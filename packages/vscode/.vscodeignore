@@ -1,0 +1,13 @@
+# The extension ships its bundle, grammars, snippets, language configuration, cheat sheet and icon.
+# scripts/package.mjs packs it from a staging folder that holds only those; this file keeps the
+# rest out if it is ever packed from here.
+**/*.map
+**/*.ts
+**/*.vsix
+**/tsconfig.json
+node_modules/**
+src/**
+test/**
+scripts/**
+dist/vsix/**
+.vscode/**

@@ -1,0 +1,124 @@
+{
+  "name": "voxdown-vscode",
+  "displayName": "VoxDown",
+  "description": "VoxDown stories in VS Code: syntax colors, warnings as you type, snippets, an outline, and a live script and book preview.",
+  "version": "1.0.0",
+  "publisher": "voxdown",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "icon": "images/icon.png",
+  "keywords": ["voxdown", "vxd", "audiobook", "script", "markdown"],
+  "categories": ["Programming Languages", "Snippets"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voxdown/voxdown.git",
+    "directory": "packages/vscode"
+  },
+  "homepage": "https://voxdown.github.io/",
+  "bugs": "https://github.com/voxdown/voxdown/issues",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./dist/extension.cjs",
+  "activationEvents": ["onLanguage:voxdown"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "voxdown",
+        "aliases": ["VoxDown", "vxd"],
+        "extensions": [".vxd"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "voxdown",
+        "scopeName": "text.voxdown",
+        "path": "./syntaxes/voxdown.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.frontmatter.voxdown": "yaml"
+        }
+      },
+      {
+        "scopeName": "markdown.voxdown.codeblock",
+        "path": "./syntaxes/voxdown.markdown.tmLanguage.json",
+        "injectTo": ["text.html.markdown"],
+        "embeddedLanguages": {
+          "meta.embedded.block.voxdown": "voxdown"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "voxdown",
+        "path": "./snippets/voxdown.code-snippets"
+      }
+    ],
+    "commands": [
+      {
+        "command": "voxdown.openPreview",
+        "title": "Open Script Preview",
+        "category": "VoxDown",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "voxdown.showCheatSheet",
+        "title": "Show Cheat Sheet",
+        "category": "VoxDown"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "voxdown.openPreview",
+          "when": "editorLangId == voxdown"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "voxdown.openPreview",
+          "when": "editorLangId == voxdown",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "voxdown.openPreview",
+        "key": "ctrl+k v",
+        "mac": "cmd+k v",
+        "when": "editorLangId == voxdown"
+      }
+    ],
+    "configurationDefaults": {
+      "[voxdown]": {
+        "editor.wordWrap": "on",
+        "editor.quickSuggestions": {
+          "comments": "off",
+          "strings": "off",
+          "other": "off"
+        },
+        "editor.unicodeHighlight.ambiguousCharacters": false,
+        "editor.unicodeHighlight.invisibleCharacters": false
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "grammar": "UPDATE_GRAMMAR=1 vitest run test/grammar-file.test.ts && biome format --write syntaxes",
+    "package": "pnpm run build && node scripts/package.mjs"
+  },
+  "dependencies": {
+    "@voxdown/render": "workspace:^",
+    "voxdown": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/vscode": "~1.90.0",
+    "@vscode/vsce": "^3.9.2",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.2.0"
+  }
+}

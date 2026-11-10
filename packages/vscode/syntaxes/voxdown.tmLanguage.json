@@ -1,0 +1,1270 @@
+{
+  "information_for_contributors": [
+    "This file is written by src/grammar.ts. Change that file, then run `pnpm grammar`."
+  ],
+  "name": "VoxDown",
+  "scopeName": "text.voxdown",
+  "fileTypes": ["vxd"],
+  "patterns": [
+    {
+      "include": "#front-matter"
+    },
+    {
+      "include": "#blocks"
+    }
+  ],
+  "repository": {
+    "front-matter": {
+      "name": "meta.frontmatter.voxdown",
+      "begin": "\\A(?=\\x{FEFF}?---\\s*$)",
+      "end": "^(---)\\s*$",
+      "applyEndPatternLast": 1,
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.frontmatter.end.voxdown"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "\\A\\x{FEFF}?(---)\\s*$",
+          "while": "^(?!---\\s*$)",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.frontmatter.begin.voxdown"
+            }
+          },
+          "contentName": "meta.embedded.block.frontmatter.voxdown",
+          "patterns": [
+            {
+              "include": "source.yaml"
+            },
+            {
+              "name": "comment.line.number-sign.yaml.voxdown",
+              "match": "(?<=^|\\s)#.*$"
+            },
+            {
+              "match": "^[ \\t]*(?:-[ \\t]+)?([^\\s#:'\"\\-][^#:]*?)(:)(?=\\s|$)",
+              "captures": {
+                "1": {
+                  "name": "entity.name.tag.yaml.voxdown"
+                },
+                "2": {
+                  "name": "punctuation.separator.key-value.mapping.yaml.voxdown"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "blocks": {
+      "patterns": [
+        {
+          "include": "#heading"
+        },
+        {
+          "include": "#group"
+        },
+        {
+          "include": "#stray-group-close"
+        },
+        {
+          "include": "#scene-break"
+        },
+        {
+          "include": "#paragraph"
+        }
+      ]
+    },
+    "heading": {
+      "name": "markup.heading.voxdown",
+      "begin": "^[ \\t]*(#{1,6})(?=[ \\t])",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.heading.voxdown"
+        }
+      },
+      "end": "$",
+      "contentName": "entity.name.section.voxdown",
+      "patterns": [
+        {
+          "include": "#heading-text"
+        }
+      ]
+    },
+    "group": {
+      "name": "meta.group.voxdown",
+      "begin": "^(?=[ \\t]*:{3,}(?!:)[^\\S\\n]*\\S)",
+      "end": "^[ \\t]*(:{3,})\\s*$",
+      "endCaptures": {
+        "1": {
+          "name": "keyword.control.group.end.voxdown"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#group-line"
+        },
+        {
+          "include": "#blocks"
+        }
+      ]
+    },
+    "group-line": {
+      "name": "meta.group.begin.voxdown",
+      "begin": "\\G[ \\t]*(:{3,})",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.group.begin.voxdown"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#escape"
+        },
+        {
+          "include": "#note"
+        },
+        {
+          "include": "#instruction"
+        },
+        {
+          "name": "meta.mark.character.voxdown",
+          "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.tag.voxdown"
+            },
+            "2": {
+              "name": "entity.name.tag.character.voxdown"
+            },
+            "3": {
+              "name": "entity.other.attribute-name.direction.voxdown",
+              "patterns": [
+                {
+                  "include": "#escape"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "entity.other.attribute-name.direction.voxdown",
+          "match": "[^\\s@{%\\\\]+(?:[^\\S\\n]+[^\\s@{%\\\\]+)*"
+        },
+        {
+          "name": "entity.other.attribute-name.direction.voxdown",
+          "match": "[@{%\\\\]"
+        }
+      ]
+    },
+    "stray-group-close": {
+      "name": "meta.group.stray.voxdown",
+      "match": "^[ \\t]*:{3,}\\s*$"
+    },
+    "scene-break": {
+      "match": "^[ \\t]*((?:-{3,}|\\*{3,}|_{3,})[ \\t]*)$",
+      "captures": {
+        "1": {
+          "name": "meta.separator.voxdown"
+        }
+      }
+    },
+    "paragraph": {
+      "patterns": [
+        {
+          "include": "#escape"
+        },
+        {
+          "include": "#note"
+        },
+        {
+          "include": "#image"
+        },
+        {
+          "include": "#link"
+        },
+        {
+          "include": "#sound"
+        },
+        {
+          "include": "#instruction"
+        },
+        {
+          "include": "#speech"
+        },
+        {
+          "include": "#direction-mark"
+        },
+        {
+          "include": "#vocal-mark"
+        },
+        {
+          "include": "#emphasis"
+        }
+      ]
+    },
+    "heading-text": {
+      "patterns": [
+        {
+          "include": "#escape"
+        },
+        {
+          "include": "#note"
+        },
+        {
+          "include": "#image"
+        },
+        {
+          "include": "#link"
+        },
+        {
+          "include": "#sound"
+        },
+        {
+          "include": "#instruction"
+        },
+        {
+          "include": "#speech-heading"
+        },
+        {
+          "include": "#direction-mark"
+        },
+        {
+          "include": "#vocal-mark"
+        },
+        {
+          "include": "#emphasis"
+        }
+      ]
+    },
+    "escape": {
+      "name": "constant.character.escape.voxdown",
+      "match": "\\\\[!-\\/:-@\\[-\\x60{-~“”‘’„‚«»‹›「」『』]"
+    },
+    "note": {
+      "name": "comment.block.note.voxdown",
+      "begin": "%%",
+      "end": "%%",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.begin.voxdown"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.end.voxdown"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "image": {
+      "name": "meta.image.inline.voxdown",
+      "match": "(!\\[)((?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\])(\\()((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\)))*)(\\))",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.link.description.begin.voxdown"
+        },
+        "2": {
+          "name": "string.other.link.description.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.link.description.end.voxdown"
+        },
+        "4": {
+          "name": "punctuation.definition.metadata.voxdown"
+        },
+        "5": {
+          "name": "markup.underline.link.image.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "7": {
+          "name": "punctuation.definition.metadata.voxdown"
+        }
+      }
+    },
+    "link": {
+      "name": "meta.link.inline.voxdown",
+      "match": "(\\[)((?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\])(\\()((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\)))*)(\\))",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.link.title.begin.voxdown"
+        },
+        "2": {
+          "name": "string.other.link.title.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.link.title.end.voxdown"
+        },
+        "4": {
+          "name": "punctuation.definition.metadata.voxdown"
+        },
+        "5": {
+          "name": "markup.underline.link.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "7": {
+          "name": "punctuation.definition.metadata.voxdown"
+        }
+      }
+    },
+    "sound": {
+      "match": "((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))",
+      "captures": {
+        "1": {
+          "name": "entity.name.type.sound.voxdown"
+        },
+        "2": {
+          "name": "punctuation.definition.sound.begin.voxdown"
+        },
+        "3": {
+          "name": "entity.name.type.sound.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.sound.end.voxdown"
+        }
+      }
+    },
+    "instruction": {
+      "patterns": [
+        {
+          "name": "meta.instruction.visibility.voxdown storage.modifier.visibility.voxdown",
+          "match": "(\\{[ \\t]*)(?:(?:book|audio)[ \\t]+only|hidden)([ \\t]*\\})",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.instruction.begin.voxdown"
+            },
+            "2": {
+              "name": "punctuation.definition.instruction.end.voxdown"
+            }
+          }
+        },
+        {
+          "name": "meta.instruction.page.voxdown keyword.control.page.voxdown",
+          "match": "(\\{[ \\t]*)page(?:[ \\t]+((?:[^\\}\\\\%\\n]|\\\\.|%(?!%))*?))?([ \\t]*\\})",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.instruction.begin.voxdown"
+            },
+            "2": {
+              "name": "constant.numeric.page.voxdown",
+              "patterns": [
+                {
+                  "include": "#escape"
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.instruction.end.voxdown"
+            }
+          }
+        },
+        {
+          "name": "meta.instruction.pause.voxdown keyword.control.pause.voxdown",
+          "match": "(\\{[ \\t]*)pause(?:[ \\t]+(?:(\\d+(?:\\.\\d+)?( ?(?:ms|s)))(?=[ \\t]*\\})|((?:[^\\}\\\\%\\n]|\\\\.|%(?!%))*?)))?([ \\t]*\\})",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.instruction.begin.voxdown"
+            },
+            "2": {
+              "name": "constant.numeric.length.voxdown"
+            },
+            "3": {
+              "name": "keyword.other.unit.voxdown"
+            },
+            "4": {
+              "name": "string.unquoted.value.voxdown",
+              "patterns": [
+                {
+                  "include": "#escape"
+                }
+              ]
+            },
+            "5": {
+              "name": "punctuation.definition.instruction.end.voxdown"
+            }
+          }
+        },
+        {
+          "name": "meta.instruction.tool.voxdown entity.name.function.tool.voxdown",
+          "match": "(\\{[ \\t]*)\\p{L}[^\\s}:\\\\%]*:[^\\s}\\\\%]*(?:[ \\t]+((?:[^\\}\\\\%\\n]|\\\\.|%(?!%))*?))?([ \\t]*\\})",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.instruction.begin.voxdown"
+            },
+            "2": {
+              "name": "string.unquoted.value.voxdown",
+              "patterns": [
+                {
+                  "include": "#escape"
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.instruction.end.voxdown"
+            }
+          }
+        },
+        {
+          "name": "meta.instruction.unknown.voxdown keyword.other.instruction.voxdown",
+          "match": "(\\{[ \\t]*)\\p{L}[^\\s}\\\\%]*(?:[ \\t]+((?:[^\\}\\\\%\\n]|\\\\.|%(?!%))*?))?([ \\t]*\\})",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.instruction.begin.voxdown"
+            },
+            "2": {
+              "name": "string.unquoted.value.voxdown",
+              "patterns": [
+                {
+                  "include": "#escape"
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.instruction.end.voxdown"
+            }
+          }
+        }
+      ]
+    },
+    "direction-mark": {
+      "name": "meta.mark.direction.voxdown",
+      "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\)))",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.voxdown"
+        },
+        "2": {
+          "name": "entity.other.attribute-name.direction.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        }
+      }
+    },
+    "vocal-mark": {
+      "name": "meta.mark.vocal.voxdown",
+      "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.voxdown"
+        },
+        "2": {
+          "name": "entity.name.type.vocal.voxdown"
+        },
+        "3": {
+          "name": "punctuation.definition.sound.begin.voxdown"
+        },
+        "4": {
+          "name": "entity.name.type.vocal.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "5": {
+          "name": "punctuation.definition.sound.end.voxdown"
+        }
+      }
+    },
+    "character-mark": {
+      "name": "meta.mark.character.voxdown",
+      "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.voxdown"
+        },
+        "2": {
+          "name": "entity.name.tag.character.voxdown"
+        },
+        "3": {
+          "name": "entity.other.attribute-name.direction.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "5": {
+          "name": "entity.name.type.vocal.voxdown"
+        },
+        "6": {
+          "name": "punctuation.definition.sound.begin.voxdown"
+        },
+        "7": {
+          "name": "entity.name.type.vocal.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "8": {
+          "name": "punctuation.definition.sound.end.voxdown"
+        }
+      }
+    },
+    "speech": {
+      "begin": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.voxdown"
+        },
+        "2": {
+          "name": "entity.name.tag.character.voxdown"
+        },
+        "3": {
+          "name": "entity.other.attribute-name.direction.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "5": {
+          "name": "entity.name.type.vocal.voxdown"
+        },
+        "6": {
+          "name": "punctuation.definition.sound.begin.voxdown"
+        },
+        "7": {
+          "name": "entity.name.type.vocal.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "8": {
+          "name": "punctuation.definition.sound.end.voxdown"
+        }
+      },
+      "end": "$|(?=^)|(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(?=@\\p{L})",
+      "patterns": [
+        {
+          "include": "#escape"
+        },
+        {
+          "include": "#note"
+        },
+        {
+          "include": "#image"
+        },
+        {
+          "include": "#link"
+        },
+        {
+          "include": "#sound"
+        },
+        {
+          "include": "#instruction"
+        },
+        {
+          "include": "#quote"
+        },
+        {
+          "include": "#direction-mark"
+        },
+        {
+          "include": "#vocal-mark"
+        },
+        {
+          "include": "#emphasis"
+        }
+      ]
+    },
+    "speech-heading": {
+      "begin": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.voxdown"
+        },
+        "2": {
+          "name": "entity.name.tag.character.voxdown"
+        },
+        "3": {
+          "name": "entity.other.attribute-name.direction.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "5": {
+          "name": "entity.name.type.vocal.voxdown"
+        },
+        "6": {
+          "name": "punctuation.definition.sound.begin.voxdown"
+        },
+        "7": {
+          "name": "entity.name.type.vocal.voxdown",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
+          ]
+        },
+        "8": {
+          "name": "punctuation.definition.sound.end.voxdown"
+        }
+      },
+      "end": "$|(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(?=@\\p{L})",
+      "patterns": [
+        {
+          "include": "#escape"
+        },
+        {
+          "include": "#note"
+        },
+        {
+          "include": "#image"
+        },
+        {
+          "include": "#link"
+        },
+        {
+          "include": "#sound"
+        },
+        {
+          "include": "#instruction"
+        },
+        {
+          "include": "#quote-line"
+        },
+        {
+          "include": "#direction-mark"
+        },
+        {
+          "include": "#vocal-mark"
+        },
+        {
+          "include": "#emphasis"
+        }
+      ]
+    },
+    "quote": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "“(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(”)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.speech.voxdown",
+          "begin": "(?<![\\p{L}\\p{M}\\p{N}])‘(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(’(?![\\p{L}\\p{M}\\p{N}]))|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "(?<![\\p{L}\\p{M}\\p{N}])\"(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(\")|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.speech.voxdown",
+          "begin": "(?<![\\p{L}\\p{M}\\p{N}])'(?=(?:[^'\\n]|'(?=[\\p{L}\\p{M}\\p{N}]))*'(?![\\p{L}\\p{M}\\p{N}]))",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "('(?![\\p{L}\\p{M}\\p{N}]))|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "„(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(“|”)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.speech.voxdown",
+          "begin": "‚(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(‘|’(?![\\p{L}\\p{M}\\p{N}]))|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "«(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(»)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "»(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(«|»)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.speech.voxdown",
+          "begin": "‹(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(›)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.speech.voxdown",
+          "begin": "「(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(」)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.speech.voxdown",
+          "begin": "『(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(』)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        }
+      ]
+    },
+    "quote-line": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "“(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(”)|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.speech.voxdown",
+          "begin": "(?<![\\p{L}\\p{M}\\p{N}])‘(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(’(?![\\p{L}\\p{M}\\p{N}]))|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "(?<![\\p{L}\\p{M}\\p{N}])\"(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(\")|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.speech.voxdown",
+          "begin": "(?<![\\p{L}\\p{M}\\p{N}])'(?=(?:[^'\\n]|'(?=[\\p{L}\\p{M}\\p{N}]))*'(?![\\p{L}\\p{M}\\p{N}]))",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "('(?![\\p{L}\\p{M}\\p{N}]))|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "„(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(“|”)|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.speech.voxdown",
+          "begin": "‚(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(‘|’(?![\\p{L}\\p{M}\\p{N}]))|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "«(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(»)|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.speech.voxdown",
+          "begin": "»(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(«|»)|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.speech.voxdown",
+          "begin": "‹(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(›)|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.speech.voxdown",
+          "begin": "「(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(」)|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.speech.voxdown",
+          "begin": "『(?!\\s*$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.voxdown"
+            }
+          },
+          "end": "(』)|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.voxdown"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#speech-text"
+            }
+          ]
+        }
+      ]
+    },
+    "speech-text": {
+      "patterns": [
+        {
+          "include": "#escape"
+        },
+        {
+          "include": "#note"
+        },
+        {
+          "include": "#image"
+        },
+        {
+          "include": "#link"
+        },
+        {
+          "include": "#sound"
+        },
+        {
+          "include": "#instruction"
+        },
+        {
+          "include": "#direction-mark"
+        },
+        {
+          "include": "#vocal-mark"
+        },
+        {
+          "include": "#character-mark"
+        },
+        {
+          "include": "#emphasis"
+        }
+      ]
+    },
+    "emphasis": {
+      "patterns": [
+        {
+          "name": "markup.bold.voxdown",
+          "match": "(\\*\\*)((?=\\S)(?:(?:[^*\\\\%\\n]|\\\\.|%(?!%))|\\*(?!\\*))+?(?<=\\S))(\\*\\*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.bold.voxdown"
+            },
+            "2": {
+              "patterns": [
+                {
+                  "include": "#emphasis-text"
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.bold.voxdown"
+            }
+          }
+        },
+        {
+          "name": "markup.bold.voxdown",
+          "match": "(?<![\\p{L}\\p{M}\\p{N}_])(__)((?=\\S)(?:(?:[^_\\\\%\\n]|\\\\.|%(?!%))|_(?!_))+?(?<=\\S))(__)(?![\\p{L}\\p{M}\\p{N}_])",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.bold.voxdown"
+            },
+            "2": {
+              "patterns": [
+                {
+                  "include": "#emphasis-text"
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.bold.voxdown"
+            }
+          }
+        },
+        {
+          "name": "markup.italic.voxdown",
+          "match": "(?<!\\*)(\\*)((?=[^\\s*])(?:[^*\\\\%\\n]|\\\\.|%(?!%))+?(?<=\\S))(\\*)(?!\\*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.italic.voxdown"
+            },
+            "2": {
+              "patterns": [
+                {
+                  "include": "#emphasis-text"
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.italic.voxdown"
+            }
+          }
+        },
+        {
+          "name": "markup.italic.voxdown",
+          "match": "(?<![\\p{L}\\p{M}\\p{N}_])(_)((?=[^\\s_])(?:[^_\\\\%\\n]|\\\\.|%(?!%))+?(?<=\\S))(_)(?![\\p{L}\\p{M}\\p{N}_])",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.italic.voxdown"
+            },
+            "2": {
+              "patterns": [
+                {
+                  "include": "#emphasis-text"
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.italic.voxdown"
+            }
+          }
+        }
+      ]
+    },
+    "emphasis-text": {
+      "patterns": [
+        {
+          "include": "#escape"
+        },
+        {
+          "include": "#note"
+        },
+        {
+          "include": "#image"
+        },
+        {
+          "include": "#link"
+        },
+        {
+          "include": "#sound"
+        },
+        {
+          "include": "#instruction"
+        },
+        {
+          "include": "#direction-mark"
+        },
+        {
+          "include": "#vocal-mark"
+        },
+        {
+          "include": "#character-mark"
+        }
+      ]
+    }
+  }
+}

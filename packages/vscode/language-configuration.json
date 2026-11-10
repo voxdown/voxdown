@@ -1,0 +1,36 @@
+{
+  "comments": { "blockComment": ["%%", "%%"] },
+  "brackets": [["(", ")"], ["[", "]"], ["{", "}"]],
+  "autoClosingPairs": [
+    { "open": "(", "close": ")" },
+    { "open": "[", "close": "]" },
+    { "open": "{", "close": "}" },
+    { "open": "“", "close": "”" },
+    { "open": "‘", "close": "’" },
+    { "open": "«", "close": "»" },
+    { "open": "„", "close": "“" }
+  ],
+  "autoCloseBefore": ";:.,=}])>”’»“ \n\t",
+  "surroundingPairs": [
+    ["(", ")"],
+    ["[", "]"],
+    ["{", "}"],
+    ["“", "”"],
+    ["‘", "’"],
+    ["«", "»"],
+    ["„", "“"],
+    ["\"", "\""],
+    ["*", "*"],
+    ["_", "_"]
+  ],
+  "wordPattern": {
+    "pattern": "@?[\\p{L}\\p{N}_](?:[\\p{L}\\p{M}\\p{N}_-]|['’](?=[\\p{L}\\p{M}]))*",
+    "flags": "u"
+  },
+  "folding": {
+    "markers": {
+      "start": "^\\s*:{3,}(?!:)\\s*\\S",
+      "end": "^\\s*:{3,}\\s*$"
+    }
+  }
+}

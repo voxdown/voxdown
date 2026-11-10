@@ -1,0 +1,79 @@
+{
+  "Character line": {
+    "prefix": ["@line", "line"],
+    "body": "@${1:Name} “${2:What they say.}”$0",
+    "description": "A character's line: the quote after the name is theirs."
+  },
+  "Character line with a direction": {
+    "prefix": ["@dir", "direction"],
+    "body": "@${1:Name} (${2:how it is said}) “${3:What they say.}”$0",
+    "description": "A direction says how the line is said. It is never read aloud or printed."
+  },
+  "Narration direction": {
+    "prefix": ["@(", "narration"],
+    "body": "@(${1:warmly}) $0",
+    "description": "A direction for whoever is speaking: in narration, the narrator, to the end of the line."
+  },
+  "Group": {
+    "prefix": [":::", "group"],
+    "body": ["::: ${1:whispering}", "$0", ":::"],
+    "description": "A direction for every line between the colons."
+  },
+  "Character group": {
+    "prefix": [":::@", "character group"],
+    "body": ["::: @${1:Name} ${2:reading the letter}", "$0", ":::"],
+    "description": "Several lines and paragraphs for one character."
+  },
+  "Sound": {
+    "prefix": ["[", "sound"],
+    "body": "[${1:wooden clatter}]$0",
+    "description": "A sound the listener hears, where it is written."
+  },
+  "Character sound": {
+    "prefix": ["@[", "character sound"],
+    "body": "@${1:Name} [${2:snores}]$0",
+    "description": "A sound a character makes."
+  },
+  "Page turn": {
+    "prefix": ["{page", "page"],
+    "body": "{page}$0",
+    "description": "A page turn."
+  },
+  "Pause": {
+    "prefix": ["{pause", "pause"],
+    "body": "{pause ${1:2s}}$0",
+    "description": "A pause: a beat with no value, or a length such as 2s or 500ms."
+  },
+  "Note": {
+    "prefix": ["%%", "note"],
+    "body": "%% ${1:A note for the performer.} %%$0",
+    "description": "A note for whoever performs or produces the story. Never read aloud or printed."
+  },
+  "Book only": {
+    "prefix": ["{book", "book only"],
+    "body": "{book only} $0",
+    "description": "Printed, not read aloud: for the whole paragraph or heading."
+  },
+  "Audio only": {
+    "prefix": ["{audio", "audio only"],
+    "body": "{audio only} $0",
+    "description": "Read aloud, not printed: for the whole paragraph or heading."
+  },
+  "Front matter with a cast": {
+    "prefix": ["---", "front matter"],
+    "body": [
+      "---",
+      "voxdown: 1.0",
+      "title: ${1:The Title}",
+      "author: ${2:The Author}",
+      "language: ${3:en-US}",
+      "cast:",
+      "  ${4:Narrator}:",
+      "  ${5:Name}: ${6:Full Name}",
+      "---",
+      "",
+      "$0"
+    ],
+    "description": "The story's details and its cast, at the very top of the file."
+  }
+}

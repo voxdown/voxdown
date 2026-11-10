@@ -1,12 +1,14 @@
 // Checks the built playground in a real browser: every example, every tab, no errors.
 // Run after `pnpm site:build`: node scripts/check-site.mjs
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
-const dist = resolve(fileURLToPath(new URL("../site/dist", import.meta.url)));
+const site = resolve(fileURLToPath(new URL("../site", import.meta.url)));
+const dist = join(site, "dist");
 if (!existsSync(join(dist, "index.html"))) {
   console.error("No site/dist/index.html: run `pnpm site:build` first.");
   process.exit(2);
@@ -150,6 +152,40 @@ const inView = await page.evaluate(() => {
 if (!inView)
   problems.push("linking: after a click far down the right page, the editor's place isn't in view");
 console.log("linking: right page to editor and back: ok");
+
+// The listening page: each recording was made from the story as it is now, and every part it
+// plays has its place on the page.
+const listen = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+watch(listen, "listen.html");
+await listen.goto(`${base}/listen.html`);
+await listen.waitForSelector(".vxd-script");
+for (const story of await listen.$$eval(".story", (buttons) =>
+  buttons.map((button) => button.dataset.name),
+)) {
+  const manifestFile = join(site, "src", "recordings", story.replace(/\.vxd$/, ".json"));
+  await listen.click(`.story[data-name="${story}"]`);
+  await listen.waitForTimeout(400);
+  if (!existsSync(manifestFile)) {
+    console.log(`listen.html: ${story}: not recorded yet, plays from a clock`);
+    continue;
+  }
+  const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+  const source = createHash("sha256")
+    .update(readFileSync(join(site, "..", "examples", story)))
+    .digest("hex");
+  if (manifest.source !== source)
+    problems.push(
+      `listen.html: ${story} changed since it was recorded; run scripts/speak.mjs again`,
+    );
+  const placed = await listen.locator(".listen-sheet .cue").count();
+  if (placed !== manifest.cues.length)
+    problems.push(
+      `listen.html: ${story}: ${placed} of ${manifest.cues.length} recorded parts found on the page`,
+    );
+  if (await listen.locator(".mock-note").isVisible())
+    problems.push(`listen.html: ${story} is recorded but the page says it's a mockup`);
+  console.log(`listen.html: ${story}: recorded, ${placed} parts placed`);
+}
 
 const element = await browser.newPage();
 watch(element, "element.html");

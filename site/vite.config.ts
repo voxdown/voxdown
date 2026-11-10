@@ -37,6 +37,7 @@ export default defineConfig({
         element: resolve(here, "element.html"),
         spec: resolve(here, "spec.html"),
         cheatsheet: resolve(here, "cheatsheet.html"),
+        listen: resolve(here, "listen.html"),
       },
     },
   },

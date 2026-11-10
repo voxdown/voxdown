@@ -13,6 +13,14 @@
   },
   "javascript": { "formatter": { "quoteStyle": "double", "trailingCommas": "all" } },
   "files": {
-    "ignore": ["node_modules", "dist", "coverage", "spec/conformance.json", "*.vsix", "site/public"]
+    "ignore": [
+      "node_modules",
+      "dist",
+      "coverage",
+      "spec/conformance.json",
+      "*.vsix",
+      "site/public",
+      "site/src/recordings"
+    ]
   }
 }

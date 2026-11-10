@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hear a VoxDown story</title>
+<meta name="description" content="A VoxDown story read aloud: every character in their own voice, every line as its marks direct.">
+<link rel="icon" href="./icon.svg">
+<script>try{var t=localStorage.getItem("vxd-theme");if(t==="light"||t==="dark")document.documentElement.dataset.vxdTheme=t}catch(e){}</script>
+</head>
+<body class="listen">
+<header class="masthead">
+  <a class="wordmark" href="./"><img class="logo" src="./icon.svg" alt="" width="30" height="30">VoxDown</a>
+  <p class="tagline">Markdown for stories read aloud.</p>
+  <nav aria-label="Site">
+    <a href="./">Playground</a>
+    <a href="./listen.html" aria-current="page">Listen</a>
+    <a href="./spec.html">Spec</a>
+    <a href="./cheatsheet.html">Cheat sheet</a>
+    <a href="https://github.com/voxdown/voxdown">Source</a>
+    <button class="theme-switch" type="button" id="theme" hidden>Auto</button>
+  </nav>
+</header>
+
+<section class="listen-intro">
+  <div>
+    <p class="mock-note">Mockup: playback is simulated with a timer, and the voices are proposals. The recordings come next.</p>
+    <h1>Hear it</h1>
+    <p class="lede">The same file you write in the playground, read aloud: each character in their own voice, each line as its marks direct.</p>
+  </div>
+  <div class="story-picker" role="tablist" aria-label="Story" id="stories"></div>
+</section>
+
+<div class="listen-layout">
+  <article class="listen-sheet" id="script" aria-label="The script"></article>
+  <aside class="now" aria-label="Now reading">
+    <section class="card">
+      <h2>Now reading, as written</h2>
+      <pre class="source-line" id="now-source"></pre>
+      <h2>Sent to the voice</h2>
+      <p class="sent" id="now-sent"></p>
+    </section>
+    <section class="card">
+      <h2>The cast and their voices</h2>
+      <ul class="cast-list" id="cast"></ul>
+    </section>
+    <section class="card how">
+      <h2>How it’s made</h2>
+      <ol>
+        <li><code>lines()</code> turns the story into the lines a listener hears, each with its speaker and direction.</li>
+        <li>Each line goes to its character’s voice, the direction as a tag the voice performs.</li>
+        <li>Sounds and pauses go between the lines, and the page lights each line as it plays.</li>
+      </ol>
+      <pre><code>import { lines, parse } from "voxdown";
+
+for (const line of lines(parse(story))) {
+  const voice = voices[line.speaker];
+  const text = line.direction
+    ? `[${line.direction}] ${line.text}`
+    : line.text;
+  // text → voice; sounds and pauses between
+}</code></pre>
+    </section>
+  </aside>
+</div>
+
+<div class="player" id="player" role="region" aria-label="Player">
+  <button class="play" type="button" id="play" aria-label="Play">
+    <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+    <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+  </button>
+  <button class="step" type="button" id="previous" aria-label="Previous line">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v12M18 6l-8 6 8 6z"/></svg>
+  </button>
+  <button class="step" type="button" id="next" aria-label="Next line">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 6v12M6 6l8 6-8 6z"/></svg>
+  </button>
+  <p class="now-short" id="now-short" aria-live="polite"></p>
+  <div class="progress" id="progress" role="slider" tabindex="0" aria-label="Position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <div class="fill" id="fill"></div>
+  </div>
+  <span class="time" id="time">0:00 / 0:00</span>
+  <button class="speed" type="button" id="speed" aria-label="Speed">1×</button>
+</div>
+
+<footer class="colophon">Voices by ElevenLabs. The stories are free to copy (CC0). This page plays recordings made once; nothing you do here is sent anywhere.</footer>
+<script type="module" src="./src/listen.ts"></script>
+</body>
+</html>

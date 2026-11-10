@@ -1,0 +1,17 @@
+{
+  "model": "eleven_v4",
+  "stories": {
+    "the-dragon-who-would-not-roar.vxd": {
+      "Narrator": "George",
+      "King": "Daniel",
+      "Percival": "Harry",
+      "Gerald": "Gerald"
+    },
+    "the-north-wind-and-the-sun.vxd": {
+      "Narrator": "Lily",
+      "Wind": "Adam",
+      "Sun": "Sarah",
+      "Traveler": "Chris"
+    }
+  }
+}

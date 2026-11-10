@@ -1,0 +1,519 @@
+{
+ "story": "the-north-wind-and-the-sun.vxd",
+ "audio": "the-north-wind-and-the-sun.mp3",
+ "source": "cfc7f56625aa220d4c46a3d30ed91fde53c2f39c46c41029a6d892c00e0ab68d",
+ "model": "eleven_v4",
+ "voices": {
+  "Narrator": "Lily",
+  "Wind": "Adam",
+  "Sun": "Sarah",
+  "Traveler": "Chris"
+ },
+ "duration": 101.776,
+ "cues": [
+  {
+   "kind": "speech",
+   "from": 408,
+   "line": [
+    408,
+    434
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "The North Wind and the Sun",
+   "sent": "The North Wind and the Sun",
+   "start": 0,
+   "duration": 1.814
+  },
+  {
+   "kind": "speech",
+   "from": 436,
+   "line": [
+    436,
+    512
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "The North Wind and the Sun once argued about which of them was the stronger.",
+   "sent": "The North Wind and the Sun once argued about which of them was the stronger.",
+   "start": 2.914,
+   "duration": 4.561
+  },
+  {
+   "kind": "speech",
+   "from": 530,
+   "line": [
+    514,
+    609
+   ],
+   "speaker": "Wind",
+   "direction": "booming",
+   "text": "I am,",
+   "sent": "[booming] I am,",
+   "start": 8.276,
+   "duration": 0.821
+  },
+  {
+   "kind": "speech",
+   "from": 538,
+   "line": [
+    514,
+    609
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "said the North Wind.",
+   "sent": "said the North Wind.",
+   "start": 9.347,
+   "duration": 1.66
+  },
+  {
+   "kind": "speech",
+   "from": 559,
+   "line": [
+    514,
+    609
+   ],
+   "speaker": "Wind",
+   "direction": "booming",
+   "text": "I knock down trees. I push ships across the sea.",
+   "sent": "[booming] I knock down trees. I push ships across the sea.",
+   "start": 11.257,
+   "duration": 4.138
+  },
+  {
+   "kind": "speech",
+   "from": 625,
+   "line": [
+    611,
+    669
+   ],
+   "speaker": "Sun",
+   "direction": "mildly",
+   "text": "Strength is not always loud,",
+   "sent": "[mildly] Strength is not always loud,",
+   "start": 16.195,
+   "duration": 1.978
+  },
+  {
+   "kind": "speech",
+   "from": 656,
+   "line": [
+    611,
+    669
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "said the Sun.",
+   "sent": "said the Sun.",
+   "start": 18.423,
+   "duration": 0.792
+  },
+  {
+   "kind": "speech",
+   "from": 671,
+   "line": [
+    671,
+    765
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "Just then a traveler came along the road, wrapped in a thick wool cloak.",
+   "sent": "Just then a traveler came along the road, wrapped in a thick wool cloak.",
+   "start": 20.015,
+   "duration": 4.854
+  },
+  {
+   "kind": "sound",
+   "from": 744,
+   "line": [
+    671,
+    765
+   ],
+   "speaker": null,
+   "direction": null,
+   "text": "footsteps on gravel",
+   "sent": "footsteps on gravel",
+   "start": 25.119,
+   "duration": 2.48
+  },
+  {
+   "kind": "speech",
+   "from": 772,
+   "line": [
+    767,
+    869
+   ],
+   "speaker": "Sun",
+   "direction": null,
+   "text": "Let us agree,",
+   "sent": "Let us agree,",
+   "start": 28.399,
+   "duration": 1.029
+  },
+  {
+   "kind": "speech",
+   "from": 788,
+   "line": [
+    767,
+    869
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "said the Sun.",
+   "sent": "said the Sun.",
+   "start": 29.678,
+   "duration": 0.799
+  },
+  {
+   "kind": "speech",
+   "from": 802,
+   "line": [
+    767,
+    869
+   ],
+   "speaker": "Sun",
+   "direction": null,
+   "text": "Whichever of us can take that cloak off his back is the stronger.",
+   "sent": "Whichever of us can take that cloak off his back is the stronger.",
+   "start": 30.727,
+   "duration": 3.659
+  },
+  {
+   "kind": "speech",
+   "from": 877,
+   "line": [
+    871,
+    917
+   ],
+   "speaker": "Wind",
+   "direction": null,
+   "text": "Easy,",
+   "sent": "Easy,",
+   "start": 35.186,
+   "duration": 0.519
+  },
+  {
+   "kind": "speech",
+   "from": 885,
+   "line": [
+    871,
+    917
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "said the North Wind.",
+   "sent": "said the North Wind.",
+   "start": 35.955,
+   "duration": 1.124
+  },
+  {
+   "kind": "speech",
+   "from": 906,
+   "line": [
+    871,
+    917
+   ],
+   "speaker": "Wind",
+   "direction": null,
+   "text": "Watch me.",
+   "sent": "Watch me.",
+   "start": 37.329,
+   "duration": 0.534
+  },
+  {
+   "kind": "page",
+   "from": 919,
+   "line": [
+    919,
+    925
+   ],
+   "speaker": null,
+   "direction": null,
+   "text": "",
+   "sent": "a single page of a book turning, soft paper, close and quiet",
+   "start": 38.664,
+   "duration": 1
+  },
+  {
+   "kind": "speech",
+   "from": 964,
+   "line": [
+    964,
+    973
+   ],
+   "speaker": "Wind",
+   "direction": "huffing, louder and louder",
+   "text": "One puff!",
+   "sent": "[huffing, louder and louder] One puff!",
+   "start": 40.464,
+   "duration": 2.055
+  },
+  {
+   "kind": "speech",
+   "from": 974,
+   "line": [
+    974,
+    984
+   ],
+   "speaker": "Wind",
+   "direction": "huffing, louder and louder",
+   "text": "Two puffs!",
+   "sent": "[huffing, louder and louder] Two puffs!",
+   "start": 42.969,
+   "duration": 1.265
+  },
+  {
+   "kind": "speech",
+   "from": 985,
+   "line": [
+    985,
+    997
+   ],
+   "speaker": "Wind",
+   "direction": "huffing, louder and louder",
+   "text": "THREE PUFFS!",
+   "sent": "[huffing, louder and louder] THREE PUFFS!",
+   "start": 44.684,
+   "duration": 1.546
+  },
+  {
+   "kind": "sound",
+   "from": 1003,
+   "line": [
+    1003,
+    1019
+   ],
+   "speaker": null,
+   "direction": null,
+   "text": "a howling gale",
+   "sent": "a howling gale",
+   "start": 47.031,
+   "duration": 2.48
+  },
+  {
+   "kind": "speech",
+   "from": 1021,
+   "line": [
+    1021,
+    1097
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "But the harder the North Wind blew, the tighter the traveler held his cloak.",
+   "sent": "But the harder the North Wind blew, the tighter the traveler held his cloak.",
+   "start": 50.311,
+   "duration": 5.149
+  },
+  {
+   "kind": "vocal",
+   "from": 1109,
+   "line": [
+    1099,
+    1178
+   ],
+   "speaker": "Traveler",
+   "direction": null,
+   "text": "shivers",
+   "sent": "[shivers] What a day,",
+   "start": 56.259,
+   "duration": 1.006
+  },
+  {
+   "kind": "speech",
+   "from": 1119,
+   "line": [
+    1099,
+    1178
+   ],
+   "speaker": "Traveler",
+   "direction": null,
+   "text": "What a day,",
+   "sent": "[shivers] What a day,",
+   "start": 57.415,
+   "duration": 0.917
+  },
+  {
+   "kind": "speech",
+   "from": 1133,
+   "line": [
+    1099,
+    1178
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "he muttered.",
+   "sent": "he muttered.",
+   "start": 58.582,
+   "duration": 0.726
+  },
+  {
+   "kind": "speech",
+   "from": 1146,
+   "line": [
+    1099,
+    1178
+   ],
+   "speaker": "Traveler",
+   "direction": null,
+   "text": "What a dreadful, freezing day.",
+   "sent": "What a dreadful, freezing day.",
+   "start": 59.558,
+   "duration": 2.161
+  },
+  {
+   "kind": "speech",
+   "from": 1180,
+   "line": [
+    1180,
+    1238
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "At last the North Wind gave up.",
+   "sent": "At last the North Wind gave up.",
+   "start": 62.519,
+   "duration": 2.362
+  },
+  {
+   "kind": "vocal",
+   "from": 1218,
+   "line": [
+    1180,
+    1238
+   ],
+   "speaker": "Wind",
+   "direction": null,
+   "text": "a long, tired sigh",
+   "sent": "a long, tired sigh: Loud, proud and gusty.",
+   "start": 65.132,
+   "duration": 2
+  },
+  {
+   "kind": "pause",
+   "from": 1240,
+   "line": [
+    1240,
+    1250
+   ],
+   "speaker": null,
+   "direction": null,
+   "text": "1s",
+   "sent": null,
+   "start": 67.932,
+   "duration": 1
+  },
+  {
+   "kind": "page",
+   "from": 1252,
+   "line": [
+    1252,
+    1258
+   ],
+   "speaker": null,
+   "direction": null,
+   "text": "",
+   "sent": "a single page of a book turning, soft paper, close and quiet",
+   "start": 69.732,
+   "duration": 1
+  },
+  {
+   "kind": "speech",
+   "from": 1260,
+   "line": [
+    1260,
+    1331
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "Then the Sun came out from behind a cloud, and simply shone.",
+   "sent": "Then the Sun came out from behind a cloud, and simply shone.",
+   "start": 71.532,
+   "duration": 3.888
+  },
+  {
+   "kind": "sound",
+   "from": 1321,
+   "line": [
+    1260,
+    1331
+   ],
+   "speaker": null,
+   "direction": null,
+   "text": "birdsong",
+   "sent": "birdsong",
+   "start": 75.67,
+   "duration": 2.48
+  },
+  {
+   "kind": "speech",
+   "from": 1363,
+   "line": [
+    1333,
+    1402
+   ],
+   "speaker": "Narrator",
+   "direction": "slowly, letting it warm up",
+   "text": "The air grew mild. Then warm. Then hot.",
+   "sent": "[slowly, letting it warm up] The air grew mild. Then warm. Then hot.",
+   "start": 78.95,
+   "duration": 4.537
+  },
+  {
+   "kind": "speech",
+   "from": 1432,
+   "line": [
+    1404,
+    1464
+   ],
+   "speaker": "Traveler",
+   "direction": "wiping his brow",
+   "text": "Well! What a lovely afternoon.",
+   "sent": "[wiping his brow] Well! What a lovely afternoon.",
+   "start": 84.287,
+   "duration": 2.537
+  },
+  {
+   "kind": "speech",
+   "from": 1466,
+   "line": [
+    1466,
+    1528
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "And he took off his cloak and sat down in the shade of a tree.",
+   "sent": "And he took off his cloak and sat down in the shade of a tree.",
+   "start": 87.624,
+   "duration": 3.355
+  },
+  {
+   "kind": "speech",
+   "from": 1544,
+   "line": [
+    1530,
+    1595
+   ],
+   "speaker": "Sun",
+   "direction": "gently",
+   "text": "You see? Gentleness often does what force cannot.",
+   "sent": "[gently] You see? Gentleness often does what force cannot.",
+   "start": 91.779,
+   "duration": 4.295
+  },
+  {
+   "kind": "speech",
+   "from": 1665,
+   "line": [
+    1652,
+    1733
+   ],
+   "speaker": "Narrator",
+   "direction": null,
+   "text": "And that is the moral of the story: persuasion is better than force.",
+   "sent": "And that is the moral of the story: persuasion is better than force.",
+   "start": 96.875,
+   "duration": 4.902
+  }
+ ]
+}

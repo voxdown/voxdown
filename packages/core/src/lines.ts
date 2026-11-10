@@ -62,7 +62,19 @@ export function lines(story: Story, options: LinesOptions = {}): ScriptLine[] {
     row: Omit<ScriptLine, "scene" | "sceneTitle" | "page" | "line" | "column">,
   ) => {
     if (options.speechOnly && row.kind !== "speech" && row.kind !== "vocal") return;
-    out.push({ ...row, scene, sceneTitle, page, ...position(item.range.from) });
+    // Always the same key order, so JSON exports diff cleanly.
+    out.push({
+      kind: row.kind,
+      speaker: row.speaker,
+      direction: row.direction,
+      text: row.text,
+      name: row.name,
+      heading: row.heading,
+      scene,
+      sceneTitle,
+      page,
+      ...position(item.range.from),
+    });
   };
 
   const emit = (block: Block, line: Line, heard: boolean) => {

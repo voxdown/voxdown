@@ -1,0 +1,136 @@
+/* The document pages: the spec and the cheat sheet, typeset as one long page of the book. */
+@import "./style.css";
+
+body.doc {
+  display: block;
+  background: var(--desk);
+}
+.doc .masthead {
+  max-width: 64rem;
+  margin: 0 auto;
+}
+.doc .masthead nav a[aria-current="page"] {
+  color: var(--pencil);
+}
+.sheet-doc {
+  background: var(--paper);
+  max-width: 64rem;
+  margin: 1.5rem auto 2rem;
+  padding: clamp(1.5rem, 5vw, 4rem) clamp(1.2rem, 6vw, 6rem) 4rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgb(30 40 60 / 0.08), 0 8px 30px -12px rgb(30 40 60 / 0.25);
+  font: 400 1.0625rem / 1.7 var(--story);
+}
+.sheet-doc > * {
+  max-width: 42rem;
+}
+.sheet-doc h1 {
+  font-size: 2.4rem;
+  line-height: 1.15;
+  margin: 0 0 1rem;
+  letter-spacing: -0.015em;
+}
+.sheet-doc h2 {
+  font-size: 1.45rem;
+  margin: 3rem 0 0.8rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+}
+.sheet-doc h3 {
+  font-size: 1.12rem;
+  margin: 2rem 0 0.5rem;
+}
+.sheet-doc .anchor {
+  float: left;
+  margin-left: -1.1em;
+  width: 1em;
+  color: var(--rule);
+  text-decoration: none;
+  font-weight: 400;
+}
+.sheet-doc h2:hover .anchor,
+.sheet-doc h3:hover .anchor {
+  color: var(--pencil);
+}
+.sheet-doc code {
+  font: 0.86em / 1.5 var(--mono);
+  font-variation-settings: "MONO" 1;
+  background: var(--tab);
+  border-radius: 3px;
+  padding: 0.05em 0.3em;
+}
+.sheet-doc pre {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.sheet-doc pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.82rem;
+}
+.sheet-doc pre.code {
+  background: var(--tab);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.9rem 1.1rem;
+  margin: 1rem 0;
+}
+.sheet-doc table {
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  margin: 1rem 0;
+  display: block;
+  overflow-x: auto;
+}
+.sheet-doc th,
+.sheet-doc td {
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+  padding: 0.45rem 0.9rem 0.45rem 0;
+}
+.sheet-doc th {
+  font: 500 0.82rem / 1.4 var(--ui);
+  color: var(--quiet);
+}
+.sheet-doc ul,
+.sheet-doc ol {
+  padding-left: 1.3rem;
+}
+
+/* A spec example: what you write, what a listener hears and what a reader sees. */
+.example {
+  max-width: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin: 1.1rem 0 1.4rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.example-part {
+  padding: 0.7rem 1rem 0.9rem;
+  min-width: 0;
+}
+.example-part + .example-part {
+  border-left: 1px solid var(--rule);
+  background: var(--tab);
+}
+.example-label {
+  font: 500 0.75rem / 1.4 var(--ui);
+  color: var(--quiet);
+  margin-bottom: 0.35rem;
+}
+.doc .colophon {
+  max-width: 64rem;
+  margin: 0 auto;
+}
+@media (max-width: 700px) {
+  .example-part + .example-part {
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+}

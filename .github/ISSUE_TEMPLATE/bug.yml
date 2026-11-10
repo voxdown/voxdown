@@ -1,0 +1,29 @@
+name: Something reads or works wrong
+description: A file that parses, renders, formats or exports differently from what the spec says, or a tool that misbehaves.
+labels: [bug]
+body:
+  - type: textarea
+    id: input
+    attributes:
+      label: The file, or the smallest part of it that shows the problem
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and where the spec says so if you know
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: The package and version, the command, the VS Code extension or the playground.
+      placeholder: voxdown 1.0.0

@@ -108,7 +108,7 @@ export class ChipWidget extends WidgetType {
     if (this.kind === "sound" || this.kind === "vocal") el.append(soundIcon());
     el.append(document.createTextNode(this.text));
     el.title = this.status ? `${this.title} · ${this.status.title}` : this.title;
-    el.dataset.amChip = this.kind;
+    el.dataset.vxdChip = this.kind;
     // Whose name it is, for a host that picks out one speaker (Listen as).
     if (this.speaker) el.dataset.speaker = this.speaker.toLowerCase();
     else if (this.kind === "name" && this.title.startsWith("@"))
@@ -172,7 +172,7 @@ export class LineWidget extends WidgetType {
     label.textContent = this.text;
     el.append(label);
     el.title = this.title;
-    el.dataset.amLine = this.kind;
+    el.dataset.vxdLine = this.kind;
     if (this.trailing) el.dataset.trailing = "";
     if (this.speaker) el.dataset.speaker = this.speaker.toLowerCase();
     if (this.kind === "turn" || this.kind === "break" || this.kind === "heading")

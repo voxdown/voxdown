@@ -15,7 +15,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "fixtures": "pnpm --filter voxdown fixtures",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "site:check": "pnpm site:build && node scripts/check-site.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

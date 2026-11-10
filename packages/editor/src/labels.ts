@@ -35,7 +35,7 @@ export class LabelWidget extends WidgetType {
     label.className = "vxd-label";
     label.textContent = this.text;
     label.title = this.title;
-    label.dataset.amChip = "direction";
+    label.dataset.vxdChip = "direction";
     if (this.speaker) label.dataset.speaker = this.speaker.toLowerCase();
     // Hovering it shows the words it directs.
     const directed = () => {

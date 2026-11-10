@@ -7,12 +7,12 @@
     "script": "Gerald (yawning): I’ve only just got to sleep,\nNarrator: said the dragon.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "yawning",
+        "text": "I’ve only just got to sleep,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’ve only just got to sleep,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -20,12 +20,12 @@
         "column": 19
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the dragon.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the dragon.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -43,12 +43,12 @@
     "script": "Narrator: Once upon a time there were four little Rabbits.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Once upon a time there were four little Rabbits.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time there were four little Rabbits.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -66,12 +66,12 @@
     "script": "Clown: Honk!",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": null,
+        "text": "Honk!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Honk!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -89,12 +89,12 @@
     "script": "Shepherd: Just count the sheep,\nNarrator: said the shepherd.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Shepherd",
         "direction": null,
+        "text": "Just count the sheep,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just count the sheep,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -102,12 +102,12 @@
         "column": 11
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the shepherd.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the shepherd.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -126,12 +126,12 @@
     "book": "And their names were—\nFlopsy,\nMopsy,\nCotton-tail,\nand Peter.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "And their names were—",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "And their names were—",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -139,12 +139,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Flopsy,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Flopsy,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -152,12 +152,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Mopsy,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Mopsy,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -165,12 +165,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Cotton-tail,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Cotton-tail,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -178,12 +178,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "and Peter.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "and Peter.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -201,12 +201,12 @@
     "script": "# Narrator: The Tale of Peter Rabbit\n\nNarrator: Once upon a time there were four little Rabbits.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The Tale of Peter Rabbit",
         "name": null,
         "heading": 1,
-        "kind": "speech",
-        "text": "The Tale of Peter Rabbit",
         "scene": 1,
         "sceneTitle": "The Tale of Peter Rabbit",
         "page": "1",
@@ -214,12 +214,12 @@
         "column": 3
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Once upon a time there were four little Rabbits.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time there were four little Rabbits.",
         "scene": 1,
         "sceneTitle": "The Tale of Peter Rabbit",
         "page": "1",
@@ -237,12 +237,12 @@
     "script": "Narrator: Until Tuesday.\n\n---\n\nNarrator: On Tuesday morning, the king summoned him.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Until Tuesday.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Until Tuesday.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -250,12 +250,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "On Tuesday morning, the king summoned him.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "On Tuesday morning, the king summoned him.",
         "scene": 2,
         "sceneTitle": null,
         "page": "1",
@@ -273,12 +273,12 @@
     "script": "Narrator: Until Tuesday.\n\n---\n\nNarrator: On Tuesday morning, the king summoned him.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Until Tuesday.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Until Tuesday.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -286,12 +286,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "On Tuesday morning, the king summoned him.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "On Tuesday morning, the king summoned him.",
         "scene": 2,
         "sceneTitle": null,
         "page": "1",
@@ -309,12 +309,12 @@
     "script": "Narrator: Mount Mumble was very tall.\n\n## Narrator: The cave\n\nNarrator: Then he heard a deep rumble.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Mount Mumble was very tall.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Mount Mumble was very tall.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -322,12 +322,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The cave",
         "name": null,
         "heading": 2,
-        "kind": "speech",
-        "text": "The cave",
         "scene": 2,
         "sceneTitle": "The cave",
         "page": "1",
@@ -335,12 +335,12 @@
         "column": 4
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Then he heard a deep rumble.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Then he heard a deep rumble.",
         "scene": 2,
         "sceneTitle": "The cave",
         "page": "1",
@@ -358,12 +358,12 @@
     "script": "Narrator: “Stop thief!” cried Mr. McGregor.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "“Stop thief!” cried Mr. McGregor.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "“Stop thief!” cried Mr. McGregor.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -381,12 +381,12 @@
     "script": "Peter: I ran.\nMother: Peter!",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Peter",
         "direction": null,
+        "text": "I ran.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I ran.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -394,12 +394,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Mother",
         "direction": null,
+        "text": "Peter!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Peter!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -417,12 +417,12 @@
     "script": "SillyClown: Honk!",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "SillyClown",
         "direction": null,
+        "text": "Honk!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Honk!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -440,12 +440,12 @@
     "script": "Clown: Honk!\nClown: Honk honk!",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": null,
+        "text": "Honk!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Honk!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -453,12 +453,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": null,
+        "text": "Honk honk!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Honk honk!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -487,12 +487,12 @@
     "script": "clown: Honk!\nclown: Honk honk!",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "clown",
         "direction": null,
+        "text": "Honk!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Honk!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -500,12 +500,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "clown",
         "direction": null,
+        "text": "Honk honk!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Honk honk!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -529,12 +529,12 @@
     "script": "Narrator (warmly): Once upon a time.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "warmly",
+        "text": "Once upon a time.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -552,12 +552,12 @@
     "script": "Narrator: Write to tom@example.com, or meet me @ noon.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Write to tom@example.com, or meet me @ noon.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Write to tom@example.com, or meet me @ noon.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -575,12 +575,12 @@
     "script": "Narrator: 雷公听见了\n雷公 [笑]",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "雷公听见了",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "雷公听见了",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -588,12 +588,12 @@
         "column": 1
       },
       {
+        "kind": "vocal",
         "speaker": "雷公",
         "direction": null,
+        "text": "笑",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "笑",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -611,12 +611,12 @@
     "script": "Narrator: @Gerald is my username.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "@Gerald is my username.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "@Gerald is my username.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -634,12 +634,12 @@
     "script": "Gerald: Could you not?",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -657,12 +657,12 @@
     "script": "Gerald: I’ve only just got to sleep,\nNarrator: said the dragon.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "I’ve only just got to sleep,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’ve only just got to sleep,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -670,12 +670,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the dragon.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the dragon.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -693,12 +693,12 @@
     "script": "Narrator: Gerald put on his spectacles.\nGerald: I thought perhaps librarian.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Gerald put on his spectacles.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Gerald put on his spectacles.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -706,12 +706,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "I thought perhaps librarian.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I thought perhaps librarian.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -729,12 +729,12 @@
     "script": "Narrator: Gerald put on his spectacles.\nGerald: I thought perhaps librarian.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Gerald put on his spectacles.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Gerald put on his spectacles.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -742,12 +742,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "I thought perhaps librarian.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I thought perhaps librarian.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -765,12 +765,12 @@
     "script": "Narrator: And out of the blue,\nBaker: Just a little flame,\nNarrator: said the baker.\nBaker: Gently.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "And out of the blue,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "And out of the blue,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -778,12 +778,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Baker",
         "direction": null,
+        "text": "Just a little flame,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just a little flame,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -791,12 +791,12 @@
         "column": 29
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the baker.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the baker.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -804,12 +804,12 @@
         "column": 52
       },
       {
+        "kind": "speech",
         "speaker": "Baker",
         "direction": null,
+        "text": "Gently.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Gently.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -827,12 +827,12 @@
     "script": "Narrator: And out of the blue,\nBaker (nervously): Just a little flame,\nNarrator: said the baker.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "And out of the blue,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "And out of the blue,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -840,12 +840,12 @@
         "column": 20
       },
       {
+        "kind": "speech",
         "speaker": "Baker",
         "direction": "nervously",
+        "text": "Just a little flame,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just a little flame,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -853,12 +853,12 @@
         "column": 41
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the baker.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the baker.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -877,12 +877,12 @@
     "book": "“Could you not?” said .",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "“Could you not?” said",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "“Could you not?” said",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -906,12 +906,12 @@
     "script": "Wanda: Fine!\nMarmalade: Hm.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "Fine!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Fine!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -919,12 +919,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Marmalade",
         "direction": null,
+        "text": "Hm.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Hm.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -942,12 +942,12 @@
     "script": "Gerald: ‘But you are a chicken,’ said the duke.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "‘But you are a chicken,’ said the duke.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "‘But you are a chicken,’ said the duke.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -965,12 +965,12 @@
     "script": "Mother: Now run along, and don’t get into mischief.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Mother",
         "direction": null,
+        "text": "Now run along, and don’t get into mischief.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Now run along, and don’t get into mischief.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -988,12 +988,12 @@
     "script": "Gerald: Could you not?\nNarrator: said the dragon.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1001,12 +1001,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the dragon.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the dragon.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1024,12 +1024,12 @@
     "script": "Anna: Guten Morgen\nNarrator: , sagte Anna.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Anna",
         "direction": null,
+        "text": "Guten Morgen",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Guten Morgen",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1037,12 +1037,12 @@
         "column": 7
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": ", sagte Anna.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": ", sagte Anna.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1060,12 +1060,12 @@
     "script": "Mother: Mind the rabbits’ burrow.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Mother",
         "direction": null,
+        "text": "Mind the rabbits’ burrow.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Mind the rabbits’ burrow.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1083,12 +1083,12 @@
     "script": "Gerald: Fine,\nNarrator: he said, 'cause he was tired.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Fine,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Fine,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1096,12 +1096,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "he said, 'cause he was tired.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "he said, 'cause he was tired.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1120,12 +1120,12 @@
     "book": "花子は「はい」と言った。",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "花子は",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "花子は",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1133,12 +1133,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Hanako",
         "direction": null,
+        "text": "はい",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "はい",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1146,12 +1146,12 @@
         "column": 12
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "と言った。",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "と言った。",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1169,12 +1169,12 @@
     "script": "Baker: Just a little flame,\nNarrator: said the baker.\nBaker: Gently.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Baker",
         "direction": null,
+        "text": "Just a little flame,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just a little flame,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1182,12 +1182,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the baker.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the baker.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1195,12 +1195,12 @@
         "column": 31
       },
       {
+        "kind": "speech",
         "speaker": "Baker",
         "direction": null,
+        "text": "Gently.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Gently.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1218,12 +1218,12 @@
     "script": "Advisor (urgent, formal whisper): Sire,\nNarrator: whispered his advisor.\nAdvisor (urgent, formal whisper): This is where you shout ‘Attack!’",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Advisor",
         "direction": "urgent, formal whisper",
+        "text": "Sire,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sire,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1231,12 +1231,12 @@
         "column": 35
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "whispered his advisor.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "whispered his advisor.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1244,12 +1244,12 @@
         "column": 43
       },
       {
+        "kind": "speech",
         "speaker": "Advisor",
         "direction": "urgent, formal whisper",
+        "text": "This is where you shout ‘Attack!’",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "This is where you shout ‘Attack!’",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1267,12 +1267,12 @@
     "script": "Gerald: I know.\nGerald (yawning): I’m tired,\nNarrator: he said.\nGerald (yawning): Very.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "I know.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I know.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1280,12 +1280,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "yawning",
+        "text": "I’m tired,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’m tired,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1293,12 +1293,12 @@
         "column": 29
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "he said.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "he said.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1306,12 +1306,12 @@
         "column": 41
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "yawning",
+        "text": "Very.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Very.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1329,12 +1329,12 @@
     "script": "Wanda: Fine,\nNarrator: she said.\nMarmalade: Good,\nNarrator: said the cat.\nMarmalade: Very good.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "Fine,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Fine,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1342,12 +1342,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "she said.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "she said.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1355,12 +1355,12 @@
         "column": 16
       },
       {
+        "kind": "speech",
         "speaker": "Marmalade",
         "direction": null,
+        "text": "Good,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Good,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1368,12 +1368,12 @@
         "column": 37
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the cat.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the cat.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1381,12 +1381,12 @@
         "column": 45
       },
       {
+        "kind": "speech",
         "speaker": "Marmalade",
         "direction": null,
+        "text": "Very good.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Very good.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1404,12 +1404,12 @@
     "script": "Percival: Aren’t you going to roar?\nNarrator: The dragon sighed.\nNarrator: “Rooooar.”",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Percival",
         "direction": null,
+        "text": "Aren’t you going to roar?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Aren’t you going to roar?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1417,12 +1417,12 @@
         "column": 11
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The dragon sighed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The dragon sighed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1430,12 +1430,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "“Rooooar.”",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "“Rooooar.”",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1453,12 +1453,12 @@
     "script": "Percival: Aren’t you going to roar?\nNarrator: The dragon sighed.\nGerald: Rooooar.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Percival",
         "direction": null,
+        "text": "Aren’t you going to roar?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Aren’t you going to roar?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1466,12 +1466,12 @@
         "column": 11
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The dragon sighed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The dragon sighed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1479,12 +1479,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Rooooar.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Rooooar.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1502,12 +1502,12 @@
     "script": "Wanda: Fine.\n\nNarrator: “Fine,” said someone else.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "Fine.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Fine.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1515,12 +1515,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "“Fine,” said someone else.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "“Fine,” said someone else.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1538,12 +1538,12 @@
     "script": "Mother: Now my dears,\nNarrator: said old Mrs. Rabbit one\nNarrator: morning, ‘you may go into the fields.’",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Mother",
         "direction": null,
+        "text": "Now my dears,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Now my dears,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1551,12 +1551,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said old Mrs. Rabbit one",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said old Mrs. Rabbit one",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1564,12 +1564,12 @@
         "column": 25
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "morning, ‘you may go into the fields.’",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "morning, ‘you may go into the fields.’",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1587,12 +1587,12 @@
     "script": "Wanda: Fine,\nNarrator: she said, in her ‘polite’ voice.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "Fine,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Fine,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1600,12 +1600,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "she said, in her ‘polite’ voice.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "she said, in her ‘polite’ voice.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1623,12 +1623,12 @@
     "script": "Gerald (softly): Twinkle, twinkle, little star,\nGerald (softly): How I wonder what you are.\nNarrator: He yawned.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "softly",
+        "text": "Twinkle, twinkle, little star,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Twinkle, twinkle, little star,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1636,12 +1636,12 @@
         "column": 18
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "softly",
+        "text": "How I wonder what you are.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "How I wonder what you are.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1649,12 +1649,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "He yawned.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He yawned.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1678,12 +1678,12 @@
     "script": "Gerald: Twinkle, twinkle, little star,\nGerald: How I wonder what you are,\nNarrator: he sang.\nGerald: Up above the world so high.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Twinkle, twinkle, little star,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Twinkle, twinkle, little star,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1691,12 +1691,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "How I wonder what you are,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "How I wonder what you are,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1704,12 +1704,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "he sang.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "he sang.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1717,12 +1717,12 @@
         "column": 29
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Up above the world so high.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Up above the world so high.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1746,12 +1746,12 @@
     "script": "Gerald: Oh no, I’m going to",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Oh no, I’m going to",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Oh no, I’m going to",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1775,12 +1775,12 @@
     "script": "Gerald: Once upon a time there was a chicken.\n\nGerald: He believed he was the king of France.\n\nNarrator: Twenty children laughed.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Once upon a time there was a chicken.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time there was a chicken.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1788,12 +1788,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "He believed he was the king of France.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He believed he was the king of France.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1801,12 +1801,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Twenty children laughed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Twenty children laughed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1824,12 +1824,12 @@
     "script": "Gerald: Once upon a time there was a chicken.\n\n{page}\n\nGerald: He believed he was the king of France.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Once upon a time there was a chicken.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time there was a chicken.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1837,12 +1837,12 @@
         "column": 9
       },
       {
+        "kind": "page",
         "speaker": null,
         "direction": null,
+        "text": "",
         "name": "page",
         "heading": null,
-        "kind": "page",
-        "text": "",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -1850,12 +1850,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "He believed he was the king of France.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He believed he was the king of France.",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -1873,12 +1873,12 @@
     "script": "Gerald: Could you not? I’ve only just got to sleep.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Could you not? I’ve only just got to sleep.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not? I’ve only just got to sleep.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1896,12 +1896,12 @@
     "script": "Gerald: Could you not?\nPercival: Sorry.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1909,12 +1909,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Percival",
         "direction": null,
+        "text": "Sorry.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sorry.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1932,12 +1932,12 @@
     "script": "Gerald: Well,\nPercival: Sorry.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Well,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Well,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1945,12 +1945,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Percival",
         "direction": null,
+        "text": "Sorry.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sorry.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1968,12 +1968,12 @@
     "script": "Gerald: Could you not?\nGerald (yawning): I’m tired.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -1981,12 +1981,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "yawning",
+        "text": "I’m tired.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’m tired.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2004,12 +2004,12 @@
     "script": "Gerald: Could you not?\n[a distant clang]\nGerald: I’m tired.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2017,12 +2017,12 @@
         "column": 9
       },
       {
+        "kind": "sound",
         "speaker": null,
         "direction": null,
+        "text": "a distant clang",
         "name": null,
         "heading": null,
-        "kind": "sound",
-        "text": "a distant clang",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2030,12 +2030,12 @@
         "column": 24
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "I’m tired.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’m tired.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2053,12 +2053,12 @@
     "script": "Gerald: Could you not?\nNarrator: I’ve only just got to sleep.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2066,12 +2066,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "I’ve only just got to sleep.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’ve only just got to sleep.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2089,12 +2089,12 @@
     "script": "Narrator: They charge into my cave shouting,\nGerald: PREPARE TO MEET THY DOOM!",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "They charge into my cave shouting,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "They charge into my cave shouting,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2102,12 +2102,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "PREPARE TO MEET THY DOOM!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "PREPARE TO MEET THY DOOM!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2125,12 +2125,12 @@
     "script": "Gerald: They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2148,12 +2148,12 @@
     "script": "Narrator: Once upon a time,\nNarrator (warmly): Hello,\nNarrator: said the cat.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Once upon a time,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2161,12 +2161,12 @@
         "column": 20
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "warmly",
+        "text": "Hello,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Hello,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2174,12 +2174,12 @@
         "column": 38
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the cat.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the cat.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2197,12 +2197,12 @@
     "script": "Narrator (warmly): Once upon a time, “Hello,” said the cat.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "warmly",
+        "text": "Once upon a time, “Hello,” said the cat.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time, “Hello,” said the cat.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2220,12 +2220,12 @@
     "script": "Gerald (deep, polite and utterly unbothered): Could you not?",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "deep, polite and utterly unbothered",
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2243,12 +2243,12 @@
     "script": "Narrator (warmly): Sir Percival had been training his entire life.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "warmly",
+        "text": "Sir Percival had been training his entire life.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sir Percival had been training his entire life.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2266,12 +2266,12 @@
     "script": "Narrator: Her broom (which was old) creaked.\nWanda (sighing): Come on.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Her broom (which was old) creaked.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Her broom (which was old) creaked.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2279,12 +2279,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": "sighing",
+        "text": "Come on.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Come on.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2302,12 +2302,12 @@
     "script": "Clown (happily): Just you wait!\nNarrator: said the clown, (sadly)\nClown (happily): I've been waiting for you",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "happily",
+        "text": "Just you wait!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just you wait!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2315,12 +2315,12 @@
         "column": 18
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the clown, (sadly)",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the clown, (sadly)",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2328,12 +2328,12 @@
         "column": 35
       },
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "happily",
+        "text": "I've been waiting for you",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I've been waiting for you",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2351,12 +2351,12 @@
     "script": "Narrator: yawning\nGerald: I’m tired.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "yawning",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "yawning",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2364,12 +2364,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "I’m tired.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’m tired.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2387,12 +2387,12 @@
     "script": "Gerald (deep (very deep)): Hello.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "deep (very deep)",
+        "text": "Hello.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Hello.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2410,12 +2410,12 @@
     "script": "Narrator (warmly): Sir Percival had been training his entire life.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "warmly",
+        "text": "Sir Percival had been training his entire life.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sir Percival had been training his entire life.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2433,12 +2433,12 @@
     "script": "Gerald: I know.\nGerald (yawning): I’m tired.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "I know.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I know.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2446,12 +2446,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "yawning",
+        "text": "I’m tired.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’m tired.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2469,12 +2469,12 @@
     "script": "King: Those poor children!\nNarrator: cried the king.\nKing (quieter): Oh dear.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "King",
         "direction": null,
+        "text": "Those poor children!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Those poor children!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2482,12 +2482,12 @@
         "column": 7
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "cried the king.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "cried the king.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2495,12 +2495,12 @@
         "column": 30
       },
       {
+        "kind": "speech",
         "speaker": "King",
         "direction": "quieter",
+        "text": "Oh dear.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Oh dear.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2518,12 +2518,12 @@
     "script": "Clown (happily): Just you wait!\nNarrator: said the clown,\nClown (sadly): I've been waiting for you",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "happily",
+        "text": "Just you wait!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just you wait!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2531,12 +2531,12 @@
         "column": 18
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the clown,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the clown,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2544,12 +2544,12 @@
         "column": 35
       },
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "sadly",
+        "text": "I've been waiting for you",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I've been waiting for you",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2567,12 +2567,12 @@
     "script": "Narrator (quieter): “Oh dear,” he said.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "quieter",
+        "text": "“Oh dear,” he said.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "“Oh dear,” he said.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2590,12 +2590,12 @@
     "script": "Clown (happily): Just you wait!\nNarrator (frostily): said the clown,\nClown (happily): I've been waiting for you\nNarrator: , he smirked.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "happily",
+        "text": "Just you wait!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just you wait!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2603,12 +2603,12 @@
         "column": 18
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "frostily",
+        "text": "said the clown,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the clown,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2616,12 +2616,12 @@
         "column": 47
       },
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "happily",
+        "text": "I've been waiting for you",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I've been waiting for you",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2629,12 +2629,12 @@
         "column": 63
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": ", he smirked.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": ", he smirked.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2652,12 +2652,12 @@
     "script": "Clown (happily): Just you wait!\nNarrator (frostily): said the clown,\nClown (happily): I've been waiting for you\nNarrator: , he smirked.\"",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "happily",
+        "text": "Just you wait!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just you wait!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2665,12 +2665,12 @@
         "column": 18
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "frostily",
+        "text": "said the clown,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the clown,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2678,12 +2678,12 @@
         "column": 47
       },
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "happily",
+        "text": "I've been waiting for you",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I've been waiting for you",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2691,12 +2691,12 @@
         "column": 63
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": ", he smirked.\"",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": ", he smirked.\"",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2720,12 +2720,12 @@
     "script": "Clown: Just you wait!\nNarrator: he smirked.\"\nNarrator: The children giggled.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": null,
+        "text": "Just you wait!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just you wait!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2733,12 +2733,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "he smirked.\"",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "he smirked.\"",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2746,12 +2746,12 @@
         "column": 25
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The children giggled.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The children giggled.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2775,12 +2775,12 @@
     "script": "Narrator (nervously): The big fox looked around,\nNarrator: and then relaxed.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "nervously",
+        "text": "The big fox looked around,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The big fox looked around,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2788,12 +2788,12 @@
         "column": 14
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "and then relaxed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "and then relaxed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2811,12 +2811,12 @@
     "script": "Clown (happily): Just you wait!\nClown: I mean it.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": "happily",
+        "text": "Just you wait!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Just you wait!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2824,12 +2824,12 @@
         "column": 18
       },
       {
+        "kind": "speech",
         "speaker": "Clown",
         "direction": null,
+        "text": "I mean it.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I mean it.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2847,12 +2847,12 @@
     "script": "Narrator (nervously): The big fox looked around,\nNarrator (whispering): and then relaxed.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "nervously",
+        "text": "The big fox looked around,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The big fox looked around,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2860,12 +2860,12 @@
         "column": 14
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "whispering",
+        "text": "and then relaxed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "and then relaxed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2883,12 +2883,12 @@
     "script": "Narrator (nervously): The big fox looked around.\nNarrator: He relaxed.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "nervously",
+        "text": "The big fox looked around.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The big fox looked around.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2896,12 +2896,12 @@
         "column": 14
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "He relaxed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He relaxed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2919,12 +2919,12 @@
     "script": "Narrator (whispering): Sir Percival crept inside.\n\nNarrator (whispering): Clank.\n\nNarrator: The dragon opened one eye.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "whispering",
+        "text": "Sir Percival crept inside.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sir Percival crept inside.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2932,12 +2932,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "whispering",
+        "text": "Clank.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Clank.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2945,12 +2945,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The dragon opened one eye.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The dragon opened one eye.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2968,12 +2968,12 @@
     "script": "Narrator (softly): The knight stopped.\n\nKnight (softly): Who goes there?\n\nPercival (barely a whisper): He’s only just got to sleep.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "softly",
+        "text": "The knight stopped.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The knight stopped.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2981,12 +2981,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Knight",
         "direction": "softly",
+        "text": "Who goes there?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Who goes there?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -2994,12 +2994,12 @@
         "column": 9
       },
       {
+        "kind": "speech",
         "speaker": "Percival",
         "direction": "barely a whisper",
+        "text": "He’s only just got to sleep.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He’s only just got to sleep.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3017,12 +3017,12 @@
     "script": "Narrator (whispering): Sir Percival crept inside.\nNarrator (whispering): Clank.\n{page}\nNarrator (whispering): The dragon opened one eye.\n\nGerald (deep, polite and utterly unbothered): Could you not?\nNarrator: Sir Percival stopped.\nGerald (yawning): I’ve only just got to sleep,\nNarrator: said the dragon.\nPercival: Aren’t you going to roar?\nNarrator: The dragon sighed.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "whispering",
+        "text": "Sir Percival crept inside.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sir Percival crept inside.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3030,12 +3030,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "whispering",
+        "text": "Clank.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Clank.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3043,12 +3043,12 @@
         "column": 1
       },
       {
+        "kind": "page",
         "speaker": null,
         "direction": null,
+        "text": "",
         "name": "page",
         "heading": null,
-        "kind": "page",
-        "text": "",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -3056,12 +3056,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "whispering",
+        "text": "The dragon opened one eye.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The dragon opened one eye.",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -3069,12 +3069,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "deep, polite and utterly unbothered",
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -3082,12 +3082,12 @@
         "column": 47
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Sir Percival stopped.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sir Percival stopped.",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -3095,12 +3095,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "yawning",
+        "text": "I’ve only just got to sleep,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’ve only just got to sleep,",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -3108,12 +3108,12 @@
         "column": 19
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said the dragon.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the dragon.",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -3121,12 +3121,12 @@
         "column": 50
       },
       {
+        "kind": "speech",
         "speaker": "Percival",
         "direction": null,
+        "text": "Aren’t you going to roar?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Aren’t you going to roar?",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -3134,12 +3134,12 @@
         "column": 11
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The dragon sighed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The dragon sighed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -3157,12 +3157,12 @@
     "script": "Wanda (reading the letter): Dear Management,\n\nWanda (reading the letter): Due to unacceptable working conditions, I am officially refusing to fly.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": "reading the letter",
+        "text": "Dear Management,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Dear Management,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3170,12 +3170,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": "reading the letter",
+        "text": "Due to unacceptable working conditions, I am officially refusing to fly.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Due to unacceptable working conditions, I am officially refusing to fly.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3193,12 +3193,12 @@
     "script": "Gerald: They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3216,12 +3216,12 @@
     "script": "Gerald (reading aloud): ‘But you are a chicken,’ said the duke.\nWanda: Ha!\nWanda: I’m aware,\nGerald (reading aloud): said the chicken.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "reading aloud",
+        "text": "‘But you are a chicken,’ said the duke.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "‘But you are a chicken,’ said the duke.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3229,12 +3229,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "Ha!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Ha!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3242,12 +3242,12 @@
         "column": 48
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "I’m aware,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I’m aware,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3255,12 +3255,12 @@
         "column": 54
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "reading aloud",
+        "text": "said the chicken.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said the chicken.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3278,12 +3278,12 @@
     "script": "Gerald (reading aloud): ‘But you are a chicken,’ said the duke.\nWanda: Ha!\nGerald (reading aloud): ‘I’m aware,’ said the chicken.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "reading aloud",
+        "text": "‘But you are a chicken,’ said the duke.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "‘But you are a chicken,’ said the duke.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3291,12 +3291,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "Ha!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Ha!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3304,12 +3304,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "reading aloud",
+        "text": "‘I’m aware,’ said the chicken.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "‘I’m aware,’ said the chicken.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3327,12 +3327,12 @@
     "script": "Narrator (softly, close to a whisper): At midnight, something came up the mountain.\n\nGerald (sleepy): Very heroic.\n\nNarrator (softly, close to a whisper): And he went back to sleep.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "softly, close to a whisper",
+        "text": "At midnight, something came up the mountain.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "At midnight, something came up the mountain.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3340,12 +3340,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "sleepy",
+        "text": "Very heroic.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Very heroic.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3353,12 +3353,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": "softly, close to a whisper",
+        "text": "And he went back to sleep.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "And he went back to sleep.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3376,12 +3376,12 @@
     "script": "Gerald (whispering): Could you not?",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": "whispering",
+        "text": "Could you not?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you not?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3399,12 +3399,12 @@
     "script": "Narrator: The broom fell over.\n[wooden clatter; one broom handle dropping flat onto flagstones]",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The broom fell over.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The broom fell over.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3412,12 +3412,12 @@
         "column": 1
       },
       {
+        "kind": "sound",
         "speaker": null,
         "direction": null,
+        "text": "wooden clatter; one broom handle dropping flat onto flagstones",
         "name": null,
         "heading": null,
-        "kind": "sound",
-        "text": "wooden clatter; one broom handle dropping flat onto flagstones",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3436,12 +3436,12 @@
     "book": "The broom shot sideways into a hedge. Only its bristles stuck out.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The broom shot sideways into a hedge.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The broom shot sideways into a hedge.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3449,12 +3449,12 @@
         "column": 1
       },
       {
+        "kind": "sound",
         "speaker": null,
         "direction": null,
+        "text": "crash through leaves",
         "name": null,
         "heading": null,
-        "kind": "sound",
-        "text": "crash through leaves",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3462,12 +3462,12 @@
         "column": 39
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Only its bristles stuck out.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Only its bristles stuck out.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3485,12 +3485,12 @@
     "script": "Narrator: On Tuesday morning, the king summoned him.\n\n[royal trumpet fanfare]\n\nKing: Sir Percival!",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "On Tuesday morning, the king summoned him.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "On Tuesday morning, the king summoned him.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3498,12 +3498,12 @@
         "column": 1
       },
       {
+        "kind": "sound",
         "speaker": null,
         "direction": null,
+        "text": "royal trumpet fanfare",
         "name": null,
         "heading": null,
-        "kind": "sound",
-        "text": "royal trumpet fanfare",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3511,12 +3511,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "King",
         "direction": null,
+        "text": "Sir Percival!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Sir Percival!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3534,12 +3534,12 @@
     "script": "Wanda: Come in—\n[door slams]\nWanda: oh.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "Come in—",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Come in—",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3547,12 +3547,12 @@
         "column": 8
       },
       {
+        "kind": "sound",
         "speaker": null,
         "direction": null,
+        "text": "door slams",
         "name": null,
         "heading": null,
-        "kind": "sound",
-        "text": "door slams",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3560,12 +3560,12 @@
         "column": 18
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "oh.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "oh.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3583,12 +3583,12 @@
     "script": "Narrator: The dragon was snoring.\nGerald [snores]",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The dragon was snoring.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The dragon was snoring.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3596,12 +3596,12 @@
         "column": 1
       },
       {
+        "kind": "vocal",
         "speaker": "Gerald",
         "direction": null,
+        "text": "snores",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "snores",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3619,12 +3619,12 @@
     "script": "Wanda [gasp]\nWanda: My broom is on strike!",
     "lines": [
       {
+        "kind": "vocal",
         "speaker": "Wanda",
         "direction": null,
+        "text": "gasp",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "gasp",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3632,12 +3632,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "My broom is on strike!",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "My broom is on strike!",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3655,12 +3655,12 @@
     "script": "Wanda [gasp]\nNarrator: She stared at the broom.",
     "lines": [
       {
+        "kind": "vocal",
         "speaker": "Wanda",
         "direction": null,
+        "text": "gasp",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "gasp",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3668,12 +3668,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "She stared at the broom.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "She stared at the broom.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3691,12 +3691,12 @@
     "script": "Wanda [gasp]\nNarrator: She stared at the broom.\nWanda: On strike?",
     "lines": [
       {
+        "kind": "vocal",
         "speaker": "Wanda",
         "direction": null,
+        "text": "gasp",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "gasp",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3704,12 +3704,12 @@
         "column": 8
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "She stared at the broom.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "She stared at the broom.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3717,12 +3717,12 @@
         "column": 15
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "On strike?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "On strike?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3740,12 +3740,12 @@
     "script": "Pickle [tiny peep]\n[a brief tumble]\nPickle [yawn]",
     "lines": [
       {
+        "kind": "vocal",
         "speaker": "Pickle",
         "direction": null,
+        "text": "tiny peep",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "tiny peep",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3753,12 +3753,12 @@
         "column": 9
       },
       {
+        "kind": "sound",
         "speaker": null,
         "direction": null,
+        "text": "a brief tumble",
         "name": null,
         "heading": null,
-        "kind": "sound",
-        "text": "a brief tumble",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3766,12 +3766,12 @@
         "column": 21
       },
       {
+        "kind": "vocal",
         "speaker": "Pickle",
         "direction": null,
+        "text": "yawn",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "yawn",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3789,12 +3789,12 @@
     "script": "Narrator: She stared at the broom.\n[gasp]\nWanda: On strike?",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "She stared at the broom.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "She stared at the broom.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3802,12 +3802,12 @@
         "column": 8
       },
       {
+        "kind": "sound",
         "speaker": null,
         "direction": null,
+        "text": "gasp",
         "name": null,
         "heading": null,
-        "kind": "sound",
-        "text": "gasp",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3815,12 +3815,12 @@
         "column": 33
       },
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "On strike?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "On strike?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3838,12 +3838,12 @@
     "script": "Gerald (softly) [snores]",
     "lines": [
       {
+        "kind": "vocal",
         "speaker": "Gerald",
         "direction": "softly",
+        "text": "snores",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "snores",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3861,12 +3861,12 @@
     "script": "Gerald: Oh no. I’m going to—\nGerald [sneezes]",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "Oh no. I’m going to—",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Oh no. I’m going to—",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3874,12 +3874,12 @@
         "column": 9
       },
       {
+        "kind": "vocal",
         "speaker": "Gerald",
         "direction": null,
+        "text": "sneezes",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "sneezes",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3897,12 +3897,12 @@
     "script": "Narrator: The fox froze.\nNarrator [gasps]",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The fox froze.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The fox froze.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3910,12 +3910,12 @@
         "column": 1
       },
       {
+        "kind": "vocal",
         "speaker": "Narrator",
         "direction": null,
+        "text": "gasps",
         "name": null,
         "heading": null,
-        "kind": "vocal",
-        "text": "gasps",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3933,12 +3933,12 @@
     "script": "Narrator: Read more at our website.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Read more at our website.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Read more at our website.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3956,12 +3956,12 @@
     "script": "![Peter squeezing under the gate](peter-gate.png)",
     "lines": [
       {
+        "kind": "image",
         "speaker": null,
         "direction": null,
+        "text": "Peter squeezing under the gate",
         "name": null,
         "heading": null,
-        "kind": "image",
-        "text": "Peter squeezing under the gate",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3979,12 +3979,12 @@
     "script": "Narrator: He slipped underneath the gate.\n\n{page}\n\nNarrator: Mr. McGregor hung up the little jacket.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "He slipped underneath the gate.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He slipped underneath the gate.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -3992,12 +3992,12 @@
         "column": 1
       },
       {
+        "kind": "page",
         "speaker": null,
         "direction": null,
+        "text": "",
         "name": "page",
         "heading": null,
-        "kind": "page",
-        "text": "",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -4005,12 +4005,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Mr. McGregor hung up the little jacket.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Mr. McGregor hung up the little jacket.",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -4029,12 +4029,12 @@
     "book": "He went back to his work. Peter sat down to rest.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "He went back to his work.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He went back to his work.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4042,12 +4042,12 @@
         "column": 1
       },
       {
+        "kind": "page",
         "speaker": null,
         "direction": null,
+        "text": "",
         "name": "page",
         "heading": null,
-        "kind": "page",
-        "text": "",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -4055,12 +4055,12 @@
         "column": 27
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Peter sat down to rest.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Peter sat down to rest.",
         "scene": 1,
         "sceneTitle": null,
         "page": "2",
@@ -4078,12 +4078,12 @@
     "script": "{page 8–9}",
     "lines": [
       {
+        "kind": "page",
         "speaker": null,
         "direction": null,
+        "text": "8–9",
         "name": "page",
         "heading": null,
-        "kind": "page",
-        "text": "8–9",
         "scene": 1,
         "sceneTitle": null,
         "page": "8–9",
@@ -4101,12 +4101,12 @@
     "script": "Wanda: Could you perhaps be in love somewhat more urgently?\n\n{pause 2s}\n\nNarrator: He went on being in love at exactly the same speed.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": null,
+        "text": "Could you perhaps be in love somewhat more urgently?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could you perhaps be in love somewhat more urgently?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4114,12 +4114,12 @@
         "column": 8
       },
       {
+        "kind": "pause",
         "speaker": null,
         "direction": null,
+        "text": "2s",
         "name": "pause",
         "heading": null,
-        "kind": "pause",
-        "text": "2s",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4127,12 +4127,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "He went on being in love at exactly the same speed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He went on being in love at exactly the same speed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4151,12 +4151,12 @@
     "book": "First published 1902.\n\nOnce upon a time…",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Once upon a time…",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time…",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4184,12 +4184,12 @@
     "book": "Once upon a time…",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Turn the page when you hear the bell.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Turn the page when you hear the bell.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4197,12 +4197,12 @@
         "column": 14
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Once upon a time…",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Once upon a time…",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4221,12 +4221,12 @@
     "book": "Mount Mumble was very tall.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "Mount Mumble was very tall.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Mount Mumble was very tall.",
         "scene": 1,
         "sceneTitle": "The cave",
         "page": "1",
@@ -4253,12 +4253,12 @@
     "script": "Narrator: The broom fell over.\n{recorder:take 3}",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The broom fell over.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The broom fell over.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4266,12 +4266,12 @@
         "column": 1
       },
       {
+        "kind": "instruction",
         "speaker": null,
         "direction": null,
+        "text": "3",
         "name": "recorder:take",
         "heading": null,
-        "kind": "instruction",
-        "text": "3",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4290,12 +4290,12 @@
     "book": "He went on being in love at exactly the same speed.",
     "lines": [
       {
+        "kind": "note",
         "speaker": null,
         "direction": null,
+        "text": "Leave a clear pause after this line.",
         "name": null,
         "heading": null,
-        "kind": "note",
-        "text": "Leave a clear pause after this line.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4303,12 +4303,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "He went on being in love at exactly the same speed.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "He went on being in love at exactly the same speed.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4326,12 +4326,12 @@
     "script": "Marmalade: Clause five.\n%% Clause and claws sound the same. %%",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Marmalade",
         "direction": null,
+        "text": "Clause five.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Clause five.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4339,12 +4339,12 @@
         "column": 12
       },
       {
+        "kind": "note",
         "speaker": null,
         "direction": null,
+        "text": "Clause and claws sound the same.",
         "name": null,
         "heading": null,
-        "kind": "note",
-        "text": "Clause and claws sound the same.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4362,12 +4362,12 @@
     "script": "%% Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line. %%",
     "lines": [
       {
+        "kind": "note",
         "speaker": null,
         "direction": null,
+        "text": "Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line.",
         "name": null,
         "heading": null,
-        "kind": "note",
-        "text": "Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4385,12 +4385,12 @@
     "script": "Gerald: I don’t *even* like treasure.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Gerald",
         "direction": null,
+        "text": "I don’t *even* like treasure.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I don’t *even* like treasure.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4408,12 +4408,12 @@
     "script": "Narrator: The page said: **JOBS AVAILABLE**",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The page said: **JOBS AVAILABLE**",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The page said: **JOBS AVAILABLE**",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4431,12 +4431,12 @@
     "script": "Narrator: She wrote [sic] and {page} on the board.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "She wrote [sic] and {page} on the board.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "She wrote [sic] and {page} on the board.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4455,12 +4455,12 @@
     "book": "“I meant to do that,” said Sir Percival, from inside the vase.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Percival",
         "direction": "muffled, echoing",
+        "text": "I meant to do that,",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "I meant to do that,",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4468,12 +4468,12 @@
         "column": 30
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "said Sir Percival, from inside the vase.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "said Sir Percival, from inside the vase.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4481,12 +4481,12 @@
         "column": 52
       },
       {
+        "kind": "sound",
         "speaker": null,
         "direction": null,
+        "text": "armor wobbles",
         "name": null,
         "heading": null,
-        "kind": "sound",
-        "text": "armor wobbles",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4505,12 +4505,12 @@
     "book": "“Could we perhaps travel somewhat more urgently?”\n\nThe broom considered this.",
     "lines": [
       {
+        "kind": "speech",
         "speaker": "Wanda",
         "direction": "strained and extremely polite",
+        "text": "Could we perhaps travel somewhat more urgently?",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "Could we perhaps travel somewhat more urgently?",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4518,12 +4518,12 @@
         "column": 40
       },
       {
+        "kind": "note",
         "speaker": null,
         "direction": null,
+        "text": "The broom considers this.",
         "name": null,
         "heading": null,
-        "kind": "note",
-        "text": "The broom considers this.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4531,12 +4531,12 @@
         "column": 1
       },
       {
+        "kind": "pause",
         "speaker": null,
         "direction": null,
+        "text": "",
         "name": "pause",
         "heading": null,
-        "kind": "pause",
-        "text": "",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",
@@ -4544,12 +4544,12 @@
         "column": 1
       },
       {
+        "kind": "speech",
         "speaker": "Narrator",
         "direction": null,
+        "text": "The broom considered this.",
         "name": null,
         "heading": null,
-        "kind": "speech",
-        "text": "The broom considered this.",
         "scene": 1,
         "sceneTitle": null,
         "page": "1",

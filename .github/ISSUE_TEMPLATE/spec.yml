@@ -1,0 +1,23 @@
+name: A question or proposal for the spec
+description: Something the spec doesn't say, says unclearly, or could say better.
+labels: [spec]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: A story that needs it
+      description: A few lines a real story would contain. The spec changes for stories, not for tools.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: The question, or what you propose
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: How the spoken script and book text would read
+      description: In the spec's example form (SPEC.md §3), if you can.

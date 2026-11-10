@@ -22,6 +22,7 @@
     "voxdown": "workspace:^"
   },
   "devDependencies": {
+    "marked": "18.2.0",
     "vite": "^7.3.8"
   }
 }

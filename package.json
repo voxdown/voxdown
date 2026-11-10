@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "pnpm -r --filter=./packages/* build",
+    "site": "pnpm --filter voxdown-site dev",
+    "site:build": "pnpm --filter voxdown-site build",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",

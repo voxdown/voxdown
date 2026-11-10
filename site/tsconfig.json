@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "voxdown": ["../packages/core/src/index.ts"],
+      "@voxdown/render": ["../packages/render/src/index.ts"],
+      "@voxdown/editor": ["../packages/editor/src/index.ts"]
+    },
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src", "test", "vite.config.ts", "vitest.config.ts"]
+}

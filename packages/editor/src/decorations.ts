@@ -689,16 +689,28 @@ function foldFrontMatter(state: EditorState): DecorationSet {
     .exec(text)?.[1]
     ?.replace(/^["']|["']$/gu, "")
     .trim();
-  const cast = /^cast:[ \t]*$/mu.test(text)
-    ? (text.split(/^cast:[ \t]*$/mu)[1] ?? "").split("\n").filter((l) => /^[ \t]+\S/u.test(l))
-        .length
-    : 0;
+  const cast = castSize(text);
   const summary = [title, cast ? `${cast} in the cast` : "", "title, language and cast"]
     .filter(Boolean)
     .join(" · ");
   return Decoration.set([
     Decoration.replace({ widget: new FrontMatterFold(summary), block: true }).range(from, to),
   ]);
+}
+
+/** How many characters the front matter's cast names: its keys one level in, not their details. */
+export function castSize(frontMatter: string): number {
+  const lines = (frontMatter.split(/^cast:[ \t]*$/mu)[1] ?? "").split("\n");
+  let indent: number | null = null;
+  let count = 0;
+  for (const line of lines) {
+    if (!line.trim() || line.trimStart().startsWith("#")) continue;
+    const depth = line.length - line.trimStart().length;
+    if (depth === 0) break;
+    indent ??= depth;
+    if (depth === indent) count++;
+  }
+  return count;
 }
 
 const frontMatterField = StateField.define<DecorationSet>({

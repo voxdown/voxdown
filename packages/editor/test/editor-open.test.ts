@@ -1,6 +1,6 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { holdOpen, openField } from "../src/decorations";
+import { castSize, holdOpen, openField } from "../src/decorations";
 
 const doc = "One line.\n\nTwo line.\n\nThree line.";
 const at = (text: string) => doc.indexOf(text);
@@ -36,5 +36,14 @@ describe("where the text opens", () => {
     // Within one line, it opens.
     state = state.update({ selection: { anchor: at("Three"), head: at("Three") + 5 } }).state;
     expect(state.field(openField).ranges).toEqual([{ from: at("Three"), to: at("Three") + 5 }]);
+  });
+});
+
+describe("the folded front matter", () => {
+  it("counts the cast's names, not their details", () => {
+    const front =
+      "title: Toast\ncast:\n  Narrator:\n    about: Warm.\n  Gerald: Gerald the Dragon\n  Wanda:\n    name: Wanda\n    about: A witch.\nlanguage: en";
+    expect(castSize(front)).toBe(3);
+    expect(castSize("title: Toast")).toBe(0);
   });
 });

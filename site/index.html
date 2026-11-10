@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoxDown playground</title>
+<meta name="description" content="Write a story with VoxDown marks and see the script, the book and the lines it becomes. Runs in your browser.">
+<link rel="icon" href="./icon.svg">
+</head>
+<body>
+<header class="masthead">
+  <a class="wordmark" href="./"><span class="at">@</span>VoxDown</a>
+  <p class="tagline">Markdown for stories read aloud.</p>
+  <nav aria-label="Site">
+    <a href="./spec.html">Spec</a>
+    <a href="./cheatsheet.html">Cheat sheet</a>
+    <a href="https://github.com/voxdown/voxdown">Source</a>
+  </nav>
+</header>
+<section class="shelf" aria-labelledby="shelf-title">
+  <h2 id="shelf-title">Examples</h2>
+  <ul id="examples"></ul>
+</section>
+<main class="desk">
+  <section class="page page-left" aria-label="Manuscript">
+    <header class="page-head">
+      <span class="file" id="file-name">story.vxd</span>
+      <span class="spacer"></span>
+      <label class="toggle" title="Show every mark raw (Ctrl+Shift+M)"><input type="checkbox" id="show-marks"> Show marks</label>
+      <button class="button quiet" type="button" id="new-story">New</button>
+      <button class="button quiet" type="button" id="open-file">Open…</button>
+      <input type="file" id="file-input" accept=".vxd,.md,.txt,.fountain" hidden>
+    </header>
+    <div class="editor" id="editor"></div>
+    <details class="warnings-box" id="warnings-box" hidden>
+      <summary>What the parser noticed</summary>
+      <ol id="warnings"></ol>
+    </details>
+    <footer class="page-foot">
+      <span id="status" class="status-ok">No warnings</span>
+      <span class="spacer"></span>
+      <label class="toggle" title="Change straight quotation marks to curly ones when formatting"><input type="checkbox" id="curly"> Curly quotes</label>
+      <button class="button" type="button" id="format">Format</button>
+      <button class="button" type="button" id="download-story">Download .vxd</button>
+    </footer>
+  </section>
+  <section class="page page-right" aria-label="What it becomes">
+    <div class="tabs" role="tablist" aria-label="Show as">
+      <button class="tab" role="tab" type="button" data-tab="script" aria-controls="output">Script</button>
+      <button class="tab" role="tab" type="button" data-tab="book" aria-controls="output">Book</button>
+      <button class="tab" role="tab" type="button" data-tab="lines" aria-controls="output">Lines</button>
+      <button class="tab" role="tab" type="button" data-tab="csv" aria-controls="output">CSV</button>
+      <button class="tab" role="tab" type="button" data-tab="sides" aria-controls="output">Sides</button>
+    </div>
+    <div class="sheet" id="output" role="tabpanel" tabindex="0"></div>
+    <footer class="page-foot">
+      <span id="summary"></span>
+      <span class="spacer"></span>
+      <button class="button quiet" type="button" id="copy-link">Copy link</button>
+      <button class="button" type="button" id="download-output">Download HTML</button>
+    </footer>
+  </section>
+</main>
+<footer class="colophon">VoxDown 1.0. Code under MIT, the spec under CC BY 4.0. This page runs in your browser: your story stays on this computer unless you copy a link.</footer>
+<script type="module" src="./src/playground.ts"></script>
+</body>
+</html>

@@ -60,6 +60,34 @@ importers:
         specifier: ^20.14.6
         version: 20.14.6
 
+  site:
+    dependencies:
+      '@codemirror/state':
+        specifier: ^6.7.6
+        version: 6.7.6
+      '@codemirror/view':
+        specifier: ^6.43.15
+        version: 6.43.15
+      '@fontsource-variable/literata':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/recursive':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@voxdown/editor':
+        specifier: workspace:^
+        version: link:../packages/editor
+      '@voxdown/render':
+        specifier: workspace:^
+        version: link:../packages/render
+      voxdown:
+        specifier: workspace:^
+        version: link:../packages/core
+    devDependencies:
+      vite:
+        specifier: ^7.3.8
+        version: 7.3.8(@types/node@24.19.2)
+
 packages:
 
   '@biomejs/biome@1.9.4':
@@ -447,6 +475,12 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@fontsource-variable/literata@5.3.0':
+    resolution: {integrity: sha512-1Jw7xvOcoGyB83lxB2nG4bfNbqtX2/TTbdh9sHAOmU064SvmSdulDtA5RBu5JYWf64fdaKX7xU+z3GO1T2bCHA==}
+
+  '@fontsource-variable/recursive@5.3.0':
+    resolution: {integrity: sha512-4B4/lWCVeZgdbpJdIIU1sOVO/ECjjM673ohuxvyQ6uCK41TPlGzKRNokKY84noUgGYnpwc//MW4k2KrOMY19jQ==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -1294,6 +1328,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
+
+  '@fontsource-variable/literata@5.3.0': {}
+
+  '@fontsource-variable/recursive@5.3.0': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:

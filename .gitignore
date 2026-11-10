@@ -5,3 +5,5 @@ dist/
 .DS_Store
 coverage/
 site/.vite/
+dist-mockup/
+docs/mockups/

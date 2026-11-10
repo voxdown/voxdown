@@ -6,10 +6,10 @@
  "voices": {
   "Narrator": "Lily",
   "Wind": "Adam",
-  "Sun": "Sarah",
+  "Sun": "Steve",
   "Traveler": "Chris"
  },
- "duration": 101.776,
+ "duration": 101.937,
  "cues": [
   {
    "kind": "speech",
@@ -93,7 +93,7 @@
    "text": "Strength is not always loud,",
    "sent": "[mildly] Strength is not always loud,",
    "start": 16.195,
-   "duration": 1.978
+   "duration": 2.16
   },
   {
    "kind": "speech",
@@ -106,7 +106,7 @@
    "direction": null,
    "text": "said the Sun.",
    "sent": "said the Sun.",
-   "start": 18.423,
+   "start": 18.605,
    "duration": 0.792
   },
   {
@@ -120,7 +120,7 @@
    "direction": null,
    "text": "Just then a traveler came along the road, wrapped in a thick wool cloak.",
    "sent": "Just then a traveler came along the road, wrapped in a thick wool cloak.",
-   "start": 20.015,
+   "start": 20.197,
    "duration": 4.854
   },
   {
@@ -134,7 +134,7 @@
    "direction": null,
    "text": "footsteps on gravel",
    "sent": "footsteps on gravel",
-   "start": 25.119,
+   "start": 25.301,
    "duration": 2.48
   },
   {
@@ -148,8 +148,8 @@
    "direction": null,
    "text": "Let us agree,",
    "sent": "Let us agree,",
-   "start": 28.399,
-   "duration": 1.029
+   "start": 28.581,
+   "duration": 0.967
   },
   {
    "kind": "speech",
@@ -162,7 +162,7 @@
    "direction": null,
    "text": "said the Sun.",
    "sent": "said the Sun.",
-   "start": 29.678,
+   "start": 29.797,
    "duration": 0.799
   },
   {
@@ -176,8 +176,8 @@
    "direction": null,
    "text": "Whichever of us can take that cloak off his back is the stronger.",
    "sent": "Whichever of us can take that cloak off his back is the stronger.",
-   "start": 30.727,
-   "duration": 3.659
+   "start": 30.846,
+   "duration": 4.133
   },
   {
    "kind": "speech",
@@ -190,7 +190,7 @@
    "direction": null,
    "text": "Easy,",
    "sent": "Easy,",
-   "start": 35.186,
+   "start": 35.779,
    "duration": 0.519
   },
   {
@@ -204,7 +204,7 @@
    "direction": null,
    "text": "said the North Wind.",
    "sent": "said the North Wind.",
-   "start": 35.955,
+   "start": 36.548,
    "duration": 1.124
   },
   {
@@ -218,7 +218,7 @@
    "direction": null,
    "text": "Watch me.",
    "sent": "Watch me.",
-   "start": 37.329,
+   "start": 37.922,
    "duration": 0.534
   },
   {
@@ -232,7 +232,7 @@
    "direction": null,
    "text": "",
    "sent": "a single page of a book turning, soft paper, close and quiet",
-   "start": 38.664,
+   "start": 39.256,
    "duration": 1
   },
   {
@@ -246,7 +246,7 @@
    "direction": "huffing, louder and louder",
    "text": "One puff!",
    "sent": "[huffing, louder and louder] One puff!",
-   "start": 40.464,
+   "start": 41.056,
    "duration": 2.055
   },
   {
@@ -260,7 +260,7 @@
    "direction": "huffing, louder and louder",
    "text": "Two puffs!",
    "sent": "[huffing, louder and louder] Two puffs!",
-   "start": 42.969,
+   "start": 43.562,
    "duration": 1.265
   },
   {
@@ -274,7 +274,7 @@
    "direction": "huffing, louder and louder",
    "text": "THREE PUFFS!",
    "sent": "[huffing, louder and louder] THREE PUFFS!",
-   "start": 44.684,
+   "start": 45.277,
    "duration": 1.546
   },
   {
@@ -288,7 +288,7 @@
    "direction": null,
    "text": "a howling gale",
    "sent": "a howling gale",
-   "start": 47.031,
+   "start": 47.624,
    "duration": 2.48
   },
   {
@@ -302,7 +302,7 @@
    "direction": null,
    "text": "But the harder the North Wind blew, the tighter the traveler held his cloak.",
    "sent": "But the harder the North Wind blew, the tighter the traveler held his cloak.",
-   "start": 50.311,
+   "start": 50.904,
    "duration": 5.149
   },
   {
@@ -316,7 +316,7 @@
    "direction": null,
    "text": "shivers",
    "sent": "[shivers] What a day,",
-   "start": 56.259,
+   "start": 56.852,
    "duration": 1.006
   },
   {
@@ -330,7 +330,7 @@
    "direction": null,
    "text": "What a day,",
    "sent": "[shivers] What a day,",
-   "start": 57.415,
+   "start": 58.008,
    "duration": 0.917
   },
   {
@@ -344,7 +344,7 @@
    "direction": null,
    "text": "he muttered.",
    "sent": "he muttered.",
-   "start": 58.582,
+   "start": 59.175,
    "duration": 0.726
   },
   {
@@ -358,7 +358,7 @@
    "direction": null,
    "text": "What a dreadful, freezing day.",
    "sent": "What a dreadful, freezing day.",
-   "start": 59.558,
+   "start": 60.151,
    "duration": 2.161
   },
   {
@@ -372,7 +372,7 @@
    "direction": null,
    "text": "At last the North Wind gave up.",
    "sent": "At last the North Wind gave up.",
-   "start": 62.519,
+   "start": 63.112,
    "duration": 2.362
   },
   {
@@ -386,7 +386,7 @@
    "direction": null,
    "text": "a long, tired sigh",
    "sent": "a long, tired sigh: Loud, proud and gusty.",
-   "start": 65.132,
+   "start": 65.725,
    "duration": 2
   },
   {
@@ -400,7 +400,7 @@
    "direction": null,
    "text": "1s",
    "sent": null,
-   "start": 67.932,
+   "start": 68.525,
    "duration": 1
   },
   {
@@ -414,7 +414,7 @@
    "direction": null,
    "text": "",
    "sent": "a single page of a book turning, soft paper, close and quiet",
-   "start": 69.732,
+   "start": 70.325,
    "duration": 1
   },
   {
@@ -428,7 +428,7 @@
    "direction": null,
    "text": "Then the Sun came out from behind a cloud, and simply shone.",
    "sent": "Then the Sun came out from behind a cloud, and simply shone.",
-   "start": 71.532,
+   "start": 72.125,
    "duration": 3.888
   },
   {
@@ -442,7 +442,7 @@
    "direction": null,
    "text": "birdsong",
    "sent": "birdsong",
-   "start": 75.67,
+   "start": 76.263,
    "duration": 2.48
   },
   {
@@ -456,7 +456,7 @@
    "direction": "slowly, letting it warm up",
    "text": "The air grew mild. Then warm. Then hot.",
    "sent": "[slowly, letting it warm up] The air grew mild. Then warm. Then hot.",
-   "start": 78.95,
+   "start": 79.543,
    "duration": 4.537
   },
   {
@@ -470,7 +470,7 @@
    "direction": "wiping his brow",
    "text": "Well! What a lovely afternoon.",
    "sent": "[wiping his brow] Well! What a lovely afternoon.",
-   "start": 84.287,
+   "start": 84.88,
    "duration": 2.537
   },
   {
@@ -484,7 +484,7 @@
    "direction": null,
    "text": "And he took off his cloak and sat down in the shade of a tree.",
    "sent": "And he took off his cloak and sat down in the shade of a tree.",
-   "start": 87.624,
+   "start": 88.217,
    "duration": 3.355
   },
   {
@@ -498,8 +498,8 @@
    "direction": "gently",
    "text": "You see? Gentleness often does what force cannot.",
    "sent": "[gently] You see? Gentleness often does what force cannot.",
-   "start": 91.779,
-   "duration": 4.295
+   "start": 92.372,
+   "duration": 3.863
   },
   {
    "kind": "speech",
@@ -512,7 +512,7 @@
    "direction": null,
    "text": "And that is the moral of the story: persuasion is better than force.",
    "sent": "And that is the moral of the story: persuasion is better than force.",
-   "start": 96.875,
+   "start": 97.035,
    "duration": 4.902
   }
  ]

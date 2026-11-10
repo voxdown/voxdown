@@ -107,7 +107,7 @@ const NOT_PRINTED: ReadonlySet<Item["kind"]> = new Set([
  * A line as printed: its source without marks, directions, sounds, notes and instructions, and
  * without escapes' backslashes. Where a removed mark leaves two spaces, one remains (§12.2).
  */
-function bookLine(source: string, line: Line): string {
+export function bookLine(source: string, line: Line): string {
   let printed = "";
   let at = line.range.from;
   let joint = false;

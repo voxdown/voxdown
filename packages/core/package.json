@@ -27,7 +27,7 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "fixtures": "node --experimental-strip-types scripts/fixtures.ts"
+    "fixtures": "UPDATE_FIXTURES=1 vitest run test/conformance.test.ts"
   },
   "engines": { "node": ">=20" }
 }

@@ -6,7 +6,15 @@ import { fileURLToPath } from "node:url";
  * The spec's examples (SPEC.md §3): an input, a line with a single dot, the spoken script, and
  * optionally a second dot and the book text. `line` is the 1-based line of its opening fence.
  */
-export type Example = { line: number; parts: number; input: string; script: string; book?: string };
+export type Example = {
+  line: number;
+  /** The section it is in, such as "5.6". */
+  section: string;
+  parts: number;
+  input: string;
+  script: string;
+  book?: string;
+};
 
 /** The repository root, where `spec/` and `examples/` are. */
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -15,7 +23,10 @@ export const spec = readFileSync(join(root, "spec", "SPEC.md"), "utf8");
 export function examples(markdown: string): Example[] {
   const found: Example[] = [];
   const lines = markdown.split("\n");
+  let section = "";
   for (let i = 0; i < lines.length; i++) {
+    const heading = /^#{2,3} (\d+(?:\.\d+)?)\.? /.exec(lines[i] ?? "");
+    if (heading?.[1]) section = heading[1];
     if (lines[i] !== "```example") continue;
     const start = i + 1;
     let end = start;
@@ -28,6 +39,7 @@ export function examples(markdown: string): Example[] {
     const [input = [], script = [], book] = parts;
     found.push({
       line: start,
+      section,
       parts: parts.length,
       input: input.join("\n"),
       script: script.join("\n"),

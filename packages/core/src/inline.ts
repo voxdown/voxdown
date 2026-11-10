@@ -298,7 +298,7 @@ function lexInstruction(source: string, at: number, to: number, warn: Warn): Ato
   if (!KNOWN_INSTRUCTIONS.has(name) && !name.includes(":")) {
     warn(
       "unknown-instruction",
-      `“{${name}}” is not an instruction this spec knows. A tool's own instructions start with its name and a colon, such as {kinu:take 3}.`,
+      `“{${name}}” is not an instruction this spec knows. A tool's own instructions start with its name and a colon, such as {recorder:take 3}.`,
       range,
     );
   }

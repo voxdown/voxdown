@@ -13,6 +13,8 @@ export type FrontMatterRead = {
   keys: YamlKey[];
   /** The index of the story's first line. */
   bodyLine: number;
+  /** The spec version as written after `voxdown:`, so `1.10` stays apart from `1.1` (§16). */
+  versionText?: string;
 };
 
 /** A file has front matter only if a `---` first line is closed by a second one (§4.4). */
@@ -30,13 +32,28 @@ export function readFrontMatter(text: SourceText, warn: Warn): FrontMatterRead {
     const raw = text.text.slice(rawFrom, rawTo);
     const yaml = readYaml(raw, rawFrom);
     for (const problem of yaml.problems) warn("front-matter", problem.message, problem.range);
+    const versionKey = yaml.keys.find((key) => key.path.length === 1 && key.path[0] === "voxdown");
+    const versionText = versionKey && writtenValue(text.text, versionKey.range);
     return {
       frontMatter: { range: { from: first.from, to: closing.to }, raw, data: yaml.data },
       keys: yaml.keys,
       bodyLine: close + 1,
+      ...(versionText ? { versionText } : {}),
     };
   }
   return { frontMatter: null, keys: [], bodyLine: 0 };
+}
+
+/** A one-line value as written after its key, without quotes or a comment. */
+function writtenValue(source: string, key: Range): string | undefined {
+  const colon = source.indexOf(":", key.to);
+  const end = source.indexOf("\n", colon);
+  const line = source.slice(colon + 1, end < 0 ? source.length : end);
+  const value = line
+    .replace(/\s+#.*$/, "")
+    .trim()
+    .replace(/^(["'])(.*)\1$/, "$2");
+  return value || undefined;
 }
 
 export type StorySetup = {
@@ -81,10 +98,11 @@ export function readSetup(read: FrontMatterRead, warn: Warn): StorySetup {
     ["subtitle", "subtitle"],
     ["author", "author"],
     ["language", "language"],
-    ["version", "audiobook-markup"],
+    ["version", "voxdown"],
   ] as const;
   for (const [field, key] of fields) {
-    const value = scalarText(data[key]);
+    const value =
+      field === "version" ? (read.versionText ?? scalarText(data[key])) : scalarText(data[key]);
     if (value !== undefined) details[field] = value;
   }
   return { details, cast, hasCast, narratorSetting, castRanges };

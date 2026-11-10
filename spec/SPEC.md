@@ -1,8 +1,8 @@
-# Audiobook Markup
+# VoxDown
 
-**Draft 0.1, revised 7 November 2026.** "Audiobook Markup" is a working name. The final name, file extension, licence and home are still to be chosen.
+**Version 1.0, 9 November 2026.** This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
 
-Audiobook Markup is a plain-text format for stories that are read aloud. It records:
+VoxDown is a plain-text format for stories that are read aloud. It records:
 
 - who says each line, and how they say it;
 - the sounds a listener hears;
@@ -43,7 +43,9 @@ Sir Percival stopped.
 12. [The two readings](#12-the-two-readings)
 13. [Tools that edit files](#13-tools-that-edit-files)
 14. [Rendering](#14-rendering)
-15. [Open questions](#15-open-questions)
+15. [Conformance](#15-conformance)
+16. [Versions](#16-versions)
+17. [Beyond 1.0](#17-beyond-10)
 
 ## 1. Goals
 
@@ -110,7 +112,7 @@ The examples are also the conformance tests: a parser follows this spec when it 
 
 A file is UTF-8 text. It starts with optional front matter, followed by the story. Line endings may be LF or CRLF. Tools keep whichever a file uses.
 
-Files use the `.md` extension so that every Markdown tool opens them. (A dedicated double extension is an open question, §15.)
+Files use the `.vxd` extension. Every VoxDown file is also a Markdown file, so a file may use `.md` instead where it is mostly read in Markdown tools; tools that read VoxDown accept both. The suggested media type is `text/markdown; variant=VoxDown` ([RFC 7763](https://www.rfc-editor.org/rfc/rfc7763)).
 
 ### 4.2 Front matter
 
@@ -118,7 +120,7 @@ Front matter is YAML between two `---` lines at the very top of the file. It is 
 
 ```yaml
 ---
-audiobook-markup: 0.1
+voxdown: 1.0
 title: The Tale of Peter Rabbit
 author: Beatrix Potter
 language: en-GB
@@ -134,13 +136,15 @@ cast:
 
 | Key | Meaning |
 | --- | --- |
-| `audiobook-markup` | The version of this spec the file follows. Recommended. |
+| `voxdown` | The version of this spec the file follows, such as `1.0` (§16). Recommended. |
 | `title`, `subtitle`, `author` | The book's details. |
 | `language` | The story's main language, as a [BCP 47](https://www.rfc-editor.org/info/bcp47) tag such as `en-GB` or `de`. |
 | `narrator` | Which cast member reads everything not marked otherwise. Defaults to `Narrator` (§5.1). |
 | `cast` | The characters, in the order a tool should list them (§4.3). |
 
-Any other key is allowed and must be kept by tools that rewrite the file. A tool's own data should sit under one key named after the tool, for example `kinu:`.
+Any other key is allowed and must be kept by tools that rewrite the file. A tool's own data should sit under one key named after the tool, for example `recorder:`.
+
+Front matter is YAML, and a reader understands at least this part of it: maps nested by indentation; plain, single-quoted and double-quoted values, including ones continued on more indented lines; block values (`|`, `>` and their `-` and `+` forms); lists written as `- item` or `[a, b]`; and comments. A tool that writes front matter keeps to that part. Anything else (anchors, aliases, tags, `{…}` maps) may be read as plain text, with a warning.
 
 ```example
 ---
@@ -1361,13 +1365,13 @@ Printed in Great Britain.
 
 ### 9.5 Other instructions
 
-An instruction with any other name is kept in place, never read or printed, and ignored by tools that don't know it. This is how tools add their own marks. A tool's instructions should start with its name and a colon, such as `{kinu:take 3}`.
+An instruction with any other name is kept in place, never read or printed, and ignored by tools that don't know it. This is how tools add their own marks. A tool's instructions should start with its name and a colon, such as `{recorder:take 3}`.
 
 ```example
-The broom fell over. {kinu:take 3}
+The broom fell over. {recorder:take 3}
 .
 Narrator: The broom fell over.
-{kinu:take 3}
+{recorder:take 3}
 ```
 
 Write `\{` for a literal curly brace.
@@ -1431,7 +1435,7 @@ She wrote \[sic\] and \{page\} on the board.
 Narrator: She wrote [sic] and {page} on the board.
 ```
 
-Links and images work as in Markdown (§8.3). Other Markdown blocks (lists, block quotes, tables, code, HTML) are not part of draft 0.1. Their lines are treated as ordinary paragraph text.
+Links and images work as in Markdown (§8.3). Other Markdown blocks (lists, block quotes, tables, code, HTML) are not part of version 1.0. Their lines are treated as ordinary paragraph text.
 
 ## 12. The two readings
 
@@ -1518,26 +1522,31 @@ The broom considered this.
 
 ### 12.3 Warnings
 
-A parser never rejects a file. It should report these warnings, each with the line and column:
+A parser never rejects a file. It should report these warnings, each with its line and column. The codes are stable: tools may match on them, and a later version adds codes but never changes what one means.
 
-- a quote or group that is never closed;
-- a quote that runs over a line break (fine for verse, but often a missing closing mark);
-- a character mark that gives its character nothing to say or do;
-- a quotation mark with nothing after it on its line;
-- a line of colons with no group open;
-- a name that is not in the cast, when the file has a cast;
-- a name written with different capitals in different places;
-- a cast member who never speaks (informational);
-- an unknown instruction without a tool prefix;
-- `{pause}` with a value that is not a length;
-- a sound followed directly by `(`, which Markdown reads as a link.
+| Code | When | Level |
+| --- | --- | --- |
+| `unclosed-quote` | A quote is never closed. | warning |
+| `quote-over-line-break` | A quote runs over a line break (fine for verse, but often a missing closing mark). | warning |
+| `unclosed-group` | A group is never closed. | warning |
+| `stray-group-close` | A line of colons closes no group. | warning |
+| `idle-mark` | A character mark gives its character nothing to say or do. | warning |
+| `stray-quote` | A quotation mark has nothing after it on its line. | warning |
+| `unknown-character` | A name is not in the cast, when the file has a cast. | warning |
+| `name-case` | A name is written with different capitals in different places. | warning |
+| `silent-cast-member` | A cast member never speaks. | info |
+| `unknown-instruction` | An instruction this spec does not know has no tool prefix. | warning |
+| `pause-value` | `{pause}` has a value that is not a length. | warning |
+| `sound-looks-like-link` | A sound is followed directly by `(`, which Markdown reads as a link. | warning |
+| `unclosed-note` | A `%%` is never closed, so it is read as text. | warning |
+| `front-matter` | The front matter uses YAML outside the part a reader must understand (§4.2), or its cast is not a map. | warning |
 
 ## 13. Tools that edit files
 
 The format is meant to be edited both by hand and through a visual editor. A visual editor works on the rendered story and writes the change back into the text. The rules below keep the text the author's own.
 
 1. **Round trip.** Reading a file and writing it back without changes produces identical bytes.
-2. **Small edits.** An edit changes only the characters it must. Tools never reflow text, change quotation styles, normalise spacing or reorder front matter.
+2. **Small edits.** An edit changes only the characters it must. Tools never reflow text, change quotation styles, normalize spacing or reorder front matter, unless the author asks them to (rule 8).
 3. **New marks are written in one way:**
    - a character mark and direction go directly before the speech's opening quote, with the cast's spelling: `@Gerald (yawning) “…`;
    - a direction for narration goes before its first word: `@(warmly) Once…`;
@@ -1546,28 +1555,75 @@ The format is meant to be edited both by hand and through a visual editor. A vis
 4. **Changing who says a line.** Replace the name in its mark. If the speech had no mark because it carried on an earlier one (§5.6), add a mark to it. If a later quote on the same line carried this one on, add a mark to that quote too, so its speaker stays the same.
 5. **Removing a direction.** Delete the parentheses, their content and one space. If the remaining character mark is not needed, remove it too.
 6. **Renaming a character.** Changing a full name touches only the front matter. Changing a short name replaces it in the cast and in every mark.
-7. **A tool's own divisions are never line breaks or words.** How a tool cuts the spoken script into pieces of its own, such as one audio recording per sentence, is the tool's business. A tool that keeps such a division in the file writes its own instruction (§9.5), such as Kinu's `{kinu:join}` between two sentences it records as one; it never adds a line break or changes the words to make one.
+7. **A tool's own divisions are never line breaks or words.** How a tool cuts the spoken script into pieces of its own, such as one audio recording per sentence, is the tool's business. A tool that keeps such a division in the file writes its own instruction (§9.5), such as a recording tool's `{recorder:join}` between two sentences it records as one; it never adds a line break or changes the words to make one.
+8. **Formatting is asked for.** A formatter tidies a file only when its author runs it, and never changes who says what, how, or in what order: words change only in their spaces and, when asked, their quotation marks. It may remove spaces at the start and end of lines, make runs of spaces and of blank lines one, put one blank line after the front matter and around headings and scene breaks, end the file with one line break, and write each name as the cast spells it. It keeps the front matter, line endings and group lines as they are. Changing straight quotation marks to curly ones is a separate choice, made for the story's language; an apostrophe becomes `’`, and a mark after a digit, such as `6"`, stays as it is.
 
 ## 14. Rendering
 
 *This section is advice, not a rule.*
 
-A renderer can show the file in two ways. The **book view** is the book text, typeset. The **performance view** is a script for reading aloud, in which:
+A renderer can show the file in two ways. The **book view** is the book text, typeset. The **script view** is a script for reading aloud, in which:
 
-- each character has a colour, assigned in cast order;
-- a character's full name appears where the speaker changes, and their words carry a light tint or underline in their colour;
+- each character has a color, assigned in cast order;
+- a character's full name appears where the speaker changes, and their words carry a light tint or underline in their color;
 - a direction appears as a small italic marking above its first word, with a bar beside the lines a group covers;
-- sounds appear as small chips in the text, and a character's sounds in the character's colour;
+- sounds appear as small chips in the text, and a character's sounds in the character's color;
 - a page turn between lines is a rule across the page, and one inside a line is a small marker;
-- pauses are small gaps labelled with their length;
+- pauses are small gaps labeled with their length;
 - notes sit in the margin beside the text they are about;
-- `{book only}` text is dimmed and labelled, and `{hidden}` headings appear only as labels.
+- `{book only}` text is dimmed and labeled, and `{hidden}` headings appear only as labels.
 
 The quotation marks stay visible in both views. They are part of the story.
 
-## 15. Open questions
+## 15. Conformance
 
-- **Name.** The final name, file extension (plain `.md` or a double extension) and front matter key.
+A tool can follow this spec at two levels.
+
+**A reader** reads VoxDown files: a player, a speech pipeline, a converter, a viewer. A reader
+
+1. accepts every file, never refusing one (§1);
+2. produces the spoken script of every example in this spec, line for line (§12.1): who says each stretch, with which direction, and every sound, instruction, note and image in its place;
+3. produces the book text of every example that gives one (§12.2);
+4. ignores, without failing, instructions and front matter keys it does not know (§4.2, §9.5).
+
+A reader should also report the warnings in §12.3, with their codes. A viewer that only shows the printed story may stop at the book text and say so.
+
+**A writer** changes VoxDown files: an editor, a formatter, a tool that adds its own marks. A writer is a reader that also
+
+1. writes an unchanged file back byte for byte (§13, rule 1), keeping its line endings and any byte order mark;
+2. keeps every front matter key, instruction, note and escape it does not change, where it was written;
+3. writes new marks in the one way §13 rule 3 gives, and edits as rules 4 to 7 say;
+4. changes spacing or quotation marks only when its author asks (§13, rule 8).
+
+**The conformance file.** Every example in this spec is also in [conformance.json](conformance.json), so an implementation can test itself without reading this document. It is a list with one entry per example:
+
+| Field | Meaning |
+| --- | --- |
+| `example` | The example's number, from 1, in the order this spec gives them. |
+| `section` | The section it is in, such as `5.6`. |
+| `line` | The line of this file its fence opens on. |
+| `input` | The file. |
+| `script` | The spoken script, as written in the examples (§3). Required of every reader. |
+| `book` | The book text, when the example gives one. Required of every reader. |
+| `lines` | The spoken script as data: one object per line heard, as the reference parser exports them. |
+| `warnings` | The warnings the reference parser reports: `code`, `line` and `column`. Recommended, not required. |
+
+The examples are the tests, and the spec is the authority: if the file and this document ever disagree, this document is right and the file has a bug.
+
+## 16. Versions
+
+This spec has a version, `major.minor`, separate from the version of any tool. A file says which it follows with the `voxdown` front matter key (§4.2).
+
+- A **minor** version (1.1, 1.2) only adds: new instructions, new front matter keys, new warnings, or meaning for something that used to be plain text and that a 1.0 file would rarely contain. A 1.0 file means the same under every 1.x. A 1.x reader reads any 1.y file, ignoring what it doesn't know as §9.5 says.
+- A **major** version (2.0) may change what existing files mean. A reader that meets a file of a later major version should still read it, and may warn.
+- Corrections that change no example's output (wording, clearer explanations, new examples of existing rules) don't change the version.
+
+A file without a `voxdown` key is read by the latest version the reader knows.
+
+## 17. Beyond 1.0
+
+Questions for later versions. None of them changes a 1.0 file.
+
 - **Dialogue with dashes.** Spanish, French and other languages often mark speech with dashes instead of quotes. A rule for where a dash speech ends.
 - **Speaking together.** A chorus line said by two characters at once: perhaps `@Wanda @Marmalade “Fine.”`.
 - **Pronunciation.** A front matter list of how to say names and invented words.
@@ -1576,4 +1632,3 @@ The quotation marks stay visible in both views. They are part of the story.
 - **Verse and letters.** Whether block quotes should carry meaning for letters, signs and poems.
 - **Headings.** Whether a file should be able to set all headings of one level to `{hidden}` at once.
 - **Sounds before unquoted speech.** Whether `@Gerald [yawns] Could you not?` should keep Gerald speaking after the sound, as a script writer would expect, rather than return to the narrator.
-- **Front matter.** Whether to limit front matter to a small, simple part of YAML.

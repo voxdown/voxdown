@@ -1,0 +1,4562 @@
+[
+  {
+    "example": 1,
+    "section": "3",
+    "line": 100,
+    "input": "@Gerald (yawning) “I’ve only just got to sleep,” said the dragon.",
+    "script": "Gerald (yawning): I’ve only just got to sleep,\nNarrator: said the dragon.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": "yawning",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’ve only just got to sleep,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 19
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the dragon.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 50
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 2,
+    "section": "4.2",
+    "line": 149,
+    "input": "---\ntitle: The Tale of Peter Rabbit\nauthor: Beatrix Potter\n---\nOnce upon a time there were four little Rabbits.",
+    "script": "Narrator: Once upon a time there were four little Rabbits.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time there were four little Rabbits.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 3,
+    "section": "4.3",
+    "line": 169,
+    "input": "---\ncast:\n  Clown: The Silly Clown\n---\n@Clown “Honk!”",
+    "script": "Clown: Honk!",
+    "lines": [
+      {
+        "speaker": "Clown",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Honk!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 8
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 4,
+    "section": "4.3",
+    "line": 179,
+    "input": "@Shepherd “Just count the sheep,” said the shepherd.",
+    "script": "Shepherd: Just count the sheep,\nNarrator: said the shepherd.",
+    "lines": [
+      {
+        "speaker": "Shepherd",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just count the sheep,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 11
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the shepherd.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 35
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 5,
+    "section": "4.4",
+    "line": 201,
+    "input": "And their names were—\nFlopsy,\nMopsy,\nCotton-tail,\nand Peter.",
+    "script": "Narrator: And their names were—\nNarrator: Flopsy,\nNarrator: Mopsy,\nNarrator: Cotton-tail,\nNarrator: and Peter.",
+    "book": "And their names were—\nFlopsy,\nMopsy,\nCotton-tail,\nand Peter.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "And their names were—",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Flopsy,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Mopsy,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Cotton-tail,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 4,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "and Peter.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 6,
+    "section": "4.4",
+    "line": 227,
+    "input": "# The Tale of Peter Rabbit\n\nOnce upon a time there were four little Rabbits.",
+    "script": "# Narrator: The Tale of Peter Rabbit\n\nNarrator: Once upon a time there were four little Rabbits.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": 1,
+        "kind": "speech",
+        "text": "The Tale of Peter Rabbit",
+        "scene": 1,
+        "sceneTitle": "The Tale of Peter Rabbit",
+        "page": "1",
+        "line": 1,
+        "column": 3
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time there were four little Rabbits.",
+        "scene": 1,
+        "sceneTitle": "The Tale of Peter Rabbit",
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 7,
+    "section": "4.4",
+    "line": 237,
+    "input": "Until Tuesday.\n\n---\n\nOn Tuesday morning, the king summoned him.",
+    "script": "Narrator: Until Tuesday.\n\n---\n\nNarrator: On Tuesday morning, the king summoned him.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Until Tuesday.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "On Tuesday morning, the king summoned him.",
+        "scene": 2,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 8,
+    "section": "4.4",
+    "line": 253,
+    "input": "Until Tuesday.\n---\nOn Tuesday morning, the king summoned him.",
+    "script": "Narrator: Until Tuesday.\n\n---\n\nNarrator: On Tuesday morning, the king summoned him.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Until Tuesday.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "On Tuesday morning, the king summoned him.",
+        "scene": 2,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 9,
+    "section": "4.4",
+    "line": 265,
+    "input": "Mount Mumble was very tall.\n## The cave\nThen he heard a deep rumble.",
+    "script": "Narrator: Mount Mumble was very tall.\n\n## Narrator: The cave\n\nNarrator: Then he heard a deep rumble.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Mount Mumble was very tall.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": 2,
+        "kind": "speech",
+        "text": "The cave",
+        "scene": 2,
+        "sceneTitle": "The cave",
+        "page": "1",
+        "line": 2,
+        "column": 4
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Then he heard a deep rumble.",
+        "scene": 2,
+        "sceneTitle": "The cave",
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 10,
+    "section": "5.1",
+    "line": 283,
+    "input": "“Stop thief!” cried Mr. McGregor.",
+    "script": "Narrator: “Stop thief!” cried Mr. McGregor.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "“Stop thief!” cried Mr. McGregor.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 11,
+    "section": "5.1",
+    "line": 289,
+    "input": "---\nnarrator: Peter\n---\nI ran. @Mother “Peter!”",
+    "script": "Peter: I ran.\nMother: Peter!",
+    "lines": [
+      {
+        "speaker": "Peter",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I ran.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 4,
+        "column": 1
+      },
+      {
+        "speaker": "Mother",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Peter!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 4,
+        "column": 16
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 12,
+    "section": "5.2",
+    "line": 305,
+    "input": "@SillyClown “Honk!”",
+    "script": "SillyClown: Honk!",
+    "lines": [
+      {
+        "speaker": "SillyClown",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Honk!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 13
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 13,
+    "section": "5.2",
+    "line": 313,
+    "input": "---\ncast:\n  Clown: The Silly Clown\n---\n@clown “Honk!” @CLOWN “Honk honk!”",
+    "script": "Clown: Honk!\nClown: Honk honk!",
+    "lines": [
+      {
+        "speaker": "Clown",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Honk!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 8
+      },
+      {
+        "speaker": "Clown",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Honk honk!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 23
+      }
+    ],
+    "warnings": [
+      {
+        "code": "name-case",
+        "line": 5,
+        "column": 2
+      },
+      {
+        "code": "name-case",
+        "line": 5,
+        "column": 17
+      }
+    ]
+  },
+  {
+    "example": 14,
+    "section": "5.2",
+    "line": 324,
+    "input": "@clown “Honk!”\n@Clown “Honk honk!”",
+    "script": "clown: Honk!\nclown: Honk honk!",
+    "lines": [
+      {
+        "speaker": "clown",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Honk!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "clown",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Honk honk!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 8
+      }
+    ],
+    "warnings": [
+      {
+        "code": "name-case",
+        "line": 2,
+        "column": 2
+      }
+    ]
+  },
+  {
+    "example": 15,
+    "section": "5.2",
+    "line": 332,
+    "input": "@narrator (warmly) Once upon a time.",
+    "script": "Narrator (warmly): Once upon a time.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "warmly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 20
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 16,
+    "section": "5.2",
+    "line": 340,
+    "input": "Write to tom@example.com, or meet me @ noon.",
+    "script": "Narrator: Write to tom@example.com, or meet me @ noon.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Write to tom@example.com, or meet me @ noon.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 17,
+    "section": "5.2",
+    "line": 346,
+    "input": "雷公听见了@雷公 [笑]",
+    "script": "Narrator: 雷公听见了\n雷公 [笑]",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "雷公听见了",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "雷公",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "笑",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 10
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 18,
+    "section": "5.2",
+    "line": 353,
+    "input": "\\@Gerald is my username.",
+    "script": "Narrator: @Gerald is my username.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "@Gerald is my username.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 19,
+    "section": "5.4",
+    "line": 374,
+    "input": "@Gerald “Could you not?”",
+    "script": "Gerald: Could you not?",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 20,
+    "section": "5.4",
+    "line": 380,
+    "input": "@Gerald “I’ve only just got to sleep,” said the dragon.",
+    "script": "Gerald: I’ve only just got to sleep,\nNarrator: said the dragon.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’ve only just got to sleep,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the dragon.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 40
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 21,
+    "section": "5.4",
+    "line": 389,
+    "input": "Gerald put on his spectacles. @Gerald “I thought perhaps librarian.”",
+    "script": "Narrator: Gerald put on his spectacles.\nGerald: I thought perhaps librarian.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Gerald put on his spectacles.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I thought perhaps librarian.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 39
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 22,
+    "section": "5.4",
+    "line": 396,
+    "input": "@Gerald Gerald put on his spectacles. “I thought perhaps librarian.”",
+    "script": "Narrator: Gerald put on his spectacles.\nGerald: I thought perhaps librarian.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Gerald put on his spectacles.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I thought perhaps librarian.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 39
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 23,
+    "section": "5.4",
+    "line": 403,
+    "input": "@Baker And out of the blue, “Just a little flame,” said the baker. “Gently.”",
+    "script": "Narrator: And out of the blue,\nBaker: Just a little flame,\nNarrator: said the baker.\nBaker: Gently.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "And out of the blue,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Baker",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just a little flame,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 29
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the baker.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 52
+      },
+      {
+        "speaker": "Baker",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Gently.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 68
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 24,
+    "section": "5.4",
+    "line": 414,
+    "input": "@Baker (nervously) And out of the blue, “Just a little flame,” said the baker.",
+    "script": "Narrator: And out of the blue,\nBaker (nervously): Just a little flame,\nNarrator: said the baker.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "And out of the blue,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 20
+      },
+      {
+        "speaker": "Baker",
+        "direction": "nervously",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just a little flame,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 41
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the baker.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 64
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 25,
+    "section": "5.4",
+    "line": 424,
+    "input": "“Could you not?” said @Gerald.",
+    "script": "Narrator: “Could you not?” said",
+    "book": "“Could you not?” said .",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "“Could you not?” said",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": [
+      {
+        "code": "idle-mark",
+        "line": 1,
+        "column": 23
+      }
+    ]
+  },
+  {
+    "example": 26,
+    "section": "5.4",
+    "line": 434,
+    "input": "@Wanda “Fine!” @Marmalade “Hm.”",
+    "script": "Wanda: Fine!\nMarmalade: Hm.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Fine!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Marmalade",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Hm.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 27
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 27,
+    "section": "5.4",
+    "line": 443,
+    "input": "@Gerald “‘But you are a chicken,’ said the duke.”",
+    "script": "Gerald: ‘But you are a chicken,’ said the duke.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "‘But you are a chicken,’ said the duke.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 28,
+    "section": "5.5",
+    "line": 475,
+    "input": "@Mother ‘Now run along, and don’t get into mischief.’",
+    "script": "Mother: Now run along, and don’t get into mischief.",
+    "lines": [
+      {
+        "speaker": "Mother",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Now run along, and don’t get into mischief.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 29,
+    "section": "5.5",
+    "line": 481,
+    "input": "@Gerald \"Could you not?\" said the dragon.",
+    "script": "Gerald: Could you not?\nNarrator: said the dragon.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the dragon.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 26
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 30,
+    "section": "5.5",
+    "line": 488,
+    "input": "@Anna „Guten Morgen“, sagte Anna.",
+    "script": "Anna: Guten Morgen\nNarrator: , sagte Anna.",
+    "lines": [
+      {
+        "speaker": "Anna",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Guten Morgen",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 7
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": ", sagte Anna.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 21
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 31,
+    "section": "5.5",
+    "line": 497,
+    "input": "@Mother ‘Mind the rabbits\\’ burrow.’",
+    "script": "Mother: Mind the rabbits’ burrow.",
+    "lines": [
+      {
+        "speaker": "Mother",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Mind the rabbits’ burrow.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 32,
+    "section": "5.5",
+    "line": 503,
+    "input": "@Gerald \"Fine,\" he said, 'cause he was tired.",
+    "script": "Gerald: Fine,\nNarrator: he said, 'cause he was tired.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Fine,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "he said, 'cause he was tired.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 17
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 33,
+    "section": "5.5",
+    "line": 512,
+    "input": "@Hanako 花子は「はい」と言った。",
+    "script": "Narrator: 花子は\nHanako: はい\nNarrator: と言った。",
+    "book": "花子は「はい」と言った。",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "花子は",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Hanako",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "はい",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 12
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "と言った。",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 16
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 34,
+    "section": "5.6",
+    "line": 526,
+    "input": "@Baker “Just a little flame,” said the baker. “Gently.”",
+    "script": "Baker: Just a little flame,\nNarrator: said the baker.\nBaker: Gently.",
+    "lines": [
+      {
+        "speaker": "Baker",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just a little flame,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the baker.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 31
+      },
+      {
+        "speaker": "Baker",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Gently.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 47
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 35,
+    "section": "5.6",
+    "line": 534,
+    "input": "@Advisor (urgent, formal whisper) “Sire,” whispered his advisor. “This is where you shout ‘Attack!’”",
+    "script": "Advisor (urgent, formal whisper): Sire,\nNarrator: whispered his advisor.\nAdvisor (urgent, formal whisper): This is where you shout ‘Attack!’",
+    "lines": [
+      {
+        "speaker": "Advisor",
+        "direction": "urgent, formal whisper",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sire,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 35
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "whispered his advisor.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 43
+      },
+      {
+        "speaker": "Advisor",
+        "direction": "urgent, formal whisper",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "This is where you shout ‘Attack!’",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 66
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 36,
+    "section": "5.6",
+    "line": 542,
+    "input": "@Gerald “I know. @(yawning) I’m tired,” he said. “Very.”",
+    "script": "Gerald: I know.\nGerald (yawning): I’m tired,\nNarrator: he said.\nGerald (yawning): Very.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I know.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "yawning",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’m tired,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 29
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "he said.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 41
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "yawning",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Very.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 50
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 37,
+    "section": "5.6",
+    "line": 553,
+    "input": "@Wanda “Fine,” she said. @Marmalade “Good,” said the cat. “Very good.”",
+    "script": "Wanda: Fine,\nNarrator: she said.\nMarmalade: Good,\nNarrator: said the cat.\nMarmalade: Very good.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Fine,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "she said.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 16
+      },
+      {
+        "speaker": "Marmalade",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Good,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 37
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the cat.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 45
+      },
+      {
+        "speaker": "Marmalade",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Very good.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 59
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 38,
+    "section": "5.6",
+    "line": 565,
+    "input": "@Percival “Aren’t you going to roar?”\nThe dragon sighed.\n“Rooooar.”",
+    "script": "Percival: Aren’t you going to roar?\nNarrator: The dragon sighed.\nNarrator: “Rooooar.”",
+    "lines": [
+      {
+        "speaker": "Percival",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Aren’t you going to roar?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 11
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The dragon sighed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "“Rooooar.”",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 39,
+    "section": "5.6",
+    "line": 575,
+    "input": "@Percival “Aren’t you going to roar?”\nThe dragon sighed.\n@Gerald “Rooooar.”",
+    "script": "Percival: Aren’t you going to roar?\nNarrator: The dragon sighed.\nGerald: Rooooar.",
+    "lines": [
+      {
+        "speaker": "Percival",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Aren’t you going to roar?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 11
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The dragon sighed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Rooooar.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 40,
+    "section": "5.6",
+    "line": 585,
+    "input": "@Wanda “Fine.”\n\n“Fine,” said someone else.",
+    "script": "Wanda: Fine.\n\nNarrator: “Fine,” said someone else.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Fine.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "“Fine,” said someone else.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 41,
+    "section": "5.6",
+    "line": 597,
+    "input": "@Mother ‘Now my dears,’ said old Mrs. Rabbit one\nmorning, ‘you may go into the fields.’",
+    "script": "Mother: Now my dears,\nNarrator: said old Mrs. Rabbit one\nNarrator: morning, ‘you may go into the fields.’",
+    "lines": [
+      {
+        "speaker": "Mother",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Now my dears,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said old Mrs. Rabbit one",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 25
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "morning, ‘you may go into the fields.’",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 42,
+    "section": "5.6",
+    "line": 608,
+    "input": "@Wanda “Fine,” she said, in her \\‘polite’ voice.",
+    "script": "Wanda: Fine,\nNarrator: she said, in her ‘polite’ voice.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Fine,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "she said, in her ‘polite’ voice.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 16
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 43,
+    "section": "5.7",
+    "line": 619,
+    "input": "@Gerald (softly) “Twinkle, twinkle, little star,\nHow I wonder what you are.”\nHe yawned.",
+    "script": "Gerald (softly): Twinkle, twinkle, little star,\nGerald (softly): How I wonder what you are.\nNarrator: He yawned.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": "softly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Twinkle, twinkle, little star,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 18
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "softly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "How I wonder what you are.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He yawned.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": [
+      {
+        "code": "quote-over-line-break",
+        "line": 1,
+        "column": 18
+      }
+    ]
+  },
+  {
+    "example": 44,
+    "section": "5.7",
+    "line": 631,
+    "input": "@Gerald “Twinkle, twinkle, little star,\nHow I wonder what you are,” he sang. “Up above the world so high.”",
+    "script": "Gerald: Twinkle, twinkle, little star,\nGerald: How I wonder what you are,\nNarrator: he sang.\nGerald: Up above the world so high.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Twinkle, twinkle, little star,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "How I wonder what you are,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "he sang.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 29
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Up above the world so high.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 38
+      }
+    ],
+    "warnings": [
+      {
+        "code": "quote-over-line-break",
+        "line": 1,
+        "column": 9
+      }
+    ]
+  },
+  {
+    "example": 45,
+    "section": "5.7",
+    "line": 643,
+    "input": "@Gerald “Oh no, I’m going to",
+    "script": "Gerald: Oh no, I’m going to",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Oh no, I’m going to",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": [
+      {
+        "code": "unclosed-quote",
+        "line": 1,
+        "column": 9
+      }
+    ]
+  },
+  {
+    "example": 46,
+    "section": "5.7",
+    "line": 649,
+    "input": "@Gerald “Once upon a time there was a chicken.\n\n“He believed he was the king of France.”\n\nTwenty children laughed.",
+    "script": "Gerald: Once upon a time there was a chicken.\n\nGerald: He believed he was the king of France.\n\nNarrator: Twenty children laughed.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time there was a chicken.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He believed he was the king of France.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Twenty children laughed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 47,
+    "section": "5.7",
+    "line": 663,
+    "input": "@Gerald “Once upon a time there was a chicken.\n\n{page}\n\n“He believed he was the king of France.”",
+    "script": "Gerald: Once upon a time there was a chicken.\n\n{page}\n\nGerald: He believed he was the king of France.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time there was a chicken.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": "page",
+        "heading": null,
+        "kind": "page",
+        "text": "",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 3,
+        "column": 1
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He believed he was the king of France.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 5,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 48,
+    "section": "5.8",
+    "line": 681,
+    "input": "@Gerald Could you not? I’ve only just got to sleep.",
+    "script": "Gerald: Could you not? I’ve only just got to sleep.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not? I’ve only just got to sleep.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 49,
+    "section": "5.8",
+    "line": 687,
+    "input": "@Gerald Could you not? @Percival Sorry.",
+    "script": "Gerald: Could you not?\nPercival: Sorry.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Percival",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sorry.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 34
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 50,
+    "section": "5.8",
+    "line": 694,
+    "input": "@Gerald Well, @Percival “Sorry.”",
+    "script": "Gerald: Well,\nPercival: Sorry.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Well,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Percival",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sorry.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 25
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 51,
+    "section": "5.8",
+    "line": 701,
+    "input": "@Gerald Could you not? @(yawning) I’m tired.",
+    "script": "Gerald: Could you not?\nGerald (yawning): I’m tired.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "yawning",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’m tired.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 35
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 52,
+    "section": "5.8",
+    "line": 708,
+    "input": "@Gerald Could you not? [a distant clang] I’m tired.",
+    "script": "Gerald: Could you not?\n[a distant clang]\nGerald: I’m tired.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "sound",
+        "text": "a distant clang",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 24
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’m tired.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 42
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 53,
+    "section": "5.8",
+    "line": 718,
+    "input": "@Gerald Could you not?\nI’ve only just got to sleep.",
+    "script": "Gerald: Could you not?\nNarrator: I’ve only just got to sleep.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’ve only just got to sleep.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 54,
+    "section": "5.8",
+    "line": 728,
+    "input": "@Gerald They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
+    "script": "Narrator: They charge into my cave shouting,\nGerald: PREPARE TO MEET THY DOOM!",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "They charge into my cave shouting,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "PREPARE TO MEET THY DOOM!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 55,
+    "section": "5.8",
+    "line": 735,
+    "input": "@Gerald “They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’”",
+    "script": "Gerald: They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 56,
+    "section": "5.8",
+    "line": 743,
+    "input": "@Narrator (warmly) Once upon a time, “Hello,” said the cat.",
+    "script": "Narrator: Once upon a time,\nNarrator (warmly): Hello,\nNarrator: said the cat.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 20
+      },
+      {
+        "speaker": "Narrator",
+        "direction": "warmly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Hello,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 38
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the cat.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 47
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 57,
+    "section": "5.8",
+    "line": 751,
+    "input": "@(warmly) Once upon a time, “Hello,” said the cat.",
+    "script": "Narrator (warmly): Once upon a time, “Hello,” said the cat.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "warmly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time, “Hello,” said the cat.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 11
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 58,
+    "section": "6.1",
+    "line": 763,
+    "input": "@Gerald (deep, polite and utterly unbothered) “Could you not?”",
+    "script": "Gerald (deep, polite and utterly unbothered): Could you not?",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": "deep, polite and utterly unbothered",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 47
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 59,
+    "section": "6.1",
+    "line": 769,
+    "input": "@Narrator (warmly) Sir Percival had been training his entire life.",
+    "script": "Narrator (warmly): Sir Percival had been training his entire life.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "warmly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sir Percival had been training his entire life.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 20
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 60,
+    "section": "6.1",
+    "line": 777,
+    "input": "Her broom (which was old) creaked. @Wanda (sighing) “Come on.”",
+    "script": "Narrator: Her broom (which was old) creaked.\nWanda (sighing): Come on.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Her broom (which was old) creaked.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Wanda",
+        "direction": "sighing",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Come on.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 53
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 61,
+    "section": "6.1",
+    "line": 784,
+    "input": "@Clown (happily) \"Just you wait!\" said the clown, (sadly) \"I've been waiting for you\".",
+    "script": "Clown (happily): Just you wait!\nNarrator: said the clown, (sadly)\nClown (happily): I've been waiting for you",
+    "lines": [
+      {
+        "speaker": "Clown",
+        "direction": "happily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just you wait!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 18
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the clown, (sadly)",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 35
+      },
+      {
+        "speaker": "Clown",
+        "direction": "happily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I've been waiting for you",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 59
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 62,
+    "section": "6.1",
+    "line": 794,
+    "input": "@Gerald yawning “I’m tired.”",
+    "script": "Narrator: yawning\nGerald: I’m tired.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "yawning",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’m tired.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 17
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 63,
+    "section": "6.1",
+    "line": 803,
+    "input": "@Gerald (deep (very deep)) “Hello.”",
+    "script": "Gerald (deep (very deep)): Hello.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": "deep (very deep)",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Hello.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 28
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 64,
+    "section": "6.2",
+    "line": 813,
+    "input": "@(warmly) Sir Percival had been training his entire life.",
+    "script": "Narrator (warmly): Sir Percival had been training his entire life.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "warmly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sir Percival had been training his entire life.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 11
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 65,
+    "section": "6.2",
+    "line": 821,
+    "input": "@Gerald “I know. @(yawning) I’m tired.”",
+    "script": "Gerald: I know.\nGerald (yawning): I’m tired.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I know.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "yawning",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’m tired.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 29
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 66,
+    "section": "6.2",
+    "line": 830,
+    "input": "@King “Those poor children!” cried the king. @(quieter) “Oh dear.”",
+    "script": "King: Those poor children!\nNarrator: cried the king.\nKing (quieter): Oh dear.",
+    "lines": [
+      {
+        "speaker": "King",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Those poor children!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 7
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "cried the king.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 30
+      },
+      {
+        "speaker": "King",
+        "direction": "quieter",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Oh dear.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 57
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 67,
+    "section": "6.2",
+    "line": 838,
+    "input": "@Clown (happily) \"Just you wait!\" said the clown, @(sadly) \"I've been waiting for you\".",
+    "script": "Clown (happily): Just you wait!\nNarrator: said the clown,\nClown (sadly): I've been waiting for you",
+    "lines": [
+      {
+        "speaker": "Clown",
+        "direction": "happily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just you wait!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 18
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the clown,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 35
+      },
+      {
+        "speaker": "Clown",
+        "direction": "sadly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I've been waiting for you",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 60
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 68,
+    "section": "6.2",
+    "line": 848,
+    "input": "@(quieter) “Oh dear,” he said.",
+    "script": "Narrator (quieter): “Oh dear,” he said.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "quieter",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "“Oh dear,” he said.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 12
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 69,
+    "section": "6.2",
+    "line": 856,
+    "input": "@Clown (happily) \"Just you wait!\" @(frostily) said the clown, \"I've been waiting for you\", he smirked.",
+    "script": "Clown (happily): Just you wait!\nNarrator (frostily): said the clown,\nClown (happily): I've been waiting for you\nNarrator: , he smirked.",
+    "lines": [
+      {
+        "speaker": "Clown",
+        "direction": "happily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just you wait!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 18
+      },
+      {
+        "speaker": "Narrator",
+        "direction": "frostily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the clown,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 47
+      },
+      {
+        "speaker": "Clown",
+        "direction": "happily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I've been waiting for you",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 63
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": ", he smirked.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 90
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 70,
+    "section": "6.2",
+    "line": 867,
+    "input": "@Clown (happily) \"Just you wait!\" @(frostily) said the clown, \"I've been waiting for you\", he smirked.\"",
+    "script": "Clown (happily): Just you wait!\nNarrator (frostily): said the clown,\nClown (happily): I've been waiting for you\nNarrator: , he smirked.\"",
+    "lines": [
+      {
+        "speaker": "Clown",
+        "direction": "happily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just you wait!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 18
+      },
+      {
+        "speaker": "Narrator",
+        "direction": "frostily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the clown,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 47
+      },
+      {
+        "speaker": "Clown",
+        "direction": "happily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I've been waiting for you",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 63
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": ", he smirked.\"",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 90
+      }
+    ],
+    "warnings": [
+      {
+        "code": "stray-quote",
+        "line": 1,
+        "column": 103
+      }
+    ]
+  },
+  {
+    "example": 71,
+    "section": "6.2",
+    "line": 876,
+    "input": "@Clown \"Just you wait!\" he smirked.\"\nThe children giggled.",
+    "script": "Clown: Just you wait!\nNarrator: he smirked.\"\nNarrator: The children giggled.",
+    "lines": [
+      {
+        "speaker": "Clown",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just you wait!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "he smirked.\"",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 25
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The children giggled.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      }
+    ],
+    "warnings": [
+      {
+        "code": "stray-quote",
+        "line": 1,
+        "column": 36
+      }
+    ]
+  },
+  {
+    "example": 72,
+    "section": "6.3",
+    "line": 889,
+    "input": "@(nervously) The big fox looked around, @() and then relaxed.",
+    "script": "Narrator (nervously): The big fox looked around,\nNarrator: and then relaxed.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "nervously",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The big fox looked around,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 14
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "and then relaxed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 45
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 73,
+    "section": "6.3",
+    "line": 896,
+    "input": "@Clown (happily) \"Just you wait! @() I mean it.\"",
+    "script": "Clown (happily): Just you wait!\nClown: I mean it.",
+    "lines": [
+      {
+        "speaker": "Clown",
+        "direction": "happily",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Just you wait!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 18
+      },
+      {
+        "speaker": "Clown",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I mean it.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 38
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 74,
+    "section": "6.3",
+    "line": 905,
+    "input": "::: whispering\n@(nervously) The big fox looked around, @() and then relaxed.\n:::",
+    "script": "Narrator (nervously): The big fox looked around,\nNarrator (whispering): and then relaxed.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "nervously",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The big fox looked around,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 14
+      },
+      {
+        "speaker": "Narrator",
+        "direction": "whispering",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "and then relaxed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 45
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 75,
+    "section": "6.4",
+    "line": 923,
+    "input": "@(nervously) The big fox looked around.\nHe relaxed.",
+    "script": "Narrator (nervously): The big fox looked around.\nNarrator: He relaxed.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "nervously",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The big fox looked around.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 14
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He relaxed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 76,
+    "section": "7.1",
+    "line": 957,
+    "input": "::: whispering\nSir Percival crept inside.\n\nClank.\n:::\n\nThe dragon opened one eye.",
+    "script": "Narrator (whispering): Sir Percival crept inside.\n\nNarrator (whispering): Clank.\n\nNarrator: The dragon opened one eye.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "whispering",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sir Percival crept inside.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": "whispering",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Clank.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 4,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The dragon opened one eye.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 7,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 77,
+    "section": "7.1",
+    "line": 973,
+    "input": "::: (softly)\nThe knight stopped.\n\n@Knight “Who goes there?”\n\n@Percival (barely a whisper) “He’s only just got to sleep.”\n:::",
+    "script": "Narrator (softly): The knight stopped.\n\nKnight (softly): Who goes there?\n\nPercival (barely a whisper): He’s only just got to sleep.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "softly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The knight stopped.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Knight",
+        "direction": "softly",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Who goes there?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 4,
+        "column": 9
+      },
+      {
+        "speaker": "Percival",
+        "direction": "barely a whisper",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He’s only just got to sleep.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 6,
+        "column": 30
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 78,
+    "section": "7.1",
+    "line": 991,
+    "input": "::: whispering\nSir Percival crept inside.\nClank.\n{page}\nThe dragon opened one eye.\n:::\n@Gerald (deep, polite and utterly unbothered) “Could you not?”\nSir Percival stopped.\n@Gerald (yawning) “I’ve only just got to sleep,” said the dragon.\n@Percival “Aren’t you going to roar?”\nThe dragon sighed.",
+    "script": "Narrator (whispering): Sir Percival crept inside.\nNarrator (whispering): Clank.\n{page}\nNarrator (whispering): The dragon opened one eye.\n\nGerald (deep, polite and utterly unbothered): Could you not?\nNarrator: Sir Percival stopped.\nGerald (yawning): I’ve only just got to sleep,\nNarrator: said the dragon.\nPercival: Aren’t you going to roar?\nNarrator: The dragon sighed.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "whispering",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sir Percival crept inside.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": "whispering",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Clank.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": "page",
+        "heading": null,
+        "kind": "page",
+        "text": "",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 4,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": "whispering",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The dragon opened one eye.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 5,
+        "column": 1
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "deep, polite and utterly unbothered",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 7,
+        "column": 47
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sir Percival stopped.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 8,
+        "column": 1
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "yawning",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’ve only just got to sleep,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 9,
+        "column": 19
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the dragon.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 9,
+        "column": 50
+      },
+      {
+        "speaker": "Percival",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Aren’t you going to roar?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 10,
+        "column": 11
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The dragon sighed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 11,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 79,
+    "section": "7.2",
+    "line": 1021,
+    "input": "::: @Wanda reading the letter\nDear Management,\n\nDue to unacceptable working conditions, I am officially refusing to fly.\n:::",
+    "script": "Wanda (reading the letter): Dear Management,\n\nWanda (reading the letter): Due to unacceptable working conditions, I am officially refusing to fly.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": "reading the letter",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Dear Management,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Wanda",
+        "direction": "reading the letter",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Due to unacceptable working conditions, I am officially refusing to fly.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 4,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 80,
+    "section": "7.2",
+    "line": 1035,
+    "input": "::: @Gerald\nThey charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’\n:::",
+    "script": "Gerald: They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 81,
+    "section": "7.2",
+    "line": 1045,
+    "input": "::: @Gerald reading aloud\n‘But you are a chicken,’ said the duke. @Wanda “Ha!” ‘I’m aware,’ said the chicken.\n:::",
+    "script": "Gerald (reading aloud): ‘But you are a chicken,’ said the duke.\nWanda: Ha!\nWanda: I’m aware,\nGerald (reading aloud): said the chicken.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": "reading aloud",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "‘But you are a chicken,’ said the duke.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Ha!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 48
+      },
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I’m aware,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 54
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "reading aloud",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said the chicken.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 67
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 82,
+    "section": "7.2",
+    "line": 1056,
+    "input": "::: @Gerald reading aloud\n‘But you are a chicken,’ said the duke.\n@Wanda “Ha!”\n‘I’m aware,’ said the chicken.\n:::",
+    "script": "Gerald (reading aloud): ‘But you are a chicken,’ said the duke.\nWanda: Ha!\nGerald (reading aloud): ‘I’m aware,’ said the chicken.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": "reading aloud",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "‘But you are a chicken,’ said the duke.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Ha!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 8
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "reading aloud",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "‘I’m aware,’ said the chicken.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 4,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 83,
+    "section": "7.3",
+    "line": 1072,
+    "input": "::: softly, close to a whisper\nAt midnight, something came up the mountain.\n\n::: @Gerald sleepy\nVery heroic.\n:::\n\nAnd he went back to sleep.\n:::",
+    "script": "Narrator (softly, close to a whisper): At midnight, something came up the mountain.\n\nGerald (sleepy): Very heroic.\n\nNarrator (softly, close to a whisper): And he went back to sleep.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": "softly, close to a whisper",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "At midnight, something came up the mountain.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "speaker": "Gerald",
+        "direction": "sleepy",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Very heroic.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": "softly, close to a whisper",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "And he went back to sleep.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 8,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 84,
+    "section": "7.3",
+    "line": 1092,
+    "input": "::: whispering\n::: @Gerald\nCould you not?\n:::\n:::",
+    "script": "Gerald (whispering): Could you not?",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": "whispering",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you not?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 85,
+    "section": "8.1",
+    "line": 1108,
+    "input": "The broom fell over. [wooden clatter; one broom handle dropping flat onto flagstones]",
+    "script": "Narrator: The broom fell over.\n[wooden clatter; one broom handle dropping flat onto flagstones]",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The broom fell over.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "sound",
+        "text": "wooden clatter; one broom handle dropping flat onto flagstones",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 22
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 86,
+    "section": "8.1",
+    "line": 1115,
+    "input": "The broom shot sideways into a hedge. [crash through leaves] Only its bristles stuck out.",
+    "script": "Narrator: The broom shot sideways into a hedge.\n[crash through leaves]\nNarrator: Only its bristles stuck out.",
+    "book": "The broom shot sideways into a hedge. Only its bristles stuck out.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The broom shot sideways into a hedge.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "sound",
+        "text": "crash through leaves",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 39
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Only its bristles stuck out.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 62
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 87,
+    "section": "8.1",
+    "line": 1125,
+    "input": "On Tuesday morning, the king summoned him.\n\n[royal trumpet fanfare]\n\n@King “Sir Percival!”",
+    "script": "Narrator: On Tuesday morning, the king summoned him.\n\n[royal trumpet fanfare]\n\nKing: Sir Percival!",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "On Tuesday morning, the king summoned him.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "sound",
+        "text": "royal trumpet fanfare",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      },
+      {
+        "speaker": "King",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Sir Percival!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 7
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 88,
+    "section": "8.1",
+    "line": 1143,
+    "input": "@Wanda “Come in— [door slams] oh.”",
+    "script": "Wanda: Come in—\n[door slams]\nWanda: oh.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Come in—",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "sound",
+        "text": "door slams",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 18
+      },
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "oh.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 31
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 89,
+    "section": "8.2",
+    "line": 1155,
+    "input": "The dragon was snoring. @Gerald [snores]",
+    "script": "Narrator: The dragon was snoring.\nGerald [snores]",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The dragon was snoring.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "snores",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 33
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 90,
+    "section": "8.2",
+    "line": 1162,
+    "input": "@Wanda [gasp] “My broom is on strike!”",
+    "script": "Wanda [gasp]\nWanda: My broom is on strike!",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "gasp",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "My broom is on strike!",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 15
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 91,
+    "section": "8.2",
+    "line": 1169,
+    "input": "@Wanda [gasp] She stared at the broom.",
+    "script": "Wanda [gasp]\nNarrator: She stared at the broom.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "gasp",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "She stared at the broom.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 15
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 92,
+    "section": "8.2",
+    "line": 1176,
+    "input": "@Wanda [gasp] She stared at the broom. “On strike?”",
+    "script": "Wanda [gasp]\nNarrator: She stared at the broom.\nWanda: On strike?",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "gasp",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "She stared at the broom.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 15
+      },
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "On strike?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 40
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 93,
+    "section": "8.2",
+    "line": 1184,
+    "input": "@Pickle [tiny peep] [a brief tumble] @Pickle [yawn]",
+    "script": "Pickle [tiny peep]\n[a brief tumble]\nPickle [yawn]",
+    "lines": [
+      {
+        "speaker": "Pickle",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "tiny peep",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "sound",
+        "text": "a brief tumble",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 21
+      },
+      {
+        "speaker": "Pickle",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "yawn",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 46
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 94,
+    "section": "8.2",
+    "line": 1192,
+    "input": "@Wanda She stared at the broom. [gasp] “On strike?”",
+    "script": "Narrator: She stared at the broom.\n[gasp]\nWanda: On strike?",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "She stared at the broom.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "sound",
+        "text": "gasp",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 33
+      },
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "On strike?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 40
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 95,
+    "section": "8.2",
+    "line": 1200,
+    "input": "@Gerald (softly) [snores]",
+    "script": "Gerald (softly) [snores]",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": "softly",
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "snores",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 18
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 96,
+    "section": "8.2",
+    "line": 1208,
+    "input": "@Gerald “Oh no. I’m going to— @[sneezes]”",
+    "script": "Gerald: Oh no. I’m going to—\nGerald [sneezes]",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Oh no. I’m going to—",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "sneezes",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 31
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 97,
+    "section": "8.2",
+    "line": 1215,
+    "input": "The fox froze. @[gasps]",
+    "script": "Narrator: The fox froze.\nNarrator [gasps]",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The fox froze.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "vocal",
+        "text": "gasps",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 16
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 98,
+    "section": "8.3",
+    "line": 1226,
+    "input": "Read more at [our website](https://example.com).",
+    "script": "Narrator: Read more at our website.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Read more at our website.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 99,
+    "section": "8.3",
+    "line": 1234,
+    "input": "![Peter squeezing under the gate](peter-gate.png)",
+    "script": "![Peter squeezing under the gate](peter-gate.png)",
+    "lines": [
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "image",
+        "text": "Peter squeezing under the gate",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 100,
+    "section": "9.1",
+    "line": 1250,
+    "input": "He slipped underneath the gate.\n\n{page}\n\nMr. McGregor hung up the little jacket.",
+    "script": "Narrator: He slipped underneath the gate.\n\n{page}\n\nNarrator: Mr. McGregor hung up the little jacket.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He slipped underneath the gate.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": "page",
+        "heading": null,
+        "kind": "page",
+        "text": "",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 3,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Mr. McGregor hung up the little jacket.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 5,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 101,
+    "section": "9.1",
+    "line": 1264,
+    "input": "He went back to his work. {page} Peter sat down to rest.",
+    "script": "Narrator: He went back to his work.\n{page}\nNarrator: Peter sat down to rest.",
+    "book": "He went back to his work. Peter sat down to rest.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He went back to his work.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": "page",
+        "heading": null,
+        "kind": "page",
+        "text": "",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 1,
+        "column": 27
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Peter sat down to rest.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "2",
+        "line": 1,
+        "column": 34
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 102,
+    "section": "9.1",
+    "line": 1274,
+    "input": "{page 8–9}",
+    "script": "{page 8–9}",
+    "lines": [
+      {
+        "speaker": null,
+        "direction": null,
+        "name": "page",
+        "heading": null,
+        "kind": "page",
+        "text": "8–9",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "8–9",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 103,
+    "section": "9.2",
+    "line": 1286,
+    "input": "@Wanda “Could you perhaps be in love somewhat more urgently?”\n\n{pause 2s}\n\nHe went on being in love at exactly the same speed.",
+    "script": "Wanda: Could you perhaps be in love somewhat more urgently?\n\n{pause 2s}\n\nNarrator: He went on being in love at exactly the same speed.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could you perhaps be in love somewhat more urgently?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 8
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": "pause",
+        "heading": null,
+        "kind": "pause",
+        "text": "2s",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He went on being in love at exactly the same speed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 104,
+    "section": "9.3",
+    "line": 1304,
+    "input": "{book only} First published 1902.\n\nOnce upon a time…",
+    "script": "{book only} First published 1902.\n\nNarrator: Once upon a time…",
+    "book": "First published 1902.\n\nOnce upon a time…",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time…",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 105,
+    "section": "9.3",
+    "line": 1318,
+    "input": "{book only} First published 1902.\nFrederick Warne & Co.",
+    "script": "{book only} First published 1902.\n{book only} Frederick Warne & Co.",
+    "lines": [],
+    "warnings": []
+  },
+  {
+    "example": 106,
+    "section": "9.3",
+    "line": 1326,
+    "input": "{audio only} Turn the page when you hear the bell.\n\nOnce upon a time…",
+    "script": "Narrator: Turn the page when you hear the bell.\n\nNarrator: Once upon a time…",
+    "book": "Once upon a time…",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Turn the page when you hear the bell.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 14
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Once upon a time…",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 107,
+    "section": "9.3",
+    "line": 1338,
+    "input": "## The cave {hidden}\n\nMount Mumble was very tall.",
+    "script": "## The cave {hidden}\n\nNarrator: Mount Mumble was very tall.",
+    "book": "Mount Mumble was very tall.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Mount Mumble was very tall.",
+        "scene": 1,
+        "sceneTitle": "The cave",
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 108,
+    "section": "9.4",
+    "line": 1354,
+    "input": "::: {book only}\nFirst published 1902.\n\nPrinted in Great Britain.\n:::",
+    "script": "{book only} First published 1902.\n\n{book only} Printed in Great Britain.",
+    "lines": [],
+    "warnings": []
+  },
+  {
+    "example": 109,
+    "section": "9.5",
+    "line": 1370,
+    "input": "The broom fell over. {recorder:take 3}",
+    "script": "Narrator: The broom fell over.\n{recorder:take 3}",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The broom fell over.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": "recorder:take",
+        "heading": null,
+        "kind": "instruction",
+        "text": "3",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 22
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 110,
+    "section": "10",
+    "line": 1383,
+    "input": "%% Leave a clear pause after this line. %%\n\nHe went on being in love at exactly the same speed.",
+    "script": "%% Leave a clear pause after this line. %%\n\nNarrator: He went on being in love at exactly the same speed.",
+    "book": "He went on being in love at exactly the same speed.",
+    "lines": [
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "note",
+        "text": "Leave a clear pause after this line.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "He went on being in love at exactly the same speed.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 111,
+    "section": "10",
+    "line": 1395,
+    "input": "@Marmalade “Clause five.” %% Clause and claws sound the same. %%",
+    "script": "Marmalade: Clause five.\n%% Clause and claws sound the same. %%",
+    "lines": [
+      {
+        "speaker": "Marmalade",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Clause five.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 12
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "note",
+        "text": "Clause and claws sound the same.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 27
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 112,
+    "section": "10",
+    "line": 1402,
+    "input": "%%\nHushed from here to the end, because Gerald is asleep.\n\nThe knight’s cry is the only loud line.\n%%",
+    "script": "%% Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line. %%",
+    "lines": [
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "note",
+        "text": "Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 113,
+    "section": "11",
+    "line": 1418,
+    "input": "@Gerald “I don’t *even* like treasure.”",
+    "script": "Gerald: I don’t *even* like treasure.",
+    "lines": [
+      {
+        "speaker": "Gerald",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I don’t *even* like treasure.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 114,
+    "section": "11",
+    "line": 1424,
+    "input": "The page said: **JOBS AVAILABLE**",
+    "script": "Narrator: The page said: **JOBS AVAILABLE**",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The page said: **JOBS AVAILABLE**",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 115,
+    "section": "11",
+    "line": 1432,
+    "input": "She wrote \\[sic\\] and \\{page\\} on the board.",
+    "script": "Narrator: She wrote [sic] and {page} on the board.",
+    "lines": [
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "She wrote [sic] and {page} on the board.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 116,
+    "section": "12.2",
+    "line": 1491,
+    "input": "@Percival (muffled, echoing) “I meant to do that,” said Sir Percival, from inside the vase. [armor wobbles]",
+    "script": "Percival (muffled, echoing): I meant to do that,\nNarrator: said Sir Percival, from inside the vase.\n[armor wobbles]",
+    "book": "“I meant to do that,” said Sir Percival, from inside the vase.",
+    "lines": [
+      {
+        "speaker": "Percival",
+        "direction": "muffled, echoing",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "I meant to do that,",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 30
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "said Sir Percival, from inside the vase.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 52
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "sound",
+        "text": "armor wobbles",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 93
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 117,
+    "section": "12.2",
+    "line": 1501,
+    "input": "@Wanda (strained and extremely polite) “Could we perhaps travel somewhat more urgently?”\n\n%% The broom considers this. %%\n\n{pause}\n\nThe broom considered this.",
+    "script": "Wanda (strained and extremely polite): Could we perhaps travel somewhat more urgently?\n\n%% The broom considers this. %%\n\n{pause}\n\nNarrator: The broom considered this.",
+    "book": "“Could we perhaps travel somewhat more urgently?”\n\nThe broom considered this.",
+    "lines": [
+      {
+        "speaker": "Wanda",
+        "direction": "strained and extremely polite",
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "Could we perhaps travel somewhat more urgently?",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 40
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "note",
+        "text": "The broom considers this.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 3,
+        "column": 1
+      },
+      {
+        "speaker": null,
+        "direction": null,
+        "name": "pause",
+        "heading": null,
+        "kind": "pause",
+        "text": "",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 5,
+        "column": 1
+      },
+      {
+        "speaker": "Narrator",
+        "direction": null,
+        "name": null,
+        "heading": null,
+        "kind": "speech",
+        "text": "The broom considered this.",
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 7,
+        "column": 1
+      }
+    ],
+    "warnings": []
+  }
+]

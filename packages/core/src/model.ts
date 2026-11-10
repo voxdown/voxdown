@@ -32,7 +32,7 @@ export type Meta = {
   subtitle?: string;
   author?: string;
   language?: string;
-  /** The spec version the file follows, from its `audiobook-markup` key. */
+  /** The spec version the file follows, from its `voxdown` key. */
   version?: string;
   /** How the narrator is written: the cast's spelling, else the `narrator:` key, else "Narrator". */
   narrator: string;
@@ -140,7 +140,7 @@ export type Vocal = {
 /** A sound in the world (§8.1). */
 export type Sound = { kind: "sound"; description: string; range: Range };
 
-/** `{page}`, `{pause 2s}`, `{book only}`, `{kinu:take 3}` … (§9). */
+/** `{page}`, `{pause 2s}`, `{book only}`, `{recorder:take 3}` … (§9). */
 export type Instruction = {
   kind: "instruction";
   name: string;

@@ -38,7 +38,7 @@ describe("Peter Rabbit", () => {
   });
 
   it("reads its front matter, details and cast", () => {
-    expect(story.frontMatter?.raw.startsWith("audiobook-markup: 0.1\ntitle:")).toBe(true);
+    expect(story.frontMatter?.raw.startsWith("voxdown: 1.0\ntitle:")).toBe(true);
     expect(slice(story, story.frontMatter?.range ?? { from: 0, to: 0 })).toMatch(
       /^---\n[\s\S]*\n---$/,
     );
@@ -46,7 +46,7 @@ describe("Peter Rabbit", () => {
       title: "The Tale of Peter Rabbit",
       author: "Beatrix Potter",
       language: "en-GB",
-      version: "0.1",
+      version: "1.0",
       narrator: "Narrator",
     });
     expect(story.cast.map((member) => [member.handle, member.name])).toEqual([
@@ -199,7 +199,7 @@ describe("warnings (§12.3)", () => {
   });
 
   it("reports unknown instructions and pauses that are not lengths", () => {
-    expect(codes("{chapter 2} {kinu:take 3} {page 4} {pause 2s} {pause 500ms}")).toEqual([
+    expect(codes("{chapter 2} {recorder:take 3} {page 4} {pause 2s} {pause 500ms}")).toEqual([
       "unknown-instruction",
     ]);
     expect(codes("{pause long}")).toEqual(["pause-value"]);

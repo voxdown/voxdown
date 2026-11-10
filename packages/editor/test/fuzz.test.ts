@@ -7,7 +7,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { editorMarks, marksField, scriptEditor } from "../src/index";
 
-const RUNS = Number(process.env.FUZZ_RUNS ?? 200);
+const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
 const SEED =
   process.env.FUZZ_SEED === "random" ? undefined : Number(process.env.FUZZ_SEED ?? 20261110);
 const settings = { numRuns: RUNS, ...(SEED === undefined ? {} : { seed: SEED }) };

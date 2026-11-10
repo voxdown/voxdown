@@ -4,7 +4,7 @@
  * byte for byte; formatting settles and never changes who says what; and each edit changes only
  * what it says it does.
  *
- * FUZZ_RUNS sets how many stories each property tries (default 200), FUZZ_SEED the seed (default
+ * FUZZ_RUNS sets how many stories each property tries (default 1000), FUZZ_SEED the seed (default
  * a fixed one, so a failure in CI can be run again; `FUZZ_SEED=random` for a new one each time).
  * FUZZ_SHOW=1 prints each story an edit declined, and how many it declined.
  */
@@ -25,6 +25,7 @@ import {
   parse,
   renameCharacter,
   setDirection,
+  setMeta,
   setSpeaker,
   spokenScript,
   textByCharacter,
@@ -33,15 +34,15 @@ import {
 } from "../src/index";
 import {
   EDITS,
+  type EditPromise,
   allItems,
   allLines,
   brokenPromise,
-  sameName,
   speeches,
   spokenChars,
 } from "./voices";
 
-const RUNS = Number(process.env.FUZZ_RUNS ?? 200);
+const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
 const SEED =
   process.env.FUZZ_SEED === "random" ? undefined : Number(process.env.FUZZ_SEED ?? 20261110);
 const settings = { numRuns: RUNS, ...(SEED === undefined ? {} : { seed: SEED }) };
@@ -147,9 +148,10 @@ const PIECES = [
   "​",
 ];
 
+/** Pieces glued together or, as in prose, with a space between them. */
 const pieceStory = fc
-  .array(fc.constantFrom(...PIECES), { maxLength: 40 })
-  .map((pieces) => pieces.join(""));
+  .array(fc.tuple(fc.constantFrom(...PIECES), fc.boolean()), { maxLength: 40 })
+  .map((pieces) => pieces.map(([piece, spaced]) => (spaced ? `${piece} ` : piece)).join(""));
 /** Stories of pieces, and now and then any text at all. */
 const anyStory = fc.oneof(
   { weight: 4, arbitrary: pieceStory },
@@ -168,12 +170,15 @@ const voice = (speech: Speech) => ({
 
 /**
  * An edit does exactly what it says or nothing (see voices.ts). How often it declines is counted,
- * so an edit that always declines can't pass: it may only do so on the odd story, and these are
- * stories of tricky pieces (about 2% are declined, all of them garbled).
+ * so an edit that always declines can't pass: it may only do so on the odd story. These are
+ * stories of tricky pieces, and an edit declines where a mark would show in the book, such as a
+ * word glued to a page turn before it (`{page}Hello`): about 3.5% of stretches for a new speaker,
+ * under 1% for a direction.
  */
 function editProperty(
   edit: (story: Story, target: Speech) => TextChange[],
-  promise: (typeof EDITS)[keyof typeof EDITS],
+  promise: EditPromise,
+  budget: number,
 ) {
   let tried = 0;
   let declined = 0;
@@ -190,12 +195,12 @@ function editProperty(
         if (process.env.FUZZ_SHOW) console.log("declined:", JSON.stringify(source), target.text);
         return;
       }
-      expect(brokenPromise(story, target, changes, promise.inside, promise.some)).toBe(null);
+      expect(brokenPromise(story, target, changes, promise)).toBe(null);
     }),
     settings,
   );
   if (process.env.FUZZ_SHOW) console.log(`declined ${declined} of ${tried}`);
-  expect(declined).toBeLessThanOrEqual(Math.max(3, tried * 0.04));
+  expect(declined).toBeLessThanOrEqual(Math.max(3, tried * budget));
 }
 
 describe("on stories made at random", () => {
@@ -309,11 +314,11 @@ describe("on stories made at random", () => {
   it("giving a stretch to another character changes only that stretch's speaker", () => {
     // The stretch may split: narration that opens with a quote gives that quote to the character
     // and keeps the rest. Each of its words goes to the new speaker or stays; one at least goes.
-    editProperty((story, target) => setSpeaker(story, target, "Zed"), EDITS.speaker);
+    editProperty((story, target) => setSpeaker(story, target, "Zed"), EDITS.speaker, 0.06);
   });
 
   it("setting how a stretch is said changes only that stretch's direction", () => {
-    editProperty((story, target) => setDirection(story, target, "softly"), EDITS.direction);
+    editProperty((story, target) => setDirection(story, target, "softly"), EDITS.direction, 0.02);
   });
 
   it("renaming a character renames them everywhere and changes nothing else", () => {
@@ -387,6 +392,114 @@ describe("on stories made at random", () => {
     );
     if (process.env.FUZZ_SHOW) console.log(`declined ${declined} of ${tried}`);
     expect(declined).toBeLessThanOrEqual(Math.max(3, tried * 0.04));
+  });
+
+  it("the writer writes a changed note, instruction or sound as asked, or throws", () => {
+    const values = fc.oneof(
+      fc.constantFrom(
+        "",
+        " ",
+        "%%",
+        "a %% b",
+        "}",
+        "{",
+        "a} b {pause",
+        "[",
+        "]",
+        "\\",
+        "x\ny",
+        "take 2",
+      ),
+      fc.string({ maxLength: 12 }),
+    );
+    let written = 0;
+    fc.assert(
+      fc.property(anyStory, fc.nat(), values, (source, pick, value) => {
+        const story = parse(source);
+        const changeable = allItems(story).filter(
+          (item) =>
+            item.kind === "note" ||
+            item.kind === "sound" ||
+            (item.kind === "instruction" && item.value !== null),
+        );
+        const item = changeable[pick % Math.max(1, changeable.length)];
+        if (!item) return;
+        const nth = allItems(story)
+          .filter((other) => other.kind === item.kind)
+          .indexOf(item);
+        if (item.kind === "note") item.text = value;
+        else if (item.kind === "sound") item.description = value;
+        else if (item.kind === "instruction") item.value = value;
+        let text: string;
+        try {
+          text = write(story);
+        } catch (error) {
+          expect(error).toBeInstanceOf(RangeError);
+          return;
+        }
+        written++;
+        const after = parse(text);
+        const before = parse(source);
+        const now = allItems(after).filter((other) => other.kind === item.kind)[nth];
+        const asked = value.replace(/\s+/g, " ").trim();
+        if (now?.kind === "note") expect(now.text).toBe(asked);
+        if (now?.kind === "sound") expect(now.description).toBe(asked);
+        if (now?.kind === "instruction") expect(now.value).toBe(asked || null);
+        expect(allItems(after).map((other) => other.kind)).toEqual(
+          allItems(before).map((other) => other.kind),
+        );
+        const heard = (of: Story) =>
+          spokenChars(of).map((c) => [c.char, c.speaker.toLowerCase(), c.direction]);
+        expect(heard(after)).toEqual(heard(before));
+      }),
+      settings,
+    );
+    expect(written).toBeGreaterThan(0);
+  });
+
+  it("book details are set exactly as asked, and nothing else in the file moves", () => {
+    const fronts = fc.constantFrom(
+      "",
+      "---\ntitle: Old\n---\n",
+      '---\ntitle: "Chapter #1" # keep\nauthor: Me\n---\n',
+      "---\ntitle: |\n  First\n\n  Second\nauthor: Me\n---\n",
+      "---\ntitle:\n  continued plain\nauthor: Me\n---\n",
+      "---\ntitle: 'It''s' # c\r\nauthor: Me\r\n---\r\n",
+      "﻿---\nauthor: Me\n---\n",
+    );
+    const values = fc.oneof(
+      fc.constantFrom(
+        "New",
+        "#1",
+        "a: b",
+        '"quoted"',
+        "it's",
+        "x # y",
+        "",
+        " padded ",
+        "a\nb",
+        "null",
+        "007",
+      ),
+      fc.string({ maxLength: 10 }),
+    );
+    fc.assert(
+      fc.property(fronts, pieceStory, values, (front, body, value) => {
+        const source = front + body;
+        const story = parse(source);
+        const text = applyChanges(source, setMeta(story, "title", value));
+        const after = parse(text);
+        // A title is read without spaces at its ends.
+        expect(after.meta.title ?? "").toBe(value.trim());
+        expect(after.meta.author).toBe(story.meta.author);
+        expect(spokenScript(after)).toBe(spokenScript(story));
+        // The story itself is untouched (unless it starts the file with front matter of its own).
+        if (front !== "" || (!story.frontMatter && !source.startsWith("\uFEFF"))) {
+          expect(text.endsWith(body)).toBe(true);
+        }
+      }),
+      settings,
+    );
   });
 
   it("a Fountain import never fails, and what it makes reads without failing", () => {

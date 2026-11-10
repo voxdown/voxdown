@@ -95,6 +95,23 @@ describe("lines", () => {
   });
 });
 
+describe("what review found", () => {
+  it("opens a straight ' quote only before a closing one on its line (§5.5)", () => {
+    expect(spokenScript(parse(`@Gerald "Hi," he said ' and left.`))).toBe(
+      "Gerald: Hi,\nNarrator: he said ' and left.",
+    );
+    expect(spokenScript(parse("@Gerald 'Hi,' he said, 'and bye.'"))).toBe(
+      "Gerald: Hi,\nNarrator: he said,\nGerald: and bye.",
+    );
+  });
+
+  it("takes a name written in another Unicode form for the same name, without a warning", () => {
+    const story = parse("---\ncast:\n  Zoë: Zoë the Cat\n---\n@Zoe\u0308 “Hi.”");
+    expect(story.warnings).toEqual([]);
+    expect(spokenScript(story)).toBe("Zoë: Hi.");
+  });
+});
+
 describe("the Fountain import", () => {
   const screenplay = [
     "Title: The Dragon Who Wouldn't Roar",

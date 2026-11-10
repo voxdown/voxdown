@@ -17,6 +17,7 @@ import {
   setSpeaker,
 } from "./edit";
 import type { Block, Item, Line, Speech, Story, Vocal } from "./model";
+import { nameKey } from "./names";
 import { parse } from "./parse";
 
 /**
@@ -37,10 +38,21 @@ export function write(story: Story): string {
   let text = story.source;
   // What the edits wrote, kept up to date as later edits move it.
   let written: Span[] = [];
-  const edit = (make: (current: Story) => TextChange[]) => {
-    const changes = make(parse(text));
+  // Each change is made on the text the ones before made, then read back: one that can't be made
+  // as asked is an error, never a change quietly left out or one that does something else.
+  const edit = (
+    make: (current: Story) => TextChange[],
+    made?: (now: Story, before: Story) => boolean,
+    what?: string,
+  ) => {
+    const current = parse(text);
+    const changes = make(current);
+    const next = applyChanges(text, changes);
+    if (made && !made(parse(next), current)) {
+      throw new RangeError(`write() can't make this change as asked: ${what}.`);
+    }
     written = afterChanges(written, changes);
-    text = applyChanges(text, changes);
+    text = next;
   };
 
   for (const field of ["title", "subtitle", "author", "language"] as const) {
@@ -76,11 +88,18 @@ export function write(story: Story): string {
   for (const [after, before] of pairs) {
     if (after.kind === "speech" && before.kind === "speech") {
       if (after.speaker !== before.speaker) {
-        edit((current) => setSpeaker(current, find(current, original, before), after.speaker));
+        edit(
+          (current) => setSpeaker(current, find(current, original, before), after.speaker),
+          (now) => nameKey(find(now, original, before).speaker) === nameKey(after.speaker),
+          `“${before.text}” said by ${after.speaker}`,
+        );
       }
       if (after.ownDirection !== before.ownDirection) {
-        edit((current) =>
-          setDirection(current, find(current, original, before), after.ownDirection),
+        const direction = after.ownDirection?.trim() || null;
+        edit(
+          (current) => setDirection(current, find(current, original, before), direction),
+          (now) => find(now, original, before).ownDirection === direction,
+          `“${before.text}” said ${direction ?? "with no direction of its own"}`,
         );
       }
     }
@@ -98,11 +117,20 @@ export function write(story: Story): string {
         before.kind === "instruction" &&
         after.value !== before.value);
     if (!changed) continue;
-    edit((current) => {
-      const item = itemsOf(current).filter((other) => other.kind === before.kind)[nth];
-      if (!item) shapeError("items");
-      return contentChanges(current, item, after);
-    });
+    const nthOf = (of: Story) => itemsOf(of).filter((other) => other.kind === before.kind)[nth];
+    edit(
+      (current) => {
+        const item = nthOf(current);
+        if (!item) shapeError("items");
+        return contentChanges(current, item, after);
+      },
+      // The item reads back as asked, and nothing else was added, removed or is heard differently.
+      (now, current) =>
+        sameContent(nthOf(now), after) &&
+        sameKinds(now, current) &&
+        (after.kind === "vocal" || sameHearing(now, current)),
+      `the ${before.kind}'s new ${before.kind === "note" ? "text" : before.kind === "instruction" ? "value" : "description"}`,
+    );
   }
   return withoutSpareMarks(text, written);
 }
@@ -116,31 +144,33 @@ function withoutSpareMarks(text: string, spans: readonly Span[]): string {
   if (spans.length === 0) return text;
   const goal = parse(text);
   let current = text;
+  let story = goal;
   let written = spans;
-  for (let round = 0; round < 32; round++) {
-    const story = parse(current);
-    let found: TextChange | undefined;
-    for (const item of itemsOf(story)) {
-      if (item.kind !== "mark" || !written.some((span) => touches(span, item.nameRange))) continue;
-      found = shorter(current, item).find((option) =>
-        sameHearing(goal, parse(applyChanges(current, [option]))),
-      );
-      if (found) break;
+  // Each mark an edit inserted whole is tried once, in order; a name an edit replaced in the
+  // author's own mark is the author's mark still.
+  for (let tried = 0; ; ) {
+    const mark = itemsOf(story).filter(
+      (item): item is Extract<Item, { kind: "mark" }> =>
+        item.kind === "mark" &&
+        written.some((span) => span.from <= item.range.from && item.range.to <= span.to),
+    )[tried];
+    if (!mark) break;
+    const found = shorter(current, mark).find((option) =>
+      sameHearing(goal, parse(applyChanges(current, [option]))),
+    );
+    if (!found) {
+      tried++;
+      continue;
     }
-    if (!found) break;
     written = afterChanges(written, [found]);
     current = applyChanges(current, [found]);
+    story = parse(current);
+    // A mark cut to its direction is no longer a mark: the next one now has its place.
   }
   return current;
 }
 
 type Span = { from: number; to: number };
-
-function touches(span: Span, range: Span): boolean {
-  return span.from === span.to
-    ? span.from >= range.from && span.from <= range.to
-    : span.from < range.to && range.from < span.to;
-}
 
 /** Spans moved by changes, with what the changes inserted added. */
 function afterChanges(spans: readonly Span[], changes: readonly TextChange[]): Span[] {
@@ -223,7 +253,8 @@ function contentChanges(current: Story, item: Item, after: Item): TextChange[] {
     return [{ from: item.range.from + 2, to: item.range.to - 2, insert: ` ${after.text} ` }];
   }
   if (item.kind === "instruction" && after.kind === "instruction") {
-    const raw = after.value === null ? `{${item.name}}` : `{${item.name} ${after.value}}`;
+    const value = after.value?.replace(/([{}\\])/g, "\\$1");
+    const raw = value === undefined ? `{${item.name}}` : `{${item.name} ${value}}`;
     return [{ ...item.range, insert: raw }];
   }
   return [];
@@ -250,6 +281,32 @@ function checkShape(story: Story, original: Story): void {
 
 function escapeBrackets(text: string): string {
   return text.replace(/([[\]\\])/g, "\\$1");
+}
+
+const spaced = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/** Whether an item written back reads as the model asked. */
+function sameContent(item: Item | undefined, after: Item): boolean {
+  if (!item || item.kind !== after.kind) return false;
+  if (
+    (item.kind === "sound" || item.kind === "vocal") &&
+    (after.kind === "sound" || after.kind === "vocal")
+  ) {
+    return item.description === spaced(after.description) && item.description !== "";
+  }
+  if (item.kind === "note" && after.kind === "note") return item.text === spaced(after.text);
+  if (item.kind === "instruction" && after.kind === "instruction") {
+    return item.value === (after.value === null ? null : spaced(after.value) || null);
+  }
+  return false;
+}
+
+function sameKinds(a: Story, b: Story): boolean {
+  const kinds = (story: Story) =>
+    itemsOf(story)
+      .map((item) => item.kind)
+      .join(" ");
+  return a.blocks.length === b.blocks.length && kinds(a) === kinds(b);
 }
 
 function shapeError(what: string): never {

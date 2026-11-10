@@ -52,14 +52,57 @@ export function inlineHtml(source: string): string {
   return render(pieces(source));
 }
 
+/**
+ * Where each mark that may close something is, worked out once so that a long line renders in
+ * linear time: for each position, the next `]`, and the next closing run of each emphasis sign;
+ * and for each `(`, its `)`, with parentheses inside balanced as the parser reads them (§8.3).
+ */
+type Closers = {
+  bracket: Int32Array;
+  emphasis: Record<"*" | "**" | "_" | "__", Int32Array>;
+  parens: Map<number, number>;
+};
+
+function closersOf(chars: readonly Piece[]): Closers {
+  const isChar = (at: number, text: string) => chars[at]?.text === text && !chars[at]?.literal;
+  const size = chars.length + 1;
+  const bracket = new Int32Array(size).fill(-1);
+  const emphasis = {
+    "*": new Int32Array(size).fill(-1),
+    "**": new Int32Array(size).fill(-1),
+    _: new Int32Array(size).fill(-1),
+    __: new Int32Array(size).fill(-1),
+  };
+  for (let at = chars.length - 1; at >= 0; at--) {
+    bracket[at] = isChar(at, "]") ? at : (bracket[at + 1] as number);
+    const spaced = /\s/u.test(chars[at - 1]?.text ?? " ");
+    for (const sign of ["*", "_"] as const) {
+      const run = isChar(at, sign);
+      const twice = run && isChar(at + 1, sign);
+      // Not after a space; an underscore run inside a word is just characters.
+      const wordAfter = (length: number) =>
+        sign === "_" && /[\p{L}\p{N}]/u.test(chars[at + length]?.text ?? "");
+      const single = run && !twice && !spaced && !wordAfter(1);
+      const double = twice && !spaced && !wordAfter(2);
+      emphasis[sign][at] = single ? at : (emphasis[sign][at + 1] as number);
+      const key = sign === "*" ? "**" : "__";
+      emphasis[key][at] = double ? at : (emphasis[key][at + 1] as number);
+    }
+  }
+  const parens = new Map<number, number>();
+  const open: number[] = [];
+  chars.forEach((_, at) => {
+    if (isChar(at, "(")) open.push(at);
+    else if (isChar(at, ")") && open.length > 0) parens.set(open.pop() as number, at);
+  });
+  return { bracket, emphasis, parens };
+}
+
 function render(chars: Piece[]): string {
   let html = "";
   let i = 0;
   const isChar = (at: number, text: string) => chars[at]?.text === text && !chars[at]?.literal;
-  const find = (from: number, text: string) => {
-    for (let at = from; at < chars.length; at++) if (isChar(at, text)) return at;
-    return -1;
-  };
+  const closers = closersOf(chars);
   while (i < chars.length) {
     const piece = chars[i] as Piece;
     if (!piece.literal) {
@@ -67,9 +110,9 @@ function render(chars: Piece[]): string {
       const bang = piece.text === "!" && isChar(i + 1, "[");
       if (piece.text === "[" || bang) {
         const open = bang ? i + 1 : i;
-        const close = find(open + 1, "]");
+        const close = closers.bracket[open + 1] ?? -1;
         if (close > 0 && isChar(close + 1, "(")) {
-          const end = find(close + 2, ")");
+          const end = closers.parens.get(close + 1) ?? -1;
           if (end > 0) {
             const label = chars.slice(open + 1, close);
             const url = safeUrl(
@@ -93,21 +136,14 @@ function render(chars: Piece[]): string {
         const sign = double ? piece.text.repeat(2) : piece.text;
         const start = i + sign.length;
         const opens = chars[start] && !/\s/u.test(chars[start]?.text ?? " ");
-        if (opens) {
-          for (let at = start + 1; at < chars.length; at++) {
-            const matches = double
-              ? isChar(at, piece.text) && isChar(at + 1, piece.text)
-              : isChar(at, piece.text) && !isChar(at + 1, piece.text);
-            if (!matches || /\s/u.test(chars[at - 1]?.text ?? " ")) continue;
-            // An underscore inside a word is just a character.
-            if (piece.text === "_" && /[\p{L}\p{N}]/u.test(chars[at + sign.length]?.text ?? ""))
-              continue;
-            const tag = double ? "strong" : "em";
-            html += `<${tag}>${render(chars.slice(start, at))}</${tag}>`;
-            i = at + sign.length;
-            break;
-          }
-          if (i >= start) continue;
+        const at = opens
+          ? (closers.emphasis[sign as keyof Closers["emphasis"]][start + 1] ?? -1)
+          : -1;
+        if (at > 0) {
+          const tag = double ? "strong" : "em";
+          html += `<${tag}>${render(chars.slice(start, at))}</${tag}>`;
+          i = at + sign.length;
+          continue;
         }
       }
     }

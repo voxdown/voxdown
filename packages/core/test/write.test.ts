@@ -470,4 +470,142 @@ describe("what fuzzing, real books and review found", () => {
     expect(write(story)).toBe(text);
     expect(applyChanges(story.source, changesFrom(story))).toBe(text);
   });
+
+  it("never changes the printed book: a mark next to punctuation goes without a space", () => {
+    expect(direction("@Anna „Guten Morgen“, sagte Anna.", ", sagte Anna.", "leise")).toBe(
+      "@Anna „Guten Morgen“@(leise), sagte Anna.",
+    );
+    expect(speaker("@Gerald “Hi”—and then he left.", "—and then he left.", "Wanda")).toBe(
+      "@Gerald “Hi”@Wanda—and then he left.",
+    );
+    expect(direction("@Pierre « Bonjour », dit-il.", ", dit-il.", "doucement")).toBe(
+      "@Pierre « Bonjour »@(doucement), dit-il.",
+    );
+    // A name can't touch the letter after it, and a space would show: nothing is done.
+    const japanese = parse("@Hanako 花子は「はい」と言った。");
+    expect(setSpeaker(japanese, stretch(japanese, "と言った。"), "Zed")).toEqual([]);
+  });
+
+  it("gives a quote away whole, over its sounds, page turns and directions", () => {
+    expect(speaker("@Wanda “Come in— [door slams] oh.”", "Come in—", "Gerald")).toBe(
+      "@Gerald “Come in— [door slams] oh.”",
+    );
+    expect(speaker("@Gerald “Hi. {page} How are you?”", "How are you?", "Wanda")).toBe(
+      "@Wanda “Hi. {page} How are you?”",
+    );
+    expect(speaker("@Gerald “I know. @(yawning) I’m tired.”", "I know.", "Wanda")).toBe(
+      "@Wanda “I know. @(yawning) I’m tired.”",
+    );
+    expect(speaker("@Gerald “Hi @[sneezes] there.”", "Hi", "Wanda")).toBe(
+      "@Wanda “Hi @[sneezes] there.”",
+    );
+    // A direction runs to the quote's end, or to a direction of its own inside it.
+    expect(direction("@Wanda “Come in— [door slams] oh.”", "Come in—", "startled")).toBe(
+      "@Wanda (startled) “Come in— [door slams] oh.”",
+    );
+    expect(direction("@Gerald “I know. @(yawning) I’m tired.”", "I know.", "softly")).toBe(
+      "@Gerald (softly) “I know. @(yawning) I’m tired.”",
+    );
+  });
+
+  it("marks only the first later quote that carried the speech on, quickly on a crowded line", () => {
+    const dense = `@Alice ${"“Hello,” said Alice. ".repeat(3)}`;
+    expect(speaker(dense, "Hello,", "Zed")).toBe(
+      "@Zed “Hello,” said Alice. @Alice “Hello,” said Alice. “Hello,” said Alice. ",
+    );
+    const crowded = parse(`@Alice ${"“Hello,” said Alice. ".repeat(1000)}`);
+    const start = performance.now();
+    expect(setSpeaker(crowded, stretch(crowded, "Hello,"), "Zed").length).toBe(2);
+    expect(performance.now() - start).toBeLessThan(2000);
+  });
+
+  it("takes out a mark a direction made spare, in a speech over paragraphs", () => {
+    const source =
+      "@Tom “Maud! Are you up there?\n\n“I’ve rowed out twice.\n\n“Will you come down?”";
+    const text = direction(source, "I’ve rowed out twice.", "loudly");
+    expect(text).toBe(
+      "@Tom “Maud! Are you up there?\n\n@Tom (loudly) “I’ve rowed out twice.\n\n@Tom “Will you come down?”",
+    );
+    expect(spokenScript(parse(text))).toBe(
+      "Tom: Maud! Are you up there?\n\nTom (loudly): I’ve rowed out twice.\n\nTom: Will you come down?",
+    );
+  });
+
+  it("refuses a line that would change who says the rest", () => {
+    const story = parse("@Gerald “Hi.”\nThe end.\n");
+    expect(insertLine(story, story.source.indexOf("The"), "::: @Gerald")).toEqual([]);
+  });
+
+  it("keeps quoted values, comments and whole block scalars apart in the front matter", () => {
+    const meta = (source: string, value: string | null) => {
+      const story = parse(source);
+      return applyChanges(source, setMeta(story, "title", value));
+    };
+    expect(meta('---\ntitle: "Chapter #1" # keep\n---\nHello.', "New")).toBe(
+      "---\ntitle: New # keep\n---\nHello.",
+    );
+    expect(meta("---\ntitle: 'It''s # here' # keep\n---\nHi.", "New")).toBe(
+      "---\ntitle: New # keep\n---\nHi.",
+    );
+    expect(meta("---\ntitle: |\n  First\n\n  Second\nauthor: Me\n---\nHello.", "New")).toBe(
+      "---\ntitle: New\nauthor: Me\n---\nHello.",
+    );
+    expect(meta("---\ntitle: |\n  First\n\n  Second\n---\nHello.", null)).toBe("---\n---\nHello.");
+    const cast = parse('---\ncast:\n  Gerald: "The #1 dragon" # hero\n---\nHi.');
+    expect(applyChanges(cast.source, setFullName(cast, "Gerald", "Sir G"))).toBe(
+      "---\ncast:\n  Gerald: Sir G # hero\n---\nHi.",
+    );
+  });
+});
+
+describe("the writer, asked for what it can't do", () => {
+  const items = (story: Story) =>
+    story.blocks.flatMap((block) =>
+      block.kind === "break"
+        ? []
+        : (block.kind === "heading" ? [block.line] : block.lines).flatMap((line) => line.items),
+    );
+
+  it("throws rather than write a note, sound or instruction that would read differently", () => {
+    const note = parse("Hello. %% old %%");
+    const found = items(note).find((item) => item.kind === "note");
+    if (found?.kind === "note") found.text = "Use %% for notes.";
+    expect(() => write(note)).toThrow(RangeError);
+    const sound = parse("Hi [bang] there");
+    const bang = items(sound).find((item) => item.kind === "sound");
+    if (bang?.kind === "sound") bang.description = "";
+    expect(() => write(sound)).toThrow(RangeError);
+  });
+
+  it("escapes an instruction's value, so it can't start another", () => {
+    const story = parse("Hi {recorder:take 1} there");
+    const take = items(story).find((item) => item.kind === "instruction");
+    if (take?.kind === "instruction") take.value = "2} Goodbye. {pause";
+    const text = write(story);
+    expect(spokenScript(parse(text))).toBe(
+      "Narrator: Hi\n{recorder:take 2} Goodbye. {pause}\nNarrator: there",
+    );
+  });
+
+  it("throws rather than leave out a change an edit can't make", () => {
+    const story = parse("don’t«{pause 2s}");
+    const [first] = speeches(story);
+    if (first) first.speaker = "Zed";
+    expect(() => write(story)).toThrow(RangeError);
+  });
+
+  it("gives two stretches to one character with one mark, and renames quickly", () => {
+    const story = parse("He polished his armor. [armor squeaking] He practiced his cry.");
+    for (const stretch of speeches(story)) stretch.speaker = "Zed";
+    expect(write(story)).toBe(
+      "@Zed He polished his armor. [armor squeaking] He practiced his cry.",
+    );
+    const long = parse(
+      `---\ncast:\n  Alice: Alice\n---\n${"@Alice “Hello,” she said. “How are you?”\n\n".repeat(3000)}`,
+    );
+    (long.cast[0] as (typeof long.cast)[number]).handle = "Alicia";
+    const start = performance.now();
+    expect(write(long)).toContain("@Alicia “Hello,”");
+    expect(performance.now() - start).toBeLessThan(3000);
+  });
 });

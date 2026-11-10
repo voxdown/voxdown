@@ -39,7 +39,9 @@ export class Names {
     const key = nameKey(written);
     const expected = this.spelling.get(key);
     if (expected === undefined) this.spelling.set(key, written);
-    else if (expected !== written) {
+    // The same letters written in another Unicode form (`ë` as `e` and a combining mark) look
+    // the same: only another case is worth a warning.
+    else if (expected.normalize("NFC") !== written.normalize("NFC")) {
       this.warn("name-case", `“${written}” is written “${expected}” elsewhere.`, range);
     }
     if (this.hasCast && !this.cast.has(key) && key !== this.narratorKey) {

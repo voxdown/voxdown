@@ -88,14 +88,12 @@ describe("real books", () => {
         for (const target of speeches(story)) {
           const speaker = setSpeaker(story, target, "Zed");
           expect(speaker.length, target.text).toBeGreaterThan(0);
-          expect(
-            brokenPromise(story, target, speaker, EDITS.speaker.inside, EDITS.speaker.some),
-          ).toBe(null);
+          expect(brokenPromise(story, target, speaker, EDITS.speaker)).toBe(null);
           const direction = setDirection(story, target, "softly");
           // A stretch said softly already has nothing to change.
           if (target.direction !== "softly")
             expect(direction.length, target.text).toBeGreaterThan(0);
-          expect(brokenPromise(story, target, direction, EDITS.direction.inside)).toBe(null);
+          expect(brokenPromise(story, target, direction, EDITS.direction)).toBe(null);
         }
       }, 60_000);
     });

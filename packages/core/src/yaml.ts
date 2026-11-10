@@ -17,8 +17,14 @@
 import type { Range } from "./source";
 
 export type YamlProblem = { message: string; range: Range };
-/** Where each key was written. List items use their index as a path segment. */
-export type YamlKey = { path: readonly string[]; range: Range };
+/**
+ * Where each key was written. List items use their index as a path segment. `value` is where a
+ * map key's value is written: from just after its colon (`from`, the spaces included) to the end of
+ * its last line, or, for a value on the key's own line, to the end of the value before any
+ * comment. `text` is the value as written, without those spaces.
+ */
+export type YamlKey = { path: readonly string[]; range: Range; value?: YamlValue };
+export type YamlValue = { from: number; to: number; text: Range };
 export type YamlResult = {
   data: Record<string, unknown>;
   keys: YamlKey[];
@@ -44,6 +50,9 @@ class YamlReader {
   private index = 0;
   private readonly keys: YamlKey[] = [];
   private readonly problems: YamlProblem[] = [];
+  /** How deep the maps and lists being read are nested, and the last line read as content. */
+  private depth = 0;
+  private lastContent = -1;
 
   constructor(text: string, offset: number) {
     let from = offset;
@@ -78,6 +87,31 @@ class YamlReader {
 
   private readMap(indent: number, path: readonly string[]): Record<string, unknown> {
     const map: Record<string, unknown> = {};
+    if (this.tooDeep(indent)) return map;
+    this.depth++;
+    try {
+      this.readEntries(map, indent, path);
+    } finally {
+      this.depth--;
+    }
+    return map;
+  }
+
+  /** Past this depth the rest of a block is reported and skipped, so no file can exhaust the stack. */
+  private tooDeep(indent: number): boolean {
+    if (this.depth < MAX_DEPTH) return false;
+    const line = this.peek();
+    if (line) this.problem("The front matter is nested too deeply here.", line);
+    while (this.index < this.lines.length) {
+      const next = this.lines[this.index] as YamlLine;
+      if (!isBlank(next) && next.indent < indent) break;
+      if (!isBlank(next)) this.lastContent = this.index;
+      this.index++;
+    }
+    return true;
+  }
+
+  private readEntries(map: Record<string, unknown>, indent: number, path: readonly string[]): void {
     for (;;) {
       this.skipBlank();
       const line = this.peek();
@@ -90,26 +124,63 @@ class YamlReader {
             : "Couldn't read this line.",
           line,
         );
+        this.lastContent = this.index;
         this.index++;
         continue;
       }
       const keyPath = [...path, entry.key];
-      this.keys.push({ path: keyPath, range: entry.range });
+      const key: YamlKey = { path: keyPath, range: entry.range };
+      this.keys.push(key);
       if (Object.hasOwn(map, entry.key)) this.problem(`“${entry.key}” is set twice.`, line);
+      const keyLine = this.index;
+      this.lastContent = keyLine;
       this.index++;
       setKey(map, entry.key, this.readValue(entry.rest, line, indent, keyPath, true));
+      key.value = this.valueRange(line, entry.rest, keyLine);
     }
-    return map;
+  }
+
+  /** Where the value after `key:` on `line` is written, now that it has been read. */
+  private valueRange(line: YamlLine, rest: string, keyLine: number): YamlValue {
+    const from = line.from + line.raw.length - rest.length;
+    const lead = rest.length - rest.trimStart().length;
+    const value = rest.trimStart();
+    if (this.lastContent > keyLine) {
+      const last = this.lines[this.lastContent] as YamlLine;
+      const to = last.from + last.raw.length;
+      const start =
+        value === "" || value.startsWith("#") ? (this.lines[keyLine + 1]?.from ?? to) : from + lead;
+      return { from, to, text: { from: start, to } };
+    }
+    let length = stripComment(value).length;
+    if (value.startsWith('"') || value.startsWith("'")) length = parseQuoted(value)?.end ?? length;
+    return {
+      from,
+      to: from + lead + length,
+      text: { from: from + lead, to: from + lead + length },
+    };
   }
 
   private readList(indent: number, path: readonly string[]): unknown[] {
     const list: unknown[] = [];
+    if (this.tooDeep(indent)) return list;
+    this.depth++;
+    try {
+      this.readItems(list, indent, path);
+    } finally {
+      this.depth--;
+    }
+    return list;
+  }
+
+  private readItems(list: unknown[], indent: number, path: readonly string[]): void {
     for (;;) {
       this.skipBlank();
       const line = this.peek();
       if (!line || line.indent < indent) break;
       if (line.indent > indent) {
         this.problem("This line is indented more than expected.", line);
+        this.lastContent = this.index;
         this.index++;
         continue;
       }
@@ -127,10 +198,10 @@ class YamlReader {
         );
         continue;
       }
+      this.lastContent = this.index;
       this.index++;
       list.push(this.readValue(item, line, indent, itemPath, false));
     }
-    return list;
   }
 
   /**
@@ -183,6 +254,7 @@ class YamlReader {
       const next = this.peek();
       if (!next || isBlank(next) || next.indent <= indent || readKey(next)) return joined;
       joined += ` ${stripComment(next.text)}`;
+      this.lastContent = this.index;
       this.index++;
     }
   }
@@ -194,6 +266,7 @@ class YamlReader {
       const next = this.peek();
       if (!next || (!isBlank(next) && next.indent <= indent)) break;
       text += `\n${next.text}`;
+      if (next.text !== "") this.lastContent = this.index;
       this.index++;
       quoted = parseQuoted(text);
     }
@@ -230,6 +303,7 @@ class YamlReader {
         break;
       }
       body.push(blank ? "" : next.raw.slice(contentIndent ?? 0));
+      if (!blank) this.lastContent = this.index;
       this.index++;
     }
     let trailing = 0;
@@ -273,6 +347,8 @@ class YamlReader {
     this.problems.push({ message, range: { from: line.from, to: line.from + line.raw.length } });
   }
 }
+
+const MAX_DEPTH = 32;
 
 function isBlank(line: YamlLine): boolean {
   return line.text === "" || line.text.startsWith("#");

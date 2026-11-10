@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parse, spokenScript } from "../src/index";
 import { readYaml } from "../src/yaml";
 
 const read = (lines: string[]) => readYaml(lines.join("\n"));
@@ -193,5 +194,28 @@ describe("the front matter YAML subset", () => {
   it("handles CRLF line endings and empty input", () => {
     expect(readYaml("a: 1\r\nb: two\r\n").data).toEqual({ a: 1, b: "two" });
     expect(readYaml("").data).toEqual({});
+  });
+
+  it("never exhausts the stack: nesting past 32 levels is reported and skipped", () => {
+    const deep = `k:\n  ${"- ".repeat(5000)}x\nafter: true`;
+    const result = readYaml(deep);
+    expect(result.problems.map((problem) => problem.message)).toContain(
+      "The front matter is nested too deeply here.",
+    );
+    expect(result.data.after).toBe(true);
+    const story = parse(`---\n${deep}\n---\nHello.`);
+    expect(spokenScript(story)).toBe("Narrator: Hello.");
+  });
+
+  it("says where each value is written, to its last line and before a comment", () => {
+    const text = 'title: "Chapter #1" # keep\nblock: |\n  First\n\n  Second\nnext: 1';
+    const keys = readYaml(text).keys;
+    const value = (key: string) => {
+      const found = keys.find((entry) => entry.path[0] === key)?.value;
+      return found && text.slice(found.text.from, found.text.to);
+    };
+    expect(value("title")).toBe('"Chapter #1"');
+    expect(value("block")).toBe("|\n  First\n\n  Second");
+    expect(value("next")).toBe("1");
   });
 });

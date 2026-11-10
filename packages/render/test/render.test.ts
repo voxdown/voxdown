@@ -59,6 +59,30 @@ describe("the book view", () => {
     );
   });
 
+  it("reads a link's or an image's address to its balancing parenthesis, as the parser does", () => {
+    const link = "See [the bat](https://en.wikipedia.org/wiki/Bat_(animal)) here.";
+    const image = "![A bat (flying)](bat_(1).png) here.";
+    for (const render of [renderBook, renderScript]) {
+      expect(render(parse(link), { header: false })).toContain(
+        '<a href="https://en.wikipedia.org/wiki/Bat_(animal)">the bat</a> here.',
+      );
+      expect(render(parse(image), { header: false })).toMatch(
+        /<img[^>]* src="bat_\(1\)\.png" alt="A bat \(flying\)">/,
+      );
+    }
+  });
+
+  it("renders lines built to be slow in good time", () => {
+    // Each opening mark once searched the rest of its line for its closing one.
+    for (const piece of ["*a ", "_a ", "**a ", "[", "![", "[x](", "("]) {
+      const story = parse(piece.repeat(Math.ceil(60_000 / piece.length)));
+      const start = performance.now();
+      renderBook(story);
+      renderScript(story);
+      expect(performance.now() - start, piece).toBeLessThan(2000);
+    }
+  });
+
   it("shows page numbers in the margin when asked", () => {
     const html = renderBook(parse("One. {page}\n\n{page 12}\nTwelve."), {
       pages: true,

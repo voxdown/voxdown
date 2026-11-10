@@ -6,7 +6,7 @@
  * each line's line ending stay as written.
  */
 import { findNotes, joinLines, scanBlocks } from "./blocks";
-import { type TextChange, applyChanges } from "./edit";
+import { type TextChange, applyChanges, sameHearing } from "./edit";
 import { readFrontMatter } from "./front-matter";
 import { type Token, lexLines } from "./inline";
 import { type ScriptLine, lines } from "./lines";
@@ -29,27 +29,68 @@ export type FormatOptions = {
 export function format(source: string, options: FormatOptions = {}): string {
   let text = source;
   if (options.names !== false) text = applyChanges(text, nameChanges(parse(text)));
-  if (options.quotes === "curly") {
-    const before = parse(text);
-    const curly = applyChanges(text, quoteChanges(before, options.language));
-    // Curly marks follow slightly different rules (§5.5); keep the straight ones if who says
-    // what would change.
-    if (sameVoices(lines(before), lines(parse(curly)))) text = curly;
-  }
-  if (options.spacing !== false) {
-    // Tidying spaces never changes who says what: where it would (a stray mark at a line's edge
-    // that turns text into a scene break, say), the spacing is left as it was.
-    // Tidying can turn a line into a heading or a scene break, which then wants blank lines of
-    // its own: tidy again until nothing changes, so formatting a formatted file changes nothing.
-    let spaced = spacing(text);
-    for (let round = 0; round < 4; round++) {
-      const again = spacing(spaced);
-      if (again === spaced) break;
-      spaced = again;
+  // Each step keeps what it can: a line whose change would make anyone say anything differently
+  // keeps its old form, and the rest of the file is still tidied. A step runs until it settles,
+  // so formatting a formatted file changes nothing.
+  for (let round = 0; round < 8; round++) {
+    const before = text;
+    if (options.quotes === "curly") {
+      const story = parse(text);
+      text = guarded(text, story, byLine(text, quoteChanges(story, options.language)));
     }
-    if (sameVoices(lines(parse(text)), lines(parse(spaced)))) text = spaced;
+    if (options.spacing !== false) {
+      // Line by line. Tidying can turn a line into a heading or a scene break, which then wants
+      // blank lines of its own: the next round gives them.
+      text = guarded(text, parse(text), spacingRuns(text));
+    }
+    if (text === before) break;
   }
   return text;
+}
+
+/** Every character but spaces, with quotation marks and apostrophes as one: what may never change. */
+function wordsOf(text: string): string {
+  return text.replace(/["'“”‘’„‚«»‹›]/g, "'").replace(/\s+/g, "");
+}
+
+/** Changes in runs, one per line: a quote's marks are decided together. */
+function byLine(text: string, changes: readonly TextChange[]): TextChange[][] {
+  const runs = new Map<number, TextChange[]>();
+  for (const change of changes) {
+    const line = text.lastIndexOf("\n", change.from - 1);
+    const run = runs.get(line);
+    if (run) run.push(change);
+    else runs.set(line, [change]);
+  }
+  return [...runs.values()];
+}
+
+/**
+ * The text with as many runs of changes made as keep its words, and who says what and how, exactly
+ * as before: all of them if they can, else, halving, each run that can.
+ */
+function guarded(text: string, story: Story, runs: readonly TextChange[][]): string {
+  const words = wordsOf(text);
+  const same = (candidate: string) => {
+    if (wordsOf(candidate) !== words) return false;
+    const after = parse(candidate);
+    return sameVoices(lines(story), lines(after)) && sameHearing(story, after);
+  };
+  const kept: TextChange[] = [];
+  const attempt = (part: readonly TextChange[][]) => {
+    if (part.length === 0) return;
+    const changes = part.flat();
+    if (same(applyChanges(text, [...kept, ...changes]))) {
+      kept.push(...changes);
+      return;
+    }
+    if (part.length === 1) return;
+    const half = Math.ceil(part.length / 2);
+    attempt(part.slice(0, half));
+    attempt(part.slice(half));
+  };
+  attempt(runs);
+  return applyChanges(text, kept);
 }
 
 /** `@clown` becomes `@Clown` when that is how the cast writes it (§5.2). */
@@ -77,7 +118,11 @@ function allItems(story: Story): Item[] {
 
 // Spacing
 
-function spacing(source: string): string {
+/**
+ * Tidied spacing, as one change for each line of the file (and one for the front matter): what the
+ * line becomes, with the blank lines it brings or loses. Each can be kept or left on its own.
+ */
+function spacingRuns(source: string): TextChange[][] {
   const bom = source.startsWith("\uFEFF") ? "\uFEFF" : "";
   const story = parse(source);
   const text = new SourceText(source);
@@ -108,11 +153,16 @@ function spacing(source: string): string {
     groupLines.add(text.position(group.range.from).line - 1);
     if (group.closeRange) groupLines.add(text.position(group.closeRange.from).line - 1);
   }
-  type Out = { line: string; ending: string };
+  /** A line of the result, and the line of the file it comes from (-1: the front matter). */
+  type Out = { line: string; ending: string; owner: number };
   const out: Out[] = front
     ? [
-        { line: source.slice(bom.length, front.range.to), ending: endingOf(firstBody - 1) },
-        { line: "", ending: last },
+        {
+          line: source.slice(bom.length, front.range.to),
+          ending: endingOf(firstBody - 1),
+          owner: -1,
+        },
+        { line: "", ending: last, owner: -1 },
       ]
     : [];
   const ended = () => out.length === 0 || out[out.length - 1]?.line === "";
@@ -124,20 +174,39 @@ function spacing(source: string): string {
     const tidy = groupLines.has(index)
       ? raw
       : raw.replace(/^[ \t\r\uFEFF]+|[ \t\r\uFEFF]+$/g, "").replace(/[ \t]{2,}|\t/g, " ");
+    const owner = index;
     if (tidy === "") {
-      if (!ended()) out.push({ line: "", ending });
+      if (!ended()) out.push({ line: "", ending, owner });
     } else if (structural.has(index)) {
-      if (!ended()) out.push({ line: "", ending: out[out.length - 1]?.ending ?? ending });
-      out.push({ line: tidy, ending }, { line: "", ending });
+      if (!ended()) out.push({ line: "", ending: out[out.length - 1]?.ending ?? ending, owner });
+      out.push({ line: tidy, ending, owner }, { line: "", ending, owner });
     } else {
-      out.push({ line: tidy, ending });
+      out.push({ line: tidy, ending, owner });
     }
   }
   while (out.length > 0 && out[out.length - 1]?.line === "") out.pop();
   // A file without front matter must not start with `---` once tidied, or it would have some:
   // it keeps a blank line before it.
-  if (!front && /^-{3,}$/.test(out[0]?.line ?? "")) out.unshift({ line: "", ending: first });
-  return `${bom}${out.map(({ line, ending }) => line + ending).join("")}`;
+  const opening = out[0];
+  if (!front && opening && /^-{3,}$/.test(opening.line)) {
+    out.unshift({ line: "", ending: first, owner: opening.owner });
+  }
+  const written = new Map<number, string>();
+  for (const { line, ending, owner } of out) {
+    written.set(owner, (written.get(owner) ?? "") + line + ending);
+  }
+  const runs: TextChange[][] = [];
+  const replace = (from: number, to: number, insert: string) => {
+    if (source.slice(from, to) !== insert) runs.push([{ from, to, insert }]);
+  };
+  if (front) {
+    replace(bom.length, text.lines[firstBody]?.from ?? source.length, written.get(-1) ?? "");
+  }
+  for (let index = firstBody; index < text.lines.length; index++) {
+    const from = index === 0 ? bom.length : (text.lines[index]?.from ?? source.length);
+    replace(from, text.lines[index + 1]?.from ?? source.length, written.get(index) ?? "");
+  }
+  return runs;
 }
 
 // Quotation marks

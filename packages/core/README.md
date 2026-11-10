@@ -46,20 +46,20 @@ A line’s `items` are, in source order: `speech` (`speaker`, `direction`, `ownD
 
 The text is the source of truth. Writing never reflows or restyles it (§13).
 
-- **`write(story)`** gives back the source, byte for byte, with the changes you made on the model: a speech’s `speaker` or `ownDirection`, a sound’s or vocal sound’s `description`, a note’s `text`, an instruction’s `value`, a heading’s `level`, `meta.title`/`subtitle`/`author`/`language`, a cast member’s `name` or `handle`. Adding or removing items is done with the edits below.
+- **`write(story)`** gives back the source, byte for byte, with the changes you made on the model: a speech’s `speaker` or `ownDirection`, a sound’s or vocal sound’s `description`, a note’s `text`, an instruction’s `value`, a heading’s `level`, `meta.title`/`subtitle`/`author`/`language`, a cast member’s `name` or `handle`. Adding or removing items is done with the edits below. A change it can't make as asked, such as a note holding `%%`, throws a `RangeError`.
 - **`changesFrom(story)`**: the same, as text changes.
 
-Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) that makes it. Apply them with **`applyChanges(source, changes)`**, then parse again.
+Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) that makes it. Apply them with **`applyChanges(source, changes)`**, then parse again. An edit does exactly what it says: every other word is heard as before, by the same character and in the same way, and the printed book doesn't change. Where that can't be done, it returns no changes.
 
 | Edit | What it does (SPEC.md §13) |
 | --- | --- |
-| `setSpeaker(story, speech, name)` | Gives a stretch to another character. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. |
-| `setDirection(story, speech, direction \| null)` | Adds, replaces or removes a stretch’s own direction, where §13 says to write it. |
+| `setSpeaker(story, speech, name)` | Gives a stretch, or the whole quote it is part of, to another character. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. |
+| `setDirection(story, speech, direction \| null)` | Adds, replaces or removes a stretch’s own direction, where §13 says to write it: to the quote's end, or to a direction of its own inside it. |
 | `renameCharacter(story, from, to)` | Renames a short name in the cast, the `narrator:` key and every mark. |
 | `setFullName(story, handle, name)` | Sets a character’s full name in the cast, adding the cast or the character if needed. |
 | `setMeta(story, key, value \| null)` | Sets or removes a front matter detail, such as `title`. |
-| `insertSound(story, offset, description)` | A sound after the word at `offset`. |
-| `insertLine(story, offset, text)` | A page turn, pause or note on a line of its own. |
+| `insertSound(story, offset, description)` | A sound after the word at `offset`, never inside or straight after a mark. |
+| `insertLine(story, offset, text)` | A page turn, pause or note on a line of its own, never in the front matter or a note. |
 
 `isName(word)` says whether a word can follow `@`.
 

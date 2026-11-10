@@ -103,4 +103,25 @@ describe("the formatter (§13, rule 8)", () => {
       "One.\r\nTwo.\n\n## Head\r\n\r\nThree.\n",
     );
   });
+
+  it("refuses curly quotes that would move words to another speaker, line by line", () => {
+    const curly = { quotes: "curly" as const };
+    // As curly marks, the first ” would close Ann's quote and give "she said" to the narrator.
+    expect(format('@Ann "Wait,” she said" and left.', curly)).toBe(
+      '@Ann "Wait,” she said" and left.\n',
+    );
+    // One line that can't change doesn't stop the others.
+    expect(format(`@Tom 'Hello,’ said Tom, 'it's late.'\n@Ann "Hi," she said.\n`, curly)).toBe(
+      `@Tom 'Hello,’ said Tom, 'it's late.'\n@Ann “Hi,” she said.\n`,
+    );
+  });
+
+  it("tidies every line it can, and leaves one whose tidying would change who says what", () => {
+    // Without its stray carriage return the second line would open a group.
+    expect(format("Hi  there.\n\r::: whispering\nHello\n:::\n")).toBe(
+      "Hi there.\n\r::: whispering\nHello\n:::\n",
+    );
+    // `#` alone is no heading: an empty heading keeps its space, and the rest is tidied.
+    expect(format("---\ntitle: X\n---\n# \n\n")).toBe("---\ntitle: X\n---\n\n# \n");
+  });
 });

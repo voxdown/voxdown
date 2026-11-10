@@ -166,6 +166,31 @@ for (const file of recorded) {
 }
 console.log(`shelf: Listen beside ${chips.length} recorded stories: ok`);
 
+// The pages fill the window between the shelf and the colophon, and never cover the colophon:
+// at a wide window, one where the shelf wraps, and a short one.
+for (const [width, height] of [
+  [1640, 760],
+  [1280, 720],
+  [1024, 560],
+]) {
+  await page.setViewportSize({ width, height });
+  await page.waitForTimeout(150);
+  const layout = await page.evaluate(() => {
+    const pages = [...document.querySelectorAll(".page")].map((p) => p.getBoundingClientRect());
+    const colophon = document.querySelector(".colophon")?.getBoundingClientRect();
+    return {
+      bottom: Math.max(...pages.map((p) => p.bottom)),
+      colophon: colophon?.top ?? 0,
+      tall: Math.min(...pages.map((p) => p.height)),
+    };
+  });
+  if (layout.bottom > layout.colophon + 0.5)
+    problems.push(`layout at ${width}×${height}: the pages cover the colophon`);
+  if (layout.tall < 300) problems.push(`layout at ${width}×${height}: the pages are too short`);
+}
+await page.setViewportSize({ width: 1440, height: 900 });
+console.log("layout: the pages never cover the colophon: ok");
+
 // The listening page: each recording was made from the story as it is now, and every part it
 // plays has its place on the page.
 const listen = await browser.newPage({ viewport: { width: 1440, height: 900 } });

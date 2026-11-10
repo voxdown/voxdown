@@ -21,6 +21,9 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - A link's or image's address runs to its balancing parenthesis, as the parser reads it: `[the bat](…/Bat_(animal))`.
 - Emphasis, links and images are matched in linear time on long lines.
 
+**The playground**
+- The pages fill the window between the shelf and the line at its foot, and no longer cover that line; on a short window the page scrolls. The Sun in *The North Wind and the Sun* is read by a new voice.
+
 **Tests**
 - Fuzz tests (fast-check), 1,000 stories each by default, for the parser, writer, formatter, edits, inserts, book details, Fountain import, views and editor, on stories made at random from the format's own pieces. Each edit's promise is checked character by character, sounds and the printed book included, and how often an edit declines is counted and kept under a budget. The writer is given notes, instructions and sounds with delimiters in them. `FUZZ_RUNS`, `FUZZ_SEED` and `FUZZ_SHOW` set how many stories, which, and whether to print the declined ones.
 - Real books (`corpus/`): a chapter of *Alice*, part of *A Scandal in Bohemia*, the Grimms' *Bremer Stadtmusikanten* in German, and a new CC0 story with CRLF line endings that has what they lack. Each is checked as heard and as printed against reviewed goldens, written back, formatted and edited on every stretch.

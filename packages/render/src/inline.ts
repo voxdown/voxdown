@@ -14,12 +14,20 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** A link or image address, kept only when it can't run script. */
-function safeUrl(url: string): string {
-  const trimmed = url.trim();
-  if (/^(?:javascript|vbscript|data):/i.test(trimmed) && !/^data:image\//i.test(trimmed))
-    return "#";
-  return trimmed;
+/**
+ * A link or image address, kept only when it can't run script: relative addresses, `http`,
+ * `https` and `mailto`, and for images raster `data:` URLs. The scheme is read the way a browser
+ * reads it, without the spaces and control characters it would ignore.
+ */
+export function safeUrl(url: string, image = false): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: browsers drop these inside a scheme.
+  const cleaned = url.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+  const normalized = cleaned.replace(/\s+/g, "").toLowerCase();
+  const scheme = /^([a-z][a-z0-9+.-]*):/.exec(normalized)?.[1];
+  if (scheme === undefined) return cleaned;
+  if (["http", "https", "mailto"].includes(scheme)) return cleaned;
+  if (image && /^data:image\/(?:png|gif|jpe?g|webp|avif)[;,]/.test(normalized)) return cleaned;
+  return "#";
 }
 
 type Piece = { text: string; literal: boolean };
@@ -69,6 +77,7 @@ function render(chars: Piece[]): string {
                 .slice(close + 2, end)
                 .map((c) => c.text)
                 .join(""),
+              bang,
             );
             html += bang
               ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(label.map((c) => c.text).join(""))}">`

@@ -13,11 +13,11 @@ import {
   type Visibility,
   parse,
 } from "voxdown";
-import { escapeHtml, inlineHtml } from "./inline";
+import { escapeHtml, inlineHtml, safeUrl } from "./inline";
 import { stylesheet } from "./stylesheet";
 
 export { stylesheet };
-export { escapeHtml, inlineHtml } from "./inline";
+export { escapeHtml, inlineHtml, safeUrl } from "./inline";
 
 export type RenderOptions = {
   /** Colors by character name, over the defaults and any `color` in the cast. */
@@ -341,7 +341,7 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
         break;
       case "image":
         gap(item.range.from);
-        html += `<img class="vxd-image" src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}">`;
+        html += `<img class="vxd-image" src="${escapeHtml(safeUrl(item.src, true))}" alt="${escapeHtml(item.alt)}">`;
         at = item.range.to;
         break;
     }

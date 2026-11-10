@@ -12,7 +12,7 @@ import {
 } from "../src/index";
 import { root } from "./examples";
 
-const peterSource = readFileSync(join(root, "examples", "peter-rabbit.md"), "utf8");
+const peterSource = readFileSync(join(root, "examples", "peter-rabbit.vxd"), "utf8");
 
 function items(story: Story): Item[] {
   return story.blocks.flatMap((block) => {

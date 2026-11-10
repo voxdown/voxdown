@@ -1,5 +1,4 @@
-import type { Item, Line, Story } from "../model";
-import { parse } from "../parse";
+import { type Item, type Line, type Story, parse } from "voxdown";
 
 /**
  * What the editor draws, worked out from the parsed story: each mark with its range in the text.

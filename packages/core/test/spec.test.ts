@@ -54,7 +54,7 @@ describe("SPEC.md examples", () => {
 
 describe("examples folder", () => {
   it("Peter Rabbit declares the spec version it follows", () => {
-    const peter = readFileSync(join(root, "examples", "peter-rabbit.md"), "utf8");
+    const peter = readFileSync(join(root, "examples", "peter-rabbit.vxd"), "utf8");
     expect(peter.startsWith("---\naudiobook-markup: 0.1\n")).toBe(true);
   });
 });

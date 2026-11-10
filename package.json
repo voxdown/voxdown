@@ -1,32 +1,25 @@
 {
-  "name": "audiobook-markup",
-  "description": "A plain-text format for stories read aloud: who speaks, how, sounds, page turns and notes. Working name.",
+  "name": "voxdown-workspace",
   "private": true,
-  "version": "0.0.0",
-  "license": "UNLICENSED",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "files": ["src", "SPEC.md", "README.md", "examples"],
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "lint": "biome check src test",
-    "test": "vitest run"
+    "build": "pnpm -r --filter=./packages/* build",
+    "test": "vitest run",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "fixtures": "pnpm --filter voxdown fixtures",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.5.0",
-    "vitest": "^3.0.0"
-  },
-  "dependencies": {
-    "@codemirror/autocomplete": "^6.20.4",
-    "@codemirror/commands": "^6.11.1",
-    "@codemirror/search": "^6.7.2",
-    "@codemirror/state": "^6.7.6",
-    "@codemirror/view": "^6.43.15"
-  },
-  "exports": {
-    ".": "./src/index.ts",
-    "./editor": "./src/editor/index.ts"
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^24.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
   }
 }

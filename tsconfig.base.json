@@ -10,7 +10,11 @@
     "exactOptionalPropertyTypes": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "noEmit": true
-  },
-  "include": ["src", "test", "vitest.config.ts"]
+    "noEmit": true,
+    "paths": {
+      "voxdown": ["./packages/core/src/index.ts"],
+      "@voxdown/render": ["./packages/render/src/index.ts"],
+      "@voxdown/editor": ["./packages/editor/src/index.ts"]
+    }
+  }
 }

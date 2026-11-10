@@ -1,7 +1,7 @@
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { scriptEditor } from "../src/editor";
-import { smartQuotes } from "../src/editor/quotes";
+import { scriptEditor } from "../src";
+import { smartQuotes } from "../src/quotes";
 
 describe("pasted text (r7)", () => {
   it("curls straight quotes and apostrophes, as typing does", () => {

@@ -1,0 +1,40 @@
+{
+  "name": "@voxdown/editor",
+  "version": "1.0.0",
+  "description": "A CodeMirror 6 editor for VoxDown stories: marks drawn as chips, raw only where you type.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": ["voxdown", "vxd", "codemirror", "editor", "audiobook"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voxdown/voxdown.git",
+    "directory": "packages/editor"
+  },
+  "homepage": "https://voxdown.github.io/",
+  "bugs": "https://github.com/voxdown/voxdown/issues",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "voxdown": "workspace:^"
+  },
+  "engines": { "node": ">=20" }
+}

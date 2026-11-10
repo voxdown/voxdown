@@ -1,13 +1,13 @@
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { marksField, sceneNumbers } from "../src/editor/decorations";
+import { marksField, sceneNumbers } from "../src/decorations";
 import {
   nameReadAt,
   readNamesField,
   readSceneNameSpec,
   sceneNameChange,
   spokenName,
-} from "../src/editor/scene-names";
+} from "../src/scene-names";
 
 const stateOf = (doc: string) => EditorState.create({ doc, extensions: [marksField] });
 const numbersOf = (doc: string) => {

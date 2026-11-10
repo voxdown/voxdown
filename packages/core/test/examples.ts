@@ -8,8 +8,9 @@ import { fileURLToPath } from "node:url";
  */
 export type Example = { line: number; parts: number; input: string; script: string; book?: string };
 
-export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const spec = readFileSync(join(root, "SPEC.md"), "utf8");
+/** The repository root, where `spec/` and `examples/` are. */
+export const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+export const spec = readFileSync(join(root, "spec", "SPEC.md"), "utf8");
 
 export function examples(markdown: string): Example[] {
   const found: Example[] = [];

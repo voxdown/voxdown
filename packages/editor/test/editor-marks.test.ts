@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type EditorMark, editorMarks } from "../src/editor/marks";
+import { type EditorMark, editorMarks } from "../src/marks";
 
 /** What the editor draws for each mark (src/editor/marks.ts), checked against the text it covers. */
 const text = (source: string, mark: EditorMark) => source.slice(mark.from, mark.to);

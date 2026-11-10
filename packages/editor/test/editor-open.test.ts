@@ -1,6 +1,6 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { holdOpen, openField } from "../src/editor/decorations";
+import { holdOpen, openField } from "../src/decorations";
 
 const doc = "One line.\n\nTwo line.\n\nThree line.";
 const at = (text: string) => doc.indexOf(text);

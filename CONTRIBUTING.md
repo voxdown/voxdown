@@ -27,6 +27,8 @@ pnpm lint        # Biome; `pnpm format` fixes formatting
 pnpm build       # the packages, into each package's dist/
 pnpm site        # the playground, at http://localhost:5173
 pnpm check       # lint, typecheck, test and build, as CI runs them
+pnpm site:check  # the built playground in Chromium (after `pnpm exec playwright install chromium`)
+pnpm --filter voxdown-vscode test:vscode   # the extension in a real VS Code (under xvfb-run on Linux)
 ```
 
 Inside the workspace, packages are read from their source, so tests and the playground need no build first.

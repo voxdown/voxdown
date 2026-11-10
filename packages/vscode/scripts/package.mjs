@@ -15,6 +15,7 @@ const stage = join(root, "dist", "vsix");
 const SHIPPED = [
   ".vscodeignore",
   "README.md",
+  "LICENSE",
   "language-configuration.json",
   "images/icon.png",
   "snippets/voxdown.code-snippets",
@@ -46,8 +47,6 @@ execFileSync(
     vsce,
     "package",
     "--no-dependencies",
-    // The repository has no LICENSE file yet; the manifest says MIT.
-    "--skip-license",
     "--baseContentUrl",
     `${github}/blob/main/packages/vscode`,
     "--baseImagesUrl",

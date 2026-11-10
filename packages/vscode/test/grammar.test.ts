@@ -250,6 +250,14 @@ describe("the grammar by hand", () => {
     expect(await scopesOf(text, "Gerald")).toEqual(["text.voxdown"]);
   });
 
+  it("reads @[text](address) as an @ and a link, as the core does (§8.3)", async () => {
+    const text = "@Gerald “Hi @[the page](https://a.b).” @[sneezes]";
+    const scopes = await scopesOf(text, "the page");
+    expect(scopes).toContain("string.other.link.title.voxdown");
+    expect(hasScope(scopes, TOKEN_SCOPES.vocal)).toBe(false);
+    expect(hasScope(await scopesOf(text, "sneezes"), TOKEN_SCOPES.vocal)).toBe(true);
+  });
+
   it("reads [text](address) as a link, not a sound", async () => {
     const text = "Read more at [our website](https://example.com).";
     const scopes = await scopesOf(text, "our website");

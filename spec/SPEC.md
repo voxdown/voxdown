@@ -1229,6 +1229,14 @@ Read more at [our website](https://example.com).
 Narrator: Read more at our website.
 ```
 
+The same holds straight after an `@`: `@[text](address)` is an `@` and a link, not a sound the speaker makes.
+
+```example
+@Gerald “Read [this](https://example.com) @[now](https://example.com).”
+.
+Gerald: Read this @now.
+```
+
 An image, `![description](file)`, is shown in the book and not heard.
 
 ```example

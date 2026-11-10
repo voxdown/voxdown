@@ -259,7 +259,14 @@ const characterMark = seq(
 );
 
 const directionMark = match("meta.mark.direction.voxdown", AT_START, AT, direction(PARENS));
-const vocalMark = match("meta.mark.vocal.voxdown", AT_START, AT, soundParts(vd(S.vocal)));
+/** `@[sneezes]`; but `@[text](address)` is an `@` and a link (§8.3). */
+const vocalMark = match(
+  "meta.mark.vocal.voxdown",
+  AT_START,
+  AT,
+  soundParts(vd(S.vocal)),
+  `(?!${PARENS})`,
+);
 
 // Speech (§5.4 to §5.7): the quotes after a character mark, on its line, are the character's.
 

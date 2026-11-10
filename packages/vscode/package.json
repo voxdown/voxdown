@@ -15,7 +15,7 @@
     "url": "git+https://github.com/voxdown/voxdown.git",
     "directory": "packages/vscode"
   },
-  "homepage": "https://voxdown.github.io/",
+  "homepage": "https://voxdown.github.io/voxdown/",
   "bugs": "https://github.com/voxdown/voxdown/issues",
   "engines": {
     "vscode": "^1.90.0"
@@ -109,7 +109,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "grammar": "UPDATE_GRAMMAR=1 vitest run test/grammar-file.test.ts && biome format --write syntaxes",
-    "package": "pnpm run build && node scripts/package.mjs"
+    "package": "pnpm run build && node scripts/package.mjs",
+    "test:vscode": "pnpm package && node integration/run.mjs"
   },
   "dependencies": {
     "@voxdown/render": "workspace:^",
@@ -117,6 +118,7 @@
   },
   "devDependencies": {
     "@types/vscode": "~1.90.0",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.2.0"

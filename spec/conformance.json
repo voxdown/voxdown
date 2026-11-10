@@ -3952,6 +3952,29 @@
     "example": 99,
     "section": "8.3",
     "line": 1234,
+    "input": "@Gerald “Read [this](https://example.com) @[now](https://example.com).”",
+    "script": "Gerald: Read this @now.",
+    "lines": [
+      {
+        "kind": "speech",
+        "speaker": "Gerald",
+        "direction": null,
+        "text": "Read this @now.",
+        "name": null,
+        "heading": null,
+        "scene": 1,
+        "sceneTitle": null,
+        "page": "1",
+        "line": 1,
+        "column": 9
+      }
+    ],
+    "warnings": []
+  },
+  {
+    "example": 100,
+    "section": "8.3",
+    "line": 1242,
     "input": "![Peter squeezing under the gate](peter-gate.png)",
     "script": "![Peter squeezing under the gate](peter-gate.png)",
     "lines": [
@@ -3972,9 +3995,9 @@
     "warnings": []
   },
   {
-    "example": 100,
+    "example": 101,
     "section": "9.1",
-    "line": 1250,
+    "line": 1258,
     "input": "He slipped underneath the gate.\n\n{page}\n\nMr. McGregor hung up the little jacket.",
     "script": "Narrator: He slipped underneath the gate.\n\n{page}\n\nNarrator: Mr. McGregor hung up the little jacket.",
     "lines": [
@@ -4021,9 +4044,9 @@
     "warnings": []
   },
   {
-    "example": 101,
+    "example": 102,
     "section": "9.1",
-    "line": 1264,
+    "line": 1272,
     "input": "He went back to his work. {page} Peter sat down to rest.",
     "script": "Narrator: He went back to his work.\n{page}\nNarrator: Peter sat down to rest.",
     "book": "He went back to his work. Peter sat down to rest.",
@@ -4071,9 +4094,9 @@
     "warnings": []
   },
   {
-    "example": 102,
+    "example": 103,
     "section": "9.1",
-    "line": 1274,
+    "line": 1282,
     "input": "{page 8–9}",
     "script": "{page 8–9}",
     "lines": [
@@ -4094,9 +4117,9 @@
     "warnings": []
   },
   {
-    "example": 103,
+    "example": 104,
     "section": "9.2",
-    "line": 1286,
+    "line": 1294,
     "input": "@Wanda “Could you perhaps be in love somewhat more urgently?”\n\n{pause 2s}\n\nHe went on being in love at exactly the same speed.",
     "script": "Wanda: Could you perhaps be in love somewhat more urgently?\n\n{pause 2s}\n\nNarrator: He went on being in love at exactly the same speed.",
     "lines": [
@@ -4143,9 +4166,9 @@
     "warnings": []
   },
   {
-    "example": 104,
+    "example": 105,
     "section": "9.3",
-    "line": 1304,
+    "line": 1312,
     "input": "{book only} First published 1902.\n\nOnce upon a time…",
     "script": "{book only} First published 1902.\n\nNarrator: Once upon a time…",
     "book": "First published 1902.\n\nOnce upon a time…",
@@ -4167,18 +4190,18 @@
     "warnings": []
   },
   {
-    "example": 105,
+    "example": 106,
     "section": "9.3",
-    "line": 1318,
+    "line": 1326,
     "input": "{book only} First published 1902.\nFrederick Warne & Co.",
     "script": "{book only} First published 1902.\n{book only} Frederick Warne & Co.",
     "lines": [],
     "warnings": []
   },
   {
-    "example": 106,
+    "example": 107,
     "section": "9.3",
-    "line": 1326,
+    "line": 1334,
     "input": "{audio only} Turn the page when you hear the bell.\n\nOnce upon a time…",
     "script": "Narrator: Turn the page when you hear the bell.\n\nNarrator: Once upon a time…",
     "book": "Once upon a time…",
@@ -4213,9 +4236,9 @@
     "warnings": []
   },
   {
-    "example": 107,
+    "example": 108,
     "section": "9.3",
-    "line": 1338,
+    "line": 1346,
     "input": "## The cave {hidden}\n\nMount Mumble was very tall.",
     "script": "## The cave {hidden}\n\nNarrator: Mount Mumble was very tall.",
     "book": "Mount Mumble was very tall.",
@@ -4237,18 +4260,18 @@
     "warnings": []
   },
   {
-    "example": 108,
+    "example": 109,
     "section": "9.4",
-    "line": 1354,
+    "line": 1362,
     "input": "::: {book only}\nFirst published 1902.\n\nPrinted in Great Britain.\n:::",
     "script": "{book only} First published 1902.\n\n{book only} Printed in Great Britain.",
     "lines": [],
     "warnings": []
   },
   {
-    "example": 109,
+    "example": 110,
     "section": "9.5",
-    "line": 1370,
+    "line": 1378,
     "input": "The broom fell over. {recorder:take 3}",
     "script": "Narrator: The broom fell over.\n{recorder:take 3}",
     "lines": [
@@ -4282,9 +4305,9 @@
     "warnings": []
   },
   {
-    "example": 110,
+    "example": 111,
     "section": "10",
-    "line": 1383,
+    "line": 1391,
     "input": "%% Leave a clear pause after this line. %%\n\nHe went on being in love at exactly the same speed.",
     "script": "%% Leave a clear pause after this line. %%\n\nNarrator: He went on being in love at exactly the same speed.",
     "book": "He went on being in love at exactly the same speed.",
@@ -4319,9 +4342,9 @@
     "warnings": []
   },
   {
-    "example": 111,
+    "example": 112,
     "section": "10",
-    "line": 1395,
+    "line": 1403,
     "input": "@Marmalade “Clause five.” %% Clause and claws sound the same. %%",
     "script": "Marmalade: Clause five.\n%% Clause and claws sound the same. %%",
     "lines": [
@@ -4355,9 +4378,9 @@
     "warnings": []
   },
   {
-    "example": 112,
+    "example": 113,
     "section": "10",
-    "line": 1402,
+    "line": 1410,
     "input": "%%\nHushed from here to the end, because Gerald is asleep.\n\nThe knight’s cry is the only loud line.\n%%",
     "script": "%% Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line. %%",
     "lines": [
@@ -4378,9 +4401,9 @@
     "warnings": []
   },
   {
-    "example": 113,
+    "example": 114,
     "section": "11",
-    "line": 1418,
+    "line": 1426,
     "input": "@Gerald “I don’t *even* like treasure.”",
     "script": "Gerald: I don’t *even* like treasure.",
     "lines": [
@@ -4401,9 +4424,9 @@
     "warnings": []
   },
   {
-    "example": 114,
+    "example": 115,
     "section": "11",
-    "line": 1424,
+    "line": 1432,
     "input": "The page said: **JOBS AVAILABLE**",
     "script": "Narrator: The page said: **JOBS AVAILABLE**",
     "lines": [
@@ -4424,9 +4447,9 @@
     "warnings": []
   },
   {
-    "example": 115,
+    "example": 116,
     "section": "11",
-    "line": 1432,
+    "line": 1440,
     "input": "She wrote \\[sic\\] and \\{page\\} on the board.",
     "script": "Narrator: She wrote [sic] and {page} on the board.",
     "lines": [
@@ -4447,9 +4470,9 @@
     "warnings": []
   },
   {
-    "example": 116,
+    "example": 117,
     "section": "12.2",
-    "line": 1491,
+    "line": 1499,
     "input": "@Percival (muffled, echoing) “I meant to do that,” said Sir Percival, from inside the vase. [armor wobbles]",
     "script": "Percival (muffled, echoing): I meant to do that,\nNarrator: said Sir Percival, from inside the vase.\n[armor wobbles]",
     "book": "“I meant to do that,” said Sir Percival, from inside the vase.",
@@ -4497,9 +4520,9 @@
     "warnings": []
   },
   {
-    "example": 117,
+    "example": 118,
     "section": "12.2",
-    "line": 1501,
+    "line": 1509,
     "input": "@Wanda (strained and extremely polite) “Could we perhaps travel somewhat more urgently?”\n\n%% The broom considers this. %%\n\n{pause}\n\nThe broom considered this.",
     "script": "Wanda (strained and extremely polite): Could we perhaps travel somewhat more urgently?\n\n%% The broom considers this. %%\n\n{pause}\n\nNarrator: The broom considered this.",
     "book": "“Could we perhaps travel somewhat more urgently?”\n\nThe broom considered this.",

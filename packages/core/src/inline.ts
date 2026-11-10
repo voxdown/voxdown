@@ -189,6 +189,10 @@ function lexAt(source: string, at: number, to: number): Atom | null {
   }
   if (next === "[") {
     const close = findUnescaped(source, at + 2, to, "]");
+    // A bracket followed directly by "(" is a Markdown link, after an @ too (§8.3).
+    if (close >= 0 && source[close + 1] === "(" && matchParen(source, close + 1, to) >= 0) {
+      return null;
+    }
     const description = close < 0 ? "" : cleanText(source.slice(at + 2, close));
     if (!description) return null;
     return { type: "vocal", description, range: { from: at, to: close + 1 } };

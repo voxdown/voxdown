@@ -269,3 +269,15 @@ describe("a byte order mark", () => {
     );
   });
 });
+
+describe("a bracket followed directly by a parenthesis", () => {
+  it("is a link after an @ too, as after a name (§8.3)", () => {
+    expect(spokenScript(parse("@Gerald “Read [this](https://a.b) now.”"))).toBe(
+      "Gerald: Read this now.",
+    );
+    expect(spokenScript(parse("@Gerald “Hi @[the page](https://a.b).”"))).toBe(
+      "Gerald: Hi @the page.",
+    );
+    expect(codes("@Gerald “Hi @[sneezes](softly).”")).toContain("sound-looks-like-link");
+  });
+});

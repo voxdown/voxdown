@@ -10,6 +10,7 @@ The first stable version. Everything a 0.1 draft file says, it still says, excep
 - **The file extension.** Files end in `.vxd`. `.md` is still read, for files mostly read in Markdown tools. The suggested media type is `text/markdown; variant=VoxDown`.
 - **Front matter.** The part of YAML every reader understands is now written down (§4.2).
 - **Warnings** have stable codes, listed in §12.3 with their level.
+- A link straight after an `@`, `@[text](address)`, is a link (§8.3), as after a name.
 - **Formatting** (§13, rule 8): what a formatter may change, and only when asked.
 - **Conformance** (§15): two levels, a reader and a writer, and `conformance.json`, every example as data for other implementations.
 - **Versions** (§16): what a minor and a major version may change.

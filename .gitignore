@@ -7,3 +7,4 @@ coverage/
 site/.vite/
 dist-mockup/
 docs/mockups/
+.vscode-test/

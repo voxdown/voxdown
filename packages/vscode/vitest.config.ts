@@ -4,11 +4,14 @@ import { workspaceAliases } from "../../vitest.shared";
 
 export default defineProject({
   resolve: {
-    alias: {
+    alias: [
       ...workspaceAliases,
       // The `vscode` module exists only inside VS Code; the tests run the extension on a stand-in.
-      vscode: fileURLToPath(new URL("./test/vscode-stub.ts", import.meta.url)),
-    },
+      {
+        find: /^vscode$/,
+        replacement: fileURLToPath(new URL("./test/vscode-stub.ts", import.meta.url)),
+      },
+    ],
   },
   test: { name: "vscode", include: ["test/**/*.test.ts"] },
 });

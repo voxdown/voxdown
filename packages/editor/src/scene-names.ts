@@ -8,7 +8,7 @@ import {
 import type { EditorView } from "@codemirror/view";
 
 /**
- * A scene's name read aloud (owner, 9 Nov): the speaker on a scene break or heading writes it as
+ * A scene's name read aloud: the speaker on a scene break or heading writes it as
  * an ordinary line of its own after the mark, `Scene 2.`, and takes it out again. Read aloud, it
  * is printed too, so no `{audio only}`.
  */
@@ -17,8 +17,8 @@ import type { EditorView } from "@codemirror/view";
 const nameRead = StateEffect.define<{ at: number; name: string | null }>();
 
 /**
- * The names each scene's speaker wrote, by where its mark starts (review r19): a heading renamed
- * before Apply is still known by the name its line says.
+ * The names each scene's speaker wrote, by where its mark starts: a heading renamed
+ * before the host applies it is still known by the name its line says.
  */
 export const readNamesField = StateField.define<ReadonlyArray<{ at: number; name: string }>>({
   create: () => [],
@@ -58,7 +58,7 @@ const renumbering = (a: string, b: string) =>
   /\d/u.test(a) && /\d/u.test(b) && shapeOf(a) === shapeOf(b);
 
 /**
- * Marks on a line that aren't its words (review r18): instructions, a speaker's name and its
+ * Marks on a line that aren't its words: instructions, a speaker's name and its
  * `(how)`, a direction, a sound, a note. A name read aloud may carry any of them.
  */
 const MARKS =
@@ -71,9 +71,9 @@ const wordsOf = (text: string) =>
   text.replace(MARKS, " ").replace(/[“”"]/gu, "").replace(/\s+/gu, " ").trim();
 
 /**
- * The line reading a scene's name aloud, after the mark ending at `markEnd` (owner, 9 Nov): the
+ * The line reading a scene's name aloud, after the mark ending at `markEnd`: the
  * next paragraph, one line of its own, whose words are the name's (directed, given to someone,
- * or `{audio only}` typed by hand: its words are what count, review r18). `stale` when it says
+ * or `{audio only}` typed by hand: its words are what count). `stale` when it says
  * another scene's number (the scene's changed since), the name the scene had (`was`, a heading
  * renamed), or an `{audio only}` line says something else.
  */
@@ -101,7 +101,7 @@ export function spokenName(
 
 /**
  * A name as a line says it: its marks escaped, ending in a full stop unless it has its own (a
- * Chinese or Japanese one after those scripts, review r18).
+ * Chinese or Japanese one after those scripts).
  */
 const sayName = (name: string) => {
   const words = name.trim().replace(/([\\[\]{}])/gu, "\\$1");
@@ -112,9 +112,9 @@ const sayName = (name: string) => {
 };
 
 /**
- * The speaker's edit (owner, 9 Nov): reading the scene's name aloud after the mark at `at`, or
+ * The speaker's edit: reading the scene's name aloud after the mark at `at`, or
  * no longer; a line saying an old name (`stale`) says the scene's name now instead, its marks
- * (a direction, a speaker) kept (review r18).
+ * (a direction, a speaker) kept.
  */
 export function sceneNameChange(
   state: EditorState,
@@ -129,7 +129,7 @@ export function sceneNameChange(
     const text = state.sliceDoc(said.from, said.to);
     const lead = LEADING.exec(text)?.[0].length ?? 0;
     // The spoken words alone, up to the first mark after them: a sound, a note or a pause on
-    // the line stays (review r19), as its speaker and direction do.
+    // the line stays, as its speaker and direction do.
     const rest = text.slice(lead);
     let end = new RegExp(MARKS.source, "u").exec(rest)?.index ?? rest.length;
     while (end > 0 && /\s/u.test(rest[end - 1] ?? "")) end--;
@@ -152,7 +152,7 @@ export function sceneNameChange(
     return back && !back.stale ? change : null;
   }
   if (said) return { from: line.to, to: said.to, insert: "" };
-  // Its own paragraph, whatever follows the mark: a blank line after it too (review r18).
+  // Its own paragraph, whatever follows the mark: a blank line after it too.
   const next = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
   return {
     from: line.to,

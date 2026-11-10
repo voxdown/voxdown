@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { scriptEditor } from "../src";
 import { smartQuotes } from "../src/quotes";
 
-describe("pasted text (r7)", () => {
+describe("pasted text", () => {
   it("curls straight quotes and apostrophes, as typing does", () => {
     const state = EditorState.create({ doc: "", extensions: smartQuotes() });
     const pasted = state.update({
@@ -28,7 +28,7 @@ describe("pasted text (r7)", () => {
     expect(decade.doc.toString()).toBe("Back in the ’90s.");
   });
 
-  it("leaves one space where words were cut from between others (r11)", () => {
+  it("leaves one space where words were cut from between others", () => {
     const state = EditorState.create({
       doc: "One. Two. Three.",
       extensions: scriptEditor({ characters: () => [] }),
@@ -40,7 +40,7 @@ describe("pasted text (r7)", () => {
     expect(cut.doc.toString()).toBe("One. Three.");
   });
 
-  it("leaves no space before a stop where a sentence's end was cut (r12)", () => {
+  it("leaves no space before a stop where a sentence's end was cut", () => {
     const state = EditorState.create({
       doc: "He flipped down the hallway. Then left.",
       extensions: scriptEditor({ characters: () => [] }),
@@ -58,7 +58,7 @@ describe("pasted text (r7)", () => {
     expect(inner.doc.toString()).toBe("He flipped. Then left.");
   });
 
-  it("keeps a sound's label as written, pasted or typed (r12)", () => {
+  it("keeps a sound's label as written, pasted or typed", () => {
     const state = EditorState.create({ doc: "", extensions: smartQuotes() });
     const pasted = state.update({
       changes: { from: 0, insert: "He said \"go\" [Knight's armor clanks] and it's done." },

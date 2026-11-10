@@ -14,17 +14,17 @@ import { ChipWidget, LineWidget, type PageTurnTools, type ReadAloud } from "./wi
 
 /**
  * Live preview: every line shows the story as it reads, with a character's name as a chip in their
- * colour, a direction as a small label above the words it directs (Performance's look, 1082),
+ * color, a direction as a small label above the words it directs,
  * sounds and page turns as chips, and scene breaks and groups drawn across the page. The line you
  * are typing in shows its raw marks instead, and "Show marks" shows them everywhere. Switches
- * (as Performance's) leave out names, directions, sounds, character sounds, page turns or notes,
- * or the speakers' colours, everywhere but where you type.
+ * leave out names, directions, sounds, character sounds, page turns or notes,
+ * or the speakers' colors, everywhere but where you type.
  */
 export type Character = {
   handle: string;
   name: string;
   color?: string;
-  /** Written in the text but not in the cast yet: coloured, never suggested. */
+  /** Written in the text but not in the cast yet: colored, never suggested. */
   provisional?: boolean;
 };
 
@@ -39,7 +39,7 @@ export type PreviewOptions = {
   /** Whether page turns do anything where this text goes; when not, they're drawn inactive. */
   pageTurns?: () => boolean;
   /**
-   * The host's own instructions (§9.5), by name, such as `kinu:join`: drawn as this small mark
+   * The host's own instructions (§9.5), by name, such as `tool:join`: drawn as this small mark
    * with this title instead of as a chip naming them.
    */
   toolMarks?: Readonly<Record<string, { text: string; title: string }>>;
@@ -57,7 +57,7 @@ export type PreviewOptions = {
   ) => { name: string; title: string } | undefined;
   /** What a page turn turns to (the next page's name), by where its mark starts. */
   pageLabel?: (state: EditorState, from: number) => string | undefined;
-  /** The host's controls on every page turn drawn (Studio's chime and rest, review r15). */
+  /** The host's controls on every page turn drawn (a chime and rest button, say). */
   pageTurnTools?: PageTurnTools;
   /**
    * What a scene break opens, by where its mark starts and the scene's number in text order
@@ -65,7 +65,7 @@ export type PreviewOptions = {
    */
   sceneLabel?: (state: EditorState, from: number, scene: number) => string | undefined;
   /**
-   * A speaker on every scene break and heading that reads the scene's name aloud (owner, 9 Nov):
+   * A speaker on every scene break and heading that reads the scene's name aloud:
    * it writes `Name.` as a line of its own after the mark, and takes it out again.
    */
   readSceneAloud?: {
@@ -76,10 +76,10 @@ export type PreviewOptions = {
   };
 };
 
-/** What the page draws, as Performance's switches choose (1082). */
+/** What the page draws, as the host's switches choose. */
 export type ViewSwitches = {
-  /** Each speaker's words underlined, and their name chip, in their colour. */
-  colour: boolean;
+  /** Each speaker's words underlined, and their name chip, in their color. */
+  color: boolean;
   names: boolean;
   directions: boolean;
   sounds: boolean;
@@ -90,7 +90,7 @@ export type ViewSwitches = {
 };
 
 const ALL_ON: ViewSwitches = {
-  colour: true,
+  color: true,
   names: true,
   directions: true,
   sounds: true,
@@ -129,7 +129,7 @@ export const marksField = StateField.define<EditorMark[]>({
 });
 
 /**
- * Each scene break's and heading's scene, numbered in text order (owner, 9 Nov), by where its
+ * Each scene break's and heading's scene, numbered in text order, by where its
  * mark starts: the story's first scene has no mark before it, unless the text opens with one.
  */
 export function sceneNumbers(state: EditorState): Map<number, number> {
@@ -138,8 +138,8 @@ export function sceneNumbers(state: EditorState): Map<number, number> {
     .filter((m) => m.kind === "break" || m.kind === "heading")
     .sort((a, b) => a.from - b.from);
   const blank = (from: number, to: number) => !state.sliceDoc(from, to).trim();
-  // A mark with nothing after it before the next (or the end) opens no scene, as Apply reads it
-  // (review r18): `---` twice, or `---` straight before a heading, is one scene.
+  // A mark with nothing after it before the next (or the end) opens no scene: `---` twice, or
+  // `---` straight before a heading, is one scene.
   const opening = starts.filter((m, i) => !blank(m.to, starts[i + 1]?.from ?? state.doc.length));
   const first = opening[0];
   // The text opens with a scene when nothing but scene marks comes before its first.
@@ -157,7 +157,7 @@ export function sceneNumbers(state: EditorState): Map<number, number> {
 const SHORT_LINE = 160;
 
 /**
- * Where the text is open (its marks shown raw), owner, 9 Nov: the cursor, or a selection within
+ * Where the text is open (its marks shown raw): the cursor, or a selection within
  * one line. While the pointer is down nothing opens or closes, so a drag never makes the page
  * move under it; letting go without moving is a click (or tap), and opens where it put the
  * cursor; letting go after a drag keeps what was open before, as does a selection over several
@@ -248,10 +248,10 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
   const { state } = view;
   const marks = state.field(marksField);
   const scenes = sceneNumbers(state);
-  /** The speaker on a scene's mark, when the host has it (owner, 9 Nov). */
+  /** The speaker on a scene's mark, when the host has it. */
   const readAloud = (mark: { from: number; to: number }, name: string): ReadAloud | undefined => {
     if (!options.readSceneAloud) return undefined;
-    // The name its speaker last wrote, else the one the host's project has (review r19).
+    // The name its speaker last wrote, else the one the host's project has.
     const was = nameReadAt(state, mark.from) ?? options.readSceneAloud.nameWas?.(state, mark.from);
     const said = spokenName(state, mark.to, name, was);
     return {
@@ -276,14 +276,14 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
     to > from && state.doc.lineAt(from).number !== state.doc.lineAt(Math.max(from, to - 1)).number;
   const add = (from: number, to: number, deco: Decoration) => {
     if (from < to && isReplace(deco) && crossesLine(from, to)) {
-      decorations.push({ from, to, deco: Decoration.mark({ class: "am-note am-raw" }) });
+      decorations.push({ from, to, deco: Decoration.mark({ class: "vxd-note vxd-raw" }) });
       return;
     }
     decorations.push({ from, to, deco });
   };
   const tinted = (cls: string, color?: string) =>
     Decoration.mark(
-      color ? { class: cls, attributes: { style: `--am-speaker: ${color}` } } : { class: cls },
+      color ? { class: cls, attributes: { style: `--vxd-speaker: ${color}` } } : { class: cls },
     );
   /** A mark switched off: left out, with one space so the words either side still read. */
   const leaveOut = (from: number, to: number) => {
@@ -297,12 +297,12 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
   for (const { from, to } of view.visibleRanges) {
     for (let pos = from; pos <= to; ) {
       const line = state.doc.lineAt(pos);
-      // Open only with the cursor on it: a selection passing over leaves it compact (owner, 9 Nov).
+      // Open only with the cursor on it: a selection passing over leaves it compact.
       const cursorHere = state
         .field(openField)
         .ranges.some((r) => r.from === r.to && r.from >= line.from && r.from <= line.to);
       if (!line.text.trim() && !cursorHere)
-        add(line.from, line.from, Decoration.line({ class: "am-blank" }));
+        add(line.from, line.from, Decoration.line({ class: "vxd-blank" }));
       pos = line.to + 1;
     }
   }
@@ -314,34 +314,34 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
       active.has(lineNo) ||
       touchesSelection(state, mark.from, mark.to) ||
       mark.to > state.doc.length;
-    const color = shown.colour ? colorOf("speaker" in mark ? mark.speaker : undefined) : undefined;
+    const color = shown.color ? colorOf("speaker" in mark ? mark.speaker : undefined) : undefined;
     switch (mark.kind) {
       case "speech":
-        if (shown.colour || showRaw) add(mark.from, mark.to, tinted("am-speech", color));
+        if (shown.color || showRaw) add(mark.from, mark.to, tinted("vxd-speech", color));
         break;
       case "directed":
         if (shown.directions || showRaw)
-          add(mark.from, mark.to, Decoration.mark({ class: "am-directed" }));
+          add(mark.from, mark.to, Decoration.mark({ class: "vxd-directed" }));
         break;
       case "warning":
         add(
           mark.from,
           mark.to,
-          Decoration.mark({ class: "am-warning", attributes: { title: mark.message } }),
+          Decoration.mark({ class: "vxd-warning", attributes: { title: mark.message } }),
         );
         break;
       case "in-group":
-        add(mark.from, mark.from, Decoration.line({ class: "am-in-group" }));
+        add(mark.from, mark.from, Decoration.line({ class: "vxd-in-group" }));
         break;
       case "frontmatter":
-        add(mark.from, mark.to, Decoration.mark({ class: "am-frontmatter" }));
+        add(mark.from, mark.to, Decoration.mark({ class: "vxd-frontmatter" }));
         break;
       case "escape":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-escape" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-escape" }));
         else add(mark.from, mark.to, Decoration.replace({}));
         break;
       case "name":
-        if (showRaw) add(mark.from, mark.to, tinted("am-name am-raw", color));
+        if (showRaw) add(mark.from, mark.to, tinted("vxd-name vxd-raw", color));
         else if (!shown.names) leaveOut(mark.from, mark.to);
         else
           add(
@@ -367,7 +367,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           );
         break;
       case "direction":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-direction am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-direction vxd-raw" }));
         else if (!shown.directions) leaveOut(mark.from, mark.to);
         else {
           // Above the words it directs: the space after it goes too, so the words keep their place.
@@ -389,20 +389,20 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       case "run-repeat":
         // A run's later lines: the bar beside them carries the direction, drawn once above.
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-direction am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-direction vxd-raw" }));
         else if (mark.to < state.doc.length && state.sliceDoc(mark.to, mark.to + 1) === " ")
           add(mark.from, mark.to + 1, Decoration.replace({}));
         else add(mark.from, mark.to, Decoration.replace({}));
         break;
       case "cleared":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-direction am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-direction vxd-raw" }));
         // The dashes under a direction's words already show where it ends.
         else if (mark.to < state.doc.length && state.sliceDoc(mark.to, mark.to + 1) === " ")
           add(mark.from, mark.to + 1, Decoration.replace({}));
         else add(mark.from, mark.to, Decoration.replace({}));
         break;
       case "sound":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-sound am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-sound vxd-raw" }));
         else if (!shown.sounds) leaveOut(mark.from, mark.to);
         else
           add(
@@ -422,7 +422,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           );
         break;
       case "vocal":
-        if (showRaw) add(mark.from, mark.to, tinted("am-name am-raw", color));
+        if (showRaw) add(mark.from, mark.to, tinted("vxd-name vxd-raw", color));
         else if (!shown.vocal) leaveOut(mark.from, mark.to);
         else
           add(
@@ -445,12 +445,12 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       case "page": {
         const turnsTo = mark.label ?? options.pageLabel?.(state, mark.from);
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-page am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-page vxd-raw" }));
         else if (!shown.pages) leaveOut(mark.from, mark.to);
         else if (
           mark.ownLine ||
           // Ending its paragraph's words, it is drawn below them across the page, as
-          // Performance draws it (review r15).
+          // a script draws it.
           !state.sliceDoc(mark.to, state.doc.lineAt(mark.to).to).trim()
         )
           add(
@@ -459,7 +459,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             Decoration.replace({
               widget: new LineWidget(
                 "turn",
-                // The page it turns to, as Performance's markers say it (owner, 9 Nov).
+                // The page it turns to, as a script's markers say it.
                 pagesOff ? "page turn · this story has no pages yet" : (turnsTo ?? "page turn"),
                 "Page turn: {page}",
                 pagesOff ? undefined : options.pageTurnTools,
@@ -491,7 +491,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       }
       case "pause":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-page am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-page vxd-raw" }));
         else
           add(
             mark.from,
@@ -510,19 +510,19 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       case "instruction": {
         // Words printed but never read aloud, or neither, look quieter than the words heard
-        // (1082, review r2): the line they are on.
+        //: the line they are on.
         if (mark.text === "book only" || mark.text === "hidden")
           add(
             state.doc.lineAt(mark.from).from,
             state.doc.lineAt(mark.from).from,
-            Decoration.line({ class: "am-unheard" }),
+            Decoration.line({ class: "vxd-unheard" }),
           );
         // A mistyped instruction looks like one: drawn as a warning, not a quiet chip.
         const wrong = marks.find(
           (m) => m.kind === "warning" && m.from < mark.to && mark.from < m.to,
         );
         const tool = wrong ? undefined : options.toolMarks?.[mark.text.split(" ")[0] ?? ""];
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-note am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-note vxd-raw" }));
         else
           add(
             mark.from,
@@ -543,7 +543,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       }
       case "note":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-note" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-note" }));
         else if (!shown.notes) leaveOut(mark.from, mark.to);
         else
           add(
@@ -562,7 +562,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           );
         break;
       case "group":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-group am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-group vxd-raw" }));
         else
           add(
             mark.from,
@@ -584,7 +584,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           );
         break;
       case "heading":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "am-heading am-raw" }));
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-heading vxd-raw" }));
         else
           add(
             mark.from,
@@ -604,11 +604,11 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       case "break": {
         if (showRaw) {
-          add(mark.from, mark.to, Decoration.mark({ class: "am-break am-raw" }));
+          add(mark.from, mark.to, Decoration.mark({ class: "vxd-break vxd-raw" }));
           break;
         }
-        // The scene it opens, numbered in text order (owner, 9 Nov); one with nothing after it
-        // opens none (review r18).
+        // The scene it opens, numbered in text order; one with nothing after it
+        // opens none.
         const number = scenes.get(mark.from);
         const label =
           number === undefined
@@ -655,7 +655,7 @@ const isReplace = (deco: Decoration) =>
   (deco.spec as { widget?: unknown }).widget !== undefined ||
   !(deco.spec as { class?: string }).class;
 
-/** The front matter folded to one line while reading: the story starts the page (1082). */
+/** The front matter folded to one line while reading: the story starts the page. */
 class FrontMatterFold extends WidgetType {
   constructor(readonly text: string) {
     super();
@@ -665,7 +665,7 @@ class FrontMatterFold extends WidgetType {
   }
   toDOM() {
     const el = document.createElement("div");
-    el.className = "am-frontmatter-fold";
+    el.className = "vxd-frontmatter-fold";
     el.textContent = this.text;
     el.title = "The title, language and cast. Click here, or Show marks, to see them.";
     return el;

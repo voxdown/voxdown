@@ -2,12 +2,12 @@ import { type Item, type Line, type Story, parse } from "voxdown";
 
 /**
  * What the editor draws, worked out from the parsed story: each mark with its range in the text.
- * Speech by a character is underlined in their colour; marks become chips on lines you aren't
+ * Speech by a character is underlined in their color; marks become chips on lines you aren't
  * typing in; lines inside a group get a bar beside them.
  */
 export type EditorMark =
   | { kind: "speech"; from: number; to: number; speaker: string }
-  /** Words a direction of their own applies to: dashed, as on Performance's page. */
+  /** Words a direction of their own applies to: dashed, as a script marks them. */
   | { kind: "directed"; from: number; to: number }
   | { kind: "name"; from: number; to: number; speaker: string }
   /** `speaker`: whose words it directs (the name it sits with, else the next speech on its line). */
@@ -64,7 +64,7 @@ const WARNED = new Set([
 
 const INSTRUCTIONS = ["page", "pause", "book only", "audio only", "hidden"];
 
-/** Edits between two words, a swap of neighbouring letters counting as one (pasue → pause). */
+/** Edits between two words, a swap of neighboring letters counting as one (pasue → pause). */
 function distance(a: string, b: string): number {
   const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
     Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
@@ -95,7 +95,7 @@ function plain(
         .trim()
         .split(/\s+/u)[0] ?? "";
     // What was typed is most likely the start of one (`{pau}` is `{pause}`, not `{page}`). A
-    // length after it (`{paws 2s}`) can only be a pause's (review r3); a page turn takes none.
+    // length after it (`{paws 2s}`) can only be a pause's; a page turn takes none.
     const timed = /^\{\s*\S+\s+\d+(?:\.\d+)?\s*(?:ms|s|sec|secs|seconds?)\s*\}?$/iu.test(raw);
     const scored = INSTRUCTIONS.map((i) => ({
       i,
@@ -109,8 +109,8 @@ function plain(
       return {
         message: `${raw} isn't an instruction this editor knows: it's kept, but does nothing.`,
       };
-    // Only the misspelt word changes: `{pasue 2s}` becomes `{pause 2s}`.
-    // With a value after it (`{pasue 2s}`), only the misspelt word changes; alone, the whole name.
+    // Only the misspelled word changes: `{pasue 2s}` becomes `{pause 2s}`.
+    // With a value after it (`{pasue 2s}`), only the misspelled word changes; alone, the whole name.
     const head = near.split(" ")[0] ?? near;
     const args = raw
       .replace(/^\{|\}$/gu, "")
@@ -125,7 +125,7 @@ function plain(
         : {}),
     };
   }
-  // A pause with a bare number (review r6): seconds, as written most often ({pause 2} → 2s).
+  // A pause with a bare number: seconds, as written most often ({pause 2} → 2s).
   if (warning.code === "pause-value") {
     const raw = source.slice(warning.range.from, warning.range.to);
     const bare = /^\{\s*pause\s+(\d+(?:\.\d+)?)\s*(?:sec|secs|seconds?)?\s*\}$/iu.exec(raw);
@@ -140,7 +140,7 @@ function plain(
         },
       };
   }
-  // A quote never closed (review r5): closed after its first sentence when more follows on the
+  // A quote never closed: closed after its first sentence when more follows on the
   // line (narration typed on after it), else at the line's end.
   if (warning.code === "unclosed-quote") {
     const open = warning.range.from;
@@ -163,7 +163,7 @@ function plain(
       };
     }
   }
-  // A group never closed: one click closes it after its paragraph (review r1).
+  // A group never closed: one click closes it after its paragraph.
   if (warning.code === "unclosed-group") {
     const opener = source.indexOf("\n", warning.range.from);
     const blank = opener < 0 ? -1 : source.slice(opener).search(/\n[ \t]*\n/u);
@@ -191,7 +191,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
           l.items.some((i) => i.kind === "note" && i.range.from <= at && at < i.range.to),
         ),
     );
-  // Names the story knows: its cast, and every name it writes with @ (Studio's text has no cast
+  // Names the story knows: its cast, and every name it writes with @ (a host's text may have no cast
   // list, but every character speaks with their @ somewhere).
   const handles = new Set(story.cast.map((c) => c.handle.toLowerCase()));
   for (const m of story.source.matchAll(/(?:^|[^\p{L}\p{N}\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)/gu))
@@ -224,7 +224,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
         });
     }
     // A quote opening while one is still open: its closing ” was forgotten, and everything up to
-    // the next ” is read in the first speaker's voice (1082, review r0).
+    // the next ” is read in the first speaker's voice.
     {
       let open = -1;
       for (let i = 0; i < line.length; i++) {
@@ -354,7 +354,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
         to: at(sign + 1 + (loose[2] ?? "").length + 1),
         message: "@ needs the name straight after it (@Rupert), or the narrator reads it out.",
         code: "loose-at",
-        // One click closes the gap (review r4).
+        // One click closes the gap.
         fix: {
           from: at(sign + 1),
           to: at(sign + 1 + (loose[2] ?? "").length),
@@ -363,7 +363,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
         },
       });
     }
-    // An @ with no name, direction or sound after it says nothing, and is left out (review r2).
+    // An @ with no name, direction or sound after it says nothing, and is left out.
     for (const lone of line.matchAll(
       /(^|[^\p{L}\p{N}\\])@(?=[ \t]*$|[ \t]*[^\p{L}\p{N}(\[\s])/gu,
     )) {
@@ -384,7 +384,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
     }
     const open = /(^|[^\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)?[ \t]*\(([^)]*)$/u.exec(line);
     if (open && !inNote(at(open.index))) {
-      // Where the direction most likely ends (review r7): before the first word with a capital,
+      // Where the direction most likely ends: before the first word with a capital,
       // or a quote mark; one click closes it there.
       const inside = open[3] ?? "";
       const insideAt = open.index + open[0].length - inside.length;
@@ -418,7 +418,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
       line,
     );
     if (swallowed && !open && !inNote(at(swallowed.index))) {
-      // One click (review r9): the ) moved to just before the quote, as `(` auto-closes it after.
+      // One click: the ) moved to just before the quote, as `(` auto-closes it after.
       const start = swallowed.index + (swallowed[1] ?? "").length;
       const end = swallowed.index + swallowed[0].length;
       const paren = line.indexOf("(", start);
@@ -749,7 +749,7 @@ export function marksOf(story: Story): EditorMark[] {
 
 export function editorMarks(source: string): EditorMark[] {
   const marks = marksOf(parse(source));
-  // A direction left open after a name is the mistake (review r8): its mark then gives the name
+  // A direction left open after a name is the mistake: its mark then gives the name
   // nothing to say, but that follows from it, and the fix is to close the direction.
   const open = new Set(
     marks.flatMap((m) =>

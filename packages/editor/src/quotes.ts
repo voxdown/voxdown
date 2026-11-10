@@ -18,7 +18,7 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
   const specs: Array<{ from: number; to: number; insert: string }> = [];
   tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
     const text = inserted.toString();
-    // A sound's label keeps its marks as written (review r12): `[Knight's armor]` is the
+    // A sound's label keeps its marks as written: `[Knight's armor]` is the
     // same sound, its audio kept.
     const line = tr.startState.doc.lineAt(fromA);
     const startsInside = inLabel(line.text.slice(0, fromA - line.from));
@@ -38,14 +38,14 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
 
 /** Straight quotes and apostrophes in pasted words, as typing would give them. */
 function curlQuotes(text: string): string {
-  // Straight double quotes too (review r7): one opening where a quote opens (a line's start,
+  // Straight double quotes too: one opening where a quote opens (a line's start,
   // after a space, a bracket or a dash), else closing; pairs on the same line only.
   return (
     text
       .replace(/(?<=\p{L})'(?=\p{L})/gu, "’")
       .replace(/(^|[\s([{—–-])"/gmu, "$1“")
       .replace(/"/gu, "”")
-      // A word cut short at its start ('Twas, 'n', 'em) keeps an apostrophe (review r9).
+      // A word cut short at its start ('Twas, 'n', 'em) keeps an apostrophe.
       .replace(
         /(^|[\s([{—–-])'(?=(?:twas|tis|em|n|cause|til|round|bout|ere)(?![\p{L}])|\d)/gimu,
         "$1’",
@@ -105,7 +105,7 @@ const ELIDED = /(^|[\s([{—–-])‘((?:twas|tis|em|n|cause|til|round|bout|ere)
 
 const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   if (view.state.readOnly) return false;
-  // Typed, the ‘ came before the word was known (review r10): once the word ends it becomes ’.
+  // Typed, the ‘ came before the word was known: once the word ends it becomes ’.
   if (/^[\s,.;:!?'’]$/u.test(text) && from === to) {
     const line = view.state.doc.lineAt(from);
     const before = line.text.slice(0, from - line.from);
@@ -128,7 +128,7 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   if (text === " " && leavePause(view, from, to)) return true;
   if (text === " ") return noteSpace(view, from, to);
   if (text !== '"' && text !== "'") return false;
-  // In a sound's label a mark stays as typed (review r12): the label names the same sound.
+  // In a sound's label a mark stays as typed: the label names the same sound.
   {
     const line = view.state.doc.lineAt(from);
     if (inLabel(line.text.slice(0, from - line.from))) return false;
@@ -283,7 +283,7 @@ export const quoteEnter = keymap.of([
       const head = line.text.slice(0, from - line.from);
       const tail = line.text.slice(from - line.from);
       // Enter on a split's empty new line (`@Rupert “` and nothing yet) ends the speech there,
-      // as Enter on an empty list item ends a list: a new paragraph follows (review r9), so two
+      // as Enter on an empty list item ends a list: a new paragraph follows, so two
       // Enters after a quote make one, as they do anywhere else.
       if (!tail.trim() && /^@\p{L}[\p{L}\p{M}\p{N}_'’-]*[ \t]*(\([^()]*\))?[ \t]*“$/u.test(head)) {
         view.dispatch({

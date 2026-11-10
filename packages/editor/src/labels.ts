@@ -1,7 +1,7 @@
 import { type EditorView, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
 
 /**
- * A direction drawn as Performance draws it (1082): a small label above the words it directs.
+ * A direction drawn as a script shows it: a small label above the words it directs.
  * The widget is a zero-width anchor where the direction is written, as tall as the labels
  * stacked above it, so the row of text it sits on makes room; the label hangs from it.
  */
@@ -30,9 +30,9 @@ export class LabelWidget extends WidgetType {
 
   toDOM(view: EditorView) {
     const anchor = document.createElement("span");
-    anchor.className = "am-label-anchor";
+    anchor.className = "vxd-label-anchor";
     const label = document.createElement("span");
-    label.className = "am-label";
+    label.className = "vxd-label";
     label.textContent = this.text;
     label.title = this.title;
     label.dataset.amChip = "direction";
@@ -41,10 +41,10 @@ export class LabelWidget extends WidgetType {
     const directed = () => {
       let el = anchor.nextElementSibling;
       while (el && el.tagName === "IMG") el = el.nextElementSibling;
-      return el?.classList.contains("am-directed") ? el : null;
+      return el?.classList.contains("vxd-directed") ? el : null;
     };
-    label.addEventListener("mouseenter", () => directed()?.classList.add("am-directed-hover"));
-    label.addEventListener("mouseleave", () => directed()?.classList.remove("am-directed-hover"));
+    label.addEventListener("mouseenter", () => directed()?.classList.add("vxd-directed-hover"));
+    label.addEventListener("mouseleave", () => directed()?.classList.remove("vxd-directed-hover"));
     // A click picks the direction's words, ready to type over.
     label.addEventListener("mousedown", (event) => {
       event.preventDefault();
@@ -108,7 +108,7 @@ export const stackLabels = ViewPlugin.fromClass(
             wrap: number;
           };
           const rows = new Map<number, Label[]>();
-          for (const el of view.contentDOM.querySelectorAll<HTMLElement>(".am-label")) {
+          for (const el of view.contentDOM.querySelectorAll<HTMLElement>(".vxd-label")) {
             const anchor = el.parentElement;
             if (!anchor) continue;
             const box = anchor.getBoundingClientRect();
@@ -117,7 +117,7 @@ export const stackLabels = ViewPlugin.fromClass(
             const natural = Number(el.dataset.natural) || el.offsetWidth;
             el.dataset.natural = String(natural);
             // Too long for the room right of its word: it wraps there, staying over its word
-            // (review r1); only right at the edge does it slide left, as little as it must.
+            //; only right at the edge does it slide left, as little as it must.
             const room = right - box.left;
             const wrap = natural > room ? (room >= 140 ? room : Math.min(natural, column)) : 0;
             const width = wrap || natural;
@@ -163,9 +163,9 @@ export const stackLabels = ViewPlugin.fromClass(
             const key = `${Math.round(lift)}:${Math.round(shift)}:${Math.round(wrap)}:${Math.round(height)}`;
             if (anchor.dataset.place === key) continue;
             anchor.dataset.place = key;
-            anchor.style.setProperty("--am-lift", `${Math.round(lift)}px`);
-            anchor.style.setProperty("--am-height", `${Math.round(height)}px`);
-            el.style.setProperty("--am-shift", `${-Math.round(shift)}px`);
+            anchor.style.setProperty("--vxd-lift", `${Math.round(lift)}px`);
+            anchor.style.setProperty("--vxd-height", `${Math.round(height)}px`);
+            el.style.setProperty("--vxd-shift", `${-Math.round(shift)}px`);
             if (wrap) {
               el.style.whiteSpace = "normal";
               el.style.width = `${Math.round(wrap)}px`;

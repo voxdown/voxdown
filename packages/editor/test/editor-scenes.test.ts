@@ -21,7 +21,7 @@ const press = (doc: string, mark: string, name: string, was?: string) => {
   return change ? doc.slice(0, change.from) + change.insert + doc.slice(change.to) : doc;
 };
 
-describe("scenes in text order (owner, 9 Nov)", () => {
+describe("scenes in text order", () => {
   it("numbers a new break by where it is, the first scene having none before it", () => {
     expect(numbersOf("One.\n\n---\n\nTwo.\n\n---\n\nThree.")).toEqual([
       ["---", 2],
@@ -42,7 +42,7 @@ describe("scenes in text order (owner, 9 Nov)", () => {
     ]);
   });
 
-  it("skips a mark with nothing after it before the next, as Apply does (r18)", () => {
+  it("skips a mark with nothing after it before the next, as a host applying it does", () => {
     expect(numbersOf("One.\n\n---\n\n---\n\nTwo.\n\n---\n\nThree.")).toEqual([
       ["---", 2],
       ["---", 3],
@@ -55,7 +55,7 @@ describe("scenes in text order (owner, 9 Nov)", () => {
   });
 
   it("reads past the front matter to see whether the story opens with a scene", () => {
-    const front = "---\naudiobook-markup: 0.1\ntitle: Toast\n---\n\n";
+    const front = "---\nvoxdown: 1.0\ntitle: Toast\n---\n\n";
     expect(numbersOf(`${front}---\n\nOne.\n\n---\n\nTwo.`)).toEqual([
       ["---", 1],
       ["---", 2],
@@ -64,7 +64,7 @@ describe("scenes in text order (owner, 9 Nov)", () => {
   });
 });
 
-describe("a scene's name read aloud (owner, 9 Nov)", () => {
+describe("a scene's name read aloud", () => {
   it("writes the name as a line of its own after the break, and takes it out again", () => {
     const doc = "One.\n\n---\n\nTwo.";
     const on = press(doc, "---", "Scene 2");
@@ -101,7 +101,7 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
     expect(spokenName(stateOf("## Den\n\nThe kitchen.\n\nTwo."), 6, "Den")).toBeNull();
   });
 
-  it("knows a directed name by its words, and takes it out or renumbers it, marks kept (r18)", () => {
+  it("knows a directed name by its words, and takes it out or renumbers it, marks kept", () => {
     const after = "One.\n\n---".length;
     const directed = "One.\n\n---\n\n@(brightly) Scene 2.\n\nTwo.";
     expect(spokenName(stateOf(directed), after, "Scene 2")).toMatchObject({
@@ -119,7 +119,7 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
     );
   });
 
-  it("gives the name a paragraph of its own when no blank line follows the mark (r18)", () => {
+  it("gives the name a paragraph of its own when no blank line follows the mark", () => {
     const doc = "One.\n\n---\nTwo.\n\nSafe.";
     const on = press(doc, "---", "Scene 2");
     expect(on).toBe("One.\n\n---\n\nScene 2.\n\nTwo.\n\nSafe.");
@@ -130,7 +130,7 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
     expect(press("## Den {hidden}\nOne.", "##", "Den")).toBe("## Den {hidden}\n\nDen.\n\nOne.");
   });
 
-  it("knows a renamed heading's old name, and says its number in the story's language (r18)", () => {
+  it("knows a renamed heading's old name, and says its number in the story's language", () => {
     const renamed = "## The Pantry\n\nThe Hallway.\n\nOne.";
     expect(spokenName(stateOf(renamed), 13, "The Pantry")).toBeNull();
     expect(spokenName(stateOf(renamed), 13, "The Pantry", "The Hallway")).toMatchObject({
@@ -148,7 +148,7 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
     expect(press("一。\n\n---\n\n二。", "---", "第2场")).toBe("一。\n\n---\n\n第2场。\n\n二。");
   });
 
-  it("changes only the spoken words of an old name, its sound, note and pause kept (r19)", () => {
+  it("changes only the spoken words of an old name, its sound, note and pause kept", () => {
     const doc =
       "Alpha.\n\n## The Pantry {hidden}\n\n@Rupert (brightly) “The Kitchen.” [small bell] %% Keep the chime. %% {pause 1.2s}\n\nBravo.";
     expect(press(doc, "##", "The Pantry", "The Kitchen")).toBe(
@@ -156,7 +156,7 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
     );
   });
 
-  it("remembers the name it wrote, so a heading renamed before Apply is known (r19)", () => {
+  it("remembers the name it wrote, so a heading renamed before the host applies it is known", () => {
     const doc = "Alpha.\n\n## The Kitchen {hidden}\n\nBravo.";
     let state = EditorState.create({ doc, extensions: [marksField, readNamesField] });
     const at = doc.indexOf("##");
@@ -166,7 +166,7 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
     expect(state.doc.toString()).toBe(
       "Alpha.\n\n## The Kitchen {hidden}\n\nThe Kitchen.\n\nBravo.",
     );
-    // Renamed by hand, before any Apply: the line still says the old name, and is out of date.
+    // Renamed by hand, before the host applies anything: the line still says the old name, and is out of date.
     const word = state.doc.toString().indexOf("Kitchen {hidden}");
     state = state.update({
       changes: { from: word, to: word + "Kitchen".length, insert: "Pantry" },

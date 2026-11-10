@@ -16,7 +16,7 @@ import { marksField } from "./decorations";
  */
 function dot(color?: string): HTMLElement {
   const el = document.createElement("span");
-  el.className = "am-option-dot";
+  el.className = "vxd-option-dot";
   el.style.background = color ?? "currentColor";
   if (!color) el.style.opacity = "0.35";
   return el;

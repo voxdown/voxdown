@@ -6,18 +6,18 @@ import { lineJoin, markEnter, noteEnter, quoteBackspace, quoteEnter, smartQuotes
 import { scriptTheme } from "./theme";
 
 /**
- * The script editor: CodeMirror 6 extensions that show an Audiobook Markup story as it reads, with
+ * The script editor: CodeMirror 6 extensions that show a VoxDown story as it reads, with
  * the raw marks only where you type, and suggest names, directions, sounds and instructions.
  * Hosts add their own keymaps, gutters and save buttons around it.
  */
 export type ScriptEditorOptions = PreviewOptions;
 
 /**
- * Typing over a selection (1082, review r4): the browser would replace it itself, and across lines
+ * Typing over a selection: the browser would replace it itself, and across lines
  * it reads the chips' labels inside back as words. The editor replaces the selection instead,
  * through the same typing aids as any keystroke (curly quotes and the rest).
  */
-/** Words cut from between others leave one space, not two (review r11). */
+/** Words cut from between others leave one space, not two. */
 const tidyCut = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged || !tr.isUserEvent("delete.cut")) return tr;
   const extra: Array<{ from: number; to: number }> = [];
@@ -25,7 +25,7 @@ const tidyCut = EditorState.transactionFilter.of((tr) => {
     if (inserted.length) return;
     const around = tr.newDoc.sliceString(fromB - 1, fromB + 1);
     if (around === "  ") extra.push({ from: fromB, to: fromB + 1 });
-    // A cut ending a sentence leaves no space before its stop (review r12): "flipped ."
+    // A cut ending a sentence leaves no space before its stop: "flipped ."
     else if (
       /^ [.,;:!?…]$/u.test(around) &&
       /\S/u.test(tr.newDoc.sliceString(fromB - 2, fromB - 1))

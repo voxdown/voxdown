@@ -20,17 +20,17 @@ export type ChipKind =
   | "warning";
 
 /**
- * The host's own controls inside a page turn's mark (Studio's chime and rest, 1077): mounted into
- * the element given, and taken down by what it returns when the mark goes (review r15).
+ * The host's own controls inside a page turn's mark (a recording tool's chime and rest buttons,
+ * say): mounted into the element given, and taken down by what it returns when the mark goes.
  */
 export type PageTurnTools = (
   el: HTMLElement,
-  /** Either side of the page turn's label, as Performance's markers have them. */
+  /** Either side of the page turn's label, as a script's page markers have them. */
   place: "before" | "after",
 ) => (() => void) | undefined;
 
 /**
- * The speaker on a scene's mark (owner, 9 Nov): the scene's name, and what the line after the
+ * The speaker on a scene's mark: the scene's name, and what the line after the
  * mark says aloud, if anything.
  */
 export type ReadAloud = {
@@ -51,7 +51,7 @@ function mountTools(el: HTMLElement, tools: PageTurnTools | undefined) {
   const dones: Array<() => void> = [];
   for (const place of ["before", "after"] as const) {
     const box = document.createElement("span");
-    box.className = "am-page-tools";
+    box.className = "vxd-page-tools";
     box.dataset.place = place;
     box.contentEditable = "false";
     if (place === "before") el.prepend(box);
@@ -64,7 +64,7 @@ function mountTools(el: HTMLElement, tools: PageTurnTools | undefined) {
 
 const inTools = (event: Event) =>
   event.target instanceof Element &&
-  Boolean(event.target.closest(".am-page-tools, .am-read-aloud"));
+  Boolean(event.target.closest(".vxd-page-tools, .vxd-read-aloud"));
 
 export class ChipWidget extends WidgetType {
   constructor(
@@ -104,7 +104,7 @@ export class ChipWidget extends WidgetType {
 
   toDOM(view: EditorView) {
     const el = document.createElement("span");
-    el.className = `am-chip am-chip-${this.kind}`;
+    el.className = `vxd-chip vxd-chip-${this.kind}`;
     if (this.kind === "sound" || this.kind === "vocal") el.append(soundIcon());
     el.append(document.createTextNode(this.text));
     el.title = this.status ? `${this.title} · ${this.status.title}` : this.title;
@@ -114,7 +114,7 @@ export class ChipWidget extends WidgetType {
     else if (this.kind === "name" && this.title.startsWith("@"))
       el.dataset.speaker = this.title.slice(1).toLowerCase();
     if (this.status) el.dataset.status = this.status.name;
-    if (this.color) el.style.setProperty("--am-speaker", this.color);
+    if (this.color) el.style.setProperty("--vxd-speaker", this.color);
     if (this.onClick) {
       const onClick = this.onClick;
       el.addEventListener("mousedown", (event) => {
@@ -144,7 +144,7 @@ export class LineWidget extends WidgetType {
     readonly trailing = false,
     /** Whose lines it holds (a group's), for a host that picks out one speaker (Listen as). */
     readonly speaker?: string,
-    /** A scene's speaker, reading its name aloud (owner, 9 Nov). */
+    /** A scene's speaker, reading its name aloud. */
     readonly readAloud?: ReadAloud,
   ) {
     super();
@@ -167,7 +167,7 @@ export class LineWidget extends WidgetType {
 
   toDOM(view: EditorView) {
     const el = document.createElement("span");
-    el.className = `am-line-${this.kind}`;
+    el.className = `vxd-line-${this.kind}`;
     const label = document.createElement("span");
     label.textContent = this.text;
     el.append(label);
@@ -214,16 +214,16 @@ function icon(path: string, className: string): SVGSVGElement {
   return svg;
 }
 
-const soundIcon = () => icon(WAVEFORM, "am-chip-icon");
+const soundIcon = () => icon(WAVEFORM, "vxd-chip-icon");
 
 /**
- * The speaker beside a scene's name (owner, 9 Nov): pressed, the scene's name is read aloud as
+ * The speaker beside a scene's name: pressed, the scene's name is read aloud as
  * the scene starts, written as a line of its own after the mark; pressed again, it isn't.
  */
 function readAloudButton(view: EditorView, line: HTMLElement, read: ReadAloud) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "am-read-aloud";
+  button.className = "vxd-read-aloud";
   const on = read.said !== null;
   button.setAttribute("aria-pressed", String(on));
   button.setAttribute("aria-label", `Read “${read.name}” aloud`);
@@ -233,7 +233,7 @@ function readAloudButton(view: EditorView, line: HTMLElement, read: ReadAloud) {
     : read.stale
       ? `Reads “${read.said}” aloud, but the scene is ${read.name} now: click to say its name now`
       : `Reads “${read.said}” aloud as the scene starts. Click to take the line out`;
-  button.append(icon(on ? `${SPEAKER} ${SPEAKING}` : SPEAKER, "am-read-aloud-icon"));
+  button.append(icon(on ? `${SPEAKER} ${SPEAKING}` : SPEAKER, "vxd-read-aloud-icon"));
   // The text keeps its cursor and the line stays as it reads.
   button.addEventListener("mousedown", (event) => event.preventDefault());
   button.addEventListener("click", (event) => {

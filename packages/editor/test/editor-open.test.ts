@@ -5,7 +5,7 @@ import { holdOpen, openField } from "../src/decorations";
 const doc = "One line.\n\nTwo line.\n\nThree line.";
 const at = (text: string) => doc.indexOf(text);
 
-describe("where the text opens (owner, 9 Nov)", () => {
+describe("where the text opens", () => {
   it("holds still while the pointer is down, and opens where a click put the cursor", () => {
     let state = EditorState.create({ doc, extensions: [openField] });
     state = state.update({ selection: { anchor: at("One") + 2 } }).state;

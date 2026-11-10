@@ -16,7 +16,7 @@ describe("editor marks", () => {
     ]);
   });
 
-  it("warns about a quote opening while another is still open, with a fix to close it (r0)", () => {
+  it("warns about a quote opening while another is still open, with a fix to close it", () => {
     const source =
       "He tied the napkin. @Rupert “Where is my spoon? The cook brought an egg. “Lovely.”";
     const warning = editorMarks(source).find(
@@ -35,7 +35,7 @@ describe("editor marks", () => {
     ).toBe(false);
   });
 
-  it("closes a direction left open before the words it directs (r7)", () => {
+  it("closes a direction left open before the words it directs", () => {
     const source = "@(softly Everyone followed.";
     const warning = editorMarks(source).find(
       (m) => m.kind === "warning" && m.code === "open-direction",
@@ -47,7 +47,7 @@ describe("editor marks", () => {
     expect(warning?.kind === "warning" ? warning.message : "").toMatch(/@\(sleepily\) Everyone/u);
   });
 
-  it("closes a quote's direction left open after its name, the mistake named first (r8)", () => {
+  it("closes a quote's direction left open after its name, the mistake named first", () => {
     const source = "@Beatrice (softly “Wait for me.”";
     const warnings = editorMarks(source).filter((m) => m.kind === "warning");
     expect(warnings.map((m) => (m.kind === "warning" ? m.code : ""))).toEqual(["open-direction"]);
@@ -57,7 +57,7 @@ describe("editor marks", () => {
     expect(fixed).toBe("@Beatrice (softly) “Wait for me.”");
   });
 
-  it("moves an auto-closed ) to before the quote it took in, the mistake named first (r9)", () => {
+  it("moves an auto-closed ) to before the quote it took in, the mistake named first", () => {
     const source = "Then @Beatrice (softly “Wait for me.”)";
     const warnings = editorMarks(source).filter((m) => m.kind === "warning");
     expect(warnings.map((m) => (m.kind === "warning" ? m.code : ""))).toEqual(["direction-quote"]);
@@ -67,7 +67,7 @@ describe("editor marks", () => {
     expect(fixed).toBe("Then @Beatrice (softly) “Wait for me.”");
   });
 
-  it("reads a bare pause length as seconds, in one click (r6)", () => {
+  it("reads a bare pause length as seconds, in one click", () => {
     for (const [typed, fixed] of [
       ["{pause 2}", "{pause 2s}"],
       ["{pause 1.5 seconds}", "{pause 1.5s}"],
@@ -79,7 +79,7 @@ describe("editor marks", () => {
     }
   });
 
-  it("offers to close a quote left open, after its sentence or at the line's end (r5)", () => {
+  it("offers to close a quote left open, after its sentence or at the line's end", () => {
     const close = (source: string) => {
       const warning = editorMarks(source).find(
         (m) => m.kind === "warning" && m.code === "unclosed-quote",
@@ -91,7 +91,7 @@ describe("editor marks", () => {
     expect(close("@Rupert “Hi there")).toBe("@Rupert “Hi there”");
   });
 
-  it("closes the gap in @ Rupert in one click (r4)", () => {
+  it("closes the gap in @ Rupert in one click", () => {
     const source = "He sighed. @ Rupert “Fine.”";
     const warning = editorMarks(source).find((m) => m.kind === "warning" && m.code === "loose-at");
     const fix = warning?.kind === "warning" ? warning.fix : undefined;
@@ -100,14 +100,14 @@ describe("editor marks", () => {
     expect(fixed).toBe("He sighed. @Rupert “Fine.”");
   });
 
-  it("reads a misspelt instruction with a length as a pause, not a page turn (r3)", () => {
+  it("reads a misspelled instruction with a length as a pause, not a page turn", () => {
     const warning = editorMarks("Then {paws 2s} quiet.").find(
       (m) => m.kind === "warning" && m.code === "unknown-instruction",
     );
     expect(warning?.kind === "warning" ? warning.fix?.insert : undefined).toBe("{pause 2s}");
   });
 
-  it("points out an @ with nothing after it, and takes it out in one click (r2)", () => {
+  it("points out an @ with nothing after it, and takes it out in one click", () => {
     const source = "He looked up. @ “Lovely.” And @. Then @Rupert “Fine.” mail@home";
     const lone = editorMarks(source).filter((m) => m.kind === "warning" && m.code === "lone-at");
     expect(lone.map((m) => m.from)).toEqual([source.indexOf("@ “"), source.indexOf("@.")]);
@@ -121,7 +121,7 @@ describe("editor marks", () => {
     );
   });
 
-  it("offers to close a group left open after its paragraph (r1)", () => {
+  it("offers to close a group left open after its paragraph", () => {
     const source = "::: whispering\nOne.\nTwo.\n\nThree.\n";
     const warning = editorMarks(source).find(
       (m) => m.kind === "warning" && m.code === "unclosed-group",

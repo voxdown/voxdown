@@ -20,7 +20,7 @@ The dragon was snoring. @Gerald [snores]
 
 The one rule to remember: **on each line, the quotes after a name belong to it, and everything else belongs to the narrator.**
 
-- **Try it** in the [playground](https://voxdown.github.io/): write on the left, see the script, the book and the lines on the right.
+- **Try it** in the [playground](https://voxdown.github.io/voxdown/): write on the left, see the script, the book and the lines on the right.
 - **Learn it** from the [cheat sheet](spec/CHEATSHEET.md), every mark on one page.
 - **Read the spec**: [SPEC.md](spec/SPEC.md), version 1.0, with a worked example for every rule.
 

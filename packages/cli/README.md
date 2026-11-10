@@ -1,6 +1,6 @@
 # @voxdown/cli
 
-The `vxd` command for [VoxDown](https://voxdown.github.io/), a plain-text format for stories read aloud. It checks stories for problems, tidies them, renders them as HTML, exports the spoken script for speech tools and performers, and imports Fountain screenplays.
+The `vxd` command for [VoxDown](https://voxdown.github.io/voxdown/), a plain-text format for stories read aloud. It checks stories for problems, tidies them, renders them as HTML, exports the spoken script for speech tools and performers, and imports Fountain screenplays.
 
 ## Install
 
@@ -8,7 +8,7 @@ The `vxd` command for [VoxDown](https://voxdown.github.io/), a plain-text format
 npm install -g @voxdown/cli
 ```
 
-You need Node 20 or later. The command is `vxd`; `voxdown` works too.
+You need Node 20 or later. The command is `vxd`. To try it without installing, `npx @voxdown/cli check story.vxd`.
 
 ## Commands
 

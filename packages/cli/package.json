@@ -4,21 +4,41 @@
   "description": "The vxd command: check, format, render and export VoxDown stories, and import Fountain screenplays.",
   "license": "MIT",
   "type": "module",
-  "keywords": ["voxdown", "vxd", "audiobook", "script", "cli", "markdown", "fountain"],
+  "keywords": [
+    "voxdown",
+    "vxd",
+    "audiobook",
+    "script",
+    "cli",
+    "markdown",
+    "fountain"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/voxdown/voxdown.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://voxdown.github.io/",
+  "homepage": "https://voxdown.github.io/voxdown/",
   "bugs": "https://github.com/voxdown/voxdown/issues",
-  "bin": { "vxd": "./dist/cli.js", "voxdown": "./dist/cli.js" },
-  "files": ["dist", "src", "README.md", "LICENSE"],
+  "bin": {
+    "vxd": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": { "@voxdown/render": "workspace:^", "voxdown": "workspace:^" },
-  "engines": { "node": ">=20" }
+  "dependencies": {
+    "@voxdown/render": "workspace:^",
+    "voxdown": "workspace:^"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }

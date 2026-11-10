@@ -1,0 +1,3 @@
+# The corpus is compared byte for byte, and one book has CRLF line endings on purpose:
+# keep every file exactly as committed.
+corpus/** -text

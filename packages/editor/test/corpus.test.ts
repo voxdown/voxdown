@@ -18,14 +18,24 @@ describe("the editor, on real books", () => {
       for (const mark of marks) {
         expect(0 <= mark.from && mark.from <= mark.to && mark.to <= source.length).toBe(true);
       }
-      const names = source.match(/(?<![\p{L}\p{N}])@[A-Z]\w*/gu)?.length ?? 0;
-      expect(marks.filter((mark) => mark.kind === "name").length).toBe(names);
+      // A name's chip is its own, or part of the chip of the sound it makes or the group it opens.
+      const names = source.match(/(?<![\p{L}\p{N}])@\p{Lu}/gu)?.length ?? 0;
+      const chips = marks.filter(
+        (mark) =>
+          mark.kind === "name" ||
+          (mark.kind === "vocal" && /^@\p{L}/u.test(source.slice(mark.from))) ||
+          (mark.kind === "group" && !mark.close && mark.speaker !== undefined),
+      );
+      expect(chips.length).toBe(names);
     });
   }
 
   it("keeps up with typing in a long story", () => {
-    const bodies = books.map(({ source }) => source.slice(source.indexOf("\n---\n", 4) + 5));
-    const doc = Array.from({ length: 18 }, () => bodies.join("\n\n")).join("\n\n");
+    const bodies = books
+      .map(({ source }) => source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ""))
+      .join("\n\n");
+    const times = Math.ceil(100_000 / bodies.split(/\s+/).length);
+    const doc = Array.from({ length: times }, () => bodies).join("\n\n");
     const characters = () => [{ handle: "Alice", name: "Alice" }];
     let state = EditorState.create({ doc, extensions: [scriptEditor({ characters })] });
     const middle = Math.floor(doc.length / 2);

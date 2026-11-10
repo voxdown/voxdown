@@ -72,4 +72,35 @@ describe("the formatter (§13, rule 8)", () => {
       expect(voices(once)).toEqual(voices(source));
     }
   });
+
+  it("never gives a file front matter, and settles at once", () => {
+    expect(format("---")).toBe("\n---\n");
+    expect(parse(format("  ---\nHi")).frontMatter).toBe(null);
+    for (const source of [" # Title\nText", "One.\uFEFF\nTwo.\r\r\n", "Hi\n  ***  \nThere"]) {
+      const once = format(source);
+      expect(format(once)).toBe(once);
+    }
+    expect(format("One.\uFEFF\nTwo.")).toBe("One.\nTwo.\n");
+  });
+
+  it("keeps feet and inches, makes rock 'n' roll's marks apostrophes, and never touches an address", () => {
+    const curly = { quotes: "curly" as const };
+    expect(format(`He is 6'2" tall.`, curly)).toBe(`He is 6'2" tall.\n`);
+    expect(format("It was rock 'n' roll.", curly)).toBe("It was rock ’n’ roll.\n");
+    expect(format(`@Gerald "I like rock 'n' roll."`, curly)).toBe(
+      "@Gerald “I like rock ’n’ roll.”\n",
+    );
+    expect(format("See [it](https://example.com/it's).", curly)).toBe(
+      "See [it](https://example.com/it's).\n",
+    );
+  });
+
+  it("keeps group lines and each line's own line ending as written", () => {
+    expect(format(":::   @Gerald   (whispering)  \nHi  there\n:::  ")).toBe(
+      ":::   @Gerald   (whispering)  \nHi there\n:::  \n",
+    );
+    expect(format("One.\r\nTwo.\n## Head\r\nThree.\n")).toBe(
+      "One.\r\nTwo.\n\n## Head\r\n\r\nThree.\n",
+    );
+  });
 });

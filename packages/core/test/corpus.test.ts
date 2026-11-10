@@ -29,13 +29,23 @@ const books = readdirSync(corpus)
 
 /** The warnings each book is expected to have, and why. */
 const EXPECTED_WARNINGS: Record<string, string[]> = {
-  // The Hatter's speech runs over three paragraphs, the novel way (spec §17, "Speech across paragraphs").
+  // The Hatter's speech stops for his song and goes on after it with no opening mark (spec §17,
+  // "A speech broken by a song").
   "alice-mad-tea-party.vxd": ["115 unclosed-quote", "123 unclosed-quote"],
   "scandal-in-bohemia-1.vxd": [],
+  "bremer-stadtmusikanten.vxd": [],
+  // The Gull's song runs over four lines (§5.7): fine for verse, so the warning only asks.
+  "the-keeper-and-the-gull.vxd": ["46 quote-over-line-break"],
 };
 
+/** Who says what, and how: the words as heard, whatever their quotation marks and apostrophes. */
 const who = (source: string) =>
-  lines(parse(source)).map((row) => [row.kind, row.speaker, row.direction, row.text]);
+  lines(parse(source)).map((row) => [
+    row.kind,
+    row.speaker,
+    row.direction,
+    row.text.replace(/["'“”‘’„‚«»‹›]/g, "'"),
+  ]);
 
 describe("real books", () => {
   it("are all here, and each has its expected warnings", () => {
@@ -50,12 +60,15 @@ describe("real books", () => {
     describe(name, () => {
       const story = parse(source);
 
-      it("is heard as reviewed", () => {
-        const file = join(corpus, name.replace(/\.vxd$/, ".spoken.txt"));
-        const spoken = `${spokenScript(story)}\n`;
-        if (process.env.UPDATE_FIXTURES) writeFileSync(file, spoken);
-        expect(spoken).toBe(readFileSync(file, "utf8"));
-        bookText(story);
+      it("is heard and printed as reviewed", () => {
+        for (const [ending, made] of [
+          [".spoken.txt", spokenScript(story)],
+          [".book.txt", bookText(story)],
+        ] as const) {
+          const file = join(corpus, name.replace(/\.vxd$/, ending));
+          if (process.env.UPDATE_FIXTURES) writeFileSync(file, `${made}\n`);
+          expect(`${made}\n`, ending).toBe(readFileSync(file, "utf8"));
+        }
         tokens(story);
       });
 
@@ -79,7 +92,9 @@ describe("real books", () => {
             brokenPromise(story, target, speaker, EDITS.speaker.inside, EDITS.speaker.some),
           ).toBe(null);
           const direction = setDirection(story, target, "softly");
-          expect(direction.length, target.text).toBeGreaterThan(0);
+          // A stretch said softly already has nothing to change.
+          if (target.direction !== "softly")
+            expect(direction.length, target.text).toBeGreaterThan(0);
           expect(brokenPromise(story, target, direction, EDITS.direction.inside)).toBe(null);
         }
       }, 60_000);
@@ -88,20 +103,41 @@ describe("real books", () => {
 
   it("reads a long story in good time", () => {
     // About 100,000 words: every book over and over, as one file.
-    const bodies = books.map(({ source }) => source.slice(source.indexOf("\n---\n", 4) + 5));
-    const long = Array.from({ length: 18 }, () => bodies.join("\n\n")).join("\n\n");
+    const bodies = books
+      .map(({ source }) => source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ""))
+      .join("\n\n");
+    const times = Math.ceil(100_000 / bodies.split(/\s+/).length);
+    const long = Array.from({ length: times }, () => bodies).join("\n\n");
     const words = long.split(/\s+/).length;
-    expect(words).toBeGreaterThan(90_000);
+    expect(words).toBeGreaterThan(100_000);
+    expect(words).toBeLessThan(120_000);
     const time = (work: () => unknown) => {
       const start = performance.now();
       work();
       return performance.now() - start;
     };
     const story = parse(long);
-    // Generous limits, for slow machines: a laptop is several times faster.
-    expect(time(() => parse(long))).toBeLessThan(3000);
-    expect(time(() => lines(story))).toBeLessThan(3000);
-    expect(time(() => tokens(story))).toBeLessThan(3000);
-    expect(time(() => format(long))).toBeLessThan(10_000);
+    // About ten times what a laptop takes (parse 50 ms, format 300 ms, an edit 250 ms), for slow
+    // machines: a step that turns quadratic still fails.
+    expect(time(() => parse(long))).toBeLessThan(750);
+    expect(time(() => lines(story))).toBeLessThan(500);
+    expect(time(() => tokens(story))).toBeLessThan(500);
+    expect(time(() => write(story))).toBeLessThan(750);
+    expect(time(() => format(long, { quotes: "curly" }))).toBeLessThan(4000);
+    const said = speeches(story);
+    const middle = said[Math.floor(said.length / 2)] as (typeof said)[number];
+    expect(time(() => setSpeaker(story, middle, "Zed"))).toBeLessThan(3000);
+  }, 60_000);
+
+  it("reads lines built to be slow in good time", () => {
+    // Each was quadratic once: an opening mark searched the rest of its line for its closing one.
+    const worst = ["[", "@(", "{", "![", "[x](", " 'a", "“", '"a ', "%% a ", "@Gerald ", "\\"].map(
+      (piece) => piece.repeat(Math.ceil(100_000 / piece.length)),
+    );
+    for (const line of worst) {
+      const start = performance.now();
+      format(line, { quotes: "curly" });
+      expect(performance.now() - start, JSON.stringify(line.slice(0, 8))).toBeLessThan(2000);
+    }
   }, 60_000);
 });

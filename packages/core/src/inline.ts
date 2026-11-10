@@ -135,6 +135,7 @@ function notesWithin(notes: readonly NoteSpan[], line: Range): NoteSpan[] {
 
 /** Lexes `from`..`to`, a stretch of a line with no notes in it. */
 function lexSegment(source: string, from: number, to: number, atoms: Atom[], warn: Warn): void {
+  segment = scanSegment(source, from, to);
   let textFrom = from;
   let i = from;
   while (i < to) {
@@ -149,6 +150,55 @@ function lexSegment(source: string, from: number, to: number, atoms: Atom[], war
     textFrom = i;
   }
   if (to > textFrom) atoms.push(sourceText(source, textFrom, to));
+  segment = null;
+}
+
+/**
+ * Where each `(` of the segment being lexed closes, and where the next `]` and `}` are, escapes
+ * aside: worked out once, so a line of thousands of unclosed brackets lexes in linear time. Every
+ * search starts just after an opening mark, where the escapes pair up as they do from the start.
+ */
+type Segment = {
+  source: string;
+  from: number;
+  to: number;
+  parens: Map<number, number>;
+  next: { "]": Int32Array; "}": Int32Array };
+};
+let segment: Segment | null = null;
+
+function scanSegment(source: string, from: number, to: number): Segment {
+  const parens = new Map<number, number>();
+  const open: number[] = [];
+  const plain = new Uint8Array(to - from);
+  for (let i = from; i < to; i++) {
+    const char = source[i];
+    if (char === "\\" && isEscapable(source[i + 1])) {
+      i++;
+      continue;
+    }
+    plain[i - from] = 1;
+    if (char === "(") open.push(i);
+    else if (char === ")" && open.length > 0) parens.set(open.pop() as number, i);
+  }
+  const brackets = new Int32Array(to - from + 1).fill(-1);
+  const braces = new Int32Array(to - from + 1).fill(-1);
+  for (let i = to - 1; i >= from; i--) {
+    const at = i - from;
+    brackets[at] = plain[at] && source[i] === "]" ? i : (brackets[at + 1] as number);
+    braces[at] = plain[at] && source[i] === "}" ? i : (braces[at + 1] as number);
+  }
+  return { source, from, to, parens, next: { "]": brackets, "}": braces } };
+}
+
+function inSegment(source: string, from: number, to: number): Segment | null {
+  return segment !== null &&
+    segment.source === source &&
+    segment.to === to &&
+    from >= segment.from &&
+    from <= to
+    ? segment
+    : null;
 }
 
 function lexAtom(source: string, i: number, to: number, warn: Warn): Atom | null {
@@ -221,7 +271,7 @@ function lexAt(source: string, at: number, to: number): Atom | null {
  * A name starts with a letter and continues with letters, digits, `-` and `_`, and apostrophes
  * between two letters (§5.2). Returns the index after it, or `from` when there is none.
  */
-function scanName(source: string, from: number, to: number): number {
+export function scanName(source: string, from: number, to: number): number {
   const first = codePointAt(source, from);
   if (from >= to || !first || !/^\p{L}$/u.test(first)) return from;
   let i = from + first.length;
@@ -325,6 +375,8 @@ function parseInstruction(content: string): { name: string; value: string | null
 
 /** The index of the `)` that closes the `(` at `open`, or -1. Escaped parentheses don't count. */
 function matchParen(source: string, open: number, to: number): number {
+  const known = inSegment(source, open, to);
+  if (known) return known.parens.get(open) ?? -1;
   let depth = 0;
   for (let i = open; i < to; i++) {
     const char = source[i];
@@ -335,7 +387,9 @@ function matchParen(source: string, open: number, to: number): number {
   return -1;
 }
 
-function findUnescaped(source: string, from: number, to: number, target: string): number {
+function findUnescaped(source: string, from: number, to: number, target: "]" | "}"): number {
+  const known = inSegment(source, from, to);
+  if (known) return known.next[target][from - known.from] ?? -1;
   for (let i = from; i < to; i++) {
     if (source[i] === "\\" && isEscapable(source[i + 1])) i++;
     else if (source[i] === target) return i;
@@ -369,6 +423,11 @@ const APOSTROPHE_LIKE = new Set(["'", "‘", '"']);
  */
 function resolveQuotes(atoms: readonly Atom[], state: QuoteState, warn: Warn): Token[] {
   const tokens: Token[] = [];
+  // The last straight `'` on the line that would close a quote: one opens only before it.
+  let lastCloser = -1;
+  atoms.forEach((atom, index) => {
+    if (atom.type === "quote" && atom.char === "'" && closes("'", atoms, index)) lastCloser = index;
+  });
   atoms.forEach((atom, index) => {
     if (atom.type !== "quote") {
       tokens.push(atom);
@@ -400,10 +459,7 @@ function resolveQuotes(atoms: readonly Atom[], state: QuoteState, warn: Warn): T
       }
       return;
     }
-    if (
-      (afterLetter && APOSTROPHE_LIKE.has(char)) ||
-      (char === "'" && !hasStraightCloser(atoms, index))
-    ) {
+    if ((afterLetter && APOSTROPHE_LIKE.has(char)) || (char === "'" && lastCloser <= index)) {
       tokens.push(plainText(atom));
       return;
     }
@@ -418,14 +474,6 @@ function closes(opener: string, atoms: readonly Atom[], index: number): boolean 
   if (atom?.type !== "quote" || !CLOSERS.get(opener)?.includes(atom.char)) return false;
   const apostrophe = atom.char === "’" || atom.char === "'";
   return !(apostrophe && isLetterOrDigit(firstChar(atoms[index + 1])));
-}
-
-function hasStraightCloser(atoms: readonly Atom[], index: number): boolean {
-  for (let i = index + 1; i < atoms.length; i++) {
-    const atom = atoms[i];
-    if (atom?.type === "quote" && atom.char === "'" && closes("'", atoms, i)) return true;
-  }
-  return false;
 }
 
 function nothingAfter(atoms: readonly Atom[], index: number): boolean {

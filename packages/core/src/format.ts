@@ -2,7 +2,8 @@
  * The formatter (§13, rule 8): tidies a file only when its author asks, and never changes who says
  * what. It writes names as the cast spells them, trims and collapses spaces, makes runs of blank
  * lines one, and puts a blank line around headings and scene breaks. Straight quotation marks
- * become curly ones only when asked, in the story's language.
+ * become curly ones only when asked, in the story's language. The front matter, group lines and
+ * each line's line ending stay as written.
  */
 import { findNotes, joinLines, scanBlocks } from "./blocks";
 import { type TextChange, applyChanges } from "./edit";
@@ -80,8 +81,19 @@ function spacing(source: string): string {
   const bom = source.startsWith("\uFEFF") ? "\uFEFF" : "";
   const story = parse(source);
   const text = new SourceText(source);
-  const eol = /\r\n/.test(source) ? "\r\n" : "\n";
   const front = story.frontMatter;
+  // Each line keeps its own line ending; a line that has none (the last) or a new blank line
+  // takes the one before it.
+  const endings = text.lines.map((line, index) =>
+    source.slice(line.to, text.lines[index + 1]?.from ?? source.length),
+  );
+  const first = endings.find((ending) => ending !== "") ?? "\n";
+  let last = first;
+  const endingOf = (index: number) => {
+    const own = endings[index] ?? "";
+    if (own !== "") last = own;
+    return own || last;
+  };
   // The front matter is kept exactly as written; the story starts on the line after it.
   const firstBody = front ? text.position(front.range.to).line : 0;
   const structural = new Set<number>();
@@ -90,27 +102,42 @@ function spacing(source: string): string {
       structural.add(text.position(block.range.from).line - 1);
     }
   }
-  const out: string[] = front ? [source.slice(bom.length, front.range.to), ""] : [];
-  const ended = () => out.length === 0 || out[out.length - 1] === "";
+  // Group lines are kept exactly as written too.
+  const groupLines = new Set<number>();
+  for (const group of story.groups) {
+    groupLines.add(text.position(group.range.from).line - 1);
+    if (group.closeRange) groupLines.add(text.position(group.closeRange.from).line - 1);
+  }
+  type Out = { line: string; ending: string };
+  const out: Out[] = front
+    ? [
+        { line: source.slice(bom.length, front.range.to), ending: endingOf(firstBody - 1) },
+        { line: "", ending: last },
+      ]
+    : [];
+  const ended = () => out.length === 0 || out[out.length - 1]?.line === "";
   for (let index = firstBody; index < text.lines.length; index++) {
     const line = text.lines[index] as (typeof text.lines)[number];
     const raw = source.slice(index === 0 ? bom.length : line.from, line.to);
+    const ending = endingOf(index);
     // A stray carriage return or byte order mark at a line's edge is spacing too.
-    const tidy = raw.replace(/^[ \t\r\uFEFF]+|[ \t\r\uFEFF]+$/g, "").replace(/[ \t]{2,}|\t/g, " ");
+    const tidy = groupLines.has(index)
+      ? raw
+      : raw.replace(/^[ \t\r\uFEFF]+|[ \t\r\uFEFF]+$/g, "").replace(/[ \t]{2,}|\t/g, " ");
     if (tidy === "") {
-      if (!ended()) out.push("");
+      if (!ended()) out.push({ line: "", ending });
     } else if (structural.has(index)) {
-      if (!ended()) out.push("");
-      out.push(tidy, "");
+      if (!ended()) out.push({ line: "", ending: out[out.length - 1]?.ending ?? ending });
+      out.push({ line: tidy, ending }, { line: "", ending });
     } else {
-      out.push(tidy);
+      out.push({ line: tidy, ending });
     }
   }
-  while (out.length > 0 && out[out.length - 1] === "") out.pop();
+  while (out.length > 0 && out[out.length - 1]?.line === "") out.pop();
   // A file without front matter must not start with `---` once tidied, or it would have some:
   // it keeps a blank line before it.
-  if (!front && /^-{3,}$/.test(out[0] ?? "")) out.unshift("");
-  return out.length === 0 ? bom : `${bom}${out.join(eol)}${eol}`;
+  if (!front && /^-{3,}$/.test(out[0]?.line ?? "")) out.unshift({ line: "", ending: first });
+  return `${bom}${out.map(({ line, ending }) => line + ending).join("")}`;
 }
 
 // Quotation marks
@@ -130,22 +157,31 @@ function styleFor(language: string | undefined): Style {
 
 /**
  * Straight marks the parser reads as quotes become the language's quotes; an apostrophe becomes
- * ’. Inches (`6"`), escaped marks and everything inside marks, sounds, notes and instructions are
- * left as written.
+ * ’. Feet and inches (`6'2"`), escaped marks, links and everything inside marks, sounds, notes,
+ * instructions and group lines are left as written.
  */
 function quoteChanges(story: Story, language: string | undefined): TextChange[] {
   const style = styleFor(language ?? story.meta.language);
   const source = story.source;
-  const skip = markRanges(story);
   const tokens = lexedTokens(source);
+  // A link's text and address are one token, never reworded: an address must stay as written.
+  const skip = new Uint8Array(source.length);
+  for (const range of [
+    ...markRanges(story),
+    ...tokens.filter((token) => token.type === "text" && !token.plain).map((token) => token.range),
+  ]) {
+    skip.fill(1, range.from, range.to);
+  }
+  const closer = closersAfter(source);
   const changes: TextChange[] = [];
   const decided = new Set<number>();
   for (const token of tokens) {
     if (token.type !== "open" && token.type !== "close") continue;
     if (token.char !== '"' && token.char !== "'") continue;
     const double = token.char === '"';
-    const insert =
-      token.type === "open"
+    const insert = isElision(source, token.range.from)
+      ? "’"
+      : token.type === "open"
         ? double
           ? style.open
           : style.innerOpen
@@ -161,7 +197,7 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
       i++;
       continue;
     }
-    if ((char !== '"' && char !== "'") || decided.has(i) || inside(skip, i)) continue;
+    if ((char !== '"' && char !== "'") || decided.has(i) || skip[i]) continue;
     const before = source[i - 1];
     const after = source[i + 1];
     if (char === '"') {
@@ -169,15 +205,31 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
       const opens = before === undefined || /[\s([{—–-]/u.test(before) || isOpening(before);
       changes.push({ from: i, to: i + 1, insert: opens ? style.open : style.close });
     } else {
+      // Feet (`6'2"`) stay as written, as inches do; `'90s` and the two of `rock 'n' roll` are
+      // apostrophes.
+      if (before !== undefined && /\d/.test(before)) continue;
+      const elided = isElision(source, i);
       const opens =
         (before === undefined || /[\s([{—–-]/u.test(before) || isOpening(before)) &&
         after !== undefined &&
-        /[\p{L}\p{N}]/u.test(after) &&
-        closesLater(source, i);
+        /\p{L}/u.test(after) &&
+        !elided &&
+        (closer[i + 1] ?? 0) === 1;
       changes.push({ from: i, to: i + 1, insert: opens ? style.innerOpen : "’" });
     }
   }
   return changes;
+}
+
+/** Whether the `'` at `at` is one of the two apostrophes of ` 'n' `, as in rock 'n' roll. */
+function isElision(source: string, at: number): boolean {
+  const word = /[\p{L}\p{N}]/u;
+  return [at, at - 2].some(
+    (from) =>
+      /^'n'$/i.test(source.slice(from, from + 3)) &&
+      !word.test(source[from - 1] ?? "") &&
+      !word.test(source[from + 3] ?? ""),
+  );
 }
 
 const OPENING = new Set(["“", "‘", "„", "‚", "«", "‹", "「", "『"]);
@@ -185,15 +237,20 @@ function isOpening(char: string): boolean {
   return OPENING.has(char);
 }
 
-/** Whether a straight `'` at `at` is closed later on its line by one that ends a word. */
-function closesLater(source: string, at: number): boolean {
-  for (let i = at + 1; i < source.length && source[i] !== "\n"; i++) {
-    if (source[i] !== "'") continue;
-    const before = source[i - 1] ?? "";
-    const after = source[i + 1] ?? "";
-    if (/\S/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) return true;
+/**
+ * For each offset, whether a straight `'` that ends a word follows it on its line: one that could
+ * close a quote opened before it.
+ */
+function closersAfter(source: string): Uint8Array {
+  const after = new Uint8Array(source.length + 1);
+  for (let i = source.length - 1; i >= 0; i--) {
+    const char = source[i];
+    if (char === "\n") continue;
+    const closes =
+      char === "'" && /\S/u.test(source[i - 1] ?? "") && !/[\p{L}\p{N}]/u.test(source[i + 1] ?? "");
+    after[i] = closes || after[i + 1] === 1 ? 1 : 0;
   }
-  return false;
+  return after;
 }
 
 /** Where marks, directions, sounds, notes, instructions and images are: never reworded. */
@@ -206,10 +263,6 @@ function markRanges(story: Story): Array<{ from: number; to: number }> {
     if (group.closeRange) ranges.push(group.closeRange);
   }
   return ranges.sort((a, b) => a.from - b.from);
-}
-
-function inside(ranges: ReadonlyArray<{ from: number; to: number }>, at: number): boolean {
-  return ranges.some((range) => at >= range.from && at < range.to);
 }
 
 /** Every token of every paragraph and heading, lexed as the parser lexes them. */

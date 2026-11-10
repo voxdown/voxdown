@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
-import { parse } from "voxdown";
+import { bookText, parse } from "voxdown";
 import { renderBook, renderScript } from "../src/index";
 
 const corpus = resolve(dirname(fileURLToPath(import.meta.url)), "../../../corpus");
@@ -29,14 +29,21 @@ describe("the views, on real books", () => {
         expect(Number(line?.getAttribute("data-from"))).toBeLessThanOrEqual(speech.range.from);
         expect(speech.range.to).toBeLessThanOrEqual(Number(line?.getAttribute("data-to")));
       }
+      // The book shows every paragraph the book text prints.
       document.body.innerHTML = renderBook(story, { positions: true, pages: true });
-      expect(document.querySelectorAll(".vxd-p").length).toBeGreaterThan(50);
+      const printed = bookText(story)
+        .split(/\n\n+/)
+        .filter((paragraph) => !/^#|^\*\*\*$/.test(paragraph));
+      expect(document.querySelectorAll(".vxd-p").length).toBe(printed.length);
     });
   }
 
   it("draw a long story in good time", () => {
-    const bodies = books.map(({ source }) => source.slice(source.indexOf("\n---\n", 4) + 5));
-    const story = parse(Array.from({ length: 18 }, () => bodies.join("\n\n")).join("\n\n"));
+    const bodies = books
+      .map(({ source }) => source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ""))
+      .join("\n\n");
+    const times = Math.ceil(100_000 / bodies.split(/\s+/).length);
+    const story = parse(Array.from({ length: times }, () => bodies).join("\n\n"));
     const time = (work: () => unknown) => {
       const start = performance.now();
       work();

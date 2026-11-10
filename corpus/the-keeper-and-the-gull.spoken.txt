@@ -1,0 +1,88 @@
+%% Written for VoxDown's tests and given to the public domain (CC0 1.0). It holds what the two books don't: directions and groups, sounds, verse, a speech over paragraphs, straight quotes, and CRLF line endings. %%
+
+# Narrator: The Keeper and the Gull
+
+{book only} A story in three short parts.
+
+## Narrator: I. The storm
+
+[wind against the glass]
+
+Narrator: Maud had kept the light at Carrick Point for thirty-one years, and in all that time she'd never once been late with the lamp. Tonight the stairs felt longer than usual.
+
+Maud (to herself): One hundred and twelve,
+Narrator: she counted at the top.
+Maud (to herself): Same as yesterday. Same as always.
+
+Narrator: A gull sat on the rail outside, feathers flat against the gale.
+Gull [screeches]
+
+Maud: Oh, it's you again.
+Narrator: She opened the hatch an inch.
+Maud (firmly): In or out. I'm not heating the whole of Cornwall.
+
+Narrator: The gull came in, shook itself, and looked at her as if _she_ were the visitor.
+
+Gull (with great dignity): I prefer ‘guest’.
+
+{pause 2s}
+
+Narrator: Maud sat down rather suddenly on the paraffin can.
+
+---
+
+## Narrator: II. The song
+
+Gull (softly): There was a ship called the _Mary Anne_,
+Gull (softly): And she sailed from Fowey to Rye;
+Gull (softly): She carried salt and she carried tin,
+Gull (softly): And she never came home to dry.
+
+Maud: That’s not how it goes.
+
+Gull: It’s how _I_ sing it.
+Gull [clears throat]
+Gull: Besides, nobody remembers the real one.
+
+Gull (whispering): They say the keeper before you heard the same song.
+Gull (whispering): They say she sang it back.
+
+Maud (hushed): Who taught you that?
+Gull (out loud): Nobody teaches a gull anything.
+
+Maud: Well, I won’t sing it.
+Narrator: She trimmed the wick.
+[the lamp hisses]
+
+{page}
+
+Tom: Maud! Maud, are you up there? There’s a light out past the Manacles, and it’s no light of ours.
+
+Tom: I’ve rowed out twice and it moves when I move. I don’t like it, Maud, and you know I don’t scare easy.
+
+Tom: Will you come down?
+
+Maud (calling down): Give me a minute, Tom!
+Narrator: she shouted.
+Maud (calling down): And don't you dare row out a third time.
+
+---
+
+## Narrator: III. The light
+
+Narrator: The three of them stood on the gallery: the keeper, the boatman, and the gull, who'd insisted. Tom's lantern swung from a 6" hook by the door.
+
+Tom (quietly): There. See it?
+
+Gull [chuckles]
+Gull: That’s no ship. That’s the _Mary Anne_.
+Gull (gently): She’s come to dry at last.
+
+Narrator: Out on the water, the strange light dipped once, as if it bowed, and went out.
+
+Maud (tired): Well,
+Narrator: she said, after a long while.
+Maud (tired): Same as always.
+Maud: Kettle’s on, if anyone wants it.
+
+Gull: Is there toast?

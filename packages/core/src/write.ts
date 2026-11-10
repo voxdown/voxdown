@@ -1,18 +1,22 @@
 /**
  * The lossless writer (§13). A story is written back from its source, so an unchanged story gives
  * back the same bytes. Fields changed in place on the model are written as the edits in `edit.ts`
- * make them: only the marks that changed are rewritten, and nothing else moves.
+ * make them, one after another, each on the text the ones before it made: only the marks that
+ * changed are rewritten, and nothing else moves.
  */
 import {
   type TextChange,
   applyChanges,
+  heardIndex,
+  heardItem,
   renameCharacter,
+  sameHearing,
   setDirection,
   setFullName,
   setMeta,
   setSpeaker,
 } from "./edit";
-import type { Block, Item, Story } from "./model";
+import type { Block, Item, Line, Speech, Story, Vocal } from "./model";
 import { parse } from "./parse";
 
 /**
@@ -28,108 +32,336 @@ import { parse } from "./parse";
  * the text instead. A story whose shape no longer matches its source is an error.
  */
 export function write(story: Story): string {
-  return applyChanges(story.source, changesFrom(story));
-}
-
-/** The text changes that would write a story's in-place edits back to its source. */
-export function changesFrom(story: Story): TextChange[] {
   const original = parse(story.source);
-  const changes: TextChange[] = [];
+  checkShape(story, original);
+  let text = story.source;
+  // What the edits wrote, kept up to date as later edits move it.
+  let written: Span[] = [];
+  const edit = (make: (current: Story) => TextChange[]) => {
+    const changes = make(parse(text));
+    written = afterChanges(written, changes);
+    text = applyChanges(text, changes);
+  };
 
   for (const field of ["title", "subtitle", "author", "language"] as const) {
     if (story.meta[field] !== original.meta[field]) {
-      changes.push(...setMeta(original, field, story.meta[field] ?? null));
+      edit((current) => setMeta(current, field, story.meta[field] ?? null));
     }
   }
-
-  if (story.cast.length !== original.cast.length) shapeError("cast members");
   story.cast.forEach((member, index) => {
     const before = original.cast[index];
     if (!before) return;
-    if (member.name !== before.name)
-      changes.push(...setFullName(original, before.handle, member.name));
+    if (member.name !== before.name) {
+      edit((current) => setFullName(current, before.handle, member.name));
+    }
     if (member.handle !== before.handle) {
-      changes.push(...renameCharacter(original, before.handle, member.handle));
+      edit((current) => renameCharacter(current, before.handle, member.handle));
     }
   });
 
+  // Headings, sounds, notes and instructions are found again by their place among their kind,
+  // speeches and a character's sounds by their first word: edits add marks, never these.
+  const pairs = itemPairs(story, original);
+  story.blocks.forEach((block, index) => {
+    const before = original.blocks[index] as Block;
+    if (block.kind === "heading" && before.kind === "heading" && block.level !== before.level) {
+      edit((current) => {
+        const heading = current.blocks[index];
+        if (heading?.kind !== "heading") shapeError("blocks");
+        const hashes = { from: heading.range.from, to: heading.range.from + heading.level };
+        return [{ ...hashes, insert: "#".repeat(Math.min(6, Math.max(1, block.level))) }];
+      });
+    }
+  });
+  for (const [after, before] of pairs) {
+    if (after.kind === "speech" && before.kind === "speech") {
+      if (after.speaker !== before.speaker) {
+        edit((current) => setSpeaker(current, find(current, original, before), after.speaker));
+      }
+      if (after.ownDirection !== before.ownDirection) {
+        edit((current) =>
+          setDirection(current, find(current, original, before), after.ownDirection),
+        );
+      }
+    }
+  }
+  const counted = new Map<Item["kind"], number>();
+  for (const [after, before] of pairs) {
+    const nth = counted.get(before.kind) ?? 0;
+    counted.set(before.kind, nth + 1);
+    const changed =
+      ((after.kind === "sound" || after.kind === "vocal") &&
+        before.kind === after.kind &&
+        after.description !== before.description) ||
+      (after.kind === "note" && before.kind === "note" && after.text !== before.text) ||
+      (after.kind === "instruction" &&
+        before.kind === "instruction" &&
+        after.value !== before.value);
+    if (!changed) continue;
+    edit((current) => {
+      const item = itemsOf(current).filter((other) => other.kind === before.kind)[nth];
+      if (!item) shapeError("items");
+      return contentChanges(current, item, after);
+    });
+  }
+  return withoutSpareMarks(text, written);
+}
+
+/**
+ * Edits made one after another can leave a mark one of them needed and a later one made spare. A
+ * mark whose name the edits wrote is taken out (or, with a direction, cut to `@(…)`) if every word
+ * is still said by the same character in the same way. The author's own marks stay.
+ */
+function withoutSpareMarks(text: string, spans: readonly Span[]): string {
+  if (spans.length === 0) return text;
+  const goal = parse(text);
+  let current = text;
+  let written = spans;
+  for (let round = 0; round < 32; round++) {
+    const story = parse(current);
+    let found: TextChange | undefined;
+    for (const item of itemsOf(story)) {
+      if (item.kind !== "mark" || !written.some((span) => touches(span, item.nameRange))) continue;
+      found = shorter(current, item).find((option) =>
+        sameHearing(goal, parse(applyChanges(current, [option]))),
+      );
+      if (found) break;
+    }
+    if (!found) break;
+    written = afterChanges(written, [found]);
+    current = applyChanges(current, [found]);
+  }
+  return current;
+}
+
+type Span = { from: number; to: number };
+
+function touches(span: Span, range: Span): boolean {
+  return span.from === span.to
+    ? span.from >= range.from && span.from <= range.to
+    : span.from < range.to && range.from < span.to;
+}
+
+/** Spans moved by changes, with what the changes inserted added. */
+function afterChanges(spans: readonly Span[], changes: readonly TextChange[]): Span[] {
+  const sorted = [...changes].sort((a, b) => a.from - b.from);
+  const at = (offset: number) => {
+    let delta = 0;
+    for (const change of sorted) {
+      if (offset <= change.from) break;
+      if (offset < change.to) return change.from + delta + change.insert.length;
+      delta += change.insert.length - (change.to - change.from);
+    }
+    return offset + delta;
+  };
+  const moved = spans.map((span) => ({
+    from: at(span.from),
+    to: Math.max(at(span.from), at(span.to)),
+  }));
+  let delta = 0;
+  for (const change of sorted) {
+    const from = change.from + delta;
+    moved.push({ from, to: from + change.insert.length });
+    delta += change.insert.length - (change.to - change.from);
+  }
+  return moved;
+}
+
+/** Taking a mark out (with one space), or cutting it to its direction. */
+function shorter(text: string, mark: Extract<Item, { kind: "mark" }>): TextChange[] {
+  const end = text[mark.range.to] === " " ? mark.range.to + 1 : mark.range.to;
+  const options: TextChange[] = [{ from: mark.range.from, to: end, insert: "" }];
+  if (mark.directionRange) {
+    options.push({ from: mark.nameRange.from, to: mark.directionRange.from, insert: "" });
+  }
+  return options;
+}
+
+/** The text changes that would write a story's in-place edits back to its source: the smallest, line by line. */
+export function changesFrom(story: Story): TextChange[] {
+  return diffChanges(story.source, write(story));
+}
+
+function itemsOf(story: Story): Item[] {
+  return story.blocks.flatMap((block) => linesOf(block).flatMap((line) => line.items));
+}
+
+function linesOf(block: Block): Line[] {
+  return block.kind === "break" ? [] : block.kind === "heading" ? [block.line] : block.lines;
+}
+
+/** Each item of the edited model with the item it was in the source, in order. */
+function itemPairs(story: Story, original: Story): Array<[Item, Item]> {
+  const after = itemsOf(story);
+  const before = itemsOf(original);
+  return after.map((item, index) => [item, before[index] as Item]);
+}
+
+/** The speech or character's sound in the current text that was `item` in the original. */
+function find(current: Story, original: Story, item: Speech): Speech {
+  const index = heardIndex(original, item);
+  const found = index >= 0 ? heardItem(current, index) : undefined;
+  if (found?.kind === "speech") return found;
+  // No words to find it by: the same place among the speeches.
+  const speeches = (of: Story) =>
+    itemsOf(of).filter((other): other is Speech => other.kind === "speech");
+  const same = speeches(current)[speeches(original).indexOf(item)];
+  if (!same) shapeError("items");
+  return same;
+}
+
+/** A sound's description, a note's text or an instruction's value, written over the old one. */
+function contentChanges(current: Story, item: Item, after: Item): TextChange[] {
+  if (
+    (item.kind === "sound" || item.kind === "vocal") &&
+    (after.kind === "sound" || after.kind === "vocal")
+  ) {
+    const open = current.source.indexOf("[", item.range.from);
+    return [{ from: open + 1, to: item.range.to - 1, insert: escapeBrackets(after.description) }];
+  }
+  if (item.kind === "note" && after.kind === "note") {
+    return [{ from: item.range.from + 2, to: item.range.to - 2, insert: ` ${after.text} ` }];
+  }
+  if (item.kind === "instruction" && after.kind === "instruction") {
+    const raw = after.value === null ? `{${item.name}}` : `{${item.name} ${after.value}}`;
+    return [{ ...item.range, insert: raw }];
+  }
+  return [];
+}
+
+function checkShape(story: Story, original: Story): void {
+  if (story.cast.length !== original.cast.length) shapeError("cast members");
   if (story.blocks.length !== original.blocks.length) shapeError("blocks");
   story.blocks.forEach((block, index) => {
     const before = original.blocks[index] as Block;
     if (block.kind !== before.kind) shapeError("blocks");
-    if (block.kind === "heading" && before.kind === "heading" && block.level !== before.level) {
-      const hashes = { from: before.range.from, to: before.range.from + before.level };
-      changes.push({ ...hashes, insert: "#".repeat(Math.min(6, Math.max(1, block.level))) });
-    }
-    const lines =
-      block.kind === "break" ? [] : block.kind === "heading" ? [block.line] : block.lines;
-    const linesBefore =
-      before.kind === "break" ? [] : before.kind === "heading" ? [before.line] : before.lines;
+    const lines = linesOf(block);
+    const linesBefore = linesOf(before);
     if (lines.length !== linesBefore.length) shapeError("lines");
     lines.forEach((line, lineIndex) => {
-      const items = line.items;
       const itemsBefore = linesBefore[lineIndex]?.items ?? [];
-      if (items.length !== itemsBefore.length) shapeError("items");
-      items.forEach((item, itemIndex) => {
-        changes.push(...itemChanges(original, itemsBefore[itemIndex] as Item, item));
+      if (line.items.length !== itemsBefore.length) shapeError("items");
+      line.items.forEach((item, itemIndex) => {
+        if (item.kind !== itemsBefore[itemIndex]?.kind) shapeError("items");
       });
     });
   });
-  return dedupe(changes);
-}
-
-function itemChanges(original: Story, before: Item, after: Item): TextChange[] {
-  if (before.kind !== after.kind) shapeError("items");
-  switch (after.kind) {
-    case "speech": {
-      if (before.kind !== "speech") return [];
-      const out: TextChange[] = [];
-      if (after.speaker !== before.speaker)
-        out.push(...setSpeaker(original, before, after.speaker));
-      if (after.ownDirection !== before.ownDirection) {
-        out.push(...setDirection(original, before, after.ownDirection));
-      }
-      return out;
-    }
-    case "sound":
-    case "vocal": {
-      if (before.kind !== after.kind || after.description === before.description) return [];
-      const open = original.source.indexOf("[", before.range.from);
-      return [
-        { from: open + 1, to: before.range.to - 1, insert: escapeBrackets(after.description) },
-      ];
-    }
-    case "note": {
-      if (before.kind !== "note" || after.text === before.text) return [];
-      return [{ from: before.range.from + 2, to: before.range.to - 2, insert: ` ${after.text} ` }];
-    }
-    case "instruction": {
-      if (before.kind !== "instruction" || after.value === before.value) return [];
-      const raw = after.value === null ? `{${before.name}}` : `{${before.name} ${after.value}}`;
-      return [{ ...before.range, insert: raw }];
-    }
-    default:
-      return [];
-  }
 }
 
 function escapeBrackets(text: string): string {
   return text.replace(/([[\]\\])/g, "\\$1");
 }
 
-/** The same change asked for twice, by two fields that agree, is made once. */
-function dedupe(changes: TextChange[]): TextChange[] {
-  const seen = new Set<string>();
-  return changes.filter((change) => {
-    const key = `${change.from}:${change.to}:${change.insert}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function shapeError(what: string): never {
   throw new Error(
     `write() follows changes to fields only, but the story's ${what} were added or removed. Use the edit functions to add or remove marks.`,
   );
+}
+
+/**
+ * The smallest changes that turn `a` into `b`: lines compared with Myers' diff, and each run of
+ * changed lines narrowed to the characters that differ.
+ */
+export function diffChanges(a: string, b: string): TextChange[] {
+  if (a === b) return [];
+  const linesA = splitLines(a);
+  const linesB = splitLines(b);
+  const script = myers(linesA, linesB);
+  const changes: TextChange[] = [];
+  let offsetA = 0;
+  let i = 0;
+  while (i < script.length) {
+    if (script[i] === "=") {
+      offsetA += (linesA.shift() as string).length;
+      linesB.shift();
+      i++;
+      continue;
+    }
+    let removed = "";
+    let added = "";
+    while (i < script.length && script[i] !== "=") {
+      if (script[i] === "-") removed += linesA.shift() as string;
+      else added += linesB.shift() as string;
+      i++;
+    }
+    // Narrow the run to where it differs.
+    let start = 0;
+    while (start < removed.length && start < added.length && removed[start] === added[start])
+      start++;
+    let end = 0;
+    while (
+      end < removed.length - start &&
+      end < added.length - start &&
+      removed[removed.length - 1 - end] === added[added.length - 1 - end]
+    ) {
+      end++;
+    }
+    changes.push({
+      from: offsetA + start,
+      to: offsetA + removed.length - end,
+      insert: added.slice(start, added.length - end),
+    });
+    offsetA += removed.length;
+  }
+  return changes;
+}
+
+/** Lines with their line breaks, so joining them gives the text back. */
+function splitLines(text: string): string[] {
+  return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+}
+
+/** An edit script from `a` to `b`: "=" keeps a line, "-" removes one, "+" adds one (Myers, 1986). */
+function myers(a: readonly string[], b: readonly string[]): Array<"=" | "-" | "+"> {
+  const max = a.length + b.length;
+  const offset = max + 1;
+  let v = new Int32Array(2 * max + 3);
+  const trace: Int32Array[] = [];
+  let found = -1;
+  for (let d = 0; d <= max && found < 0; d++) {
+    trace.push(v.slice());
+    for (let k = -d; k <= d; k += 2) {
+      const down =
+        k === -d || (k !== d && (v[offset + k - 1] as number) < (v[offset + k + 1] as number));
+      let x = down ? (v[offset + k + 1] as number) : (v[offset + k - 1] as number) + 1;
+      let y = x - k;
+      while (x < a.length && y < b.length && a[x] === b[y]) {
+        x++;
+        y++;
+      }
+      v[offset + k] = x;
+      if (x >= a.length && y >= b.length) {
+        found = d;
+        break;
+      }
+    }
+  }
+  v = new Int32Array(0);
+  const script: Array<"=" | "-" | "+"> = [];
+  let x = a.length;
+  let y = b.length;
+  for (let d = found; d > 0; d--) {
+    const previous = trace[d] as Int32Array;
+    const k = x - y;
+    const down =
+      k === -d ||
+      (k !== d && (previous[offset + k - 1] as number) < (previous[offset + k + 1] as number));
+    const prevK = down ? k + 1 : k - 1;
+    const prevX = previous[offset + prevK] as number;
+    const prevY = prevX - prevK;
+    while (x > prevX && y > prevY) {
+      script.push("=");
+      x--;
+      y--;
+    }
+    script.push(down ? "+" : "-");
+    if (down) y--;
+    else x--;
+  }
+  while (x > 0 && y > 0) {
+    script.push("=");
+    x--;
+    y--;
+  }
+  return script.reverse();
 }

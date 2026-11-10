@@ -152,9 +152,11 @@ describe("changing who says a line (§13, rule 4)", () => {
   });
 
   it("turns a quote's own @(…) into the new mark with its direction", () => {
+    // The `@(…)` directed the whole narration, “Oh dear,” and he said: the words left with the
+    // narrator keep it, with an `@(…)` of their own.
     const result = edit("@(quieter) “Oh dear,” he said.", 0, (s, sp) => setSpeaker(s, sp, "King"));
-    expect(result.text).toBe("@King (quieter) “Oh dear,” he said.");
-    expect(result.script).toBe("King (quieter): Oh dear,\nNarrator: he said.");
+    expect(result.text).toBe("@King (quieter) “Oh dear,” @(quieter) he said.");
+    expect(result.script).toBe("King (quieter): Oh dear,\nNarrator (quieter): he said.");
   });
 
   it("gives narration and an unmarked quote to a character", () => {
@@ -332,5 +334,140 @@ describe("adding marks (§13, rule 3)", () => {
     const text = applyChanges(story.source, insertLine(story, at + 1, "{page}"));
     expect(text).toBe("One.\n{page}\nTwo.\n");
     expect(spokenScript(parse(text))).toBe("Narrator: One.\n{page}\nNarrator: Two.");
+  });
+
+  const sound = (source: string, at: number) =>
+    applyChanges(source, insertSound(parse(source), at, "clatter"));
+  const line = (source: string, at: number, text = "{page}") =>
+    applyChanges(source, insertLine(parse(source), at, text));
+
+  it("never puts a sound where it would be a character's own, or inside something else", () => {
+    // Inside a mark or its direction: after the first word the mark gives, not after the mark.
+    expect(sound("@Gerald (yawning) “Hi there”", 3)).toBe("@Gerald (yawning) “Hi [clatter] there”");
+    expect(sound("@Gerald (yawning) “Hi there”", 11)).toBe(
+      "@Gerald (yawning) “Hi [clatter] there”",
+    );
+    // Inside an instruction or a note: after it.
+    expect(sound("He paused {pause 2s} and went on.", 13)).toBe(
+      "He paused {pause 2s} [clatter] and went on.",
+    );
+    expect(sound("A %% a note here %% b", 6)).toBe("A %% a note here %% [clatter] b");
+    // In the front matter: after the story's first word.
+    expect(sound("---\ntitle: X\n---\nStory.", 3)).toBe("---\ntitle: X\n---\nStory. [clatter]");
+    // A mark with nothing after it: the sound would be Gerald's, so nothing is done.
+    expect(insertSound(parse("@Gerald"), 3, "clatter")).toEqual([]);
+    expect(applyChanges("Hi", insertSound(parse("Hi"), 0, "a]b"))).toBe("Hi [a\\]b]");
+    expect(() => insertSound(parse("Hi"), 9, "clatter")).toThrow(RangeError);
+  });
+
+  it("never puts a line in the front matter or a note, and keeps the line endings", () => {
+    expect(line("---\ntitle: X\n---\nStory.", 0)).toBe("---\ntitle: X\n---\n{page}\n\nStory.");
+    expect(line("---\ntitle: X\n---", 2)).toBe("---\ntitle: X\n---\n{page}");
+    expect(line("One.\r\nTwo.\r\n", 7)).toBe("One.\r\n{page}\r\nTwo.\r\n");
+    expect(line("A %% note\nover lines %% b\nC", 12, "{pause}")).toBe(
+      "{pause}\n\nA %% note\nover lines %% b\nC",
+    );
+    expect(() => insertLine(parse("Hi"), -1, "{page}")).toThrow(RangeError);
+  });
+
+  it("keeps a quote that runs over lines or paragraphs going past the new line (§5.7)", () => {
+    const verse = "@Gerald (softly) “Twinkle, twinkle, little star,\nHow I wonder what you are.”";
+    expect(spokenScript(parse(line(verse, verse.indexOf("How"))))).toBe(
+      "Gerald (softly): Twinkle, twinkle, little star,\n{page}\nGerald (softly): How I wonder what you are.",
+    );
+    const paragraphs = "@Gerald “Once upon a time.\n\n“He believed.”";
+    expect(line(paragraphs, paragraphs.indexOf("“He"))).toBe(
+      "@Gerald “Once upon a time.\n\n{page}\n\n“He believed.”",
+    );
+  });
+});
+
+describe("what fuzzing, real books and review found", () => {
+  const stretch = (story: Story, text: string) => {
+    const found = speeches(story).find((speech) => speech.text === text);
+    if (!found) throw new Error(`No stretch “${text}”`);
+    return found;
+  };
+  const speaker = (source: string, text: string, name: string) => {
+    const story = parse(source);
+    return applyChanges(source, setSpeaker(story, stretch(story, text), name));
+  };
+  const direction = (source: string, text: string, value: string | null) => {
+    const story = parse(source);
+    return applyChanges(source, setDirection(story, stretch(story, text), value));
+  };
+
+  it("a direction set on one stretch leaves the later ones of its mark as they were", () => {
+    expect(
+      direction("@Gerald (yawning) “Hello,” he said. “I just woke up.”", "Hello,", "softly"),
+    ).toBe("@Gerald (softly) “Hello,” he said. @(yawning) “I just woke up.”");
+    expect(direction("@Gerald “Hello,” he said. “I’m tired.”", "Hello,", "softly")).toBe(
+      "@Gerald (softly) “Hello,” he said. @() “I’m tired.”",
+    );
+  });
+
+  it("a stretch given to someone else keeps how it is said, and other sounds keep their owner", () => {
+    expect(
+      speaker("@Gerald (yawning) “Hello,” he said. “I just woke up.”", "I just woke up.", "Wanda"),
+    ).toBe("@Gerald (yawning) “Hello,” he said. @Wanda (yawning) “I just woke up.”");
+    expect(speaker("@Fox [gasps] “Oh!” @Fox (sadly) [sighs] “Gone.”", "Oh!", "Wanda")).toBe(
+      "@Fox [gasps] @Wanda “Oh!” @Fox (sadly) [sighs] “Gone.”",
+    );
+    expect(speaker("@Wanda [gasp] “Who’s there?”", "Who’s there?", "Gerald")).toBe(
+      "@Wanda [gasp] @Gerald “Who’s there?”",
+    );
+  });
+
+  it("narration given to a character gives the quote it holds, marked just before it", () => {
+    const source = "The fox ran. “Wait!” called the hen.";
+    const text = speaker(source, source, "Fox");
+    expect(text).toBe("The fox ran. @Fox “Wait!” called the hen.");
+    expect(spokenScript(parse(text))).toBe(
+      "Narrator: The fox ran.\nFox: Wait!\nNarrator: called the hen.",
+    );
+    expect(speaker("@() “Hi,” said Gerald.", "“Hi,” said Gerald.", "Gerald")).toBe(
+      "@Gerald “Hi,” said Gerald.",
+    );
+    expect(speaker("@Gerald “Hi,” he said (quietly).", "he said (quietly).", "Wanda")).toBe(
+      "@Gerald “Hi,” @Wanda he said (quietly).",
+    );
+  });
+
+  it("a quote over several lines is given away whole (§5.7)", () => {
+    const verse = "@Gerald (softly) “Twinkle, twinkle, little star,\nHow I wonder what you are.”";
+    expect(speaker(verse, "How I wonder what you are.", "Wanda")).toBe(
+      "@Wanda (softly) “Twinkle, twinkle, little star,\nHow I wonder what you are.”",
+    );
+    expect(direction(verse, "How I wonder what you are.", "loudly")).toBe(
+      "@Gerald (loudly) “Twinkle, twinkle, little star,\nHow I wonder what you are.”",
+    );
+  });
+
+  it("renames the narrator, refuses a name that is taken, and keeps comments in the front matter", () => {
+    const story = parse("@Gerald “Hi.” Once upon a time.");
+    expect(applyChanges(story.source, renameCharacter(story, "Narrator", "Teller"))).toBe(
+      "---\nnarrator: Teller\n---\n\n@Gerald “Hi.” Once upon a time.",
+    );
+    expect(() => renameCharacter(parse("@Gerald “Hi.” @Zed “Yo.”"), "Gerald", "Zed")).toThrow(
+      "There is already a character called “Zed”.",
+    );
+    const cast = parse("---\ncast:\n  Gerald: Gerald the Dragon # the hero\n---\nHi.");
+    expect(applyChanges(cast.source, setFullName(cast, "Gerald", "Sir Gerald"))).toBe(
+      "---\ncast:\n  Gerald: Sir Gerald # the hero\n---\nHi.",
+    );
+    const meta = parse("---\ntitle: Old # working title\n---\nHi.");
+    expect(applyChanges(meta.source, setMeta(meta, "title", "New"))).toBe(
+      "---\ntitle: New # working title\n---\nHi.",
+    );
+  });
+
+  it("the writer makes several changes, keeps the author's marks, and its changes say the same", () => {
+    const story = parse("@Gerald “Hi.” @Wanda “Yo.”\nThe end.");
+    const [hi, yo] = speeches(story) as [Speech, Speech];
+    hi.speaker = "Wanda";
+    yo.ownDirection = "softly";
+    const text = "@Wanda “Hi.” @Wanda (softly) “Yo.”\nThe end.";
+    expect(write(story)).toBe(text);
+    expect(applyChanges(story.source, changesFrom(story))).toBe(text);
   });
 });

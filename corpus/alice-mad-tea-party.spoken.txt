@@ -1,0 +1,380 @@
+%% Lewis Carroll, 1865, in the public domain. From Project Gutenberg’s text (#11): each paragraph joined onto one line and marked up for VoxDown’s stress tests. Where two characters speak together, the line is the Hatter’s: VoxDown 1.0 has no mark for a chorus. %%
+
+# Narrator: A Mad Tea-Party
+
+Narrator: There was a table set out under a tree in front of the house, and the March Hare and the Hatter were having tea at it: a Dormouse was sitting between them, fast asleep, and the other two were using it as a cushion, resting their elbows on it, and talking over its head.
+Alice: Very uncomfortable for the Dormouse,
+Narrator: thought Alice;
+Alice: only, as it’s asleep, I suppose it doesn’t mind.
+
+Narrator: The table was a large one, but the three were all crowded together at one corner of it:
+Hatter: No room! No room!
+Narrator: they cried out when they saw Alice coming.
+Alice: There’s _plenty_ of room!
+Narrator: said Alice indignantly, and she sat down in a large arm-chair at one end of the table.
+
+Hare: Have some wine,
+Narrator: the March Hare said in an encouraging tone.
+
+Narrator: Alice looked all round the table, but there was nothing on it but tea.
+Alice: I don’t see any wine,
+Narrator: she remarked.
+
+Hare: There isn’t any,
+Narrator: said the March Hare.
+
+Alice: Then it wasn’t very civil of you to offer it,
+Narrator: said Alice angrily.
+
+Hare: It wasn’t very civil of you to sit down without being invited,
+Narrator: said the March Hare.
+
+Alice: I didn’t know it was _your_ table,
+Narrator: said Alice;
+Alice: it’s laid for a great many more than three.
+
+Hatter: Your hair wants cutting,
+Narrator: said the Hatter. He had been looking at Alice for some time with great curiosity, and this was his first speech.
+
+Alice: You should learn not to make personal remarks,
+Narrator: Alice said with some severity;
+Alice: it’s very rude.
+
+Narrator: The Hatter opened his eyes very wide on hearing this; but all he _said_ was,
+Hatter: Why is a raven like a writing-desk?
+
+Alice: Come, we shall have some fun now!
+Narrator: thought Alice.
+Alice: I’m glad they’ve begun asking riddles.—I believe I can guess that,
+Narrator: she added aloud.
+
+Hare: Do you mean that you think you can find out the answer to it?
+Narrator: said the March Hare.
+
+Alice: Exactly so,
+Narrator: said Alice.
+
+Hare: Then you should say what you mean,
+Narrator: the March Hare went on.
+
+Alice: I do,
+Narrator: Alice hastily replied;
+Alice: at least—at least I mean what I say—that’s the same thing, you know.
+
+Hatter: Not the same thing a bit!
+Narrator: said the Hatter.
+Hatter: You might just as well say that ‘I see what I eat’ is the same thing as ‘I eat what I see’!
+
+Hare: You might just as well say,
+Narrator: added the March Hare,
+Hare: that ‘I like what I get’ is the same thing as ‘I get what I like’!
+
+Dormouse: You might just as well say,
+Narrator: added the Dormouse, who seemed to be talking in his sleep,
+Dormouse: that ‘I breathe when I sleep’ is the same thing as ‘I sleep when I breathe’!
+
+Hatter: It _is_ the same thing with you,
+Narrator: said the Hatter, and here the conversation dropped, and the party sat silent for a minute, while Alice thought over all she could remember about ravens and writing-desks, which wasn’t much.
+
+Narrator: The Hatter was the first to break the silence.
+Hatter: What day of the month is it?
+Narrator: he said, turning to Alice: he had taken his watch out of his pocket, and was looking at it uneasily, shaking it every now and then, and holding it to his ear.
+
+Narrator: Alice considered a little, and then said
+Alice: The fourth.
+
+Hatter: Two days wrong!
+Narrator: sighed the Hatter.
+Hatter: I told you butter wouldn’t suit the works!
+Narrator: he added looking angrily at the March Hare.
+
+Hare: It was the _best_ butter,
+Narrator: the March Hare meekly replied.
+
+Hatter: Yes, but some crumbs must have got in as well,
+Narrator: the Hatter grumbled:
+Hatter: you shouldn’t have put it in with the bread-knife.
+
+Narrator: The March Hare took the watch and looked at it gloomily: then he dipped it into his cup of tea, and looked at it again: but he could think of nothing better to say than his first remark,
+Hare: It was the _best_ butter, you know.
+
+Narrator: Alice had been looking over his shoulder with some curiosity.
+Alice: What a funny watch!
+Narrator: she remarked.
+Alice: It tells the day of the month, and doesn’t tell what o’clock it is!
+
+Hatter: Why should it?
+Narrator: muttered the Hatter.
+Hatter: Does _your_ watch tell you what year it is?
+
+Alice: Of course not,
+Narrator: Alice replied very readily:
+Alice: but that’s because it stays the same year for such a long time together.
+
+Hatter: Which is just the case with _mine_,
+Narrator: said the Hatter.
+
+Narrator: Alice felt dreadfully puzzled, The Hatter’s remark seemed to have no sort of meaning in it, and yet it was certainly English.
+Alice: I don’t quite understand you,
+Narrator: she said, as politely as she could.
+
+Hatter: The Dormouse is asleep again,
+Narrator: said the Hatter, and he poured a little hot tea upon its nose.
+
+Narrator: The Dormouse shook its head impatiently, and said, without opening its eyes,
+Dormouse: Of course, of course; just what I was going to remark myself.
+
+Hatter: Have you guessed the riddle yet?
+Narrator: the Hatter said, turning to Alice again.
+
+Alice: No, I give it up,
+Narrator: Alice replied:
+Alice: what’s the answer?
+
+Hatter: I haven’t the slightest idea,
+Narrator: said the Hatter.
+
+Hare: Nor I,
+Narrator: said the March Hare.
+
+Narrator: Alice sighed wearily.
+Alice: I think you might do something better with the time,
+Narrator: she said,
+Alice: than waste it in asking riddles that have no answers.
+
+Hatter: If you knew Time as well as I do,
+Narrator: said the Hatter,
+Hatter: you wouldn’t talk about wasting _it_. It’s _him_.
+
+Alice: I don’t know what you mean,
+Narrator: said Alice.
+
+Hatter: Of course you don’t!
+Narrator: the Hatter said, tossing his head contemptuously.
+Hatter: I dare say you never even spoke to Time!
+
+Alice: Perhaps not,
+Narrator: Alice cautiously replied:
+Alice: but I know I have to beat time when I learn music.
+
+Hatter: Ah! that accounts for it,
+Narrator: said the Hatter.
+Hatter: He won’t stand beating. Now, if you only kept on good terms with him, he’d do almost anything you liked with the clock. For instance, suppose it were nine o’clock in the morning, just time to begin lessons: you’d only have to whisper a hint to Time, and round goes the clock in a twinkling! Half-past one, time for dinner!
+
+Hare: I only wish it was,
+Narrator: the March Hare said to itself in a whisper.)
+
+Alice: That would be grand, certainly,
+Narrator: said Alice thoughtfully:
+Alice: but then—I shouldn’t be hungry for it, you know.
+
+Hatter: Not at first, perhaps,
+Narrator: said the Hatter:
+Hatter: but you could keep it to half-past one as long as you liked.
+
+Alice: Is that the way _you_ manage?
+Narrator: Alice asked.
+
+Narrator: The Hatter shook his head mournfully.
+Hatter: Not I!
+Narrator: he replied.
+Hatter: We quarrelled last March—just before _he_ went mad, you know—
+Narrator: (pointing with his tea spoon at the March Hare,)
+Hatter: —it was at the great concert given by the Queen of Hearts, and I had to sing
+
+Hatter: Twinkle, twinkle, little bat! How I wonder what you’re at!
+
+Hatter: You know the song, perhaps?”
+
+Alice: I’ve heard something like it,
+Narrator: said Alice.
+
+Hatter: It goes on, you know,
+Narrator: the Hatter continued,
+Hatter: in this way:—
+
+Hatter: Up above the world you fly, Like a tea-tray in the sky. Twinkle, twinkle—
+
+Narrator: Here the Dormouse shook itself, and began singing in its sleep
+Dormouse: _Twinkle, twinkle, twinkle, twinkle_—
+Narrator: and went on so long that they had to pinch it to make it stop.
+
+Hatter: Well, I’d hardly finished the first verse,
+Narrator: said the Hatter,
+Hatter: when the Queen jumped up and bawled out, ‘He’s murdering the time! Off with his head!’
+
+Alice: How dreadfully savage!
+Narrator: exclaimed Alice.
+
+Hatter: And ever since that,
+Narrator: the Hatter went on in a mournful tone,
+Hatter: he won’t do a thing I ask! It’s always six o’clock now.
+
+Narrator: A bright idea came into Alice’s head.
+Alice: Is that the reason so many tea-things are put out here?
+Narrator: she asked.
+
+Hatter: Yes, that’s it,
+Narrator: said the Hatter with a sigh:
+Hatter: it’s always tea-time, and we’ve no time to wash the things between whiles.
+
+Alice: Then you keep moving round, I suppose?
+Narrator: said Alice.
+
+Hatter: Exactly so,
+Narrator: said the Hatter:
+Hatter: as the things get used up.
+
+Alice: But what happens when you come to the beginning again?
+Narrator: Alice ventured to ask.
+
+Hare: Suppose we change the subject,
+Narrator: the March Hare interrupted, yawning.
+Hare: I’m getting tired of this. I vote the young lady tells us a story.
+
+Alice: I’m afraid I don’t know one,
+Narrator: said Alice, rather alarmed at the proposal.
+
+Hatter: Then the Dormouse shall!
+Narrator: they both cried.
+Hatter: Wake up, Dormouse!
+Narrator: And they pinched it on both sides at once.
+
+Narrator: The Dormouse slowly opened his eyes.
+Dormouse: I wasn’t asleep,
+Narrator: he said in a hoarse, feeble voice:
+Dormouse: I heard every word you fellows were saying.
+
+Hare: Tell us a story!
+Narrator: said the March Hare.
+
+Alice: Yes, please do!
+Narrator: pleaded Alice.
+
+Hatter: And be quick about it,
+Narrator: added the Hatter,
+Hatter: or you’ll be asleep again before it’s done.
+
+Dormouse: Once upon a time there were three little sisters,
+Narrator: the Dormouse began in a great hurry;
+Dormouse: and their names were Elsie, Lacie, and Tillie; and they lived at the bottom of a well—
+
+Alice: What did they live on?
+Narrator: said Alice, who always took a great interest in questions of eating and drinking.
+
+Dormouse: They lived on treacle,
+Narrator: said the Dormouse, after thinking a minute or two.
+
+Alice: They couldn’t have done that, you know,
+Narrator: Alice gently remarked;
+Alice: they’d have been ill.
+
+Dormouse: So they were,
+Narrator: said the Dormouse;
+Dormouse: _very_ ill.
+
+Narrator: Alice tried to fancy to herself what such an extraordinary way of living would be like, but it puzzled her too much, so she went on:
+Alice: But why did they live at the bottom of a well?
+
+Hare: Take some more tea,
+Narrator: the March Hare said to Alice, very earnestly.
+
+Alice: I’ve had nothing yet,
+Narrator: Alice replied in an offended tone,
+Alice: so I can’t take more.
+
+Hatter: You mean you can’t take _less_,
+Narrator: said the Hatter:
+Hatter: it’s very easy to take _more_ than nothing.
+
+Alice: Nobody asked _your_ opinion,
+Narrator: said Alice.
+
+Hatter: Who’s making personal remarks now?
+Narrator: the Hatter asked triumphantly.
+
+Narrator: Alice did not quite know what to say to this: so she helped herself to some tea and bread-and-butter, and then turned to the Dormouse, and repeated her question.
+Alice: Why did they live at the bottom of a well?
+
+Narrator: The Dormouse again took a minute or two to think about it, and then said,
+Dormouse: It was a treacle-well.
+
+Alice: There’s no such thing!
+Narrator: Alice was beginning very angrily, but the Hatter and the March Hare went
+Hatter: Sh! sh!
+Narrator: and the Dormouse sulkily remarked,
+Dormouse: If you can’t be civil, you’d better finish the story for yourself.
+
+Alice: No, please go on!
+Narrator: Alice said very humbly;
+Alice: I won’t interrupt again. I dare say there may be _one_.
+
+Dormouse: One, indeed!
+Narrator: said the Dormouse indignantly. However, he consented to go on.
+Dormouse: And so these three little sisters—they were learning to draw, you know—
+
+Alice: What did they draw?
+Narrator: said Alice, quite forgetting her promise.
+
+Dormouse: Treacle,
+Narrator: said the Dormouse, without considering at all this time.
+
+Hatter: I want a clean cup,
+Narrator: interrupted the Hatter:
+Hatter: let’s all move one place on.
+
+Narrator: He moved on as he spoke, and the Dormouse followed him: the March Hare moved into the Dormouse’s place, and Alice rather unwillingly took the place of the March Hare. The Hatter was the only one who got any advantage from the change: and Alice was a good deal worse off than before, as the March Hare had just upset the milk-jug into his plate.
+
+Narrator: Alice did not wish to offend the Dormouse again, so she began very cautiously:
+Alice: But I don’t understand. Where did they draw the treacle from?
+
+Hatter: You can draw water out of a water-well,
+Narrator: said the Hatter;
+Hatter: so I should think you could draw treacle out of a treacle-well—eh, stupid?
+
+Alice: But they were _in_ the well,
+Narrator: Alice said to the Dormouse, not choosing to notice this last remark.
+
+Dormouse: Of course they were,
+Narrator: said the Dormouse;
+Dormouse: —well in.
+
+Narrator: This answer so confused poor Alice, that she let the Dormouse go on for some time without interrupting it.
+
+Dormouse: They were learning to draw,
+Narrator: the Dormouse went on, yawning and rubbing its eyes, for it was getting very sleepy;
+Dormouse: and they drew all manner of things—everything that begins with an M—
+
+Alice: Why with an M?
+Narrator: said Alice.
+
+Hare: Why not?
+Narrator: said the March Hare.
+
+Narrator: Alice was silent.
+
+Narrator: The Dormouse had closed its eyes by this time, and was going off into a doze; but, on being pinched by the Hatter, it woke up again with a little shriek, and went on:
+Dormouse: —that begins with an M, such as mouse-traps, and the moon, and memory, and muchness—you know you say things are “much of a muchness”—did you ever see such a thing as a drawing of a muchness?
+
+Alice: Really, now you ask me,
+Narrator: said Alice, very much confused,
+Alice: I don’t think—
+
+Hatter: Then you shouldn’t talk,
+Narrator: said the Hatter.
+
+Narrator: This piece of rudeness was more than Alice could bear: she got up in great disgust, and walked off; the Dormouse fell asleep instantly, and neither of the others took the least notice of her going, though she looked back once or twice, half hoping that they would call after her: the last time she saw them, they were trying to put the Dormouse into the teapot.
+
+Alice: At any rate I’ll never go _there_ again!
+Narrator: said Alice as she picked her way through the wood.
+Alice: It’s the stupidest tea-party I ever was at in all my life!
+
+Narrator: Just as she said this, she noticed that one of the trees had a door leading right into it.
+Alice: That’s very curious!
+Narrator: she thought.
+Alice: But everything’s curious today. I think I may as well go in at once.
+Narrator: And in she went.
+
+Narrator: Once more she found herself in the long hall, and close to the little glass table.
+Alice: Now, I’ll manage better this time,
+Narrator: she said to herself, and began by taking the little golden key, and unlocking the door that led into the garden. Then she went to work nibbling at the mushroom (she had kept a piece of it in her pocket) till she was about a foot high: then she walked down the little passage: and _then_—she found herself at last in the beautiful garden, among the bright flower-beds and the cool fountains.

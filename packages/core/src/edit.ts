@@ -6,6 +6,7 @@
 import { baseSpeaker } from "./groups";
 import type { Block, Group, Item, Line, Speech, Story } from "./model";
 import { nameKey } from "./names";
+import { parse } from "./parse";
 import type { Range } from "./source";
 import { readYaml } from "./yaml";
 
@@ -129,8 +130,27 @@ function markText(speaker: string, direction: string | null): string {
 /**
  * Gives a stretch of speech or narration to another character (§13.4). The name is written as
  * the cast spells it. Later quotes on the line that carried the speech on keep their speaker.
+ * Like every edit here, it changes only what it says it does: where that can't be done without
+ * changing other words or voices, it returns no changes.
  */
 export function setSpeaker(story: Story, speech: Speech, name: string): TextChange[] {
+  const changes = keepSpeakers(story, speech, speakerChanges(story, speech, name));
+  const key = nameKey(name);
+  // The stretch may split: given to a character, narration that opens with a quote keeps the
+  // rest of its words. So each of its words goes to the new speaker or stays, and one at least goes.
+  return confirmed(
+    story,
+    speech,
+    changes,
+    (before, after, inTarget) =>
+      inTarget
+        ? nameKey(after.speaker) === key || after.speaker === before.speaker
+        : after.speaker === before.speaker && after.direction === before.direction,
+    (after) => after.some((voice) => voice.inTarget && nameKey(voice.speaker) === key),
+  );
+}
+
+function speakerChanges(story: Story, speech: Speech, name: string): TextChange[] {
   checkName(name);
   const speaker = spelled(story, name);
   if (nameKey(speaker) === nameKey(speech.speaker)) return [];
@@ -160,14 +180,55 @@ export function setSpeaker(story: Story, speech: Speech, name: string): TextChan
       changes.push({ ...mark.nameRange, insert: speaker });
     }
   } else if (own) {
-    // `@(quieter) “Oh dear.”` becomes `@Gerald (quieter) “Oh dear.”`.
-    changes.push({ ...own, insert: markText(speaker, speech.ownDirection) });
+    // `@(quieter) “Oh dear.”` becomes `@Gerald (quieter) “Oh dear.”`; `@()Well` becomes `@Gerald Well`.
+    const spaced =
+      speech.ownDirection === null && !/^\s/.test(story.source.slice(own.to, own.to + 1));
+    changes.push({
+      ...own,
+      insert: `${markText(speaker, speech.ownDirection)}${spaced ? " " : ""}`,
+    });
   } else {
     const at = speech.openQuote?.from ?? speech.textRange.from;
     changes.push({ from: at, to: at, insert: `@${speaker} ` });
   }
+  // Words that open with `(` would read as the new mark's direction: `@Gerald \(sighs)`.
+  if (!speech.quoted && story.source[speech.textRange.from] === "(") {
+    const at = speech.textRange.from;
+    changes.push({ from: at, to: at, insert: "\\" });
+  }
   carriedOn(line, speech).forEach(keep);
-  return changes;
+  return changes.sort((a, b) => a.from - b.from || a.to - b.to);
+}
+
+/**
+ * Words without quotes after a mark are the character's to the end of the line, so a mark given
+ * to one stretch can take the stretches after it on its line. This gives each of them back its
+ * speaker, with a mark of its own (`@Narrator` for narration), so the edit changes only the
+ * stretch it was for.
+ */
+function keepSpeakers(story: Story, target: Speech, changes: TextChange[]): TextChange[] {
+  if (changes.length === 0) return changes;
+  const { line } = place(story, target);
+  const index = allLines(story).indexOf(line);
+  const worded = (of: Line) => speechesOf(of).filter((other) => /[\p{L}\p{N}]/u.test(other.text));
+  const before = worded(line);
+  const later = before.filter((other) => other.range.from > target.range.from);
+  const result = [...changes];
+  for (let round = 0; round <= later.length; round++) {
+    const edited = allLines(parse(applyChanges(story.source, result)))[index];
+    if (!edited) return result;
+    const now = worded(edited);
+    if (now.length !== before.length) return result;
+    const taken = later.find((other) => now[before.indexOf(other)]?.speaker !== other.speaker);
+    if (!taken) break;
+    const at = taken.openQuote?.from ?? taken.textRange.from;
+    result.push({ from: at, to: at, insert: `${markText(taken.speaker, taken.ownDirection)} ` });
+    if (!taken.quoted && story.source[taken.textRange.from] === "(") {
+      result.push({ from: taken.textRange.from, to: taken.textRange.from, insert: "\\" });
+    }
+    result.sort((a, b) => a.from - b.from || a.to - b.to);
+  }
+  return result;
 }
 
 /**
@@ -175,6 +236,71 @@ export function setSpeaker(story: Story, speech: Speech, name: string): TextChan
  * direction a group gives can't be removed this way; give the stretch another one instead.
  */
 export function setDirection(story: Story, speech: Speech, direction: string | null): TextChange[] {
+  const changes = keepTheRest(story, speech, directionChanges(story, speech, direction));
+  const value = direction?.trim() || null;
+  return confirmed(story, speech, changes, (before, after, inTarget) =>
+    inTarget
+      ? after.speaker === before.speaker && (value === null || after.direction === value)
+      : after.speaker === before.speaker && after.direction === before.direction,
+  );
+}
+
+/** Quotation marks don't count as words: a quote can become a speech's own and still be heard. */
+const QUOTATION_MARKS = /["'“”‘’„‚«»‹›]/g;
+
+type Voice = { speaker: string; direction: string | null; inTarget: boolean };
+
+/**
+ * Who says each character of the story's words, in order: quotation marks and spaces left out,
+ * so a stretch that splits or a quote that changes hands still lines up.
+ */
+function voiceTrack(story: Story, target?: Speech): { words: string; voices: Voice[] } {
+  let words = "";
+  const voices: Voice[] = [];
+  for (const line of allLines(story)) {
+    for (const speech of speechesOf(line)) {
+      const text = speech.text.replace(QUOTATION_MARKS, "").replace(/\s+/g, "");
+      words += text;
+      for (let i = 0; i < text.length; i++) {
+        voices.push({
+          speaker: speech.speaker,
+          direction: speech.direction,
+          inTarget: speech === target,
+        });
+      }
+    }
+  }
+  return { words, voices };
+}
+
+/**
+ * The changes, if after them the story has the same words in the same order, and `kept` holds
+ * for each of them (`inTarget` for those of the edited stretch), and `whole` for the result; else
+ * none, so a tool never gets text that says something else than it asked for.
+ */
+function confirmed(
+  story: Story,
+  target: Speech,
+  changes: TextChange[],
+  kept: (before: Voice, after: Voice, inTarget: boolean) => boolean,
+  whole: (after: Voice[]) => boolean = () => true,
+): TextChange[] {
+  if (changes.length === 0) return changes;
+  const before = voiceTrack(story, target);
+  const after = voiceTrack(parse(applyChanges(story.source, changes)));
+  if (after.words !== before.words) return [];
+  const marked = after.voices.map((voice, index) => ({
+    ...voice,
+    inTarget: before.voices[index]?.inTarget ?? false,
+  }));
+  for (const [index, voice] of before.voices.entries()) {
+    if (!kept(voice, marked[index] as Voice, voice.inTarget)) return [];
+  }
+  return whole(marked) ? changes : [];
+}
+
+/** The changes for a new direction, before the stretches after it are kept as they were. */
+function directionChanges(story: Story, speech: Speech, direction: string | null): TextChange[] {
   const value = direction?.trim() || null;
   if (value === speech.ownDirection) return [];
   const { line, groups } = place(story, speech);
@@ -220,6 +346,45 @@ export function setDirection(story: Story, speech: Speech, direction: string | n
     return [{ from: at, to: at, insert: "@() " }];
   }
   return [];
+}
+
+/**
+ * A direction reaches the stretches after it on its line that have none of their own: narration up
+ * to the next speech, and quotes a mark carries on. So an edit to one stretch's direction can
+ * change theirs. This gives each of them back the direction it had, with a `@(…)` or `@()` of its
+ * own, so the edit changes only the stretch it was for.
+ */
+function keepTheRest(story: Story, target: Speech, changes: TextChange[]): TextChange[] {
+  if (changes.length === 0) return changes;
+  const { line } = place(story, target);
+  const index = allLines(story).indexOf(line);
+  // Stretches are matched by order; those without words (a stray space) are left out of it.
+  const worded = (of: Line) => speechesOf(of).filter((other) => /[\p{L}\p{N}]/u.test(other.text));
+  const before = worded(line);
+  const later = before.filter((other) => other.range.from > target.range.from);
+  const result = [...changes];
+  // Each `@(…)` given back also keeps the stretches after it, so one per stretch is the most.
+  for (let round = 0; round <= later.length; round++) {
+    const edited = allLines(parse(applyChanges(story.source, result)))[index];
+    if (!edited) return result;
+    const now = worded(edited);
+    if (now.length !== before.length) return result;
+    const changed = later.find(
+      (other) => now[before.indexOf(other)]?.direction !== other.direction,
+    );
+    if (!changed) break;
+    const at = changed.openQuote?.from ?? changed.textRange.from;
+    const own = changed.ownDirection;
+    result.push({ from: at, to: at, insert: own ? `@(${directionText(own)}) ` : "@() " });
+    result.sort((a, b) => a.from - b.from || a.to - b.to);
+  }
+  return result;
+}
+
+function allLines(story: Story): Line[] {
+  return story.blocks.flatMap((block) =>
+    block.kind === "break" ? [] : block.kind === "heading" ? [block.line] : block.lines,
+  );
 }
 
 /** The direction a stretch of a mark's speech would have without its `@(…)`: the one before. */

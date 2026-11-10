@@ -4,7 +4,17 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
-Nothing yet.
+**voxdown**
+- Every edit does exactly what it says, or returns no changes: `setSpeaker` and `setDirection` check the result, and no other word is ever said by someone else or in another way.
+- `setDirection` no longer changes the stretches after it on its line that took their direction from the same mark: they keep theirs, with `@()` or `@(…)`.
+- `setSpeaker` no longer gives the rest of the line to the new speaker: narration after the stretch keeps its voice (`@Narrator`). Words that open with `(` are escaped, so they don't become a direction, and a name that replaces `@()` keeps a space after it.
+- `format` never changes who says what, and settles after one run: a file without front matter can't gain some, and stray carriage returns and byte order marks at a line's edge are tidied.
+
+**Tests**
+- Fuzz tests (fast-check) for the parser, writer, formatter, edits, Fountain import, views and editor, on stories made at random from the format's own pieces.
+- Real books (`corpus/`): a chapter of *Alice* and part of *A Scandal in Bohemia*, marked up by hand, checked as heard, written back, formatted and edited on every stretch, and timed at 100,000 words.
+
+**Spec**: three questions for after 1.0 that the books raised (§17): speaking together, speech across paragraphs, and quotes of the same kind inside a quote.
 
 ## The VS Code extension 1.0.0 and the playground (10 November 2026)
 

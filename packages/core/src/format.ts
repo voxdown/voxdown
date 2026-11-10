@@ -35,7 +35,19 @@ export function format(source: string, options: FormatOptions = {}): string {
     // what would change.
     if (sameVoices(lines(before), lines(parse(curly)))) text = curly;
   }
-  if (options.spacing !== false) text = spacing(text);
+  if (options.spacing !== false) {
+    // Tidying spaces never changes who says what: where it would (a stray mark at a line's edge
+    // that turns text into a scene break, say), the spacing is left as it was.
+    // Tidying can turn a line into a heading or a scene break, which then wants blank lines of
+    // its own: tidy again until nothing changes, so formatting a formatted file changes nothing.
+    let spaced = spacing(text);
+    for (let round = 0; round < 4; round++) {
+      const again = spacing(spaced);
+      if (again === spaced) break;
+      spaced = again;
+    }
+    if (sameVoices(lines(parse(text)), lines(parse(spaced)))) text = spaced;
+  }
   return text;
 }
 
@@ -83,7 +95,8 @@ function spacing(source: string): string {
   for (let index = firstBody; index < text.lines.length; index++) {
     const line = text.lines[index] as (typeof text.lines)[number];
     const raw = source.slice(index === 0 ? bom.length : line.from, line.to);
-    const tidy = raw.replace(/^[ \t]+|[ \t]+$/g, "").replace(/[ \t]{2,}|\t/g, " ");
+    // A stray carriage return or byte order mark at a line's edge is spacing too.
+    const tidy = raw.replace(/^[ \t\r\uFEFF]+|[ \t\r\uFEFF]+$/g, "").replace(/[ \t]{2,}|\t/g, " ");
     if (tidy === "") {
       if (!ended()) out.push("");
     } else if (structural.has(index)) {
@@ -94,6 +107,9 @@ function spacing(source: string): string {
     }
   }
   while (out.length > 0 && out[out.length - 1] === "") out.pop();
+  // A file without front matter must not start with `---` once tidied, or it would have some:
+  // it keeps a blank line before it.
+  if (!front && /^-{3,}$/.test(out[0] ?? "")) out.unshift("");
   return out.length === 0 ? bom : `${bom}${out.join(eol)}${eol}`;
 }
 

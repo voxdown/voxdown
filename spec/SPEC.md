@@ -1633,7 +1633,9 @@ A file without a `voxdown` key is read by the latest version the reader knows.
 Questions for later versions. None of them changes a 1.0 file.
 
 - **Dialogue with dashes.** Spanish, French and other languages often mark speech with dashes instead of quotes. A rule for where a dash speech ends.
-- **Speaking together.** A chorus line said by two characters at once: perhaps `@Wanda @Marmalade “Fine.”`.
+- **Speaking together.** A chorus line said by two characters at once, as in “they both cried”: perhaps `@Wanda @Marmalade “Fine.”`.
+- **Speech across paragraphs.** In novels, a long speech runs over several paragraphs: each opens with a quotation mark and only the last one closes. Today each paragraph needs its own mark, and its unclosed quote warns.
+- **Quotes of the same kind inside a quote.** `“…things are “much of a muchness”—did you…”` closes at the inner mark (§5.5), so today the inner quote is escaped: `\“much of a muchness\”`.
 - **Pronunciation.** A front matter list of how to say names and invented words.
 - **Language changes.** A way to mark a phrase in another language.
 - **Sound timing.** Lengths, overlaps and background sounds that run under the words, if they belong in the story file at all.

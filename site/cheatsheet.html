@@ -6,21 +6,24 @@
 <title>VoxDown cheat sheet</title>
 <meta name="description" content="Every VoxDown mark on one page.">
 <link rel="icon" href="./icon.svg">
+<script>try{var t=localStorage.getItem("vxd-theme");if(t==="light"||t==="dark")document.documentElement.dataset.vxdTheme=t}catch(e){}</script>
 <link rel="stylesheet" href="./src/docs.css">
 </head>
 <body class="doc">
 <header class="masthead">
-  <a class="wordmark" href="./"><span class="at">@</span>VoxDown</a>
+  <a class="wordmark" href="./"><img class="logo" src="./icon.svg" alt="" width="30" height="30">VoxDown</a>
   <nav aria-label="Site">
     <a href="./">Playground</a>
     <a href="./spec.html">Spec</a>
     <a href="./cheatsheet.html" aria-current="page">Cheat sheet</a>
     <a href="https://github.com/voxdown/voxdown">Source</a>
+    <button class="theme-switch" type="button" id="theme" hidden>Auto</button>
   </nav>
 </header>
 <main class="sheet-doc">
 <!--markdown:../spec/CHEATSHEET.md-->
 </main>
 <footer class="colophon">The spec is under CC BY 4.0. Corrections are welcome as issues or pull requests.</footer>
+<script type="module" src="./src/theme.ts"></script>
 </body>
 </html>

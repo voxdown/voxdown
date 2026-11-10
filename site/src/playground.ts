@@ -24,6 +24,7 @@ import {
 } from "voxdown";
 import { examples } from "./examples";
 import "./style.css";
+import "./theme";
 
 type Tab = "script" | "book" | "lines" | "csv" | "sides";
 const TABS: readonly Tab[] = ["script", "book", "lines", "csv", "sides"];
@@ -268,6 +269,25 @@ $<HTMLButtonElement>("#format").addEventListener("click", () => {
   }
   view.dispatch({ changes: { from: start, to: endBefore, insert: after.slice(start, endAfter) } });
 });
+
+// The strip of marks above the editor: each puts its mark where the cursor is, its placeholder selected.
+for (const button of document.querySelectorAll<HTMLButtonElement>(".mk")) {
+  button.addEventListener("click", () => {
+    const insert = button.dataset.insert ?? "";
+    const placeholder = button.dataset.select;
+    const { from, to } = view.state.selection.main;
+    const at = placeholder ? insert.indexOf(placeholder) : -1;
+    view.dispatch({
+      changes: { from, to, insert },
+      selection:
+        placeholder && at >= 0
+          ? EditorSelection.range(from + at, from + at + placeholder.length)
+          : EditorSelection.cursor(from + insert.length),
+      scrollIntoView: true,
+    });
+    view.focus();
+  });
+}
 
 $<HTMLInputElement>("#show-marks").addEventListener("change", (event) => {
   view.dispatch({ effects: setShowMarks.of((event.target as HTMLInputElement).checked) });

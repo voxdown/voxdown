@@ -6,15 +6,17 @@
 <title>VoxDown playground</title>
 <meta name="description" content="Write a story with VoxDown marks and see the script, the book and the lines it becomes. Runs in your browser.">
 <link rel="icon" href="./icon.svg">
+<script>try{var t=localStorage.getItem("vxd-theme");if(t==="light"||t==="dark")document.documentElement.dataset.vxdTheme=t}catch(e){}</script>
 </head>
 <body>
 <header class="masthead">
-  <a class="wordmark" href="./"><span class="at">@</span>VoxDown</a>
+  <a class="wordmark" href="./"><img class="logo" src="./icon.svg" alt="" width="30" height="30">VoxDown</a>
   <p class="tagline">Markdown for stories read aloud.</p>
   <nav aria-label="Site">
     <a href="./spec.html">Spec</a>
     <a href="./cheatsheet.html">Cheat sheet</a>
     <a href="https://github.com/voxdown/voxdown">Source</a>
+    <button class="theme-switch" type="button" id="theme" hidden>Auto</button>
   </nav>
 </header>
 <section class="shelf" aria-labelledby="shelf-title">
@@ -31,6 +33,15 @@
       <button class="button quiet" type="button" id="open-file">Open…</button>
       <input type="file" id="file-input" accept=".vxd,.md,.txt,.fountain" hidden>
     </header>
+    <div class="marks-key" role="toolbar" aria-label="Insert a mark">
+      <span class="marks-key-label">Insert</span>
+      <button class="mk mk-name" type="button" data-insert="@Name " data-select="Name" title="Who says the line: @Name “…”">@Name</button>
+      <button class="mk mk-direction" type="button" data-insert="(how) " data-select="how" title="How it is said, after a name: @Name (whispering) “…”">(how)</button>
+      <button class="mk mk-sound" type="button" data-insert="[sound]" data-select="sound" title="A sound the listener hears">[sound]</button>
+      <button class="mk mk-page" type="button" data-insert="{page}" title="A page turn">{page}</button>
+      <button class="mk mk-note" type="button" data-insert="%% note %%" data-select="note" title="A note for the performer, never read aloud">%% note %%</button>
+      <a class="mk-all" href="./cheatsheet.html">All marks</a>
+    </div>
     <div class="editor" id="editor"></div>
     <details class="warnings-box" id="warnings-box" hidden>
       <summary>What the parser noticed</summary>

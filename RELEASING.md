@@ -36,10 +36,10 @@ How a release is made. Every step that publishes something is done by a maintain
 ```sh
 pnpm --filter voxdown-vscode package                    # writes voxdown-<version>.vsix
 pnpm --filter voxdown-vscode exec vsce publish --packagePath voxdown-<version>.vsix
-pnpm --filter voxdown-vscode exec ovsx publish voxdown-<version>.vsix -p "$OVSX_TOKEN"   # Open VSX, for VSCodium and others
+npx ovsx publish packages/vscode/voxdown-<version>.vsix -p "$OVSX_TOKEN"   # Open VSX, for VSCodium, Cursor and others
 ```
 
-`vsce publish` asks for the `voxdown` publisher’s Azure DevOps token (`vsce login voxdown` stores it).
+`vsce publish` asks for the `voxdown` publisher’s Azure DevOps token (`vsce login voxdown` stores it), or signs in with a Microsoft account through the Azure CLI with `--azure-credential`.
 
 ## The spec
 

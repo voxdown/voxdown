@@ -17,6 +17,7 @@
     "directory": "packages/vscode"
   },
   "homepage": "https://voxdown.github.io/",
+  "galleryBanner": { "color": "#245f61", "theme": "dark" },
   "bugs": "https://github.com/voxdown/voxdown/issues",
   "engines": {
     "vscode": "^1.90.0"

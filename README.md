@@ -6,6 +6,8 @@
 
 VoxDown is a plain-text format for stories that are performed: by a narrator, a cast, or a speech engine. A file is a Markdown story with light marks in it: who says each line, how they say it, the sounds a listener hears, where the pages turn, and notes for the performer. Take the marks out and you have the printed book. Leave them in and you have the script.
 
+[![In the playground, a line typed with VoxDown marks becomes a script, a book and the lines a listener hears.](assets/demo.gif)](https://voxdown.github.io/)
+
 ```
 ## The cave {hidden}
 

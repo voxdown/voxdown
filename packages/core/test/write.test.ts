@@ -18,6 +18,7 @@ import {
   spokenScript,
   write,
 } from "../src/index";
+import { diffChanges } from "../src/write";
 import { root } from "./examples";
 
 function speeches(story: Story): Speech[] {
@@ -519,16 +520,31 @@ describe("what fuzzing, real books and review found", () => {
     expect(performance.now() - start).toBeLessThan(2000);
   });
 
-  it("takes out a mark a direction made spare, in a speech over paragraphs", () => {
+  it("edits a speech over paragraphs as one, by its mark, with no new warnings (§5.7)", () => {
     const source =
       "@Tom “Maud! Are you up there?\n\n“I’ve rowed out twice.\n\n“Will you come down?”";
-    const text = direction(source, "I’ve rowed out twice.", "loudly");
-    expect(text).toBe(
-      "@Tom “Maud! Are you up there?\n\n@Tom (loudly) “I’ve rowed out twice.\n\n@Tom “Will you come down?”",
+    const loud = direction(source, "I’ve rowed out twice.", "loudly");
+    expect(loud).toBe(
+      "@Tom (loudly) “Maud! Are you up there?\n\n“I’ve rowed out twice.\n\n“Will you come down?”",
     );
-    expect(spokenScript(parse(text))).toBe(
-      "Tom: Maud! Are you up there?\n\nTom (loudly): I’ve rowed out twice.\n\nTom: Will you come down?",
+    expect(spokenScript(parse(loud))).toBe(
+      "Tom (loudly): Maud! Are you up there?\n\nTom (loudly): I’ve rowed out twice.\n\nTom (loudly): Will you come down?",
     );
+    const given = speaker(source, "Will you come down?", "Wanda");
+    expect(given).toBe(
+      "@Wanda “Maud! Are you up there?\n\n“I’ve rowed out twice.\n\n“Will you come down?”",
+    );
+    expect(parse(loud).warnings).toEqual([]);
+    expect(parse(given).warnings).toEqual([]);
+    // A paragraph's own direction carries into the next (§5.7). Without it, the next paragraph
+    // keeps its direction with a `@(…)` just inside its opening mark, so it still carries on.
+    const own = "@Tom “Maud!\n\n“@(angrily)I’ve rowed out twice.\n\n“Will you come down?”";
+    const calmer = direction(own, "I’ve rowed out twice.", null);
+    expect(calmer).toBe("@Tom “Maud!\n\n“I’ve rowed out twice.\n\n“@(angrily)Will you come down?”");
+    expect(spokenScript(parse(calmer))).toBe(
+      "Tom: Maud!\n\nTom: I’ve rowed out twice.\n\nTom (angrily): Will you come down?",
+    );
+    expect(parse(calmer).warnings).toEqual([]);
   });
 
   it("refuses a line that would change who says the rest", () => {
@@ -555,6 +571,91 @@ describe("what fuzzing, real books and review found", () => {
     expect(applyChanges(cast.source, setFullName(cast, "Gerald", "Sir G"))).toBe(
       "---\ncast:\n  Gerald: Sir G # hero\n---\nHi.",
     );
+  });
+});
+
+describe("review, round three", () => {
+  const giveFirst = (source: string, name: string) => {
+    const story = parse(source);
+    const first = speeches(story).find((speech) => /[\p{L}\p{N}]/u.test(speech.text)) as Speech;
+    return applyChanges(source, setSpeaker(story, first, name));
+  };
+
+  it("gives narration's first quote, from the stretch's start, as the parser reads its quotes", () => {
+    expect(giveFirst("“I do,” Alice hastily replied; “at least I mean what I say.”", "Alice")).toBe(
+      "@Alice “I do,” Alice hastily replied; “at least I mean what I say.”",
+    );
+    // A quote inside the quote, and plural possessives, don't end it.
+    expect(giveFirst("“It’s the boys’ room, isn’t it, ‘no’.”", "Maud")).toBe(
+      "@Maud “It’s the boys’ room, isn’t it, ‘no’.”",
+    );
+    expect(
+      spokenScript(parse(giveFirst(`"Rock 'n' roll never dies, 'never'," whispered Zoë.`, "Maud"))),
+    ).toBe("Maud: Rock 'n' roll never dies, 'never',\nNarrator: whispered Zoë.");
+  });
+
+  it("gives a group character's words whole, the quote they hold too (§7.2)", () => {
+    const text = giveFirst(
+      "::: @Gerald\nThey charge, shouting, ‘PREPARE TO MEET THY DOOM!’\n:::",
+      "Wanda",
+    );
+    expect(text).toBe(
+      "::: @Gerald\n@Wanda They charge, shouting, @Wanda ‘PREPARE TO MEET THY DOOM!’\n:::",
+    );
+    expect(spokenScript(parse(text))).toBe(
+      "Wanda: They charge, shouting,\nWanda: PREPARE TO MEET THY DOOM!",
+    );
+  });
+
+  it("gives an unmarked speech over paragraphs whole, and a sound made inside a quote with it", () => {
+    const speech =
+      "{page}\n\n“Maud! Are you up there?\n\n“I’ve rowed out twice.\n\n“Will you come down?”\n\nShe sighed.";
+    const text = giveFirst(speech, "Tom");
+    expect(text).toBe(speech.replace("“Maud!", "@Tom “Maud!"));
+    expect(spokenScript(parse(text))).toBe(
+      "{page}\n\nTom: Maud! Are you up there?\n\nTom: I’ve rowed out twice.\n\nTom: Will you come down?\n\nNarrator: She sighed.",
+    );
+    expect(parse(text).warnings).toEqual([]);
+    const sound = giveFirst(
+      "“It’s how I sing it. @[clears throat] Besides, nobody remembers.”",
+      "Gull",
+    );
+    expect(spokenScript(parse(sound))).toBe(
+      "Gull: It’s how I sing it.\nGull [clears throat]\nGull: Besides, nobody remembers.",
+    );
+  });
+
+  it("adds a book detail at the indentation the front matter has, and reads it back", () => {
+    const story = parse("---\n  author: Me\n---\nHello.");
+    expect(applyChanges(story.source, setMeta(story, "title", "New"))).toBe(
+      "---\n  author: Me\n  title: New\n---\nHello.",
+    );
+  });
+
+  it("makes `cast: null` a cast, and refuses a cast that is a list", () => {
+    const empty = parse("---\ncast: null\n---\nHello.");
+    expect(applyChanges(empty.source, setFullName(empty, "Bob", "Robert"))).toBe(
+      "---\ncast:\n  Bob: Robert\n---\nHello.",
+    );
+    expect(setFullName(parse("---\ncast: [Gerald, Wanda]\n---\nHello."), "Bob", "Robert")).toEqual(
+      [],
+    );
+    expect(setFullName(parse("---\ncast:\n  - Gerald\n---\nHello."), "Bob", "Robert")).toEqual([]);
+  });
+
+  it("writes back changes to a long story with a line added, quickly and line by line", () => {
+    const base = Array.from(
+      { length: 30_000 },
+      (_, at) => `@Alice “Line ${at},” she said.\n\n`,
+    ).join("");
+    const after = base
+      .replace(/@Alice/g, "@Alicia")
+      .replace("Line 15000,", "Line 15000,\nAnother line,");
+    const start = performance.now();
+    const changes = diffChanges(base, after);
+    expect(performance.now() - start).toBeLessThan(2000);
+    expect(applyChanges(base, changes)).toBe(after);
+    expect(changes.length).toBeGreaterThan(29_000);
   });
 });
 

@@ -53,7 +53,7 @@ Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) tha
 
 | Edit | What it does (SPEC.md §13) |
 | --- | --- |
-| `setSpeaker(story, speech, name)` | Gives a stretch, or the whole quote it is part of, to another character. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. |
+| `setSpeaker(story, speech, name)` | Gives a stretch, or the whole quote it is part of (over lines and paragraphs), to another character; narration that holds quotes gives its first quote. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. |
 | `setDirection(story, speech, direction \| null)` | Adds, replaces or removes a stretch’s own direction, where §13 says to write it: to the quote's end, or to a direction of its own inside it. |
 | `renameCharacter(story, from, to)` | Renames a short name in the cast, the `narrator:` key and every mark. |
 | `setFullName(story, handle, name)` | Sets a character’s full name in the cast, adding the cast or the character if needed. |

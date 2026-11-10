@@ -59,6 +59,22 @@ describe("the book view", () => {
     );
   });
 
+  it("pairs emphasis as Markdown does, nested and in runs", () => {
+    const html = (text: string) =>
+      renderBook(parse(text), { header: false })
+        .match(/<p[^>]*>(.*)<\/p>/s)?.[1]
+        ?.trim();
+    expect(html("*very **quiet** indeed*")).toContain(
+      "<em>very <strong>quiet</strong> indeed</em>",
+    );
+    expect(html("***Hello***")).toContain("<em><strong>Hello</strong></em>");
+    expect(html("**bold *and em* here**")).toContain("<strong>bold <em>and em</em> here</strong>");
+    expect(html("*foo**bar**baz*")).toContain("<em>foo<strong>bar</strong>baz</em>");
+    // Not emphasis: signs with spaces inside, and underscores inside a word.
+    expect(html("* a * and snake_case_word")).toContain("* a * and snake_case_word");
+    expect(html("**a*")).toContain("*<em>a</em>");
+  });
+
   it("reads a link's or an image's address to its balancing parenthesis, as the parser does", () => {
     const link = "See [the bat](https://en.wikipedia.org/wiki/Bat_(animal)) here.";
     const image = "![A bat (flying)](bat_(1).png) here.";
@@ -74,7 +90,7 @@ describe("the book view", () => {
 
   it("renders lines built to be slow in good time", () => {
     // Each opening mark once searched the rest of its line for its closing one.
-    for (const piece of ["*a ", "_a ", "**a ", "[", "![", "[x](", "("]) {
+    for (const piece of ["*a ", "_a ", "**a ", "a* ", "*a **b ", "***a ", "[", "![", "[x](", "("]) {
       const story = parse(piece.repeat(Math.ceil(60_000 / piece.length)));
       const start = performance.now();
       renderBook(story);

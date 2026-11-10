@@ -154,6 +154,9 @@ class YamlReader {
     }
     let length = stripComment(value).length;
     if (value.startsWith('"') || value.startsWith("'")) length = parseQuoted(value)?.end ?? length;
+    // No value, perhaps a comment: it is written just after the colon, and the comment keeps its
+    // space.
+    if (length === 0) return { from, to: from, text: { from, to: from } };
     return {
       from,
       to: from + lead + length,
@@ -251,25 +254,41 @@ class YamlReader {
   private continuePlain(value: string, indent: number): string {
     let joined = value;
     for (;;) {
-      const next = this.peek();
+      // Empty lines inside a plain scalar are line breaks (YAML folding): look past them.
+      let ahead = this.index;
+      while (this.lines[ahead]?.text === "") ahead++;
+      const next = this.lines[ahead];
       if (!next || isBlank(next) || next.indent <= indent || readKey(next)) return joined;
-      joined += ` ${stripComment(next.text)}`;
-      this.lastContent = this.index;
-      this.index++;
+      const empty = ahead - this.index;
+      joined += `${empty > 0 ? "\n".repeat(empty) : " "}${stripComment(next.text)}`;
+      this.lastContent = ahead;
+      this.index = ahead + 1;
     }
   }
 
   private readQuoted(value: string, line: YamlLine, indent: number): unknown {
-    let text = value;
-    let quoted = parseQuoted(text);
-    while (!quoted) {
+    // Each line is scanned once for the closing quote, and the lines joined once at the end, so
+    // a long value reads in linear time.
+    const quote = value[0] as string;
+    const pieces = [value];
+    let scan = scanPiece(value, 1, quote);
+    let before = 0;
+    while (!("end" in scan)) {
       const next = this.peek();
       if (!next || (!isBlank(next) && next.indent <= indent)) break;
-      text += `\n${next.text}`;
+      before += (pieces[pieces.length - 1] as string).length + 1;
+      pieces.push(next.text);
       if (next.text !== "") this.lastContent = this.index;
       this.index++;
-      quoted = parseQuoted(text);
+      scan = scanPiece(next.text, 0, quote);
     }
+    const text = pieces.join("\n");
+    const quoted =
+      "end" in scan
+        ? decodeQuoted(text, before + scan.end, () =>
+            this.problem("This escape is not a character, so it is kept as written.", line),
+          )
+        : null;
     if (!quoted) {
       this.problem("This quoted value is never closed.", line);
       return value;
@@ -317,7 +336,7 @@ class YamlReader {
   }
 
   private readFlowList(value: string, line: YamlLine): unknown {
-    const body = stripComment(value);
+    const body = stripFlowComment(value);
     if (!body.endsWith("]")) {
       this.problem("A list in brackets must close on the same line.", line);
       return body;
@@ -328,7 +347,12 @@ class YamlReader {
       return body;
     }
     return items.map((item) => {
-      const quoted = item.startsWith('"') || item.startsWith("'") ? parseQuoted(item) : null;
+      const quoted =
+        item.startsWith('"') || item.startsWith("'")
+          ? parseQuoted(item, () =>
+              this.problem("This escape is not a character, so it is kept as written.", line),
+            )
+          : null;
       return quoted ? quoted.value : plainScalar(item);
     });
   }
@@ -388,6 +412,23 @@ function endsToken(text: string, index: number): boolean {
   return index >= text.length || text[index] === " " || text[index] === "\t";
 }
 
+/** In a list in brackets, a comment starts at a `#` after white space outside quotes. */
+function stripFlowComment(text: string): string {
+  let quote: string | null = null;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quote) {
+      if (char === "\\" && quote === '"') i++;
+      else if (char === quote) quote = null;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === "#" && (i === 0 || /[ \t]/.test(text[i - 1] ?? ""))) {
+      return text.slice(0, i).trim();
+    }
+  }
+  return text.trim();
+}
+
 /** A comment starts with `#` at the start or after white space. */
 function stripComment(text: string): string {
   if (text.startsWith("#")) return "";
@@ -409,26 +450,48 @@ function plainScalar(text: string): unknown {
  * A quoted scalar at the start of `text`, which may run over line breaks. Returns its value and
  * the index just after its closing quote, or null when it doesn't close.
  */
-function parseQuoted(text: string): { value: string; end: number } | null {
-  const quote = text[0];
-  for (let i = 1; i < text.length; i++) {
-    const char = text[i];
+function parseQuoted(text: string, bad?: () => void): { value: string; end: number } | null {
+  const scan = scanQuoted(text, 1);
+  return "end" in scan ? decodeQuoted(text, scan.end, bad) : null;
+}
+
+/**
+ * Looks for the closing quote of the scalar that opens `text`: the index after it, or null when
+ * it doesn't close.
+ */
+function scanQuoted(text: string, from: number): { end: number } | { open: true } {
+  return scanPiece(text, from, text[0] as string);
+}
+
+/**
+ * Looks for a closing `quote` in one line of a quoted scalar, from `from` on. A backslash at the
+ * end of a line escapes the line break, so the next line starts afresh.
+ */
+function scanPiece(piece: string, from: number, quote: string): { end: number } | { open: true } {
+  for (let i = from; i < piece.length; i++) {
+    const char = piece[i];
     if (quote === '"' && char === "\\") {
       i++;
       continue;
     }
     if (char !== quote) continue;
-    if (quote === "'" && text[i + 1] === "'") {
+    if (quote === "'" && piece[i + 1] === "'") {
       i++;
       continue;
     }
-    const inner = foldLines(text.slice(1, i));
-    return {
-      value: quote === '"' ? unescapeDouble(inner) : inner.replaceAll("''", "'"),
-      end: i + 1,
-    };
+    return { end: i + 1 };
   }
-  return null;
+  return { open: true };
+}
+
+/** The value of the quoted scalar that opens `text` and closes just before `end`. */
+function decodeQuoted(text: string, end: number, bad?: () => void): { value: string; end: number } {
+  const quote = text[0];
+  const inner = foldLines(text.slice(1, end - 1));
+  return {
+    value: quote === '"' ? unescapeDouble(inner, bad) : inner.replaceAll("''", "'"),
+    end,
+  };
 }
 
 /** Line breaks inside a quoted scalar: one becomes a space, an empty line becomes a newline. */
@@ -470,11 +533,19 @@ const DOUBLE_ESCAPES: Record<string, string> = {
   _: " ",
 };
 
-function unescapeDouble(text: string): string {
+function unescapeDouble(text: string, bad?: () => void): string {
   return text.replace(
     /\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)/g,
     (whole, code: string) => {
-      if (code.length > 1) return String.fromCodePoint(Number.parseInt(code.slice(1), 16));
+      if (code.length > 1) {
+        const point = Number.parseInt(code.slice(1), 16);
+        // Past the last code point there is no character: the escape stays as written.
+        if (point > 0x10ffff) {
+          bad?.();
+          return whole;
+        }
+        return String.fromCodePoint(point);
+      }
       return DOUBLE_ESCAPES[code] ?? whole;
     },
   );

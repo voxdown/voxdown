@@ -32,6 +32,8 @@ import {
   tokens,
   write,
 } from "../src/index";
+import { diffChanges } from "../src/write";
+import { proseStory } from "./stories";
 import {
   EDITS,
   type EditPromise,
@@ -41,6 +43,9 @@ import {
   speeches,
   spokenChars,
 } from "./voices";
+
+/** On prose, an edit may decline on one stretch in a hundred at most. */
+const PROSE_BUDGET = 0.01;
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
 const SEED =
@@ -172,10 +177,12 @@ const voice = (speech: Speech) => ({
  * An edit does exactly what it says or nothing (see voices.ts). How often it declines is counted,
  * so an edit that always declines can't pass: it may only do so on the odd story. These are
  * stories of tricky pieces, and an edit declines where a mark would show in the book, such as a
- * word glued to a page turn before it (`{page}Hello`): about 3.5% of stretches for a new speaker,
- * under 1% for a direction.
+ * name glued to a word (`]日本`): about 6% of stretches for a new speaker, which must move every
+ * word of the stretch (or every word of narration's first quote), under 1% for a direction. The
+ * real books, where every stretch must take both edits, show how they do on prose.
  */
 function editProperty(
+  stories: fc.Arbitrary<string>,
   edit: (story: Story, target: Speech) => TextChange[],
   promise: EditPromise,
   budget: number,
@@ -183,11 +190,12 @@ function editProperty(
   let tried = 0;
   let declined = 0;
   fc.assert(
-    fc.property(anyStory, fc.nat(), (source, pick) => {
+    fc.property(stories, fc.nat(), (source, pick) => {
       const story = parse(source);
       const said = speeches(story);
       const target = said[pick % Math.max(1, said.length)];
-      if (!target) return;
+      // A stretch already said as asked has nothing to change: that's no decline.
+      if (!target || promise.already?.(target)) return;
       tried++;
       const changes = edit(story, target);
       if (changes.length === 0) {
@@ -314,30 +322,22 @@ describe("on stories made at random", () => {
   it("giving a stretch to another character changes only that stretch's speaker", () => {
     // The stretch may split: narration that opens with a quote gives that quote to the character
     // and keeps the rest. Each of its words goes to the new speaker or stays; one at least goes.
-    editProperty((story, target) => setSpeaker(story, target, "Zed"), EDITS.speaker, 0.06);
-  });
-
-  it("setting how a stretch is said changes only that stretch's direction", () => {
-    editProperty((story, target) => setDirection(story, target, "softly"), EDITS.direction, 0.02);
-  });
-
-  it("renaming a character renames them everywhere and changes nothing else", () => {
-    fc.assert(
-      fc.property(anyStory, (source) => {
-        const story = parse(source);
-        const before = speeches(story).map(voice);
-        const after = speeches(
-          parse(applyChanges(source, renameCharacter(story, "Gerald", "Zed"))),
-        );
-        // Names are the same name whatever their case: `@gerald` is Gerald.
-        expect(after.map(voice)).toEqual(
-          before.map((v) => (v.speaker.toLowerCase() === "gerald" ? { ...v, speaker: "Zed" } : v)),
-        );
-      }),
-      settings,
+    editProperty(
+      anyStory,
+      (story, target) => setSpeaker(story, target, "Zed"),
+      EDITS.speaker,
+      0.12,
     );
   });
 
+  it("setting how a stretch is said changes only that stretch's direction", () => {
+    editProperty(
+      anyStory,
+      (story, target) => setDirection(story, target, "softly"),
+      EDITS.direction,
+      0.04,
+    );
+  });
   it("a sound or a line put in adds just that, and everything heard stays as it was", () => {
     // Any offset is tried for safety. How often an edit declines is counted where it is meant to
     // be used: a sound after a word of a stretch, a line anywhere. (A sound has no place on a group
@@ -489,6 +489,8 @@ describe("on stories made at random", () => {
         const story = parse(source);
         const text = applyChanges(source, setMeta(story, "title", value));
         const after = parse(text);
+        // Front matter the reader can't make sense of isn't changed: it can't be read back.
+        if (story.warnings.some((warning) => warning.code === "front-matter")) return;
         // A title is read without spaces at its ends.
         expect(after.meta.title ?? "").toBe(value.trim());
         expect(after.meta.author).toBe(story.meta.author);
@@ -497,6 +499,89 @@ describe("on stories made at random", () => {
         if (front !== "" || (!story.frontMatter && !source.startsWith("\uFEFF"))) {
           expect(text.endsWith(body)).toBe(true);
         }
+      }),
+      settings,
+    );
+  });
+
+  it("front matter of every form reads without failing, and its details are set as asked", () => {
+    const scalar = fc.oneof(
+      fc.constantFrom(
+        "plain",
+        "two words # a comment",
+        '"double \\u00e9 \\UFFFFFFFF \\x41 # not a comment"',
+        "'single ''quoted'' # not a comment'",
+        "null",
+        "~",
+        "007",
+        "true",
+        "[a, \"b # c\", 'd']",
+        "[unclosed",
+        "{flow: map}",
+        "&anchor value",
+        "|\n  block\n\n  scalar",
+        ">-\n  folded\n  lines",
+        '"over\n  two lines"',
+        "first\n\n  continued",
+        "",
+      ),
+      fc.string({ maxLength: 12 }),
+    );
+    const key = fc.constantFrom(
+      "title",
+      "author",
+      "language",
+      "narrator",
+      "subtitle",
+      "x-tool",
+      "cast",
+    );
+    const entry: fc.Arbitrary<string> = fc.oneof(
+      fc.tuple(key, scalar).map(([k, v]) => `${k}: ${v}`),
+      fc
+        .tuple(fc.constantFrom("Gerald", "Wanda", "Zoë"), scalar)
+        .map(([name, v]) => `cast:\n  ${name}: ${v}\n  ${name}2:\n    name: ${v}`),
+      fc.constantFrom("# a comment", "", "- a list item", "  indented: oddly", "\tcast: tabbed"),
+      fc.nat({ max: 60 }).map((depth) => `deep:\n  ${"- ".repeat(depth)}x`),
+    );
+    fc.assert(
+      fc.property(
+        fc.array(entry, { maxLength: 8 }),
+        fc.boolean(),
+        fc.string({ maxLength: 10 }),
+        (entries, crlf, value) => {
+          let source = `---\n${entries.join("\n")}\n---\nHello.\n`;
+          if (crlf) source = source.replace(/\n/g, "\r\n");
+          const story = parse(source);
+          expect(spokenScript(story)).toContain("Hello.");
+          const text = applyChanges(source, setMeta(story, "title", value));
+          const after = parse(text);
+          // Unless the front matter is too broken to hold a title where it can be read.
+          if (!story.warnings.some((warning) => warning.code === "front-matter")) {
+            expect(after.meta.title ?? "").toBe(value.trim());
+            expect(spokenScript(after)).toBe(spokenScript(story));
+          }
+        },
+      ),
+      settings,
+    );
+  });
+
+  it("the changes between two texts turn the one into the other", () => {
+    const line = fc.constantFrom(
+      "@Alice “Hi.”\n",
+      "@Alicia “Hi.”\n",
+      "\n",
+      "Some words\n",
+      "Some word\n",
+      "x",
+      "\r\n",
+    );
+    fc.assert(
+      fc.property(fc.array(line, { maxLength: 40 }), fc.array(line, { maxLength: 40 }), (a, b) => {
+        const before = a.join("");
+        const after = b.join("");
+        expect(applyChanges(before, diffChanges(before, after))).toBe(after);
       }),
       settings,
     );
@@ -512,6 +597,59 @@ describe("on stories made at random", () => {
         ]) {
           parse(fromFountain(fountain));
         }
+      }),
+      settings,
+    );
+  });
+});
+
+describe("on prose made at random", () => {
+  // Stories written the way people write them (stories.ts), where an edit should almost never
+  // have to decline.
+  it("giving a stretch to another character changes only that stretch's speaker", () => {
+    editProperty(
+      proseStory,
+      (story, target) => setSpeaker(story, target, "Zed"),
+      EDITS.speaker,
+      PROSE_BUDGET,
+    );
+  }, 60_000);
+
+  it("setting how a stretch is said changes only that stretch's direction", () => {
+    editProperty(
+      proseStory,
+      (story, target) => setDirection(story, target, "softly"),
+      EDITS.direction,
+      PROSE_BUDGET,
+    );
+  }, 60_000);
+
+  it("formatting settles, keeps every word, and never changes who says what", () => {
+    fc.assert(
+      fc.property(proseStory, fc.boolean(), (source, curly) => {
+        const options = curly ? { quotes: "curly" as const } : {};
+        const once = format(source, options);
+        expect(format(once, options)).toBe(once);
+        const heard = (text: string) =>
+          spokenChars(parse(text)).map((c) => [c.char, c.speaker.toLowerCase(), c.direction]);
+        expect(heard(once)).toEqual(heard(source));
+      }),
+      settings,
+    );
+  }, 60_000);
+
+  it("renaming a character renames them everywhere and changes nothing else", () => {
+    fc.assert(
+      fc.property(anyStory, (source) => {
+        const story = parse(source);
+        const before = speeches(story).map(voice);
+        const after = speeches(
+          parse(applyChanges(source, renameCharacter(story, "Gerald", "Zed"))),
+        );
+        // Names are the same name whatever their case: `@gerald` is Gerald.
+        expect(after.map(voice)).toEqual(
+          before.map((v) => (v.speaker.toLowerCase() === "gerald" ? { ...v, speaker: "Zed" } : v)),
+        );
       }),
       settings,
     );

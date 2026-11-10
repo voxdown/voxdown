@@ -218,4 +218,29 @@ describe("the front matter YAML subset", () => {
     expect(value("block")).toBe("|\n  First\n\n  Second");
     expect(value("next")).toBe("1");
   });
+
+  it("keeps an escape that is no character as written, with a problem, instead of failing", () => {
+    const result = readYaml('title: "a \\UFFFFFFFF b"');
+    expect(result.data.title).toBe("a \\UFFFFFFFF b");
+    expect(result.problems.map((problem) => problem.message)).toContain(
+      "This escape is not a character, so it is kept as written.",
+    );
+    expect(spokenScript(parse('---\ntitle: "\\UFFFFFFFF"\n---\nHello.'))).toBe("Narrator: Hello.");
+  });
+
+  it("reads a # inside a quoted list item, and a plain value past an empty line", () => {
+    expect(readYaml('tags: ["a # b", c] # x').data.tags).toEqual(["a # b", "c"]);
+    expect(readYaml("title: first\n\n  second\nnext: 1").data).toEqual({
+      title: "first\nsecond",
+      next: 1,
+    });
+  });
+
+  it("reads a long quoted value over many lines in linear time", () => {
+    const lines = Array.from({ length: 30_000 }, () => "  continuation").join("\n");
+    const start = performance.now();
+    const title = readYaml(`title: "start\n${lines}\n  end"`).data.title as string;
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(title.startsWith("start continuation")).toBe(true);
+  });
 });

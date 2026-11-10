@@ -6,7 +6,7 @@
 import fc from "fast-check";
 import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
-import { parse } from "voxdown";
+import { bookText, parse } from "voxdown";
 import { renderBook, renderDocument, renderScript } from "../src/index";
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
@@ -60,6 +60,10 @@ const PIECES = [
   "&",
   "*em*",
   "**strong**",
+  "*very **quiet** indeed*",
+  "***",
+  "_",
+  "snake_case",
   "`code`",
   "Hello",
   " ",
@@ -110,7 +114,68 @@ function balanced(html: string): boolean {
   return true;
 }
 
+/** A link as its text and an image as nothing, an address running to its balancing `)`. */
+function withoutLinks(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const bang = text[i] === "!" && text[i + 1] === "[";
+    if (text[i] === "[" || bang) {
+      const open = bang ? i + 1 : i;
+      const close = text.indexOf("]", open + 1);
+      let end = -1;
+      for (
+        let at = close + 1, depth = 0;
+        close > 0 && text[close + 1] === "(" && at < text.length;
+        at++
+      ) {
+        if (text[at] === "(") depth++;
+        else if (text[at] === ")" && --depth === 0) {
+          end = at;
+          break;
+        }
+      }
+      if (end > 0) {
+        out += bang ? "" : text.slice(open + 1, close);
+        i = end;
+        continue;
+      }
+    }
+    out += text[i];
+  }
+  return out;
+}
+
+/**
+ * Text as a reader sees it: Markdown's own signs (a heading's `#` and a scene break's `---` too,
+ * which a paragraph may hold once its marks are gone) and the spaces between words don't count.
+ */
+const plain = (text: string) =>
+  text
+    .split("\n")
+    .map(withoutLinks)
+    .join("\n")
+    .replace(/[*_#]|-{3,}/g, "")
+    .replace(/\s+/g, "");
+
 describe("the views, on stories made at random", () => {
+  it("print the book text in the book view, as a reader sees it", () => {
+    const window = new Window();
+    fc.assert(
+      // The book text drops escapes, so a story with one can't be told from one without.
+      fc.property(
+        story.filter((source) => !source.includes("\\")),
+        (source) => {
+          const parsed = parse(source);
+          window.document.body.innerHTML = renderBook(parsed, { header: false });
+          expect(plain(window.document.body.textContent ?? "")).toBe(
+            plain(bookText(parsed).replace(/^-{3,}$|^\*{3,}$|^_{3,}$/gm, "")),
+          );
+        },
+      ),
+      settings,
+    );
+  });
+
   it("never fail, and close every tag they open", () => {
     fc.assert(
       fc.property(story, (source) => {

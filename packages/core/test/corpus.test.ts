@@ -9,7 +9,10 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { heardIndex, heardItem } from "../src/edit";
 import {
+  type TextChange,
+  applyChanges,
   bookText,
   format,
   lines,
@@ -20,7 +23,7 @@ import {
   tokens,
   write,
 } from "../src/index";
-import { EDITS, brokenPromise, speeches } from "./voices";
+import { EDITS, allItems, brokenPromise, speeches } from "./voices";
 
 const corpus = resolve(dirname(fileURLToPath(import.meta.url)), "../../../corpus");
 const books = readdirSync(corpus)
@@ -84,6 +87,45 @@ describe("real books", () => {
         }
       });
 
+      it("marks up again from bare text: with its marks taken off, edits give every stretch back", () => {
+        // An author's work, done with the edits: take off every mark that stands before a quote,
+        // then give each stretch its speaker and direction again, in order. The book must read
+        // as reviewed, line for line (an oracle the edits' own checks don't share).
+        const bare: TextChange[] = [];
+        for (const item of allItems(story)) {
+          if (item.kind !== "speech" || !item.mark || !item.openQuote) continue;
+          const { mark, openQuote } = item;
+          const between = source.slice(mark.range.to, openQuote.from);
+          if (/^\s*$/.test(between) && !bare.some((change) => change.from === mark.range.from)) {
+            bare.push({ from: mark.range.from, to: openQuote.from, insert: "" });
+          }
+        }
+        expect(bare.length).toBeGreaterThan(10);
+        let text = applyChanges(source, bare);
+        for (const wanted of speeches(story)) {
+          const at = heardIndex(story, wanted);
+          let current = parse(text);
+          let item = heardItem(current, at);
+          if (item?.kind !== "speech") continue;
+          if (item.speaker !== wanted.speaker) {
+            const changes = setSpeaker(current, item, wanted.speaker);
+            expect(changes.length, `give “${item.text}” to ${wanted.speaker}`).toBeGreaterThan(0);
+            text = applyChanges(text, changes);
+            current = parse(text);
+            item = heardItem(current, at);
+          }
+          if (item?.kind === "speech" && item.direction !== wanted.direction) {
+            const changes = setDirection(current, item, wanted.direction);
+            expect(changes.length, `say “${item.text}” ${wanted.direction}`).toBeGreaterThan(0);
+            text = applyChanges(text, changes);
+          }
+        }
+        expect(spokenScript(parse(text))).toBe(spokenScript(story));
+        // The same print, but for where a mark taken out of `(@MarchHare “…` left a space.
+        const print = (of: string) => bookText(parse(of)).replace(/\s+/g, "");
+        expect(print(text)).toBe(print(source));
+      }, 60_000);
+
       it("takes a new speaker and a new direction on every stretch, changing nothing else", () => {
         for (const target of speeches(story)) {
           const speaker = setSpeaker(story, target, "Zed");
@@ -126,6 +168,38 @@ describe("real books", () => {
     const middle = said[Math.floor(said.length / 2)] as (typeof said)[number];
     expect(time(() => setSpeaker(story, middle, "Zed"))).toBeLessThan(3000);
   }, 60_000);
+
+  it("formats a long manuscript with lines it must leave as they are, in good time", () => {
+    // Straight quotes made curly, but some lines would give words to someone else as curly
+    // marks: they stay as written, and finding them mustn't mean reading the book once each.
+    const straight = books
+      .map(({ source }) =>
+        source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "").replace(/\r\n/g, "\n"),
+      )
+      .join("\n\n")
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'");
+    const paragraphs = Array.from({ length: 6 }, () => straight)
+      .join("\n\n")
+      .split("\n\n");
+    const bad = '@Tom "I\'m here,” he said. "Come in."';
+    for (let at = 0; at < paragraphs.length; at += 20) paragraphs.splice(at, 0, bad);
+    const manuscript = paragraphs.join("\n\n");
+    let start = performance.now();
+    const once = format(manuscript, { quotes: "curly" });
+    expect(performance.now() - start).toBeLessThan(15_000);
+    expect(once.split("\n").filter((line) => line === bad).length).toBeGreaterThan(40);
+    start = performance.now();
+    expect(format(once, { quotes: "curly" })).toBe(once);
+    expect(performance.now() - start).toBeLessThan(10_000);
+    // And short lines, every other one left as it is.
+    const good = '@Ann "Hello," she said. "It\'s late."';
+    const lines = Array.from({ length: 4000 }, (_, at) => (at % 2 ? bad : good)).join("\n\n");
+    start = performance.now();
+    const alternate = format(lines, { quotes: "curly" });
+    expect(performance.now() - start).toBeLessThan(10_000);
+    expect(alternate.split("\n").filter((line) => line.startsWith("@Ann “")).length).toBe(2000);
+  }, 120_000);
 
   it("reads lines built to be slow in good time", () => {
     // Each was quadratic once: an opening mark searched the rest of its line for its closing one.

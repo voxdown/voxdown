@@ -323,25 +323,26 @@ export function diffChanges(a: string, b: string): TextChange[] {
   if (a === b) return [];
   const linesA = splitLines(a);
   const linesB = splitLines(b);
-  const script = myers(linesA, linesB);
+  // The lines both share at the start and the end are set aside first.
+  let head = 0;
+  while (head < linesA.length && head < linesB.length && linesA[head] === linesB[head]) head++;
+  let tail = 0;
+  while (
+    tail < linesA.length - head &&
+    tail < linesB.length - head &&
+    linesA[linesA.length - 1 - tail] === linesB[linesB.length - 1 - tail]
+  ) {
+    tail++;
+  }
+  const middleA = linesA.slice(head, linesA.length - tail);
+  const middleB = linesB.slice(head, linesB.length - tail);
+  const script = align(middleA, middleB);
   const changes: TextChange[] = [];
-  let offsetA = 0;
-  let i = 0;
-  while (i < script.length) {
-    if (script[i] === "=") {
-      offsetA += (linesA.shift() as string).length;
-      linesB.shift();
-      i++;
-      continue;
-    }
-    let removed = "";
-    let added = "";
-    while (i < script.length && script[i] !== "=") {
-      if (script[i] === "-") removed += linesA.shift() as string;
-      else added += linesB.shift() as string;
-      i++;
-    }
-    // Narrow the run to where it differs.
+  let offsetA = linesA.slice(0, head).reduce((sum, line) => sum + line.length, 0);
+  let atA = 0;
+  let atB = 0;
+  const change = (removed: string, added: string) => {
+    // Narrowed to where the two differ.
     let start = 0;
     while (start < removed.length && start < added.length && removed[start] === added[start])
       start++;
@@ -359,6 +360,28 @@ export function diffChanges(a: string, b: string): TextChange[] {
       insert: added.slice(start, added.length - end),
     });
     offsetA += removed.length;
+  };
+  let i = 0;
+  while (i < script.length) {
+    const step = script[i];
+    if (step === "=") {
+      offsetA += (middleA[atA++] as string).length;
+      atB++;
+      i++;
+    } else if (step === "~") {
+      // A line changed within: a change of its own.
+      change(middleA[atA++] as string, middleB[atB++] as string);
+      i++;
+    } else {
+      let removed = "";
+      let added = "";
+      while (i < script.length && (script[i] === "-" || script[i] === "+")) {
+        if (script[i] === "-") removed += middleA[atA++] as string;
+        else added += middleB[atB++] as string;
+        i++;
+      }
+      change(removed, added);
+    }
   }
   return changes;
 }
@@ -368,57 +391,74 @@ function splitLines(text: string): string[] {
   return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
 }
 
-/** An edit script from `a` to `b`: "=" keeps a line, "-" removes one, "+" adds one (Myers, 1986). */
-function myers(a: readonly string[], b: readonly string[]): Array<"=" | "-" | "+"> {
-  const max = a.length + b.length;
-  const offset = max + 1;
-  let v = new Int32Array(2 * max + 3);
-  const trace: Int32Array[] = [];
-  let found = -1;
-  for (let d = 0; d <= max && found < 0; d++) {
-    trace.push(v.slice());
-    for (let k = -d; k <= d; k += 2) {
-      const down =
-        k === -d || (k !== d && (v[offset + k - 1] as number) < (v[offset + k + 1] as number));
-      let x = down ? (v[offset + k + 1] as number) : (v[offset + k - 1] as number) + 1;
-      let y = x - k;
-      while (x < a.length && y < b.length && a[x] === b[y]) {
-        x++;
-        y++;
+/** Whether two lines are one line changed within: most of them, at the start and end, the same. */
+function similar(a: string, b: string): boolean {
+  if (a.trim() === "" || b.trim() === "") return false;
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let end = 0;
+  while (
+    end < a.length - start &&
+    end < b.length - start &&
+    a[a.length - 1 - end] === b[b.length - 1 - end]
+  ) {
+    end++;
+  }
+  return (start + end) * 2 >= Math.max(a.length, b.length);
+}
+
+/**
+ * How `a`'s lines become `b`'s: "=" keeps a line, "~" changes one within, "-" removes one and "+"
+ * adds one. The writer changes lines within and only now and then adds or removes one, so lines
+ * are lined up as they come, looking a little ahead where some were added or removed: linear in
+ * the text, however many lines changed.
+ */
+function align(a: readonly string[], b: readonly string[]): Array<"=" | "~" | "-" | "+"> {
+  const script: Array<"=" | "~" | "-" | "+"> = [];
+  const AHEAD = 16;
+  const matches = (x: string | undefined, y: string | undefined) =>
+    x !== undefined && y !== undefined && (x === y || similar(x, y));
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length) {
+      if (a[i] === b[j]) {
+        script.push("=");
+        i++;
+        j++;
+        continue;
       }
-      v[offset + k] = x;
-      if (x >= a.length && y >= b.length) {
-        found = d;
-        break;
+      if (similar(a[i] as string, b[j] as string)) {
+        script.push("~");
+        i++;
+        j++;
+        continue;
+      }
+    }
+    let added = 0;
+    for (let q = 1; q <= AHEAD && j + q < b.length && !added; q++) {
+      if (matches(a[i], b[j + q])) added = q;
+    }
+    let removed = 0;
+    for (let p = 1; p <= AHEAD && i + p < a.length && !removed; p++) {
+      if (matches(a[i + p], b[j])) removed = p;
+    }
+    if (added && (!removed || added <= removed)) {
+      for (let q = 0; q < added; q++) script.push("+");
+      j += added;
+    } else if (removed) {
+      for (let p = 0; p < removed; p++) script.push("-");
+      i += removed;
+    } else {
+      if (i < a.length) {
+        script.push("-");
+        i++;
+      }
+      if (j < b.length) {
+        script.push("+");
+        j++;
       }
     }
   }
-  v = new Int32Array(0);
-  const script: Array<"=" | "-" | "+"> = [];
-  let x = a.length;
-  let y = b.length;
-  for (let d = found; d > 0; d--) {
-    const previous = trace[d] as Int32Array;
-    const k = x - y;
-    const down =
-      k === -d ||
-      (k !== d && (previous[offset + k - 1] as number) < (previous[offset + k + 1] as number));
-    const prevK = down ? k + 1 : k - 1;
-    const prevX = previous[offset + prevK] as number;
-    const prevY = prevX - prevK;
-    while (x > prevX && y > prevY) {
-      script.push("=");
-      x--;
-      y--;
-    }
-    script.push(down ? "+" : "-");
-    if (down) y--;
-    else x--;
-  }
-  while (x > 0 && y > 0) {
-    script.push("=");
-    x--;
-    y--;
-  }
-  return script.reverse();
+  return script;
 }

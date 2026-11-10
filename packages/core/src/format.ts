@@ -5,10 +5,8 @@
  * become curly ones only when asked, in the story's language. The front matter, group lines and
  * each line's line ending stay as written.
  */
-import { findNotes, joinLines, scanBlocks } from "./blocks";
-import { type TextChange, applyChanges, sameHearing } from "./edit";
-import { readFrontMatter } from "./front-matter";
-import { type Token, lexLines } from "./inline";
+import { type TextChange, applyChanges, hearingDifferences, sameHearing } from "./edit";
+import { lexedTokens } from "./lexed";
 import { type ScriptLine, lines } from "./lines";
 import type { Item, Story } from "./model";
 import { parse } from "./parse";
@@ -48,6 +46,13 @@ export function format(source: string, options: FormatOptions = {}): string {
   return text;
 }
 
+/** The story's blocks, and each heading's level: tidying never makes a heading a paragraph. */
+function shapeOf(story: Story): string {
+  return story.blocks
+    .map((block) => (block.kind === "heading" ? `h${block.level}` : block.kind))
+    .join(" ");
+}
+
 /** Every character but spaces, with quotation marks and apostrophes as one: what may never change. */
 function wordsOf(text: string): string {
   return text.replace(/["'“”‘’„‚«»‹›]/g, "'").replace(/\s+/g, "");
@@ -67,14 +72,87 @@ function byLine(text: string, changes: readonly TextChange[]): TextChange[][] {
 
 /**
  * The text with as many runs of changes made as keep its words, and who says what and how, exactly
- * as before: all of them if they can, else, halving, each run that can.
+ * as before. All of them are tried at once; where a word would be heard differently, the runs of
+ * its line are left out (then, if that isn't enough, of its paragraph), and the rest tried again,
+ * so a long file with a few lines that can't change takes a few readings, not one per line. What
+ * that can't settle is narrowed down by halves.
  */
 function guarded(text: string, story: Story, runs: readonly TextChange[][]): string {
   const words = wordsOf(text);
+  const shape = shapeOf(story);
+  const rows = lines(story);
+  const lineStarts = [0];
+  for (let at = text.indexOf("\n"); at >= 0; at = text.indexOf("\n", at + 1))
+    lineStarts.push(at + 1);
+  const lineOf = (at: number) => {
+    let low = 0;
+    let high = lineStarts.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if ((lineStarts[middle] as number) <= at) low = middle;
+      else high = middle - 1;
+    }
+    return low;
+  };
+  const blockOf = (at: number) =>
+    story.blocks.findIndex((block) => block.range.from <= at && at <= block.range.to);
+  const runLines = runs.map((run) => lineOf((run[0] as TextChange).from));
+  const runBlocks = runs.map((run) => blockOf((run[0] as TextChange).from));
+  let left = runs.map((_, index) => index);
+  const widened = new Set<number>();
+  for (let round = 0; round <= runs.length; round++) {
+    const candidate = applyChanges(
+      text,
+      left.flatMap((index) => runs[index] as TextChange[]),
+    );
+    if (wordsOf(candidate) !== words) break;
+    const after = parse(candidate);
+    const differences = hearingDifferences(story, after);
+    if (differences.length === 0) {
+      if (shapeOf(after) === shape && sameVoices(rows, lines(after))) return candidate;
+      break;
+    }
+    // Leave out the runs on each line where a word is heard differently; a line already left
+    // out widens to its paragraph.
+    const differing = new Set(differences.map(lineOf));
+    const blocks = new Set<number>();
+    for (const at of differences) if (widened.has(lineOf(at))) blocks.add(blockOf(at));
+    const before = left.length;
+    left = left.filter(
+      (index) =>
+        !differing.has(runLines[index] as number) && !blocks.has(runBlocks[index] as number),
+    );
+    for (const line of differing) widened.add(line);
+    if (left.length === before && blocks.size === 0) {
+      // Nothing on those lines to leave out: the difference comes from further back.
+      for (const at of differences) blocks.add(blockOf(at));
+      left = left.filter((index) => !blocks.has(runBlocks[index] as number));
+      if (left.length === before) break;
+    }
+  }
+  return halving(
+    text,
+    story,
+    words,
+    shape,
+    rows,
+    left.map((index) => runs[index] as TextChange[]),
+  );
+}
+
+/** The runs that keep the reading, found by halves: all of them if they can, else each that can. */
+function halving(
+  text: string,
+  story: Story,
+  words: string,
+  shape: string,
+  rows: readonly ScriptLine[],
+  runs: readonly TextChange[][],
+): string {
   const same = (candidate: string) => {
     if (wordsOf(candidate) !== words) return false;
     const after = parse(candidate);
-    return sameVoices(lines(story), lines(after)) && sameHearing(story, after);
+    return shapeOf(after) === shape && sameVoices(rows, lines(after)) && sameHearing(story, after);
   };
   const kept: TextChange[] = [];
   const attempt = (part: readonly TextChange[][]) => {
@@ -332,22 +410,6 @@ function markRanges(story: Story): Array<{ from: number; to: number }> {
     if (group.closeRange) ranges.push(group.closeRange);
   }
   return ranges.sort((a, b) => a.from - b.from);
-}
-
-/** Every token of every paragraph and heading, lexed as the parser lexes them. */
-function lexedTokens(source: string): Token[] {
-  const text = new SourceText(source);
-  const ignore = () => {};
-  const front = readFrontMatter(text, ignore);
-  const bodyFrom = text.lines[front.bodyLine]?.from ?? source.length;
-  const notes = findNotes(source, bodyFrom, ignore);
-  const tokens: Token[] = [];
-  for (const block of scanBlocks(source, joinLines(text.lines, front.bodyLine, notes))) {
-    const ranges =
-      block.kind === "paragraph" ? block.lines : block.kind === "heading" ? [block.content] : [];
-    for (const line of lexLines(source, ranges, notes, ignore)) tokens.push(...line.tokens);
-  }
-  return tokens;
 }
 
 function sameVoices(a: readonly ScriptLine[], b: readonly ScriptLine[]): boolean {

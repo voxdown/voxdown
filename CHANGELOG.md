@@ -4,14 +4,13 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
-### `@voxdown/editor` 1.0.0 and the VS Code extension 1.0.0
+**VS Code extension 1.0.0**
+- Highlighting, snippets, warnings as you type, a script preview, and the cheat sheet.
 
-**@voxdown/editor**
+## `@voxdown/editor` 1.0.0 (9 November 2026)
+
 - `scriptEditor`, the CodeMirror 6 editor that draws marks as chips, with its hooks documented.
 - `<voxdown-editor>`, the same as a web component (`@voxdown/editor/element`).
-
-**VS Code extension**
-- Highlighting, snippets, warnings as you type, a script preview, and the cheat sheet.
 
 ## `@voxdown/render` 1.0.1 (9 November 2026)
 

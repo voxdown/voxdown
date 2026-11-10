@@ -112,15 +112,16 @@ ${render(parsed, view, options)}
 /** The printed story: the book text typeset, with emphasis, links and images (§12.2). */
 export function renderBook(story: Story, options: RenderOptions = {}): string {
   const out: string[] = [];
-  if (options.header !== false) out.push(header(story, false, new Map()));
+  if (options.header !== false && !opensWithTitle(story)) out.push(header(story, false, new Map()));
   let page = "1";
+  // Page numbers wait for the next printed paragraph: a page turn on a line of its own prints nothing.
+  let markers = "";
   for (const block of story.blocks) {
     if (block.kind === "break") {
       out.push(`<hr class="vxd-break">`);
       continue;
     }
     const lines = block.kind === "heading" ? [block.line] : block.lines;
-    let markers = "";
     if (options.pages) {
       for (const line of lines)
         for (const item of line.items)
@@ -140,6 +141,7 @@ export function renderBook(story: Story, options: RenderOptions = {}): string {
     } else {
       out.push(`<p class="vxd-p">${markers}${printed.join("<br>\n")}</p>`);
     }
+    markers = "";
   }
   return article(story, "book", out);
 }
@@ -239,7 +241,9 @@ function scriptBlock(block: Block, context: ScriptContext): string {
     context.last = null;
     return `<hr class="vxd-break">`;
   }
-  const label = visibilityLabel(block.visibility);
+  // A group's visibility is labeled once, on the group.
+  const inherited = !ownVisibility(block) && block.visibility !== "both";
+  const label = inherited ? "" : visibilityLabel(block.visibility);
   if (block.kind === "heading") {
     const level = Math.min(6, block.level);
     if (block.visibility === "hidden") {
@@ -249,12 +253,14 @@ function scriptBlock(block: Block, context: ScriptContext): string {
     const inner = scriptLine(block.line, context, true);
     return `<h${level} class="vxd-heading"${visibilityAttr(block.visibility)}>${label}${inner}</h${level}>`;
   }
+  // Each paragraph names its speakers afresh.
+  context.last = null;
   // A line holding only a page turn is a rule across the page.
   const lines = block.lines.map((line) => {
     const solid = line.items.filter((item) => !(item.kind === "speech" && item.text === ""));
     const only = solid.length === 1 ? solid[0] : undefined;
     if (only?.kind === "instruction" && only.name === "page") {
-      return `<div class="vxd-turn" role="separator"><span>${escapeHtml(only.value ? `page ${only.value}` : "page turn")}</span></div>`;
+      return `<span class="vxd-turn" role="separator"><span>${escapeHtml(only.value ? `page ${only.value}` : "page turn")}</span></span>`;
     }
     return `<span class="vxd-line">${scriptLine(line, context, false)}</span>`;
   });
@@ -262,6 +268,17 @@ function scriptBlock(block: Block, context: ScriptContext): string {
     .join("\n")
     .replace(/<\/span>\n<span class="vxd-line">/g, '</span><br>\n<span class="vxd-line">');
   return `<p class="vxd-p"${visibilityAttr(block.visibility)}>${label}${joined}</p>`;
+}
+
+function ownVisibility(block: Block): boolean {
+  if (block.kind === "break") return false;
+  const lines = block.kind === "heading" ? [block.line] : block.lines;
+  return lines.some((line) =>
+    line.items.some(
+      (item) =>
+        item.kind === "instruction" && ["book only", "audio only", "hidden"].includes(item.name),
+    ),
+  );
 }
 
 function visibilityLabel(visibility: Visibility): string {
@@ -357,10 +374,11 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): s
   const color = narrator ? undefined : colors.get(speech.speaker);
   const changed = context.last !== speech.speaker;
   const spoken = /[\p{L}\p{N}]/u.test(speech.text);
-  if (spoken) context.last = speech.speaker;
+  // Narration between two stretches of one character's speech doesn't name them again.
+  if (spoken && (!narrator || options.narratorName)) context.last = speech.speaker;
   const name =
     spoken && changed && !heading && (!narrator || options.narratorName)
-      ? `<span class="vxd-name">${escapeHtml(fullName(story, speech.speaker))}</span>`
+      ? `<span class="vxd-name"${color ? ` style="--vxd-c: ${color}"` : ""}>${escapeHtml(fullName(story, speech.speaker))}</span>`
       : "";
   const direction =
     speech.direction && spoken
@@ -387,12 +405,26 @@ function fullName(story: Story, speaker: string): string {
 
 // Shared
 
+/** Whether the story's first block is a heading that says its title, so the header would repeat it. */
+function opensWithTitle(story: Story): boolean {
+  // The first block that prints anything: notes and page turns before it don't count.
+  const first = story.blocks.find(
+    (block) =>
+      block.kind !== "paragraph" || block.lines.some((line) => printedLine(story.source, line)),
+  );
+  if (first?.kind !== "heading" || !story.meta.title) return false;
+  const text = printedLine(story.source, first.line).replace(/<[^>]+>/g, "");
+  return text.trim().toLowerCase() === escapeHtml(story.meta.title).trim().toLowerCase();
+}
+
 function header(story: Story, withCast: boolean, colors: Map<string, string>): string {
-  const { title, subtitle, author } = story.meta;
+  const { subtitle, author } = story.meta;
+  const repeated = opensWithTitle(story);
+  const title = repeated ? undefined : story.meta.title;
   const parts: string[] = [];
   if (title) parts.push(`<div class="vxd-title">${escapeHtml(title)}</div>`);
-  if (subtitle) parts.push(`<div class="vxd-subtitle">${escapeHtml(subtitle)}</div>`);
-  if (author) parts.push(`<div class="vxd-author">${escapeHtml(author)}</div>`);
+  if (subtitle && !repeated) parts.push(`<div class="vxd-subtitle">${escapeHtml(subtitle)}</div>`);
+  if (author && !repeated) parts.push(`<div class="vxd-author">${escapeHtml(author)}</div>`);
   if (withCast && colors.size) {
     const cast = [...colors].map(([handle, color]) => {
       const about = story.cast.find((member) => member.handle === handle)?.about;

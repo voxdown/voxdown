@@ -103,6 +103,26 @@ describe("the script view", () => {
     expect(html).toContain('style="--vxd-c: #ff0000"');
   });
 
+  it("names a speaker once a paragraph, through narration, and labels a group's visibility once", () => {
+    const html = renderScript(
+      parse(
+        "@Mother “Now my dears,” said Mrs. Rabbit, “you may go.”\n\n@Mother “Run along.”\n\n::: {book only}\nOne.\n\nTwo.\n:::",
+      ),
+      { header: false },
+    );
+    expect(html.match(/class="vxd-name"/g)?.length).toBe(2);
+    expect(html.match(/>book only</g)?.length).toBe(1);
+  });
+
+  it("repeats no title the story opens with", () => {
+    const story = parse(
+      "---\ntitle: Toast\nauthor: Me\ncast:\n  Gerald:\n---\n# Toast\n@Gerald “Hi.”",
+    );
+    expect(renderBook(story)).not.toContain("vxd-header");
+    expect(renderScript(story)).not.toContain("vxd-title");
+    expect(renderScript(story)).toContain("vxd-cast");
+  });
+
   it("draws sounds, pauses, page turns, notes, groups and labels", () => {
     const html = renderScript(
       parse(
@@ -116,7 +136,7 @@ describe("the script view", () => {
       '<span class="vxd-chip vxd-chip-sound">paper rustles</span>',
       '<span class="vxd-chip vxd-chip-pause" title="Pause">2s</span>',
       '<span class="vxd-note" role="note">slowly</span>',
-      '<div class="vxd-turn" role="separator"><span>page 3</span></div>',
+      '<span class="vxd-turn" role="separator"><span>page 3</span></span>',
       'data-visibility="book"',
       'data-visibility="hidden"',
     ]) {

@@ -67,7 +67,7 @@ h3.vxd-heading, h4.vxd-heading, h5.vxd-heading, h6.vxd-heading { font-size: 1.05
 .vxd-page-number { float: right; margin-right: -3.2em; width: 2.4em; text-align: left; font: 0.7em/2.4 var(--vxd-ui-font); color: var(--vxd-muted); text-indent: 0; }
 
 /* The script view */
-.vxd-script { line-height: 2.55; }
+.vxd-script { line-height: 2.35; }
 .vxd-script .vxd-p { margin-bottom: 0.9em; }
 .vxd-speech { border-radius: 0.2em; }
 .vxd-speech:not(.vxd-narration) {
@@ -119,7 +119,7 @@ h3.vxd-heading, h4.vxd-heading, h5.vxd-heading, h6.vxd-heading { font-size: 1.05
 .vxd-chip-page { color: var(--vxd-page); }
 .vxd-chip-instruction, .vxd-chip-label { color: var(--vxd-muted); border-color: var(--vxd-line); }
 .vxd-chip-label { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.58em; }
-.vxd-turn { display: flex; align-items: center; gap: 0.8em; margin: 0.2em 0; font: 500 0.66em/2 var(--vxd-ui-font); color: var(--vxd-page); text-transform: uppercase; letter-spacing: 0.08em; }
+.vxd-turn { display: flex; width: 100%; align-items: center; gap: 0.8em; margin: 0.2em 0; font: 500 0.66em/2 var(--vxd-ui-font); color: var(--vxd-page); text-transform: uppercase; letter-spacing: 0.08em; }
 .vxd-turn::before, .vxd-turn::after { content: ""; flex: 1; border-top: 1px dashed color-mix(in srgb, var(--vxd-page) 55%, transparent); }
 .vxd-note {
   display: inline-block;

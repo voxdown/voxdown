@@ -25,6 +25,7 @@ The one rule to remember: **on each line, the quotes after a name belong to it, 
 - **Try it** in the [playground](https://voxdown.github.io/): write on the left, see the script, the book and the lines on the right.
 - **Hear it**: [two stories read aloud](https://voxdown.github.io/voxdown/listen.html), every character in their own voice and every line as its marks direct.
 - **Learn it** from the [cheat sheet](spec/CHEATSHEET.md), every mark on one page.
+- **Write it** in VS Code: install [VoxDown from the Marketplace](https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown) for colors, warnings as you type and a live preview.
 - **Read the spec**: [SPEC.md](spec/SPEC.md), version 1.0, with a worked example for every rule.
 
 ## In 30 seconds
@@ -70,7 +71,7 @@ npx @voxdown/cli render story.vxd -o story.html   # a script to print or share
 | [`@voxdown/render`](packages/render/) | HTML for a book view and a script view, with a stylesheet driven by CSS variables. No framework. |
 | [`@voxdown/editor`](packages/editor/) | An editor that draws marks as chips, for CodeMirror 6, and the same as a `<voxdown-editor>` web component. |
 | [`@voxdown/cli`](packages/cli/) | The `vxd` command: `check`, `fmt`, `render`, `export`, `text`, `import`. |
-| [`packages/vscode`](packages/vscode/) | VS Code support: highlighting, snippets, warnings, a preview and the cheat sheet. |
+| [`packages/vscode`](packages/vscode/) | VS Code support: highlighting, snippets, warnings, a preview and the cheat sheet. [On the Marketplace](https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown). |
 | [`site/`](site/) | The playground. |
 | [`examples/`](examples/) | Stories to learn from and test with: public domain, or new and free to copy. |
 

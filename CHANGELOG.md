@@ -4,7 +4,11 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
-**VS Code extension 1.0.0**
+Nothing yet.
+
+## The VS Code extension 1.0.0 and the playground (10 November 2026)
+
+**VS Code extension**, on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown)
 - Highlighting, snippets, warnings as you type, a script preview, and the cheat sheet.
 
 **The playground**

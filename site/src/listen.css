@@ -3,6 +3,8 @@
 
 body.listen {
   display: block;
+  /* As tall as its contents, with room at the end for the floating player. */
+  height: auto;
   padding-bottom: 7rem;
 }
 

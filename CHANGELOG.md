@@ -4,7 +4,8 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
-Nothing yet.
+**The playground**
+- The pages fill the window between the shelf and the line at its foot, and no longer cover that line; on a short window the page scrolls. The Sun in *The North Wind and the Sun* is read by a new voice.
 
 ## The VS Code extension 1.0.0 and the playground (10 November 2026)
 

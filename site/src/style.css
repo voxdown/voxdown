@@ -109,8 +109,11 @@ body {
   font: 400 15px / 1.5 var(--ui);
   font-variation-settings: "CASL" 0.15;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  min-height: 100vh;
+  /* The desk takes the height the masthead, the shelf and the colophon leave, and never less than
+     room for a page: on a short window the whole page scrolls instead. */
+  grid-template-rows: auto auto minmax(26rem, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
 }
 a {
   color: var(--pencil);
@@ -474,6 +477,8 @@ select {
 .desk {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* The pages fill the desk's height, and no more, so they never cover the colophon. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 0;
   padding: 2.6rem clamp(0.5rem, 2.5vw, 2.5rem) 1.5rem;
   min-height: 0;
@@ -485,8 +490,6 @@ select {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
   min-height: 0;
-  height: calc(100vh - 12.5rem);
-  min-height: 32rem;
   position: relative;
   box-shadow: 0 1px 2px rgb(30 40 60 / 0.08), 0 8px 30px -12px rgb(30 40 60 / 0.25);
 }
@@ -825,6 +828,7 @@ select {
   }
   .desk {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     gap: 3.2rem;
   }
   .page {

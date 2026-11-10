@@ -39,6 +39,8 @@ export type ReadAloud = {
   said: string | null;
   /** It says an old name (the scene's number changed since). */
   stale: boolean;
+  /** The name the scene had (a heading renamed): a line still saying it is out of date. */
+  was?: string;
 };
 
 const toolsDone = new WeakMap<HTMLElement, () => void>();
@@ -158,7 +160,8 @@ export class LineWidget extends WidgetType {
       Boolean(other.tools) === Boolean(this.tools) &&
       other.readAloud?.name === this.readAloud?.name &&
       other.readAloud?.said === this.readAloud?.said &&
-      other.readAloud?.stale === this.readAloud?.stale
+      other.readAloud?.stale === this.readAloud?.stale &&
+      other.readAloud?.was === this.readAloud?.was
     );
   }
 
@@ -236,7 +239,7 @@ function readAloudButton(view: EditorView, line: HTMLElement, read: ReadAloud) {
   button.addEventListener("click", (event) => {
     event.preventDefault();
     const at = view.posAtDOM(line);
-    readSceneName(view, at, read.name);
+    readSceneName(view, at, read.name, read.was);
     view.focus();
   });
   return button;

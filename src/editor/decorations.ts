@@ -68,7 +68,12 @@ export type PreviewOptions = {
    * A speaker on every scene break and heading that reads the scene's name aloud (owner, 9 Nov):
    * it writes `Name.` as a line of its own after the mark, and takes it out again.
    */
-  readSceneAloud?: boolean;
+  readSceneAloud?: {
+    /** How a scene's number is said in the story's language ("Toneel 2"): unless said, its label. */
+    say?: (scene: number) => string;
+    /** The name a heading's scene had (the project's): a line still saying it is out of date. */
+    nameWas?: (state: EditorState, from: number) => string | undefined;
+  };
 };
 
 /** What the page draws, as Performance's switches choose (1082). */
@@ -131,12 +136,21 @@ export function sceneNumbers(state: EditorState): Map<number, number> {
   const marks = state.field(marksField);
   const starts = marks
     .filter((m) => m.kind === "break" || m.kind === "heading")
-    .map((m) => m.from)
-    .sort((a, b) => a - b);
-  const body = marks.find((m) => m.kind === "frontmatter")?.to ?? 0;
-  const first = starts[0];
-  const opensWithOne = first !== undefined && !state.sliceDoc(body, first).trim();
-  return new Map(starts.map((from, index) => [from, index + (opensWithOne ? 1 : 2)]));
+    .sort((a, b) => a.from - b.from);
+  const blank = (from: number, to: number) => !state.sliceDoc(from, to).trim();
+  // A mark with nothing after it before the next (or the end) opens no scene, as Apply reads it
+  // (review r18): `---` twice, or `---` straight before a heading, is one scene.
+  const opening = starts.filter((m, i) => !blank(m.to, starts[i + 1]?.from ?? state.doc.length));
+  const first = opening[0];
+  // The text opens with a scene when nothing but scene marks comes before its first.
+  let opens = Boolean(first);
+  let at = marks.find((m) => m.kind === "frontmatter")?.to ?? 0;
+  for (const m of starts) {
+    if (!first || m.from > first.from) break;
+    if (!blank(at, m.from)) opens = false;
+    at = m.to;
+  }
+  return new Map(opening.map((m, index) => [m.from, index + (opens ? 1 : 2)]));
 }
 
 /** Lines short enough to show raw while you type in them; long paragraphs show only the mark you're in. */
@@ -235,10 +249,16 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
   const marks = state.field(marksField);
   const scenes = sceneNumbers(state);
   /** The speaker on a scene's mark, when the host has it (owner, 9 Nov). */
-  const readAloud = (markEnd: number, name: string): ReadAloud | undefined => {
+  const readAloud = (mark: { from: number; to: number }, name: string): ReadAloud | undefined => {
     if (!options.readSceneAloud) return undefined;
-    const said = spokenName(state, markEnd, name);
-    return { name, said: said?.said ?? null, stale: said?.stale ?? false };
+    const was = options.readSceneAloud.nameWas?.(state, mark.from);
+    const said = spokenName(state, mark.to, name, was);
+    return {
+      name,
+      said: said?.said ?? null,
+      stale: said?.stale ?? false,
+      ...(was && was !== name ? { was } : {}),
+    };
   };
   const raw = state.field(showMarksField);
   const shown = state.field(viewField);
@@ -576,7 +596,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 undefined,
                 false,
                 undefined,
-                readAloud(mark.to, mark.text),
+                scenes.has(mark.from) ? readAloud(mark, mark.text) : undefined,
               ),
             }),
           );
@@ -586,9 +606,13 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           add(mark.from, mark.to, Decoration.mark({ class: "am-break am-raw" }));
           break;
         }
-        // The scene it opens, numbered in text order (owner, 9 Nov).
-        const number = scenes.get(mark.from) ?? 1;
-        const label = options.sceneLabel?.(state, mark.from, number) ?? `Scene ${number}`;
+        // The scene it opens, numbered in text order (owner, 9 Nov); one with nothing after it
+        // opens none (review r18).
+        const number = scenes.get(mark.from);
+        const label =
+          number === undefined
+            ? "Scene break · nothing after it"
+            : (options.sceneLabel?.(state, mark.from, number) ?? `Scene ${number}`);
         add(
           mark.from,
           mark.to,
@@ -600,7 +624,9 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
               undefined,
               false,
               undefined,
-              readAloud(mark.to, label),
+              number === undefined
+                ? undefined
+                : readAloud(mark, options.readSceneAloud?.say?.(number) ?? label),
             ),
           }),
         );

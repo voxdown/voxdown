@@ -36,6 +36,18 @@ describe("scenes in text order (owner, 9 Nov)", () => {
     ]);
   });
 
+  it("skips a mark with nothing after it before the next, as Apply does (r18)", () => {
+    expect(numbersOf("One.\n\n---\n\n---\n\nTwo.\n\n---\n\nThree.")).toEqual([
+      ["---", 2],
+      ["---", 3],
+    ]);
+    expect(numbersOf("One.\n\n---\n\n## Den\n\nTwo.\n\n---\n\nThree.")).toEqual([
+      ["## Den", 2],
+      ["---", 3],
+    ]);
+    expect(numbersOf("One.\n\n---\n\n")).toEqual([]);
+  });
+
   it("reads past the front matter to see whether the story opens with a scene", () => {
     const front = "---\naudiobook-markup: 0.1\ntitle: Toast\n---\n\n";
     expect(numbersOf(`${front}---\n\nOne.\n\n---\n\nTwo.`)).toEqual([
@@ -81,5 +93,54 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
     expect(press(old, "---", "Scene 3")).toBe("One.\n\n---\n\nScene 3.\n\nTwo.");
     // A heading's own words that aren't a number are never taken for an old name.
     expect(spokenName(stateOf("## Den\n\nThe kitchen.\n\nTwo."), 6, "Den")).toBeNull();
+  });
+
+  it("knows a directed name by its words, and takes it out or renumbers it, marks kept (r18)", () => {
+    const after = "One.\n\n---".length;
+    const directed = "One.\n\n---\n\n@(brightly) Scene 2.\n\nTwo.";
+    expect(spokenName(stateOf(directed), after, "Scene 2")).toMatchObject({
+      said: "Scene 2.",
+      stale: false,
+    });
+    expect(press(directed, "---", "Scene 2")).toBe("One.\n\n---\n\nTwo.");
+    expect(spokenName(stateOf(directed), after, "Scene 3")).toMatchObject({ stale: true });
+    expect(press(directed, "---", "Scene 3")).toBe("One.\n\n---\n\n@(brightly) Scene 3.\n\nTwo.");
+    const given = "One.\n\n---\n\n@Cook (softly) “Scene 2.”\n\nTwo.";
+    expect(press(given, "---", "Scene 3")).toBe("One.\n\n---\n\n@Cook (softly) “Scene 3.”\n\nTwo.");
+    const heard = "## Pantry\n\n{audio only} @(softly) Kitchen.\n\nTwo.";
+    expect(press(heard, "##", "Pantry")).toBe(
+      "## Pantry\n\n{audio only} @(softly) Pantry.\n\nTwo.",
+    );
+  });
+
+  it("gives the name a paragraph of its own when no blank line follows the mark (r18)", () => {
+    const doc = "One.\n\n---\nTwo.\n\nSafe.";
+    const on = press(doc, "---", "Scene 2");
+    expect(on).toBe("One.\n\n---\n\nScene 2.\n\nTwo.\n\nSafe.");
+    expect(spokenName(stateOf(on), "One.\n\n---".length, "Scene 2")).toMatchObject({
+      stale: false,
+    });
+    expect(press(on, "---", "Scene 2")).toBe("One.\n\n---\n\nTwo.\n\nSafe.");
+    expect(press("## Den {hidden}\nOne.", "##", "Den")).toBe("## Den {hidden}\n\nDen.\n\nOne.");
+  });
+
+  it("knows a renamed heading's old name, and says its number in the story's language (r18)", () => {
+    const renamed = "## The Pantry\n\nThe Hallway.\n\nOne.";
+    expect(spokenName(stateOf(renamed), 13, "The Pantry")).toBeNull();
+    expect(spokenName(stateOf(renamed), 13, "The Pantry", "The Hallway")).toMatchObject({
+      stale: true,
+    });
+    const state = stateOf(renamed);
+    const change = sceneNameChange(state, 0, "The Pantry", "The Hallway");
+    expect(renamed.slice(0, change.from) + change.insert + renamed.slice(change.to)).toBe(
+      "## The Pantry\n\nThe Pantry.\n\nOne.",
+    );
+    expect(press("Een.\n\n---\n\nToneel 2.\n\nTwee.", "---", "Toneel 3")).toBe(
+      "Een.\n\n---\n\nToneel 3.\n\nTwee.",
+    );
+    expect(press("一。\n\n---\n\n第2场。\n\n二。", "---", "第3场")).toBe(
+      "一。\n\n---\n\n第3场。\n\n二。",
+    );
+    expect(press("一。\n\n---\n\n二。", "---", "第2场")).toBe("一。\n\n---\n\n第2场。\n\n二。");
   });
 });

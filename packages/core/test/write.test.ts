@@ -1,11 +1,14 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import v8 from "node:v8";
+import vm from "node:vm";
 import { describe, expect, it } from "vitest";
 import {
   type Speech,
   type Story,
   applyChanges,
   changesFrom,
+  format,
   insertLine,
   insertSound,
   isName,
@@ -757,4 +760,158 @@ describe("the writer, asked for what it can't do", () => {
     expect(write(long)).toContain("@Alicia “Hello,”");
     expect(performance.now() - start).toBeLessThan(3000);
   });
+});
+
+describe("review, round five", () => {
+  const nth = (source: string, at: number) => {
+    const story = parse(source);
+    return { story, speech: speeches(story)[at] as Speech };
+  };
+  const give = (source: string, at: number, name: string) => {
+    const { story, speech } = nth(source, at);
+    return applyChanges(source, setSpeaker(story, speech, name));
+  };
+  const say = (source: string, at: number, direction: string) => {
+    const { story, speech } = nth(source, at);
+    return applyChanges(source, setDirection(story, speech, direction));
+  };
+
+  it("gives an unmarked speech over paragraphs whole from any of them, from where it starts (§5.7)", () => {
+    expect(give("“One.\n\n“Two.”", 1, "Ann")).toBe("@Ann “One.\n\n“Two.”");
+    expect(give("“One.\n\n“Two.\n\n“Three,” said Ann.", 2, "Ann")).toBe(
+      "@Ann “One.\n\n“Two.\n\n“Three,” said Ann.",
+    );
+    expect(give("He said, “One.\n\n“Two.”", 1, "Ann")).toBe("He said, @Ann “One.\n\n“Two.”");
+    // A quote closed in its own paragraph carries nothing on.
+    expect(give("“One,” he said.\n\n“Two.”", 1, "Ann")).toBe("“One,” he said.\n\n@Ann “Two.”");
+  });
+
+  it("gives a later paragraph of an unmarked speech a direction of its own, inside its mark", () => {
+    expect(say("“One.\n\n“Two.”", 1, "soft")).toBe("“One.\n\n“@(soft)Two.”");
+    expect(say("“One.\n\n“Two.\n\n“Three,” said Ann.", 2, "soft")).toBe(
+      "“One.\n\n“Two.\n\n“@(soft)Three,” said Ann.",
+    );
+  });
+
+  it("throws when changes made together would undo each other, and makes those that don't", () => {
+    const together = parse("@Zoë (softly) “We’ll see,\nDon’t go.”");
+    const [first, second] = speeches(together) as [Speech, Speech];
+    first.speaker = "Ann";
+    second.speaker = "Cy";
+    expect(() => write(together)).toThrow(/undone by another/);
+    const apart = parse("“One.”\n\n“Two.”");
+    const [one, two] = speeches(apart) as [Speech, Speech];
+    one.speaker = "Ann";
+    two.speaker = "Bob";
+    expect(write(apart)).toBe("@Ann “One.”\n\n@Bob “Two.”");
+  });
+
+  it("changes only the lines that differ, even where other lines look alike", () => {
+    // Line 2 and line 9 are much alike: lining them up would rewrite everything between.
+    const before =
+      "::: @Gerald (whispering)\n“Hello,” said Gerald.\n:::\n\n::: whispering\n@Gerald “Hello. @(whispering) Hello.”\n:::\n\n“Hello,” said Gerald.\n";
+    const after =
+      "::: @Gerald (whispering)\n@Ann (whispering) “Hello,” @Ann (whispering) said Gerald.\n:::\n\n::: whispering\n@Gerald “Hello. @(whispering) Hello.”\n:::\n\n@Ann “Hello,” said Gerald.\n";
+    const changes = diffChanges(before, after);
+    expect(applyChanges(before, changes)).toBe(after);
+    expect(changes.map((c) => before.slice(c.from, c.to))).toEqual(["“Hello,”", ""]);
+  });
+
+  it("lines up long texts quickly, however their lines move", () => {
+    const n = 100_000;
+    const lines = Array.from({ length: n }, (_, at) => `Line ${at}.\n`);
+    const texts: Array<[string, string]> = [
+      [lines.join(""), [...lines].reverse().join("")],
+      [lines.join(""), [lines[n - 1], ...lines.slice(0, n - 1)].join("")],
+      [lines.join(""), lines.map((line, at) => (at % 2 ? line : `${line}x\n`)).join("")],
+      ["a\n".repeat(n), "a\nb\n".repeat(n / 2)],
+      [lines.join(""), lines.map((line) => `@Zed ${line}`).join("")],
+      [lines.join(""), lines.map((_, at) => lines[(at * 7919) % n]).join("")],
+    ];
+    for (const [a, b] of texts) {
+      const start = performance.now();
+      const changes = diffChanges(a, b);
+      expect(performance.now() - start).toBeLessThan(2000);
+      // Compared as a boolean: a failure would print two texts of 100,000 lines.
+      expect(applyChanges(a, changes) === b).toBe(true);
+    }
+  });
+
+  it("edits a line of many sounds quickly", () => {
+    const source = `@Tom “Hi.” ${"[tap] ".repeat(40_000)}he said.`;
+    const story = parse(source);
+    const said = speeches(story).filter((speech) => /\p{L}/u.test(speech.text));
+    const start = performance.now();
+    expect(give(source, 0, "Ann").startsWith("@Ann “Hi.”")).toBe(true);
+    const last = said[said.length - 1] as Speech;
+    expect(setSpeaker(story, last, "Ann")).toHaveLength(1);
+    expect(setDirection(story, last, "soft")).toHaveLength(1);
+    expect(insertSound(story, source.length - 3, "bang")).toHaveLength(1);
+    expect(performance.now() - start).toBeLessThan(3000);
+  });
+
+  it("escapes a parenthesis after a new name, and glues a name only where no space can go", () => {
+    // Unescaped, `(Not now.)` would be read as how Ann says it (§6.1).
+    expect(give("(Not now.) He left.", 0, "Ann")).toBe("@Ann \\(Not now.) He left.");
+    expect(give("@Tom “Hi.” (Not now.) He left.", 1, "Ann")).toBe(
+      "@Tom “Hi.” @Ann \\(Not now.) He left.",
+    );
+    // With no space between, a space after the name would show in the book.
+    expect(give("@Tom “Hi.”(he left).", 1, "Ann")).toBe("@Tom “Hi.”@Ann\\(he left).");
+    expect(give("@Tom “Hi.”—he left.", 1, "Ann")).toBe("@Tom “Hi.”@Ann—he left.");
+    // A name glued to a word would run on into it, and a space would show: no change can do.
+    expect(give("@Tom “Hi.”He left.", 1, "Ann")).toBe("@Tom “Hi.”He left.");
+    expect(say("@Tom “Hi.”He left.", 1, "soft")).toBe("@Tom “Hi.”@(soft)He left.");
+  });
+
+  it("writes a book detail with a control character or a YAML float's name as it was given", () => {
+    for (const value of ["One\rTwo", "Tab\there", "x\u0001y", "Line\u2028break", ".inf", "-.NaN"]) {
+      const story = parse("---\ntitle: Old\n---\n\nHello.");
+      const text = applyChanges(story.source, setMeta(story, "title", value));
+      expect(parse(text).meta.title, JSON.stringify(value)).toBe(value);
+      // No raw control character in the file: each is written as an escape.
+      const front = text.slice(0, text.indexOf("\n---"));
+      for (const raw of ["\r", "\u0001", "\u2028"]) expect(front).not.toContain(raw);
+    }
+    expect(
+      applyChanges(
+        "---\ntitle: Old\n---\n",
+        setMeta(parse("---\ntitle: Old\n---\n"), "title", ".inf"),
+      ),
+    ).toBe('---\ntitle: ".inf"\n---\n');
+  });
+
+  it("puts in no line that brings a new warning", () => {
+    const line = (text: string) => insertLine(parse("Hello.\n"), 0, text);
+    for (const text of ["%% an open note", "“An open quote", ":::", "@Ann"]) {
+      expect(line(text), text).toEqual([]);
+    }
+    expect(line("%% A note. %%")).toHaveLength(1);
+    expect(line("{page}")).toHaveLength(1);
+  });
+
+  it("keeps nothing it read once an edit, the writer or the formatter is done", () => {
+    // What an edit reads again and again is kept only while it works: ten edits to a long story
+    // once left hundreds of megabytes behind them.
+    v8.setFlagsFromString("--expose-gc");
+    const gc = vm.runInNewContext("gc") as () => void;
+    const paragraph =
+      "@Gerald “It was the kind of night that hums,” he said. The dragon yawned and turned over.\n\n";
+    const source = paragraph.repeat(6_000);
+    const story = parse(source);
+    const said = speeches(story);
+    gc();
+    const before = process.memoryUsage().heapUsed;
+    for (let at = 0; at < 10; at++) {
+      const target = said[(at * 997) % said.length] as Speech;
+      if (at % 2) setSpeaker(story, target, "Ann");
+      else setDirection(story, target, "softly");
+    }
+    insertSound(story, 100, "bang");
+    format(source);
+    (said[5] as Speech).speaker = "Ann";
+    write(story);
+    gc();
+    expect((process.memoryUsage().heapUsed - before) / 1e6).toBeLessThan(100);
+  }, 60_000);
 });

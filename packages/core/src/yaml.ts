@@ -229,7 +229,7 @@ class YamlReader {
       this.problem("Flow maps, anchors, aliases and tags are not supported here.", line);
       return stripComment(value);
     }
-    return plainScalar(this.continuePlain(stripComment(value), indent));
+    return plainScalar(this.continuePlain(value, indent));
   }
 
   private readNested(indent: number, path: readonly string[], sameIndentList: boolean): unknown {
@@ -237,9 +237,12 @@ class YamlReader {
     const next = this.peek();
     if (!next) return null;
     if (next.indent > indent) {
-      return isListItem(next.text)
-        ? this.readList(next.indent, path)
-        : this.readMap(next.indent, path);
+      if (isListItem(next.text)) return this.readList(next.indent, path);
+      if (readKey(next)) return this.readMap(next.indent, path);
+      // A scalar that starts on the line after its key (`narrator:` then `  Watson`).
+      this.lastContent = this.index;
+      this.index++;
+      return this.readValue(next.text, next, indent, path, false);
     }
     if (sameIndentList && next.indent === indent && isListItem(next.text)) {
       return this.readList(indent, path);
@@ -249,10 +252,13 @@ class YamlReader {
 
   /**
    * A plain scalar may continue on following lines that are indented more than its key. A line
-   * that reads as `key: value` is not a continuation; it is reported where it stands.
+   * that reads as `key: value` is not a continuation; it is reported where it stands. A comment
+   * ends the scalar (YAML 1.2, §7.3.3: no comment may sit inside a plain scalar), so a line after
+   * one is reported too, rather than read as part of it.
    */
   private continuePlain(value: string, indent: number): string {
-    let joined = value;
+    let joined = stripComment(value);
+    if (hasComment(value)) return joined;
     for (;;) {
       // Empty lines inside a plain scalar are line breaks (YAML folding): look past them.
       let ahead = this.index;
@@ -263,6 +269,7 @@ class YamlReader {
       joined += `${empty > 0 ? "\n".repeat(empty) : " "}${stripComment(next.text)}`;
       this.lastContent = ahead;
       this.index = ahead + 1;
+      if (hasComment(next.text)) return joined;
     }
   }
 
@@ -430,6 +437,11 @@ function stripFlowComment(text: string): string {
     if (!quote) itemStart = char === "[" || char === "," || (itemStart && /[ \t]/.test(char ?? ""));
   }
   return text.trim();
+}
+
+/** Whether a line has a comment: a `#` at its start or after white space. */
+function hasComment(text: string): boolean {
+  return /^#|[ \t]#/.test(text.trimStart());
 }
 
 /** A comment starts with `#` at the start or after white space. */

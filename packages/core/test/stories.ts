@@ -93,6 +93,16 @@ const block: fc.Arbitrary<string> = fc.oneof(
       .map(([name, a, b, c]) => `@${name} “${a}.\n\n“${b}.\n\n“${c}.”`),
   },
   {
+    // A speech over paragraphs nobody has marked yet, its tag at the end (§5.7).
+    weight: 1,
+    arbitrary: fc
+      .tuple(pick(QUOTES), pick(UTTERANCES), pick(UTTERANCES), pick(SAID), pick(NAMES))
+      .map(
+        ([[open, close], a, b, said, name]) =>
+          `${open}${a}.\n\n${open}${b},${close} ${said} ${name}.`,
+      ),
+  },
+  {
     weight: 1,
     arbitrary: fc
       .tuple(pick(NAMES), pick(DIRECTIONS), fc.array(line, { minLength: 1, maxLength: 2 }))

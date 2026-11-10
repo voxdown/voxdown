@@ -1,14 +1,9 @@
-/**
- * The lossless writer (§13). A story is written back from its source, so an unchanged story gives
- * back the same bytes. Fields changed in place on the model are written as the edits in `edit.ts`
- * make them, one after another, each on the text the ones before it made: only the marks that
- * changed are rewritten, and nothing else moves.
- */
 import {
   type TextChange,
   applyChanges,
   heardIndex,
   heardItem,
+  heardVoices,
   renameCharacter,
   sameHearing,
   setDirection,
@@ -19,6 +14,13 @@ import {
 import type { Block, Item, Line, Speech, Story, Vocal } from "./model";
 import { nameKey } from "./names";
 import { parse } from "./parse";
+/**
+ * The lossless writer (§13). A story is written back from its source, so an unchanged story gives
+ * back the same bytes. Fields changed in place on the model are written as the edits in `edit.ts`
+ * make them, one after another, each on the text the ones before it made: only the marks that
+ * changed are rewritten, and nothing else moves.
+ */
+import { session } from "./session";
 
 /**
  * Writes a story back to text. These fields may be changed in place before writing:
@@ -33,11 +35,17 @@ import { parse } from "./parse";
  * the text instead. A story whose shape no longer matches its source is an error.
  */
 export function write(story: Story): string {
+  return session(() => writeNow(story));
+}
+
+function writeNow(story: Story): string {
   const original = parse(story.source);
   checkShape(story, original);
   let text = story.source;
   // What the edits wrote, kept up to date as later edits move it.
   let written: Span[] = [];
+  // Each word a speaker change gave, by its place among what is heard (edits never move words).
+  const given: Array<{ index: number; speaker: string; what: string }> = [];
   // Each change is made on the text the ones before made, then read back: one that can't be made
   // as asked is an error, never a change quietly left out or one that does something else.
   const edit = (
@@ -94,10 +102,23 @@ export function write(story: Story): string {
         edit(
           (current) => setSpeaker(current, find(current, original, before), after.speaker),
           // The edit checks its own result (narration that holds a quote gives the quote): it
-          // is made unless it declined, or there was nothing to do.
-          (_, current, changes) =>
-            changes.length > 0 ||
-            nameKey(find(current, original, before).speaker) === nameKey(after.speaker),
+          // is made unless it declined, or there was nothing to do. The words it gave are kept,
+          // so that later changes can't take them back.
+          (now, current, changes) => {
+            const was = heardVoices(current);
+            heardVoices(now).forEach((voice, index) => {
+              if (
+                nameKey(voice.speaker) === nameKey(after.speaker) &&
+                nameKey(was[index]?.speaker ?? "") !== nameKey(after.speaker)
+              ) {
+                given.push({ index, speaker: after.speaker, what: before.text });
+              }
+            });
+            return (
+              changes.length > 0 ||
+              nameKey(find(current, original, before).speaker) === nameKey(after.speaker)
+            );
+          },
           `“${before.text}” said by ${after.speaker}`,
         );
       }
@@ -140,7 +161,20 @@ export function write(story: Story): string {
       `the ${before.kind}'s new ${before.kind === "note" ? "text" : before.kind === "instruction" ? "value" : "description"}`,
     );
   }
-  return withoutSpareMarks(text, written);
+  const done = withoutSpareMarks(text, written);
+  // Changes made one after another can undo each other (two stretches of one quote given to two
+  // characters): every word each one gave must still be said as it gave it.
+  if (given.length > 0) {
+    const voices = heardVoices(parse(done));
+    for (const { index, speaker, what } of given) {
+      if (nameKey(voices[index]?.speaker ?? "") !== nameKey(speaker)) {
+        throw new RangeError(
+          `write() can't make these changes together: “${what}” said by ${speaker} is undone by another.`,
+        );
+      }
+    }
+  }
+  return done;
 }
 
 /**
@@ -344,7 +378,7 @@ export function diffChanges(a: string, b: string): TextChange[] {
   }
   const middleA = linesA.slice(head, linesA.length - tail);
   const middleB = linesB.slice(head, linesB.length - tail);
-  const script = align(middleA, middleB);
+  const script = lineUp(middleA, middleB);
   const changes: TextChange[] = [];
   let offsetA = linesA.slice(0, head).reduce((sum, line) => sum + line.length, 0);
   let atA = 0;
@@ -399,6 +433,21 @@ function splitLines(text: string): string[] {
   return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
 }
 
+/** How many characters of two lines differ, their shared start and end aside. */
+function differing(a: string, b: string): number {
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let end = 0;
+  while (
+    end < a.length - start &&
+    end < b.length - start &&
+    a[a.length - 1 - end] === b[b.length - 1 - end]
+  ) {
+    end++;
+  }
+  return a.length + b.length - 2 * (start + end);
+}
+
 /** Whether two lines are one line changed within: most of them, at the start and end, the same. */
 function similar(a: string, b: string): boolean {
   if (a.trim() === "" || b.trim() === "") return false;
@@ -415,19 +464,173 @@ function similar(a: string, b: string): boolean {
   return (start + end) * 2 >= Math.max(a.length, b.length);
 }
 
+type Step = "=" | "~" | "-" | "+";
+
+/**
+ * How `a`'s lines become `b`'s, as cheaply as can be found quickly: exactly (`cheapest`) where
+ * that is quick; otherwise lined up first on the lines each has once, in the order both have them
+ * (as patience diff does), and each part between them in turn; and as they come (`align`) where a
+ * long part has none.
+ */
+function lineUp(a: readonly string[], b: readonly string[], depth = 0): Step[] {
+  const exact = cheapest(a, b, 250_000);
+  if (exact) return exact;
+  // Parts within parts only so deep, so text made to split one line at a time stays quick.
+  const anchors = depth < 12 ? uniqueInBoth(a, b) : [];
+  if (anchors.length === 0) return align(a, b);
+  const script: Step[] = [];
+  let i = 0;
+  let j = 0;
+  for (const [x, y] of [...anchors, [a.length, b.length] as const]) {
+    for (const step of lineUp(a.slice(i, x), b.slice(j, y), depth + 1)) script.push(step);
+    if (x < a.length) script.push("=");
+    i = x + 1;
+    j = y + 1;
+  }
+  return script;
+}
+
+/**
+ * The lines `a` and `b` each have once, as pairs of where they are, the most of them that come in
+ * the same order in both.
+ */
+function uniqueInBoth(a: readonly string[], b: readonly string[]): Array<[number, number]> {
+  const counts = new Map<string, [number, number, number]>();
+  a.forEach((line, i) => {
+    const count = counts.get(line);
+    if (count) count[0]++;
+    else counts.set(line, [1, 0, i]);
+  });
+  const pairs: Array<[number, number]> = [];
+  const inB = new Map<string, number>();
+  b.forEach((line, j) => {
+    const count = counts.get(line);
+    if (!count) return;
+    count[1]++;
+    inB.set(line, j);
+  });
+  for (const [line, [inA, timesB, i]] of counts) {
+    if (inA === 1 && timesB === 1) pairs.push([i, inB.get(line) as number]);
+  }
+  pairs.sort((p, q) => p[0] - q[0]);
+  // The longest run of pairs rising in `b` too (patience sorting).
+  const tops: number[] = [];
+  const back = new Int32Array(pairs.length);
+  for (const [n, [, y]] of pairs.entries()) {
+    let low = 0;
+    let high = tops.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if ((pairs[tops[mid] as number] as [number, number])[1] < y) low = mid + 1;
+      else high = mid;
+    }
+    back[n] = low > 0 ? (tops[low - 1] as number) : -1;
+    tops[low] = n;
+  }
+  const chosen: Array<[number, number]> = [];
+  for (
+    let n = tops.length > 0 ? (tops[tops.length - 1] as number) : -1;
+    n >= 0;
+    n = back[n] as number
+  ) {
+    chosen.push(pairs[n] as [number, number]);
+  }
+  return chosen.reverse();
+}
+
+/**
+ * The cheapest way, in characters, `a`'s lines become `b`'s: each line added or removed costs its
+ * length, and a line changed within costs what differs. Lines are lined up within a band about
+ * the diagonal, wide enough for the lines added or removed and as many again: null if that is more
+ * pairs than `budget`.
+ */
+function cheapest(a: readonly string[], b: readonly string[], budget: number): Step[] | null {
+  const n = a.length;
+  const m = b.length;
+  const SLACK = 64;
+  const lo = Math.max(-n, Math.min(0, m - n) - SLACK);
+  const hi = Math.min(m, Math.max(0, m - n) + SLACK);
+  const width = hi - lo + 1;
+  if ((n + 1) * width > budget) return null;
+  // The cost of each pair, row by row, and the way each was reached: 1 along, 2 a line
+  // removed, 3 a line added.
+  const way = new Uint8Array((n + 1) * width);
+  let previous = new Float64Array(width).fill(Number.POSITIVE_INFINITY);
+  let row = new Float64Array(width);
+  for (let i = 0; i <= n; i++) {
+    row.fill(Number.POSITIVE_INFINITY);
+    for (let k = 0; k < width; k++) {
+      const j = i + k + lo;
+      if (j < 0 || j > m) continue;
+      if (i === 0 && j === 0) {
+        row[k] = 0;
+        continue;
+      }
+      let cost = Number.POSITIVE_INFINITY;
+      let how = 0;
+      if (i > 0 && k + 1 < width) {
+        cost = (previous[k + 1] as number) + (a[i - 1] as string).length;
+        how = 2;
+      }
+      if (j > 0 && k > 0) {
+        const added = (row[k - 1] as number) + (b[j - 1] as string).length;
+        if (added < cost) {
+          cost = added;
+          how = 3;
+        }
+      }
+      if (i > 0 && j > 0) {
+        const x = a[i - 1] as string;
+        const y = b[j - 1] as string;
+        const before = previous[k] as number;
+        // What differs is at least what one is longer by: only worked out if it could do.
+        if (x === y ? before <= cost : before + Math.abs(x.length - y.length) < cost) {
+          const along = x === y ? before : before + differing(x, y);
+          if (along <= cost) {
+            cost = along;
+            how = 1;
+          }
+        }
+      }
+      row[k] = cost;
+      way[i * width + k] = how;
+    }
+    [previous, row] = [row, previous];
+  }
+  const script: Step[] = [];
+  let i = n;
+  let k = m - n - lo;
+  while (i > 0 || k + lo + i > 0) {
+    const how = way[i * width + k];
+    if (how === 1) {
+      script.push(a[i - 1] === b[i - 1 + k + lo] ? "=" : "~");
+      i--;
+    } else if (how === 2) {
+      script.push("-");
+      i--;
+      k++;
+    } else {
+      script.push("+");
+      k--;
+    }
+  }
+  return script.reverse();
+}
+
 /**
  * How `a`'s lines become `b`'s: "=" keeps a line, "~" changes one within, "-" removes one and "+"
  * adds one. The writer changes lines within and only now and then adds or removes one, so lines
- * are lined up as they come, looking a little ahead where some were added or removed: linear in
- * the text, however many lines changed.
+ * are lined up as they come, looking a little ahead where they part: linear in the text, however
+ * many lines changed.
  */
-function align(a: readonly string[], b: readonly string[]): Array<"=" | "~" | "-" | "+"> {
-  const script: Array<"=" | "~" | "-" | "+"> = [];
+function align(a: readonly string[], b: readonly string[]): Step[] {
+  const script: Step[] = [];
   const AHEAD = 16;
-  const matches = (x: string | undefined, y: string | undefined) =>
-    x !== undefined && y !== undefined && (x === y || similar(x, y));
   let i = 0;
   let j = 0;
+  const push = (step: Step, count: number) => {
+    for (let n = 0; n < count; n++) script.push(step);
+  };
   while (i < a.length || j < b.length) {
     if (i < a.length && j < b.length) {
       if (a[i] === b[j]) {
@@ -443,30 +646,53 @@ function align(a: readonly string[], b: readonly string[]): Array<"=" | "~" | "-
         continue;
       }
     }
-    let added = 0;
-    for (let q = 1; q <= AHEAD && j + q < b.length && !added; q++) {
-      if (matches(a[i], b[j + q])) added = q;
-    }
-    let removed = 0;
-    for (let p = 1; p <= AHEAD && i + p < a.length && !removed; p++) {
-      if (matches(a[i + p], b[j])) removed = p;
-    }
-    if (added && (!removed || added <= removed)) {
-      for (let q = 0; q < added; q++) script.push("+");
-      j += added;
-    } else if (removed) {
-      for (let p = 0; p < removed; p++) script.push("-");
-      i += removed;
-    } else {
-      if (i < a.length) {
-        script.push("-");
-        i++;
+    // Where the two meet again, a little ahead, and what each way there costs in characters:
+    // lines added, lines removed, or lines replaced up to the next they share; a line only like
+    // the one it meets costs what differs. Less what then runs on the same, so a way that meets
+    // for longer beats one that parts again at once.
+    let best = { cost: Number.POSITIVE_INFINITY, removed: 1, added: 1 };
+    const consider = (removed: number, added: number, cost: number) => {
+      let score = cost;
+      for (let run = 0; run < AHEAD; run++) {
+        const x = a[i + removed + run];
+        if (x === undefined || x !== b[j + added + run]) break;
+        score -= x.length;
       }
-      if (j < b.length) {
-        script.push("+");
-        j++;
+      if (score < best.cost) best = { cost: score, removed, added };
+    };
+    const length = (lines: readonly string[], from: number, count: number) => {
+      let sum = 0;
+      for (let n = from; n < from + count; n++) sum += (lines[n] as string).length;
+      return sum;
+    };
+    for (let k = 1; k <= AHEAD; k++) {
+      const x = a[i + k];
+      const y = b[j + k];
+      if (x === undefined && y === undefined) break;
+      if (x !== undefined && x === y) {
+        consider(k, k, length(a, i, k) + length(b, j, k));
+        break;
       }
     }
+    for (let q = 1; q <= AHEAD && j + q < b.length && i < a.length; q++) {
+      const y = b[j + q] as string;
+      if (a[i] !== y && !similar(a[i] as string, y)) continue;
+      consider(0, q, length(b, j, q) + differing(a[i] as string, y));
+      break;
+    }
+    for (let p = 1; p <= AHEAD && i + p < a.length && j < b.length; p++) {
+      const x = a[i + p] as string;
+      if (x !== b[j] && !similar(x, b[j] as string)) continue;
+      consider(p, 0, length(a, i, p) + differing(x, b[j] as string));
+      break;
+    }
+    // Nothing met within reach: a line goes for a line.
+    const removed = Math.min(best.removed, a.length - i);
+    const added = Math.min(best.added, b.length - j);
+    push("-", removed);
+    push("+", added);
+    i += removed;
+    j += added;
   }
   return script;
 }

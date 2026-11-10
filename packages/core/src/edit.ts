@@ -1,8 +1,3 @@
-/**
- * Edits that follow the spec's rules for tools (§13): each returns the smallest set of text
- * changes that makes it, and never touches the author's spacing, quotation marks or line breaks
- * elsewhere. Apply them with `applyChanges`, then parse again.
- */
 import { hasLetterOrDigit } from "./chars";
 import { baseSpeaker } from "./groups";
 import { scanName } from "./inline";
@@ -11,6 +6,12 @@ import type { Block, Group, Item, Line, Speech, Story, Vocal } from "./model";
 import { nameKey } from "./names";
 import { parse } from "./parse";
 import { bookText as readBook } from "./readings";
+/**
+ * Edits that follow the spec's rules for tools (§13): each returns the smallest set of text
+ * changes that makes it, and never touches the author's spacing, quotation marks or line breaks
+ * elsewhere. Apply them with `applyChanges`, then parse again.
+ */
+import { onForget, remembering, session } from "./session";
 import type { Range } from "./source";
 import { type YamlKey, readYaml } from "./yaml";
 
@@ -132,10 +133,11 @@ function quoteOf(
   // speaker (§6.4), past any sound, page turn or note: the run is one stretch.
   if (!speech.quoted && !speech.mark) {
     const stretches = narrationRun(story, speech);
+    const inRun = new Set<Item>(stretches);
     const last = stretches[stretches.length - 1] as Speech;
     const items = line.items.filter(
       (item) =>
-        (item.kind === "speech" && stretches.includes(item)) ||
+        (item.kind === "speech" && inRun.has(item)) ||
         (item.kind === "vocal" &&
           !item.mark &&
           item.range.from > speech.range.from &&
@@ -164,12 +166,13 @@ function quoteOf(
   while (joined(said[from - 1], said[from])) from--;
   while (joined(said[to], said[to + 1])) to++;
   const stretches = said.slice(from, to + 1);
+  const inQuote = new Set<Item>(stretches);
   const start = items.indexOf(stretches[0] as Speech);
   const end = items.indexOf(stretches[stretches.length - 1] as Speech);
   const inside = items
     .slice(start, end + 1)
     .filter((item) =>
-      item.kind === "speech" ? stretches.includes(item) : item.kind === "vocal" && !item.mark,
+      item.kind === "speech" ? inQuote.has(item) : item.kind === "vocal" && !item.mark,
     );
   return { stretches, items: inside };
 }
@@ -230,6 +233,42 @@ function narrationCarrying(
   return done;
 }
 
+/**
+ * Where an unmarked speech over paragraphs starts, if `speech` is one of its later paragraphs: the
+ * narration in a paragraph before whose open quote goes on into this one (§5.7). Undefined if
+ * it isn't one.
+ */
+function narrationOrigin(story: Story, speech: Speech): Speech | undefined {
+  if (speech.quoted || speech.mark || !sameName(speech.speaker, story.meta.narrator)) return;
+  const { block } = place(story, speech);
+  if (block.kind !== "paragraph") return;
+  const first = block.lines.flatMap((line) => line.items).find((item) => item.kind === "speech");
+  if (first !== speech || !OPENING_MARKS.has(story.source[speech.textRange.from] ?? "")) return;
+  const at = story.blocks.indexOf(block);
+  for (let back = at - 1; back >= 0 && back >= at - 64; back--) {
+    const before = story.blocks[back] as Block;
+    if (before.kind !== "paragraph") return;
+    const said = before.lines
+      .flatMap((line) => line.items)
+      .filter((item): item is Speech => item.kind === "speech");
+    for (const candidate of [...said].reverse()) {
+      if (candidate.quoted || candidate.mark) continue;
+      const quotes = quotesWithin(story, candidate);
+      const last = quotes[quotes.length - 1];
+      if (!last || last.closed) continue;
+      const end = narrationRun(story, candidate).at(-1) as Speech;
+      if (narrationCarrying(story, end, last).stretches.includes(speech)) {
+        return narrationOrigin(story, candidate) ?? candidate;
+      }
+    }
+    // A paragraph of page turns or notes alone is passed over; one with words ends the search.
+    if (said.some((stretch) => hasLetterOrDigit(stretch.text))) return;
+  }
+  return;
+}
+
+const OPENING_MARKS = new Set(['"', "'", "“", "‘", "„", "‚", "«", "»", "‹", "「", "『"]);
+
 /** Whether a speech carries on the one in the paragraph before (§5.7): it opens a paragraph with the quote's mark. */
 function carriesParagraph(story: Story, speech: Speech): boolean {
   if (!speech.continued || !speech.openQuote || speech.mark) return false;
@@ -267,19 +306,16 @@ function carriedOn(line: Line, speech: Speech): Speech | undefined {
 
 /**
  * A mark written at `at`, with the space after it §13.3 writes, unless the space would show in the
- * book: between two characters with no space between them (`„Guten Morgen“@(leise), sagte`) a mark
- * goes without one, if what follows can't be read as part of it (a name's letters, or a direction
- * or sound of its own). `next` is what will follow it, when that is an escape it brings.
+ * book: between two characters with no space between them (`„Guten Morgen“@(leise), sagte`,
+ * `”@Ann—he`) a mark goes without one. Where a name would then run on into what follows
+ * (`”@AnnHe`), the edit reads it back, hears it differently and declines, as it would have to
+ * with the space.
  */
-function markAt(source: string, at: number, mark: string, next = source[at]): string {
+function markAt(source: string, at: number, mark: string): string {
   const before = source[at - 1];
-  const after = next;
-  if (before === undefined || after === undefined || /\s/.test(before) || /\s/.test(after)) {
-    return `${mark} `;
-  }
-  // A mark ending in its direction's `)` can't run on; a bare name runs on into a name's letters.
-  const glued = mark.endsWith(")") || !/[\p{L}\p{N}\p{M}_'’(\[@-]/u.test(after);
-  return glued ? mark : `${mark} `;
+  const next = source[at];
+  const spaced = before === undefined || next === undefined || /\s/.test(before + next);
+  return spaced ? `${mark} ` : mark;
 }
 
 /**
@@ -316,6 +352,13 @@ function markText(speaker: string, direction: string | null): string {
  * changing other words or voices, it returns no changes.
  */
 export function setSpeaker(story: Story, speech: Speech, name: string): TextChange[] {
+  return session(() => setSpeakerNow(story, speech, name));
+}
+
+function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[] {
+  // A later paragraph of an unmarked speech over paragraphs is given with the whole speech.
+  const origin = narrationOrigin(story, speech);
+  if (origin) return setSpeaker(story, origin, name);
   // A quote is given away whole, with the sounds made inside it.
   const { stretches, items: quote } = quoteOf(story, speech, true);
   const first = stretches[0] as Speech;
@@ -480,10 +523,7 @@ function speakerChanges(
   } else {
     // A quote carried on from a mark keeps how it is said: `@Zed (yawning) “Very.”`.
     const at = speech.openQuote?.from ?? quoteAt ?? beforeGlued(story, line, speech.textRange.from);
-    const escaped = !speech.quoted && quoteAt === undefined && story.source[at] === "(";
-    const mark = markText(speaker, how);
-    const insert = markAt(story.source, at, mark, escaped ? "\\" : undefined);
-    changes.push({ from: at, to: at, insert });
+    changes.push({ from: at, to: at, insert: markAt(story.source, at, markText(speaker, how)) });
   }
   // Words that open with `(` would read as the new mark's direction: `@Gerald \(sighs)`.
   if (!speech.quoted && quoteAt === undefined && story.source[speech.textRange.from] === "(") {
@@ -528,6 +568,10 @@ function speakerChanges(
  * direction a group gives can't be removed this way; give the stretch another one instead.
  */
 export function setDirection(story: Story, speech: Speech, direction: string | null): TextChange[] {
+  return session(() => setDirectionNow(story, speech, direction));
+}
+
+function setDirectionNow(story: Story, speech: Speech, direction: string | null): TextChange[] {
   // To its closing mark, or to the next `@(…)` inside it.
   const { stretches, items: quote } = quoteOf(story, speech, false);
   const changes = directionChanges(story, stretches[0] as Speech, direction);
@@ -546,6 +590,14 @@ export function setDirection(story: Story, speech: Speech, direction: string | n
  * may move them about, and a stretch left with nothing but punctuation isn't read aloud (§12.1).
  */
 const NOT_WORDS = /[\s\p{P}]/u;
+/** NOT_WORDS of the first 128 characters, looked up rather than matched: most text is these. */
+const ASCII_NOT_WORDS = Array.from({ length: 128 }, (_, code) =>
+  NOT_WORDS.test(String.fromCharCode(code)),
+);
+const notWord = (char: string) => {
+  const code = char.charCodeAt(0);
+  return code < 128 ? (ASCII_NOT_WORDS[code] as boolean) : NOT_WORDS.test(char);
+};
 
 type Voice = { speaker: string; direction: string | null };
 
@@ -563,30 +615,47 @@ type Heard = Voice & {
 
 function heard(story: Story, target: readonly Item[] = []): Heard[] {
   const all = heardCache.get(story) ?? hear(story);
-  heardCache.set(story, all);
+  if (remembering()) {
+    heardCache.set(story, all);
+    held.add(story);
+  }
   if (target.length === 0) return all;
   const targets = new Set(target);
   return all.map((char) => (targets.has(char.item) ? { ...char, target: true } : char));
 }
 
-// What an edit reads again and again, kept: stories by their text, and what each is heard and
-// printed as. The stories are never changed.
+// What an edit reads again and again, kept while it works (session.ts): stories by their text,
+// and what each is heard and printed as. The stories are never changed.
 const heardCache = new WeakMap<Story, Heard[]>();
 const bookCache = new WeakMap<Story, string>();
 const recentStories: Story[] = [];
+const held = new Set<Story>();
+onForget(() => {
+  for (const story of held) {
+    heardCache.delete(story);
+    bookCache.delete(story);
+  }
+  held.clear();
+  recentStories.length = 0;
+});
 
 function parsed(text: string): Story {
   const known = recentStories.find((story) => story.source === text);
   if (known) return known;
   const story = parse(text);
-  recentStories.unshift(story);
-  if (recentStories.length > 8) recentStories.pop();
+  if (remembering()) {
+    recentStories.unshift(story);
+    if (recentStories.length > 8) recentStories.pop();
+  }
   return story;
 }
 
 function bookOf(story: Story): string {
   const book = bookCache.get(story) ?? readBook(story);
-  bookCache.set(story, book);
+  if (remembering()) {
+    bookCache.set(story, book);
+    held.add(story);
+  }
   return book;
 }
 
@@ -599,8 +668,11 @@ function hear(story: Story, target: readonly Item[] = []): Heard[] {
       .filter((item) => item.kind !== "speech" && item.kind !== "vocal")
       .map((item) => item.range)
       .sort((a, b) => a.from - b.from);
+    // Items come in order along the line, so the pointer into what isn't heard only moves on
+    // (and starts over in the odd case that a stretch begins before the last one did).
+    let next = 0;
+    let previous = -1;
     for (const item of line.items) {
-      let next = 0;
       let from: number;
       let to: number;
       // A stretch with no letter or digit in it isn't read aloud (§12.1), so it isn't heard.
@@ -611,16 +683,27 @@ function hear(story: Story, target: readonly Item[] = []): Heard[] {
         from = story.source.indexOf("[", item.range.from) + 1;
         to = item.range.to - 1;
       } else continue;
+      if (from < previous) next = 0;
+      previous = from;
       let first = true;
+      const isTarget = targets.has(item);
       for (let at = from; at < to; at++) {
         const char = story.source[at] as string;
-        if (NOT_WORDS.test(char)) continue;
+        if (notWord(char)) continue;
         if (item.kind === "speech") {
           while (next < unheard.length && (unheard[next] as Range).to <= at) next++;
           const range = unheard[next];
           if (range && range.from <= at) continue;
         }
-        out.push({ char, at, item, first, target: targets.has(item), ...voiceOf(item) });
+        out.push({
+          char,
+          at,
+          item,
+          first,
+          target: isTarget,
+          speaker: item.speaker,
+          direction: item.direction,
+        });
         first = false;
       }
     }
@@ -632,7 +715,7 @@ const voiceOf = (item: Speech | Vocal): Voice => ({
   speaker: item.speaker,
   direction: item.direction,
 });
-const sameName = (a: string, b: string) => nameKey(a) === nameKey(b);
+const sameName = (a: string, b: string) => a === b || nameKey(a) === nameKey(b);
 
 type Promise = {
   /** Whether a character of the edited stretch is said as the edit promises. */
@@ -823,6 +906,14 @@ export function heardIndex(story: Story, item: Speech | Vocal): number {
   return heard(story).findIndex((char) => char.item === item);
 }
 
+/**
+ * Who says each character heard, and how, in order (for the writer; not part of the package's
+ * API).
+ */
+export function heardVoices(story: Story): Voice[] {
+  return heard(story).map((char) => ({ speaker: char.speaker, direction: char.direction }));
+}
+
 /** Whether two stories have the same words heard, each said by the same character in the same way. */
 export function sameHearing(a: Story, b: Story): boolean {
   return sameHeard(heard(a), heard(b));
@@ -902,7 +993,7 @@ function giveBack(story: Story, char: Heard, voice: Voice): { at: number; insert
     item.kind === "speech" && sameSpeaker
       ? direction
       : markText(spelled(story, voice.speaker), voice.direction);
-  const insert = markAt(source, at, mark, escaped ? "\\" : undefined) + (escaped ? "\\" : "");
+  const insert = markAt(source, at, mark) + (escaped ? "\\" : "");
   return { at, insert };
 }
 
@@ -961,12 +1052,15 @@ function directionChanges(story: Story, speech: Speech, direction: string | null
       const at = speech.mark.nameRange.to;
       return [{ from: at, to: at, insert: ` (${text})` }];
     }
-    // A paragraph that carries a speech on keeps the quote's mark first (§5.7).
+    // A paragraph that carries a speech on keeps the quote's mark first (§5.7), as does one that
+    // carries an unmarked speech's quote on.
     const at = speech.openQuote
       ? carriesParagraph(story, speech)
         ? speech.openQuote.to
         : speech.openQuote.from
-      : speech.textRange.from;
+      : narrationOrigin(story, speech)
+        ? speech.textRange.from + 1
+        : speech.textRange.from;
     return [{ from: at, to: at, insert: markAt(story.source, at, `@(${text})`) }];
   }
 
@@ -1034,6 +1128,10 @@ function removeWithSpace(source: string, range: Range): Range {
  * and every mark. Their full name is left alone.
  */
 export function renameCharacter(story: Story, from: string, to: string): TextChange[] {
+  return session(() => renameCharacterNow(story, from, to));
+}
+
+function renameCharacterNow(story: Story, from: string, to: string): TextChange[] {
   checkName(to);
   const key = nameKey(from);
   if (key === nameKey(to)) return [];
@@ -1100,6 +1198,10 @@ export function renameCharacter(story: Story, from: string, to: string): TextCha
  * the front matter when they aren't there yet. Nothing in the story changes.
  */
 export function setFullName(story: Story, handle: string, name: string): TextChange[] {
+  return session(() => setFullNameNow(story, handle, name));
+}
+
+function setFullNameNow(story: Story, handle: string, name: string): TextChange[] {
   checkName(handle);
   const changes = fullNameChanges(story, handle, name);
   // Read back: the character has the name, and everyone else in the cast is as they were.
@@ -1154,6 +1256,10 @@ function fullNameChanges(story: Story, handle: string, name: string): TextChange
 
 /** Book details in the front matter: `title`, `subtitle`, `author`, `language`, `narrator`… */
 export function setMeta(story: Story, key: string, value: string | null): TextChange[] {
+  return session(() => setMetaNow(story, key, value));
+}
+
+function setMetaNow(story: Story, key: string, value: string | null): TextChange[] {
   const changes = metaChanges(story, key, value);
   const asked = value === null ? undefined : value;
   // Read back: the detail is as asked, and every other detail and the cast as they were, so the
@@ -1199,6 +1305,10 @@ function metaChanges(story: Story, key: string, value: string | null): TextChang
  * (§8.2), nor in the front matter. Returns no changes if the story would then be heard differently.
  */
 export function insertSound(story: Story, offset: number, description: string): TextChange[] {
+  return session(() => insertSoundNow(story, offset, description));
+}
+
+function insertSoundNow(story: Story, offset: number, description: string): TextChange[] {
   const source = story.source;
   inText(source, offset);
   if (description.trim() === "") return [];
@@ -1273,6 +1383,10 @@ export function insertSound(story: Story, offset: number, description: string): 
  * of its own. Returns no changes if the rest of the story would then be heard differently.
  */
 export function insertLine(story: Story, offset: number, text: string): TextChange[] {
+  return session(() => insertLineNow(story, offset, text));
+}
+
+function insertLineNow(story: Story, offset: number, text: string): TextChange[] {
   const source = story.source;
   inText(source, offset);
   let at = Math.max(lineStart(source, offset), bodyStart(story));
@@ -1312,7 +1426,8 @@ export function insertLine(story: Story, offset: number, text: string): TextChan
     .map((char) => char.char)
     .join("");
   const same = sameHeard(heard(story), rest) && own.map((char) => char.char).join("") === alone;
-  return same ? changes : [];
+  // Like every edit, it brings no new warning: a note or quote left open, a stray `:::`.
+  return same && noNewWarnings(story, changes) ? changes : [];
 }
 
 function inText(source: string, offset: number): void {
@@ -1407,8 +1522,23 @@ export function yamlScalar(value: string): string {
     value === value.trim() &&
     !/^[-?:,[\]{}#&*!|>'"%@`]/.test(value) &&
     !/: |:$| #|[\n\r\t]/.test(value) &&
-    !/^(?:null|~|true|false|yes|no|on|off)$/i.test(value) &&
+    !UNPRINTABLE.test(value) &&
+    !/^(?:null|~|true|false|yes|no|on|off|[-+]?\.(?:inf|nan))$/i.test(value) &&
     !/^[-+]?(?:\.?\d)/.test(value);
   if (plain) return value;
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\t/g, "\\t")}"`;
+  const escaped = value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t")
+    .replace(
+      new RegExp(UNPRINTABLE.source, "g"),
+      (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+    );
+  return `"${escaped}"`;
 }
+
+/** What YAML writes only as an escape: control characters, line and paragraph separators, a BOM. */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it finds
+const UNPRINTABLE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u2028\u2029\ufeff]/;

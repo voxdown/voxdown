@@ -165,6 +165,8 @@ type Segment = {
   parens: Map<number, number>;
   /** For each `[`, its `]`, with brackets inside balanced: a link's text may hold some. */
   squares: Map<number, number>;
+  /** The `[` of each would-be link that holds another: it isn't one (Markdown). */
+  nesting: Set<number>;
   next: { "]": Int32Array; "}": Int32Array };
 };
 let segment: Segment | null = null;
@@ -194,7 +196,19 @@ function scanSegment(source: string, from: number, to: number): Segment {
     brackets[at] = plain[at] && source[i] === "]" ? i : (brackets[at + 1] as number);
     braces[at] = plain[at] && source[i] === "}" ? i : (braces[at + 1] as number);
   }
-  return { source, from, to, parens, squares, next: { "]": brackets, "}": braces } };
+  // A link may not hold another (Markdown): where links nest, the innermost is the link.
+  const candidates = [...squares.keys()]
+    .filter((open) => {
+      const close = squares.get(open) as number;
+      return source[close + 1] === "(" && parens.has(close + 1);
+    })
+    .sort((a, b) => a - b);
+  const nesting = new Set<number>();
+  candidates.forEach((open, index) => {
+    const next = candidates[index + 1];
+    if (next !== undefined && next < (squares.get(open) as number)) nesting.add(open);
+  });
+  return { source, from, to, parens, squares, nesting, next: { "]": brackets, "}": braces } };
 }
 
 function inSegment(source: string, from: number, to: number): Segment | null {
@@ -320,6 +334,7 @@ function linkAt(
   at: number,
   to: number,
 ): { close: number; end: number; target: string } | null {
+  if (inSegment(source, at, to)?.nesting.has(at)) return null;
   const close = matchSquare(source, at, to);
   if (close < 0 || close + 1 >= to || source[close + 1] !== "(") return null;
   const end = matchParen(source, close + 1, to);
@@ -357,6 +372,8 @@ function matchSquare(source: string, open: number, to: number): number {
 
 /** `[a sound]` (§8.1), or a Markdown link, `[text](address)`, whose text is read (§8.3). */
 function lexBracket(source: string, at: number, to: number, warn: Warn): Atom | null {
+  // A `[` whose link holds another link is text: the inner one is the link (Markdown).
+  if (inSegment(source, at, to)?.nesting.has(at)) return null;
   // A link whose text holds brackets: `[a [fine] story](…)`.
   const link = linkAt(source, at, to);
   if (link && link.close !== findUnescaped(source, at + 1, to, "]")) {

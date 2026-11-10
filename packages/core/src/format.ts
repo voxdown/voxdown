@@ -1,3 +1,8 @@
+import { type TextChange, applyChanges, hearingDifferences, sameHearing } from "./edit";
+import { lexedTokens } from "./lexed";
+import { type ScriptLine, lines } from "./lines";
+import type { Item, Story } from "./model";
+import { parse } from "./parse";
 /**
  * The formatter (§13, rule 8): tidies a file only when its author asks, and never changes who says
  * what. It writes names as the cast spells them, trims and collapses spaces, makes runs of blank
@@ -5,11 +10,7 @@
  * become curly ones only when asked, in the story's language. The front matter, group lines and
  * each line's line ending stay as written.
  */
-import { type TextChange, applyChanges, hearingDifferences, sameHearing } from "./edit";
-import { lexedTokens } from "./lexed";
-import { type ScriptLine, lines } from "./lines";
-import type { Item, Story } from "./model";
-import { parse } from "./parse";
+import { session } from "./session";
 import { SourceText } from "./source";
 
 export type FormatOptions = {
@@ -25,6 +26,10 @@ export type FormatOptions = {
 
 /** Formats a file. An already formatted file comes back unchanged. */
 export function format(source: string, options: FormatOptions = {}): string {
+  return session(() => formatNow(source, options));
+}
+
+function formatNow(source: string, options: FormatOptions): string {
   let text = source;
   if (options.names !== false) text = applyChanges(text, nameChanges(parse(text)));
   // Each step keeps what it can: a line whose change would make anyone say anything differently
@@ -170,7 +175,7 @@ function halving(
     if (part.length === 0) return;
     const changes = part.flat();
     if (same(applyChanges(text, [...kept, ...changes]))) {
-      kept.push(...changes);
+      for (const change of changes) kept.push(change);
       return;
     }
     if (part.length === 1) return;

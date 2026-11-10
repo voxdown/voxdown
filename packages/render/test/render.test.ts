@@ -101,6 +101,12 @@ describe("the book view", () => {
     );
   });
 
+  it("makes the innermost of links inside links the link, as Markdown and the parser do", () => {
+    const html = (text: string) => renderBook(parse(text), { header: false });
+    expect(html("[a [b](x) c](y)")).toContain('[a <a href="x">b</a> c](y)');
+    expect(html("[[b](x)](y)")).toContain('[<a href="x">b</a>](y)');
+  });
+
   it("reads a link's or an image's address to its balancing parenthesis, as the parser does", () => {
     const link = "See [the bat](https://en.wikipedia.org/wiki/Bat_(animal)) here.";
     const image = "![A bat (flying)](bat_(1).png) here.";
@@ -111,6 +117,20 @@ describe("the book view", () => {
       expect(render(parse(image), { header: false })).toMatch(
         /<img[^>]* src="bat_\(1\)\.png" alt="A bat \(flying\)">/,
       );
+    }
+  });
+
+  it("renders a very long line, and brackets nested deep, in good time", () => {
+    for (const text of [
+      "word ".repeat(60_000),
+      "@Tom “a” [b] {page} %% n %% ".repeat(5_000),
+      `${"[".repeat(100_000)}x${"]".repeat(100_000)}(y)`,
+    ]) {
+      const story = parse(text);
+      const start = performance.now();
+      renderBook(story, { positions: true });
+      renderScript(story, { positions: true });
+      expect(performance.now() - start, text.slice(0, 6)).toBeLessThan(3000);
     }
   });
 

@@ -32,6 +32,8 @@ export type Spoken = {
   speaker: string;
   direction: string | null;
   target: boolean;
+  /** Whether the edit may leave this character of its stretch as it was (see narrationBefore). */
+  optional: boolean;
   /** Whether its stretch carries on a quote from the line or paragraph before (§5.7). */
   carries: boolean;
   /**
@@ -100,12 +102,66 @@ export function quoteOf(story: Story, target: Speech, acrossDirections = true): 
     );
 }
 
+const OPENS = /^\s*["'“‘„‚«‹»›]/u;
+
+/** Whether a paragraph's text leaves a quote open: its last quotation mark opens one. */
+function leavesOpen(paragraph: string): boolean {
+  // Apostrophes aside: rock ’n’ roll's, a word's own, and one that starts a word (’90s).
+  const text = paragraph.replace(/[’']n[’']/gu, "n");
+  const marks = [...text.matchAll(/["'“”‘’„‚«»‹›]/gu)].filter((m) => {
+    const at = m.index ?? 0;
+    const before = text[at - 1] ?? " ";
+    const after = text[at + 1] ?? " ";
+    if (!/['’]/u.test(m[0])) return true;
+    return (
+      !(/\p{L}/u.test(before) && /\p{L}/u.test(after)) && !(m[0] === "’" && /\s/u.test(before))
+    );
+  });
+  const last = marks.at(-1);
+  if (!last) return false;
+  const before = text[(last.index ?? 0) - 1] ?? " ";
+  return /[“‘„‚«‹]/u.test(last[0]) || (/["']/u.test(last[0]) && /\s/u.test(before));
+}
+
+/**
+ * The narration of the paragraphs before `target`'s that an unmarked speech may have started in:
+ * a paragraph of narration that opens with a quotation mark carries on a quote the one before left
+ * open (§5.7), so giving it away may give that whole speech, from where it started. The edit may
+ * move these words, or not.
+ */
+export function narrationBefore(story: Story, target: Speech): Item[] {
+  if (target.quoted || target.mark || !sameName(target.speaker, story.meta.narrator)) return [];
+  const blocks = story.blocks.filter((block) => block.kind === "paragraph");
+  const said = (at: number) =>
+    (blocks[at]?.lines ?? [])
+      .flatMap((line) => line.items)
+      .filter((item): item is Speech => item.kind === "speech");
+  let at = blocks.findIndex((_, index) => said(index)[0] === target);
+  const chain: Item[] = [];
+  while (at > 0 && OPENS.test(said(at)[0]?.text ?? "")) {
+    const before = said(at - 1);
+    const narration = before.every(
+      (item) => !item.quoted && !item.mark && sameName(item.speaker, story.meta.narrator),
+    );
+    if (before.length === 0 || !narration || !leavesOpen(before.map((s) => s.text).join(" ")))
+      break;
+    chain.unshift(...before);
+    at--;
+  }
+  return chain;
+}
+
 /**
  * Each character of what is heard, with who says it and how: the words of every stretch and the
  * sounds characters make (`@Gerald [snores]`); spaces and punctuation aside. `target` marks
  * the characters of the items an edit is made to.
  */
-export function spokenChars(story: Story, target: readonly Item[] = [], strict = false): Spoken[] {
+export function spokenChars(
+  story: Story,
+  target: readonly Item[] = [],
+  strict = false,
+  optional: readonly Item[] = [],
+): Spoken[] {
   const firsts = new Set(
     story.blocks.flatMap((block) => {
       if (block.kind !== "paragraph") return [];
@@ -124,8 +180,9 @@ export function spokenChars(story: Story, target: readonly Item[] = [], strict =
       char,
       speaker: item.speaker,
       direction: item.direction,
-      target: target.includes(item),
+      target: target.includes(item) || optional.includes(item),
       strict: strict && target.includes(item),
+      optional: optional.includes(item),
       // A quote that runs over lines, or a paragraph that carries the speech before it on.
       carries:
         item.kind === "speech" &&
@@ -159,22 +216,15 @@ export function brokenPromise(
 ): string | null {
   const edited = parse(applyChanges(story.source, changes));
   if (bookText(edited) !== bookText(story)) return "the book changed";
-  // No new warnings, but that a new name isn't in the cast, or someone in it no longer speaks.
-  const counts = (of: Story) => {
-    const found = new Map<string, number>();
-    for (const { code } of of.warnings) {
-      if (code !== "unknown-character" && code !== "silent-cast-member") {
-        found.set(code, (found.get(code) ?? 0) + 1);
-      }
-    }
-    return found;
-  };
-  const was = counts(story);
-  for (const [code, count] of counts(edited)) {
-    if (count > (was.get(code) ?? 0)) return `a new ${code} warning`;
-  }
+  const added = newWarnings(story, edited);
+  if (added.length > 0) return `a new ${added[0]} warning`;
   const narration = !target.quoted && sameName(target.speaker, story.meta.narrator);
-  const before = spokenChars(story, quoteOf(story, target, promise.acrossDirections), !narration);
+  const before = spokenChars(
+    story,
+    quoteOf(story, target, promise.acrossDirections),
+    !narration,
+    narrationBefore(story, target),
+  );
   const after = spokenChars(edited);
   if (after.map((c) => c.char).join("") !== before.map((c) => c.char).join(""))
     return "the words changed";
@@ -182,7 +232,8 @@ export function brokenPromise(
     const now = after[index] as Spoken;
     if (
       was.target
-        ? !promise.inside(was, now)
+        ? !promise.inside(was, now) &&
+          !(was.optional && sameName(now.speaker, was.speaker) && now.direction === was.direction)
         : (!sameName(now.speaker, was.speaker) || now.direction !== was.direction) &&
           // A paragraph that now carries the edited speech on (§5.7) goes with it.
           !(now.carries && promise.inside(was, now))
@@ -198,6 +249,24 @@ export function brokenPromise(
     return was.target || (now.carries && changed);
   });
   return some(moved) ? null : "the edited words didn't change";
+}
+
+/**
+ * The warnings `after` has more of than `before`, by code: but that a new name isn't in the cast,
+ * or someone in it no longer speaks.
+ */
+export function newWarnings(before: Story, after: Story): string[] {
+  const counts = (of: Story) => {
+    const found = new Map<string, number>();
+    for (const { code } of of.warnings) {
+      if (code !== "unknown-character" && code !== "silent-cast-member") {
+        found.set(code, (found.get(code) ?? 0) + 1);
+      }
+    }
+    return found;
+  };
+  const was = counts(before);
+  return [...counts(after)].filter(([code, count]) => count > (was.get(code) ?? 0)).map(([c]) => c);
 }
 
 /** The two edits every stretch is tried with, and what each must do to the stretch's own words. */

@@ -37,9 +37,14 @@ import { proseStory } from "./stories";
 import {
   EDITS,
   type EditPromise,
+  type Spoken,
   allItems,
   allLines,
   brokenPromise,
+  narrationBefore,
+  newWarnings,
+  quoteOf,
+  sameName,
   spareMark,
   speeches,
   spokenChars,
@@ -191,7 +196,7 @@ const voice = (speech: Speech) => ({
  * An edit does exactly what it says or nothing (see voices.ts). How often it declines is counted,
  * so an edit that always declines can't pass: it may only do so on the odd story. These are
  * stories of tricky pieces, and an edit declines where a mark would show in the book, such as a
- * name glued to a word (`]日本`): about 6% of stretches for a new speaker, which must move every
+ * name glued to a word (`]日本`): about 8% of stretches for a new speaker, which must move every
  * word of the stretch (or every word of narration's first quote), under 1% for a direction. The
  * real books, where every stretch must take both edits, show how they do on prose.
  */
@@ -333,7 +338,7 @@ describe("on stories made at random", () => {
       anyStory,
       (story, target) => setSpeaker(story, target, "Zed"),
       EDITS.speaker,
-      0.12,
+      0.1,
     );
   });
 
@@ -342,7 +347,22 @@ describe("on stories made at random", () => {
       anyStory,
       (story, target) => setDirection(story, target, "softly"),
       EDITS.direction,
-      0.04,
+      0.015,
+    );
+  });
+
+  it("every mark an edit writes is needed", async () => {
+    await check(
+      fc.property(anyStory, fc.nat(), fc.boolean(), (source, pick, speaker) => {
+        const story = parse(source);
+        const said = speeches(story);
+        const target = said[pick % Math.max(1, said.length)];
+        if (!target) return;
+        const changes = speaker
+          ? setSpeaker(story, target, "Zed")
+          : setDirection(story, target, "brightly");
+        expect(spareMark(story, changes)).toBe(null);
+      }),
     );
   });
   it("a sound or a line put in adds just that, and everything heard stays as it was", async () => {
@@ -397,7 +417,7 @@ describe("on stories made at random", () => {
       ),
     );
     if (process.env.FUZZ_SHOW) console.log(`declined ${declined} of ${tried}`);
-    expect(declined).toBeLessThanOrEqual(Math.max(3, tried * 0.04));
+    expect(declined).toBeLessThanOrEqual(Math.max(3, tried * 0.035));
   });
 
   it("the writer writes a changed note, instruction or sound as asked, or throws", async () => {
@@ -589,6 +609,54 @@ describe("on stories made at random", () => {
     );
   });
 
+  it("the changes between two texts change no more than the lines that differ", async () => {
+    // Lines as stories have them, some much alike, and a text made from another by changing
+    // some lines, adding some and removing some: the changes are never bigger than that.
+    const LINES = [
+      "“Hello,” said Gerald.\n",
+      "@Ann “Hello,” said Gerald.\n",
+      "@Ann (whispering) “Hello,” @Ann (whispering) said Gerald.\n",
+      "::: whispering\n",
+      ":::\n",
+      "\n",
+      "\n",
+      "The dragon yawned.\n",
+      "@Gerald “Hello. @(whispering) Hello.”\n",
+      "Gerald looked up. @Gerald “Hello?”\n",
+      "{page}\n",
+    ];
+    const line = fc.constantFrom(...LINES);
+    const step = fc.oneof(
+      { weight: 6, arbitrary: fc.constant<"keep">("keep") },
+      { weight: 2, arbitrary: line.map((text) => ({ change: text })) },
+      { weight: 1, arbitrary: line.map((text) => ({ add: text })) },
+      { weight: 1, arbitrary: fc.constant<"remove">("remove") },
+    );
+    await check(
+      fc.property(fc.array(fc.tuple(line, step), { maxLength: 40 }), (steps) => {
+        let before = "";
+        let after = "";
+        let size = 0;
+        for (const [text, how] of steps) {
+          before += text;
+          if (how === "keep") after += text;
+          else if (how === "remove") size += text.length;
+          else if ("change" in how) {
+            after += how.change;
+            if (how.change !== text) size += text.length + how.change.length;
+          } else {
+            after += how.add + text;
+            size += how.add.length;
+          }
+        }
+        const changes = diffChanges(before, after);
+        expect(applyChanges(before, changes)).toBe(after);
+        const changed = changes.reduce((sum, c) => sum + (c.to - c.from) + c.insert.length, 0);
+        expect(changed, JSON.stringify([before, after])).toBeLessThanOrEqual(size);
+      }),
+    );
+  });
+
   it("a Fountain import never fails, and what it makes reads without failing", async () => {
     await check(
       fc.property(fc.string({ unit: "binary", maxLength: 120 }), pieceStory, (text, pieces) => {
@@ -640,40 +708,96 @@ describe("on prose made at random", () => {
     );
   }, 60_000);
 
-  it("the writer makes several changes at once with no mark to spare", async () => {
+  it("the writer gives stretches to several characters at once, exactly as asked, or throws", async () => {
+    // Each pick gives a stretch to Ann, Bob or Cy on the model. The writer must give each one's
+    // whole quote (§6.4, §5.7) to that name, keep every other word as it was heard, keep the book
+    // and add no warning; or throw a RangeError, which it may only do where two picks share a
+    // quote and ask for different names, or on the odd story an edit alone declines.
+    const NAMES = ["Ann", "Bob", "Cy"];
+    let tried = 0;
+    let refused = 0;
     await check(
       fc.property(
         proseStory,
-        fc.array(fc.nat(), { minLength: 2, maxLength: 4 }),
+        fc.array(fc.tuple(fc.nat(), fc.constantFrom(...NAMES)), { minLength: 2, maxLength: 4 }),
         (source, picks) => {
+          const original = parse(source);
           const story = parse(source);
           const said = speeches(story);
+          const before = speeches(original);
           if (said.length === 0) return;
-          for (const pick of picks) (said[pick % said.length] as Speech).speaker = "Zed";
+          // The model as asked: a stretch picked twice goes to the later name.
+          const asked = new Map<number, string>();
+          for (const [pick, name] of picks) asked.set(pick % said.length, name);
+          for (const [index, name] of asked) (said[index] as Speech).speaker = name;
+          // Who may say each character heard: a stretch's quote goes with it, all of it to the
+          // name for a quote or a character's words, or narration's words to the name or not.
+          const was = spokenChars(original);
+          const may = was.map(() => new Set<string>());
+          const strictly = was.map(() => false);
+          for (const [index, name] of asked) {
+            const target = before[index] as Speech;
+            const narration = !target.quoted && sameName(target.speaker, original.meta.narrator);
+            const unit = quoteOf(original, target, true);
+            spokenChars(original, unit, false, narrationBefore(original, target)).forEach(
+              (char, at) => {
+                if (!char.target) return;
+                may[at]?.add(name);
+                if (!narration && !char.optional) strictly[at] = true;
+              },
+            );
+          }
+          const clash = may.some((names) => names.size > 1);
+          if (!clash) tried++;
           let text: string;
           try {
             text = write(story);
           } catch (error) {
             expect(error).toBeInstanceOf(RangeError);
+            if (!clash) {
+              refused++;
+              if (process.env.FUZZ_SHOW) console.log("refused:", JSON.stringify(source), picks);
+            }
             return;
           }
-          const original = parse(source);
-          expect(spareMark(original, diffChanges(source, text))).toBe(null);
-          // Each stretch asked for is Zed's now, and every other word is heard as before.
           const after = parse(text);
-          expect(
-            spokenChars(after)
-              .map((c) => c.char)
-              .join(""),
-          ).toBe(
-            spokenChars(original)
-              .map((c) => c.char)
-              .join(""),
-          );
+          expect(bookText(after)).toBe(bookText(original));
+          expect(newWarnings(original, after)).toEqual([]);
+          const now = spokenChars(after);
+          expect(now.map((c) => c.char).join("")).toBe(was.map((c) => c.char).join(""));
+          const names = new Set(asked.values());
+          for (const [at, char] of now.entries()) {
+            const then = was[at] as Spoken;
+            const allowed = may[at] as Set<string>;
+            const kept = sameName(char.speaker, then.speaker);
+            const given = allowed.has(char.speaker);
+            const why = `"${then.char}" at ${at} of ${JSON.stringify(text)}`;
+            expect(char.direction, why).toBe(then.direction);
+            if (allowed.size === 0) {
+              // A paragraph that now carries a given speech on (§5.7) goes with it.
+              expect(kept || (char.carries && names.has(char.speaker)), why).toBe(true);
+            } else if (strictly[at]) {
+              expect(given || (kept && allowed.has(then.speaker)), why).toBe(true);
+            } else {
+              expect(given || kept, why).toBe(true);
+            }
+          }
+          // Each pick was made: some word of its stretch is now said by its name.
+          for (const [index, name] of asked) {
+            const target = before[index] as Speech;
+            const words = spokenChars(original, quoteOf(original, target, true));
+            const made = words.some(
+              (char, at) => char.target && sameName(now[at]?.speaker ?? "", name),
+            );
+            expect(made || sameName(target.speaker, name), `${name}: ${target.text}`).toBe(true);
+          }
+          expect(spareMark(original, diffChanges(source, text))).toBe(null);
         },
       ),
     );
-  }, 60_000);
+    if (process.env.FUZZ_SHOW) console.log(`refused ${refused} of ${tried}`);
+    expect(refused).toBeLessThanOrEqual(Math.max(3, tried * PROSE_BUDGET * 2));
+  }, 120_000);
 
   it("curly quotes nest: each closing mark closes the quote its kind opened", async () => {
     // Prose written with straight quotes, made curly in English and in German. In each paragraph,

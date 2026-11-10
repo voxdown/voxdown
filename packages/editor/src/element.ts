@@ -38,7 +38,7 @@ function dedent(text: string): string {
   const indents = lines
     .filter((line) => line.trim())
     .map((line) => /^[ \t]*/.exec(line)?.[0].length ?? 0);
-  const cut = indents.length ? Math.min(...indents) : 0;
+  const cut = indents.length ? indents.reduce((low, indent) => Math.min(low, indent)) : 0;
   return lines.map((line) => line.slice(cut)).join("\n");
 }
 

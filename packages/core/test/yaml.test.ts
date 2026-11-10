@@ -249,4 +249,28 @@ describe("the front matter YAML subset", () => {
     expect(readYaml('title: "The long\\\n  story"').data.title).toBe("The longstory");
     expect(readYaml('title: "two\n  lines"').data.title).toBe("two lines");
   });
+
+  it("reads a value that starts on the line after its key", () => {
+    expect(readYaml("narrator:\n  Watson").data).toEqual({ narrator: "Watson" });
+    expect(readYaml("title:\n  The Long\n  Night\nnarrator: Ann").data).toEqual({
+      title: "The Long Night",
+      narrator: "Ann",
+    });
+    expect(readYaml("cast:\n  Ann:\n    Ann Smith").data).toEqual({ cast: { Ann: "Ann Smith" } });
+    expect(readYaml("title:\n  'quoted'").data).toEqual({ title: "quoted" });
+    expect(readYaml("title:\n  - a list").data).toEqual({ title: ["a list"] });
+  });
+
+  it("ends a plain value at a comment, and reports a line that would carry it on", () => {
+    // YAML 1.2 (§7.3.3) has no comment inside a plain scalar: a YAML library refuses these.
+    // The value is read up to its comment, and the line after is reported where it stands.
+    for (const text of ["title: first # a comment\n  second", "title: first\n  # c\n  second"]) {
+      const read = readYaml(text);
+      expect(read.data).toEqual({ title: "first" });
+      expect(
+        read.problems.map((problem) => text.slice(problem.range.from, problem.range.to)),
+      ).toEqual(["  second"]);
+    }
+    expect(readYaml("title: first\n  second # c").data).toEqual({ title: "first second" });
+  });
 });

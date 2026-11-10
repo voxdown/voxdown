@@ -2,6 +2,7 @@
 import { findNotes, joinLines, scanBlocks } from "./blocks";
 import { readFrontMatter } from "./front-matter";
 import { type Token, lexLines } from "./inline";
+import { onForget, remembering } from "./session";
 import { SourceText } from "./source";
 
 /**
@@ -10,15 +11,20 @@ import { SourceText } from "./source";
  * stretch.
  */
 export function lexedTokens(source: string): Token[] {
-  // An edit asks for the same text's tokens several times: the last few are kept.
+  // An edit asks for the same text's tokens several times: the last few are kept while it works.
   for (const [text, tokens] of recent) if (text === source) return tokens;
   const tokens = lex(source);
-  recent.unshift([source, tokens]);
-  if (recent.length > 4) recent.pop();
+  if (remembering()) {
+    recent.unshift([source, tokens]);
+    if (recent.length > 4) recent.pop();
+  }
   return tokens;
 }
 
 const recent: Array<[string, Token[]]> = [];
+onForget(() => {
+  recent.length = 0;
+});
 
 function lex(source: string): Token[] {
   const text = new SourceText(source);
@@ -30,7 +36,9 @@ function lex(source: string): Token[] {
   for (const block of scanBlocks(source, joinLines(text.lines, front.bodyLine, notes))) {
     const ranges =
       block.kind === "paragraph" ? block.lines : block.kind === "heading" ? [block.content] : [];
-    for (const line of lexLines(source, ranges, notes, ignore)) tokens.push(...line.tokens);
+    for (const line of lexLines(source, ranges, notes, ignore)) {
+      for (const token of line.tokens) tokens.push(token);
+    }
   }
   return tokens;
 }

@@ -108,13 +108,19 @@ const NOT_PRINTED: ReadonlySet<Item["kind"]> = new Set([
  * without escapes' backslashes. Where a removed mark leaves two spaces, one remains (§12.2).
  */
 export function bookLine(source: string, line: Line): string {
-  let printed = "";
+  // Pieces joined once at the end, and whether the text so far ends in a space kept on the side:
+  // a long line of many marks stays linear.
+  const printed: string[] = [];
+  let spaced = false;
   let at = line.range.from;
   let joint = false;
   const append = (to: number) => {
     let piece = removeEscapes(source.slice(at, to));
-    if (joint && /[ \t]$/.test(printed)) piece = piece.replace(/^[ \t]+/, "");
-    printed += piece;
+    if (joint && spaced) piece = piece.replace(/^[ \t]+/, "");
+    if (piece !== "") {
+      printed.push(piece);
+      spaced = /[ \t]$/.test(piece);
+    }
   };
   for (const item of line.items) {
     if (!NOT_PRINTED.has(item.kind) || item.range.from < at) continue;
@@ -123,5 +129,5 @@ export function bookLine(source: string, line: Line): string {
     joint = true;
   }
   append(line.range.to);
-  return printed.trim();
+  return printed.join("").trim();
 }

@@ -313,7 +313,7 @@ async function check({ io, values, files }: Context): Promise<number> {
       };
     });
     found.sort((a, b) => a.line - b.line || a.column - b.column);
-    problems.push(...found);
+    for (const problem of found) problems.push(problem);
   }
   if (flag(values, "json")) {
     io.stdout(`${JSON.stringify(problems, null, 2)}\n`);

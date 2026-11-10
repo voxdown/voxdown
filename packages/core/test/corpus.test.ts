@@ -41,6 +41,7 @@ const EXPECTED_WARNINGS: Record<string, string[]> = {
   "bremer-stadtmusikanten.vxd": [],
   // The Gull's song runs over four lines (§5.7): fine for verse, so the warning only asks.
   "the-keeper-and-the-gull.vxd": ["46 quote-over-line-break"],
+  "the-last-lamp.vxd": [],
 };
 
 /** Who says what, and how: the words as heard, whatever their quotation marks and apostrophes. */
@@ -89,44 +90,59 @@ describe("real books", () => {
         }
       });
 
-      it("marks up again from bare text: with its marks taken off, edits give every stretch back", () => {
-        // An author's work, done with the edits: take off every mark that stands before a quote,
-        // then give each stretch its speaker and direction again, in order. The book must read
-        // as reviewed, line for line (an oracle the edits' own checks don't share).
-        const bare: TextChange[] = [];
-        for (const item of allItems(story)) {
-          if (item.kind !== "speech" || !item.mark || !item.openQuote) continue;
-          const { mark, openQuote } = item;
-          const between = source.slice(mark.range.to, openQuote.from);
-          if (/^\s*$/.test(between) && !bare.some((change) => change.from === mark.range.from)) {
-            bare.push({ from: mark.range.from, to: openQuote.from, insert: "" });
+      it.each([
+        ["in order", false],
+        ["paragraph by paragraph from the end", true],
+      ])(
+        "marks up again from bare text, %s: with its marks taken off, edits give every stretch back",
+        (_, backwards) => {
+          // An author's work, done with the edits: take off every mark that stands before a quote,
+          // then give each stretch its speaker and direction again, in order or from the last
+          // paragraph to the first (so a speech over paragraphs is given from its last one, §5.7).
+          // The book must read as reviewed, line for line (an oracle the edits' own checks don't
+          // share). Within a paragraph the stretches go in order: given from the end, a quote's
+          // words after a sound would be given apart from it, and the sound would stay as it was.
+          const bare: TextChange[] = [];
+          for (const item of allItems(story)) {
+            if (item.kind !== "speech" || !item.mark || !item.openQuote) continue;
+            const { mark, openQuote } = item;
+            const between = source.slice(mark.range.to, openQuote.from);
+            if (/^\s*$/.test(between) && !bare.some((change) => change.from === mark.range.from)) {
+              bare.push({ from: mark.range.from, to: openQuote.from, insert: "" });
+            }
           }
-        }
-        expect(bare.length).toBeGreaterThan(10);
-        let text = applyChanges(source, bare);
-        for (const wanted of speeches(story)) {
-          const at = heardIndex(story, wanted);
-          let current = parse(text);
-          let item = heardItem(current, at);
-          if (item?.kind !== "speech") continue;
-          if (item.speaker !== wanted.speaker) {
-            const changes = setSpeaker(current, item, wanted.speaker);
-            expect(changes.length, `give “${item.text}” to ${wanted.speaker}`).toBeGreaterThan(0);
-            text = applyChanges(text, changes);
-            current = parse(text);
-            item = heardItem(current, at);
+          expect(bare.length).toBeGreaterThan(10);
+          let text = applyChanges(source, bare);
+          const blocks = story.blocks.map((block) =>
+            speeches({ ...story, blocks: [block] } as typeof story),
+          );
+          for (const stretch of (backwards ? blocks.reverse() : blocks).flat()) {
+            const at = heardIndex(story, stretch);
+            let current = parse(text);
+            let item = heardItem(current, at);
+            if (item?.kind !== "speech") continue;
+            if (item.speaker !== stretch.speaker) {
+              const changes = setSpeaker(current, item, stretch.speaker);
+              expect(changes.length, `give “${item.text}” to ${stretch.speaker}`).toBeGreaterThan(
+                0,
+              );
+              text = applyChanges(text, changes);
+              current = parse(text);
+              item = heardItem(current, at);
+            }
+            if (item?.kind === "speech" && item.direction !== stretch.direction) {
+              const changes = setDirection(current, item, stretch.direction);
+              expect(changes.length, `say “${item.text}” ${stretch.direction}`).toBeGreaterThan(0);
+              text = applyChanges(text, changes);
+            }
           }
-          if (item?.kind === "speech" && item.direction !== wanted.direction) {
-            const changes = setDirection(current, item, wanted.direction);
-            expect(changes.length, `say “${item.text}” ${wanted.direction}`).toBeGreaterThan(0);
-            text = applyChanges(text, changes);
-          }
-        }
-        expect(spokenScript(parse(text))).toBe(spokenScript(story));
-        // The same print, but for where a mark taken out of `(@MarchHare “…` left a space.
-        const print = (of: string) => bookText(parse(of)).replace(/\s+/g, "");
-        expect(print(text)).toBe(print(source));
-      }, 60_000);
+          expect(spokenScript(parse(text))).toBe(spokenScript(story));
+          // The same print, but for where a mark taken out of `(@MarchHare “…` left a space.
+          const print = (of: string) => bookText(parse(of)).replace(/\s+/g, "");
+          expect(print(text)).toBe(print(source));
+        },
+        60_000,
+      );
 
       it("takes a new speaker and a new direction on every stretch, changing nothing else", () => {
         for (const target of speeches(story)) {

@@ -133,6 +133,27 @@ describe("links, as Markdown reads them (§8.3)", () => {
     // An address with a title is an address: no warning that a sound reads as a link.
     expect(parse('[story](https://example.com "A story")').warnings).toEqual([]);
   });
+
+  it("makes the innermost of links inside links the link, the rest text, as Markdown does", () => {
+    // CommonMark: a link may not hold a link, so the inner one is the link.
+    expect(spokenScript(parse("[a [b](x) c](y)"))).toBe("Narrator: [a b c](y)");
+    expect(spokenScript(parse("[[b](x)](y)"))).toBe("Narrator: [b](y)");
+    expect(spokenScript(parse("[a](x) [b](y)"))).toBe("Narrator: a b");
+  });
+
+  it("reads brackets nested deep, and lines of many links, in linear time", () => {
+    for (const text of [
+      `${"[".repeat(150_000)}x${"]".repeat(150_000)}(y)`,
+      "[a](".repeat(40_000),
+      "[x](y) ".repeat(25_000),
+    ]) {
+      const start = performance.now();
+      const story = parse(text);
+      spokenScript(story);
+      lines(story);
+      expect(performance.now() - start, text.slice(0, 6)).toBeLessThan(2000);
+    }
+  });
 });
 
 describe("the Fountain import", () => {

@@ -78,7 +78,7 @@ export function inlineHtmlPieces(sources: readonly string[]): string[] {
   const chars: Piece[] = [];
   sources.forEach((source, index) => {
     if (index > 0) chars.push({ text: " ", literal: true, edge: true });
-    chars.push(...pieces(source));
+    for (const piece of pieces(source)) chars.push(piece);
   });
   // A piece of only spaces needs no emphasis around it.
   return renderPieces(chars).map((html) =>
@@ -95,6 +95,7 @@ function closersOf(chars: readonly Piece[]): {
   bracket: Int32Array;
   squares: Map<number, number>;
   parens: Map<number, number>;
+  nesting: Set<number>;
 } {
   const isChar = (at: number, text: string) => chars[at]?.text === text && !chars[at]?.literal;
   const bracket = new Int32Array(chars.length + 1).fill(-1);
@@ -111,7 +112,20 @@ function closersOf(chars: readonly Piece[]): {
     else if (isChar(at, "[")) openSquare.push(at);
     else if (isChar(at, "]") && openSquare.length > 0) squares.set(openSquare.pop() as number, at);
   });
-  return { bracket, squares, parens };
+  // A link may not hold another (Markdown): where links nest, the innermost is the link, so a
+  // link's text never holds one and rendering it goes one level deep at most.
+  const candidates = [...squares.keys()]
+    .filter((open) => {
+      const close = squares.get(open) as number;
+      return isChar(close + 1, "(") && parens.has(close + 1);
+    })
+    .sort((a, b) => a - b);
+  const nesting = new Set<number>();
+  candidates.forEach((open, index) => {
+    const next = candidates[index + 1];
+    if (next !== undefined && next < (squares.get(open) as number)) nesting.add(open);
+  });
+  return { bracket, squares, parens, nesting };
 }
 
 /** A run of `*` or `_`, and the tags it becomes once runs are paired. */
@@ -231,7 +245,7 @@ function renderPieces(chars: Piece[]): string[] {
     if (!piece.literal) {
       // Images and links.
       const bang = piece.text === "!" && isChar(i + 1, "[");
-      if (piece.text === "[" || bang) {
+      if ((piece.text === "[" || bang) && !closers.nesting.has(bang ? i + 1 : i)) {
         const open = bang ? i + 1 : i;
         // The text runs to the `]` that balances it, as the parser reads a link (§8.3).
         const balanced = closers.squares.get(open) ?? -1;

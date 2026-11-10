@@ -1558,9 +1558,11 @@ The format is meant to be edited both by hand and through a visual editor. A vis
 3. **New marks are written in one way:**
    - a character mark and direction go directly before the speech's opening quote, with the cast's spelling: `@Gerald (yawning) “…`;
    - a direction for narration goes before its first word: `@(warmly) Once…`;
+   - a direction for a paragraph that carries a speech on (§5.7) goes just inside its opening mark, so the paragraph still carries the speech on: `“@(softly)Two.”`;
    - a sound follows the word it belongs to, after one space: `fell over. [clatter]`;
-   - a page turn, pause or note between lines goes on a line of its own.
-4. **Changing who says a line.** Replace the name in its mark. If the speech had no mark because it carried on an earlier one (§5.6), add a mark to it. If a later quote on the same line carried this one on, add a mark to that quote too, so its speaker stays the same.
+   - a page turn, pause or note between lines goes on a line of its own;
+   - between two characters with no space between them, a mark goes without the space after it, which would show in the book: `“Hi.”@Ann—he said.` Where the mark would then run on into what follows, as a name runs on into a word's letters, there is no way to write it without changing the book.
+4. **Changing who says a line.** Replace the name in its mark. If the speech had no mark because it carried on an earlier one (§5.6), add a mark to it. If a later quote on the same line carried this one on, add a mark to that quote too, so its speaker stays the same. A speech over paragraphs (§5.7) is given away whole, from any of its paragraphs: the mark goes before the quote it starts with.
 5. **Removing a direction.** Delete the parentheses, their content and one space. If the remaining character mark is not needed, remove it too.
 6. **Renaming a character.** Changing a full name touches only the front matter. Changing a short name replaces it in the cast and in every mark.
 7. **A tool's own divisions are never line breaks or words.** How a tool cuts the spoken script into pieces of its own, such as one audio recording per sentence, is the tool's business. A tool that keeps such a division in the file writes its own instruction (§9.5), such as a recording tool's `{recorder:join}` between two sentences it records as one; it never adds a line break or changes the words to make one.

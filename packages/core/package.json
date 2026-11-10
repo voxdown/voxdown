@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "VoxDown: a plain-text format for stories read aloud. Parser, readings, writer, formatter and exports, with no dependencies.",
   "license": "MIT",
+  "author": "Etienne Ackermann",
   "type": "module",
   "sideEffects": false,
   "keywords": ["voxdown", "vxd", "audiobook", "script", "markdown", "text-to-speech", "parser"],
@@ -11,7 +12,7 @@
     "url": "git+https://github.com/voxdown/voxdown.git",
     "directory": "packages/core"
   },
-  "homepage": "https://voxdown.github.io/voxdown/",
+  "homepage": "https://voxdown.github.io/",
   "bugs": "https://github.com/voxdown/voxdown/issues",
   "exports": {
     ".": {

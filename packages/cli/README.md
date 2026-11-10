@@ -1,6 +1,6 @@
 # @voxdown/cli
 
-The `vxd` command for [VoxDown](https://voxdown.github.io/voxdown/), a plain-text format for stories read aloud. It checks stories for problems, tidies them, renders them as HTML, exports the spoken script for speech tools and performers, and imports Fountain screenplays.
+The `vxd` command for [VoxDown](https://voxdown.github.io/), a plain-text format for stories read aloud. It checks stories for problems, tidies them, renders them as HTML, exports the spoken script for speech tools and performers, and imports Fountain screenplays.
 
 ## Install
 

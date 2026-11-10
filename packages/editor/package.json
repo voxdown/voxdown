@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A CodeMirror 6 editor for VoxDown stories: marks drawn as chips, raw only where you type.",
   "license": "MIT",
+  "author": "Etienne Ackermann",
   "type": "module",
   "sideEffects": ["./dist/define.js", "./src/define.ts"],
   "keywords": ["voxdown", "vxd", "codemirror", "editor", "audiobook"],
@@ -11,7 +12,7 @@
     "url": "git+https://github.com/voxdown/voxdown.git",
     "directory": "packages/editor"
   },
-  "homepage": "https://voxdown.github.io/voxdown/",
+  "homepage": "https://voxdown.github.io/",
   "bugs": "https://github.com/voxdown/voxdown/issues",
   "exports": {
     ".": {

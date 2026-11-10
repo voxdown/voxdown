@@ -6,6 +6,7 @@
   "publisher": "voxdown",
   "private": true,
   "license": "MIT",
+  "author": "Etienne Ackermann",
   "type": "module",
   "icon": "images/icon.png",
   "keywords": ["voxdown", "vxd", "audiobook", "script", "markdown"],
@@ -15,7 +16,7 @@
     "url": "git+https://github.com/voxdown/voxdown.git",
     "directory": "packages/vscode"
   },
-  "homepage": "https://voxdown.github.io/voxdown/",
+  "homepage": "https://voxdown.github.io/",
   "bugs": "https://github.com/voxdown/voxdown/issues",
   "engines": {
     "vscode": "^1.90.0"

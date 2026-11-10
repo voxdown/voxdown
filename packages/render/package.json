@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "HTML for VoxDown stories: a book view and a script view, styled with CSS variables. No framework.",
   "license": "MIT",
+  "author": "Etienne Ackermann",
   "type": "module",
   "sideEffects": false,
   "keywords": ["voxdown", "vxd", "audiobook", "script", "html", "renderer"],
@@ -11,7 +12,7 @@
     "url": "git+https://github.com/voxdown/voxdown.git",
     "directory": "packages/render"
   },
-  "homepage": "https://voxdown.github.io/voxdown/",
+  "homepage": "https://voxdown.github.io/",
   "bugs": "https://github.com/voxdown/voxdown/issues",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },

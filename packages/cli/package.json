@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "The vxd command: check, format, render and export VoxDown stories, and import Fountain screenplays.",
   "license": "MIT",
+  "author": "Etienne Ackermann",
   "type": "module",
   "keywords": ["voxdown", "vxd", "audiobook", "script", "cli", "markdown", "fountain"],
   "repository": {
@@ -10,7 +11,7 @@
     "url": "git+https://github.com/voxdown/voxdown.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://voxdown.github.io/voxdown/",
+  "homepage": "https://voxdown.github.io/",
   "bugs": "https://github.com/voxdown/voxdown/issues",
   "bin": {
     "vxd": "./dist/cli.js"

@@ -9,7 +9,7 @@ import {
 } from "@codemirror/view";
 import { LabelWidget, stackLabels } from "./labels";
 import { type EditorMark, editorMarks } from "./marks";
-import { spokenName } from "./scene-names";
+import { nameReadAt, readNamesField, spokenName } from "./scene-names";
 import { ChipWidget, LineWidget, type PageTurnTools, type ReadAloud } from "./widgets";
 
 /**
@@ -251,7 +251,8 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
   /** The speaker on a scene's mark, when the host has it (owner, 9 Nov). */
   const readAloud = (mark: { from: number; to: number }, name: string): ReadAloud | undefined => {
     if (!options.readSceneAloud) return undefined;
-    const was = options.readSceneAloud.nameWas?.(state, mark.from);
+    // The name its speaker last wrote, else the one the host's project has (review r19).
+    const was = nameReadAt(state, mark.from) ?? options.readSceneAloud.nameWas?.(state, mark.from);
     const said = spokenName(state, mark.to, name, was);
     return {
       name,
@@ -714,6 +715,7 @@ export function livePreview(options: PreviewOptions): Extension {
     showMarksField.init(() => options.showMarks ?? false),
     viewField.init(() => ({ ...ALL_ON, ...options.view })),
     marksField,
+    readNamesField,
     openField,
     pointerHold,
     frontMatterField,

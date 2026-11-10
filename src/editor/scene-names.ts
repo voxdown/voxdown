@@ -1,4 +1,10 @@
-import type { EditorState } from "@codemirror/state";
+import {
+  type EditorState,
+  MapMode,
+  StateEffect,
+  StateField,
+  type TransactionSpec,
+} from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 
 /**
@@ -6,6 +12,36 @@ import type { EditorView } from "@codemirror/view";
  * an ordinary line of its own after the mark, `Scene 2.`, and takes it out again. Read aloud, it
  * is printed too, so no `{audio only}`.
  */
+
+/** The speaker wrote (a name) or took out (null) a scene's name, after the mark at `at`. */
+const nameRead = StateEffect.define<{ at: number; name: string | null }>();
+
+/**
+ * The names each scene's speaker wrote, by where its mark starts (review r19): a heading renamed
+ * before Apply is still known by the name its line says.
+ */
+export const readNamesField = StateField.define<ReadonlyArray<{ at: number; name: string }>>({
+  create: () => [],
+  update(value, tr) {
+    let next = value;
+    if (tr.docChanged)
+      next = value.flatMap((r) => {
+        const at = tr.changes.mapPos(r.at, 1, MapMode.TrackDel);
+        return at === null ? [] : [{ at, name: r.name }];
+      });
+    for (const e of tr.effects)
+      if (e.is(nameRead)) {
+        next = next.filter((r) => r.at !== e.value.at);
+        if (e.value.name) next = [...next, { at: e.value.at, name: e.value.name }];
+      }
+    return next;
+  },
+});
+
+/** The name the speaker last wrote for the scene whose mark starts at `from`, if it did. */
+export function nameReadAt(state: EditorState, from: number): string | undefined {
+  return state.field(readNamesField, false)?.find((r) => r.at === from)?.name;
+}
 
 /** Words compared as said: escapes, closing punctuation and case aside. */
 const asSaid = (text: string) =>
@@ -80,26 +116,40 @@ const sayName = (name: string) => {
  * no longer; a line saying an old name (`stale`) says the scene's name now instead, its marks
  * (a direction, a speaker) kept (review r18).
  */
-export function sceneNameChange(state: EditorState, at: number, name: string, was?: string) {
+export function sceneNameChange(
+  state: EditorState,
+  at: number,
+  name: string,
+  was?: string,
+): { from: number; to: number; insert: string } | null {
   const line = state.doc.lineAt(at);
   const said = spokenName(state, line.to, name, was);
   const words = sayName(name);
   if (said?.stale) {
     const text = state.sliceDoc(said.from, said.to);
     const lead = LEADING.exec(text)?.[0].length ?? 0;
+    // The spoken words alone, up to the first mark after them: a sound, a note or a pause on
+    // the line stays (review r19), as its speaker and direction do.
+    const rest = text.slice(lead);
+    let end = new RegExp(MARKS.source, "u").exec(rest)?.index ?? rest.length;
+    while (end > 0 && /\s/u.test(rest[end - 1] ?? "")) end--;
+    if (/[“"]$/u.test(text.slice(0, lead)) && /[”"]$/u.test(rest.slice(0, end))) end--;
+    const spoken = rest.slice(0, end);
     // An old number: just the number changes.
     const number = /\d+/u.exec(name)?.[0];
-    const old = /\d+/u.exec(text.slice(lead));
-    if (number && old && renumbering(said.said, name)) {
-      const from = said.from + lead + old.index;
-      return { from, to: from + old[0].length, insert: number };
-    }
-    const quoted = /[“"]$/u.test(text.slice(0, lead));
-    return {
-      from: said.from + lead,
-      to: said.to,
-      insert: quoted ? `${words.replace(/[.!?…]$/u, "")}.”` : words,
-    };
+    const old = /\d+/u.exec(spoken);
+    const change =
+      number && old && renumbering(said.said, name)
+        ? {
+            from: said.from + lead + old.index,
+            to: said.from + lead + old.index + old[0].length,
+            insert: number,
+          }
+        : { from: said.from + lead, to: said.from + lead + end, insert: words };
+    // Read back: the line says the name now, or nothing is changed.
+    const after = state.update({ changes: change }).state;
+    const back = spokenName(after, line.to, name, was);
+    return back && !back.stale ? change : null;
   }
   if (said) return { from: line.to, to: said.to, insert: "" };
   // Its own paragraph, whatever follows the mark: a blank line after it too (review r18).
@@ -113,6 +163,22 @@ export function sceneNameChange(state: EditorState, at: number, name: string, wa
 
 /** Reads the scene's name aloud, or no longer (the speaker on its mark). */
 export function readSceneName(view: EditorView, at: number, name: string, was?: string) {
-  const change = sceneNameChange(view.state, at, name, was);
-  view.dispatch({ changes: change, userEvent: change.insert ? "input" : "delete" });
+  const spec = readSceneNameSpec(view.state, at, name, was);
+  if (spec) view.dispatch(spec);
+}
+
+/** The speaker's press as a transaction, remembering the name it wrote; null when it can't. */
+export function readSceneNameSpec(
+  state: EditorState,
+  at: number,
+  name: string,
+  was?: string,
+): TransactionSpec | null {
+  const change = sceneNameChange(state, at, name, was);
+  if (!change) return null;
+  return {
+    changes: change,
+    effects: nameRead.of({ at: state.doc.lineAt(at).from, name: change.insert ? name : null }),
+    userEvent: change.insert ? "input" : "delete",
+  };
 }

@@ -1,7 +1,13 @@
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { marksField, sceneNumbers } from "../src/editor/decorations";
-import { sceneNameChange, spokenName } from "../src/editor/scene-names";
+import {
+  nameReadAt,
+  readNamesField,
+  readSceneNameSpec,
+  sceneNameChange,
+  spokenName,
+} from "../src/editor/scene-names";
 
 const stateOf = (doc: string) => EditorState.create({ doc, extensions: [marksField] });
 const numbersOf = (doc: string) => {
@@ -9,10 +15,10 @@ const numbersOf = (doc: string) => {
   return [...sceneNumbers(state)].map(([from, n]) => [state.doc.lineAt(from).text, n]);
 };
 /** The text after pressing the speaker on the mark that starts `mark`, named `name`. */
-const press = (doc: string, mark: string, name: string) => {
+const press = (doc: string, mark: string, name: string, was?: string) => {
   const state = stateOf(doc);
-  const change = sceneNameChange(state, doc.indexOf(mark), name);
-  return doc.slice(0, change.from) + change.insert + doc.slice(change.to);
+  const change = sceneNameChange(state, doc.indexOf(mark), name, was);
+  return change ? doc.slice(0, change.from) + change.insert + doc.slice(change.to) : doc;
 };
 
 describe("scenes in text order (owner, 9 Nov)", () => {
@@ -130,9 +136,7 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
     expect(spokenName(stateOf(renamed), 13, "The Pantry", "The Hallway")).toMatchObject({
       stale: true,
     });
-    const state = stateOf(renamed);
-    const change = sceneNameChange(state, 0, "The Pantry", "The Hallway");
-    expect(renamed.slice(0, change.from) + change.insert + renamed.slice(change.to)).toBe(
+    expect(press(renamed, "##", "The Pantry", "The Hallway")).toBe(
       "## The Pantry\n\nThe Pantry.\n\nOne.",
     );
     expect(press("Een.\n\n---\n\nToneel 2.\n\nTwee.", "---", "Toneel 3")).toBe(
@@ -142,5 +146,40 @@ describe("a scene's name read aloud (owner, 9 Nov)", () => {
       "一。\n\n---\n\n第3场。\n\n二。",
     );
     expect(press("一。\n\n---\n\n二。", "---", "第2场")).toBe("一。\n\n---\n\n第2场。\n\n二。");
+  });
+
+  it("changes only the spoken words of an old name, its sound, note and pause kept (r19)", () => {
+    const doc =
+      "Alpha.\n\n## The Pantry {hidden}\n\n@Rupert (brightly) “The Kitchen.” [small bell] %% Keep the chime. %% {pause 1.2s}\n\nBravo.";
+    expect(press(doc, "##", "The Pantry", "The Kitchen")).toBe(
+      "Alpha.\n\n## The Pantry {hidden}\n\n@Rupert (brightly) “The Pantry.” [small bell] %% Keep the chime. %% {pause 1.2s}\n\nBravo.",
+    );
+  });
+
+  it("remembers the name it wrote, so a heading renamed before Apply is known (r19)", () => {
+    const doc = "Alpha.\n\n## The Kitchen {hidden}\n\nBravo.";
+    let state = EditorState.create({ doc, extensions: [marksField, readNamesField] });
+    const at = doc.indexOf("##");
+    const spec = readSceneNameSpec(state, at, "The Kitchen");
+    expect(spec).not.toBeNull();
+    state = state.update(spec ?? {}).state;
+    expect(state.doc.toString()).toBe(
+      "Alpha.\n\n## The Kitchen {hidden}\n\nThe Kitchen.\n\nBravo.",
+    );
+    // Renamed by hand, before any Apply: the line still says the old name, and is out of date.
+    const word = state.doc.toString().indexOf("Kitchen {hidden}");
+    state = state.update({
+      changes: { from: word, to: word + "Kitchen".length, insert: "Pantry" },
+    }).state;
+    expect(nameReadAt(state, at)).toBe("The Kitchen");
+    const markEnd = state.doc.lineAt(at).to;
+    expect(spokenName(state, markEnd, "The Pantry", nameReadAt(state, at))).toMatchObject({
+      stale: true,
+    });
+    state = state.update(
+      readSceneNameSpec(state, at, "The Pantry", nameReadAt(state, at)) ?? {},
+    ).state;
+    expect(state.doc.toString()).toBe("Alpha.\n\n## The Pantry {hidden}\n\nThe Pantry.\n\nBravo.");
+    expect(nameReadAt(state, at)).toBe("The Pantry");
   });
 });

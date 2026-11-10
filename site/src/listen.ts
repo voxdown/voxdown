@@ -32,7 +32,7 @@ const STORIES: Record<string, Record<string, string>> = {
   "the-north-wind-and-the-sun.vxd": {
     Narrator: "Lily",
     Wind: "Adam",
-    Sun: "Sarah",
+    Sun: "Steve",
     Traveler: "Chris",
   },
 };

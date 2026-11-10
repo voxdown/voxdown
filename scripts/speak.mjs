@@ -5,7 +5,8 @@
 //   ELEVENLABS_API_KEY=… node scripts/speak.mjs [story.vxd …] [--dry-run]
 //
 // The casting is in scripts/speak.json: a voice for each character, by its name in ElevenLabs,
-// one of theirs ("George") or one of the account's own.
+// one of theirs ("George") or one of the account's own. A voice can be shown on the page under
+// another name: { "voice": "N1 — Kinu Comedy Narrator", "as": "Steve" }.
 // It needs `pnpm build` first (the parser is read from packages/core/dist) and ffmpeg. Each clip is
 // kept in ~/.cache/voxdown-speak, so recording again only pays for lines or voices that changed.
 // --dry-run prints what each voice would be sent, and the characters it would cost, and stops.
@@ -24,6 +25,9 @@ const chosen = args.filter((arg) => !arg.startsWith("--"));
 const stories = chosen.length ? chosen : Object.keys(casting.stories);
 const cache = process.env.VOXDOWN_SPEAK_CACHE ?? join(homedir(), ".cache", "voxdown-speak");
 const API = "https://api.elevenlabs.io";
+/** A casting's voice by its ElevenLabs name, and the name the page shows it by. */
+const voiceName = (cast) => (typeof cast === "string" ? cast : cast.voice);
+const shownName = (cast) => (typeof cast === "string" ? cast : (cast.as ?? cast.voice));
 
 /** Silence between parts: on one line, from line to line, between paragraphs, after a heading. */
 const GAP = { part: 0.25, line: 0.45, block: 0.8, heading: 1.1 };
@@ -320,7 +324,7 @@ async function record(name, voicesByName) {
       if (cue.joined) continue;
       const what =
         cue.kind === "speech"
-          ? `${voices[cue.speaker]}: ${voiceText(cue)}`
+          ? `${voiceName(voices[cue.speaker])}: ${voiceText(cue)}`
           : cue.kind === "vocal"
             ? `sound effect: ${soundOfCharacter(cue, story)}`
             : cue.kind === "sound"
@@ -356,7 +360,10 @@ async function record(name, voicesByName) {
         );
         const sent = voiceText(cue);
         const result = JSON.parse(
-          readFileSync(await speak(voicesByName.get(voices[cue.speaker]), sent, context), "utf8"),
+          readFileSync(
+            await speak(voicesByName.get(voiceName(voices[cue.speaker])), sent, context),
+            "utf8",
+          ),
         );
         const mp3 = join(work, `${index}.mp3`);
         writeFileSync(mp3, Buffer.from(result.audio_base64, "base64"));
@@ -454,7 +461,9 @@ async function record(name, voicesByName) {
       audio: `${base}.mp3`,
       source: createHash("sha256").update(text).digest("hex"),
       model: casting.model,
-      voices,
+      voices: Object.fromEntries(
+        Object.entries(voices).map(([character, cast]) => [character, shownName(cast)]),
+      ),
       duration: Number(time.toFixed(3)),
       cues: cues.map((cue) => ({
         kind: cue.kind,
@@ -488,9 +497,9 @@ const voicesByName = dryRun ? new Map() : await voiceIds();
 for (const name of stories) {
   if (!casting.stories[name]) throw new Error(`${name} isn't in scripts/speak.json`);
   if (!dryRun) {
-    const unknown = Object.values(casting.stories[name]).filter(
-      (voice) => !voicesByName.has(voice),
-    );
+    const unknown = Object.values(casting.stories[name])
+      .map(voiceName)
+      .filter((voice) => !voicesByName.has(voice));
     if (unknown.length) throw new Error(`No ElevenLabs voice named ${unknown.join(", ")}`);
   }
   await record(name, voicesByName);

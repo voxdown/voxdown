@@ -23,7 +23,7 @@ export function slug(text: string): string {
     .replace(/\s/g, "-");
 }
 
-const escape = (text: string) =>
+const escapeHtml = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 export function markdownToHtml(markdown: string): string {
@@ -37,19 +37,19 @@ export function markdownToHtml(markdown: string): string {
       },
       code({ text, lang }: Tokens.Code) {
         if (lang !== "example") {
-          return `<pre class="code"><code${lang ? ` class="language-${escape(lang)}"` : ""}>${escape(text)}</code></pre>\n`;
+          return `<pre class="code"><code${lang ? ` class="language-${escapeHtml(lang)}"` : ""}>${escapeHtml(text)}</code></pre>\n`;
         }
         const [input = "", script = "", book] = text
           .split(/^\.$/m)
           .map((part) => part.replace(/^\n|\n$/g, ""));
         const cell = (label: string, body: string) =>
-          `<div class="example-part"><div class="example-label">${label}</div><pre><code>${escape(body)}</code></pre></div>`;
+          `<div class="example-part"><div class="example-label">${label}</div><pre><code>${escapeHtml(body)}</code></pre></div>`;
         return `<figure class="example">${cell("You write", input)}${cell("A listener hears", script)}${book === undefined ? "" : cell("A reader sees", book)}</figure>\n`;
       },
       link({ href, title, tokens }: Tokens.Link) {
         const target = LINKS[href] ?? href;
-        const titled = title ? ` title="${escape(title)}"` : "";
-        return `<a href="${escape(target)}"${titled}>${this.parser.parseInline(tokens)}</a>`;
+        const titled = title ? ` title="${escapeHtml(title)}"` : "";
+        return `<a href="${escapeHtml(target)}"${titled}>${this.parser.parseInline(tokens)}</a>`;
       },
     },
   });

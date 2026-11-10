@@ -192,8 +192,8 @@ select {
 .shelf {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4rem 1.6rem;
+  align-items: center;
+  gap: 0.5rem 1.2rem;
   padding: 0.5rem clamp(1rem, 3vw, 2.5rem) 1.1rem;
   border-bottom: 1px solid var(--desk-edge);
 }
@@ -208,35 +208,47 @@ select {
   padding: 0;
   display: contents;
 }
+/* Each example: a book or a script page, its title, and who wrote it underneath. */
 .example {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 0.5rem;
+  align-items: center;
   white-space: nowrap;
+  text-align: left;
   background: none;
   border: 0;
   padding: 0.15rem 0;
   cursor: pointer;
-  text-align: left;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  border-bottom: 1px solid transparent;
 }
-.example:hover {
-  border-bottom-color: var(--quiet);
-}
-.example[aria-current="true"] {
-  border-bottom-color: var(--pencil);
+.example .icon {
+  grid-row: span 2;
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: none;
+  stroke: var(--quiet);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 .example .title {
-  font: 500 1rem / 1.3 var(--story);
+  justify-self: start;
+  font: 500 1rem / 1.25 var(--story);
+  border-bottom: 1px solid transparent;
 }
 .example .by {
-  font-size: 0.8rem;
+  font-size: 0.74rem;
+  line-height: 1.3;
   color: var(--quiet);
 }
-@media (max-width: 1599px) {
-  .example .by {
-    display: none;
-  }
+.example:hover .title {
+  border-bottom-color: var(--quiet);
+}
+.example[aria-current="true"] .title {
+  border-bottom-color: var(--pencil);
+}
+.example[aria-current="true"] .icon {
+  stroke: var(--pencil);
 }
 .shelf .actions {
   margin-left: auto;
@@ -418,6 +430,19 @@ select {
   --vxd-story-font: var(--story);
   --vxd-interface-font: var(--ui);
   --vxd-size: 17px;
+}
+/* The part of the right page the cursor is in, and a hint that the parts can be clicked. */
+.sheet [data-from],
+.sheet tr[data-line] {
+  cursor: pointer;
+}
+.sheet .linked {
+  outline: 2px solid color-mix(in srgb, var(--pencil) 40%, transparent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.sheet tr.linked {
+  outline-offset: -2px;
 }
 /* Notes sit in the text here: the page has no margin to hold them. */
 .sheet .vxd-script .vxd-note {

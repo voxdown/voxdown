@@ -30,7 +30,17 @@ export type RenderOptions = {
   pages?: boolean;
   /** Script view: show the narrator's name too, where the speaker changes. Default false. */
   narratorName?: boolean;
+  /**
+   * Write where each paragraph, heading, line, speech and mark comes from in the source, as
+   * `data-from` and `data-to` (UTF-16 offsets), to link a view to an editor. Default false.
+   */
+  positions?: boolean;
 };
+
+/** ` data-from="…" data-to="…"`, when positions are asked for. */
+function placed(range: { from: number; to: number }, options: RenderOptions): string {
+  return options.positions ? ` data-from="${range.from}" data-to="${range.to}"` : "";
+}
 
 export type View = "book" | "script";
 
@@ -92,14 +102,21 @@ export function renderBook(story: Story, options: RenderOptions = {}): string {
     }
     if (block.visibility === "audio" || block.visibility === "hidden") continue;
     const printed = lines
-      .map((line) => printedLine(story.source, line))
+      .map((line) => {
+        const html = printedLine(story.source, line);
+        // With positions, each printed line says where it comes from.
+        return html && options.positions && block.kind !== "heading"
+          ? `<span class="vxd-line"${placed(line.range, options)}>${html}</span>`
+          : html;
+      })
       .filter((html) => html !== "");
     if (!printed.length) continue;
+    const where = placed(block.range, options);
     if (block.kind === "heading") {
       const level = Math.min(6, block.level);
-      out.push(`<h${level} class="vxd-heading">${markers}${printed.join(" ")}</h${level}>`);
+      out.push(`<h${level} class="vxd-heading"${where}>${markers}${printed.join(" ")}</h${level}>`);
     } else {
-      out.push(`<p class="vxd-p">${markers}${printed.join("<br>\n")}</p>`);
+      out.push(`<p class="vxd-p"${where}>${markers}${printed.join("<br>\n")}</p>`);
     }
     markers = "";
   }
@@ -210,7 +227,7 @@ function groupOpen(group: Group, context: ScriptContext): string {
       `<span class="vxd-chip vxd-chip-instruction">${escapeHtml(instruction.name)}</span>`,
     );
   const attrs = group.character ? ` data-speaker="${escapeHtml(group.character)}"` : "";
-  return `<div class="vxd-group"${attrs}${style}><div class="vxd-group-label">${parts.join(" ")}</div><div class="vxd-group-body">`;
+  return `<div class="vxd-group"${attrs}${style}><div class="vxd-group-label"${placed(group.range, context.options)}>${parts.join(" ")}</div><div class="vxd-group-body">`;
 }
 
 function scriptBlock(block: Block, context: ScriptContext): string {
@@ -224,11 +241,11 @@ function scriptBlock(block: Block, context: ScriptContext): string {
   if (block.kind === "heading") {
     const level = Math.min(6, block.level);
     if (block.visibility === "hidden") {
-      return `<div class="vxd-heading-label vxd-h${level}" data-visibility="hidden"><span class="vxd-chip vxd-chip-label">hidden</span> ${printedLine(context.story.source, block.line)}</div>`;
+      return `<div class="vxd-heading-label vxd-h${level}" data-visibility="hidden"${placed(block.range, context.options)}><span class="vxd-chip vxd-chip-label">hidden</span> ${printedLine(context.story.source, block.line)}</div>`;
     }
     context.last = null;
     const inner = scriptLine(block.line, context, true);
-    return `<h${level} class="vxd-heading"${visibilityAttr(block.visibility)}>${label}${inner}</h${level}>`;
+    return `<h${level} class="vxd-heading"${visibilityAttr(block.visibility)}${placed(block.range, context.options)}>${label}${inner}</h${level}>`;
   }
   // Each paragraph names its speakers afresh, except the character its group's label names.
   context.last = groupSays(context.groups).character ?? null;
@@ -237,14 +254,14 @@ function scriptBlock(block: Block, context: ScriptContext): string {
     const solid = line.items.filter((item) => !(item.kind === "speech" && item.text === ""));
     const only = solid.length === 1 ? solid[0] : undefined;
     if (only?.kind === "instruction" && only.name === "page") {
-      return `<span class="vxd-turn" role="separator"><span>${escapeHtml(only.value ? `page ${only.value}` : "page turn")}</span></span>`;
+      return `<span class="vxd-turn" role="separator"${placed(line.range, context.options)}><span>${escapeHtml(only.value ? `page ${only.value}` : "page turn")}</span></span>`;
     }
-    return `<span class="vxd-line">${scriptLine(line, context, false)}</span>`;
+    return `<span class="vxd-line"${placed(line.range, context.options)}>${scriptLine(line, context, false)}</span>`;
   });
   const joined = lines
     .join("\n")
-    .replace(/<\/span>\n<span class="vxd-line">/g, '</span><br>\n<span class="vxd-line">');
-  return `<p class="vxd-p"${visibilityAttr(block.visibility)}>${label}${joined}</p>`;
+    .replace(/<\/span>\n<span class="vxd-line"/g, '</span><br>\n<span class="vxd-line"');
+  return `<p class="vxd-p"${visibilityAttr(block.visibility)}${placed(block.range, context.options)}>${label}${joined}</p>`;
 }
 
 function ownVisibility(block: Block): boolean {
@@ -271,7 +288,7 @@ function visibilityAttr(visibility: Visibility): string {
 
 /** One line of the script: speeches tinted in their speaker's color, marks drawn as chips. */
 function scriptLine(line: Line, context: ScriptContext, heading: boolean): string {
-  const { story, colors } = context;
+  const { story, colors, options } = context;
   const source = story.source;
   const items = [...line.items].sort((a, b) => a.range.from - b.range.from);
   let html = "";
@@ -306,36 +323,36 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
         const direction = item.direction
           ? `<span class="vxd-chip-direction">${escapeHtml(item.direction)}</span> `
           : "";
-        html += `<span class="vxd-chip vxd-chip-vocal" data-speaker="${escapeHtml(item.speaker)}"${style}>${who}${direction}${escapeHtml(item.description)}</span>`;
+        html += `<span class="vxd-chip vxd-chip-vocal" data-speaker="${escapeHtml(item.speaker)}"${style}${placed(item.range, options)}>${who}${direction}${escapeHtml(item.description)}</span>`;
         context.last = item.speaker;
         at = item.range.to;
         break;
       }
       case "sound":
         gap(item.range.from);
-        html += `<span class="vxd-chip vxd-chip-sound">${escapeHtml(item.description)}</span>`;
+        html += `<span class="vxd-chip vxd-chip-sound"${placed(item.range, options)}>${escapeHtml(item.description)}</span>`;
         at = item.range.to;
         break;
       case "instruction": {
         gap(item.range.from);
         if (item.name === "page") {
-          html += `<span class="vxd-chip vxd-chip-page" title="Page turn">${escapeHtml(item.value ? `page ${item.value}` : "page")}</span>`;
+          html += `<span class="vxd-chip vxd-chip-page" title="Page turn"${placed(item.range, options)}>${escapeHtml(item.value ? `page ${item.value}` : "page")}</span>`;
         } else if (item.name === "pause") {
-          html += `<span class="vxd-chip vxd-chip-pause" title="Pause">${escapeHtml(item.value ?? "pause")}</span>`;
+          html += `<span class="vxd-chip vxd-chip-pause" title="Pause"${placed(item.range, options)}>${escapeHtml(item.value ?? "pause")}</span>`;
         } else if (!["book only", "audio only", "hidden"].includes(item.name)) {
-          html += `<span class="vxd-chip vxd-chip-instruction">${escapeHtml(item.value ? `${item.name} ${item.value}` : item.name)}</span>`;
+          html += `<span class="vxd-chip vxd-chip-instruction"${placed(item.range, options)}>${escapeHtml(item.value ? `${item.name} ${item.value}` : item.name)}</span>`;
         }
         at = item.range.to;
         break;
       }
       case "note":
         gap(item.range.from);
-        html += `<span class="vxd-note" role="note">${escapeHtml(item.text)}</span>`;
+        html += `<span class="vxd-note" role="note"${placed(item.range, options)}>${escapeHtml(item.text)}</span>`;
         at = item.range.to;
         break;
       case "image":
         gap(item.range.from);
-        html += `<img class="vxd-image" src="${escapeHtml(safeUrl(item.src, true))}" alt="${escapeHtml(item.alt)}">`;
+        html += `<img class="vxd-image" src="${escapeHtml(safeUrl(item.src, true))}" alt="${escapeHtml(item.alt)}"${placed(item.range, options)}>`;
         at = item.range.to;
         break;
     }
@@ -371,7 +388,7 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): s
     .filter(Boolean)
     .join(" ");
   const style = color ? ` style="--vxd-c: ${color}"` : "";
-  return `${name}<span class="${classes}" data-speaker="${escapeHtml(speech.speaker)}"${style}>${direction}${words}</span>`;
+  return `${name}<span class="${classes}" data-speaker="${escapeHtml(speech.speaker)}"${style}${placed(speech.range, options)}>${direction}${words}</span>`;
 }
 
 function fullName(story: Story, speaker: string): string {

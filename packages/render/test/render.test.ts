@@ -170,6 +170,73 @@ describe("the script view", () => {
   });
 });
 
+describe("positions", () => {
+  const views = (source: string, positions: boolean) => [
+    render(source, "script", { positions }),
+    render(source, "book", { pages: true, positions }),
+  ];
+
+  it("are written only when asked for, and change nothing else", () => {
+    for (const [, source] of inputs) {
+      const [script, book] = views(source, false);
+      expect(`${script}${book}`).not.toContain("data-from");
+      const [placedScript, placedBook] = views(source, true).map((html) => {
+        const doc = dom(html);
+        for (const element of doc.querySelectorAll("[data-from]")) {
+          element.removeAttribute("data-from");
+          element.removeAttribute("data-to");
+        }
+        // The book view wraps each printed line, to say where it comes from.
+        for (const line of doc.querySelectorAll(".vxd-book .vxd-line"))
+          line.replaceWith(...line.childNodes);
+        return doc.body.innerHTML;
+      });
+      expect(placedScript).toBe(dom(script ?? "").body.innerHTML);
+      expect(placedBook).toBe(dom(book ?? "").body.innerHTML);
+    }
+  });
+
+  it("place each part inside its parent, and each speech and line on its own source", () => {
+    for (const [name, source] of inputs) {
+      const story = parse(source);
+      const speeches = new Set(
+        story.blocks.flatMap((block) =>
+          block.kind === "break"
+            ? []
+            : (block.kind === "heading" ? [block.line] : block.lines).flatMap((line) =>
+                line.items
+                  .filter((item) => item.kind === "speech")
+                  .map((item) => `${item.range.from}-${item.range.to}`),
+              ),
+        ),
+      );
+      const lineRanges = new Set(
+        story.blocks.flatMap((block) =>
+          block.kind === "paragraph"
+            ? block.lines.map((line) => `${line.range.from}-${line.range.to}`)
+            : [],
+        ),
+      );
+      for (const html of views(source, true)) {
+        for (const element of dom(html).querySelectorAll("[data-from]")) {
+          const from = Number(element.getAttribute("data-from"));
+          const to = Number(element.getAttribute("data-to"));
+          expect(0 <= from && from <= to && to <= source.length, name).toBe(true);
+          const parent = element.parentElement?.closest("[data-from]");
+          if (parent) {
+            expect(Number(parent.getAttribute("data-from")) <= from, name).toBe(true);
+            expect(to <= Number(parent.getAttribute("data-to")), name).toBe(true);
+          }
+          if (element.classList.contains("vxd-speech"))
+            expect(speeches.has(`${from}-${to}`), name).toBe(true);
+          if (element.classList.contains("vxd-line"))
+            expect(lineRanges.has(`${from}-${to}`), name).toBe(true);
+        }
+      }
+    }
+  });
+});
+
 describe("safety", () => {
   it("escapes HTML in the story, its marks and its front matter", () => {
     const source =

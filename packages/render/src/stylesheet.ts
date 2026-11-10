@@ -73,13 +73,28 @@ export const stylesheet = `
 /* The script view */
 .vxd-script { line-height: 2.35; }
 .vxd-script .vxd-p { margin-bottom: 0.9em; }
-:where(.vxd) .vxd-speech { border-radius: 0.2em; }
-:where(.vxd) .vxd-speech:not(.vxd-narration) {
-  background: color-mix(in srgb, var(--vxd-c, currentColor) 11%, transparent);
-  box-shadow: inset 0 -0.09em 0 color-mix(in srgb, var(--vxd-c, currentColor) 55%, transparent);
-  padding: 0.08em 0.05em;
+/* Two lanes under the words: the speaker's solid line just below them, a direction's dashes below that. */
+:where(.vxd) .vxd-speech {
+  --vxd-speaker-line: linear-gradient(color-mix(in srgb, var(--vxd-c, currentColor) 55%, transparent), color-mix(in srgb, var(--vxd-c, currentColor) 55%, transparent));
+  --vxd-direction-line: linear-gradient(to right, color-mix(in srgb, var(--vxd-direction) 60%, transparent) 50%, transparent 50%);
+  --vxd-tint: linear-gradient(color-mix(in srgb, var(--vxd-c, currentColor) 11%, transparent), color-mix(in srgb, var(--vxd-c, currentColor) 11%, transparent));
+  border-radius: 0.2em;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
+}
+:where(.vxd) .vxd-speech:not(.vxd-narration) {
+  padding: 0.08em 0.05em 0.14em;
+  background: var(--vxd-speaker-line) 0 100% / 100% 0.1em no-repeat, var(--vxd-tint) content-box;
+}
+:where(.vxd) .vxd-speech.vxd-directed {
+  padding-bottom: 0.42em;
+  background: var(--vxd-direction-line) 0 100% / 0.36em 0.09em repeat-x;
+}
+:where(.vxd) .vxd-speech.vxd-directed:not(.vxd-narration) {
+  background:
+    var(--vxd-speaker-line) 0 calc(100% - 0.28em) / 100% 0.1em no-repeat,
+    var(--vxd-direction-line) 0 100% / 0.36em 0.09em repeat-x,
+    var(--vxd-tint) content-box;
 }
 :where(.vxd) .vxd-name {
   display: inline-block;
@@ -101,7 +116,6 @@ export const stylesheet = `
   white-space: nowrap;
   pointer-events: none;
 }
-:where(.vxd) .vxd-directed { text-decoration: underline dashed color-mix(in srgb, var(--vxd-direction) 45%, transparent); text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
 
 :where(.vxd) .vxd-chip {
   display: inline-block;

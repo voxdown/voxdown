@@ -27,7 +27,20 @@ await writeFile("story.html", renderDocument(story, "book", { pages: true })); /
 | `characterColors(story, overrides?)`, `PALETTE` | Each character’s color (from `voxdown`). |
 | `inlineHtml(text)`, `escapeHtml(text)`, `safeUrl(url, image?)` | The small Markdown and escaping helpers the views use. |
 
-Options: `colors` (by character name), `header` (the title, author and cast; on unless `false`), `pages` (book view: page numbers in the margin), `narratorName` (script view: name the narrator too).
+Options: `colors` (by character name), `header` (the title, author and cast; on unless `false`), `pages` (book view: page numbers in the margin), `narratorName` (script view: name the narrator too), `positions` (see below).
+
+### Linking a view to an editor
+
+With `positions: true`, each paragraph, heading, line, speech and mark says where it comes from in the source, as `data-from` and `data-to` (UTF-16 offsets, as the parser's ranges). In the book view, each printed line is also wrapped in a `<span class="vxd-line">` to carry them. A page can then move an editor's cursor to whatever is clicked, and mark the part that holds the cursor:
+
+```js
+view.addEventListener("click", (event) => {
+  const placed = event.target.closest("[data-from]");
+  if (placed) editor.setCursor(Number(placed.dataset.from)); // your editor's call
+});
+```
+
+The playground does both. Positions are off unless asked for, so saved pages stay clean.
 
 ## The look
 

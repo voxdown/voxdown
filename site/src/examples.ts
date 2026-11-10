@@ -4,7 +4,14 @@
  */
 import { fromFountain, parse } from "voxdown";
 
-export type Example = { name: string; title: string; byline: string; text: string };
+export type Example = {
+  name: string;
+  title: string;
+  byline: string;
+  /** A story, or a screenplay imported from Fountain: the shelf draws a book or a script page. */
+  kind: "story" | "screenplay";
+  text: string;
+};
 
 const files = import.meta.glob("../../examples/*.{vxd,fountain}", {
   query: "?raw",
@@ -12,13 +19,13 @@ const files = import.meta.glob("../../examples/*.{vxd,fountain}", {
   eager: true,
 }) as Record<string, string>;
 
-/** How each example is introduced; anything not listed is shown by its title alone. */
+/** The line under each example's title; anything not listed is shown by its title alone. */
 const BYLINES: Record<string, string> = {
   "peter-rabbit.vxd": "Beatrix Potter, 1902",
-  "the-dragon-who-would-not-roar.vxd": "new",
-  "the-north-wind-and-the-sun.vxd": "after Aesop",
-  "die-bremer-stadtmusikanten.vxd": "in German",
-  "the-lighthouse.vxd": "a screenplay, imported",
+  "the-dragon-who-would-not-roar.vxd": "A new story, free to copy",
+  "the-north-wind-and-the-sun.vxd": "After Aesop",
+  "die-bremer-stadtmusikanten.vxd": "Brothers Grimm, in German",
+  "the-lighthouse.vxd": "A screenplay",
 };
 
 const ORDER = [
@@ -36,7 +43,13 @@ export const examples: Example[] = Object.entries(files)
     const name = fountain ? file.replace(/\.fountain$/, ".vxd") : file;
     const text = fountain ? fromFountain(raw) : raw;
     const title = parse(text).meta.title ?? name;
-    return { name, title, byline: BYLINES[name] ?? "", text };
+    return {
+      name,
+      title,
+      byline: BYLINES[name] ?? "",
+      kind: fountain ? ("screenplay" as const) : ("story" as const),
+      text,
+    };
   })
   .sort((a, b) => rank(a.name) - rank(b.name));
 

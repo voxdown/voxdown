@@ -95,6 +95,47 @@ if (squeezed) problems.push(`show marks: ${squeezed} raw direction(s) squeezed`)
 await page.uncheck("#show-marks");
 console.log("show marks: raw directions read in line: ok");
 
+// The two pages are linked: a click on the right page moves the cursor there, and the cursor marks
+// its place on the right page.
+const cursorLine = () =>
+  page.evaluate(() => {
+    const node = window.getSelection()?.anchorNode;
+    const element = node instanceof Element ? node : node?.parentElement;
+    return element?.closest(".cm-line")?.textContent ?? "";
+  });
+await page.click(`.example[data-name="${names[0]}"]`);
+await page.click('.tab[data-tab="script"]');
+if (await page.locator("#output .linked").count())
+  problems.push("linking: a story just opened already has a marked place");
+const speech = page.locator("#output .vxd-speech:not(.vxd-narration)").nth(3);
+await speech.scrollIntoViewIfNeeded();
+// The words alone, without the direction label drawn above them.
+const said = await speech.evaluate((element) => {
+  const words = element.cloneNode(true);
+  for (const label of words.querySelectorAll(".vxd-direction")) label.remove();
+  return words.textContent.replace(/[“”"]/g, "").trim().split(/\s+/).slice(0, 3).join(" ");
+});
+await speech.click();
+const active = await cursorLine();
+if (!active.includes(said))
+  problems.push(`linking: a click on “${said}” put the cursor on “${active}”`);
+if (!(await speech.evaluate((element) => element.classList.contains("linked"))))
+  problems.push("linking: the clicked speech isn't marked as the cursor's place");
+await page.keyboard.press("ArrowDown");
+await page.keyboard.press("ArrowDown");
+const moved = await page.evaluate(() => document.querySelectorAll("#output .linked").length);
+if (moved !== 1) problems.push(`linking: after moving the cursor, ${moved} places are marked`);
+await page.click('.tab[data-tab="lines"]');
+const row = page.locator("#output tbody tr").nth(5);
+const rowText = (await row.locator(".text").innerText()).split(/\s+/).slice(0, 3).join(" ");
+await row.click();
+const rowLine = await cursorLine();
+if (!rowLine.includes(rowText))
+  problems.push(`linking: a click on row 6 put the cursor on “${rowLine}”`);
+if (!(await row.evaluate((element) => element.classList.contains("linked"))))
+  problems.push("linking: the clicked row isn't marked");
+console.log("linking: right page to editor and back: ok");
+
 const element = await browser.newPage();
 watch(element, "element.html");
 await element.goto(`${base}/element.html`);

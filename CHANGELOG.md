@@ -7,6 +7,19 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **VS Code extension 1.0.0**
 - Highlighting, snippets, warnings as you type, a script preview, and the cheat sheet.
 
+## `@voxdown/render` 1.1.0 and the playground (9 November 2026)
+
+**@voxdown/render**
+- `positions`: each paragraph, heading, line, speech and mark says where it comes from in the source (`data-from`, `data-to`), to link a view to an editor.
+- In the script view, a speaker's line and a direction's dashes each have their own lane under the words, as in the editor, instead of being drawn over each other.
+
+**The playground**
+- The icon in the masthead, and a switch for light, dark, or as the system is.
+- A strip of marks above the editor: a click puts one in.
+- The two pages are linked: a click on the script, the book or the lines moves the editor's cursor there, and the cursor marks its place on the right page.
+- The examples show who wrote them, under each title, with a book or a script page beside it.
+- Laptop and phone layouts that fit: the left page no longer slides under the right one, and stacked pages keep their buttons.
+
 ## `@voxdown/editor` 1.0.0 (9 November 2026)
 
 - `scriptEditor`, the CodeMirror 6 editor that draws marks as chips, with its hooks documented.

@@ -60,8 +60,15 @@ const view = new EditorView({
     scriptEditor({ characters }),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) schedule();
+      else if (update.selectionSet) markPlace(true);
     }),
     EditorView.contentAttributes.of({ "aria-label": "Story" }),
+    EditorView.domEventHandlers({
+      focus: () => {
+        following = true;
+        markPlace(false);
+      },
+    }),
   ],
 });
 
@@ -74,6 +81,7 @@ function schedule(): void {
 /** Puts a story on the left page, the cursor where the story starts so the front matter folds. */
 function load(text: string, name: string): void {
   state.name = name;
+  following = false;
   $<HTMLElement>("#file-name").textContent = name;
   const story = parse(text);
   const start = story.frontMatter ? Math.min(story.frontMatter.range.to + 2, text.length) : 0;
@@ -144,11 +152,11 @@ function showOutput(): void {
   const download = $<HTMLButtonElement>("#download-output");
   switch (state.tab) {
     case "script":
-      sheet.innerHTML = renderScript(story);
+      sheet.innerHTML = renderScript(story, { positions: true });
       download.textContent = "Download HTML";
       break;
     case "book":
-      sheet.innerHTML = renderBook(story, { pages: true });
+      sheet.innerHTML = renderBook(story, { pages: true, positions: true });
       download.textContent = "Download HTML";
       break;
     case "lines":
@@ -164,6 +172,7 @@ function showOutput(): void {
       download.textContent = "Download text";
       break;
   }
+  markPlace(false);
 }
 
 function linesTable(story: Story): string {
@@ -173,7 +182,7 @@ function linesTable(story: Story): string {
       ? `<span class="speaker-dot"${color ? ` style="--c: ${color}"` : ""}></span>${escapeHtml(line.speaker)}`
       : `<span class="kind">${escapeHtml(line.kind === "instruction" ? `{${line.name}}` : line.kind)}</span>`;
     const text = line.kind === "vocal" || line.kind === "sound" ? `[${line.text}]` : line.text;
-    return `<tr><td class="n">${index + 1}</td><td class="who">${who}</td><td class="direction">${escapeHtml(line.direction ?? "")}</td><td class="text">${escapeHtml(text)}</td><td class="n">${line.scene}</td><td class="n">${escapeHtml(line.page)}</td></tr>`;
+    return `<tr data-line="${line.line}" data-column="${line.column}"><td class="n">${index + 1}</td><td class="who">${who}</td><td class="direction">${escapeHtml(line.direction ?? "")}</td><td class="text">${escapeHtml(text)}</td><td class="n">${line.scene}</td><td class="n">${escapeHtml(line.page)}</td></tr>`;
   });
   return `<p class="sheet-note">The spoken script as data: what <code>lines()</code> returns, and what <em>Download JSON</em> saves.</p><table><thead><tr><th>#</th><th>Who</th><th>Direction</th><th>Text</th><th>Scene</th><th>Page</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
@@ -185,6 +194,89 @@ function sides(story: Story): string {
     return `<section class="side"><h3><span class="speaker-dot"${color ? ` style="--c: ${color}"` : ""}></span>${escapeHtml(full)}</h3><pre>${escapeHtml(text)}</pre></section>`;
   });
   return `<p class="sheet-note">What each character says, in order: a performer's sides.</p>${parts.join("")}`;
+}
+
+// The two pages, linked: a click on the right page puts the cursor where that came from, and the
+// cursor marks its place on the right page, from the first time the editor or the right page is
+// used, so a story opens without a mark.
+let following = false;
+
+/** Where an element of the right page comes from in the story, if it says. */
+function sourceOf(element: Element): { from: number; to: number } | undefined {
+  const row = element.closest<HTMLElement>("tr[data-line]");
+  if (row) {
+    const doc = view.state.doc;
+    const number = Number(row.dataset.line);
+    if (number < 1 || number > doc.lines) return undefined;
+    const from = Math.min(doc.line(number).from + Number(row.dataset.column) - 1, doc.length);
+    return { from, to: from };
+  }
+  const placed = element.closest<HTMLElement>("[data-from]");
+  if (!placed) return undefined;
+  return { from: Number(placed.dataset.from), to: Number(placed.dataset.to) };
+}
+
+$<HTMLElement>("#output").addEventListener("click", (event) => {
+  const target = event.target as Element;
+  // Selecting text to copy, or following a link, isn't a jump.
+  if (target.closest("a") || window.getSelection()?.toString()) return;
+  const place = sourceOf(target);
+  if (!place) return;
+  following = true;
+  const at = Math.min(place.from, view.state.doc.length);
+  view.dispatch({
+    selection: EditorSelection.cursor(at),
+    effects: EditorView.scrollIntoView(at, { y: "center" }),
+  });
+  // On a phone the keyboard would cover the story; there the editor only scrolls to the place.
+  if (!matchMedia("(pointer: coarse)").matches) view.focus();
+});
+
+/** Marks the right page's smallest part that holds the cursor, scrolling only that page to it. */
+function markPlace(scroll: boolean): void {
+  const sheet = $<HTMLElement>("#output");
+  if (!following) {
+    for (const old of sheet.querySelectorAll(".linked")) old.classList.remove("linked");
+    return;
+  }
+  const cursor = view.state.selection.main.head;
+  let best: HTMLElement | undefined;
+  let bestSize = Number.POSITIVE_INFINITY;
+  let bestRow: HTMLElement | undefined;
+  // Between parts, as on a blank line, the next part is the place; after the last, the last.
+  let next: HTMLElement | undefined;
+  let nextFrom = Number.POSITIVE_INFINITY;
+  let last: HTMLElement | undefined;
+  for (const element of sheet.querySelectorAll<HTMLElement>("[data-from], tr[data-line]")) {
+    const place = sourceOf(element);
+    if (!place) continue;
+    if (element.matches("tr")) {
+      // Rows: the last one that starts at or before the cursor, or else the first.
+      if (place.from <= cursor || !bestRow) bestRow = element;
+      continue;
+    }
+    if (place.from <= cursor && cursor <= place.to && place.to - place.from < bestSize) {
+      best = element;
+      bestSize = place.to - place.from;
+    }
+    if (place.from > cursor && place.from < nextFrom) {
+      next = element;
+      nextFrom = place.from;
+    }
+    last = element;
+  }
+  const mark = bestRow ?? best ?? next ?? last;
+  for (const old of sheet.querySelectorAll(".linked"))
+    if (old !== mark) old.classList.remove("linked");
+  if (!mark) return;
+  mark.classList.add("linked");
+  if (!scroll) return;
+  const box = mark.getBoundingClientRect();
+  const frame = sheet.getBoundingClientRect();
+  if (box.top < frame.top || box.bottom > frame.bottom) {
+    sheet.scrollTop +=
+      box.top - frame.top - (frame.height - Math.min(box.height, frame.height)) / 2;
+  }
 }
 
 function selectTab(tab: Tab, focus = false): void {
@@ -377,13 +469,21 @@ $<HTMLButtonElement>("#copy-link").addEventListener("click", async () => {
 // The shelf
 
 const shelf = $<HTMLUListElement>("#examples");
+/** A book for a story, a script page for a screenplay. */
+const ICONS = {
+  story:
+    '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5c3-1.2 6-1 9 1v13c-3-2-6-2.2-9-1zM21 5.5c-3-1.2-6-1-9 1v13c3-2 6-2.2 9-1z"/></svg>',
+  screenplay:
+    '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 11.5h7M9 15h7M9 18.5h4"/></svg>',
+};
+
 for (const example of examples) {
   const item = document.createElement("li");
   const button = document.createElement("button");
   button.type = "button";
   button.className = "example";
   button.dataset.name = example.name;
-  button.innerHTML = `<span class="title">${escapeHtml(example.title)}</span><span class="by">${escapeHtml(example.byline)}</span>`;
+  button.innerHTML = `${ICONS[example.kind]}<span class="title">${escapeHtml(example.title)}</span><span class="by">${escapeHtml(example.byline)}</span>`;
   button.addEventListener("click", () => load(example.text, example.name));
   item.append(button);
   shelf.append(item);

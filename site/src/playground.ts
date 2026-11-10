@@ -275,7 +275,22 @@ $<HTMLInputElement>("#show-marks").addEventListener("change", (event) => {
 
 $<HTMLButtonElement>("#new-story").addEventListener("click", () => {
   load(
-    `---\nvoxdown: 1.0\ntitle: A new story\nlanguage: en-US\ncast:\n  Wanda:\n---\n\n# A new story\n\n@(warmly) Once upon a time, there was a witch called Wanda.\n\n@Wanda “Hello,” said Wanda. [a cat purrs]\n`,
+    [
+      "---",
+      "voxdown: 1.0",
+      "title: A new story",
+      "language: en-US",
+      "cast:",
+      "  Wanda:",
+      "---",
+      "",
+      "# A new story",
+      "",
+      "@(warmly) Once upon a time, there was a witch called Wanda.",
+      "",
+      "@Wanda “Hello,” said Wanda. [a cat purrs]",
+      "",
+    ].join("\n"),
     "new-story.vxd",
   );
   view.focus();

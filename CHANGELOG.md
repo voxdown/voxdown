@@ -6,6 +6,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 **The playground**
 - The pages fill the window between the shelf and the line at its foot, and no longer cover that line; on a short window the page scrolls. The Sun in *The North Wind and the Sun* is read by a new voice.
+- The listening page's recordings are levelled as `scripts/speak.mjs` means them to be: every voice as loud as the others, sounds and page turns quieter behind them. Its measurement of each clip's loudness had always failed, so no clip was ever levelled.
 
 ## The VS Code extension 1.0.0 and the playground (10 November 2026)
 

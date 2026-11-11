@@ -5,7 +5,17 @@
   "license": "MIT",
   "author": "Etienne Ackermann",
   "type": "module",
-  "keywords": ["voxdown", "vxd", "audiobook", "script", "cli", "markdown", "fountain", "mcp", "speaker attribution"],
+  "keywords": [
+    "voxdown",
+    "vxd",
+    "audiobook",
+    "script",
+    "cli",
+    "markdown",
+    "fountain",
+    "mcp",
+    "speaker attribution"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/voxdown/voxdown.git",
@@ -25,6 +35,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
     "@modelcontextprotocol/server": "^2.4.0",
+    "@voxdown/produce": "workspace:^",
     "@voxdown/render": "workspace:^",
     "voxdown": "workspace:^",
     "zod": "^4.2.0"

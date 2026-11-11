@@ -1,0 +1,41 @@
+{
+  "name": "@voxdown/produce",
+  "version": "0.1.0",
+  "description": "Turn a VoxDown story into an audiobook with the voice service you choose: a production script any tool can read, adapters (ElevenLabs, OpenAI-compatible speech such as Kokoro, Azure), and chapters assembled as WAV, MP3 and M4B.",
+  "license": "MIT",
+  "author": "Etienne Ackermann",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "voxdown",
+    "vxd",
+    "audiobook",
+    "tts",
+    "text-to-speech",
+    "elevenlabs",
+    "kokoro",
+    "m4b"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voxdown/voxdown.git",
+    "directory": "packages/produce"
+  },
+  "homepage": "https://voxdown.github.io/",
+  "bugs": "https://github.com/voxdown/voxdown/issues",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./node": { "types": "./dist/node.d.ts", "default": "./dist/node.js" },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": { "voxdown": "workspace:^" },
+  "engines": { "node": ">=20" }
+}

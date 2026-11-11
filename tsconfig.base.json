@@ -15,7 +15,9 @@
       "voxdown": ["./packages/core/src/index.ts"],
       "@voxdown/render": ["./packages/render/src/index.ts"],
       "@voxdown/editor": ["./packages/editor/src/index.ts"],
-      "@voxdown/editor/element": ["./packages/editor/src/define.ts"]
+      "@voxdown/editor/element": ["./packages/editor/src/define.ts"],
+      "@voxdown/produce": ["./packages/produce/src/index.ts"],
+      "@voxdown/produce/node": ["./packages/produce/src/node.ts"]
     }
   }
 }

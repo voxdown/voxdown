@@ -27,7 +27,7 @@ How a release is made. Every step that publishes something is done by a maintain
    pnpm --filter voxdown publish --access public
    ```
 
-   Publish in dependency order: `voxdown`, then `@voxdown/render`, then `@voxdown/editor` and `@voxdown/cli`.
+   Publish in dependency order: `voxdown`, then `@voxdown/render` and `@voxdown/produce`, then `@voxdown/editor` and `@voxdown/cli` (which needs `@voxdown/produce`).
 
 4. The playground deploys itself from `main` (the **Playground** workflow).
 

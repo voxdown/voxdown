@@ -29,6 +29,8 @@ import {
   findBackends,
   thisMachine,
 } from "./ai";
+import { ERROR, Failure, OK, PROBLEMS } from "./errors";
+import { produceCommand } from "./produce";
 import { type Tagged, scoreAgainst, tagStory, withoutSpeakers } from "./tag";
 import { passagesOf } from "./tagging";
 
@@ -62,9 +64,7 @@ export type Io = {
 };
 
 /** Exit codes: done, problems found, and the command couldn't run. */
-export const OK = 0;
-export const PROBLEMS = 1;
-export const ERROR = 2;
+export { ERROR, OK, PROBLEMS } from "./errors";
 
 /** Runs `vxd` with its arguments (without `node` and the script) and returns the exit code. */
 export async function run(argv: readonly string[], io: Io): Promise<number> {
@@ -122,16 +122,6 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
 }
 
 // Errors
-
-/** An error the user can act on, shown as one line. */
-class Failure extends Error {
-  constructor(
-    message: string,
-    readonly code: number = ERROR,
-  ) {
-    super(message);
-  }
-}
 
 function usage(message: string, command?: string): Failure {
   return new Failure(`${message} (see vxd ${command ? `${command} ` : ""}--help)`);
@@ -736,6 +726,23 @@ function tagSummary(tagged: Tagged, name: string): string {
   return `${out.join("\n")}\n`;
 }
 
+// produce
+
+async function produceAction({ io, values, files }: Context): Promise<number> {
+  const [input] = await readInputs(io, files);
+  if (!input) return ERROR;
+  return produceCommand({
+    machine: io.machine ?? thisMachine(),
+    cwd: io.cwd,
+    input,
+    values,
+    stdout: io.stdout,
+    stderr: io.stderr,
+    interactive: Boolean(io.interactive),
+    ...(io.question ? { question: io.question } : {}),
+  });
+}
+
 // mcp
 
 async function mcpCommand({ io }: Context): Promise<number> {
@@ -945,6 +952,66 @@ const COMMANDS: Record<string, Command> = {
       },
     },
     action: tagCommand,
+  },
+  produce: {
+    usage:
+      "vxd produce <file> [--with <service>] [--dry-run] [--chapters 1,3-5] [--sounds] [--out dir] [--script-only]",
+    summary: "Make an audiobook with a voice service you have",
+    about: [
+      "Reads the story aloud, each character in a voice of their own, with the voice service you have:",
+      "ElevenLabs (ELEVENLABS_API_KEY), Azure (AZURE_SPEECH_KEY and AZURE_SPEECH_REGION), Kokoro running",
+      "on this computer (free), OpenAI (OPENAI_API_KEY), or any OpenAI-compatible speech server",
+      "(--with http://host:port --model name). A first casting is written to casting.json in the output",
+      "folder for you to change; --dry-run shows it and what making the book would cost, and stops.",
+      "The book goes to <story>.audiobook/: an M4B with its chapters marked and an MP3 a chapter (with",
+      "ffmpeg; WAV without), when each line is heard (timings/), and the production script. Clips",
+      "already made are kept, so making it again only pays for what changed. --script-only writes the",
+      "production script and SSML, for other tools, with no service.",
+    ].join("\n"),
+    examples: [
+      "vxd produce story.vxd --dry-run",
+      "vxd produce story.vxd --with elevenlabs --chapters 1",
+      "vxd produce story.vxd --with http://127.0.0.1:8000 --model qwen3-tts",
+    ],
+    files: "one",
+    options: {
+      with: {
+        type: "string",
+        value: "<service>",
+        help: "elevenlabs, azure, kokoro, openai, or an OpenAI-compatible server's address.",
+      },
+      model: {
+        type: "string",
+        value: "<name>",
+        help: "The service's model (ElevenLabs: eleven_v4, the default).",
+      },
+      chapters: {
+        type: "string",
+        value: "<list>",
+        help: "Only these chapters, such as 1 or 2,4-6.",
+      },
+      sounds: {
+        type: "boolean",
+        help: "Make sounds and page turns with the service's sound effects (they cost too).",
+      },
+      out: {
+        type: "string",
+        short: "o",
+        value: "<dir>",
+        help: "Where the book goes. Default: <story>.audiobook beside it.",
+      },
+      "dry-run": {
+        type: "boolean",
+        help: "Write the casting, say what it would cost, and make nothing.",
+      },
+      yes: { type: "boolean", short: "y", help: "Make it without asking first." },
+      "keep-wav": { type: "boolean", help: "Keep each chapter's WAV beside its MP3." },
+      "script-only": {
+        type: "boolean",
+        help: "Write only the production script and SSML: no service needed.",
+      },
+    },
+    action: produceAction,
   },
   mcp: {
     usage: "vxd mcp",

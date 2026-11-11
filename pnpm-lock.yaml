@@ -38,6 +38,9 @@ importers:
       '@modelcontextprotocol/server':
         specifier: ^2.4.0
         version: 2.4.0
+      '@voxdown/produce':
+        specifier: workspace:^
+        version: link:../produce
       '@voxdown/render':
         specifier: workspace:^
         version: link:../render
@@ -74,6 +77,12 @@ importers:
       happy-dom:
         specifier: ^20.14.6
         version: 20.14.6
+
+  packages/produce:
+    dependencies:
+      voxdown:
+        specifier: workspace:^
+        version: link:../core
 
   packages/render:
     dependencies:

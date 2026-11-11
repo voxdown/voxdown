@@ -9,6 +9,8 @@ export const workspaceAliases = [
   { find: /^@voxdown\/render$/, replacement: source("./packages/render/src/index.ts") },
   { find: /^@voxdown\/editor$/, replacement: source("./packages/editor/src/index.ts") },
   { find: /^@voxdown\/editor\/element$/, replacement: source("./packages/editor/src/define.ts") },
+  { find: /^@voxdown\/produce$/, replacement: source("./packages/produce/src/index.ts") },
+  { find: /^@voxdown\/produce\/node$/, replacement: source("./packages/produce/src/node.ts") },
 ];
 
 /**

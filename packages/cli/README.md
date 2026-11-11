@@ -1,6 +1,6 @@
 # @voxdown/cli
 
-The `vxd` command for [VoxDown](https://voxdown.github.io/), a plain-text format for stories read aloud. It checks stories for problems, tidies them, renders them as HTML, exports the spoken script for speech tools and performers, imports Fountain screenplays, and names who says each quote with an AI you already have.
+The `vxd` command for [VoxDown](https://voxdown.github.io/), a plain-text format for stories read aloud. It checks stories for problems, tidies them, renders them as HTML, exports the spoken script for speech tools and performers, imports Fountain screenplays, names who says each quote with an AI you already have, and makes audiobooks with the voice service you have.
 
 ## Install
 
@@ -164,6 +164,15 @@ The AI is one you already have, found on your computer:
 `vxd tag --list` shows what it finds. With several, it asks which and remembers; `--with codex` chooses one (`--with ollama:qwen3:14b` a model). Speakers the AI is unsure of are held back and listed with their lines; `--min low` gives them too. `--dry-run` writes nothing, `--yes` doesn't ask before writing, and `--out` writes another file. `--with tags` uses the dialogue tags alone (`“…” asked Mara`), with no AI.
 
 `--eval` measures an AI on a story that's already marked: it takes the speaker marks out, has the AI put them back, and scores it.
+
+### `vxd produce`: an audiobook
+
+```sh
+vxd produce story.vxd --dry-run
+vxd produce story.vxd --with elevenlabs
+```
+
+Reads the story aloud, each character in a voice of their own, with a voice service you have: ElevenLabs (`ELEVENLABS_API_KEY`), Azure (`AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`), Kokoro running on your computer (free), OpenAI (`OPENAI_API_KEY`), or any OpenAI-compatible speech server (`--with http://host:port --model name`). The first run writes a casting to change, `casting.json`; `--dry-run` shows it and what the book would cost. The book goes to `story.audiobook/`: an M4B with its chapters marked and an MP3 a chapter (with ffmpeg), and when each line is heard. Lines already made are kept, so making it again only pays for what changed. `--chapters 1` makes one chapter; `--sounds` makes sounds with the service's sound effects; `--script-only` writes the production script and SSML for other tools. [docs/produce.md](https://github.com/voxdown/voxdown/blob/main/docs/produce.md) has more.
 
 ### `vxd mcp`: VoxDown's tools for AI apps
 

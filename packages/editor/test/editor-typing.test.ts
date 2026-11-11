@@ -274,3 +274,34 @@ describe("Enter in a mark not finished", () => {
     view.destroy();
   });
 });
+
+describe("a long story's marks worked out elsewhere", () => {
+  it("come from the host's worker once typing pauses, and only for the text as it still is", async () => {
+    const { marksElsewhere, marksField, marksPending, livePreview } = await import(
+      "../src/decorations"
+    );
+    const long = `${"Word. ".repeat(6000)}@Ann “Hi.”`;
+    const asked: string[] = [];
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: long,
+        extensions: [
+          livePreview({ characters: () => [] }),
+          marksElsewhere.of(async (text) => {
+            asked.push(text);
+            return [{ kind: "frontmatter", from: 0, to: 1 }];
+          }),
+        ],
+      }),
+      parent: document.body,
+    });
+    view.dispatch({ changes: { from: 0, insert: "New. " } });
+    expect(marksPending(view.state)).toBe(true);
+    await new Promise((done) => setTimeout(done, 450));
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.startsWith("New. ")).toBe(true);
+    expect(marksPending(view.state)).toBe(false);
+    expect(view.state.field(marksField)).toEqual([{ kind: "frontmatter", from: 0, to: 1 }]);
+    view.destroy();
+  });
+});

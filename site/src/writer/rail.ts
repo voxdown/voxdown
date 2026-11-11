@@ -8,6 +8,7 @@ import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { sceneNumbers } from "@voxdown/editor";
 import type { Story } from "voxdown";
+import { type SceneData, scenesOf } from "./story-data";
 
 /** Room above the story's start and below its end, for a node's ring. */
 const PAD = 12;
@@ -64,31 +65,24 @@ export function railAt(points: readonly Point[], y: number): number {
   return points.at(-1)?.at ?? 0;
 }
 
-/** The story's chapters, headings and scene breaks, in order. */
+/** The story's chapters, headings and scene breaks, in order, its breaks numbered. */
 export function railScenes(story: Story, numbers: ReadonlyMap<number, number>): RailScene[] {
-  const scenes: RailScene[] = [];
-  for (const block of story.blocks) {
-    if (block.kind === "heading") {
-      const said = block.line.items
-        .flatMap((item) => (item.kind === "speech" ? [item.text] : []))
-        .join(" ")
-        .trim();
-      const written = story.source.slice(block.line.range.from, block.line.range.to).trim();
-      scenes.push({
-        from: block.range.from,
-        name: said || written || `Heading ${scenes.length + 1}`,
-        chapter: block.level === 1,
-      });
-    } else if (block.kind === "break") {
-      const number = numbers.get(block.range.from);
-      scenes.push({
-        from: block.range.from,
-        name: number ? `Scene ${number}` : "Scene",
-        chapter: false,
-      });
-    }
-  }
-  return scenes;
+  return numbered(scenesOf(story), numbers);
+}
+
+/** Scenes read from a story (on the page or in a worker), their breaks given their numbers. */
+export function numbered(
+  scenes: readonly SceneData[],
+  numbers: ReadonlyMap<number, number>,
+): RailScene[] {
+  return scenes.map((scene) => {
+    const number = scene.break ? numbers.get(scene.from) : undefined;
+    return {
+      from: scene.from,
+      name: scene.break ? (number ? `Scene ${number}` : "Scene") : scene.name,
+      chapter: scene.chapter,
+    };
+  });
 }
 
 const LABELS_KEY = "vxd-writer-rail";
@@ -138,7 +132,11 @@ export class SceneRail {
 
   /** The story's scenes, read again after a change. */
   update(story: Story): void {
-    const next = railScenes(story, sceneNumbers(this.view.state));
+    this.show(railScenes(story, sceneNumbers(this.view.state)));
+  }
+
+  /** The scenes as read (by the page or its worker), drawn again if they changed. */
+  show(next: RailScene[]): void {
     const same =
       next.length === this.scenes.length &&
       next.every((scene, i) => {

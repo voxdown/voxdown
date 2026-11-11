@@ -94,6 +94,7 @@ export {
   type ViewSwitches,
   holdOpen,
   livePreview,
+  marksElsewhere,
   marksField,
   marksPending,
   openField,

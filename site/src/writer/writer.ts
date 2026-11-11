@@ -25,7 +25,9 @@ import {
 } from "@codemirror/view";
 import {
   type Character,
+  type EditorMark,
   type ViewSwitches,
+  marksElsewhere,
   marksField,
   readStory,
   sceneNumbers,
@@ -87,7 +89,7 @@ import { keys, menus } from "./menu";
 import { rankScenes } from "./outline";
 import { afterParagraph, moveParagraph } from "./paragraphs";
 import { type Problem, problems } from "./problems";
-import { SceneRail, railScenes } from "./rail";
+import { SceneRail, numbered, railScenes } from "./rail";
 import type { RenderAsk, RenderReply } from "./render-worker";
 import { Rescue, tabStory as tabStoryIn } from "./rescue";
 import { SaveFlow } from "./save-flow";
@@ -111,12 +113,15 @@ import {
   rememberFile,
   versionsOf,
 } from "./store";
+import { type CastView, castOf, passageIn } from "./story-data";
 import {
   type Speaker,
   StretchTools,
+  asPassage,
   mapped,
   nextNarratedQuote,
   passageNear,
+  speechAt,
   speechOfMark,
 } from "./stretch";
 import {
@@ -406,6 +411,8 @@ function editorState(source: string, cursor: number): EditorState {
       ),
       keymap.of([...searchKeymap, ...historyKeymap, ...defaultKeymap]),
       emphasis(),
+      // A long story's marks, worked out in the worker once typing pauses.
+      marksElsewhere.of((text) => marksFromWorker(text)),
       warningTips,
       scriptEditor({
         characters,
@@ -518,7 +525,13 @@ const tools: StretchTools = new StretchTools({
   speakers,
   apply,
   onHover: () => prefs.hoverBar,
-  fresh: () => (storyVersion === version ? story : undefined),
+  passageAt: (at) => {
+    if (storyVersion === version) {
+      const speech = speechAt(story, at);
+      return speech ? asPassage(speech) : undefined;
+    }
+    return read && readNow() ? passageIn(read.reply.passages, at) : undefined;
+  },
 });
 
 /** Everyone a passage can be given to: the narrator, the cast, and anyone else the story names. */
@@ -664,7 +677,12 @@ function changed(): void {
   showSaveState(true);
   clearTimeout(refreshTimer);
   cancelIdle();
-  refreshTimer = setTimeout(refresh, view.state.doc.length < LONG ? 150 : 450);
+  // A long story's is read in the worker once typing pauses (marksFromWorker): here only what
+  // needs no reading.
+  refreshTimer = setTimeout(
+    () => (view.state.doc.length < LONG ? refresh() : showSaveState()),
+    view.state.doc.length < LONG ? 150 : 450,
+  );
   // The draft is kept a moment after typing stops, and every two seconds while it goes on.
   clearTimeout(keepTimer);
   keepTimer = setTimeout(() => void keep(), Date.now() - keptAt > 2000 ? 0 : 300);
@@ -691,28 +709,81 @@ function refresh(): void {
 function showRest(): void {
   if (storyVersion !== version) return;
   showWarningCount();
-  // A long story's script or book, and its counts, are worked out in a worker of their own.
+  // A long story's script or book, and its counts, are worked out in the worker.
   if (view.state.doc.length >= LONG) {
-    const tab = prefs.side && (prefs.tab === "script" || prefs.tab === "book") ? prefs.tab : "none";
-    const drawn = tab !== "none";
-    renderer.postMessage({ id: ++asked, text: view.state.doc.toString(), tab } satisfies RenderAsk);
-    if (prefs.side && !drawn) showSide();
+    const doc = view.state.doc;
+    void readInWorker(doc.toString()).then((reply) => {
+      if (view.state.doc !== doc) return;
+      read = { doc, reply };
+      showRead();
+    });
     return;
   }
   showCounts(countsOf(story));
   if (prefs.side) showSide();
 }
 
-const renderer = new Worker(new URL("./render-worker.ts", import.meta.url), { type: "module" });
+// A long story is read in a worker (render-worker.ts): once each time typing pauses, for
+// everything the page shows of it, so that the page never reads a long book again while it is
+// written. Only the page's explicit acts (an edit, the outline) read it on the page.
+const reader = new Worker(new URL("./render-worker.ts", import.meta.url), { type: "module" });
 let asked = 0;
-renderer.addEventListener("message", ({ data: reply }: MessageEvent<RenderReply>) => {
-  // Only the latest: a reply for a text since changed is let go.
-  if (reply.id !== asked || storyVersion !== version) return;
-  showCounts(reply);
-  if (reply.html && prefs.side && (prefs.tab === "script" || prefs.tab === "book")) {
-    showSide(reply.html);
-  }
+const replies = new Map<number, (reply: RenderReply) => void>();
+reader.addEventListener("message", ({ data: reply }: MessageEvent<RenderReply>) => {
+  replies.get(reply.id)?.(reply);
+  replies.delete(reply.id);
 });
+function readInWorker(text: string): Promise<RenderReply> {
+  const id = ++asked;
+  const tab = prefs.side && (prefs.tab === "script" || prefs.tab === "book") ? prefs.tab : "none";
+  return new Promise((resolve) => {
+    replies.set(id, resolve);
+    reader.postMessage({ id, text, tab } satisfies RenderAsk);
+  });
+}
+
+/** What the worker last read of a long story, and the text it read (the editor's own). */
+let read: { doc: Text; reply: RenderReply } | undefined;
+/** Whether the worker's reading is of the text as it is now. */
+const readNow = () => read !== undefined && read.doc === view.state.doc;
+
+/** The editor's marks for a long story, from the worker; the rest put in once they are. */
+async function marksFromWorker(text: string): Promise<EditorMark[] | undefined> {
+  const doc = view.state.doc;
+  const reply = await readInWorker(text);
+  if (view.state.doc !== doc) return undefined;
+  read = { doc, reply };
+  // After the editor has the marks (the scenes' numbers come from them).
+  setTimeout(() => showRead(), 0);
+  return reply.marks;
+}
+
+/**
+ * A long story as the worker read it: the rail, the counts and the warnings at once; the side
+ * (a whole script or book to lay out again) once typing has stopped for a moment, never in the
+ * pauses between words.
+ */
+function showRead(): void {
+  if (!read || !readNow()) return;
+  const { reply } = read;
+  colors = new Map(reply.colors);
+  rail.show(numbered(reply.scenes, sceneNumbers(view.state)));
+  showCounts(reply);
+  showWarningCount();
+  if (prefs.side) whenStill(() => readNow() && showSide(read?.reply.html || undefined));
+}
+
+/** Runs `run` once the text has been still for a moment, in the browser's idle time. */
+let stillTimer: ReturnType<typeof setTimeout> | undefined;
+function whenStill(run: () => unknown, still = 1500): void {
+  clearTimeout(stillTimer);
+  const wait = Math.max(0, still - (Date.now() - file.changedAt));
+  stillTimer = setTimeout(() => {
+    if (Date.now() - file.changedAt < still) return whenStill(run, still);
+    if ("requestIdleCallback" in window) window.requestIdleCallback(() => run(), { timeout: 2000 });
+    else run();
+  }, wait);
+}
 
 let idle: number | undefined;
 let idleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -988,17 +1059,19 @@ function showSide(drawn?: string): void {
           ? renderScript(story, { positions: true })
           : renderBook(story, { pages: true, positions: true });
     else {
-      renderer.postMessage({
-        id: ++asked,
-        text: view.state.doc.toString(),
-        tab: prefs.tab,
-      } satisfies RenderAsk);
+      // A long story's comes from the worker, read for this side.
+      const doc = view.state.doc;
+      void readInWorker(doc.toString()).then((reply) => {
+        if (view.state.doc !== doc) return;
+        read = { doc, reply };
+        showRead();
+      });
       return;
     }
   } else if (prefs.tab === "cast")
     sheet.replaceChildren(
       castPanel(
-        story,
+        castData(),
         colors,
         {
           rename: (from, to) =>
@@ -1275,6 +1348,11 @@ function moveSectionHere(chapters: boolean, by: 1 | -1): boolean {
   return true;
 }
 
+/** The cast as the story is now: the worker's reading of a long story, else read here. */
+function castData(): CastView {
+  return storyVersion !== version && read && readNow() ? read.reply.cast : castOf(current());
+}
+
 /** A warning as the story is now: the same one, over the same words, nearest `near`. */
 function problemNow(code: string, words: string, near: number): Problem | undefined {
   if (storyVersion !== version) refresh();
@@ -1293,6 +1371,8 @@ function toTheText(): void {
 
 /** What to put right, with its fixes. */
 function currentProblems(): Problem[] {
+  // A long story read in the worker since it changed: its reading of what to put right.
+  if (storyVersion !== version && read && readNow()) return read.reply.problems;
   const doc = view.state.doc;
   return problems(
     story,

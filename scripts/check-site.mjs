@@ -1020,6 +1020,23 @@ await longPage.waitForTimeout(600);
 const slowest = await longPage.evaluate(() => Math.max(0, ...window.__keys));
 if (slowest > 150)
   problems.push(`writer: in a 100,000-word book, a key took ${slowest} ms (budget 150 ms)`);
+// Writing word by word, with the pauses between words: the page never reads the book again
+// itself (the worker does), so nothing holds it for long while a writer writes.
+await longPage.evaluate(() => {
+  window.__long = [];
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) window.__long.push(entry.duration);
+  }).observe({ type: "longtask" });
+});
+for (let word = 0; word < 16; word++) {
+  await longPage.keyboard.type(` word${word}`, { delay: 40 });
+  await longPage.waitForTimeout(word % 4 === 3 ? 800 : 350);
+}
+const held = await longPage.evaluate(() => window.__long.filter((duration) => duration > 50));
+if (held.length > 3)
+  problems.push(
+    `writer: writing in a 100,000-word book held the page ${held.length} times (${held.map(Math.round).join(", ")} ms)`,
+  );
 await long.close();
 console.log(`writer: a 100,000-word book, slowest key ${slowest} ms: ok`);
 

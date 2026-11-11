@@ -2,6 +2,7 @@ import {
   type ChangeDesc,
   type EditorState,
   type Extension,
+  Facet,
   StateEffect,
   StateField,
 } from "@codemirror/state";
@@ -139,6 +140,15 @@ const SETTLE_MS = 300;
 export const setMarks = StateEffect.define<EditorMark[]>();
 
 /**
+ * Where a long story's marks can be worked out away from the page (a worker of the host's): given
+ * the text, its marks. Without one, they are worked out on the page, in two steps.
+ */
+export const marksElsewhere = Facet.define<
+  (text: string) => Promise<readonly EditorMark[] | undefined>,
+  ((text: string) => Promise<readonly EditorMark[] | undefined>) | undefined
+>({ combine: (all) => all[0] });
+
+/**
  * Marks moved along with a change: each keeps its place in the text, a mark the change removes
  * goes, and a fix whose words the change touched is dropped until the marks are worked out again,
  * so a fix is never made in the wrong place.
@@ -202,6 +212,18 @@ const settleMarksPlugin = ViewPlugin.fromClass(
     update(update: ViewUpdate) {
       if (!update.docChanged || !marksPending(update.state)) return;
       clearTimeout(this.timer);
+      const elsewhere = update.state.facet(marksElsewhere);
+      if (elsewhere) {
+        // Away from the page: the page only puts the marks in, if the text is still the same.
+        this.timer = setTimeout(() => {
+          const doc = this.view.state.doc;
+          void elsewhere(doc.toString()).then((marks) => {
+            if (marks && this.view.state.doc === doc && marksPending(this.view.state))
+              this.view.dispatch({ effects: setMarks.of([...marks]) });
+          });
+        }, SETTLE_MS);
+        return;
+      }
       // In two steps, each its own task, so neither holds a key typed meanwhile: the story read
       // (kept, see `readStory`), then its marks worked out, if the text is still the same.
       this.timer = setTimeout(() => {

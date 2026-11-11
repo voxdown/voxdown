@@ -18,6 +18,7 @@ import {
   setFullName,
   setSpeaker,
 } from "voxdown";
+import type { Passage } from "./story-data";
 
 export type Speaker = { handle: string; name: string; color?: string };
 
@@ -34,10 +35,10 @@ export type StretchContext = {
   /** Whether resting the pointer on a passage brings its bar (View › The bar over a passage). */
   onHover?: () => boolean;
   /**
-   * The story as read already, or undefined while it waits to be read again after typing: the
-   * pointer passing by never makes the page read a long story at once.
+   * The passage at a place, as the story was last read (on the page or in a worker), or undefined
+   * while it waits to be read again: the pointer passing by never makes the page read a long story.
    */
-  fresh?: () => Story | undefined;
+  passageAt?: (at: number) => Passage | undefined;
 };
 
 const hasWords = (text: string) => /[\p{L}\p{N}]/u.test(text);
@@ -220,6 +221,17 @@ export function giveQuote(story: Story, quote: Quote, name: string): TextChange[
     : [];
 }
 
+/** A speech as the bar needs it. */
+export function asPassage(speech: Speech): Passage {
+  return {
+    from: speech.range.from,
+    to: speech.range.to,
+    speaker: speech.speaker,
+    ownDirection: speech.ownDirection,
+    ...(speech.mark ? { markFrom: speech.mark.range.from } : {}),
+  };
+}
+
 /** The passage a character mark gives its speaker to. */
 export function speechOfMark(story: Story, markFrom: number): Speech | undefined {
   for (const block of story.blocks) {
@@ -269,7 +281,7 @@ export class StretchTools {
     view.contentDOM.addEventListener("pointerup", (event) => {
       if (event.pointerType !== "touch" || !this.popover.hidden) return;
       const at = this.context.view.posAtCoords({ x: event.clientX, y: event.clientY });
-      const speech = at === null ? undefined : speechAt(this.context.story(), at);
+      const speech = at === null ? undefined : this.passageAt(at);
       if (speech) this.show(speech);
     });
     view.contentDOM.addEventListener("mouseleave", () => {
@@ -642,14 +654,13 @@ export class StretchTools {
         return;
       }
       const at = this.context.view.posAtCoords({ x, y });
-      const story = this.context.fresh ? this.context.fresh() : this.context.story();
-      const speech = at === null || !story ? undefined : speechAt(story, at);
+      const speech = at === null ? undefined : this.passageAt(at);
       if (!speech) {
         this.hideSoon();
         return;
       }
       clearTimeout(this.hideTimer);
-      if (this.shown === speech.range.from && !this.bar.hidden) return;
+      if (this.shown === speech.from && !this.bar.hidden) return;
       this.show(speech);
     }, 250);
   }
@@ -665,16 +676,23 @@ export class StretchTools {
   }
 
   /** The bar over a passage's start, or its mark's when the mark is on its line. */
-  private show(speech: Speech): void {
+  /** The passage at `at`, as the page or its worker last read the story. */
+  private passageAt(at: number): Passage | undefined {
+    if (this.context.passageAt) return this.context.passageAt(at);
+    const speech = speechAt(this.context.story(), at);
+    return speech ? asPassage(speech) : undefined;
+  }
+
+  private show(speech: Passage): void {
     const { view, host } = this.context;
-    const markFrom = speech.mark?.range.from;
+    const markFrom = speech.markFrom;
     const sameLine =
       markFrom !== undefined &&
-      view.state.doc.lineAt(markFrom).number === view.state.doc.lineAt(speech.range.from).number;
-    const anchor = sameLine ? (markFrom as number) : speech.range.from;
+      view.state.doc.lineAt(markFrom).number === view.state.doc.lineAt(speech.from).number;
+    const anchor = sameLine ? (markFrom as number) : speech.from;
     const coords = view.coordsAtPos(anchor, 1);
     if (!coords) return;
-    this.shown = speech.range.from;
+    this.shown = speech.from;
     const who = this.part(".who");
     const color = this.context
       .speakers()

@@ -3,7 +3,8 @@
  * aren't in the cast yet. A short name is renamed everywhere (`renameCharacter`), a full name set
  * in the front matter (`setFullName`), and a name not yet in the cast added to it.
  */
-import { type Story, isName, lines } from "voxdown";
+import { isName } from "voxdown";
+import type { CastView } from "./story-data";
 
 export type CastActions = {
   rename: (from: string, to: string) => boolean;
@@ -27,22 +28,16 @@ function refocus(key: string): void {
 }
 
 export function castPanel(
-  story: Story,
+  /** The cast, as the story was read (on the page, or in a worker for a long one). */
+  story: CastView,
   colors: ReadonlyMap<string, string>,
   actions: CastActions,
   /** Another tab writes the story: the cast is shown, not changed. */
   readOnly = false,
 ): HTMLElement {
-  const said = new Map<string, number>();
-  const words = new Map<string, number>();
-  for (const line of lines(story)) {
-    if ((line.kind === "speech" || line.kind === "vocal") && line.speaker) {
-      said.set(line.speaker, (said.get(line.speaker) ?? 0) + 1);
-      const count = line.text.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
-      words.set(line.speaker, (words.get(line.speaker) ?? 0) + count);
-    }
-  }
-  const narrator = story.meta.narrator;
+  const said = new Map(story.said);
+  const words = new Map(story.words);
+  const narrator = story.narrator;
   const inCast = new Map(story.cast.map((member) => [member.handle.toLowerCase(), member]));
   const names = [...colors.keys()];
   // The narrator first, whom the colours leave out: they read the rest, and the cast may say how.

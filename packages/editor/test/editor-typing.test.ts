@@ -153,6 +153,23 @@ describe("Enter in a quote", () => {
     expect(press("Enter", "@Ann “Hello,” she said.|")).toBe("@Ann “Hello,” she said.\n|");
   });
 
+  it("closes the quote after its last word, not after a space typed before Enter", () => {
+    expect(press("Enter", "@Ann “One thing. |Two things.”")).toBe(
+      "@Ann “One thing.”\n@Ann “|Two things.”",
+    );
+  });
+
+  it("splits a quote in a long story as in a short one, reading only the paragraphs near it", () => {
+    const filler = "Narration goes on and on. ".repeat(Math.ceil(FRESH_BELOW / 26) + 10);
+    const front = "---\nlanguage: de\n---\n";
+    const text = `${front}${filler}\n\n@Anna „Hallo.| Wie geht’s?“`;
+    const split = press("Enter", text);
+    expect(split.slice(split.indexOf("@Anna"))).toBe("@Anna „Hallo.“\n@Anna „|Wie geht’s?“");
+    // And a quote typed there is the story's language's, opened and closed.
+    const typed = type(`${front}${filler}\n\n@Anna `, `"Gut", sagte sie.`);
+    expect(typed.endsWith("@Anna „Gut“, sagte sie.")).toBe(true);
+  });
+
   it("before the closing mark goes after the line", () => {
     expect(press("Enter", "@Ann “Hello.|” [door]")).toBe("@Ann “Hello.” [door]\n|");
   });

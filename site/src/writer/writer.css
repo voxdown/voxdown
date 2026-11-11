@@ -5,6 +5,8 @@
  */
 
 body.writer {
+  /* One column, the window's width: the bar and the workspace shrink to it, never past it. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   /* The window's height at every width: the playground's narrow pages grow instead. */
   height: 100vh;
@@ -71,7 +73,7 @@ body.writer {
   align-items: baseline;
   gap: 0.6rem;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 0;
 }
 .file-name {
   min-width: 0;
@@ -532,6 +534,18 @@ body.writer {
 .side-sheet .vxd {
   --vxd-size: 15.5px;
 }
+/* The side's small labels (book only, hidden, a speaker's name), large and dark enough to read. */
+.side-sheet .vxd {
+  --vxd-muted: var(--quiet);
+}
+.side-sheet .vxd .vxd-chip-label {
+  font-size: 0.7rem;
+  color: var(--quiet);
+}
+.side-sheet .vxd [data-visibility] {
+  opacity: 0.8;
+}
+
 /* A long book's parts off screen are laid out only when they come into view. */
 .side-sheet .vxd > :not(header) {
   content-visibility: auto;

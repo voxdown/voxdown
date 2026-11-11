@@ -6,13 +6,20 @@
 import { type Story, isName, lines } from "voxdown";
 
 export type CastActions = {
-  rename: (from: string, to: string) => void;
-  fullName: (handle: string, name: string) => void;
+  rename: (from: string, to: string) => boolean;
+  fullName: (handle: string, name: string) => boolean;
   /** Takes the cursor to the character's first line. */
   find: (handle: string) => void;
   /** Says why something wasn't done. */
   notice: (message: string) => void;
 };
+
+/** After the side is drawn again, the focus goes back to the field that was changed. */
+function refocus(selector: string): void {
+  requestAnimationFrame(() =>
+    document.querySelector<HTMLElement>(`#side-sheet ${selector}`)?.focus(),
+  );
+}
 
 export function castPanel(
   story: Story,
@@ -88,12 +95,14 @@ export function castPanel(
         actions.notice(`“${next}” isn’t a name: one word of letters, digits, - and _.`);
         return;
       }
-      actions.rename(handle, next);
+      // The focus stays with the name just changed, in the list drawn again.
+      if (actions.rename(handle, next)) refocus(`.cast-handle input[value="${CSS.escape(next)}"]`);
     });
     commit(nameInput, () => {
       const next = nameInput.value.trim();
       if (next === nameInput.defaultValue) return;
-      actions.fullName(handle, next || handle);
+      if (actions.fullName(handle, next || handle))
+        refocus(`.cast-name[aria-label="Full name of ${CSS.escape(handle)}"]`);
     });
     (item.querySelector(".cast-find") as HTMLElement).addEventListener("click", () =>
       actions.find(handle),

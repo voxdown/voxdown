@@ -123,5 +123,29 @@ export function menus(
   document.addEventListener("pointerdown", (event) => {
     if (open && !(event.target as HTMLElement).closest(".menu")) close();
   });
+  // Escape closes a menu however it was opened; F10 goes to the menu bar, as in a desktop app.
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        close(true);
+      } else if (event.key === "F10" && !event.shiftKey) {
+        event.preventDefault();
+        if (open) close(true);
+        else buttons[0]?.focus();
+      }
+    },
+    true,
+  );
+  // Left and right move along the bar itself, as they do inside an open menu.
+  for (const button of buttons) {
+    button.addEventListener("keydown", (event) => {
+      const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      if (!by) return;
+      event.preventDefault();
+      buttons[(buttons.indexOf(button) + by + buttons.length) % buttons.length]?.focus();
+    });
+  }
   return { close: () => close() };
 }

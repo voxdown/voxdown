@@ -179,6 +179,9 @@ export class SceneRail {
           '<span class="scene-rail-node" aria-hidden="true"></span><span class="scene-rail-name" aria-hidden="true"></span>';
         (button.lastElementChild as HTMLElement).textContent = scene.name;
         button.addEventListener("click", () => this.go(index));
+        // One tab stop for the whole rail: arrows go from scene to scene, Enter goes there.
+        button.tabIndex = -1;
+        button.addEventListener("keydown", (event) => this.step(event, index));
         item.append(button);
         return item;
       }),
@@ -254,6 +257,32 @@ export class SceneRail {
       if (index === current) button?.setAttribute("aria-current", "true");
       else button?.removeAttribute("aria-current");
     }
+    // The keyboard comes in at the scene being read, unless it is already on the rail.
+    if (!this.root.contains(document.activeElement)) this.focusable(Math.max(0, current));
+  }
+
+  /** Up, down, Home and End along the scenes. */
+  private step(event: KeyboardEvent, index: number): void {
+    const to =
+      event.key === "ArrowDown"
+        ? index + 1
+        : event.key === "ArrowUp"
+          ? index - 1
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? this.scenes.length - 1
+              : null;
+    if (to === null) return;
+    event.preventDefault();
+    this.focusable(Math.max(0, Math.min(this.scenes.length - 1, to)))?.focus();
+  }
+
+  /** The scene the keyboard reaches the rail at: the one being read, else the first. */
+  private focusable(index: number): HTMLButtonElement | undefined {
+    const buttons = [...this.part("#rail-scenes").querySelectorAll<HTMLButtonElement>("button")];
+    for (const [at, button] of buttons.entries()) button.tabIndex = at === index ? 0 : -1;
+    return buttons[index];
   }
 
   /** Takes the cursor to a scene's start, with the scene at the top of the page. */

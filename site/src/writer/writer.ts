@@ -190,6 +190,12 @@ function editorState(source: string, cursor: number): EditorState {
       lineBreaks(source),
       editable.of(editability()),
       // The browser's spelling check, in the story's own language.
+      // Coming back to the story (from the rail, a warning, the side) marks the place on the side.
+      EditorView.domEventHandlers({
+        focus: () => {
+          requestAnimationFrame(markPlace);
+        },
+      }),
       EditorView.contentAttributes.of(() => ({
         spellcheck: "true",
         autocapitalize: "sentences",
@@ -394,7 +400,10 @@ function load(
   file.savedAt = kept.savedAt;
   file.changedAt = kept.changedAt ?? Date.now();
   const lf = opened.text.replace(/\r\n/g, "\n");
-  const front = parse(lf).frontMatter;
+  // The story's characters and colours first, so its names are drawn right from the start.
+  story = readStory(lf);
+  colors = characterColors(story);
+  const front = story.frontMatter;
   const start = front ? Math.min(front.range.to + 2, lf.length) : 0;
   view.setState(editorState(opened.text, start));
   view.scrollDOM.scrollTop = 0;
@@ -515,8 +524,12 @@ let keptVersion = 0;
 
 async function keep(): Promise<void> {
   clearTimeout(keepTimer);
-  // Another tab writes the story: this one keeps nothing over it.
-  if (!lock.owner) return;
+  // Another tab writes the story: this one keeps nothing over it, and says so.
+  if (!lock.owner) {
+    file.kept = false;
+    showDraftState();
+    return;
+  }
   keptAt = Date.now();
   const keeping = version;
   persistOnce();
@@ -621,6 +634,8 @@ function showSaveState(edited = false): void {
     : file.savedAt
       ? `Saved ${time(file.savedAt)}`
       : "Saved";
+  // Saving automatically stopped: said beside the name until a save goes through.
+  if (autosaveStopped && unsaved) return;
   if (state.textContent !== words) {
     state.textContent = words;
     state.title = words;
@@ -643,10 +658,12 @@ function announce(message: string): void {
 
 function showDraftState(): void {
   const state = $("#draft-state");
-  state.textContent = file.kept
-    ? "Kept in this browser"
-    : "This browser won't keep a draft: save to a file";
-  state.dataset.kept = String(file.kept);
+  state.textContent = !lock.owner
+    ? "Not kept: another tab writes the story"
+    : file.kept
+      ? "Kept in this browser"
+      : "This browser won't keep a draft: save to a file";
+  state.dataset.kept = String(file.kept && lock.owner);
 }
 
 function showCounts({
@@ -662,14 +679,28 @@ function showCounts({
     plural(said, "line said", "lines said"),
     plural(voices, "voice"),
     plural(scenes, "scene"),
+    listening(words),
   ].join(" · ");
 }
 
 function cursorMoved(): void {
-  const head = view.state.selection.main.head;
+  const { head, from, to } = view.state.selection.main;
   const line = view.state.doc.lineAt(head);
-  $("#cursor-place").textContent = `Line ${line.number}, column ${head - line.from + 1}`;
+  // A selection says how many words it holds, and how long they take to hear.
+  const chosen = from === to ? "" : view.state.sliceDoc(from, to);
+  const words = chosen ? (chosen.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0) : 0;
+  $("#cursor-place").textContent = words
+    ? `${words.toLocaleString()} ${words === 1 ? "word" : "words"} selected · ${listening(words)}`
+    : `Line ${line.number}, column ${head - line.from + 1}`;
   markPlace();
+}
+
+/** How long words take to hear, read aloud at a storyteller's pace (150 words a minute). */
+function listening(words: number): string {
+  const minutes = words / 150;
+  if (minutes < 1) return `${Math.max(1, Math.round(minutes * 60))} s to hear`;
+  if (minutes < 60) return `${Math.round(minutes)} min to hear`;
+  return `${Math.floor(minutes / 60)} h ${Math.round(minutes % 60)} min to hear`;
 }
 
 function showWarningCount(): void {
@@ -888,15 +919,25 @@ function markPlace(): void {
   marked = element;
   if (!element) return;
   element.classList.add("linked");
+  bringIntoView(element);
+}
+
+/**
+ * Scrolls the side to a part of it. Parts off screen aren't laid out (content-visibility), so their
+ * sizes are guesses until they are: the browser scrolls, and once they are laid out, again.
+ */
+function bringIntoView(element: HTMLElement): void {
   const sheet = $("#side-sheet");
-  const box = element.getBoundingClientRect();
-  const frame = sheet.getBoundingClientRect();
-  if (box.top < frame.top || box.bottom > frame.bottom) {
-    sheet.scrollTo({
-      top: sheet.scrollTop + box.top - frame.top - frame.height / 3,
-      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    });
-  }
+  const shown = () => {
+    const box = element.getBoundingClientRect();
+    const frame = sheet.getBoundingClientRect();
+    return box.top >= frame.top && box.bottom <= frame.bottom;
+  };
+  if (shown()) return;
+  element.scrollIntoView({ block: "center", behavior: "auto" });
+  requestAnimationFrame(() => {
+    if (!shown()) element.scrollIntoView({ block: "center", behavior: "auto" });
+  });
 }
 
 function showSidePanel(shown: boolean): void {
@@ -1173,6 +1214,7 @@ document.addEventListener("visibilitychange", () => {
 function saved(content: string): void {
   file.saved = content;
   file.savedAt = Date.now();
+  autosaveStopped = false;
   showSaveState();
   void keep();
   void snapshot("Saved", content);
@@ -1191,7 +1233,11 @@ function scheduleAutosave(): void {
 async function autosave(): Promise<void> {
   const handle = file.handle;
   if (!handle || !lock.owner || lockedOut || sameText(text(), file.saved)) return;
-  if (!(await mayWriteNow(handle))) return;
+  if (!(await mayWriteNow(handle))) {
+    // The browser asks again after a restart, and only on a click: Save asks, once.
+    stopped(`Saving ${file.name} automatically needs your go-ahead: press Save once (Ctrl+S).`);
+    return;
+  }
   if (file.modified !== undefined) {
     const disk = await onDisk(handle);
     if (disk && disk.modified !== file.modified && !sameText(disk.text, file.saved)) {
@@ -1206,9 +1252,23 @@ async function autosave(): Promise<void> {
   const id = file.id;
   try {
     savedAs(id, content, await queued(() => writeFile(handle, content)));
-  } catch {
-    // Save shows what went wrong.
+    autosaveStopped = false;
+  } catch (error) {
+    stopped(`${file.name} couldn’t be saved automatically: ${(error as Error).message}`);
   }
+}
+
+/** Saving automatically stopped: said once, and shown beside the file's name until it saves. */
+let autosaveStopped = false;
+function stopped(message: string): void {
+  const state = $("#save-state");
+  state.dataset.state = "error";
+  state.textContent = "Not saved: press Save";
+  state.title = message;
+  if (autosaveStopped) return;
+  autosaveStopped = true;
+  notice(message);
+  announce(message);
 }
 
 /**
@@ -1279,26 +1339,25 @@ function tell(message: string): Promise<string> {
   return ask(message, [{ label: "OK", value: "ok", main: true }]);
 }
 
+/** A new story: its details, a title, and a page to write on. The examples show the marks. */
 const NEW_STORY = [
   "---",
   "voxdown: 1.1",
-  "title: A new story",
-  "language: en-US",
+  "title: Untitled",
+  `language: ${navigator.language || "en"}`,
   "cast:",
-  "  Wanda:",
   "---",
   "",
-  "# A new story",
+  "# Untitled",
   "",
-  "@(warmly) Once upon a time, there was a witch called Wanda.",
-  "",
-  "@Wanda “Hello,” said Wanda. [a cat purrs]",
   "",
 ].join("\n");
 
 async function newStory(): Promise<void> {
   if (!(await mayLeave())) return;
-  void load({ name: "Untitled.vxd", text: NEW_STORY }, { saved: "" });
+  await load({ name: "Untitled.vxd", text: NEW_STORY }, { saved: "" });
+  // The cursor on the page under the title, ready to write.
+  view.dispatch({ selection: EditorSelection.cursor(view.state.doc.length), scrollIntoView: true });
   view.focus();
 }
 
@@ -1337,7 +1396,26 @@ async function insertSoundHere(): Promise<void> {
 /** Puts `text` in at the cursor, the part `select` selected, with a space before it if needed. */
 function insertAtCursor(text: string, select?: string): void {
   if (lockedOut) return;
-  const { from, to } = view.state.selection.main;
+  let { from, to } = view.state.selection.main;
+  // Inside a mark (an instruction, a sound, a note, a direction), the new one goes after it.
+  const inside = view.state
+    .field(marksField)
+    .find(
+      (mark) =>
+        (mark.kind === "instruction" ||
+          mark.kind === "pause" ||
+          mark.kind === "page" ||
+          mark.kind === "sound" ||
+          mark.kind === "vocal" ||
+          mark.kind === "note" ||
+          mark.kind === "direction") &&
+        mark.from < from &&
+        from < mark.to,
+    );
+  if (inside) {
+    from = inside.to;
+    to = inside.to;
+  }
   const before = view.state.sliceDoc(Math.max(0, from - 1), from);
   const insert = before && !/\s/.test(before) ? ` ${text}` : text;
   const at = select ? insert.indexOf(select) : -1;
@@ -1361,7 +1439,11 @@ function insertAfterParagraph(line: string, select?: string): void {
   while (number < doc.lines && doc.line(number).text.trim() !== "") number++;
   const blank = doc.line(number).text.trim() === "";
   const end = blank ? doc.line(number).from : doc.line(number).to;
-  const insert = `${blank ? "\n" : "\n\n"}${line}\n\n`;
+  // One blank line before it and one after: as many as there already are, and no more.
+  const next = blank ? number + 1 : number + 1;
+  const followed = next <= doc.lines && doc.line(next).text.trim() === "";
+  const atEnd = number >= doc.lines;
+  const insert = `${blank ? "\n" : "\n\n"}${line}${atEnd ? "\n" : followed ? "\n" : "\n\n"}`;
   const at = select ? insert.indexOf(select) : insert.length;
   view.dispatch({
     changes: { from: end, insert },
@@ -1766,7 +1848,8 @@ async function openDropped(event: DragEvent): Promise<void> {
 // Leaving with nothing kept anywhere: the browser asks first.
 window.addEventListener("beforeunload", (event) => {
   rescue();
-  if (!file.kept && !sameText(text(), file.saved)) event.preventDefault();
+  // Nothing of this tab's changes kept anywhere: the browser asks first.
+  if ((!file.kept || !lock.owner) && !sameText(text(), file.saved)) event.preventDefault();
 });
 
 $("#side-close").addEventListener("click", () => {
@@ -1790,8 +1873,9 @@ function showWelcome(): void {
       button.innerHTML = `<span class="title"></span><span class="by"></span>`;
       (button.firstElementChild as HTMLElement).textContent = example.title;
       (button.lastElementChild as HTMLElement).textContent = example.byline;
-      button.addEventListener("click", () => {
-        void load({ name: example.name, text: example.text }, { saved: "" });
+      button.addEventListener("click", async () => {
+        if (!(await mayWrite())) return;
+        await load({ name: example.name, text: example.text }, { saved: "" });
         view.focus();
       });
       item.append(button);
@@ -1811,7 +1895,11 @@ async function start(): Promise<void> {
   void showRecent();
   const draft = await loadDraft();
   if (!draft) {
-    await lock.claim();
+    // Another tab writes: this one reads, and asks before it writes anything.
+    if (!(await lock.claim())) {
+      lockedOut = true;
+      $("#elsewhere").hidden = false;
+    }
     showWelcome();
     refresh();
     showDraftState();
@@ -1853,7 +1941,7 @@ async function restore(draft: Draft): Promise<void> {
   if (kept.place) goTo(kept.place);
   if (newer) {
     forgetRescue();
-    void keep();
+    await keep();
   }
 }
 

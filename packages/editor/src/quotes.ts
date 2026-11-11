@@ -1,6 +1,7 @@
 import { EditorState, type Extension, type Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { type Speech, type Story, curlQuotes, parse, quotationMarks } from "voxdown";
+import { FRESH_BELOW } from "./decorations";
 
 /**
  * Typographer's quotes as you type: `"` opens with “ after a space, a line's start or an opening
@@ -185,6 +186,45 @@ function speechBefore(story: Story, at: number): Speech | undefined {
   return undefined;
 }
 
+/** A story read for a decision at one place, and how far its text is shifted from the editor's. */
+type Near = { story: Story; text: string; shift: number };
+
+/**
+ * The story around `at`, to decide a quote by. A short story is read whole. A long one is read as
+ * its front matter (for the language and the cast) with the paragraph at `at` and the one before it
+ * (for a speech it carries on, §5.7): reading a whole book on each Enter or quote typed made those
+ * keys lag (150 ms at 120,000 words). Positions in it are the editor's less `shift`.
+ */
+function readNear(state: EditorState, at: number): Near {
+  const doc = state.doc;
+  if (doc.length < FRESH_BELOW) {
+    const text = doc.toString();
+    return { story: parse(text), text, shift: 0 };
+  }
+  // Where the front matter ends: the line closing a `---` that opens the file.
+  const opening = doc.sliceString(0, Math.min(doc.length, 50_000));
+  const front = /^\uFEFF?---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?(?:---|\.\.\.)[ \t]*(?=\r?\n|$)/.exec(
+    opening,
+  );
+  const frontEnd = front ? front[0].length : 0;
+  if (at <= frontEnd) {
+    const text = doc.sliceString(0, Math.min(doc.length, frontEnd + 1));
+    return { story: parse(text), text, shift: 0 };
+  }
+  const blank = (number: number) => doc.line(number).text.trim() === "";
+  let first = doc.lineAt(at).number;
+  while (first > 1 && !blank(first - 1)) first--;
+  let before = first - 1;
+  while (before > 1 && blank(before)) before--;
+  while (before > 1 && !blank(before - 1)) before--;
+  let last = doc.lineAt(at).number;
+  while (last < doc.lines && !blank(last + 1)) last++;
+  const from = Math.max(frontEnd, doc.line(Math.max(1, before)).from);
+  const head = frontEnd ? `${doc.sliceString(0, frontEnd)}\n\n` : "";
+  const text = head + doc.sliceString(from, doc.line(last).to);
+  return { story: parse(text), text, shift: from - head.length };
+}
+
 /** Whether a line's text up to here leaves a sound's `[` open. */
 function inLabel(head: string): boolean {
   let inside = false;
@@ -239,9 +279,12 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   if (/\d/u.test(before)) return false;
   // Where the formatter keeps marks as written, typing does too: the front matter, a group line,
   // an instruction, a note, a mark or direction, an image, and a link's address.
-  const story = parse(view.state.doc.toString());
-  const within = (range: { from: number; to: number }) => range.from < from && from < range.to;
-  if (story.frontMatter && from <= story.frontMatter.range.to) return false;
+  const near = readNear(view.state, from);
+  const story = near.story;
+  // Where the cursor is in what was read.
+  const here = from - near.shift;
+  const within = (range: { from: number; to: number }) => range.from < here && here < range.to;
+  if (story.frontMatter && here <= story.frontMatter.range.to) return false;
   // Front matter still being written: the story opens with `---`, and nothing closes it yet.
   {
     const head = view.state.sliceDoc(0, from);
@@ -250,7 +293,7 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
     }
   }
   // A group line, to its end: what is typed there is still the group's.
-  const onLine = (range: { from: number; to: number }) => range.from < from && from <= range.to;
+  const onLine = (range: { from: number; to: number }) => range.from < here && here <= range.to;
   for (const group of story.groups) {
     if (onLine(group.range) || (group.closeRange && onLine(group.closeRange))) return false;
   }
@@ -280,7 +323,7 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   const marks = quotationMarks(story.meta.language);
   // A quote opened with a straight mark closes with one, as typed: `"Hello world,"`. A curly `”`
   // would close nothing, and the rest of the line would be said.
-  const outer = openQuoteAt(story, from);
+  const outer = openQuoteAt(story, here);
   if (outer && outer.opener === text) return false;
   // A straight `"` the narration holds open is no one's speech, so the parser lists it nowhere:
   // with an odd number of them in the paragraph so far, the `"` typed closes one, straight.
@@ -288,7 +331,7 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   // A paragraph that opens with the mark the speech before it opened with carries it on (§5.7):
   // typed straight after a speech opened straight, the mark stays straight and carries it on.
   if (!outer && !view.state.sliceDoc(view.state.doc.lineAt(from).from, from).trim()) {
-    const before = unclosedBefore(story, from);
+    const before = unclosedBefore(story, here);
     if (before === text) return false;
   }
   // A `'` is no quote until something closes it (§5.5), so the parser is asked with the mark typed
@@ -296,11 +339,10 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   if (text === "'" && !outer) {
     const lineStart = view.state.doc.lineAt(from).from;
     if (view.state.sliceDoc(lineStart, from).includes("'")) {
-      const doc = view.state.doc;
-      const tried = parse(doc.sliceString(0, from) + text + doc.sliceString(to));
-      const closed = speechBefore(tried, from + 1);
+      const tried = parse(near.text.slice(0, here) + text + near.text.slice(here + (to - from)));
+      const closed = speechBefore(tried, here + 1);
       if (
-        closed?.closeQuote?.from === from &&
+        closed?.closeQuote?.from === here &&
         closed.openQuote &&
         tried.source.slice(closed.openQuote.from, closed.openQuote.to) === "'"
       ) {
@@ -487,18 +529,23 @@ export const quoteEnter = keymap.of([
         });
         return true;
       }
-      const source = view.state.doc.toString();
-      const story = parse(source);
-      const open = openQuoteAt(story, from);
+      const near = readNear(view.state, from);
+      const { story, text: source, shift } = near;
+      const here = from - shift;
+      const open = openQuoteAt(story, here);
       if (!open?.speech.openQuote) return false;
       const { speech, opener } = open;
-      const start = speech.openQuote?.to ?? from;
-      if (start < line.from || !/[\p{L}\p{N}]/u.test(source.slice(start, from))) return false;
+      const start = speech.openQuote?.to ?? here;
+      if (start + shift < line.from || !/[\p{L}\p{N}]/u.test(source.slice(start, here)))
+        return false;
       const rest = tail.replace(/^[ \t]+/u, "");
       const restFrom = from + (tail.length - rest.length);
+      // The quote closes straight after its last word, not after a space typed before Enter.
+      const words = head.replace(/[ \t]+$/u, "");
+      const splitAt = from - (head.length - words.length);
       // Right before the closing mark the quote is finished: the new line goes after the whole
       // line, whatever follows the quote (a sound, "he said").
-      if (speech.closeQuote?.from === restFrom) {
+      if (speech.closeQuote?.from === restFrom - shift) {
         view.dispatch({
           changes: { from: line.to, insert: "\n" },
           selection: { anchor: line.to + 1 },
@@ -508,22 +555,23 @@ export const quoteEnter = keymap.of([
       }
       // The speaker's mark as written, the last on the line before the quote (a quote that
       // carries on a speech has none of its own), and the direction the quote is said with.
-      const name = nameBefore(story, line.from, start, speech.speaker);
+      const name = nameBefore(story, line.from - shift, start, speech.speaker);
       const direction = speech.ownDirection;
       const mark = name ? `@${name} ${direction ? `(${direction}) ` : ""}` : "";
       const closer = closerFor(opener, story.meta.language);
       const insert = `${closer}\n${mark}${opener}`;
-      const after = source.slice(0, from) + insert + source.slice(restFrom);
+      const at = splitAt - shift;
+      const after = source.slice(0, at) + insert + source.slice(restFrom - shift);
       // Both halves are the speaker's, said the same way, or the split isn't made.
       const split = parse(after);
-      const first = speechBefore(split, from);
-      const second = openQuoteAt(split, from + insert.length)?.speech;
+      const first = speechBefore(split, at);
+      const second = openQuoteAt(split, at + insert.length)?.speech;
       const same = (other: Speech | undefined) =>
         other?.speaker === speech.speaker && other.direction === speech.direction;
-      if (!same(first) || first?.closeQuote?.from !== from || !same(second)) return false;
+      if (!same(first) || first?.closeQuote?.from !== at || !same(second)) return false;
       view.dispatch({
-        changes: { from, to: restFrom, insert },
-        selection: { anchor: from + insert.length },
+        changes: { from: splitAt, to: restFrom, insert },
+        selection: { anchor: splitAt + insert.length },
         userEvent: "input",
       });
       return true;

@@ -129,11 +129,22 @@ export class StretchTools {
       if (next && !this.popover.contains(next) && !this.bar.contains(next))
         this.closePopover(false);
     });
-    // Up and down move between the names, as in any list of choices.
+    // Up and down move between the names showing, as in any list of choices; a letter typed on
+    // one goes to the box that finds them.
     this.popover.addEventListener("keydown", (event) => {
-      const choices = [...this.popover.querySelectorAll<HTMLElement>(".speaker-choice")];
+      const choices = [...this.popover.querySelectorAll<HTMLElement>(".speaker-choice")].filter(
+        (choice) => !choice.parentElement?.hidden,
+      );
       const at = choices.indexOf(document.activeElement as HTMLElement);
       if (at < 0) return;
+      const box = this.popover.querySelector<HTMLInputElement>(".new-speaker input");
+      if (box && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        box.focus();
+        box.value += event.key;
+        box.dispatchEvent(new Event("input"));
+        return;
+      }
       const to =
         event.key === "ArrowDown"
           ? at + 1
@@ -146,9 +157,8 @@ export class StretchTools {
                 : null;
       if (to === null) return;
       event.preventDefault();
-      if (to >= choices.length)
-        this.popover.querySelector<HTMLElement>(".new-speaker input")?.focus();
-      else choices[Math.max(0, to)]?.focus();
+      if (to < 0) box?.focus();
+      else choices[Math.min(to, choices.length - 1)]?.focus();
     });
   }
 
@@ -186,6 +196,7 @@ export class StretchTools {
       (button.children[1] as HTMLElement).textContent = speaker.handle;
       (button.lastElementChild as HTMLElement).textContent =
         speaker.name !== speaker.handle ? speaker.name : "";
+      button.dataset.handle = speaker.handle;
       button.addEventListener("click", () => this.giveTo(speech.range.from, speaker.handle));
       item.append(button);
       list.append(item);
@@ -193,11 +204,37 @@ export class StretchTools {
     const form = document.createElement("form");
     form.className = "new-speaker";
     form.innerHTML =
-      '<input type="text" name="name" placeholder="Someone new" aria-label="A new character’s name" autocomplete="off" spellcheck="false"><button type="submit" class="button">Give</button>';
+      '<input type="text" name="name" placeholder="Type to find, or someone new" aria-label="Find a character, or name someone new" autocomplete="off" spellcheck="false"><button type="submit" class="button">Give</button>';
     const input = form.querySelector("input") as HTMLInputElement;
+    const choices = [...list.querySelectorAll<HTMLElement>(".speaker-choice")];
+    const shown = () => choices.filter((choice) => !choice.parentElement?.hidden);
+    // Typing narrows the list to the names that hold what is typed.
+    input.addEventListener("input", () => {
+      input.setCustomValidity("");
+      const typed = input.value.trim().toLowerCase();
+      for (const choice of choices)
+        (choice.parentElement as HTMLElement).hidden =
+          typed !== "" && !(choice.textContent ?? "").toLowerCase().includes(typed);
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        (event.key === "ArrowDown" ? shown()[0] : shown().at(-1))?.focus();
+      }
+    });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const name = input.value.trim();
+      // A name in the list, typed in full or the only one left showing; else someone new.
+      const exact = choices.find(
+        (choice) => choice.dataset.handle?.toLowerCase() === name.toLowerCase(),
+      );
+      const left = shown();
+      const pick = exact ?? (name && left.length === 1 ? left[0] : undefined);
+      if (pick?.dataset.handle) {
+        this.giveTo(speech.range.from, pick.dataset.handle);
+        return;
+      }
       if (!isName(name)) {
         input.setCustomValidity("A name is one word: letters, digits, - and _.");
         input.reportValidity();
@@ -205,8 +242,8 @@ export class StretchTools {
       }
       this.giveTo(speech.range.from, name);
     });
-    input.addEventListener("input", () => input.setCustomValidity(""));
-    this.showPopover("Who says this?", [list, form], anchor, at);
+    // The box above the list: up from the list's top goes to it.
+    this.showPopover("Who says this?", [form, list], anchor, at);
     (
       list.querySelector<HTMLElement>("[aria-current]") ?? list.querySelector<HTMLElement>("button")
     )?.focus();

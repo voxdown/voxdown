@@ -275,6 +275,17 @@ const draftIn = (page) =>
       }),
   );
 
+/** The real books, one after another: long stories to try the Writer on. */
+const corpusDir = join(site, "..", "corpus");
+const bodies = readdirSync(corpusDir)
+  .filter((name) => name.endsWith(".vxd"))
+  .map((name) =>
+    readFileSync(join(corpusDir, name), "utf8")
+      .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "")
+      .replace(/\r\n/g, "\n"),
+  )
+  .join("\n\n");
+
 // The Writer: the welcome, an example with its scenes on the rail, a jump to a scene, typing,
 // saving to a file (a stand-in for the one Chrome gives pages), the draft brought back after a
 // reload, asking before putting changes aside, and the warnings.
@@ -507,6 +518,123 @@ else {
 await keeping.close();
 console.log("writer: recovering a draft, going back to a version: ok");
 
+// Round two: a second tab on the welcome reads only, and asks before writing; saving
+// automatically says when it stops; a long file name never pushes the bar off the window; the
+// side follows a jump from the rail in a long story; an insert never lands inside another mark.
+const two = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const firstTab = await two.newPage();
+watch(firstTab, "writer welcome tab 1");
+await firstTab.goto(`${base}/writer/`);
+await firstTab.waitForSelector("#welcome:not([hidden])");
+const secondTab = await two.newPage();
+watch(secondTab, "writer welcome tab 2");
+await secondTab.goto(`${base}/writer/`);
+await secondTab.waitForSelector("#elsewhere:not([hidden])");
+await secondTab.click(`.welcome-example[data-name="${dragonName}"]`);
+await secondTab.waitForSelector("#ask[open]");
+if (!(await secondTab.textContent("#ask-message"))?.includes("another tab"))
+  problems.push("writer: a second tab writes over the first without asking");
+await secondTab.click('#ask-buttons button[value="cancel"]');
+await two.close();
+
+const stops = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await stops.addInitScript(() => {
+  const name = "a-rather-long-name-for-a-story-file.vxd";
+  window.showOpenFilePicker = async () => [
+    {
+      kind: "file",
+      name,
+      getFile: async () => new File(["# A story\n\nIt begins.\n"], name, { lastModified: 1 }),
+      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+      isSameEntry: async () => false,
+      queryPermission: async ({ mode }) => (mode === "readwrite" ? "prompt" : "granted"),
+      requestPermission: async () => "granted",
+    },
+  ];
+});
+const stop = await stops.newPage();
+watch(stop, "writer autosave stops");
+await stop.goto(`${base}/writer/`);
+await stop.click('.welcome [data-command="open"]');
+await stop.waitForFunction(() =>
+  document.querySelector("#file-name")?.textContent?.startsWith("a-rather"),
+);
+await stop.click(".cm-content");
+await stop.keyboard.press("Control+End");
+await stop.keyboard.type(" More.");
+await stop.waitForTimeout(2800);
+if (
+  (await stop.getAttribute("#save-state", "data-state")) !== "error" ||
+  (await stop.isHidden("#notice"))
+)
+  problems.push("writer: saving automatically stopped without saying so");
+for (const width of [760, 860, 1000, 1100]) {
+  await stop.setViewportSize({ width, height: 800 });
+  await stop.waitForTimeout(100);
+  const over = await stop.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  if (over > 0)
+    problems.push(`writer: with a long file name at ${width} px, the page runs ${over} px wide`);
+}
+await stops.close();
+
+const follow = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const followBook = Array.from({ length: 4 }, () => bodies).join("\n\n");
+await follow.addInitScript((text) => {
+  window.showOpenFilePicker = async () => [
+    {
+      kind: "file",
+      name: "follow.vxd",
+      getFile: async () => new File([text], "follow.vxd"),
+      queryPermission: async () => "granted",
+      requestPermission: async () => "granted",
+      isSameEntry: async () => false,
+    },
+  ];
+}, followBook);
+const follower = await follow.newPage();
+watch(follower, "writer side follows");
+await follower.goto(`${base}/writer/`);
+await follower.click('.welcome [data-command="open"]');
+await follower.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "follow.vxd",
+);
+if (!(await follower.isVisible("#side"))) {
+  await follower.click("#view-menu-button");
+  await follower.click('[data-view="side"]');
+}
+await follower.click('.side-tab[data-tab="script"]');
+await follower.waitForTimeout(1500);
+const scenes = await follower.locator("#rail-scenes button").count();
+await follower
+  .locator("#rail-scenes button")
+  .nth(Math.floor(scenes * 0.7))
+  .click({ force: true });
+await follower.waitForTimeout(1200);
+const linked = await follower.evaluate(() => {
+  const mark = document.querySelector("#side-sheet .linked")?.getBoundingClientRect();
+  const frame = document.querySelector("#side-sheet")?.getBoundingClientRect();
+  return Boolean(mark && frame && mark.top >= frame.top - 1 && mark.bottom <= frame.bottom + 1);
+});
+if (!linked) problems.push("writer: after a jump from the rail, the side doesn't show the place");
+// An insert inside a mark goes after it.
+await follower.click("#file-menu-button");
+await follower.click('[data-command="new"]');
+if (await follower.isVisible("#ask[open]"))
+  await follower.click('#ask-buttons button[value="discard"]');
+await follower.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
+);
+await follower.keyboard.type("She waved.");
+await follower.click("#insert-menu-button");
+await follower.click('[data-command="insert-pause"]');
+await follower.click("#insert-menu-button");
+await follower.click('[data-command="insert-note"]');
+await follower.waitForTimeout(900);
+if (!/\{pause 1s\}\s*%% note %%/.test(await draftIn(follower)))
+  problems.push("writer: a note inserted inside a pause went into it");
+await follow.close();
+console.log("writer: second tab, autosave stops, long names, side follows, inserts: ok");
+
 // Slow saves: words typed while a save before leaving is under way are asked about again, not
 // left behind; a save that ends after another story was opened leaves that story alone.
 const slow = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -618,7 +746,7 @@ await edge.click('.side-tab[data-tab="cast"]').catch(async () => {
 });
 await edge.click(".cm-content");
 await edge.keyboard.press("Control+End");
-await edge.keyboard.type("\n@Bob “Hi.”");
+await edge.keyboard.type("@Wanda “Hello.”\n\n@Bob “Hi.”");
 await edge.waitForTimeout(400);
 const wanda = edge.locator('.cast-handle input[value="Wanda"]');
 await wanda.fill("Bob");
@@ -641,20 +769,21 @@ if (!after.choice || after.name === before)
 await edge.keyboard.press("Escape");
 if (await edge.isVisible(".popover"))
   problems.push("writer: Escape doesn't close the speaker picker");
+// Typing finds a name: two letters and Enter give Bob's line to Wanda.
+await edge.click(".cm-line >> text=Hi.");
+await edge.keyboard.press("Control+k");
+await edge.waitForSelector(".popover:not([hidden]) .speaker-choice");
+await edge.keyboard.type("wa");
+await edge.keyboard.press("Enter");
+await edge.waitForTimeout(900);
+if (!/@Wanda “Hi\.”/.test(await draftIn(edge)))
+  problems.push("writer: typing a name's first letters in the speaker picker doesn't find it");
 await edges.close();
 console.log("writer: drop, bar width, welcome, rename, Ctrl+K: ok");
 
 // Typing in a long book stays quick: no key held up for long, with the script beside it.
 const long = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-const corpusDir = join(site, "..", "corpus");
-const bodies = readdirSync(corpusDir)
-  .filter((name) => name.endsWith(".vxd"))
-  .map((name) =>
-    readFileSync(join(corpusDir, name), "utf8")
-      .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "")
-      .replace(/\r\n/g, "\n"),
-  )
-  .join("\n\n");
+
 const book = `---\ntitle: Long\n---\n\n${Array.from({ length: Math.ceil(100_000 / bodies.split(/\s+/).length) }, () => bodies).join("\n\n")}`;
 await long.addInitScript((text) => {
   window.showOpenFilePicker = async () => [
@@ -690,10 +819,14 @@ for (const char of "the quick brown fox jumps") {
   await longPage.keyboard.press(char === " " ? "Space" : char);
   await longPage.waitForTimeout(80);
 }
+for (const key of ["Enter", "Shift+Quote", "Enter"]) {
+  await longPage.keyboard.press(key);
+  await longPage.waitForTimeout(120);
+}
 await longPage.waitForTimeout(600);
 const slowest = await longPage.evaluate(() => Math.max(0, ...window.__keys));
-if (slowest > 400)
-  problems.push(`writer: in a 100,000-word book, a key took ${slowest} ms (budget 400 ms)`);
+if (slowest > 150)
+  problems.push(`writer: in a 100,000-word book, a key took ${slowest} ms (budget 150 ms)`);
 await long.close();
 console.log(`writer: a 100,000-word book, slowest key ${slowest} ms: ok`);
 
@@ -844,8 +977,7 @@ watch(maker, "writer insert and export");
 const draftOf = () => draftIn(maker);
 await maker.goto(`${base}/writer/`);
 await maker.click('.welcome [data-command="new"]');
-await maker.click(".cm-line >> text=Once upon a time");
-await maker.keyboard.press("End");
+await maker.keyboard.type("Once upon a time, there was a witch.");
 await maker.click("#insert-menu-button");
 await maker.click('[data-command="insert-sound"]');
 await maker.fill("#ask-input", "an owl hoots");

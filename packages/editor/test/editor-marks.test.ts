@@ -303,3 +303,17 @@ describe("groups that keep their lines from being heard or printed", () => {
     expect(unheard).toEqual(["First published 1902.", "Frederick Warne."]);
   });
 });
+
+describe("headings", () => {
+  it("know their level, and what they are for when not both heard and printed", () => {
+    const text = "# Book One {hidden}\n\n## Chapter 1\n\n### Smaller {book only}\n\nText.";
+    const headings = editorMarks(text).flatMap((mark) =>
+      mark.kind === "heading" ? [[mark.level, mark.tag ?? null]] : [],
+    );
+    expect(headings).toEqual([
+      [1, "hidden"],
+      [2, null],
+      [3, "book only"],
+    ]);
+  });
+});

@@ -10,7 +10,11 @@ const LOCK = "voxdown-writer-story";
 type Message =
   | { type: "flush"; id: string }
   | { type: "flushed"; id: string }
-  | { type: "kept"; id: string };
+  | { type: "kept"; id: string }
+  | { type: "leaving"; id: string };
+
+/** How long a tab that reads waits, after the one that writes leaves, before writing itself. */
+const RELOAD = 3000;
 
 export class DraftLock {
   /** Whether this tab writes its story. */
@@ -38,11 +42,26 @@ export class DraftLock {
       const message = event.data;
       if (!message || message.id !== this.story) return;
       if (message.type === "kept" && !this.owner) this.onKept();
+      // The tab that writes is going: maybe only reloading, to take its story back. A tab that
+      // reads waits a moment before writing it, and writes it only if no one has.
+      if (message.type === "leaving" && !this.owner) {
+        this.waiting?.abort();
+        this.waiting = undefined;
+        setTimeout(() => {
+          if (!this.owner && this.story === message.id && !this.waiting) this.waitFor(message.id);
+        }, RELOAD);
+      }
       if (message.type === "flush" && this.owner)
         void this.flush().then(() =>
           this.channel?.postMessage({ type: "flushed", id: message.id } satisfies Message),
         );
     });
+  }
+
+  /** Tells the tabs that read this story that this one, which writes it, is going. */
+  leaving(): void {
+    if (this.owner && this.story)
+      this.channel?.postMessage({ type: "leaving", id: this.story } satisfies Message);
   }
 
   /** Tells the tabs that read this story that its draft was just kept. */

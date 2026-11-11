@@ -706,11 +706,13 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
               widget: new LineWidget(
                 "heading",
                 mark.text,
-                mark.hidden ? "Scene name (not read aloud)" : "Heading",
+                `${mark.level === 1 ? "Heading" : `Heading ${mark.level}`}${mark.tag ? ` (${mark.tag})` : ""}`,
                 undefined,
                 false,
                 undefined,
                 scenes.has(mark.from) ? readAloud(mark, mark.text) : undefined,
+                mark.level,
+                mark.tag,
               ),
             }),
           );

@@ -1214,3 +1214,17 @@ describe("what the cast says about a character (§4.3)", () => {
     expect(setAbout(parse("---\ncast:\n  Ann:\n---\n"), "Ann", null)).toEqual([]);
   });
 });
+
+describe("a detail added to the front matter", () => {
+  it("goes after the details, before the cast", () => {
+    const source = "---\nvoxdown: 1.1\nlanguage: en\ncast:\n  Ann:\n---\n# Untitled\n";
+    expect(applyChanges(source, setMeta(parse(source), "title", "The Long Rain"))).toBe(
+      "---\nvoxdown: 1.1\nlanguage: en\ntitle: The Long Rain\ncast:\n  Ann:\n---\n# Untitled\n",
+    );
+    // An empty cast (a new story's) is a map to come all the same.
+    const empty = "---\nvoxdown: 1.1\ncast:\n---\n";
+    expect(applyChanges(empty, setMeta(parse(empty), "author", "Me"))).toBe(
+      "---\nvoxdown: 1.1\nauthor: Me\ncast:\n---\n",
+    );
+  });
+});

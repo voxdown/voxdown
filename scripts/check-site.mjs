@@ -1672,10 +1672,21 @@ for (const [command, name] of [
 // F9 reads it aloud from the cursor, and says how to stop.
 await maker.click(".cm-content");
 await maker.keyboard.press("Control+Home");
+const placeBeforeF9 = await maker.textContent("#cursor-place");
 await maker.keyboard.press("F9");
-await maker.waitForTimeout(200);
-if (!(await maker.textContent("#notice"))?.match(/Reading aloud|can’t read aloud|Nothing to hear/))
+await maker.waitForTimeout(1800);
+if (
+  !(await maker.textContent("#notice"))?.match(
+    /Reading aloud|can’t read aloud|Nothing to hear|no voices/,
+  )
+)
   problems.push("writer: F9 doesn't read aloud or say why not");
+// With no voices (as here), nothing is read and the cursor stays where it was.
+if (
+  (await maker.textContent("#notice"))?.includes("no voices") &&
+  (await maker.textContent("#cursor-place")) !== placeBeforeF9
+)
+  problems.push("writer: F9 with no voices moved the cursor");
 await maker.keyboard.press("Escape");
 // The side made wider with the keyboard on its edge; the text larger from Page and text.
 const sideBefore = await maker.evaluate(
@@ -1857,6 +1868,16 @@ await second.waitForTimeout(600);
 if (!(await draftIn(second)).includes("field not left"))
   problems.push("writer: taking the story to another tab lost what was typed in the cast");
 await first.waitForSelector("#elsewhere:not([hidden])");
+// The tab that writes, reloaded, writes its story again; the one that reads goes on reading.
+await second.reload();
+await second.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "tale.vxd",
+);
+await second.waitForTimeout(800);
+if (!(await second.isHidden("#elsewhere")))
+  problems.push("writer: a reloaded tab handed its story to a tab that only read it");
+if (await first.isHidden("#elsewhere"))
+  problems.push("writer: a tab that only read took the story while the other reloaded");
 // The first tab, now reading only, saves nothing over what the second writes: it asks.
 const diskBefore = await first.evaluate(() => localStorage.getItem("__disk"));
 await first.keyboard.press("Control+s");
@@ -1872,7 +1893,7 @@ await second.keyboard.type(" Written in the second tab before it closed.");
 await second.waitForTimeout(900);
 await second.close();
 await first
-  .waitForSelector("#elsewhere", { state: "hidden", timeout: 5000 })
+  .waitForSelector("#elsewhere", { state: "hidden", timeout: 8000 })
   .catch(() => problems.push("writer: the tab that reads doesn't write when the other closes"));
 await first.waitForTimeout(300);
 if (!(await first.locator(".cm-content").innerText()).includes("before it closed."))

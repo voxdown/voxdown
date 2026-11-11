@@ -90,7 +90,8 @@ import { type Problem, problems } from "./problems";
 import { SceneRail, railScenes } from "./rail";
 import type { RenderAsk, RenderReply } from "./render-worker";
 import { Rescue, tabStory as tabStoryIn } from "./rescue";
-import { SaveQueue, autosaveCheck, checkDisk as diskCheck, sameText } from "./saving";
+import { SaveFlow } from "./save-flow";
+import { sameText } from "./saving";
 import { moveSection } from "./sections";
 import { sidesHtml, sidesText } from "./sides";
 import {
@@ -113,6 +114,7 @@ import {
 import {
   type Speaker,
   StretchTools,
+  mapped,
   nextNarratedQuote,
   passageNear,
   speechOfMark,
@@ -828,7 +830,11 @@ const rescued = (id: string) => rescues.read(id);
 /** The story this tab has open, kept for its reloads; set with `id`. */
 const tabStory = (id?: string) => tabStoryIn(sessionStorage, id);
 
-window.addEventListener("pagehide", () => void rescue());
+window.addEventListener("pagehide", () => {
+  void rescue();
+  // A tab that reads the story waits a moment, in case this one is only reloading.
+  lock.leaving();
+});
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     rescue();
@@ -854,7 +860,7 @@ function showSaveState(edited = false): void {
         `${keepsFiles ? "Saved" : "Downloaded"} ${time(file.savedAt)}`
       : "Saved";
   // Saving automatically stopped: said beside the name until a save goes through.
-  if (autosaveStopped && unsaved) return;
+  if (saving.stopped && unsaved) return;
   if (state.textContent !== words) {
     state.textContent = words;
     state.title = words;
@@ -1057,7 +1063,11 @@ function nextProblem(by: 1 | -1): boolean {
     selection: EditorSelection.range(next.from, next.to),
     effects: EditorView.scrollIntoView(next.from, { y: "center" }),
   });
-  const fix = next.fix?.label ?? (next.cast ? `Add ${next.cast} to the cast` : undefined);
+  const fix = next.fix
+    ? (next.fix.label ?? "Fix it")
+    : next.cast
+      ? `Add ${next.cast} to the cast`
+      : undefined;
   const message = /[.!?…]$/.test(next.message) ? next.message : `${next.message}.`;
   const told = `Line ${next.line} (${all.indexOf(next) + 1} of ${all.length}): ${message}${fix ? ` ${keys("Mod+.")}: ${fix}.` : ""}`;
   // The notice is read out too: it is a live region of its own.
@@ -1102,6 +1112,38 @@ function hearFromHere(): boolean {
     notice("This browser can’t read aloud.");
     return true;
   }
+  void (async () => {
+    // The browser's voices load after the page: a moment's wait, then a word if there are none.
+    if (!(await voicesReady())) {
+      notice(
+        "This browser has no voices to read aloud with: your system's speech settings add them.",
+      );
+      return;
+    }
+    readFromHere();
+  })();
+  return true;
+}
+
+/** Whether the browser has voices, after waiting for them a moment if it is still loading them. */
+async function voicesReady(): Promise<boolean> {
+  const synth = window.speechSynthesis;
+  if (synth.getVoices().length) return true;
+  await new Promise<void>((done) => {
+    const timer = setTimeout(done, 1500);
+    synth.addEventListener(
+      "voiceschanged",
+      () => {
+        clearTimeout(timer);
+        done();
+      },
+      { once: true },
+    );
+  });
+  return synth.getVoices().length > 0;
+}
+
+function readFromHere(): boolean {
   if (storyVersion !== version) refresh();
   const story = current();
   const rows = toHear(lines(story), view.state.doc.lineAt(view.state.selection.main.head).number);
@@ -1121,7 +1163,10 @@ function hearFromHere(): boolean {
   return true;
 }
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && hearing.on) hearing.stop();
+  if (event.key === "Escape" && hearing.on) {
+    hearing.stop();
+    $("#notice").hidden = true;
+  }
 });
 
 /** Ctrl+.: the fix for the warning at the cursor. */
@@ -1612,13 +1657,6 @@ async function openStory(opened: Opened): Promise<void> {
     );
 }
 
-/** A name beside the one given, for a copy: `Story (2).vxd`, or the next number. */
-function anotherName(name: string): string {
-  const [, stem = name, number, extension = ""] =
-    /^(.*?)(?: \((\d+)\))?(\.[^.]+)?$/.exec(name) ?? [];
-  return `${stem} (${number ? Number(number) + 1 : 2})${extension}`;
-}
-
 /** Whether two handles are the same file, where the browser can tell. */
 async function sameEntry(a: FileSystemFileHandle, b: FileSystemFileHandle): Promise<boolean> {
   try {
@@ -1649,290 +1687,64 @@ function commitPending(): void {
     field.blur();
 }
 
-/** Saves to the story's file, or asks where. True once it is saved. */
-async function save(): Promise<boolean> {
-  commitPending();
-  // Only the tab that writes the story saves it: another would save what it last saw.
-  if (!(await mayWrite())) return false;
-  if (!file.handle) return saveAs();
-  return write(file.handle);
-}
-
-async function saveAs(keepBoth = false): Promise<boolean> {
-  commitPending();
-  if (!(await mayWrite())) return false;
-  if (!keepsFiles) {
-    // Where a page can't keep a file, saving is a download.
-    const content = text();
-    download(content, suggestedName());
-    saved(content);
-    return true;
-  }
-  const handle = await pickSaveTarget(keepBoth ? anotherName(suggestedName()) : suggestedName());
-  if (!handle) return false;
-  const itself = file.handle ? await sameEntry(handle, file.handle) : false;
-  // Keeping both: never the file it is to be kept beside.
-  if (keepBoth && itself) {
-    await tell(
-      `That is ${file.name} itself: keeping both needs a file of its own. Nothing was saved.`,
-    );
-    return false;
-  }
-  // The story's own file, chosen again: a Save, with its check for changes made elsewhere.
-  if (itself && file.handle) return write(file.handle);
-  // The new file is the story's from here: its name and handle go with what is kept, and back to
-  // the old ones if it can't be written.
-  const before = { handle: file.handle, name: file.name, modified: file.modified };
-  file.handle = handle;
-  file.name = handle.name;
-  file.modified = undefined;
-  $("#file-name").textContent = file.name;
-  const done = await write(handle);
-  if (done) {
+// Saving: Save, Save as, Keep both, reading the file again and saving by itself (save-flow.ts),
+// given what it needs from the page.
+const saving = new SaveFlow({
+  file,
+  text: () => text(),
+  owner: () => lock.owner && !lockedOut,
+  mayWrite: () => mayWrite(),
+  commitPending: () => commitPending(),
+  autosaveOn: () => prefs.autosave,
+  keepsFiles,
+  suggestedName: () => suggestedName(),
+  files: {
+    allowed: (handle, mode) => allowed(handle, mode),
+    mayWriteNow: (handle) => mayWriteNow(handle),
+    onDisk: (handle) => onDisk(handle),
+    writeFile: (handle, content) => writeFile(handle, content),
+    pickSaveTarget: (name) => pickSaveTarget(name),
+    download: (content, name) => download(content, name),
+    sameEntry: (a, b) => sameEntry(a, b),
+  },
+  ask: (message, buttons) => ask(message, buttons),
+  tell: (message) => tell(message),
+  notice: (message) => notice(message),
+  announce: (message) => announce(message),
+  showSaveState: () => showSaveState(),
+  showState: (state, words, title) => {
+    const shown = $("#save-state");
+    shown.dataset.state = state;
+    shown.textContent = words;
+    if (title !== undefined) shown.title = title;
+  },
+  named: (name) => {
+    $("#file-name").textContent = name;
+  },
+  remember: async (handle) => {
     await rememberFile(handle.name, handle);
     void showRecent();
-  } else {
-    file.handle = before.handle;
-    file.name = before.name;
-    file.modified = before.modified;
-    $("#file-name").textContent = file.name;
-    showSaveState();
-  }
-  return done;
-}
-
-async function write(handle: FileSystemFileHandle): Promise<boolean> {
-  // The browser may want to ask before the page writes the file again (after a restart): asked
-  // now, on the click, so that the file can be read before it is written.
-  try {
-    if (!(await allowed(handle, "readwrite"))) {
-      await tell(`${file.name} wasn’t saved: the browser didn’t allow writing it.`);
-      return false;
-    }
-  } catch {
-    // Writing will say what is wrong.
-  }
-  // Changed on disk since the Writer read it (another app, another computer syncing it): asked
-  // first, never overwritten unseen; and whichever is kept, the other is in Earlier versions.
-  const check =
-    handle === file.handle && file.modified !== undefined
-      ? diskCheck(await onDisk(handle), { modified: file.modified, saved: file.saved })
-      : ({ kind: "write" } as const);
-  if (check.kind === "unread") {
-    const answer = await ask(
-      `${file.name} couldn’t be read to see whether it changed outside the Writer. Save over it anyway?`,
-      [
-        { label: "Cancel", value: "cancel", main: true },
-        { label: "Save over it", value: "mine" },
-      ],
-    );
-    if (answer !== "mine") return false;
-  } else if (check.kind === "changed") {
-    const disk = check.disk;
-    const answer = await ask(
-      `${file.name} was changed outside the Writer since it was opened here. Keep both, open the file as it is now, or save over it? The one you don’t keep stays in Earlier versions.`,
-      [
-        { label: "Cancel", value: "cancel" },
-        { label: "Open it as it is now", value: "theirs" },
-        { label: "Save over it", value: "mine" },
-        { label: "Keep both…", value: "both", main: true },
-      ],
-    );
-    if (answer === "theirs") {
-      await readAgain(disk);
-      return false;
-    }
-    if (answer === "both") {
-      // Theirs stays in the file, and among this story's versions; mine goes to a new file.
-      await snapshot("As it was on disk", disk.text);
-      return saveAs(true);
-    }
-    if (answer !== "mine") return false;
-    await snapshot("As it was on disk, before it was saved over", disk.text);
-  }
-  const content = text();
-  const state = $("#save-state");
-  state.dataset.state = "saving";
-  state.textContent = "Saving…";
-  try {
-    const id = file.id;
-    const modified = await queued(() => {
-      // Checked again when its turn comes: another tab may have taken the story meanwhile.
-      if (!lock.owner) throw new Error("another tab writes this story now");
-      return writeFile(handle, content);
-    });
-    if (!savedAs(id, content, modified)) return false;
-    announce(`Saved ${file.name}`);
-    return true;
-  } catch (error) {
-    state.dataset.state = "error";
-    state.textContent = "Not saved";
-    announce(`${file.name} wasn't saved`);
-    await tell(`${file.name} couldn't be saved: ${(error as Error).message}`);
-    return false;
-  }
-}
-
-/**
- * The file as it is on disk now, in place of the story here: the same story with its versions,
- * the cursor and the page where they were, Undo to take it back; and what was here kept as a
- * version first.
- */
-async function readAgain(disk: { text: string; modified: number }): Promise<void> {
-  // The file and the story agree again: saving by itself can go on.
-  autosaveStopped = false;
-  await snapshot("Before the file was read again", text());
-  file.saved = disk.text;
-  file.savedAt = Date.now();
-  file.modified = disk.modified;
-  replaceText(disk.text, "input.disk", allCrlf(disk.text));
-  showSaveState();
-  await keep();
-  await snapshot("Read again from disk", disk.text);
-}
-
-/**
- * Coming back to the Writer: if the file changed on disk meanwhile, a story with nothing unsaved
- * here is read again; one with changes here is left as it is, and Save will ask.
- */
-async function checkDisk(): Promise<void> {
-  const handle = file.handle;
-  if (!handle || file.modified === undefined || !lock.owner) return;
-  const disk = await onDisk(handle);
-  if (!disk || handle !== file.handle) return;
-  // What it says, not its date: a sync or a copy can keep the date and change the words.
-  if (sameText(disk.text, file.saved)) {
-    if (disk.modified !== file.modified) {
-      file.modified = disk.modified;
-      void keep();
-    }
-    return;
-  }
-  if (sameText(text(), file.saved)) {
-    await readAgain(disk);
-    notice(
-      `${file.name} changed outside the Writer, so it was read again. Undo (Ctrl+Z) takes it back.`,
-    );
-  } else {
-    stopped(
-      `${file.name} changed outside the Writer. Save will ask which to keep.`,
-      "Not saved: changed on disk",
-    );
-  }
-}
+  },
+  replaceText: (next) => replaceText(next, "input.disk", allCrlf(next)),
+  keep: () => keep(),
+  snapshot: (why, content) => snapshot(why, content),
+  versionDue: () => Date.now() - versionAt > SNAPSHOT_EVERY,
+  markSaved: (id, content, modified) => markSaved(id, content, modified),
+});
+const save = () => saving.save();
+const saveAs = (keepBoth = false) => saving.saveAs(keepBoth);
+const checkDisk = () => saving.checkDisk();
 window.addEventListener("focus", () => void checkDisk());
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") void checkDisk();
 });
 
-/** Saved: a version kept each time it is saved by hand, and at most every ten minutes by itself. */
-function saved(content: string, automatic = false): void {
-  file.saved = content;
-  file.savedAt = Date.now();
-  autosaveStopped = false;
-  // A word about saving that no longer holds goes with it.
-  const box = $("#notice");
-  if (/changed outside|couldn’t be read|go-ahead|couldn’t be saved/.test(box.textContent ?? ""))
-    box.hidden = true;
-  showSaveState();
-  void keep();
-  if (!automatic || Date.now() - versionAt > SNAPSHOT_EVERY) void snapshot("Saved", content);
-}
-
-// Saving automatically: to the story's own file, two seconds after typing stops, where the browser
-// already lets the page write it. Never asks: a file changed on disk waits for Save.
-
+// Saving automatically: two seconds after typing stops.
 let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 function scheduleAutosave(): void {
   clearTimeout(autosaveTimer);
   if (!prefs.autosave || !keepsFiles || !file.handle) return;
-  autosaveTimer = setTimeout(() => void autosave(), 2000);
-}
-
-async function autosave(): Promise<void> {
-  const handle = file.handle;
-  const base = {
-    on: prefs.autosave,
-    owner: lock.owner && !lockedOut,
-    hasFile: Boolean(handle),
-    unsaved: !sameText(text(), file.saved),
-  };
-  // Nothing to do (off, another tab's, no file, nothing changed): no need to look at the file.
-  const first = autosaveCheck({ ...base, mayWriteNow: true, disk: { kind: "write" } });
-  if (first.kind === "wait" || !handle) return;
-  const may = await mayWriteNow(handle);
-  const check = autosaveCheck({
-    ...base,
-    mayWriteNow: may,
-    disk: may
-      ? diskCheck(await onDisk(handle), { modified: file.modified, saved: file.saved })
-      : { kind: "write" },
-  });
-  if (check.kind === "ask") {
-    // The browser asks again after a restart, and only on a click: Save asks, once.
-    stopped(`Saving ${file.name} automatically needs your go-ahead: press Save once (Ctrl+S).`);
-    return;
-  }
-  if (check.kind === "stop") {
-    // Shown beside the name for as long as it lasts; said once.
-    const changed = check.check.kind === "changed";
-    stopped(
-      changed
-        ? `${file.name} changed outside the Writer, so it isn’t saved automatically. Save will ask which to keep.`
-        : `${file.name} couldn’t be read, so it isn’t saved automatically. Save will ask what to do.`,
-      changed ? "Not saved: changed on disk" : "Not saved: can’t read the file",
-    );
-    return;
-  }
-  if (check.kind !== "write" || handle !== file.handle) return;
-  const content = text();
-  const id = file.id;
-  try {
-    const modified = await queued(() => {
-      if (!prefs.autosave || !lock.owner) throw new Error("saving automatically was stopped");
-      return writeFile(handle, content);
-    });
-    savedAs(id, content, modified, true);
-    autosaveStopped = false;
-  } catch (error) {
-    // Switched off, or taken by another tab, while it waited its turn: nothing to say.
-    if (!prefs.autosave || !lock.owner) return;
-    stopped(`${file.name} couldn’t be saved automatically: ${(error as Error).message}`);
-  }
-}
-
-/** Saving automatically stopped: said once, and shown beside the file's name until it saves. */
-let autosaveStopped = false;
-function stopped(message: string, short = "Not saved: press Save"): void {
-  const state = $("#save-state");
-  state.dataset.state = "error";
-  state.textContent = short;
-  state.title = message;
-  if (autosaveStopped) return;
-  autosaveStopped = true;
-  notice(message);
-}
-
-/**
- * Saving one at a time: a save started while another is under way waits for it, so two never
- * write the same file at once, and the later always lands last.
- */
-const saves = new SaveQueue();
-const queued = <T>(work: () => Promise<T>): Promise<T> => saves.run(work);
-
-/**
- * A save finished: the story it was for is saved as `content`. If another story is open by now,
- * only that story's kept draft learns it; the open one is left as it is. True if it is the open
- * story.
- */
-function savedAs(id: string, content: string, modified: number, automatic = false): boolean {
-  if (id !== file.id) {
-    void markSaved(id, content, modified);
-    return false;
-  }
-  file.modified = modified;
-  saved(content, automatic);
-  return true;
+  autosaveTimer = setTimeout(() => void saving.autosave(), 2000);
 }
 
 // One tab writes the story at a time.
@@ -2067,11 +1879,21 @@ async function insertSoundHere(): Promise<void> {
   if (!(await mayWrite())) return;
   const at = view.state.selection.main.head;
   const description = await askText("What does the listener hear?", "a door creaks", "Put it in");
-  if (description)
-    attempt(
-      () => insertSound(current(), at, description),
-      "A sound can’t go there without changing what is heard: put the cursor after a word.",
-    );
+  let made: TextChange[] = [];
+  if (
+    description &&
+    attempt(() => {
+      made = insertSound(current(), at, description);
+      return made;
+    }, "A sound can’t go there without changing what is heard: put the cursor after a word.")
+  ) {
+    // The cursor after the sound, to go on writing.
+    const sound = made.find((change) => change.insert.includes(`[${description}`)) ?? made.at(-1);
+    if (sound) {
+      const end = mapped(made, sound.from) + sound.insert.length;
+      view.dispatch({ selection: EditorSelection.cursor(Math.min(end, view.state.doc.length)) });
+    }
+  }
   view.focus();
 }
 
@@ -2347,8 +2169,11 @@ function retitleHeading(was: string, now: string): void {
 function showDetails(): void {
   const dialog = $<HTMLDialogElement>("#details");
   const fields = [...dialog.querySelectorAll<HTMLInputElement>("input[data-key]")];
+  // A story with no title yet is named by its first heading: that is its title until changed.
+  const heading = railScenes(current(), new Map()).find((scene) => scene.chapter)?.name ?? "";
   const written = (key: string) => {
     const value = current().frontMatter?.data[key];
+    if (key === "title" && value === undefined) return heading;
     return typeof value === "string" || typeof value === "number" ? String(value) : "";
   };
   for (const field of fields) field.value = written(field.dataset.key ?? "");

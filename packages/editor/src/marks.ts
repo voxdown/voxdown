@@ -29,7 +29,17 @@ export type EditorMark =
       /** Whose lines it holds: its character's, else the narrator's (for Listen as). */
       voice?: string;
     }
-  | { kind: "heading"; from: number; to: number; text: string; hidden: boolean }
+  | {
+      kind: "heading";
+      from: number;
+      to: number;
+      text: string;
+      hidden: boolean;
+      /** 1 for `#`, 2 for `##`… */
+      level: number;
+      /** What it is for, when not both heard and printed: "hidden", "book only", "audio only". */
+      tag?: string;
+    }
   | { kind: "break"; from: number; to: number }
   | { kind: "escape"; from: number; to: number }
   | { kind: "frontmatter"; from: number; to: number }
@@ -705,6 +715,14 @@ export function marksOf(story: Story): EditorMark[] {
         text:
           words || story.source.slice(block.range.from, block.range.to).replace(/^\s*#+\s*/u, ""),
         hidden: block.visibility === "hidden" || block.visibility === "book",
+        level: block.level,
+        ...(block.visibility === "hidden"
+          ? { tag: "hidden" }
+          : block.visibility === "book"
+            ? { tag: "book only" }
+            : block.visibility === "audio"
+              ? { tag: "audio only" }
+              : {}),
       });
     } else {
       for (const line of block.lines) {

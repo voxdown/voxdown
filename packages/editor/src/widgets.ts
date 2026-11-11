@@ -146,6 +146,10 @@ export class LineWidget extends WidgetType {
     readonly speaker?: string,
     /** A scene's speaker, reading its name aloud. */
     readonly readAloud?: ReadAloud,
+    /** A heading's level (1 for `#`), drawn larger the higher it is. */
+    readonly level?: number,
+    /** What a heading is for when not both heard and printed ("hidden"), shown beside it. */
+    readonly tag?: string,
   ) {
     super();
   }
@@ -161,7 +165,9 @@ export class LineWidget extends WidgetType {
       other.readAloud?.name === this.readAloud?.name &&
       other.readAloud?.said === this.readAloud?.said &&
       other.readAloud?.stale === this.readAloud?.stale &&
-      other.readAloud?.was === this.readAloud?.was
+      other.readAloud?.was === this.readAloud?.was &&
+      other.level === this.level &&
+      other.tag === this.tag
     );
   }
 
@@ -171,6 +177,13 @@ export class LineWidget extends WidgetType {
     const label = document.createElement("span");
     label.textContent = this.text;
     el.append(label);
+    if (this.level) el.dataset.level = String(this.level);
+    if (this.tag) {
+      const tag = document.createElement("span");
+      tag.className = "vxd-line-tag";
+      tag.textContent = this.tag;
+      el.append(tag);
+    }
     el.title = this.title;
     el.dataset.vxdLine = this.kind;
     if (this.trailing) el.dataset.trailing = "";

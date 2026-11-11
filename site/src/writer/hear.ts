@@ -119,12 +119,22 @@ export class Hearing {
       const voice = voices[chosen.get(row.speaker ?? narrator) ?? -1];
       if (voice) utterance.voice = voice;
       if (!live()) return;
+      let failed = false;
       await this.wait((done) => {
         utterance.onend = () => done();
-        utterance.onerror = () => done();
+        utterance.onerror = (event) => {
+          // Stopped on purpose is no failure; anything else ends the reading.
+          const why = (event as SpeechSynthesisErrorEvent | undefined)?.error;
+          failed = why !== "interrupted" && why !== "canceled";
+          done();
+        };
         synth.speak(utterance);
         return () => {};
       });
+      if (failed && live()) {
+        this.stop();
+        return;
+      }
     }
     if (live()) this.reading = false;
   }

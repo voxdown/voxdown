@@ -252,6 +252,25 @@ export const scriptTheme = EditorView.theme({
     color: "var(--vxd-muted, #6b7280)",
     cursor: "pointer",
   },
+  // A chapter (`#`) larger and in ink, a scene (`##`) a step down, smaller headings as they were.
+  '.vxd-line-heading[data-level="1"]': {
+    fontSize: "15px",
+    letterSpacing: "0.1em",
+    color: "var(--vxd-ink, #1f2328)",
+    margin: "22px 0 14px",
+  },
+  '.vxd-line-heading[data-level="2"]': { fontSize: "13px" },
+  // What a heading is for, when not both heard and printed: beside it, as a chip.
+  ".vxd-line-tag": {
+    flex: "none",
+    fontSize: "11px",
+    fontWeight: "600",
+    letterSpacing: "0.06em",
+    padding: "1px 6px",
+    border: "1px solid var(--vxd-line, #d0d4da)",
+    borderRadius: "999px",
+    color: "var(--vxd-muted, #6b7280)",
+  },
   ".vxd-line-break::before, .vxd-line-break::after, .vxd-line-heading::before, .vxd-line-heading::after":
     {
       content: '""',

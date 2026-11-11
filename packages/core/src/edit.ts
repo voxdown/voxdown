@@ -1783,10 +1783,19 @@ function addToFrontMatter(story: Story, path: readonly string[], text: string): 
   }
   const closing = lineStart(story.source, front.range.to);
   if (!parent) {
-    // At the indentation the top-level keys already have.
-    const first = frontMatterKeys(story).find((k) => k.path.length === 1);
+    // At the indentation the top-level keys already have, after the details and before the
+    // first map (the cast), where a reader looks for a title.
+    const keys = frontMatterKeys(story);
+    const first = keys.find((k) => k.path.length === 1);
     const indent = first ? lineIndent(story.source, first.range.from) : "";
-    return [{ from: closing, to: closing, insert: `${indent}${text}${nl}` }];
+    const map = keys.find(
+      (k) =>
+        k.path.length === 1 &&
+        (keys.some((child) => child.path.length === 2 && child.path[0] === k.path[0]) ||
+          story.source.slice(writtenValue(k).from, writtenValue(k).to).trim() === ""),
+    );
+    const at = map ? lineStart(story.source, map.range.from) : closing;
+    return [{ from: at, to: at, insert: `${indent}${text}${nl}` }];
   }
   const keys = frontMatterKeys(story);
   const top = keys.find((k) => k.path.length === 1 && k.path[0] === parent);

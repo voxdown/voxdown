@@ -441,6 +441,7 @@ body.writer {
 
 /* The side: what the story becomes, and its warnings. */
 .side {
+  container-type: inline-size;
   display: none;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
@@ -472,6 +473,30 @@ body.writer {
   color: var(--ink);
   border-bottom-color: var(--brand);
   font-weight: 600;
+}
+.side-close {
+  margin-left: auto;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--quiet);
+  cursor: pointer;
+}
+.side-close:hover {
+  background: var(--tab);
+  color: var(--ink);
+}
+.side-close svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 .side-tab .count {
   display: inline-block;
@@ -807,6 +832,20 @@ body.writer {
   justify-self: start;
   padding: 0.15rem 0.4rem;
   font-size: 0.8rem;
+}
+
+/* A narrow side: each character's names on lines of their own. */
+@container (max-width: 26rem) {
+  .cast-member {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .cast-name {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+  .cast-add {
+    grid-row: 3;
+  }
 }
 
 /* The status line. */

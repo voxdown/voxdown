@@ -369,6 +369,63 @@ if (!fits) problems.push("writer: at 900×760, the page doesn't fill the window"
 await writerContext.close();
 console.log("writer: welcome, rail, save, draft, open, warnings, view: ok");
 
+// Never losing the last words: typed and the page reloaded at once, they come back, with the
+// writer's place; a file saved under a new name comes back under that name; the side closes.
+const safety = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await safety.addInitScript(() => {
+  window.showSaveFilePicker = async ({ suggestedName }) => ({
+    kind: "file",
+    name: suggestedName === "Untitled.vxd" ? "renamed.vxd" : suggestedName,
+    getFile: async () => new File([""], "renamed.vxd", { lastModified: 1 }),
+    createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+    isSameEntry: async () => false,
+    queryPermission: async () => "granted",
+    requestPermission: async () => "granted",
+  });
+});
+const safe = await safety.newPage();
+watch(safe, "writer safety");
+await safe.goto(`${base}/writer/`);
+await safe.click(`.welcome-example[data-name="${dragonName}"]`);
+await safe.waitForTimeout(600);
+await safe.click(".cm-content");
+await safe.keyboard.press("Control+End");
+await safe.keyboard.type("Typed just before a reload.");
+const placeBefore = await safe.textContent("#cursor-place");
+await safe.reload();
+await safe.waitForSelector(".cm-content");
+await safe.waitForTimeout(400);
+if (!(await safe.locator(".cm-content").innerText()).includes("Typed just before a reload."))
+  problems.push("writer: words typed just before a reload were lost");
+if ((await safe.textContent("#cursor-place")) !== placeBefore)
+  problems.push("writer: after a reload, the cursor isn't where the writer left it");
+await safe.click("#file-menu-button");
+await safe.click('[data-command="new"]');
+// The example has changes to save: putting it aside asks first.
+await safe.waitForSelector("#ask[open]");
+await safe.click('#ask-buttons button[value="discard"]');
+await safe.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
+);
+await safe.keyboard.press("Control+Shift+s");
+await safe.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "renamed.vxd",
+);
+await safe.waitForTimeout(500);
+await safe.reload();
+await safe.waitForSelector(".cm-content");
+await safe.waitForTimeout(300);
+if ((await safe.textContent("#file-name")) !== "renamed.vxd")
+  problems.push("writer: after Save as and a reload, the story has its old name");
+await safe.setViewportSize({ width: 390, height: 844 });
+if (!(await safe.isVisible("#side")))
+  await safe.click("#view-menu-button").then(() => safe.click('[data-view="side"]'));
+await safe.click("#side-close");
+if (await safe.isVisible("#side"))
+  problems.push("writer: the side's close button doesn't close it");
+await safety.close();
+console.log("writer: last words, place, Save as name, closing the side: ok");
+
 // Saving automatically: a file opened, typed in, and two seconds later it is on disk.
 const auto = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 await auto.addInitScript(() => {

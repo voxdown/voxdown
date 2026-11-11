@@ -201,6 +201,7 @@ function editorState(source: string, cursor: number): EditorState {
           changed();
         }
         if (update.docChanged || update.selectionSet) cursorMoved();
+        if (update.selectionSet && !update.docChanged) keepPlaceSoon();
         const raw = update.state.field(showMarksField);
         if (raw !== prefs.marks) {
           prefs.marks = raw;
@@ -353,8 +354,9 @@ function changed(): void {
   clearTimeout(refreshTimer);
   cancelIdle();
   refreshTimer = setTimeout(refresh, view.state.doc.length < LONG ? 150 : 450);
+  // The draft is kept a moment after typing stops, and every two seconds while it goes on.
   clearTimeout(keepTimer);
-  keepTimer = setTimeout(() => void keep(), 700);
+  keepTimer = setTimeout(() => void keep(), Date.now() - keptAt > 2000 ? 0 : 300);
   scheduleAutosave();
 }
 
@@ -397,10 +399,16 @@ function cancelIdle(): void {
   idle = undefined;
 }
 
+/** When the draft was last kept, and the text's version then. */
+let keptAt = 0;
+let keptVersion = 0;
+
 async function keep(): Promise<void> {
   clearTimeout(keepTimer);
   // Another tab writes the story: this one keeps nothing over it.
   if (!lock.owner) return;
+  keptAt = Date.now();
+  const keeping = version;
   file.kept = await keepDraft({
     name: file.name,
     text: text(),
@@ -409,9 +417,78 @@ async function keep(): Promise<void> {
     ...(file.handle ? { handle: file.handle } : {}),
     ...(file.savedAt ? { savedAt: file.savedAt } : {}),
     ...(file.modified !== undefined ? { modified: file.modified } : {}),
+    place: place(),
   });
+  if (file.kept) {
+    keptVersion = Math.max(keptVersion, keeping);
+    if (keptVersion === version) forgetRescue();
+  }
   showDraftState();
 }
+
+/** Moving about without typing: where the writer is, kept a moment later. */
+let placeTimer: ReturnType<typeof setTimeout> | undefined;
+function keepPlaceSoon(): void {
+  clearTimeout(placeTimer);
+  placeTimer = setTimeout(() => void keep(), 1500);
+}
+view.scrollDOM.addEventListener("scroll", keepPlaceSoon, { passive: true });
+
+/** Where the writer is: the cursor, and the line at the top of the page. */
+function place(): { cursor: number; top: number } {
+  const cursor = view.state.selection.main.head;
+  const top = view.lineBlockAtHeight(
+    Math.max(0, view.scrollDOM.scrollTop - view.contentDOM.offsetTop),
+  ).from;
+  return { cursor, top };
+}
+
+// The words typed since the draft was last kept, written down at once when the page goes, where
+// a draft kept a moment later might not be: brought back on the next visit.
+
+const RESCUE = "vxd-writer-rescue";
+
+function rescue(): void {
+  if (!lock.owner || keptVersion === version) return;
+  try {
+    localStorage.setItem(
+      RESCUE,
+      JSON.stringify({
+        name: file.name,
+        text: text(),
+        saved: file.saved,
+        changedAt: file.changedAt,
+        place: place(),
+      }),
+    );
+  } catch {
+    // Too long for this storage: the draft from a moment ago is what comes back.
+  }
+}
+
+function forgetRescue(): void {
+  try {
+    localStorage.removeItem(RESCUE);
+  } catch {
+    // Nothing kept.
+  }
+}
+
+function rescued(): Pick<Draft, "name" | "text" | "saved" | "changedAt" | "place"> | null {
+  try {
+    return JSON.parse(localStorage.getItem(RESCUE) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+window.addEventListener("pagehide", rescue);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    rescue();
+    void keep();
+  }
+});
 
 // What the bars say.
 
@@ -493,6 +570,7 @@ function showSide(): void {
     tab.setAttribute("aria-selected", String(selected));
     tab.tabIndex = selected ? 0 : -1;
   }
+  sheet.setAttribute("aria-labelledby", `tab-${prefs.tab}`);
   // A name being typed on the side isn't redrawn under the writer's fingers.
   if (sheet.contains(document.activeElement) && document.activeElement?.matches("input")) return;
   if (prefs.tab === "script") sheet.innerHTML = renderScript(story, { positions: true });
@@ -833,14 +911,23 @@ async function saveAs(): Promise<boolean> {
   }
   const handle = await pickSaveTarget(file.name);
   if (!handle) return false;
+  // The new file is the story's from here: its name and handle go with what is kept, and back to
+  // the old ones if it can't be written.
+  const before = { handle: file.handle, name: file.name, modified: file.modified };
+  file.handle = handle;
+  file.name = handle.name;
+  file.modified = undefined;
+  $("#file-name").textContent = file.name;
   const done = await write(handle);
   if (done) {
-    file.handle = handle;
-    file.name = handle.name;
-    $("#file-name").textContent = file.name;
-    showSaveState();
     await rememberFile(handle.name, handle);
     void showRecent();
+  } else {
+    file.handle = before.handle;
+    file.name = before.name;
+    file.modified = before.modified;
+    $("#file-name").textContent = file.name;
+    showSaveState();
   }
   return done;
 }
@@ -1334,7 +1421,13 @@ document.addEventListener("drop", async (event) => {
 
 // Leaving with nothing kept anywhere: the browser asks first.
 window.addEventListener("beforeunload", (event) => {
+  rescue();
   if (!file.kept && text() !== file.saved) event.preventDefault();
+});
+
+$("#side-close").addEventListener("click", () => {
+  showSidePanel(false);
+  view.focus();
 });
 
 // The welcome, for a first visit: open a file, start one, or begin from an example.
@@ -1393,17 +1486,37 @@ async function start(): Promise<void> {
   void checkDisk();
 }
 
-/** Puts the kept draft in the editor. */
-function restore(draft: Draft): Promise<void> {
-  return load(
-    { name: draft.name, text: draft.text, ...(draft.handle ? { handle: draft.handle } : {}) },
+/**
+ * Puts the kept draft in the editor, with the words typed just before the page went if they were
+ * written down later than it, and the writer back where they were.
+ */
+async function restore(draft: Draft): Promise<void> {
+  const late = rescued();
+  const newer = late && late.name === draft.name && late.changedAt > draft.changedAt ? late : null;
+  const kept = newer ? { ...draft, ...newer } : draft;
+  await load(
+    { name: kept.name, text: kept.text, ...(kept.handle ? { handle: kept.handle } : {}) },
     {
-      saved: draft.saved,
-      changedAt: draft.changedAt,
-      ...(draft.savedAt ? { savedAt: draft.savedAt } : {}),
-      ...(draft.modified !== undefined ? { modified: draft.modified } : {}),
+      saved: kept.saved,
+      changedAt: kept.changedAt,
+      ...(kept.savedAt ? { savedAt: kept.savedAt } : {}),
+      ...(kept.modified !== undefined ? { modified: kept.modified } : {}),
     },
   );
+  if (kept.place) goTo(kept.place);
+  if (newer) {
+    forgetRescue();
+    void keep();
+  }
+}
+
+/** Puts the cursor and the page back where they were, within the story. */
+function goTo({ cursor, top }: { cursor: number; top: number }): void {
+  const length = view.state.doc.length;
+  view.dispatch({
+    selection: EditorSelection.cursor(Math.min(cursor, length)),
+    effects: EditorView.scrollIntoView(Math.min(top, length), { y: "start" }),
+  });
 }
 
 void start();

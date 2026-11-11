@@ -17,6 +17,8 @@ export type Draft = {
   savedAt?: number;
   /** When the file was last changed on disk, as the Writer last read or wrote it. */
   modified?: number;
+  /** Where the writer was: the cursor, and the line at the top of the page. */
+  place?: { cursor: number; top: number };
 };
 
 export type Recent = { name: string; handle: FileSystemFileHandle; openedAt: number };

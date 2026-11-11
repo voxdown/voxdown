@@ -139,10 +139,13 @@
 
   <aside class="side" id="side" aria-label="What the story becomes">
     <div class="side-tabs" role="tablist" aria-label="Show">
-      <button class="side-tab" role="tab" type="button" data-tab="script" aria-controls="side-sheet">Script</button>
-      <button class="side-tab" role="tab" type="button" data-tab="book" aria-controls="side-sheet">Book</button>
-      <button class="side-tab" role="tab" type="button" data-tab="cast" aria-controls="side-sheet">Cast</button>
-      <button class="side-tab" role="tab" type="button" data-tab="warnings" aria-controls="side-sheet">Warnings <span class="count" id="warning-count">0</span></button>
+      <button class="side-tab" role="tab" type="button" id="tab-script" data-tab="script" aria-controls="side-sheet">Script</button>
+      <button class="side-tab" role="tab" type="button" id="tab-book" data-tab="book" aria-controls="side-sheet">Book</button>
+      <button class="side-tab" role="tab" type="button" id="tab-cast" data-tab="cast" aria-controls="side-sheet">Cast</button>
+      <button class="side-tab" role="tab" type="button" id="tab-warnings" data-tab="warnings" aria-controls="side-sheet">Warnings <span class="count" id="warning-count">0</span></button>
+      <button class="side-close" type="button" id="side-close" title="Hide the side (View › Book and script)" aria-label="Hide the book and script">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
     </div>
     <div class="side-sheet sheet" id="side-sheet" role="tabpanel" tabindex="0"></div>
   </aside>
@@ -168,7 +171,7 @@
   </form>
 </dialog>
 
-<dialog class="ask" id="ask">
+<dialog class="ask" id="ask" aria-labelledby="ask-message">
   <form method="dialog">
     <p id="ask-message"></p>
     <input type="text" id="ask-input" autocomplete="off" hidden>

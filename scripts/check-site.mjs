@@ -1004,6 +1004,30 @@ for (const [command, name] of [
   if (download.suggestedFilename() !== name)
     problems.push(`writer: ${command} downloaded ${download.suggestedFilename()}, not ${name}`);
 }
+// Sides give each line with its cue, the end of the line before.
+await maker.click(".cm-content");
+await maker.keyboard.press("Control+End");
+await maker.keyboard.type("\n\n@Ann “Where were you all night?”\n\n@Bob “Out.”");
+await maker.click("#file-menu-button");
+const [sidesFile] = await Promise.all([
+  maker.waitForEvent("download"),
+  maker.click('[data-command="export-sides"]'),
+]);
+const sidesText = readFileSync(await sidesFile.path(), "utf8");
+if (!/…Where were you all night\? \(Ann\)\nBob: Out\./.test(sidesText))
+  problems.push("writer: the sides give Bob's line without Ann's cue before it");
+// Focus: the rail and side away, the paragraph being written in full ink, and back.
+await maker.keyboard.press("Control+Shift+f");
+if (
+  !(await maker.evaluate(() => document.body.hasAttribute("data-focus"))) ||
+  (await maker.isVisible("#scene-rail"))
+)
+  problems.push("writer: Ctrl+Shift+F doesn't focus on the writing");
+if ((await maker.locator(".cm-line.in-focus").count()) === 0)
+  problems.push("writer: in focus, the paragraph being written isn't set apart");
+await maker.keyboard.press("Control+Shift+f");
+if (await maker.evaluate(() => document.body.hasAttribute("data-focus")))
+  problems.push("writer: Ctrl+Shift+F doesn't leave focus");
 await maker.keyboard.press("Control+/");
 if ((await maker.locator("#shortcut-list dt").count()) < 8)
   problems.push("writer: Ctrl+/ doesn't list the shortcuts");

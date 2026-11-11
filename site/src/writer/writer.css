@@ -878,6 +878,25 @@ body.writer {
   }
 }
 
+/* Focus: the rail and the side away, the paragraph being written alone in full ink. */
+.writer[data-focus] .scene-rail,
+.writer[data-focus] .workspace[data-side] .side {
+  display: none;
+}
+.writer[data-focus] .workspace,
+.writer[data-focus] .workspace[data-side] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.writer[data-focus] .manuscript .cm-line:not(.in-focus) {
+  opacity: 0.32;
+  transition: opacity 0.2s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .writer[data-focus] .manuscript .cm-line:not(.in-focus) {
+    transition: none;
+  }
+}
+
 /* The status line. */
 .statusbar {
   display: flex;

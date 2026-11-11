@@ -5,8 +5,23 @@
  */
 import { defaultKeymap, history, historyKeymap, redo, undo } from "@codemirror/commands";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorSelection, EditorState, type Extension, Prec } from "@codemirror/state";
-import { EditorView, hoverTooltip, keymap } from "@codemirror/view";
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  type Extension,
+  Prec,
+  RangeSetBuilder,
+} from "@codemirror/state";
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+  hoverTooltip,
+  keymap,
+} from "@codemirror/view";
 import {
   type Character,
   type ViewSwitches,
@@ -91,7 +106,13 @@ document.head.append(rendererStyle);
 // What the writer chose to see, kept on this computer.
 
 type Tab = "script" | "book" | "cast" | "warnings";
-type Prefs = ViewSwitches & { marks: boolean; side: boolean; tab: Tab; autosave: boolean };
+type Prefs = ViewSwitches & {
+  marks: boolean;
+  side: boolean;
+  tab: Tab;
+  autosave: boolean;
+  focus: boolean;
+};
 const PREFS_KEY = "vxd-writer-view";
 const prefs: Prefs = {
   color: true,
@@ -105,6 +126,7 @@ const prefs: Prefs = {
   side: window.matchMedia("(min-width: 1100px)").matches,
   tab: "script",
   autosave: true,
+  focus: false,
   ...savedPrefs(),
 };
 
@@ -176,6 +198,48 @@ const lineBreaks = (source: string): Extension =>
     ? EditorState.lineSeparator.of("\r\n")
     : [];
 
+// Focus: the paragraph being written, the rest of the story faded, and the page keeping the
+// cursor in its middle as it goes.
+
+const IN_FOCUS = Decoration.line({ class: "in-focus" });
+
+const focusLines = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(readonly view: EditorView) {
+      this.decorations = this.build();
+    }
+    update(update: ViewUpdate) {
+      // A change, a move, a scroll, or focus switched (an effect): drawn again.
+      const switched = update.transactions.some((tr) => tr.effects.length > 0);
+      if (update.docChanged || update.selectionSet || update.viewportChanged || switched)
+        this.decorations = this.build();
+      if (prefs.focus && update.selectionSet && update.view.hasFocus) {
+        const head = update.state.selection.main.head;
+        requestAnimationFrame(() =>
+          update.view.dispatch({ effects: EditorView.scrollIntoView(head, { y: "center" }) }),
+        );
+      }
+    }
+    build(): DecorationSet {
+      if (!prefs.focus) return Decoration.none;
+      const doc = this.view.state.doc;
+      const blank = (number: number) => doc.line(number).text.trim() === "";
+      let first = doc.lineAt(this.view.state.selection.main.head).number;
+      let last = first;
+      while (first > 1 && !blank(first - 1)) first--;
+      while (last < doc.lines && !blank(last + 1)) last++;
+      const builder = new RangeSetBuilder<Decoration>();
+      for (let number = first; number <= last; number++) {
+        const line = doc.line(number);
+        builder.add(line.from, line.from, IN_FOCUS);
+      }
+      return builder.finish();
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
 /** Read only while another tab writes the story. */
 const editable = new Compartment();
 let lockedOut = false;
@@ -189,6 +253,7 @@ function editorState(source: string, cursor: number): EditorState {
     extensions: [
       lineBreaks(source),
       editable.of(editability()),
+      focusLines,
       // The browser's spelling check, in the story's own language.
       // Coming back to the story (from the rail, a warning, the side) marks the place on the side.
       EditorView.domEventHandlers({
@@ -1609,6 +1674,41 @@ async function showVersions(): Promise<void> {
   );
 }
 
+/**
+ * Each character's lines, with their cues: the end of the line before each one, as a performer's
+ * sides give it, and what the line is said like.
+ */
+function sides(of: Story): string {
+  const said = lines(of).filter((line) => line.kind === "speech" || line.kind === "vocal");
+  const parts: string[] = [];
+  for (const name of textByCharacter(of).keys()) {
+    const out = [`== ${name} ==`, ""];
+    for (const [index, line] of said.entries()) {
+      if (line.speaker !== name) continue;
+      const before = said[index - 1];
+      if (before && before.speaker !== name) {
+        const words = before.text.split(/\s+/).filter(Boolean);
+        out.push(`    …${words.slice(-8).join(" ")} (${before.speaker})`);
+      }
+      const text = line.kind === "vocal" ? `[${line.text}]` : line.text;
+      out.push(`${name}${line.direction ? ` (${line.direction})` : ""}: ${text}`, "");
+    }
+    parts.push(out.join("\n"));
+  }
+  return `${parts.join("\n\n")}\n`;
+}
+
+function focusMode(on: boolean): void {
+  prefs.focus = on;
+  keepPrefs();
+  checkMenu("focus", on);
+  document.body.toggleAttribute("data-focus", on);
+  // Redrawn: the faded lines, and the page about the cursor.
+  view.dispatch({
+    effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: "center" }),
+  });
+}
+
 // Keyboard shortcuts, as this computer writes them.
 
 const SHORTCUTS: Array<[string, string]> = [
@@ -1624,6 +1724,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Alt+↑ / Alt+↓", "Move the paragraph up or down"],
   ["Enter", "In a quote: close it, and open it again on a new line for the same speaker"],
   ["Mod+Shift+M", "Every mark raw, or drawn"],
+  ["Mod+Shift+F", "Focus: the paragraph being written, in the middle of the page"],
   ["Ctrl+Space", "Suggest names, directions, sounds and instructions"],
   ["Mod+/", "These shortcuts"],
 ];
@@ -1694,12 +1795,7 @@ const COMMANDS: Record<string, () => unknown> = {
       `${baseName()}.json`,
       "application/json",
     ),
-  "export-sides": () =>
-    download(
-      [...textByCharacter(current())].map(([name, said]) => `== ${name} ==\n${said}`).join("\n"),
-      `${baseName()}-sides.txt`,
-      "text/plain",
-    ),
+  "export-sides": () => download(sides(current()), `${baseName()}-sides.txt`, "text/plain"),
   print: printBook,
   recover: showDrafts,
   versions: showVersions,
@@ -1719,7 +1815,9 @@ function passageAtCursor(): number {
 const SWITCHES = ["color", "names", "directions", "sounds", "vocal", "pages", "notes"] as const;
 
 function viewCommand(name: string, on: boolean): void {
-  if (name === "autosave") {
+  if (name === "focus") {
+    focusMode(on);
+  } else if (name === "autosave") {
     prefs.autosave = on;
     keepPrefs();
     if (on) scheduleAutosave();
@@ -1765,7 +1863,13 @@ document.addEventListener(
   (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
-    // Every mark raw, wherever the focus is.
+    // Focus, and every mark raw, wherever the keyboard is.
+    if (key === "f" && event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      focusMode(!prefs.focus);
+      return;
+    }
     if (key === "m" && event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
@@ -1887,7 +1991,9 @@ function showWelcome(): void {
 // Start: the draft from last time, or the welcome.
 
 async function start(): Promise<void> {
-  for (const name of [...SWITCHES, "marks", "autosave"] as const) checkMenu(name, prefs[name]);
+  for (const name of [...SWITCHES, "marks", "autosave", "focus"] as const)
+    checkMenu(name, prefs[name]);
+  focusMode(prefs.focus);
   // Where the browser can't keep files, there's no file to save to automatically.
   $("#autosave-item").hidden = !keepsFiles;
   showSidePanel(prefs.side);

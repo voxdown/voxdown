@@ -48,7 +48,8 @@ const CURRENT = "current";
 /** How many files Open recent lists, how many stories' drafts are kept, versions of each. */
 const KEEP = 8;
 const KEEP_DRAFTS = 30;
-const KEEP_VERSIONS = 120;
+/** All the versions of a story together, in characters (a 600 KB book kept 80 times). */
+const KEEP_TEXT = 50_000_000;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 /** Versions kept as a story is written, as against those kept before a change the Writer made. */
@@ -123,6 +124,15 @@ export async function loadDraft(): Promise<Draft | undefined> {
       | undefined;
     if (!pointer?.id) return undefined;
     return (await done((await store(DOCUMENTS, "readonly")).get(pointer.id))) as Draft | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A story's draft by its key, if this browser still keeps it. */
+export async function draftById(id: string): Promise<Draft | undefined> {
+  try {
+    return (await done((await store(DOCUMENTS, "readonly")).get(id))) as Draft | undefined;
   } catch {
     return undefined;
   }
@@ -213,35 +223,39 @@ export async function draftForFile(handle: FileSystemFileHandle): Promise<Draft 
 }
 
 /**
- * The versions worth keeping, the latest first: every one from the last hour; for the last day,
- * the latest of each hour, and every one kept before a change the Writer made (opening, going
- * back, tidying, reading the file again); then the latest of each day for a month, and of each
- * week beyond. At most `KEEP_VERSIONS`.
+ * The versions worth keeping, the latest first. Of those kept as the story is written and saved:
+ * the last twenty of the last ten minutes, then the latest of every five minutes for the hour, of every hour for a day, of every day for a
+ * month, and of every week before. Those kept before a change the Writer made (opening, going
+ * back, tidying, reading the file again) are all kept for a week, thirty at most, and then share
+ * the days and weeks with the rest. However often a story is saved, older versions stay, until
+ * all of them together pass `KEEP_TEXT` characters, the oldest let go first.
  */
-export function thinVersions<V extends Pick<Version, "at" | "why">>(
+export function thinVersions<V extends Pick<Version, "at" | "why"> & { text?: string }>(
   versions: readonly V[],
   now: number,
 ): V[] {
   const seen = new Set<string>();
   const kept: V[] = [];
+  let special = 0;
+  let recent = 0;
+  let size = 0;
   for (const version of [...versions].sort((a, b) => b.at - a.at)) {
     const age = now - version.at;
-    const bucket =
-      age < HOUR
-        ? undefined
-        : age < DAY
-          ? ROUTINE.has(version.why)
-            ? `hour ${Math.floor(version.at / HOUR)}`
-            : undefined
-          : age < 30 * DAY
-            ? `day ${Math.floor(version.at / DAY)}`
-            : `week ${Math.floor(version.at / (7 * DAY))}`;
+    const routine = ROUTINE.has(version.why);
+    let bucket: string | undefined;
+    if (!routine && age < 7 * DAY && special < 30) special++;
+    else if (age < 10 * 60_000 && recent < 20) recent++;
+    else if (age < HOUR) bucket = `five ${Math.floor(version.at / (5 * 60_000))}`;
+    else if (age < DAY) bucket = `hour ${Math.floor(version.at / HOUR)}`;
+    else if (age < 30 * DAY) bucket = `day ${Math.floor(version.at / DAY)}`;
+    else bucket = `week ${Math.floor(version.at / (7 * DAY))}`;
     if (bucket !== undefined) {
       if (seen.has(bucket)) continue;
       seen.add(bucket);
     }
+    size += version.text?.length ?? 0;
+    if (kept.length > 0 && size > KEEP_TEXT) break;
     kept.push(version);
-    if (kept.length >= KEEP_VERSIONS) break;
   }
   return kept;
 }

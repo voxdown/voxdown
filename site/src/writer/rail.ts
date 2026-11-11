@@ -215,11 +215,15 @@ export class SceneRail {
         labelled.add(index);
       }
     }
-    for (const [index] of this.scenes.entries()) {
+    // So many scenes that their nodes would touch: the chapters keep theirs, the scenes become
+    // ticks (each still a button, named by its title).
+    const packed = ys.some((y, index) => index > 0 && y - (ys[index - 1] ?? 0) < 11);
+    for (const [index, scene] of this.scenes.entries()) {
       const item = items[index] as HTMLElement | undefined;
       if (!item) continue;
       item.style.top = `${ys[index] ?? 0}px`;
       item.toggleAttribute("data-crowded", !labelled.has(index));
+      item.toggleAttribute("data-minor", packed && !scene.chapter);
     }
     this.place();
   }
@@ -245,7 +249,10 @@ export class SceneRail {
     const shownBox = this.part("#rail-window");
     const y = railY(this.points, first.from);
     shownBox.style.top = `${y}px`;
-    shownBox.style.height = `${Math.max(8, railY(this.points, last.to) - y)}px`;
+    const tall = railY(this.points, last.to) - y;
+    shownBox.style.height = `${Math.max(8, tall)}px`;
+    // A thin window is a band, not two lines that would strike through a name.
+    shownBox.toggleAttribute("data-thin", tall < 16);
     // The scene being read: the one a quarter of the way down, not a line just scrolled past.
     const reading = this.view.lineBlockAtHeight(
       Math.max(0, top + Math.min(80, scroller.clientHeight / 4) - contentTop),

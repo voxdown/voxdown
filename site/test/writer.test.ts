@@ -4,11 +4,12 @@ import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
 import { describe, expect, it } from "vitest";
 import { parse } from "voxdown";
-import { changesOnly, diffLines } from "../src/writer/diff";
+import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, toggleEmphasis } from "../src/writer/emphasis";
 import { afterParagraph, moveParagraph } from "../src/writer/paragraphs";
-import { problems } from "../src/writer/problems";
+import { nearestName, problems } from "../src/writer/problems";
 import { railAt, railPoints, railScenes, railY } from "../src/writer/rail";
+import { SaveQueue, autosaveCheck, checkDisk, sameText } from "../src/writer/saving";
 import { thinVersions } from "../src/writer/store";
 import { speechAt, speechOfMark } from "../src/writer/stretch";
 import { glimpse, listening, wordCount } from "../src/writer/words";
@@ -115,6 +116,18 @@ describe("what to put right", () => {
     const text = "---\ncast:\n  Ann:\n---\n@Ann “Hi.” @Bob “Hello.”";
     const found = problems(parse(text), editorMarks(text), lineOf(text));
     expect(found.find((problem) => problem.code === "unknown-character")?.cast).toBe("Bob");
+  });
+
+  it("offers the cast's name for one mistyped, before adding it to the cast", () => {
+    const text = "---\ncast:\n  Wanda:\n  Ann:\n---\n@Wnada “Hi.” @Zed “Hello.”";
+    const found = problems(parse(text), editorMarks(text), lineOf(text)).filter(
+      (problem) => problem.code === "unknown-character",
+    );
+    expect(found[0]?.fix).toMatchObject({ insert: "Wanda", label: "Change to @Wanda" });
+    expect(found[0]?.cast).toBe("Wnada");
+    expect(found[1]?.fix).toBeUndefined();
+    expect(nearestName("Anne", ["Ann", "Anna"])).toBeUndefined();
+    expect(nearestName("Percivel", ["Percival", "Gerald"])).toBe("Percival");
   });
 
   it("closes a sound left open where its line ends, CRLF or not", () => {
@@ -278,6 +291,39 @@ describe("comparing two versions", () => {
   });
 });
 
+describe("comparing words", () => {
+  it("shows a line changed as one line, its words gone and new", () => {
+    const rows = withWords(
+      changesOnly(
+        diffLines("One.\nThe old grey cat sat.\nTwo.", "One.\nThe young grey cat sat.\nTwo."),
+      ),
+    );
+    expect(rows).toEqual([
+      { kind: "same", text: "One." },
+      {
+        kind: "changed",
+        parts: [
+          { kind: "same", text: "The " },
+          { kind: "gone", text: "old" },
+          { kind: "new", text: "young" },
+          { kind: "same", text: " grey cat sat." },
+        ],
+      },
+      { kind: "same", text: "Two." },
+    ]);
+    expect(diffWords("a b", "a b")).toEqual([{ kind: "same", text: "a b" }]);
+  });
+
+  it("takes a name changed all through a long book line for line", () => {
+    const book = Array.from({ length: 4000 }, (_, i) => `Holmes said ${i}.`);
+    const rows = withWords(
+      diffLines(book.join("\n"), book.map((line) => line.replace("Holmes", "Sherlock")).join("\n")),
+    );
+    expect(rows).toHaveLength(4000);
+    expect(rows.every((row) => row.kind === "changed")).toBe(true);
+  });
+});
+
 describe("the versions kept", () => {
   const HOUR = 3_600_000;
   const now = 400 * 24 * HOUR;
@@ -293,7 +339,6 @@ describe("the versions kept", () => {
     ];
     const kept = thinVersions(versions, now);
     const ages = kept.map((version) => (now - version.at) / HOUR);
-    // The last hour, all six; then one an hour; then one a day.
     expect(ages.filter((age) => age < 1)).toHaveLength(6);
     const day = kept.filter((version) => now - version.at >= HOUR && now - version.at < 24 * HOUR);
     expect(day.filter((version) => version.why === "Saved").length).toBeLessThanOrEqual(24);
@@ -301,6 +346,33 @@ describe("the versions kept", () => {
     expect(ages.filter((age) => age >= 24 && age < 72).length).toBeLessThanOrEqual(3);
     expect(kept.at(-1)?.why).toBe("Opened");
     expect(ages).toEqual([...ages].sort((a, b) => a - b));
+  });
+
+  it("never lets saving often push out older versions, or those kept before a change", () => {
+    const versions = [
+      // Saved every 25 seconds for 55 minutes.
+      ...Array.from({ length: 132 }, (_, i) => ({ at: now - i * 25_000, why: "Saved" })),
+      { at: now - 3 * HOUR, why: "Before tidying" },
+      { at: now - 30 * 24 * HOUR + HOUR, why: "Opened" },
+      ...Array.from({ length: 20 }, (_, i) => ({ at: now - (2 + i) * 24 * HOUR, why: "Saved" })),
+    ];
+    const kept = thinVersions(versions, now);
+    expect(kept.some((version) => version.why === "Before tidying")).toBe(true);
+    expect(kept.some((version) => version.why === "Opened")).toBe(true);
+    expect(kept.filter((version) => now - version.at >= 24 * HOUR).length).toBe(21);
+    // The last ten minutes, twenty of them; then one every five minutes.
+    const hour = kept.filter((version) => version.why === "Saved" && now - version.at < HOUR);
+    expect(hour.length).toBeLessThanOrEqual(20 + 10);
+  });
+
+  it("lets the oldest go once they are too many characters together", () => {
+    const big = "x".repeat(10_000_000);
+    const versions = Array.from({ length: 8 }, (_, i) => ({
+      at: now - i * 2 * 24 * HOUR,
+      why: "Saved",
+      text: big,
+    }));
+    expect(thinVersions(versions, now)).toHaveLength(5);
   });
 });
 
@@ -325,5 +397,65 @@ describe("words", () => {
     });
     expect(glimpse("No front matter here.").title).toBeUndefined();
     expect(glimpse("word ".repeat(40)).words).toMatch(/^word( word)*…$/);
+  });
+});
+
+describe("saving", () => {
+  const known = { modified: 10, saved: "One.\nTwo.\n" };
+
+  it("writes over a file as it was read, and one changed only in its date or line breaks", () => {
+    expect(checkDisk({ text: "Anything.", modified: 10 }, known)).toEqual({ kind: "write" });
+    expect(checkDisk({ text: "One.\r\nTwo.\r\n", modified: 99 }, known)).toEqual({ kind: "write" });
+    expect(sameText("a\r\nb", "a\nb")).toBe(true);
+  });
+
+  it("asks before writing over changes made elsewhere, or a file it couldn't read", () => {
+    const disk = { text: "One.\nTwo, from the laptop.\n", modified: 20 };
+    expect(checkDisk(disk, known)).toEqual({ kind: "changed", disk });
+    expect(checkDisk(undefined, known)).toEqual({ kind: "unread" });
+    // A file never read here (a new one from Save as) is written.
+    expect(checkDisk(undefined, { modified: undefined, saved: "" })).toEqual({ kind: "write" });
+  });
+
+  it("saves by itself only what it may, without asking, never blind", () => {
+    const ready = {
+      on: true,
+      owner: true,
+      hasFile: true,
+      unsaved: true,
+      mayWriteNow: true,
+      disk: { kind: "write" } as const,
+    };
+    expect(autosaveCheck(ready)).toEqual({ kind: "write" });
+    expect(autosaveCheck({ ...ready, on: false })).toMatchObject({ kind: "wait", reason: "off" });
+    expect(autosaveCheck({ ...ready, owner: false })).toMatchObject({ reason: "not-owner" });
+    expect(autosaveCheck({ ...ready, unsaved: false })).toMatchObject({ reason: "nothing" });
+    expect(autosaveCheck({ ...ready, mayWriteNow: false })).toEqual({
+      kind: "ask",
+      reason: "permission",
+    });
+    expect(autosaveCheck({ ...ready, disk: { kind: "unread" } })).toMatchObject({ kind: "stop" });
+  });
+
+  it("saves one at a time, in order, a failure stopping none after it", async () => {
+    const queue = new SaveQueue();
+    const done: string[] = [];
+    const slow =
+      (name: string, ms: number, fail = false) =>
+      () =>
+        new Promise<string>((resolve, reject) =>
+          setTimeout(() => {
+            done.push(name);
+            if (fail) reject(new Error(name));
+            else resolve(name);
+          }, ms),
+        );
+    const first = queue.run(slow("first", 30));
+    const second = queue.run(slow("second", 1, true));
+    const third = queue.run(slow("third", 1));
+    await expect(first).resolves.toBe("first");
+    await expect(second).rejects.toThrow("second");
+    await expect(third).resolves.toBe("third");
+    expect(done).toEqual(["first", "second", "third"]);
   });
 });

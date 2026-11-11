@@ -17,8 +17,8 @@
       <div class="menu-list" role="menu" id="file-menu" aria-labelledby="file-menu-button" hidden>
         <button role="menuitem" type="button" data-command="new">New story</button>
         <button role="menuitem" type="button" data-command="open">Open…<kbd data-keys="Mod+O"></kbd></button>
-        <div class="menu-group" id="recent-group" hidden>
-          <span class="menu-label" id="recent-label">Open recent</span>
+        <div class="menu-group" id="recent-group" role="none" hidden>
+          <span class="menu-label" id="recent-label" aria-hidden="true">Open recent</span>
           <div role="group" aria-labelledby="recent-label" id="recent-list"></div>
         </div>
         <button role="menuitem" type="button" data-command="recover">Recover a draft…</button>
@@ -29,13 +29,15 @@
         <button role="menuitemcheckbox" type="button" data-view="autosave" aria-checked="true" id="autosave-item">Save automatically</button>
         <button role="menuitem" type="button" data-command="download">Download a copy</button>
         <hr>
-        <span class="menu-label">Export</span>
-        <button role="menuitem" type="button" data-command="export-book">The book, as a web page</button>
-        <button role="menuitem" type="button" data-command="export-script">The script, as a web page</button>
-        <button role="menuitem" type="button" data-command="export-csv">The lines, as a spreadsheet (CSV)</button>
-        <button role="menuitem" type="button" data-command="export-json">The lines, as data (JSON)</button>
-        <button role="menuitem" type="button" data-command="export-sides">Each character’s lines (sides)</button>
-        <button role="menuitem" type="button" data-command="print">Print the book…<kbd data-keys="Mod+P"></kbd></button>
+        <span class="menu-label" id="export-label" aria-hidden="true">Export</span>
+        <div role="group" aria-labelledby="export-label">
+          <button role="menuitem" type="button" data-command="export-book">The book, as a web page</button>
+          <button role="menuitem" type="button" data-command="export-script">The script, as a web page</button>
+          <button role="menuitem" type="button" data-command="export-csv">The lines, as a spreadsheet (CSV)</button>
+          <button role="menuitem" type="button" data-command="export-json">The lines, as data (JSON)</button>
+          <button role="menuitem" type="button" data-command="export-sides">Each character’s lines (sides)</button>
+          <button role="menuitem" type="button" data-command="print">Print the book…<kbd data-keys="Mod+P"></kbd></button>
+        </div>
         <hr>
         <button role="menuitem" type="button" data-command="details">Story details…</button>
         <button role="menuitem" type="button" data-command="format">Tidy the story</button>
@@ -83,14 +85,16 @@
         <button role="menuitem" type="button" data-command="goal">Writing goal…</button>
         <button role="menuitemcheckbox" type="button" data-view="marks" aria-checked="false">Every mark raw<kbd data-keys="Mod+Shift+M"></kbd></button>
         <hr>
-        <span class="menu-label">Draw</span>
-        <button role="menuitemcheckbox" type="button" data-view="color" aria-checked="true">Color by speaker</button>
-        <button role="menuitemcheckbox" type="button" data-view="names" aria-checked="true">Names</button>
-        <button role="menuitemcheckbox" type="button" data-view="directions" aria-checked="true">Directions</button>
-        <button role="menuitemcheckbox" type="button" data-view="sounds" aria-checked="true">Sounds</button>
-        <button role="menuitemcheckbox" type="button" data-view="vocal" aria-checked="true">Character sounds</button>
-        <button role="menuitemcheckbox" type="button" data-view="pages" aria-checked="true">Page turns</button>
-        <button role="menuitemcheckbox" type="button" data-view="notes" aria-checked="true">Notes</button>
+        <span class="menu-label" id="draw-label" aria-hidden="true">Draw</span>
+        <div role="group" aria-labelledby="draw-label">
+          <button role="menuitemcheckbox" type="button" data-view="color" aria-checked="true">Color by speaker</button>
+          <button role="menuitemcheckbox" type="button" data-view="names" aria-checked="true">Names</button>
+          <button role="menuitemcheckbox" type="button" data-view="directions" aria-checked="true">Directions</button>
+          <button role="menuitemcheckbox" type="button" data-view="sounds" aria-checked="true">Sounds</button>
+          <button role="menuitemcheckbox" type="button" data-view="vocal" aria-checked="true">Character sounds</button>
+          <button role="menuitemcheckbox" type="button" data-view="pages" aria-checked="true">Page turns</button>
+          <button role="menuitemcheckbox" type="button" data-view="notes" aria-checked="true">Notes</button>
+        </div>
         <hr>
         <button role="menuitemcheckbox" type="button" data-view="rail-names" aria-checked="true">Scene names</button>
         <button role="menuitemcheckbox" type="button" data-view="side" aria-checked="true">Book and script</button>

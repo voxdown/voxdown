@@ -24,11 +24,83 @@ export function diffLines(before: string, after: string): DiffLine[] {
   const same = (lines: string[]) => lines.map((text): DiffLine => ({ kind: "same", text }));
   const middleA = a.slice(start, a.length - end);
   const middleB = b.slice(start, b.length - end);
-  const middle = myers(middleA, middleB) ?? [
-    ...middleA.map((text): DiffLine => ({ kind: "gone", text })),
-    ...middleB.map((text): DiffLine => ({ kind: "new", text })),
-  ];
+  const middle = myers(middleA, middleB) ?? pairUp(middleA, middleB);
   return [...same(a.slice(0, start)), ...middle, ...same(a.slice(a.length - end))];
+}
+
+/**
+ * Too many changes to find the shortest way: as many lines on each side (a name changed all
+ * through a book) are taken line for line; otherwise the one stretch went, the other came.
+ */
+function pairUp(a: readonly string[], b: readonly string[]): DiffLine[] {
+  if (a.length !== b.length)
+    return [
+      ...a.map((text): DiffLine => ({ kind: "gone", text })),
+      ...b.map((text): DiffLine => ({ kind: "new", text })),
+    ];
+  return a.flatMap((text, index): DiffLine[] => {
+    const next = b[index] as string;
+    return text === next
+      ? [{ kind: "same", text }]
+      : [
+          { kind: "gone", text },
+          { kind: "new", text: next },
+        ];
+  });
+}
+
+/** Two lines word by word: the words both have, those gone and those new, spaces kept. */
+export function diffWords(before: string, after: string): DiffLine[] {
+  const a = before.split(/(\s+)/).filter(Boolean);
+  const b = after.split(/(\s+)/).filter(Boolean);
+  const words = myers(a, b) ?? [
+    { kind: "gone" as const, text: before },
+    { kind: "new" as const, text: after },
+  ];
+  // Neighbours of a kind joined: fewer, longer stretches to read.
+  const joined: DiffLine[] = [];
+  for (const word of words) {
+    const last = joined.at(-1);
+    if (last && last.kind === word.kind) last.text += word.text;
+    else joined.push({ ...word });
+  }
+  return joined;
+}
+
+export type CompareRow =
+  | DiffLine
+  | { kind: "skip"; count: number }
+  | { kind: "changed"; parts: DiffLine[] };
+
+/**
+ * Lines taken away and as many put in straight after are the same lines changed: each shown once,
+ * its words gone and new within it.
+ */
+export function withWords(
+  rows: ReadonlyArray<DiffLine | { kind: "skip"; count: number }>,
+): CompareRow[] {
+  const out: CompareRow[] = [];
+  for (let i = 0; i < rows.length; ) {
+    let gone = 0;
+    while (rows[i + gone]?.kind === "gone") gone++;
+    let added = 0;
+    while (rows[i + gone + added]?.kind === "new") added++;
+    if (gone > 0 && gone === added) {
+      for (let k = 0; k < gone; k++)
+        out.push({
+          kind: "changed",
+          parts: diffWords((rows[i + k] as DiffLine).text, (rows[i + gone + k] as DiffLine).text),
+        });
+      i += gone * 2;
+    } else if (gone + added > 0) {
+      for (let k = 0; k < gone + added; k++) out.push(rows[i + k] as DiffLine);
+      i += gone + added;
+    } else {
+      out.push(rows[i] as CompareRow);
+      i++;
+    }
+  }
+  return out;
 }
 
 /** The shortest way from `a` to `b` (Myers, 1986), or undefined past `MOST_EDITS` changes. */

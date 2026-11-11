@@ -4,7 +4,8 @@
  * `setDirection`), which change exactly what they say or nothing: where a change would reach
  * other lines, the writer is told and nothing changes.
  */
-import type { EditorView } from "@codemirror/view";
+import { EditorSelection } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import {
   type Speech,
   type Story,
@@ -30,6 +31,16 @@ export type StretchContext = {
 
 const hasWords = (text: string) => /[\p{L}\p{N}]/u.test(text);
 
+/** Where `at` is once the changes are made: moved by those before it. */
+export function mapped(changes: readonly TextChange[], at: number): number {
+  let shift = 0;
+  for (const change of [...changes].sort((a, b) => a.from - b.from)) {
+    if (change.to <= at) shift += change.insert.length - (change.to - change.from);
+    else if (change.from < at) return change.from + shift + change.insert.length;
+  }
+  return at + shift;
+}
+
 /** The passage at `at` in a paragraph: a speech with words, the narrator's included. */
 export function speechAt(story: Story, at: number): Speech | undefined {
   for (const block of story.blocks) {
@@ -44,6 +55,34 @@ export function speechAt(story: Story, at: number): Speech | undefined {
         if (item.range.from === at) found = item;
       }
       if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The passage the cursor means: the one it is in; else the one whose mark or direction it is on
+ * (`@King (less grandly) “…”`, the cursor anywhere from the `@` to the quote); else, at the start
+ * of a line, its first; else the next in the line, or the last before it.
+ */
+export function passageNear(story: Story, at: number): Speech | undefined {
+  const inside = speechAt(story, at);
+  if (inside) return inside;
+  for (const block of story.blocks) {
+    if (block.kind !== "paragraph" || at < block.range.from || at > block.range.to) continue;
+    for (const line of block.lines) {
+      if (at < line.range.from || at > line.range.to) continue;
+      const said = line.items.filter(
+        (item): item is Speech => item.kind === "speech" && hasWords(item.text),
+      );
+      const marked = said.find((speech) => {
+        const from = Math.min(
+          speech.mark?.range.from ?? speech.range.from,
+          speech.directionMark?.range.from ?? speech.range.from,
+        );
+        return from <= at && at <= speech.range.from;
+      });
+      return marked ?? said.find((speech) => speech.range.from >= at) ?? said.at(-1);
     }
   }
   return undefined;
@@ -194,8 +233,24 @@ export class StretchTools {
     if (!this.popover.hidden) this.closePopover(this.popover.contains(document.activeElement));
   }
 
+  /**
+   * Brings the passage at `at` into view first when it isn't, and then runs `open`: a picker is
+   * placed by its words, and must never open off the page.
+   */
+  private revealThen(at: number, anchor: Element | undefined, open: () => void): boolean {
+    if (anchor) return false;
+    const { view } = this.context;
+    const box = view.scrollDOM.getBoundingClientRect();
+    const place = view.coordsAtPos(at);
+    if (place && place.top >= box.top && place.bottom <= box.bottom) return false;
+    view.dispatch({ effects: EditorView.scrollIntoView(at, { y: "center" }) });
+    requestAnimationFrame(() => requestAnimationFrame(open));
+    return true;
+  }
+
   /** The speaker picker for the passage at `at`, below `anchor` or the cursor. */
   openSpeaker(at: number, anchor?: Element): void {
+    if (this.revealThen(at, anchor, () => this.openSpeaker(at, anchor))) return;
     const story = this.context.story();
     const speech = speechAt(story, at);
     if (!speech) {
@@ -270,11 +325,12 @@ export class StretchTools {
     this.showPopover("Who says this?", [form, list], anchor, at);
     (
       list.querySelector<HTMLElement>("[aria-current]") ?? list.querySelector<HTMLElement>("button")
-    )?.focus();
+    )?.focus({ preventScroll: true });
   }
 
   /** The direction picker for the passage at `at`. */
   openDirection(at: number, anchor?: Element): void {
+    if (this.revealThen(at, anchor, () => this.openDirection(at, anchor))) return;
     const story = this.context.story();
     const speech = speechAt(story, at);
     if (!speech) {
@@ -332,7 +388,7 @@ export class StretchTools {
     });
     remove.addEventListener("click", () => set(null));
     this.showPopover("How is it said?", [form], anchor, at);
-    input.focus();
+    input.focus({ preventScroll: true });
     input.select();
   }
 
@@ -358,11 +414,17 @@ export class StretchTools {
       this.closePopover(true);
       return;
     }
-    this.context.apply(
+    const done = this.context.apply(
       changes,
       `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,
     );
     this.closePopover(true);
+    // A cursor left before the new mark goes into the passage, so the next key (Ctrl+J, a word)
+    // is about it.
+    const { view } = this.context;
+    const words = mapped(changes, target.textRange.from);
+    if (done && view.state.selection.main.empty && view.state.selection.main.head < words)
+      view.dispatch({ selection: EditorSelection.cursor(Math.min(words, view.state.doc.length)) });
   }
 
   private nothingHere(): void {
@@ -452,7 +514,9 @@ export class StretchTools {
     this.popover.style.left = `${left}px`;
     const below = place.bottom - box.top + 4;
     const height = this.popover.offsetHeight;
-    this.popover.style.top = `${below + height > box.height - 8 ? Math.max(4, below - height - 40) : below}px`;
+    const top = below + height > box.height - 8 ? below - height - 40 : below;
+    // Always within the manuscript, whatever the words' place.
+    this.popover.style.top = `${Math.min(Math.max(4, top), Math.max(4, box.height - height - 4))}px`;
   }
 
   private closePopover(focusEditor: boolean): void {

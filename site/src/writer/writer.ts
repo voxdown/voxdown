@@ -64,7 +64,7 @@ import "../style.css";
 import "./writer.css";
 import "../theme";
 import { castPanel } from "./cast";
-import { changesOnly, diffLines } from "./diff";
+import { changesOnly, diffLines, withWords } from "./diff";
 import { emphasis, toggleEmphasis } from "./emphasis";
 import {
   type Opened,
@@ -86,9 +86,11 @@ import { afterParagraph, moveParagraph } from "./paragraphs";
 import { type Problem, problems } from "./problems";
 import { SceneRail, railScenes } from "./rail";
 import type { RenderAsk, RenderReply } from "./render-worker";
+import { SaveQueue, autosaveCheck, checkDisk as diskCheck, sameText } from "./saving";
 import {
   type Draft,
   type Version,
+  draftById,
   draftForFile,
   forgetDraft,
   forgetFile,
@@ -102,7 +104,7 @@ import {
   rememberFile,
   versionsOf,
 } from "./store";
-import { type Speaker, StretchTools, speechAt, speechOfMark } from "./stretch";
+import { type Speaker, StretchTools, passageNear, speechOfMark } from "./stretch";
 import { glimpse, listening, wordCount } from "./words";
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
@@ -201,8 +203,6 @@ const characters = (): readonly Character[] =>
  * The same story, whatever its line breaks: a file with some lines ending in CRLF and some in LF
  * opens as it is, unchanged, and is saved with one kind.
  */
-const sameText = (a: string, b: string) =>
-  a === b || a.replace(/\r\n?/g, "\n") === b.replace(/\r\n?/g, "\n");
 
 /** The text as it will be saved: with the line breaks the story came with. */
 const text = () => view.state.sliceDoc();
@@ -320,6 +320,11 @@ function editorState(source: string, cursor: number): EditorState {
         lang: story.meta.language ?? "en",
       })),
       history(),
+      // The line being written never sits on the window's bottom edge, under the notices.
+      EditorView.scrollMargins.of((margins) => ({
+        top: 24,
+        bottom: Math.min(240, Math.round(margins.scrollDOM.clientHeight / 4)),
+      })),
       search({ top: true }),
       // The search panel's words, as the rest of the Writer writes them.
       EditorState.phrases.of({
@@ -527,7 +532,7 @@ function notice(message: string): void {
 }
 
 /** Puts a story in the editor, with a fresh undo history, the cursor where the story starts. */
-function load(
+async function load(
   opened: Opened,
   kept: {
     id?: string;
@@ -537,7 +542,18 @@ function load(
     modified?: number;
   } = {},
 ): Promise<void> {
-  file.id = kept.id ?? newId();
+  const id = kept.id ?? newId();
+  // The story open before is kept as it is (what keep() writes is read at once), and its lock
+  // let go of; this one is written here, unless another tab writes it, when it is only read. A
+  // new story's key is new: no other tab can be writing it, and it opens at once.
+  if (lock.owner && id !== file.id) void keep();
+  const claiming = lock.claim(id);
+  const mine = kept.id === undefined || (await claiming);
+  lockedOut = !mine;
+  $("#elsewhere").hidden = mine;
+  tools.hide();
+  tabStory(id);
+  file.id = id;
   file.name = opened.name;
   file.handle = opened.handle;
   file.modified = opened.modified ?? kept.modified;
@@ -562,6 +578,8 @@ function load(
   refresh();
   // Ready to type, except on a touch screen, where that would bring up its keyboard unasked.
   if (!lockedOut && !matchMedia("(pointer: coarse)").matches) view.focus();
+  // The lock in hand before the draft is kept under it.
+  await claiming;
   return keep();
 }
 
@@ -663,10 +681,20 @@ function snapshot(why: string, content = text()): Promise<void> {
 
 /** Asks the browser, once, not to clear what the Writer keeps when space runs short. */
 let persisted = false;
+/** Whether the browser promised to keep the drafts: undefined until it says. */
+let protectedDrafts: boolean | undefined;
 function persistOnce(): void {
   if (persisted) return;
   persisted = true;
-  void navigator.storage?.persist?.().catch(() => false);
+  void (async () => {
+    try {
+      protectedDrafts =
+        (await navigator.storage?.persisted?.()) || (await navigator.storage?.persist?.());
+    } catch {
+      protectedDrafts = false;
+    }
+    showDraftState();
+  })();
 }
 
 /** When the draft was last kept, and the text's version then. */
@@ -730,7 +758,7 @@ function rescue(): void {
   if (!lock.owner || keptVersion === version) return;
   try {
     localStorage.setItem(
-      RESCUE,
+      `${RESCUE}:${file.id}`,
       JSON.stringify({
         id: file.id,
         name: file.name,
@@ -745,20 +773,41 @@ function rescue(): void {
   }
 }
 
-function forgetRescue(): void {
+function forgetRescue(id = file.id): void {
   try {
-    localStorage.removeItem(RESCUE);
+    localStorage.removeItem(`${RESCUE}:${id}`);
+    if (rescuedBefore()?.id === id) localStorage.removeItem(RESCUE);
   } catch {
     // Nothing kept.
   }
 }
 
 type Rescued = Pick<Draft, "name" | "text" | "saved" | "changedAt" | "place"> & { id?: string };
-function rescued(): Rescued | null {
+/** The words rescued for a story; one written down before each story had its own, if it is this one's. */
+function rescued(id: string): Rescued | null {
+  try {
+    const own = JSON.parse(localStorage.getItem(`${RESCUE}:${id}`) ?? "null") as Rescued | null;
+    const before = rescuedBefore();
+    return own ?? (before?.id === id ? before : null);
+  } catch {
+    return null;
+  }
+}
+function rescuedBefore(): Rescued | null {
   try {
     return JSON.parse(localStorage.getItem(RESCUE) ?? "null");
   } catch {
     return null;
+  }
+}
+
+/** The story this tab has open, kept for its reloads; set with `id`. */
+function tabStory(id?: string): string | undefined {
+  try {
+    if (id) sessionStorage.setItem("vxd-writer-tab", id);
+    return sessionStorage.getItem("vxd-writer-tab") ?? undefined;
+  } catch {
+    return id;
   }
 }
 
@@ -784,7 +833,8 @@ function showSaveState(edited = false): void {
       ? "Not saved yet"
       : "Edited"
     : file.savedAt
-      ? `Saved ${time(file.savedAt)}`
+      ? // Where saving is a download, the copy is in Downloads, maybe under another name.
+        `${keepsFiles ? "Saved" : "Downloaded"} ${time(file.savedAt)}`
       : "Saved";
   // Saving automatically stopped: said beside the name until a save goes through.
   if (autosaveStopped && unsaved) return;
@@ -810,13 +860,37 @@ function announce(message: string): void {
 
 function showDraftState(): void {
   const state = $("#draft-state");
+  // A story never saved to a file, in a browser that may clear what pages keep: said, once.
+  const unprotected = protectedDrafts === false;
   state.textContent = !lock.owner
     ? "Not kept: another tab writes the story"
     : file.kept
-      ? "Kept in this browser"
+      ? unprotected
+        ? "Kept in this browser, for now"
+        : "Kept in this browser"
       : "This browser won't keep a draft: save to a file";
+  state.title =
+    file.kept && unprotected
+      ? "This browser may clear what pages keep when space runs short, or after weeks without a visit. Save the story to a file to be safe."
+      : "";
   state.dataset.kept = String(file.kept && lock.owner);
+  if (
+    file.kept &&
+    lock.owner &&
+    !file.handle &&
+    file.saved === "" &&
+    Date.now() - startedAt > 15 * 60_000 &&
+    nudged !== file.id
+  ) {
+    nudged = file.id;
+    notice(
+      `${file.name} is only in this browser so far. Save (${keys("Mod+S")}) keeps a copy as a file.`,
+    );
+  }
 }
+/** When this page opened, and the story already told it is only in this browser. */
+const startedAt = Date.now();
+let nudged = "";
 
 /** The story open, and its words when it was opened here. */
 let session: { id: string; words: number; reached: boolean } | undefined;
@@ -837,7 +911,6 @@ function showCounts({
   if (prefs.goal > 0 && since >= prefs.goal && !session.reached) {
     session.reached = true;
     notice(`${prefs.goal.toLocaleString()} words written: the goal is reached.`);
-    announce("Writing goal reached.");
   }
   $("#counts").textContent = [
     `${plural(words, "word")}${since || goal ? ` (${signed}${goal})` : ""}`,
@@ -952,7 +1025,6 @@ function nextProblem(by: 1 | -1): boolean {
   const all = currentProblems();
   if (all.length === 0) {
     notice("Nothing to put right.");
-    announce("Nothing to put right.");
     return true;
   }
   const here = view.state.selection.main.from;
@@ -968,8 +1040,8 @@ function nextProblem(by: 1 | -1): boolean {
   const fix = next.fix?.label ?? (next.cast ? `Add ${next.cast} to the cast` : undefined);
   const message = /[.!?…]$/.test(next.message) ? next.message : `${next.message}.`;
   const told = `Line ${next.line} (${all.indexOf(next) + 1} of ${all.length}): ${message}${fix ? ` ${keys("Mod+.")}: ${fix}.` : ""}`;
+  // The notice is read out too: it is a live region of its own.
   notice(told);
-  announce(told);
   return true;
 }
 
@@ -1266,6 +1338,8 @@ async function askText(message: string, placeholder: string, action: string): Pr
 
 /** Whether the story may be put aside: saved, or the writer says so. */
 async function mayLeave(): Promise<boolean> {
+  // A story another tab writes is that tab's to save: this one leaves it as it is.
+  if (lockedOut) return true;
   if (!(await mayWrite())) return false;
   if (sameText(text(), file.saved)) return true;
   const answer = await ask(
@@ -1391,39 +1465,41 @@ async function write(handle: FileSystemFileHandle): Promise<boolean> {
   }
   // Changed on disk since the Writer read it (another app, another computer syncing it): asked
   // first, never overwritten unseen; and whichever is kept, the other is in Earlier versions.
-  if (handle === file.handle && file.modified !== undefined) {
-    const disk = await onDisk(handle);
-    if (!disk) {
-      const answer = await ask(
-        `${file.name} couldn’t be read to see whether it changed outside the Writer. Save over it anyway?`,
-        [
-          { label: "Cancel", value: "cancel", main: true },
-          { label: "Save over it", value: "mine" },
-        ],
-      );
-      if (answer !== "mine") return false;
-    } else if (disk.modified !== file.modified && !sameText(disk.text, file.saved)) {
-      const answer = await ask(
-        `${file.name} was changed outside the Writer since it was opened here. Keep both, open the file as it is now, or save over it? The one you don’t keep stays in Earlier versions.`,
-        [
-          { label: "Cancel", value: "cancel" },
-          { label: "Open it as it is now", value: "theirs" },
-          { label: "Save over it", value: "mine" },
-          { label: "Keep both…", value: "both", main: true },
-        ],
-      );
-      if (answer === "theirs") {
-        await readAgain(disk);
-        return false;
-      }
-      if (answer === "both") {
-        // Theirs stays in the file, and among this story's versions; mine goes to a new file.
-        await snapshot("As it was on disk", disk.text);
-        return saveAs();
-      }
-      if (answer !== "mine") return false;
-      await snapshot("As it was on disk, before it was saved over", disk.text);
+  const check =
+    handle === file.handle && file.modified !== undefined
+      ? diskCheck(await onDisk(handle), { modified: file.modified, saved: file.saved })
+      : ({ kind: "write" } as const);
+  if (check.kind === "unread") {
+    const answer = await ask(
+      `${file.name} couldn’t be read to see whether it changed outside the Writer. Save over it anyway?`,
+      [
+        { label: "Cancel", value: "cancel", main: true },
+        { label: "Save over it", value: "mine" },
+      ],
+    );
+    if (answer !== "mine") return false;
+  } else if (check.kind === "changed") {
+    const disk = check.disk;
+    const answer = await ask(
+      `${file.name} was changed outside the Writer since it was opened here. Keep both, open the file as it is now, or save over it? The one you don’t keep stays in Earlier versions.`,
+      [
+        { label: "Cancel", value: "cancel" },
+        { label: "Open it as it is now", value: "theirs" },
+        { label: "Save over it", value: "mine" },
+        { label: "Keep both…", value: "both", main: true },
+      ],
+    );
+    if (answer === "theirs") {
+      await readAgain(disk);
+      return false;
     }
+    if (answer === "both") {
+      // Theirs stays in the file, and among this story's versions; mine goes to a new file.
+      await snapshot("As it was on disk", disk.text);
+      return saveAs();
+    }
+    if (answer !== "mine") return false;
+    await snapshot("As it was on disk, before it was saved over", disk.text);
   }
   const content = text();
   const state = $("#save-state");
@@ -1512,27 +1588,47 @@ function scheduleAutosave(): void {
   autosaveTimer = setTimeout(() => void autosave(), 2000);
 }
 
+/** The change on disk last told about, so that it is told once. */
+let toldDisk = "";
+
 async function autosave(): Promise<void> {
   const handle = file.handle;
-  if (!prefs.autosave || !handle || !lock.owner || lockedOut || sameText(text(), file.saved))
-    return;
-  if (!(await mayWriteNow(handle))) {
+  const base = {
+    on: prefs.autosave,
+    owner: lock.owner && !lockedOut,
+    hasFile: Boolean(handle),
+    unsaved: !sameText(text(), file.saved),
+  };
+  // Nothing to do (off, another tab's, no file, nothing changed): no need to look at the file.
+  const first = autosaveCheck({ ...base, mayWriteNow: true, disk: { kind: "write" } });
+  if (first.kind === "wait" || !handle) return;
+  const may = await mayWriteNow(handle);
+  const check = autosaveCheck({
+    ...base,
+    mayWriteNow: may,
+    disk: may
+      ? diskCheck(await onDisk(handle), { modified: file.modified, saved: file.saved })
+      : { kind: "write" },
+  });
+  if (check.kind === "ask") {
     // The browser asks again after a restart, and only on a click: Save asks, once.
     stopped(`Saving ${file.name} automatically needs your go-ahead: press Save once (Ctrl+S).`);
     return;
   }
-  if (file.modified !== undefined) {
-    const disk = await onDisk(handle);
-    if (!disk || (disk.modified !== file.modified && !sameText(disk.text, file.saved))) {
+  if (check.kind === "stop") {
+    // Said once for each change on disk, not at every pause in typing.
+    const what = check.check;
+    const seen = `${file.id}:${what.kind === "changed" ? what.disk.modified : "unread"}`;
+    if (toldDisk !== seen)
       notice(
-        disk
+        what.kind === "changed"
           ? `${file.name} changed outside the Writer, so it wasn’t saved automatically. Save will ask which to keep.`
           : `${file.name} couldn’t be read, so it wasn’t saved automatically. Save will ask what to do.`,
       );
-      return;
-    }
+    toldDisk = seen;
+    return;
   }
-  if (handle !== file.handle) return;
+  if (check.kind !== "write" || handle !== file.handle) return;
   const content = text();
   const id = file.id;
   try {
@@ -1559,19 +1655,14 @@ function stopped(message: string): void {
   if (autosaveStopped) return;
   autosaveStopped = true;
   notice(message);
-  announce(message);
 }
 
 /**
  * Saving one at a time: a save started while another is under way waits for it, so two never
  * write the same file at once, and the later always lands last.
  */
-let writing: Promise<unknown> = Promise.resolve();
-function queued<T>(work: () => Promise<T>): Promise<T> {
-  const run = writing.then(work, work);
-  writing = run.catch(() => undefined);
-  return run;
-}
+const saves = new SaveQueue();
+const queued = <T>(work: () => Promise<T>): Promise<T> => saves.run(work);
 
 /**
  * A save finished: the story it was for is saved as `content`. If another story is open by now,
@@ -1606,12 +1697,8 @@ let following = Promise.resolve();
 function follow(): Promise<void> {
   following = following.then(async () => {
     if (!lockedOut && lock.owner) return;
-    const draft = await loadDraft();
-    if (!draft || lock.owner) return;
-    if (draft.id !== file.id) {
-      await restore(draft);
-      return;
-    }
+    const draft = await draftById(file.id);
+    if (!draft || lock.owner || draft.id !== file.id) return;
     file.saved = draft.saved;
     file.name = draft.name;
     $("#file-name").textContent = file.name;
@@ -1625,10 +1712,10 @@ function follow(): Promise<void> {
 
 /** Takes the story from the tab that writes it, and reads the draft it kept. */
 async function writeHere(): Promise<boolean> {
-  if (!(await lock.claim(true))) return false;
+  if (!(await lock.claim(file.id, true))) return false;
   lockedOut = false;
   $("#elsewhere").hidden = true;
-  const draft = await loadDraft();
+  const draft = await draftById(file.id);
   if (draft) await restore(draft);
   else view.dispatch({ effects: editable.reconfigure(editability()) });
   view.focus();
@@ -1638,7 +1725,8 @@ $("#edit-here").addEventListener("click", () => void writeHere());
 
 /** Whether this tab may change the story: it writes it, or the writer says it should. */
 async function mayWrite(): Promise<boolean> {
-  if (lock.owner) return true;
+  // With no story open yet, there is nothing another tab could be writing.
+  if (lock.owner || !lock.story) return true;
   const answer = await ask(
     "This story is being written in another tab. Write here instead? The other tab will only read it.",
     [
@@ -1729,6 +1817,16 @@ function insertAtCursor(text: string, select?: string): void {
   if (inside) {
     from = inside.to;
     to = inside.to;
+  }
+  // Inside a word, after it: a pause or a note never splits one.
+  const letter = /[\p{L}\p{N}’'-]/u;
+  if (from === to) {
+    const line = view.state.doc.lineAt(from);
+    let end = from;
+    if (letter.test(view.state.sliceDoc(from - 1, from)))
+      while (end < line.to && letter.test(view.state.sliceDoc(end, end + 1))) end++;
+    from = end;
+    to = end;
   }
   const before = view.state.sliceDoc(Math.max(0, from - 1), from);
   const insert = before && !/\s/.test(before) ? ` ${text}` : text;
@@ -1876,9 +1974,7 @@ async function showDrafts(): Promise<void> {
                 label: "Open",
                 main: true,
                 run: async () => {
-                  if (!(await mayWrite())) return;
                   // The story open now is kept as it is: nothing to ask.
-                  await keep();
                   await restore(draft);
                   void checkDisk();
                 },
@@ -1953,7 +2049,7 @@ function showDetails(): void {
 function compare(kept: Version): void {
   const dialog = $<HTMLDialogElement>("#compare");
   $("#compare-title").textContent = `${when(kept.at)} · ${kept.why}, and now`;
-  const rows = changesOnly(diffLines(kept.text, text()));
+  const rows = withWords(changesOnly(diffLines(kept.text, text())));
   const shown = rows.slice(0, 3000);
   $("#compare-lines").replaceChildren(
     ...shown.map((row) => {
@@ -1961,10 +2057,21 @@ function compare(kept: Version): void {
         row.kind === "gone" ? "del" : row.kind === "new" ? "ins" : "div",
       );
       line.className = `compare-${row.kind}`;
-      line.textContent =
-        row.kind === "skip"
-          ? `${row.count.toLocaleString()} ${row.count === 1 ? "line" : "lines"} the same`
-          : row.text || " ";
+      if (row.kind === "changed")
+        // One line, its words gone struck through and its new ones underlined.
+        line.append(
+          ...row.parts.map((part) => {
+            if (part.kind === "same") return document.createTextNode(part.text);
+            const word = document.createElement(part.kind === "gone" ? "del" : "ins");
+            word.textContent = part.text;
+            return word;
+          }),
+        );
+      else
+        line.textContent =
+          row.kind === "skip"
+            ? `${row.count.toLocaleString()} ${row.count === 1 ? "line" : "lines"} the same`
+            : row.text || " ";
       return line;
     }),
   );
@@ -2025,16 +2132,25 @@ function showOutline(): void {
   const filter = $<HTMLInputElement>("#outline-filter");
   const list = $("#outline-list");
   const scenes = railScenes(current(), sceneNumbers(view.state));
+  // Each scene with the chapter it is in, to tell apart scenes of the same name.
+  let chapter = "";
+  const within = scenes.map((scene) => {
+    if (scene.chapter) chapter = scene.name;
+    return scene.chapter ? "" : chapter;
+  });
   const here = view.state.selection.main.head;
   let active = Math.max(
     0,
     scenes.reduce((last, scene, index) => (scene.from <= here ? index : last), -1),
   );
   const draw = () => {
-    const typed = filter.value.trim().toLowerCase();
+    const typed = filter.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const shown = scenes
       .map((scene, index) => ({ scene, index }))
-      .filter(({ scene }) => !typed || scene.name.toLowerCase().includes(typed));
+      .filter(({ scene, index }) => {
+        const words = `${scene.name} ${within[index]}`.toLowerCase();
+        return typed.every((word) => words.includes(word));
+      });
     if (!shown.some(({ index }) => index === active)) active = shown[0]?.index ?? -1;
     list.replaceChildren(
       ...shown.map(({ scene, index }) => {
@@ -2044,6 +2160,12 @@ function showOutline(): void {
         option.setAttribute("aria-selected", String(index === active));
         if (scene.chapter) option.dataset.chapter = "";
         option.textContent = scene.name;
+        if (within[index]) {
+          const where = document.createElement("span");
+          where.className = "outline-in";
+          where.textContent = within[index] as string;
+          option.append(where);
+        }
         option.addEventListener("click", () => go(index));
         return option;
       }),
@@ -2231,7 +2353,7 @@ const COMMANDS: Record<string, () => unknown> = {
 /** Where the passage the cursor is in starts, or the cursor, for the pickers to find it. */
 function passageAtCursor(): number {
   const head = view.state.selection.main.head;
-  return speechAt(current(), head)?.range.from ?? head;
+  return passageNear(current(), head)?.range.from ?? head;
 }
 
 const SWITCHES = ["color", "names", "directions", "sounds", "vocal", "pages", "notes"] as const;
@@ -2277,6 +2399,12 @@ menus(
       const handle = recentHandles[Number(command.slice(7))];
       if (handle) void openRecent(handle);
     } else void COMMANDS[command]?.();
+    // Back to the text, unless the command opened a dialog or a picker of its own.
+    requestAnimationFrame(() => {
+      const at = document.activeElement;
+      const left = !at || at === document.body || Boolean(at.closest(".menus"));
+      if (left && !document.querySelector("dialog[open]") && !lockedOut) view.focus();
+    });
   },
   () => view.focus(),
 );
@@ -2406,7 +2534,7 @@ async function openDropped(event: DragEvent): Promise<void> {
 window.addEventListener("beforeunload", (event) => {
   rescue();
   // Nothing of this tab's changes kept anywhere: the browser asks first.
-  if ((!file.kept || !lock.owner) && !sameText(text(), file.saved)) event.preventDefault();
+  if (lock.owner && !file.kept && !sameText(text(), file.saved)) event.preventDefault();
 });
 
 $("#side-close").addEventListener("click", () => {
@@ -2431,7 +2559,7 @@ function showWelcome(): void {
       (button.firstElementChild as HTMLElement).textContent = example.title;
       (button.lastElementChild as HTMLElement).textContent = example.byline;
       button.addEventListener("click", async () => {
-        if (!(await mayWrite())) return;
+        if (!(await mayLeave())) return;
         await load({ name: example.name, text: example.text }, { saved: "" });
         view.focus();
       });
@@ -2452,23 +2580,16 @@ async function start(): Promise<void> {
   showSidePanel(prefs.side);
   checkMenu("rail-names", rail.names);
   void showRecent();
-  const draft = await loadDraft();
+  // This tab's own story after a reload; in a new tab, the one written last.
+  const mine = tabStory();
+  const draft = (mine ? await draftById(mine) : undefined) ?? (await loadDraft());
   if (!draft) {
-    // Another tab writes: this one reads, and asks before it writes anything.
-    if (!(await lock.claim())) {
-      lockedOut = true;
-      $("#elsewhere").hidden = false;
-    }
     showWelcome();
     refresh();
     showDraftState();
     return;
   }
   // Another tab writes the story: this one shows it, read only, until asked to write here.
-  if (!(await lock.claim())) {
-    lockedOut = true;
-    $("#elsewhere").hidden = false;
-  }
   await restore(draft);
   if (draft.text !== draft.saved && lock.owner) {
     const back = `Brought back the changes you hadn't saved, from ${time(draft.changedAt)}`;
@@ -2483,9 +2604,8 @@ async function start(): Promise<void> {
  * written down later than it, and the writer back where they were.
  */
 async function restore(draft: Draft): Promise<void> {
-  const late = rescued();
-  const same = late && (late.id ? late.id === draft.id : late.name === draft.name);
-  const newer = late && same && late.changedAt > draft.changedAt ? late : null;
+  const late = rescued(draft.id);
+  const newer = late && late.changedAt > draft.changedAt ? late : null;
   const kept = newer ? { ...draft, ...newer } : draft;
   await load(
     { name: kept.name, text: kept.text, ...(kept.handle ? { handle: kept.handle } : {}) },

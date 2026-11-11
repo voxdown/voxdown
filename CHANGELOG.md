@@ -41,12 +41,22 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - **Go to a chapter or scene** (Ctrl+Shift+O) finds one as its name is typed. F8 and Shift+F8 go to the next warning and the one before, and say it; Ctrl+. puts it right. Ctrl+I and Ctrl+B put italics and bold in or take them out, and the editor shows them.
 - A tab that only reads follows the one that writes, and saves nothing over it; switching **Save automatically** off stops the save waiting. The speaker and direction pickers stay open as the page scrolls; the menu bar is one stop for Tab, and Escape on it goes back to the text; Undo from a field in the cast undoes in the story; an opened story is ready to type in.
 - Cast gives each character's words and goes to their next line. The status line counts the words written since the story was opened. Headings and scene breaks go in with one blank line either side, no more. The script's small labels are 11 px at least and readable in both themes; on a phone, the bar is two rows.
-- The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings, emphasis, inserts, comparing and keeping versions), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
+- Each story has its own lock: two tabs write two stories side by side, a story open in one tab opens in another to read and follows it, and each tab opens its own story again when reloaded.
+- **Cast** says who each character is and how they sound (`about`), and **File › Story details** sets the title, subtitle, author, language and narrator, without YAML. A name a letter or two from one in the cast offers that name as its fix.
+- Ctrl+K and Ctrl+J find the passage from its mark, its direction or the start of its line, and bring it into view before the picker opens; after a menu command, the keyboard is back in the text; menus, pickers, the outline and the cast show where the keyboard is.
+- A warning's fix clicked after typing elsewhere is made where the warning is now; a pause or a note goes after the word it would split; the line being written stays clear of the window's foot and of the notices.
+- **Earlier versions** keeps the last twenty of the last ten minutes, then one every five minutes for the hour, and older ones however often the story is saved, within 50 million characters in all; **Compare** shows the words changed within a line, and a name changed all through a book line by line. **Go to** shows each scene's chapter; a crowded rail draws its scenes as ticks.
+- Typewriter scrolling, and a writing goal for the sitting. The status line says when the browser hasn't promised to keep the drafts, and a story only ever kept in the browser is reminded to be saved; where saving is a download, it says Downloaded.
+- The site deploys only once the browser check passes; `pnpm check:all` runs every check.
+- The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings, emphasis, inserts, comparing and keeping versions, words, saving decisions and the save queue), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
 
 **@voxdown/editor**
 - In a story longer than 30,000 characters, the marks move along with each change and are worked out afresh once typing pauses (`settleMarks`, `marksPending`, `FRESH_BELOW`): reading the whole story on every key took 110 ms at 100,000 words.
 - `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
 - Lines printed but not read aloud are easier to read, and a page turn's label is 11 px.
+
+**voxdown**
+- `setAbout(story, handle, about)` sets what the cast says about a character, or takes it out; a character not in the cast is added, and one written as a full name alone becomes a map that keeps it.
 
 **The playground**
 - Undo and redo, and find and replace: Ctrl+Z did nothing. Opening another story starts a new undo history.

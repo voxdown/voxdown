@@ -356,6 +356,21 @@ body.writer {
   height: 8px;
   border-width: 1.5px;
 }
+.scene-rail-scenes [data-minor] .scene-rail-node {
+  width: 5px;
+  height: 5px;
+  border: 0;
+  background: var(--quiet);
+}
+.scene-rail-scenes [data-minor] button[aria-current="true"] .scene-rail-node {
+  width: 8px;
+  height: 8px;
+  background: var(--pencil);
+}
+.scene-rail-window[data-thin] {
+  border: 0;
+  background: color-mix(in srgb, var(--pencil) 24%, transparent);
+}
 .scene-rail-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -637,10 +652,11 @@ body.writer {
   flex: none;
   white-space: nowrap;
 }
-/* The welcome has no story behind it: no scenes, no counts. */
+/* The welcome has no story behind it: no scenes, no counts, nothing kept. */
 body[data-welcome] .scene-rail,
 body[data-welcome] #counts,
-body[data-welcome] #cursor-place {
+body[data-welcome] #cursor-place,
+body[data-welcome] #draft-state {
   visibility: hidden;
 }
 .elsewhere {
@@ -1166,6 +1182,22 @@ body[data-welcome] #cursor-place {
 .compare-new::before {
   content: "+";
 }
+.compare-changed::before {
+  content: "~";
+  display: inline-block;
+  width: 1.2em;
+  margin-left: -1.2em;
+  color: var(--quiet);
+}
+.compare-changed del {
+  background: color-mix(in srgb, #dc2626 16%, transparent);
+  text-decoration-color: color-mix(in srgb, #dc2626 80%, transparent);
+}
+.compare-changed ins {
+  background: color-mix(in srgb, #16a34a 16%, transparent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, #16a34a 80%, transparent);
+}
 .compare-skip {
   color: var(--quiet);
   font-style: italic;
@@ -1223,6 +1255,19 @@ body[data-welcome] #cursor-place {
 }
 #outline-list [role="option"][aria-selected="true"] {
   box-shadow: inset 3px 0 0 var(--brand);
+}
+#outline-list [role="option"] {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.outline-in {
+  color: var(--quiet);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
 }
 .outline-none {
   padding: 0.5rem 0.6rem;
@@ -1296,7 +1341,7 @@ body[data-welcome] #cursor-place {
   padding: 1.2rem 1.3rem 1rem;
   background: var(--paper);
   color: var(--ink);
-  max-width: 28rem;
+  max-width: min(36rem, 94vw);
   box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
 }
 .ask::backdrop {
@@ -1307,8 +1352,12 @@ body[data-welcome] #cursor-place {
 }
 .ask-buttons {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+.ask-buttons .button {
+  white-space: nowrap;
 }
 
 /* In the dark, the brand's buttons take dark ink: white on its teal is too faint to read. */
@@ -1480,4 +1529,38 @@ body[data-welcome] #cursor-place {
   .save-button {
     order: 3;
   }
+}
+
+/* Where the keyboard is, seen at a glance: a ring in the pencil colour, 3:1 or more on the paper
+   of either theme. */
+.menu-button:focus-visible,
+.menu-list [role^="menuitem"]:focus-visible,
+.speaker-choice:focus-visible,
+.stretch-tools button:focus-visible,
+.cast-find:focus-visible,
+.cast-add:focus-visible,
+.list-items button:focus-visible,
+.side-tab:focus-visible,
+.scene-rail button:focus-visible,
+.warning-list button:focus-visible {
+  outline: 2px solid var(--pencil);
+  outline-offset: -2px;
+}
+#outline-list [role="option"][aria-selected="true"] {
+  box-shadow: inset 0 0 0 2px var(--pencil);
+}
+.cast-handle input:focus,
+.cast-name:focus,
+.cast-about:focus {
+  box-shadow: 0 0 0 1px var(--pencil);
+}
+
+/* The part of the side the cursor is in: a tint behind its words, which wraps with them, rather
+   than a box around each of its lines. */
+.side-sheet .linked {
+  outline: none;
+  background: color-mix(in srgb, var(--pencil) 13%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  border-radius: 3px;
 }

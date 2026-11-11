@@ -582,23 +582,63 @@ if (keptIds.length >= 36) problems.push("writer: saved drafts beyond the limit a
 await many.close();
 console.log("writer: recovering a draft, going back to a version: ok");
 
-// Round two: a second tab on the welcome reads only, and asks before writing; saving
+// Round two: two tabs write two stories; saving
 // automatically says when it stops; a long file name never pushes the bar off the window; the
 // side follows a jump from the rail in a long story; an insert never lands inside another mark.
 const two = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+// Two tabs, two stories: each writes its own. A new tab opens the story written last, to read
+// while the other tab writes it; a new story there is its own, written there, with nothing asked.
 const firstTab = await two.newPage();
-watch(firstTab, "writer welcome tab 1");
+watch(firstTab, "writer two stories, tab 1");
 await firstTab.goto(`${base}/writer/`);
-await firstTab.waitForSelector("#welcome:not([hidden])");
+await firstTab.click(`.welcome-example[data-name="${dragonName}"]`);
+await firstTab.waitForSelector("#welcome", { state: "hidden" });
+await firstTab.click(".cm-content");
+await firstTab.keyboard.press("Control+End");
+await firstTab.keyboard.type(" Written in the first tab.");
+await firstTab.waitForTimeout(900);
 const secondTab = await two.newPage();
-watch(secondTab, "writer welcome tab 2");
+watch(secondTab, "writer two stories, tab 2");
 await secondTab.goto(`${base}/writer/`);
 await secondTab.waitForSelector("#elsewhere:not([hidden])");
-await secondTab.click(`.welcome-example[data-name="${dragonName}"]`);
-await secondTab.waitForSelector("#ask[open]");
-if (!(await secondTab.textContent("#ask-message"))?.includes("another tab"))
-  problems.push("writer: a second tab writes over the first without asking");
-await secondTab.click('#ask-buttons button[value="cancel"]');
+await secondTab.click("#file-menu-button");
+await secondTab.click('[data-command="new"]');
+await secondTab.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
+);
+if (await secondTab.isVisible("#ask[open]"))
+  problems.push("writer: a new story in a tab that reads another asks before it opens");
+if (!(await secondTab.isHidden("#elsewhere")))
+  problems.push("writer: a new story in a second tab can't be written there");
+await secondTab.click(".cm-content");
+await secondTab.keyboard.press("Control+End");
+await secondTab.keyboard.type("Written in the second tab.");
+await firstTab.keyboard.type(" And more in the first.");
+await secondTab.waitForTimeout(1200);
+if (!(await firstTab.isHidden("#elsewhere")))
+  problems.push("writer: a story opened in a second tab took the first tab's story from it");
+const bothKept = await secondTab.evaluate(
+  () =>
+    new Promise((resolve) => {
+      const request = indexedDB.open("voxdown-writer");
+      request.onsuccess = () => {
+        const all = request.result.transaction("documents").objectStore("documents").getAll();
+        all.onsuccess = () => resolve(all.result.map((draft) => draft.text));
+      };
+    }),
+);
+if (
+  !bothKept.some((text) => text.includes("Written in the first tab. And more in the first.")) ||
+  !bothKept.some((text) => text.includes("Written in the second tab."))
+)
+  problems.push("writer: two tabs writing two stories didn't each keep their own");
+// Reloaded, each tab opens its own story again.
+await secondTab.reload();
+await secondTab.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
+);
+if (!(await secondTab.isHidden("#elsewhere")))
+  problems.push("writer: a tab reloaded doesn't write its own story again");
 await two.close();
 
 const stops = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -1086,7 +1126,9 @@ if ((await keptBefore.count()) === 0)
 else {
   await keptBefore.locator("button", { hasText: "Compare" }).click();
   await sync.waitForSelector("#compare[open]");
-  const gone = await sync.locator("#compare-lines .compare-gone").allInnerTexts();
+  const gone = await sync
+    .locator("#compare-lines .compare-gone, #compare-lines .compare-changed del")
+    .allInnerTexts();
   if (!gone.some((line) => line.includes("Mine.")))
     problems.push("writer: comparing a version doesn't show what it had that is gone now");
   await sync.click('#compare button[value="close"]');
@@ -1141,6 +1183,13 @@ await author.keyboard.press("Enter");
 await settled();
 if (!/@\(proudly\) He had polished/.test(await kept()))
   problems.push("writer: the direction picker didn't set “proudly”");
+// Ctrl+K from the start of a line with a mark on it opens the picker for that mark's passage.
+await author.locator(".cm-line", { hasText: "Most of them" }).first().click();
+await author.keyboard.press("Home");
+await author.keyboard.press("Control+k");
+if (!(await author.isVisible(".speaker-choice")))
+  problems.push("writer: Ctrl+K at the start of a line with a mark finds no passage");
+await author.keyboard.press("Escape");
 await author.keyboard.press("Control+f");
 if (!(await author.isVisible(".cm-search")))
   problems.push("writer: Ctrl+F doesn't open search and replace");
@@ -1257,7 +1306,18 @@ await maker.click("#insert-menu-button");
 await maker.click('[data-command="insert-break"]');
 await maker.click("#insert-menu-button");
 await maker.click('[data-command="insert-page"]');
+await maker.waitForTimeout(300);
+// After a command from a menu, the keyboard is back in the text.
+if (!(await maker.evaluate(() => document.activeElement?.classList.contains("cm-content"))))
+  problems.push("writer: after Insert › A page turn, the focus stays on the menu");
+// A pause put in mid-word goes after the word.
+await maker.keyboard.type(" Then the training began.");
+for (let i = 0; i < 10; i++) await maker.keyboard.press("ArrowLeft");
+await maker.click("#insert-menu-button");
+await maker.click('[data-command="insert-pause"]');
 await maker.waitForTimeout(900);
+if (!(await draftOf()).includes("training {pause 1s}"))
+  problems.push("writer: Insert › A pause split a word");
 const made = await draftOf();
 if (!made.includes("[an owl hoots]")) problems.push("writer: Insert › A sound… put nothing in");
 if (!/\n\* \* \*\n/.test(made)) problems.push("writer: Insert › A scene break put nothing in");

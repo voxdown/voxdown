@@ -88,6 +88,10 @@ describe("lines", () => {
     expect(csv).toBe(
       'kind,speaker,direction,text,scene,page\r\nspeech,Gerald,"dry, very","He said ""no"", twice.",1,1\r\n',
     );
+    // Other columns, in the order given: where each line is, for a producer's cue sheet.
+    expect(linesToCsv(lines(parse("Hello.\n\n@Gerald “Hi.”")), ["line", "speaker", "text"])).toBe(
+      "line,speaker,text\r\n1,Narrator,Hello.\r\n3,Gerald,Hi.\r\n",
+    );
   });
 
   it("gives each character's lines as plain text, in cast order", () => {

@@ -230,14 +230,20 @@ function positions(source: string): (offset: number) => { line: number; column: 
 
 const CSV_COLUMNS = ["kind", "speaker", "direction", "text", "scene", "page"] as const;
 
-/** The lines as CSV (RFC 4180): kind, speaker, direction, text, scene, page. */
-export function linesToCsv(rows: readonly ScriptLine[]): string {
+/**
+ * The lines as CSV (RFC 4180): kind, speaker, direction, text, scene, page; or the columns given,
+ * in their order, such as `[...]` with `"line"` added for where each is in the file.
+ */
+export function linesToCsv(
+  rows: readonly ScriptLine[],
+  columns: readonly (keyof ScriptLine)[] = CSV_COLUMNS,
+): string {
   const cell = (value: string | number | null) => {
     const text = value === null ? "" : String(value);
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
-  const body = rows.map((row) => CSV_COLUMNS.map((column) => cell(row[column])).join(","));
-  return `${[CSV_COLUMNS.join(","), ...body].join("\r\n")}\r\n`;
+  const body = rows.map((row) => columns.map((column) => cell(row[column])).join(","));
+  return `${[columns.join(","), ...body].join("\r\n")}\r\n`;
 }
 
 /**

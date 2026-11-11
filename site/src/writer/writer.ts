@@ -594,6 +594,13 @@ function apply(changes: TextChange[], declined: string): boolean {
   return true;
 }
 
+/** The file's name in the bar, whole on hover where the bar has no room for it. */
+function showFileName(name: string): void {
+  const shown = $("#file-name");
+  shown.textContent = name;
+  shown.title = name;
+}
+
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 /** A word to the writer at the foot of the manuscript, for a few seconds. */
 /** Whether the notice up is about a place in the text, gone once the text changes. */
@@ -653,7 +660,7 @@ async function load(
   storyCommands(true);
   for (const behind of ["#editor", "#scene-rail", "#side"]) $(behind).inert = false;
   overlaid();
-  $("#file-name").textContent = file.name;
+  showFileName(file.name);
   refresh();
   cursorMoved();
   // Ready to type, except on a touch screen, where that would bring up its keyboard unasked.
@@ -1807,7 +1814,7 @@ const saving = new SaveFlow({
     if (title !== undefined) shown.title = title;
   },
   named: (name) => {
-    $("#file-name").textContent = name;
+    showFileName(name);
   },
   remember: async (handle) => {
     await rememberFile(handle.name, handle);
@@ -1874,7 +1881,7 @@ function follow(): Promise<void> {
     if (!draft || lock.owner || draft.id !== file.id) return;
     file.saved = draft.saved;
     file.name = draft.name;
-    $("#file-name").textContent = file.name;
+    showFileName(file.name);
     if (draft.handle) file.handle = draft.handle;
     file.modified = draft.modified;
     replaceText(draft.text, "follow");
@@ -2608,7 +2615,10 @@ const COMMANDS: Record<string, () => unknown> = {
   // A cue sheet: every line, sound, pause and page turn in order, in plain words.
   "export-csv": () =>
     download(
-      linesToCsv(lines(current()).map((line) => ({ ...line, text: plainText(line.text) }))),
+      linesToCsv(
+        lines(current()).map((line) => ({ ...line, text: plainText(line.text) })),
+        ["line", "kind", "speaker", "direction", "text", "scene", "page"],
+      ),
       `${baseName()}.csv`,
       "text/csv",
     ),

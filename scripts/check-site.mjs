@@ -1683,8 +1683,10 @@ for (const [command, name] of [
   // The cue sheet has the sounds and the pauses, in plain words.
   if (command === "export-csv") {
     const sheet = readFileSync(await download.path(), "utf8");
-    if (!/^sound,/m.test(sheet) || !/^pause,/m.test(sheet))
+    if (!/^\d+,sound,/m.test(sheet) || !/^\d+,pause,/m.test(sheet))
       problems.push("writer: the CSV leaves out the sounds or the pauses");
+    if (!sheet.startsWith("line,kind,speaker,direction,text,scene,page"))
+      problems.push("writer: the CSV doesn't say where each line is");
   }
   // The production script, for voice tools: every line with its id, the pauses with their length.
   if (command === "export-production") {

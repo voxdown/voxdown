@@ -750,6 +750,11 @@ body[data-welcome] #draft-state {
 }
 .stretch-tools .how {
   color: var(--mark-direction);
+  /* A long direction is shortened here; the whole of it is in the picker and on hover. */
+  display: inline-block;
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .stretch-tools .how.set {
   font-style: italic;
@@ -1491,6 +1496,17 @@ body[data-welcome] #draft-state {
 @media (max-width: 1180px) {
   .appbar .wordmark .product {
     display: none;
+  }
+}
+/* Narrower still, the logo alone: the file's name needs the room more. */
+@media (max-width: 1100px) and (min-width: 701px) {
+  .appbar .wordmark .word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

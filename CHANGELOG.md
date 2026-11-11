@@ -75,6 +75,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - A long book is read once each time typing pauses, in a worker, for everything the page shows (the editor's marks, the rail, the counts, the warnings, the cast, the passages under the pointer, the side), and the side is laid out again only once typing has stopped: writing word by word in a 126,000-word book, nothing held the page for more than 50 ms (it was held 67 times, up to 106 ms).
 - Story details names a new story by its first heading; a detail added goes before the cast. Headings show their level, and what they are for when not both heard and printed. A reloaded writing tab keeps its story. Insert › A sound leaves the cursor after it; reading aloud says when there are no voices.
 - Giving a passage to someone, or saying how it is said, leaves no mark that changes nothing: `@Wanda “Fine!” @Wanda “Hm.”` becomes `@Wanda “Fine!” “Hm.”`, as long as every word is heard as before.
+- The cue sheet (CSV) says on which line of the file each part is. The bar over a passage goes in the margin where the page has room, says a long direction in short, and sits by the passage's words, not its chip. The file's name has more room in a narrow window, and shows whole on hover.
 - The site deploys only once the browser check passes; `pnpm check:all` runs every check.
 - The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings, emphasis, inserts, comparing and keeping versions, words, saving decisions and the save queue), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
 
@@ -82,7 +83,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - In a story longer than 30,000 characters, the marks move along with each change and are worked out afresh once typing pauses (`settleMarks`, `marksPending`, `FRESH_BELOW`): reading the whole story on every key took 110 ms at 100,000 words.
 - `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
 - Lines printed but not read aloud are easier to read, and a page turn's label is 11 px.
-- A space typed straight after a name picked from the list, which already has one, isn't doubled.
+- A space typed straight after a name picked from the list, which already has one, isn't doubled. `@` offers the names the story uses that aren't in the cast yet too, after the cast's.
 - Enter after the last word of a quote never closed, at the end of its line, closes it there; Enter again straight after Enter closed a sound or an instruction ends the line, without the space it left.
 - `marksElsewhere`: a host can work a long story's marks out away from the page (in a worker); the editor puts them in when the text is still the same. Headings are drawn by their level, with a tag when hidden, book only or audio only.
 - A group that keeps its lines from being heard or printed (`::: {book only}`, `{audio only}`, `{hidden}`) says so on its line, and its lines not heard look it, as a paragraph's own do.
@@ -91,6 +92,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - A direction longer than 20 characters is written in the line, in brackets, where it wraps, rather than over the first word, where it ran past the line.
 
 **voxdown**
+- `linesToCsv(rows, columns)` writes the columns given, such as `line` for where each part is.
 - `setAbout(story, handle, about)` sets what the cast says about a character, or takes it out; a character not in the cast is added, and one written as a full name alone becomes a map that keeps it.
 
 **The playground**

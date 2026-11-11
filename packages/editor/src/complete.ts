@@ -141,12 +141,18 @@ export function completions(characters: () => readonly Character[]): Extension {
       const from = context.pos - typed.length;
       return {
         from,
+        // The cast, then names the story uses that aren't in it yet (but not the name being
+        // typed, which is one of those until it's finished).
         options: characters()
-          .filter((c) => !c.provisional)
+          .filter((c) => !c.provisional || c.handle.toLowerCase() !== typed.toLowerCase())
           .map(
             (c): Completion => ({
               label: c.handle,
-              ...(c.name !== c.handle ? { detail: c.name } : {}),
+              ...(c.provisional
+                ? { detail: "not in the cast", boost: -1 }
+                : c.name !== c.handle
+                  ? { detail: c.name }
+                  : {}),
               type: "variable",
               apply: spaced(c.handle),
             }),

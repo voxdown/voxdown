@@ -39,7 +39,7 @@ A line’s `items` are, in source order: `speech` (`speaker`, `direction`, `ownD
 ## The spoken script as data
 
 - **`lines(story, { speechOnly? })`**: one `ScriptLine` per thing heard: `kind` (`speech`, `vocal`, `sound`, `page`, `pause`, `instruction`, `note`, `image`), `speaker`, `direction`, `text`, `name` (an instruction’s), `heading` (a heading’s level), `scene` (from 1), `sceneTitle`, `page` (the page it is on), and its `line` and `column`. The shape multi-voice text-to-speech tools take.
-- **`linesToCsv(rows)`**: `kind,speaker,direction,text,scene,page`, RFC 4180.
+- **`linesToCsv(rows, columns?)`**: `kind,speaker,direction,text,scene,page`, RFC 4180; or the columns given, such as `line` added.
 - **`textByCharacter(story)`**: a `Map` from each character to what they say, one line per speech, for a performer’s sides.
 
 ## Writing back

@@ -658,7 +658,14 @@ export class StretchTools {
       markFrom !== undefined &&
       view.state.doc.lineAt(markFrom).number === view.state.doc.lineAt(speech.from).number;
     const anchor = sameLine ? (markFrom as number) : speech.from;
-    const coords = view.coordsAtPos(anchor, 1);
+    // Where the passage's words start, a character on the page (a mark may be drawn as a chip),
+    // and its mark's left edge when the mark is on the same line.
+    const words = view.coordsAtPos(Math.min(speech.from + 1, view.state.doc.length), -1);
+    const start = view.coordsAtPos(anchor, 1);
+    const coords =
+      words && start && Math.abs(start.top - words.top) < 4
+        ? { top: words.top, bottom: words.bottom, left: Math.min(start.left, words.left) }
+        : (words ?? start);
     if (!coords) return;
     this.shown = speech.from;
     const who = this.part(".who");
@@ -669,10 +676,21 @@ export class StretchTools {
     (who.querySelector(".who-name") as HTMLElement).textContent = speech.speaker;
     const how = this.part(".how");
     how.textContent = speech.ownDirection ? `(${speech.ownDirection})` : "+ how";
+    how.title = speech.ownDirection ? `How it’s said: ${speech.ownDirection}` : "How it’s said";
     how.classList.toggle("set", Boolean(speech.ownDirection));
     this.bar.hidden = false;
     const box = host.getBoundingClientRect();
     const height = this.bar.offsetHeight;
+    const width = this.bar.offsetWidth;
+    // In the margin beside the passage's line where the page has room for it, so it covers no
+    // words; else over the line above, or under its own at the top of the view.
+    const content = view.contentDOM.getBoundingClientRect();
+    const margin = content.left - box.left;
+    if (margin >= width + 12) {
+      this.bar.style.left = `${margin - width - 8}px`;
+      this.bar.style.top = `${Math.max(4, coords.top - box.top + (coords.bottom - coords.top - height) / 2)}px`;
+      return;
+    }
     const top = coords.top - box.top - height - 3;
     this.bar.style.left = `${Math.max(4, coords.left - box.left - 4)}px`;
     this.bar.style.top = `${top < 4 ? coords.bottom - box.top + 3 : top}px`;

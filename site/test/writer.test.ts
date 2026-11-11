@@ -3,18 +3,25 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
 import { describe, expect, it } from "vitest";
-import { parse } from "voxdown";
+import { applyChanges, parse } from "voxdown";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, toggleEmphasis } from "../src/writer/emphasis";
 import { rankScenes } from "../src/writer/outline";
 import { afterParagraph, moveParagraph } from "../src/writer/paragraphs";
 import { nearestName, problems } from "../src/writer/problems";
 import { railAt, railPoints, railScenes, railY } from "../src/writer/rail";
+import { Rescue, tabStory } from "../src/writer/rescue";
 import { SaveQueue, autosaveCheck, checkDisk, sameText } from "../src/writer/saving";
 import { moveSection } from "../src/writer/sections";
 import { sidesHtml, sidesOf, sidesText } from "../src/writer/sides";
 import { thinVersions } from "../src/writer/store";
-import { speechAt, speechOfMark } from "../src/writer/stretch";
+import {
+  composed,
+  dialogueTag,
+  nextNarratedQuote,
+  speechAt,
+  speechOfMark,
+} from "../src/writer/stretch";
 import { fileNameFor, glimpse, listening, wordCount } from "../src/writer/words";
 
 describe("the scene rail's layout", () => {
@@ -470,34 +477,40 @@ describe("saving", () => {
 });
 
 describe("moving a scene or a chapter", () => {
-  const story = "# One\n\nFirst.\n\n* * *\n\nSecond.\n\n# Two\n\nThird.";
-  const move = (doc: string, cursor: number, starts: number[], by: 1 | -1) => {
-    const state = EditorState.create({ doc, selection: EditorSelection.cursor(cursor) });
-    const spec = moveSection(state, starts, by);
-    if (!spec) return null;
+  const story =
+    "# One\n\nOpening.\n\n## A\n\nFirst.\n\n* * *\n\nSecond.\n\n# Two\n\n## C\n\nThird.";
+  const at = (sign: string) => story.indexOf(sign);
+  const chapters = [at("# One"), at("# Two")];
+  const scenes = [at("## A"), at("* * *"), at("## C")];
+  const move = (cursor: number, starts: number[], by: 1 | -1, walls: number[] = []) => {
+    const state = EditorState.create({ doc: story, selection: EditorSelection.cursor(cursor) });
+    const spec = moveSection(state, starts, by, walls);
+    if (typeof spec === "string") return spec;
     const next = state.update(spec).state;
     return { text: next.doc.toString(), at: next.selection.main.head };
   };
-  const starts = (doc: string, signs: string[]) => signs.map((sign) => doc.indexOf(sign));
 
-  it("moves the scene the cursor is in past the next, the blank lines kept, the cursor with it", () => {
-    const done = move(story, story.indexOf("First"), starts(story, ["# One", "* * *", "# Two"]), 1);
-    expect(done?.text).toBe("* * *\n\nSecond.\n\n# One\n\nFirst.\n\n# Two\n\nThird.");
-    expect(done?.text.slice(done.at, done.at + 6)).toBe("First.");
+  it("moves a scene past the next in its chapter, the blank lines kept, the cursor with it", () => {
+    const done = move(at("First"), scenes, 1, chapters);
+    expect(typeof done === "string" ? done : done.text).toBe(
+      "# One\n\nOpening.\n\n* * *\n\nSecond.\n\n## A\n\nFirst.\n\n# Two\n\n## C\n\nThird.",
+    );
+    if (typeof done !== "string") expect(done.text.slice(done.at, done.at + 6)).toBe("First.");
   });
 
-  it("moves the last chapter up, and gives the end of the story to the one now last", () => {
-    const done = move(story, story.indexOf("Third"), starts(story, ["# One", "# Two"]), -1);
-    expect(done?.text).toBe("# Two\n\nThird.\n\n# One\n\nFirst.\n\n* * *\n\nSecond.");
-    expect(done?.text.slice(done.at, done.at + 6)).toBe("Third.");
+  it("never takes a scene past its chapter's heading, nor moves its opening words", () => {
+    expect(move(at("First"), scenes, -1, chapters)).toBe("edge");
+    expect(move(at("Second"), scenes, 1, chapters)).toBe("edge");
+    expect(move(at("Opening"), scenes, 1, chapters)).toBe("outside");
   });
 
-  it("has nothing to move past at either end, nor before the first", () => {
-    const at = starts(story, ["# One", "# Two"]);
-    expect(move(story, story.indexOf("First"), at, -1)).toBeNull();
-    expect(move(story, story.indexOf("Third"), at, 1)).toBeNull();
-    const titled = `Title.\n\n${story}`;
-    expect(move(titled, 2, starts(titled, ["# One", "# Two"]), 1)).toBeNull();
+  it("moves the last chapter up, the end of the story going to the one now last", () => {
+    const done = move(at("Third"), chapters, -1);
+    expect(typeof done === "string" ? done : done.text).toBe(
+      "# Two\n\n## C\n\nThird.\n\n# One\n\nOpening.\n\n## A\n\nFirst.\n\n* * *\n\nSecond.",
+    );
+    expect(move(at("Opening"), chapters, -1)).toBe("edge");
+    expect(move(at("Third"), chapters, 1)).toBe("edge");
   });
 });
 
@@ -551,5 +564,86 @@ describe("sides", () => {
     expect(html).toContain("&lt;b&gt;&amp;&lt;/b&gt;");
     expect(html).toContain("<title>A &amp; B: sides</title>");
     expect(html).toContain(".side + .side { break-before: page; }");
+  });
+});
+
+describe("two edits as one", () => {
+  it("makes the second in the text the first made, as one set of changes", () => {
+    const source = "abc def";
+    const first = [{ from: 0, to: 0, insert: "@X " }];
+    const second = [{ from: 7, to: 10, insert: "DEF\nmore" }];
+    expect(applyChanges(source, composed(source, first, second))).toBe(
+      applyChanges(applyChanges(source, first), second),
+    );
+  });
+});
+
+describe("attributing quotes", () => {
+  it("reads who a dialogue tag names, and nothing from a pronoun", () => {
+    expect(dialogueTag("", " asked Mara.")).toBe("Mara");
+    expect(dialogueTag("", ", Mara said softly.")).toBe("Mara");
+    expect(dialogueTag("Then Tom whispered, ", "")).toBe("Tom");
+    expect(dialogueTag("", " she said.")).toBeUndefined();
+    expect(dialogueTag("", " The wind blew.")).toBeUndefined();
+  });
+
+  it("finds the next quote no one is marked to say, round to the first", () => {
+    const story = parse("“One,” said Ann. @Bob “Two.”\n\nThe end. “Three?” asked Cy.");
+    const first = nextNarratedQuote(story, -1);
+    expect(first?.text).toBe("One,");
+    expect(nextNarratedQuote(story, first?.from ?? 0)?.text).toBe("Three?");
+    expect(nextNarratedQuote(story, story.source.length)?.text).toBe("One,");
+  });
+});
+
+describe("words rescued as the page goes", () => {
+  const memory = () => {
+    const kept = new Map<string, string>();
+    return {
+      kept,
+      getItem: (key: string) => kept.get(key) ?? null,
+      setItem: (key: string, value: string) => void kept.set(key, value),
+      removeItem: (key: string) => void kept.delete(key),
+    };
+  };
+  const words = { name: "a.vxd", text: "Last words.", saved: "", changedAt: 5 };
+
+  it("keeps each story's own, and lets them go", () => {
+    const storage = memory();
+    const rescue = new Rescue(storage);
+    rescue.write("a", words);
+    rescue.write("b", { ...words, text: "Other." });
+    expect(rescue.read("a")?.text).toBe("Last words.");
+    expect(rescue.read("b")?.text).toBe("Other.");
+    rescue.forget("a");
+    expect(rescue.read("a")).toBeNull();
+    expect(rescue.read("b")?.text).toBe("Other.");
+  });
+
+  it("reads the one written before each story had its own, for its story only", () => {
+    const storage = memory();
+    storage.setItem("vxd-writer-rescue", JSON.stringify({ ...words, id: "old" }));
+    const rescue = new Rescue(storage);
+    expect(rescue.read("old")?.text).toBe("Last words.");
+    expect(rescue.read("new")).toBeNull();
+    rescue.forget("old");
+    expect(storage.kept.size).toBe(0);
+  });
+
+  it("survives a storage that refuses, and a tab remembers its story", () => {
+    const full = {
+      getItem: () => "{not json",
+      setItem: () => {
+        throw new Error("full");
+      },
+      removeItem: () => {},
+    };
+    const rescue = new Rescue(full);
+    expect(() => rescue.write("a", words)).not.toThrow();
+    expect(rescue.read("a")).toBeNull();
+    const session = memory();
+    expect(tabStory(session)).toBeUndefined();
+    expect(tabStory(session, "s1")).toBe("s1");
+    expect(tabStory(session)).toBe("s1");
   });
 });

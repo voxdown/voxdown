@@ -6,7 +6,7 @@ import {
   closeBrackets,
 } from "@codemirror/autocomplete";
 import { EditorState, type Extension } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import type { Character } from "./decorations";
 import { marksField } from "./decorations";
 
@@ -84,6 +84,9 @@ function asTyped(typed: string, labels: readonly string[], closer: string): Comp
   return [{ label: t, detail: "as typed", type: "text", apply: closing(t, closer), boost: 99 }];
 }
 
+/** Where a picked name left the cursor after its space, in each editor: a space typed there is had. */
+const spacedAt = new WeakMap<EditorView, number>();
+
 /** A name picked from the list is followed by a space, ready for `(how)` or the quote. */
 function spaced(handle: string) {
   return (view: EditorView, _completion: Completion, from: number, to: number) => {
@@ -95,8 +98,16 @@ function spaced(handle: string) {
       selection: { anchor: from + handle.length + 1 },
       userEvent: "input.complete",
     });
+    spacedAt.set(view, from + handle.length + 1);
   };
 }
+
+/** The space a writer types out of habit straight after a picked name, which already has one. */
+const habitSpace = EditorView.inputHandler.of((view, from, to, text) => {
+  const at = spacedAt.get(view);
+  spacedAt.delete(view);
+  return text === " " && from === to && from === at && view.state.sliceDoc(from - 1, from) === " ";
+});
 
 /** A group's direction ends its `:::` line: words already after it go to the next line. */
 function groupDirection(label: string) {
@@ -250,6 +261,7 @@ export function completions(characters: () => readonly Character[]): Extension {
   };
 
   return [
+    habitSpace,
     // ( [ { close themselves; quotes are left to smart quotes.
     EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "[", "{"] } }]),
     closeBrackets(),

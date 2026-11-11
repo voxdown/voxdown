@@ -7,6 +7,10 @@
 export const wordCount = (content: string): number =>
   content.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
 
+/** A count of words, as said: 1 word, 2 words, 1,234 words. */
+export const words = (count: number): string =>
+  `${count.toLocaleString()} ${count === 1 ? "word" : "words"}`;
+
 /** How long words take to hear, read aloud at a storyteller's pace (150 words a minute). */
 export function listening(words: number): string {
   const minutes = words / 150;

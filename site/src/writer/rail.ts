@@ -157,7 +157,8 @@ export class SceneRail {
     } catch {
       // Nothing kept.
     }
-    return window.matchMedia("(min-width: 900px)").matches;
+    // Names beside the nodes where the window is wide enough to give them room.
+    return window.matchMedia("(min-width: 1440px)").matches;
   }
 
   private part<T extends HTMLElement = HTMLElement>(selector: string): T {

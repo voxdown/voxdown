@@ -87,6 +87,7 @@ import { afterParagraph, moveParagraph } from "./paragraphs";
 import { type Problem, problems } from "./problems";
 import { SceneRail, railScenes } from "./rail";
 import type { RenderAsk, RenderReply } from "./render-worker";
+import { Rescue, tabStory as tabStoryIn } from "./rescue";
 import { SaveQueue, autosaveCheck, checkDisk as diskCheck, sameText } from "./saving";
 import { moveSection } from "./sections";
 import { sidesHtml, sidesText } from "./sides";
@@ -107,8 +108,14 @@ import {
   rememberFile,
   versionsOf,
 } from "./store";
-import { type Speaker, StretchTools, passageNear, speechOfMark } from "./stretch";
-import { fileNameFor, glimpse, listening, wordCount } from "./words";
+import {
+  type Speaker,
+  StretchTools,
+  nextNarratedQuote,
+  passageNear,
+  speechOfMark,
+} from "./stretch";
+import { fileNameFor, glimpse, listening, wordCount, words as wordsSaid } from "./words";
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector(selector) as T;
@@ -130,6 +137,8 @@ type Prefs = ViewSwitches & {
   typewriter: boolean;
   /** Words to write in a sitting; 0 for none. */
   goal: number;
+  /** Resting the pointer on a passage brings its bar. */
+  hoverBar: boolean;
 };
 const PREFS_KEY = "vxd-writer-view";
 const prefs: Prefs = {
@@ -141,12 +150,13 @@ const prefs: Prefs = {
   pages: true,
   notes: true,
   marks: false,
-  side: window.matchMedia("(min-width: 1100px)").matches,
+  side: window.matchMedia("(min-width: 900px)").matches,
   tab: "script",
   autosave: true,
   focus: false,
   typewriter: false,
   goal: 0,
+  hoverBar: true,
   ...savedPrefs(),
 };
 
@@ -424,11 +434,14 @@ const warningTips = hoverTooltip(
       .field(marksField)
       .find((m) => m.kind === "warning" && m.from <= at && at <= m.to);
     if (!mark || mark.kind !== "warning") return null;
-    // The warning as the list has it, with the same fixes: read here, before the tip is drawn.
-    if (storyVersion !== version) refresh();
-    const problem = currentProblems().find(
-      (found) => found.code === mark.code && found.from <= at && at <= found.to,
-    );
+    // The warning as the list has it, with the same fixes, once the story is read again after
+    // typing (the pointer passing by never makes the page read a long story at once).
+    const problem =
+      storyVersion === version
+        ? currentProblems().find(
+            (found) => found.code === mark.code && found.from <= at && at <= found.to,
+          )
+        : undefined;
     const fix = problem?.fix ?? mark.fix;
     const cast = problem?.cast;
     return {
@@ -483,6 +496,8 @@ const tools: StretchTools = new StretchTools({
   story: current,
   speakers,
   apply,
+  onHover: () => prefs.hoverBar,
+  fresh: () => (storyVersion === version ? story : undefined),
 });
 
 /** Everyone a passage can be given to: the narrator, the cast, and anyone else the story names. */
@@ -776,65 +791,23 @@ function place(): { cursor: number; top: number } {
 // The words typed since the draft was last kept, written down at once when the page goes, where
 // a draft kept a moment later might not be: brought back on the next visit.
 
-const RESCUE = "vxd-writer-rescue";
+const rescues = new Rescue(localStorage);
 
 function rescue(): void {
   commitPending();
   if (!lock.owner || keptVersion === version) return;
-  try {
-    localStorage.setItem(
-      `${RESCUE}:${file.id}`,
-      JSON.stringify({
-        id: file.id,
-        name: file.name,
-        text: text(),
-        saved: file.saved,
-        changedAt: file.changedAt,
-        place: place(),
-      }),
-    );
-  } catch {
-    // Too long for this storage: the draft from a moment ago is what comes back.
-  }
+  rescues.write(file.id, {
+    name: file.name,
+    text: text(),
+    saved: file.saved,
+    changedAt: file.changedAt,
+    place: place(),
+  });
 }
-
-function forgetRescue(id = file.id): void {
-  try {
-    localStorage.removeItem(`${RESCUE}:${id}`);
-    if (rescuedBefore()?.id === id) localStorage.removeItem(RESCUE);
-  } catch {
-    // Nothing kept.
-  }
-}
-
-type Rescued = Pick<Draft, "name" | "text" | "saved" | "changedAt" | "place"> & { id?: string };
-/** The words rescued for a story; one written down before each story had its own, if it is this one's. */
-function rescued(id: string): Rescued | null {
-  try {
-    const own = JSON.parse(localStorage.getItem(`${RESCUE}:${id}`) ?? "null") as Rescued | null;
-    const before = rescuedBefore();
-    return own ?? (before?.id === id ? before : null);
-  } catch {
-    return null;
-  }
-}
-function rescuedBefore(): Rescued | null {
-  try {
-    return JSON.parse(localStorage.getItem(RESCUE) ?? "null");
-  } catch {
-    return null;
-  }
-}
-
+const forgetRescue = (id = file.id) => rescues.forget(id);
+const rescued = (id: string) => rescues.read(id);
 /** The story this tab has open, kept for its reloads; set with `id`. */
-function tabStory(id?: string): string | undefined {
-  try {
-    if (id) sessionStorage.setItem("vxd-writer-tab", id);
-    return sessionStorage.getItem("vxd-writer-tab") ?? undefined;
-  } catch {
-    return id;
-  }
-}
+const tabStory = (id?: string) => tabStoryIn(sessionStorage, id);
 
 window.addEventListener("pagehide", rescue);
 document.addEventListener("visibilitychange", () => {
@@ -935,7 +908,7 @@ function showCounts({
   const goal = prefs.goal > 0 ? ` of ${prefs.goal.toLocaleString()}` : "";
   if (prefs.goal > 0 && since >= prefs.goal && !session.reached) {
     session.reached = true;
-    notice(`${prefs.goal.toLocaleString()} words written: the goal is reached.`);
+    notice(`${wordsSaid(prefs.goal)} written: the goal is reached.`);
   }
   $("#counts").textContent = [
     `${plural(words, "word")}${since || goal ? ` (${signed}${goal})` : ""}`,
@@ -945,7 +918,7 @@ function showCounts({
     ...(words ? [listening(words)] : []),
   ].join(" · ");
   $("#counts").title = since
-    ? `${since > 0 ? "+" : "−"}${Math.abs(since).toLocaleString()} words since the story was opened`
+    ? `${since > 0 ? "+" : "−"}${wordsSaid(Math.abs(since))} since the story was opened`
     : "";
 }
 
@@ -1071,6 +1044,27 @@ function nextProblem(by: 1 | -1): boolean {
   return true;
 }
 
+/**
+ * Ctrl+Shift+K: the next quote no one is marked to say, which the narrator would read, selected;
+ * Ctrl+K then gives it to someone, the name its tag gives first.
+ */
+function nextQuote(): boolean {
+  if (storyVersion !== version) refresh();
+  const quote = nextNarratedQuote(current(), view.state.selection.main.head);
+  if (!quote) {
+    notice("Every quote has its speaker: none is left for the narrator to read.");
+    return true;
+  }
+  view.dispatch({
+    selection: EditorSelection.range(quote.from, quote.to),
+    effects: EditorView.scrollIntoView(quote.from, { y: "center" }),
+  });
+  notice(
+    `Line ${view.state.doc.lineAt(quote.from).number}: the narrator reads this quote. ${keys("Mod+K")} gives it to someone; ${keys("Mod+Shift+K")} goes to the next.`,
+  );
+  return true;
+}
+
 /** Ctrl+.: the fix for the warning at the cursor. */
 function fixHere(): boolean {
   if (lockedOut) return true;
@@ -1116,7 +1110,19 @@ function insideMark(state: EditorState, from: number, to: number): string | unde
         from < found.to &&
         !(from <= found.from && found.to <= to),
     );
-  if (!mark) return undefined;
+  if (!mark) {
+    // Nor from one passage into another: the script would split them, signs and all.
+    const crossed = state
+      .field(marksField)
+      .some(
+        (found) =>
+          found.kind === "speech" &&
+          ((from < found.from && found.from < to) || (from < found.to && found.to < to)),
+      );
+    return crossed
+      ? "Italics and bold go within one passage: this runs from one speaker’s words into another’s."
+      : undefined;
+  }
   const what: Record<string, string> = {
     name: "a name",
     direction: "a direction",
@@ -1140,20 +1146,27 @@ const bold = toggleEmphasis(true, insideMark, (message) => notice(message));
 function moveSectionHere(chapters: boolean, by: 1 | -1): boolean {
   if (lockedOut) return true;
   if (storyVersion !== version) refresh();
-  const starts = railScenes(current(), sceneNumbers(view.state))
-    .filter((scene) => !chapters || scene.chapter)
-    .map((scene) => scene.from);
-  const spec = moveSection(view.state, starts, by);
-  if (!spec) {
-    const what = chapters ? "chapter" : "scene";
+  const all = railScenes(current(), sceneNumbers(view.state));
+  const heads = all.filter((scene) => scene.chapter).map((scene) => scene.from);
+  const moved = chapters
+    ? moveSection(view.state, heads, by)
+    : moveSection(
+        view.state,
+        all.filter((scene) => !scene.chapter).map((scene) => scene.from),
+        by,
+        heads,
+      );
+  if (typeof moved === "string") {
     notice(
-      starts.some((start) => start <= view.state.selection.main.head)
-        ? `No ${what} ${by < 0 ? "before" : "after"} this one to move it past.`
-        : `Put the cursor in a ${what} first: one starts at a ${chapters ? "# heading" : "heading or a scene break"}.`,
+      moved === "outside"
+        ? `Put the cursor in a ${chapters ? "chapter first: one starts at a # heading" : "scene first: one starts at a ## heading or a scene break"}.`
+        : chapters
+          ? `No chapter ${by < 0 ? "before" : "after"} this one to move it past.`
+          : `This is the ${by < 0 ? "first" : "last"} scene of its chapter: a scene stays in its chapter.`,
     );
     return true;
   }
-  view.dispatch({ ...spec, scrollIntoView: true, userEvent: "move.section" });
+  view.dispatch({ ...moved, scrollIntoView: true, userEvent: "move.section" });
   refresh();
   return true;
 }
@@ -1369,7 +1382,7 @@ function showSidePanel(shown: boolean): void {
  * On a narrow window the side lies over the manuscript: then it is what is read, and what is
  * behind it can't be reached by the keyboard or a screen reader until it is closed.
  */
-const narrow = window.matchMedia("(max-width: 1099px)");
+const narrow = window.matchMedia("(max-width: 899px)");
 function overlaid(): void {
   const over = narrow.matches && prefs.side;
   const toggle = $("#preview-toggle");
@@ -1381,6 +1394,18 @@ function overlaid(): void {
   $("#scene-rail").inert = over;
 }
 narrow.addEventListener("change", overlaid);
+// The side lying over the manuscript closes at a click beside it, on the manuscript it covers.
+document.addEventListener("pointerdown", (event) => {
+  if (!narrow.matches || !prefs.side || onWelcome()) return;
+  const side = $("#side").getBoundingClientRect();
+  const work = $("#workspace").getBoundingClientRect();
+  if (event.clientX < side.left && event.clientY > work.top && event.clientY < work.bottom) {
+    event.preventDefault();
+    showSidePanel(false);
+    view.focus();
+  }
+});
+
 $("#preview-toggle").addEventListener("click", () => {
   const preview = !(narrow.matches && prefs.side);
   showSidePanel(preview);
@@ -1905,8 +1930,12 @@ function tidy(curly: boolean): void {
   if (lockedOut) return;
   const before = view.state.doc.toString();
   const after = format(before, curly ? { quotes: "curly" } : {});
-  if (after === before) return;
+  if (after === before) {
+    notice("Already tidy: nothing to change.");
+    return;
+  }
   void snapshot("Before tidying");
+  const changedLines = diffLines(before, after).filter((line) => line.kind === "new").length;
   let start = 0;
   while (start < before.length && before[start] === after[start]) start++;
   let endBefore = before.length;
@@ -1916,6 +1945,9 @@ function tidy(curly: boolean): void {
     endAfter--;
   }
   view.dispatch({ changes: { from: start, to: endBefore, insert: after.slice(start, endAfter) } });
+  notice(
+    `Tidied: ${changedLines.toLocaleString()} ${changedLines === 1 ? "line" : "lines"} changed. Undo (${keys("Mod+Z")}) takes it back; Earlier versions has it as it was.`,
+  );
 }
 
 // Insert: marks put in where the cursor is, each as one step to undo.
@@ -1993,12 +2025,18 @@ function insertAfterParagraph(line: string, select?: string): void {
 
 // Export: what the story becomes, as files.
 
-/** The name to save under: the file's own, or for a new story never saved, its title's. */
+/**
+ * The name to save under: the file's own, or for a new story never saved, its title's, or, while
+ * its title is still Untitled, its first heading's.
+ */
 function suggestedName(): string {
-  const title = current().meta.title;
-  return /^untitled\.vxd$/i.test(file.name) && !file.handle && title && title !== "Untitled"
-    ? `${fileNameFor(title)}.vxd`
-    : file.name;
+  if (!/^untitled\.vxd$/i.test(file.name) || file.handle) return file.name;
+  const story = current();
+  const title = story.meta.title;
+  const heading = railScenes(story, new Map()).find((scene) => scene.name !== "Scene")?.name;
+  const named =
+    title && title !== "Untitled" ? title : heading && heading !== "Untitled" ? heading : undefined;
+  return named ? `${fileNameFor(named)}.vxd` : file.name;
 }
 const baseName = () => suggestedName().replace(/\.(?:vxd|md|txt)$/i, "") || "story";
 
@@ -2111,7 +2149,7 @@ async function showDrafts(): Promise<void> {
             ? `${title} · ${draft.name}`
             : draft.name,
         excerpt: words,
-        detail: `${open ? "Open now · " : ""}${unsaved ? "changes not saved · " : ""}${wordCount(draft.text).toLocaleString()} words · ${when(draft.changedAt)}`,
+        detail: `${open ? "Open now · " : ""}${unsaved ? "changes not saved · " : ""}${wordsSaid(wordCount(draft.text))} · ${when(draft.changedAt)}`,
         current: open,
         actions: open
           ? []
@@ -2154,7 +2192,7 @@ async function showVersions(): Promise<void> {
       : "None yet: a version is kept when the story is opened or saved, and every ten minutes of writing.",
     versions.map((kept) => ({
       title: `${when(kept.at)} · ${kept.why}`,
-      detail: `${wordCount(kept.text).toLocaleString()} words${sameText(kept.text, text()) ? " · the same as now" : ""}`,
+      detail: `${wordsSaid(wordCount(kept.text))}${sameText(kept.text, text()) ? " · the same as now" : ""}`,
       actions: sameText(kept.text, text())
         ? []
         : [
@@ -2389,6 +2427,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Mod+I", "Italics"],
   ["Mod+B", "Bold"],
   ["Mod+K", "Who says this passage"],
+  ["Mod+Shift+K", "The next quote with no speaker"],
   ["Mod+J", "How it’s said"],
   ["Alt+↑ / Alt+↓", "Move the paragraph up or down"],
   ["Enter", "In a quote: close it, and open it again on a new line for the same speaker"],
@@ -2455,6 +2494,10 @@ const COMMANDS: Record<string, () => unknown> = {
     view.focus();
   },
   details: showDetails,
+  "next-quote": () => {
+    nextQuote();
+    view.focus();
+  },
   "next-warning": () => {
     nextProblem(1);
     view.focus();
@@ -2525,6 +2568,10 @@ const SWITCHES = ["color", "names", "directions", "sounds", "vocal", "pages", "n
 function viewCommand(name: string, on: boolean): void {
   if (name === "focus") {
     focusMode(on);
+  } else if (name === "hover-bar") {
+    prefs.hoverBar = on;
+    keepPrefs();
+    if (!on) tools.hide();
   } else if (name === "typewriter") {
     prefs.typewriter = on;
     keepPrefs();
@@ -2605,6 +2652,13 @@ document.addEventListener(
     // With no story open, only what opens one.
     if (onWelcome() && (key === "s" || key === "p" || event.shiftKey)) {
       if (key === "s" || key === "p") event.preventDefault();
+      return;
+    }
+    // The next quote with no speaker: Shift told apart here, where the editor's keys might not.
+    if (key === "k" && event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      nextQuote();
       return;
     }
     // The outline, focus, and every mark raw, wherever the keyboard is.
@@ -2754,11 +2808,23 @@ function showWelcome(): void {
   );
 }
 
+// A dialog closed, with nothing else asking: the keyboard goes back to the text.
+for (const dialog of document.querySelectorAll("dialog")) {
+  dialog.addEventListener("close", () => {
+    requestAnimationFrame(() => {
+      const at = document.activeElement;
+      const lost = !at || at === document.body || Boolean(at.closest(".menus, dialog"));
+      if (lost && !document.querySelector("dialog[open]") && !onWelcome()) view.focus();
+    });
+  });
+}
+
 // Start: the draft from last time, or the welcome.
 
 async function start(): Promise<void> {
   for (const name of [...SWITCHES, "marks", "autosave", "focus", "typewriter"] as const)
     checkMenu(name, prefs[name]);
+  checkMenu("hover-bar", prefs.hoverBar);
   focusMode(prefs.focus);
   // Where the browser can't keep files, there's no file to save to automatically.
   $("#autosave-item").hidden = !keepsFiles;

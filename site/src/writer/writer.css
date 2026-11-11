@@ -223,7 +223,7 @@ body.writer {
   position: relative;
 }
 .workspace[data-side] {
-  grid-template-columns: auto minmax(0, 1fr) minmax(22rem, 36%);
+  grid-template-columns: auto minmax(0, 1fr) minmax(20rem, 34%);
 }
 
 /* The scene rail. */
@@ -435,7 +435,7 @@ body.writer {
 }
 .welcome p {
   max-width: 36rem;
-  color: var(--quiet);
+  color: color-mix(in oklab, var(--quiet) 70%, var(--ink));
   margin: 0;
 }
 .welcome-actions {
@@ -487,6 +487,7 @@ body.writer {
   container-type: inline-size;
   display: none;
   grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   background: var(--paper);
   border-left: 1px solid var(--desk-edge);
@@ -503,8 +504,18 @@ body.writer {
   display: flex;
   gap: 0.2rem;
   min-width: 0;
+  /* A side too narrow for every tab scrolls them, the close button staying in view. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+@container (max-width: 22rem) {
+  .side-tab {
+    padding-inline: 0.45rem;
+  }
 }
 .side-tab {
+  flex: none;
+  white-space: nowrap;
   background: none;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -522,6 +533,7 @@ body.writer {
   font-weight: 600;
 }
 .side-close {
+  flex: none;
   margin-left: auto;
   align-self: center;
   display: grid;
@@ -586,7 +598,7 @@ body.writer {
 .side-sheet .vxd .vxd-name,
 .side-sheet .vxd .vxd-group-label,
 .side-sheet .vxd .vxd-chip-vocal {
-  color: color-mix(in oklab, var(--vxd-c, var(--vxd-muted)) 60%, var(--ink));
+  color: color-mix(in oklab, var(--vxd-c, var(--vxd-muted)) 50%, var(--ink));
 }
 .side-sheet .vxd .vxd-name:has(+ .vxd-narration) {
   color: var(--quiet);
@@ -656,9 +668,20 @@ body.writer {
 }
 
 /* Another tab writes the story: this one reads it. */
-/* The banner of a tab that only reads: the story's first line moves down from under it. */
-.manuscript:has(#elsewhere:not([hidden])) .cm-content {
-  padding-top: 5.6rem;
+/* The banner of a tab that only reads: above the page, never over its words. */
+.manuscript:has(#elsewhere:not([hidden])) {
+  flex-direction: column;
+  align-items: center;
+}
+.manuscript:has(#elsewhere:not([hidden])) .elsewhere {
+  position: static;
+  transform: none;
+  flex: none;
+  margin: 0 0 0.6rem;
+}
+.manuscript:has(#elsewhere:not([hidden])) .editor {
+  flex: 1 1 0;
+  height: auto;
 }
 .elsewhere button {
   flex: none;
@@ -864,7 +887,7 @@ body[data-welcome] #draft-state {
 }
 .cast-member {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.3rem 0.55rem;
   padding: 0.5rem 0.6rem;
@@ -907,10 +930,17 @@ body[data-welcome] #draft-state {
   outline: none;
   background: var(--paper);
 }
+/* The lines and words under the names, where they never squeeze them. */
 .cast-lines {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  padding-left: 0.3rem;
   font-size: 0.75rem;
   color: var(--quiet);
-  white-space: nowrap;
+}
+.cast-find {
+  grid-column: 4;
+  grid-row: 1;
 }
 .cast-find {
   background: none;
@@ -925,6 +955,7 @@ body[data-welcome] #draft-state {
 }
 .cast-about {
   grid-column: 2 / -1;
+  grid-row: 3;
   border: 1px solid transparent;
   border-radius: 5px;
   background: none;
@@ -950,6 +981,7 @@ body[data-welcome] #draft-state {
 }
 .cast-add {
   grid-column: 2 / -1;
+  grid-row: 4;
   justify-self: start;
   padding: 0.15rem 0.4rem;
   font-size: 0.8rem;
@@ -958,17 +990,23 @@ body[data-welcome] #draft-state {
 /* A narrow side: each character's names on lines of their own. */
 @container (max-width: 26rem) {
   .cast-member {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .cast-find {
+    grid-column: 3;
   }
   .cast-name {
     grid-column: 2 / -1;
     grid-row: 2;
   }
-  .cast-about {
+  .cast-lines {
     grid-row: 3;
   }
-  .cast-add {
+  .cast-about {
     grid-row: 4;
+  }
+  .cast-add {
+    grid-row: 5;
   }
 }
 
@@ -1475,7 +1513,7 @@ body[data-welcome] #draft-state {
 }
 
 /* A narrower window: the side lies over the manuscript, from the right. */
-@media (max-width: 1099px) {
+@media (max-width: 899px) {
   .preview-toggle {
     display: inline-block;
   }
@@ -1521,6 +1559,16 @@ body[data-welcome] #draft-state {
 
 /* A phone: the menus on one row, the story's name and its buttons on the next. */
 @media (max-width: 600px) {
+  .statusbar {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  #draft-state {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .appbar {
     gap: 0.3rem 0.4rem;
   }

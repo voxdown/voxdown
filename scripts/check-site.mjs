@@ -1295,6 +1295,51 @@ await author.click('#details button[value="done"]');
 await settled();
 if (!(await kept()).includes("author: A. Teller"))
   problems.push("writer: Story details didn't write the author");
+// Escape from a dialog gives the keyboard back to the text.
+await author.click("#file-menu-button");
+await author.click('[data-command="details"]');
+await author.waitForSelector("#details[open]");
+await author.keyboard.press("Escape");
+await author.waitForTimeout(200);
+if (!(await author.evaluate(() => document.activeElement?.classList.contains("cm-content"))))
+  problems.push("writer: after a dialog closes, the keyboard isn't back in the text");
+// The first scene of its chapter stays below the chapter's heading.
+await author.locator(".cm-line", { hasText: "Sir Percival had been training" }).first().click();
+const beforeMove = await kept();
+await author.keyboard.press("Alt+Shift+ArrowUp");
+await settled();
+if ((await kept()) !== beforeMove)
+  problems.push("writer: a scene was moved above its chapter's heading");
+// A quote no one is marked to say, found, and given to the name its tag gives.
+await author.click(".cm-content");
+await author.keyboard.press("Control+End");
+await author.keyboard.insertText("\n\n“Is anyone there?” asked Mara.\n");
+await settled();
+await author.keyboard.press("Control+Home");
+await author.keyboard.press("Control+Shift+k");
+await author.waitForTimeout(200);
+await author.keyboard.press("Control+k");
+await author.waitForSelector(".speaker-choice");
+const firstChoice = await author.locator(".speaker-choice").first().textContent();
+if (!firstChoice?.includes("Mara"))
+  problems.push("writer: the speaker picker doesn't offer the name the dialogue tag gives first");
+await author.keyboard.press("Enter");
+await settled();
+const marked = await kept();
+if (!/@Mara “Is anyone there\?”/.test(marked))
+  problems.push("writer: Ctrl+Shift+K and Ctrl+K didn't give the quote to its tag's name");
+// Someone new is added to the cast with the give, so the name raises no warning.
+if (!/^ {2}Mara:/m.test(marked))
+  problems.push("writer: a passage given to someone new didn't add them to the cast");
+// A name picked from the list has its space: the one typed after it out of habit isn't doubled.
+await author.keyboard.press("Control+End");
+await author.keyboard.type("\n\n@Ger");
+await author.waitForSelector(".cm-tooltip-autocomplete");
+await author.keyboard.press("Enter");
+await author.keyboard.type(" “Hi.”");
+await settled();
+if (!(await kept()).includes("@Gerald “Hi.”"))
+  problems.push("writer: a space typed after a picked name was doubled");
 // A fix clicked straight after typing elsewhere fixes its own warning, where it is now.
 await author.click(".cm-content");
 await author.keyboard.press("Control+End");

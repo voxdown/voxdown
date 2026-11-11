@@ -4,14 +4,17 @@
  * `setDirection`), which change exactly what they say or nothing: where a change would reach
  * other lines, the writer is told and nothing changes.
  */
-import { EditorSelection } from "@codemirror/state";
+import { ChangeSet, EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
   type Speech,
   type Story,
   type TextChange,
+  applyChanges,
   isName,
+  parse,
   setDirection,
+  setFullName,
   setSpeaker,
 } from "voxdown";
 
@@ -27,9 +30,40 @@ export type StretchContext = {
   speakers: () => Speaker[];
   /** Applies an edit; with no changes, says why in `declined`. True if anything changed. */
   apply: (changes: TextChange[], declined: string) => boolean;
+  /** Whether resting the pointer on a passage brings its bar (View › The bar over a passage). */
+  onHover?: () => boolean;
+  /**
+   * The story as read already, or undefined while it waits to be read again after typing: the
+   * pointer passing by never makes the page read a long story at once.
+   */
+  fresh?: () => Story | undefined;
 };
 
 const hasWords = (text: string) => /[\p{L}\p{N}]/u.test(text);
+
+/**
+ * Two sets of changes made one after the other, as one set on the text before both: the second's
+ * places are in the text the first makes.
+ */
+export function composed(
+  source: string,
+  first: readonly TextChange[],
+  second: readonly TextChange[],
+): TextChange[] {
+  const a = ChangeSet.of(
+    first.map(({ from, to, insert }) => ({ from, to, insert })),
+    source.length,
+  );
+  const b = ChangeSet.of(
+    second.map(({ from, to, insert }) => ({ from, to, insert })),
+    a.newLength,
+  );
+  const out: TextChange[] = [];
+  a.compose(b).iterChanges((from, to, _fromB, _toB, inserted) => {
+    out.push({ from, to, insert: inserted.toString() });
+  });
+  return out;
+}
 
 /** Where `at` is once the changes are made: moved by those before it. */
 export function mapped(changes: readonly TextChange[], at: number): number {
@@ -86,6 +120,60 @@ export function passageNear(story: Story, at: number): Speech | undefined {
     }
   }
   return undefined;
+}
+
+/** Words that tag a quote with who says it. */
+const SAYING =
+  "said|says|asked|asks|replied|replies|whispered|whispers|shouted|shouts|cried|cries|called|calls|answered|answers|muttered|mutters|murmured|murmurs|added|adds|sighed|sighs|laughed|laughs|snapped|snaps|exclaimed|exclaims|yelled|yells|demanded|demands|began|begins|continued|continues|went on|goes on|told|tells";
+
+/**
+ * The name a dialogue tag gives a quote, if it gives one: `“…” asked Mara`, `“…” Mara said`,
+ * `Mara said, “…”`. A pronoun says nothing of who.
+ */
+export function dialogueTag(before: string, after: string): string | undefined {
+  const name = "(\\p{Lu}[\\p{L}’'-]*)";
+  const behind = new RegExp(
+    `^[\\s,.!?—–-]*(?:(?:${SAYING})\\s+(?:the\\s+)?${name}|${name}\\s+(?:${SAYING})\\b)`,
+    "u",
+  ).exec(after);
+  const ahead = new RegExp(`${name}\\s+(?:${SAYING})[\\s,:]*$`, "u").exec(before);
+  const found = behind?.[1] ?? behind?.[2] ?? ahead?.[1];
+  if (!found || /^(?:He|She|They|It|I|We|You|The|His|Her|Their)$/u.test(found)) return undefined;
+  return found;
+}
+
+/** A quote in a stretch of the source: where it opens and closes, and its words. */
+export type Quote = { from: number; to: number; text: string };
+
+/** The first quote between `from` and `to`, in the source. */
+export function firstQuote(source: string, from: number, to: number): Quote | undefined {
+  const found = /[“"«„「『‘]([^”"»“」』’\n]+)[”"»“」』’]/u.exec(source.slice(from, to));
+  if (!found || !/[\p{L}\p{N}]/u.test(found[1] ?? "")) return undefined;
+  return {
+    from: from + found.index,
+    to: from + found.index + found[0].length,
+    text: found[1] as string,
+  };
+}
+
+/**
+ * The next quote after `after` that no one is marked to say, so that the narrator reads it with
+ * the words around it; round to the first.
+ */
+export function nextNarratedQuote(story: Story, after: number): Quote | undefined {
+  const narrator = story.meta.narrator.toLowerCase();
+  const quotes: Quote[] = [];
+  for (const block of story.blocks) {
+    if (block.kind !== "paragraph") continue;
+    for (const line of block.lines)
+      for (const item of line.items) {
+        if (item.kind !== "speech" || item.quoted || item.speaker.toLowerCase() !== narrator)
+          continue;
+        const quote = firstQuote(story.source, item.range.from, item.range.to);
+        if (quote) quotes.push(quote);
+      }
+  }
+  return quotes.find((quote) => quote.from > after) ?? quotes[0];
 }
 
 /** The passage a character mark gives its speaker to. */
@@ -260,7 +348,35 @@ export class StretchTools {
     const current = speech.speaker;
     const list = document.createElement("ul");
     list.className = "speaker-list";
-    for (const speaker of this.context.speakers()) {
+    // The name the dialogue tag gives, first: one of the cast, or someone new. A quote in the
+    // narrator's words is the one its tag is about.
+    const source = story.source;
+    const quote =
+      speech.speaker.toLowerCase() === story.meta.narrator.toLowerCase() && !speech.quoted
+        ? firstQuote(source, speech.range.from, speech.range.to)
+        : undefined;
+    const quoteFrom = quote?.from ?? speech.mark?.range.from ?? speech.range.from;
+    const quoteTo = quote?.to ?? speech.range.to;
+    const lineStart = source.lastIndexOf("\n", quoteFrom - 1) + 1;
+    const lineEnd = source.indexOf("\n", quoteTo);
+    const tag = dialogueTag(
+      source.slice(lineStart, quoteFrom),
+      source.slice(quoteTo, lineEnd < 0 ? source.length : lineEnd),
+    );
+    const speakers = this.context.speakers();
+    const tagged = tag
+      ? speakers.find(
+          (speaker) =>
+            speaker.handle.toLowerCase() === tag.toLowerCase() ||
+            speaker.name.toLowerCase().split(/\s+/).includes(tag.toLowerCase()),
+        )
+      : undefined;
+    const ordered = tagged
+      ? [tagged, ...speakers.filter((speaker) => speaker !== tagged)]
+      : speakers;
+    if (tag && !tagged && isName(tag) && tag.toLowerCase() !== current.toLowerCase())
+      ordered.unshift({ handle: tag, name: "named in the tag: someone new" });
+    for (const speaker of ordered) {
       const item = document.createElement("li");
       const button = document.createElement("button");
       button.type = "button";
@@ -274,7 +390,13 @@ export class StretchTools {
       );
       (button.children[1] as HTMLElement).textContent = speaker.handle;
       (button.lastElementChild as HTMLElement).textContent =
-        speaker.name !== speaker.handle ? speaker.name : "";
+        speaker === tagged
+          ? `${speaker.name !== speaker.handle ? `${speaker.name} · ` : ""}named in the tag`
+          : speaker.name !== speaker.handle
+            ? speaker.name
+            : "";
+      if (speaker === tagged || (tag && speaker.handle === tag && !tagged))
+        button.dataset.tagged = "";
       button.dataset.handle = speaker.handle;
       button.addEventListener("click", () => this.giveTo(speech.range.from, speaker.handle));
       item.append(button);
@@ -283,7 +405,7 @@ export class StretchTools {
     const form = document.createElement("form");
     form.className = "new-speaker";
     form.innerHTML =
-      '<input type="text" name="name" placeholder="Type to find, or someone new" aria-label="Find a character, or name someone new" autocomplete="off" spellcheck="false"><button type="submit" class="button">Give</button>';
+      '<input type="text" name="name" placeholder="Find, or a new name" aria-label="Find a character, or name someone new" autocomplete="off" spellcheck="false"><button type="submit" class="button">Give</button>';
     const input = form.querySelector("input") as HTMLInputElement;
     const choices = [...list.querySelectorAll<HTMLElement>(".speaker-choice")];
     const shown = () => choices.filter((choice) => !choice.parentElement?.hidden);
@@ -324,7 +446,11 @@ export class StretchTools {
     // The box above the list: up from the list's top goes to it.
     this.showPopover("Who says this?", [form, list], anchor, at);
     (
-      list.querySelector<HTMLElement>("[aria-current]") ?? list.querySelector<HTMLElement>("button")
+      (current.toLowerCase() === story.meta.narrator.toLowerCase()
+        ? list.querySelector<HTMLElement>("[data-tagged]")
+        : null) ??
+      list.querySelector<HTMLElement>("[aria-current]") ??
+      list.querySelector<HTMLElement>("button")
     )?.focus({ preventScroll: true });
   }
 
@@ -406,6 +532,14 @@ export class StretchTools {
     let changes: TextChange[];
     try {
       changes = setSpeaker(fresh, target, name);
+      // Someone new, in a story with a cast: added to it in the same step, so the name raises
+      // no warning.
+      const known = fresh.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
+      if (changes.length && !known && fresh.cast.length > 0) {
+        const given = applyChanges(fresh.source, changes);
+        const cast = setFullName(parse(given), name, name);
+        if (cast.length) changes = composed(fresh.source, changes, cast);
+      }
     } catch (error) {
       this.context.apply(
         [],
@@ -436,7 +570,7 @@ export class StretchTools {
    * way somewhere else doesn't.
    */
   private hover(event: MouseEvent): void {
-    if (event.buttons || !this.popover.hidden) return;
+    if (event.buttons || !this.popover.hidden || this.context.onHover?.() === false) return;
     const { clientX: x, clientY: y } = event;
     clearTimeout(this.restTimer);
     this.restTimer = setTimeout(() => {
@@ -446,7 +580,8 @@ export class StretchTools {
         return;
       }
       const at = this.context.view.posAtCoords({ x, y });
-      const speech = at === null ? undefined : speechAt(this.context.story(), at);
+      const story = this.context.fresh ? this.context.fresh() : this.context.story();
+      const speech = at === null || !story ? undefined : speechAt(story, at);
       if (!speech) {
         this.hideSoon();
         return;

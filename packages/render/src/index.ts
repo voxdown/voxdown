@@ -17,8 +17,11 @@ import {
 import { escapeHtml, inlineHtml, inlineHtmlPieces, safeUrl } from "./inline";
 import { stylesheet } from "./stylesheet";
 
-/** Directions longer than this many characters go in the line, not over its first word. */
-const LONG_DIRECTION = 36;
+/**
+ * Directions longer than this many characters go in the line, in brackets, rather than over the
+ * first word, where a long one ran past the line.
+ */
+const LONG_DIRECTION = 20;
 export { stylesheet };
 export { PALETTE, characterColors } from "voxdown";
 export { escapeHtml, inlineHtml, safeUrl } from "./inline";

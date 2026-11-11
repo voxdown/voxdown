@@ -230,11 +230,6 @@ const characters = (): readonly Character[] =>
     ...(story.cast.some((member) => member.handle === handle) ? {} : { provisional: true }),
   }));
 
-/**
- * The same story, whatever its line breaks: a file with some lines ending in CRLF and some in LF
- * opens as it is, unchanged, and is saved with one kind.
- */
-
 /** The text as it will be saved: with the line breaks the story came with. */
 const text = () => view.state.sliceDoc();
 
@@ -580,8 +575,11 @@ function apply(changes: TextChange[], declined: string): boolean {
 
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 /** A word to the writer at the foot of the manuscript, for a few seconds. */
-function notice(message: string): void {
+/** Whether the notice up is about a place in the text, gone once the text changes. */
+let noticeOfPlace = false;
+function notice(message: string, ofPlace = false): void {
   const box = $("#notice");
+  noticeOfPlace = ofPlace;
   box.textContent = message;
   box.hidden = false;
   clearTimeout(noticeTimer);
@@ -654,6 +652,11 @@ const LONG = 30_000;
 
 function changed(): void {
   file.changedAt = Date.now();
+  // A notice about a place ("the narrator reads this quote") no longer holds once it changes.
+  if (noticeOfPlace) {
+    noticeOfPlace = false;
+    $("#notice").hidden = true;
+  }
   showSaveState(true);
   clearTimeout(refreshTimer);
   cancelIdle();
@@ -1063,7 +1066,7 @@ function nextProblem(by: 1 | -1): boolean {
   const message = /[.!?…]$/.test(next.message) ? next.message : `${next.message}.`;
   const told = `Line ${next.line} (${all.indexOf(next) + 1} of ${all.length}): ${message}${fix ? ` ${keys("Mod+.")}: ${fix}.` : ""}`;
   // The notice is read out too: it is a live region of its own.
-  notice(told);
+  notice(told, true);
   return true;
 }
 
@@ -1084,6 +1087,7 @@ function nextQuote(): boolean {
   });
   notice(
     `Line ${view.state.doc.lineAt(quote.from).number}: the narrator reads this quote. ${keys("Mod+K")} gives it to someone; ${keys("Mod+Shift+K")} goes to the next.`,
+    true,
   );
   return true;
 }
@@ -1340,6 +1344,12 @@ const TABS: readonly Tab[] = ["script", "book", "cast", "warnings"];
 for (const tab of document.querySelectorAll<HTMLButtonElement>(".side-tab")) {
   tab.addEventListener("click", () => selectTab(tab.dataset.tab as Tab));
   tab.addEventListener("keydown", (event) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      selectTab((event.key === "Home" ? TABS[0] : TABS.at(-1)) as Tab, true);
+      return;
+    }
     const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     if (!step) return;
     event.preventDefault();
@@ -1499,7 +1509,6 @@ function ask(message: string, buttons: Array<{ label: string; value: string; mai
   );
 }
 
-/** A question answered in a few words ("" if the writer changes their mind). */
 /** A question with a box to type in: what was typed, or null if the writer changed their mind. */
 async function askText(
   message: string,
@@ -1631,7 +1640,6 @@ const ENCODINGS: Record<string, string> = {
   "utf-16be": "UTF-16",
 };
 
-/** Saves to the story's file, or asks where. True once it is saved. */
 /**
  * A field on the side changed but not yet left (a name in the cast, what it says about someone):
  * made now, so that Save and leaving the page take it with them.
@@ -1646,6 +1654,7 @@ function commitPending(): void {
     field.blur();
 }
 
+/** Saves to the story's file, or asks where. True once it is saved. */
 async function save(): Promise<boolean> {
   commitPending();
   // Only the tab that writes the story saves it: another would save what it last saw.
@@ -2068,7 +2077,9 @@ async function insertSoundHere(): Promise<void> {
 /** Puts `text` in at the cursor, the part `select` selected, with a space before it if needed. */
 function insertAtCursor(text: string, select?: string): void {
   if (lockedOut) return;
-  let { from, to } = view.state.selection.main;
+  // After what is selected, never over it.
+  let from = view.state.selection.main.to;
+  let to = from;
   // Inside a mark (an instruction, a sound, a note, a direction), the new one goes after it.
   const inside = view.state
     .field(marksField)
@@ -2341,6 +2352,8 @@ function showDetails(): void {
   };
   for (const field of fields) field.value = written(field.dataset.key ?? "");
   dialog.returnValue = "";
+  // Enter in a field is Done (the form's first submit button); Cancel is a button of its own.
+  $("#details-cancel").onclick = () => dialog.close("cancel");
   dialog.onclose = () => {
     if (dialog.returnValue !== "done" || lockedOut) return;
     for (const field of fields) {

@@ -34,6 +34,8 @@ export type EditorMark =
   | { kind: "escape"; from: number; to: number }
   | { kind: "frontmatter"; from: number; to: number }
   | { kind: "in-group"; from: number; to: number }
+  /** A line never read aloud (printed only, or neither): its group or paragraph says so. */
+  | { kind: "unheard"; from: number; to: number }
   /** A direction repeated on the next lines of a run (§7.1 by hand): drawn once, like a group's. */
   | { kind: "run-repeat"; from: number; to: number; text: string }
   /** Something that probably isn't what was meant: an unclosed quote, a bracket left open. */
@@ -558,11 +560,20 @@ export function marksOf(story: Story): EditorMark[] {
   if (story.frontMatter) out.push({ kind: "frontmatter", ...story.frontMatter.range });
 
   for (const group of story.groups) {
+    // What the group does, said on its line: printed only, heard only, or neither.
+    const shown =
+      group.visibility === "book"
+        ? "book only"
+        : group.visibility === "audio"
+          ? "audio only"
+          : group.visibility === "hidden"
+            ? "hidden"
+            : "";
     out.push({
       kind: "group",
       from: group.range.from,
       to: group.range.to,
-      text: group.direction ?? "",
+      text: [shown, group.direction].filter(Boolean).join(" · "),
       ...(group.character ? { speaker: group.character } : {}),
       voice: group.character ?? story.meta.narrator,
     });
@@ -697,6 +708,9 @@ export function marksOf(story: Story): EditorMark[] {
       });
     } else {
       for (const line of block.lines) {
+        // A line its group (or its own paragraph) keeps from being heard looks it.
+        if (block.visibility === "book" || block.visibility === "hidden")
+          out.push({ kind: "unheard", from: line.range.from, to: line.range.from });
         if (block.groups.length) {
           out.push({ kind: "in-group", from: line.range.from, to: line.range.from });
           const inner = block.groups[block.groups.length - 1];

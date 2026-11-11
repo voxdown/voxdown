@@ -678,10 +678,25 @@ const INSTRUCTION_NAMES = ["page", "pause", "book only", "audio only", "hidden"]
 
 export const markEnter = keymap.of([{ key: "Enter", run: (view) => markEnterRun(view) }]);
 
+/** Where Enter last stepped out of a mark, after the space it added, in each editor. */
+const steppedOut = new WeakMap<EditorView, number>();
+
 function markEnterRun(view: EditorView): boolean {
   const { from, to } = view.state.selection.main;
   if (from !== to || view.state.readOnly) return false;
   const line = view.state.doc.lineAt(from);
+  // Enter again, straight after stepping out at the line's end: the line ends there, without the
+  // space the step left.
+  const out = steppedOut.get(view);
+  steppedOut.delete(view);
+  if (out === from && from === line.to && view.state.sliceDoc(from - 1, from) === " ") {
+    view.dispatch({
+      changes: { from: from - 1, to: from, insert: "\n" },
+      selection: { anchor: from },
+      userEvent: "input",
+    });
+    return true;
+  }
   const head = line.text.slice(0, from - line.from);
   // The innermost mark opened before the cursor and not closed.
   const stack: { char: string; at: number }[] = [];
@@ -729,5 +744,6 @@ function markEnterRun(view: EditorView): boolean {
     selection: { anchor: from + 1 + space.length },
     userEvent: "input",
   });
+  steppedOut.set(view, from + 1 + space.length);
   return true;
 }

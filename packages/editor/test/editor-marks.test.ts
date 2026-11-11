@@ -284,3 +284,22 @@ describe("runs of one direction", () => {
     expect(kinds("@(whispering) One.\n@(loudly) Two.")).not.toContain("run-repeat");
   });
 });
+
+describe("groups that keep their lines from being heard or printed", () => {
+  it("say what they do on their line, and draw the lines not heard as such", () => {
+    const text =
+      "Heard.\n\n::: {book only}\nFirst published 1902.\nFrederick Warne.\n:::\n\n::: {audio only}\nRead aloud only.\n:::";
+    const marks = editorMarks(text);
+    const groups = marks.filter(
+      (mark) => mark.kind === "group" && !("close" in mark && mark.close),
+    );
+    expect(groups.map((mark) => (mark.kind === "group" ? mark.text : ""))).toEqual([
+      "book only",
+      "audio only",
+    ]);
+    const unheard = marks
+      .filter((mark) => mark.kind === "unheard")
+      .map((mark) => text.slice(mark.from, text.indexOf("\n", mark.from)));
+    expect(unheard).toEqual(["First published 1902.", "Frederick Warne."]);
+  });
+});

@@ -535,7 +535,9 @@ export class StretchTools {
       // Someone new, in a story with a cast: added to it in the same step, so the name raises
       // no warning.
       const known = fresh.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
-      if (changes.length && !known && fresh.cast.length > 0) {
+      // A cast, even one with no one in it yet (a new story's `cast:`).
+      const hasCast = fresh.cast.length > 0 || "cast" in (fresh.frontMatter?.data ?? {});
+      if (changes.length && !known && hasCast) {
         const given = applyChanges(fresh.source, changes);
         const cast = setFullName(parse(given), name, name);
         if (cast.length) changes = composed(fresh.source, changes, cast);

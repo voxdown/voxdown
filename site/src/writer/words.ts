@@ -8,16 +8,43 @@ export const wordCount = (content: string): number =>
   content.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
 
 /**
- * The words a story's book holds, near enough, read straight from its text: the front matter,
- * notes, names, directions, sounds and instructions left out, as the status line counts them.
+ * The words a story's book holds, near enough, read straight from its text as the status line counts
+ * them: the front matter, notes, names, directions, sounds and instructions left out, and what the
+ * book doesn't print (`{hidden}`, `{audio only}`, in a paragraph, a heading or a group) with them.
  */
 export function proseWords(source: string): number {
   const front = /^\uFEFF?---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(source);
-  const body = source
-    .slice(front ? front[0].length : 0)
-    .replace(/%%[\s\S]*?(?:%%|$)/g, " ")
-    .replace(/@[\p{L}\p{N}_-]*(?:[ \t]*\([^)\n]*\))?|\[[^\]\n]*\]|\{[^}\n]*\}|^:::.*$/gmu, " ");
-  return wordCount(body);
+  const body = source.slice(front ? front[0].length : 0).replace(/%%[\s\S]*?(?:%%|$)/g, " ");
+  const unprinted = /\{\s*(?:hidden|audio only)\s*\}/i;
+  const kept: string[] = [];
+  // Groups open around the lines, each printed or not.
+  const groups: boolean[] = [];
+  let paragraph: string[] = [];
+  const end = () => {
+    const text = paragraph.join("\n");
+    if (!groups.includes(false) && !unprinted.test(text)) kept.push(text);
+    paragraph = [];
+  };
+  for (const line of body.split(/\r?\n/)) {
+    const fence = /^:::(.*)$/.exec(line.trim());
+    if (fence) {
+      end();
+      if ((fence[1] ?? "").trim()) groups.push(!unprinted.test(fence[1] ?? ""));
+      else groups.pop();
+    } else if (!line.trim()) end();
+    else if (/^#{1,6}\s/.test(line)) {
+      end();
+      paragraph.push(line);
+      end();
+    } else paragraph.push(line);
+  }
+  end();
+  return wordCount(
+    kept
+      .join("\n\n")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/@[\p{L}\p{N}_-]*(?:[ \t]*\([^)\n]*\))?|\[[^\]\n]*\]|\{[^}\n]*\}/gu, " "),
+  );
 }
 
 /** A count of words, as said: 1 word, 2 words, 1,234 words. */

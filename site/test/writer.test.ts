@@ -3,7 +3,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
 import { describe, expect, it, vi } from "vitest";
-import { applyChanges, lines, parse } from "voxdown";
+import { applyChanges, bookText, lines, parse } from "voxdown";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, plainText, toggleEmphasis } from "../src/writer/emphasis";
 import { asStory, decode } from "../src/writer/files";
@@ -403,6 +403,20 @@ describe("words", () => {
     const story =
       "---\ntitle: A long title here\ncast:\n  Ann:\n---\n# The Start\n\n@Ann (softly) “Hush now,” [an owl hoots] she said. %% a note %% {pause 1s}";
     expect(proseWords(story)).toBe(6);
+  });
+
+  it("counts every example's words as its book does", async () => {
+    const { existsSync, readFileSync, readdirSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    // Run from the repository or from the site.
+    const folder = [join(process.cwd(), "examples"), join(process.cwd(), "..", "examples")].find(
+      (path) => existsSync(path),
+    ) as string;
+    for (const name of readdirSync(folder).filter((file) => file.endsWith(".vxd"))) {
+      const text = readFileSync(join(folder, name), "utf8");
+      const book = wordCount(bookText(parse(text)));
+      expect(proseWords(text), name).toBe(book);
+    }
   });
 
   it("makes a file name from a title, as written, without the signs a file can't have", () => {

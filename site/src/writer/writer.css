@@ -147,7 +147,8 @@ body.writer {
   position: absolute;
   top: calc(100% + 0.3rem);
   left: 0;
-  min-width: 16rem;
+  min-width: min(16rem, calc(100vw - 8px));
+  max-width: calc(100vw - 8px);
   /* Never past the window's foot: a long menu scrolls within it. */
   max-height: calc(100dvh - var(--menu-top, 3.5rem) - 0.5rem);
   overflow-y: auto;
@@ -1483,6 +1484,13 @@ body[data-welcome] #draft-state {
 }
 .manuscript .cm-searchMatch-selected {
   background: color-mix(in srgb, #f97316 50%, transparent);
+}
+
+/* A window where the file's name needs the room: "Writer" goes from the wordmark first. */
+@media (max-width: 1180px) {
+  .appbar .wordmark .product {
+    display: none;
+  }
 }
 
 /* A window too narrow for the whole bar: the file's state shrinks to its dot first. */

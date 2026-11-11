@@ -55,6 +55,10 @@ export function menus(
       `${Math.round(button.getBoundingClientRect().bottom + 6)}px`,
     );
     list.hidden = false;
+    // Never past the window's right edge: moved left as far as it needs.
+    list.style.left = "";
+    const right = list.getBoundingClientRect().right;
+    if (right > window.innerWidth - 4) list.style.left = `${window.innerWidth - 4 - right}px`;
     button.setAttribute("aria-expanded", "true");
     open = button;
     const all = items(list);
@@ -130,8 +134,18 @@ export function menus(
         case "Tab":
           close();
           return;
-        default:
-          return;
+        default: {
+          // A letter goes to the next item that starts with it.
+          if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
+          const letter = event.key.toLowerCase();
+          const starts = (item: HTMLElement) =>
+            (item.textContent ?? "").trim().toLowerCase().startsWith(letter);
+          const next =
+            all.slice(at + 1).find(starts) ?? all.slice(0, Math.max(0, at + 1)).find(starts);
+          if (!next) return;
+          next.focus();
+          break;
+        }
       }
       event.preventDefault();
     });

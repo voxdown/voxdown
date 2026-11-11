@@ -59,6 +59,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Redo is Ctrl+Shift+Z on every computer (and Ctrl+Y); a long menu scrolls within a short window; **Keep both** offers `Story (2).vxd` and refuses the file it is to be kept beside; a new story takes its title from its heading until it is given one; Windows High Contrast shows who says what and every mark; the CSV is a cue sheet, with the sounds, pauses and page turns, in plain words; the word counts in Recover a draft and Earlier versions are the book's, as in the status line.
 - **View › Hear it read aloud** (F9): the browser reads from the cursor to the end of the scene, the narrator in one voice and each character in another, pausing where the story pauses, the cursor going with it. **Go to** gives each scene's and chapter's words.
 - Save as onto the story's own file is a Save, asking first about changes made elsewhere. A reading aloud stopped is never heard again, whatever starts after it. Speakers' names shown raw read at 4.5:1 or better in the dark too. Sides go scene by scene (its number and the heading it comes under), each line with where it is in the file and on which page, and no cue from another scene.
+- Enter in Story details is Done; every menu stays inside a phone's width, and a letter jumps to the item it starts; an insert goes after the words selected, never over them; the first reading aloud waits for the browser's voices; a new story's empty cast takes the names given passages; the word counts everywhere are the book's, `{hidden}` and `{audio only}` text left out; a notice about a place goes once the text changes; Home and End on the side's tabs.
 - The site deploys only once the browser check passes; `pnpm check:all` runs every check.
 - The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings, emphasis, inserts, comparing and keeping versions, words, saving decisions and the save queue), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
 
@@ -67,10 +68,11 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
 - Lines printed but not read aloud are easier to read, and a page turn's label is 11 px.
 - A space typed straight after a name picked from the list, which already has one, isn't doubled.
-- Enter after the last word of a quote never closed, at the end of its line, closes it there.
+- Enter after the last word of a quote never closed, at the end of its line, closes it there; Enter again straight after Enter closed a sound or an instruction ends the line, without the space it left.
+- A group that keeps its lines from being heard or printed (`::: {book only}`, `{audio only}`, `{hidden}`) says so on its line, and its lines not heard look it, as a paragraph's own do.
 
 **@voxdown/render**
-- A direction longer than 36 characters is written in the line, in brackets, where it wraps, rather than over the first word, where it ran off the page.
+- A direction longer than 20 characters is written in the line, in brackets, where it wraps, rather than over the first word, where it ran past the line.
 
 **voxdown**
 - `setAbout(story, handle, about)` sets what the cast says about a character, or takes it out; a character not in the cast is added, and one written as a full name alone becomes a map that keeps it.

@@ -443,6 +443,9 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
       case "in-group":
         add(mark.from, mark.from, Decoration.line({ class: "vxd-in-group" }));
         break;
+      case "unheard":
+        add(mark.from, mark.from, Decoration.line({ class: "vxd-unheard" }));
+        break;
       case "frontmatter":
         add(mark.from, mark.to, Decoration.mark({ class: "vxd-frontmatter" }));
         break;

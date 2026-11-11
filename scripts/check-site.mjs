@@ -1431,6 +1431,15 @@ await author.click('#details button[value="done"]');
 await settled();
 if (!(await kept()).includes("author: A. Teller"))
   problems.push("writer: Story details didn't write the author");
+// Enter in a field of Story details is Done.
+await author.click("#file-menu-button");
+await author.click('[data-command="details"]');
+await author.waitForSelector("#details[open]");
+await author.fill("#detail-subtitle", "A tale told twice");
+await author.press("#detail-subtitle", "Enter");
+await settled();
+if (!(await kept()).includes("subtitle: A tale told twice"))
+  problems.push("writer: Enter in Story details threw the change away");
 // Escape from a dialog gives the keyboard back to the text.
 await author.click("#file-menu-button");
 await author.click('[data-command="details"]');
@@ -1565,6 +1574,19 @@ if (
   )
 )
   problems.push("writer: on a phone, a jump from the side to the text leaves the side over it");
+// Every menu stays inside a phone's width.
+for (const menu of ["file", "edit", "insert", "view", "help"]) {
+  await phonePage.click(`#${menu}-menu-button`);
+  const right = await phonePage.evaluate(
+    (id) => document.querySelector(`#${id}-menu`)?.getBoundingClientRect().right ?? 0,
+    menu,
+  );
+  if (right > 390)
+    problems.push(
+      `writer: on a phone, the ${menu} menu runs ${Math.round(right - 390)} px past the window`,
+    );
+  await phonePage.keyboard.press("Escape");
+}
 await phone.close();
 
 // Insert and export: a sound, a page turn and a scene break put in where the cursor is; the book,
@@ -1599,6 +1621,14 @@ await maker.click('[data-command="insert-pause"]');
 await maker.waitForTimeout(900);
 if (!(await draftOf()).includes("training {pause 1s}"))
   problems.push("writer: Insert › A pause split a word");
+// A note put in with words selected goes after them, never over them.
+await maker.keyboard.press("End");
+await maker.keyboard.press("Shift+Home");
+await maker.click("#insert-menu-button");
+await maker.click('[data-command="insert-note"]');
+await maker.waitForTimeout(900);
+if (!(await draftOf()).includes("the training {pause 1s} began."))
+  problems.push("writer: Insert › A note replaced the words selected");
 const made = await draftOf();
 if (!made.includes("[an owl hoots]")) problems.push("writer: Insert › A sound… put nothing in");
 if (!/\n\* \* \*\n/.test(made)) problems.push("writer: Insert › A scene break put nothing in");

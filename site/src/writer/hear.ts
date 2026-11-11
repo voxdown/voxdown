@@ -82,7 +82,24 @@ export class Hearing {
     const mine = ++this.turn;
     const live = () => mine === this.turn;
     this.reading = true;
-    const voices = synth.getVoices();
+    // The browser loads its voices after the page: on the first reading, waited for a moment.
+    let voices = synth.getVoices();
+    const events = synth as Partial<Pick<SpeechSynthesis, "addEventListener">>;
+    if (voices.length === 0 && events.addEventListener) {
+      await new Promise<void>((done) => {
+        const timer = setTimeout(done, 1500);
+        events.addEventListener?.(
+          "voiceschanged",
+          () => {
+            clearTimeout(timer);
+            done();
+          },
+          { once: true },
+        );
+      });
+      if (!live()) return;
+      voices = synth.getVoices();
+    }
     const speakers = [...new Set(rows.flatMap((row) => (row.speaker ? [row.speaker] : [])))];
     const chosen = voicesFor(speakers, voices, language, narrator);
     for (const row of rows) {

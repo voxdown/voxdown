@@ -252,3 +252,25 @@ describe("a long story's marks", () => {
     view.destroy();
   });
 });
+
+describe("Enter in a mark not finished", () => {
+  it("closes it, and Enter again at the line's end ends the line without the space", async () => {
+    const { markEnter } = await import("../src/quotes");
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "The door [creak",
+        selection: EditorSelection.cursor(15),
+        extensions: [markEnter],
+      }),
+      parent: document.body,
+    });
+    const enter = () =>
+      runScopeHandlers(view, new KeyboardEvent("keydown", { key: "Enter" }), "editor");
+    expect(enter()).toBe(true);
+    expect(view.state.doc.toString()).toBe("The door [creak] ");
+    expect(enter()).toBe(true);
+    expect(view.state.doc.toString()).toBe("The door [creak]\n");
+    expect(view.state.selection.main.head).toBe(view.state.doc.length);
+    view.destroy();
+  });
+});

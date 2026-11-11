@@ -4,10 +4,11 @@
  * on nothing but putting the result in.
  */
 import { renderBook, renderScript } from "@voxdown/render";
-import { bookText, lines, parse } from "voxdown";
+import { parse } from "voxdown";
+import { type Counts, countsOf } from "./counts";
 
 export type RenderAsk = { id: number; text: string; tab: "script" | "book" | "none" };
-export type RenderReply = { id: number; html: string; words: number; said: number; voices: number };
+export type RenderReply = { id: number; html: string } & Counts;
 
 const scope = self as unknown as {
   onmessage: ((event: MessageEvent<RenderAsk>) => void) | null;
@@ -22,12 +23,5 @@ scope.onmessage = ({ data: { id, text, tab } }) => {
       : tab === "book"
         ? renderBook(story, { pages: true, positions: true })
         : "";
-  const said = lines(story).filter((line) => line.kind === "speech" || line.kind === "vocal");
-  scope.postMessage({
-    id,
-    html,
-    words: bookText(story).match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0,
-    said: said.length,
-    voices: new Set(said.map((line) => line.speaker)).size,
-  });
+  scope.postMessage({ id, html, ...countsOf(story) });
 };

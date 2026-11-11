@@ -53,9 +53,13 @@ export const words = (count: number): string =>
 
 /** How long words take to hear, read aloud at a storyteller's pace (150 words a minute). */
 export function listening(words: number): string {
-  const minutes = words / 150;
-  if (minutes < 1) return `${Math.max(1, Math.round(minutes * 60))} s to hear`;
-  const whole = Math.round(minutes);
+  return timeToHear((words / 150) * 60);
+}
+
+/** A time to hear, as said: `40 s to hear`, `12 min to hear`, `2 h 5 min to hear`. */
+export function timeToHear(seconds: number): string {
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s to hear`;
+  const whole = Math.round(seconds / 60);
   if (whole < 60) return `${whole} min to hear`;
   return `${Math.floor(whole / 60)} h ${whole % 60} min to hear`;
 }

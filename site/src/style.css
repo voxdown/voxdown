@@ -24,6 +24,8 @@
   --mark-note: #854d0e;
   --brand: #245f61;
   --brand-ink: #ffffff;
+  /* Warnings: red that reads at 4.5:1 or better on the paper. */
+  --warning: #c81e1e;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -36,6 +38,7 @@
     --quiet: #9aa1ab;
     --rule: #2c3036;
     --pencil: #8fb3f0;
+    --warning: #ff8a8a;
     --mark-direction: #c4b5fd;
     --mark-sound: #5eead4;
     --mark-page: #fbbf24;
@@ -64,6 +67,7 @@
   --quiet: #9aa1ab;
   --rule: #2c3036;
   --pencil: #8fb3f0;
+  --warning: #ff8a8a;
   --mark-direction: #c4b5fd;
   --mark-sound: #5eead4;
   --mark-page: #fbbf24;

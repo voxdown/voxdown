@@ -64,6 +64,7 @@ import "../style.css";
 import "./writer.css";
 import "../theme";
 import { castPanel } from "./cast";
+import { type Counts, countsOf } from "./counts";
 import { changesOnly, diffLines, withWords } from "./diff";
 import { emphasis, plainText, toggleEmphasis } from "./emphasis";
 import {
@@ -121,6 +122,7 @@ import {
   glimpse,
   listening,
   proseWords,
+  timeToHear,
   wordCount,
   words as wordsSaid,
 } from "./words";
@@ -375,7 +377,7 @@ function editorState(source: string, cursor: number): EditorState {
           {
             key: "Mod-k",
             run: () => {
-              tools.openSpeaker(passageAtCursor());
+              tools.openSpeaker(passageAtCursor(), undefined, view.state.selection.main.head);
               return true;
             },
           },
@@ -710,15 +712,6 @@ renderer.addEventListener("message", ({ data: reply }: MessageEvent<RenderReply>
   }
 });
 
-function countsOf(of: Story): { words: number; said: number; voices: number } {
-  const said = lines(of).filter((line) => line.kind === "speech" || line.kind === "vocal");
-  return {
-    words: bookText(of).match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0,
-    said: said.length,
-    voices: new Set(said.map((line) => line.speaker)).size,
-  };
-}
-
 let idle: number | undefined;
 let idleTimer: ReturnType<typeof setTimeout> | undefined;
 function whenIdle(run: () => void): void {
@@ -919,11 +912,7 @@ let nudged = "";
 /** The story open, and its words when it was opened here. */
 let session: { id: string; words: number; reached: boolean } | undefined;
 
-function showCounts({
-  words,
-  said,
-  voices,
-}: { words: number; said: number; voices: number }): void {
+function showCounts({ words, said, voices, heard }: Counts): void {
   const scenes = Math.max(0, ...sceneNumbers(view.state).values());
   const plural = (n: number, one: string, many = `${one}s`) =>
     `${n.toLocaleString()} ${n === 1 ? one : many}`;
@@ -941,7 +930,8 @@ function showCounts({
     plural(said, "line said", "lines said"),
     plural(voices, "voice"),
     plural(scenes, "scene"),
-    ...(words ? [listening(words)] : []),
+    // How long it takes to hear: what is read aloud, and its pauses, not what is printed.
+    ...(heard > 0 ? [timeToHear(heard)] : []),
   ].join(" · ");
   $("#counts").title = since
     ? `${since > 0 ? "+" : "−"}${wordsSaid(Math.abs(since))} since the story was opened`
@@ -1001,40 +991,45 @@ function showSide(drawn?: string): void {
     }
   } else if (prefs.tab === "cast")
     sheet.replaceChildren(
-      castPanel(story, colors, {
-        rename: (from, to) =>
-          attempt(
-            () => renameCharacter(current(), from, to),
-            `${from} can’t be renamed ${to} here.`,
-          ),
-        fullName: (handle, name) =>
-          attempt(
-            () => setFullName(current(), handle, name),
-            `The cast can’t give ${handle} that name as written.`,
-          ),
-        about: (handle, about) =>
-          attempt(
-            () => setAbout(current(), handle, about || null),
-            `The cast can’t say that about ${handle} as written.`,
-          ),
-        // Their next line after the cursor, round to the first after the last.
-        find: (handle) => {
-          const doc = view.state.doc;
-          const theirs = lines(current())
-            .filter((row) => row.speaker?.toLowerCase() === handle.toLowerCase())
-            .map((row) => Math.min(doc.line(row.line).from + row.column - 1, doc.length));
-          if (theirs.length === 0) return notice(`${handle} has no lines yet.`);
-          const here = view.state.selection.main.head;
-          const at = theirs.find((place) => place > here) ?? (theirs[0] as number);
-          view.dispatch({
-            selection: EditorSelection.cursor(at),
-            effects: EditorView.scrollIntoView(at, { y: "center" }),
-          });
-          announce(`${handle}, line ${theirs.indexOf(at) + 1} of ${theirs.length}`);
-          toTheText();
+      castPanel(
+        story,
+        colors,
+        {
+          rename: (from, to) =>
+            attempt(
+              () => renameCharacter(current(), from, to),
+              `${from} can’t be renamed ${to} here.`,
+            ),
+          fullName: (handle, name) =>
+            attempt(
+              () => setFullName(current(), handle, name),
+              `The cast can’t give ${handle} that name as written.`,
+            ),
+          about: (handle, about) =>
+            attempt(
+              () => setAbout(current(), handle, about || null),
+              `The cast can’t say that about ${handle} as written.`,
+            ),
+          // Their next line after the cursor, round to the first after the last.
+          find: (handle) => {
+            const doc = view.state.doc;
+            const theirs = lines(current())
+              .filter((row) => row.speaker?.toLowerCase() === handle.toLowerCase())
+              .map((row) => Math.min(doc.line(row.line).from + row.column - 1, doc.length));
+            if (theirs.length === 0) return notice(`${handle} has no lines yet.`);
+            const here = view.state.selection.main.head;
+            const at = theirs.find((place) => place > here) ?? (theirs[0] as number);
+            view.dispatch({
+              selection: EditorSelection.cursor(at),
+              effects: EditorView.scrollIntoView(at, { y: "center" }),
+            });
+            announce(`${handle}, line ${theirs.indexOf(at) + 1} of ${theirs.length}`);
+            toTheText();
+          },
+          notice,
         },
-        notice,
-      }),
+        lockedOut,
+      ),
     );
   else sheet.replaceChildren(warningList());
   indexSheet();
@@ -1948,8 +1943,14 @@ const lock = new DraftLock(
     view.dispatch({ effects: editable.reconfigure(editability()) });
     $("#elsewhere").hidden = false;
     tools.hide();
+    // The cast is shown, not changed, here now.
+    showSide();
   },
-  () => keep(),
+  // Before another tab takes the story: what is typed on the side too, then the draft.
+  () => {
+    commitPending();
+    return keep();
+  },
   () => void follow(),
   () => void gained(),
 );
@@ -2646,7 +2647,7 @@ const COMMANDS: Record<string, () => unknown> = {
     bold(view);
     view.focus();
   },
-  who: () => tools.openSpeaker(passageAtCursor()),
+  who: () => tools.openSpeaker(passageAtCursor(), undefined, view.state.selection.main.head),
   how: () => tools.openDirection(passageAtCursor()),
   "paragraph-up": () => {
     moveParagraph(view, -1, frontMatterEnd());

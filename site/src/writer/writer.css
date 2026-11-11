@@ -107,10 +107,10 @@ body.writer {
   background: var(--pencil);
 }
 .save-state[data-state="error"] {
-  color: #c2410c;
+  color: var(--warning);
 }
 .save-state[data-state="error"]::before {
-  background: #c2410c;
+  background: var(--warning);
 }
 .save-button.needed,
 .button.primary {
@@ -396,8 +396,9 @@ body.writer {
 
 /* The manuscript: a sheet of paper on the desk. */
 .manuscript {
-  /* Notes in the theme's note colour, dark enough on their tint to read. */
+  /* Notes and warnings in the theme's colours, each dark (or light) enough to read. */
   --vxd-note: var(--mark-note);
+  --vxd-warning: var(--warning);
   position: relative;
   display: flex;
   justify-content: center;

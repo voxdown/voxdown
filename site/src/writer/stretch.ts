@@ -12,6 +12,7 @@ import {
   type TextChange,
   applyChanges,
   isName,
+  lines,
   parse,
   setDirection,
   setFullName,
@@ -145,15 +146,22 @@ export function dialogueTag(before: string, after: string): string | undefined {
 /** A quote in a stretch of the source: where it opens and closes, and its words. */
 export type Quote = { from: number; to: number; text: string };
 
+/** Every quote with words between `from` and `to`, in the source, in order. */
+export function quotesIn(source: string, from: number, to: number): Quote[] {
+  const quotes: Quote[] = [];
+  for (const found of source.slice(from, to).matchAll(/[“"«„「『‘]([^”"»“」』’\n]+)[”"»“」』’]/gu))
+    if (/[\p{L}\p{N}]/u.test(found[1] ?? ""))
+      quotes.push({
+        from: from + found.index,
+        to: from + found.index + found[0].length,
+        text: found[1] as string,
+      });
+  return quotes;
+}
+
 /** The first quote between `from` and `to`, in the source. */
 export function firstQuote(source: string, from: number, to: number): Quote | undefined {
-  const found = /[“"«„「『‘]([^”"»“」』’\n]+)[”"»“」』’]/u.exec(source.slice(from, to));
-  if (!found || !/[\p{L}\p{N}]/u.test(found[1] ?? "")) return undefined;
-  return {
-    from: from + found.index,
-    to: from + found.index + found[0].length,
-    text: found[1] as string,
-  };
+  return quotesIn(source, from, to)[0];
 }
 
 /**
@@ -169,11 +177,47 @@ export function nextNarratedQuote(story: Story, after: number): Quote | undefine
       for (const item of line.items) {
         if (item.kind !== "speech" || item.quoted || item.speaker.toLowerCase() !== narrator)
           continue;
-        const quote = firstQuote(story.source, item.range.from, item.range.to);
-        if (quote) quotes.push(quote);
+        quotes.push(...quotesIn(story.source, item.range.from, item.range.to));
       }
   }
   return quotes.find((quote) => quote.from > after) ?? quotes[0];
+}
+
+/**
+ * Gives one quote in the narrator's words (not the first) to `name`: a mark straight before it,
+ * and someone new joins the cast. Read back: the quote is theirs, and every word heard is heard as
+ * before; else no changes.
+ */
+export function giveQuote(story: Story, quote: Quote, name: string): TextChange[] {
+  let changes: TextChange[] = [{ from: quote.from, to: quote.from, insert: `@${name} ` }];
+  const known = story.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
+  const hasCast = story.cast.length > 0 || "cast" in (story.frontMatter?.data ?? {});
+  if (!known && hasCast) {
+    const cast = setFullName(parse(applyChanges(story.source, changes)), name, name);
+    if (cast.length) changes = composed(story.source, changes, cast);
+  }
+  const after = parse(applyChanges(story.source, changes));
+  const at = mapped(changes, quote.from) + 1;
+  const given = after.blocks
+    .flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+    .flatMap((line) => line.items)
+    .find(
+      (item): item is Speech =>
+        item.kind === "speech" && item.quoted && item.range.from <= at && at <= item.range.to,
+    );
+  // The words heard, quote marks aside, the same before and after.
+  const heard = (of: Story) =>
+    lines(of)
+      .map((line) => line.text)
+      .join(" ")
+      .replace(/[“”"«»„‚‘’「」『』]/gu, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  return given &&
+    given.speaker.toLowerCase() === name.toLowerCase() &&
+    heard(after) === heard(story)
+    ? changes
+    : [];
 }
 
 /** The passage a character mark gives its speaker to. */
@@ -337,8 +381,8 @@ export class StretchTools {
   }
 
   /** The speaker picker for the passage at `at`, below `anchor` or the cursor. */
-  openSpeaker(at: number, anchor?: Element): void {
-    if (this.revealThen(at, anchor, () => this.openSpeaker(at, anchor))) return;
+  openSpeaker(at: number, anchor?: Element, cursor?: number): void {
+    if (this.revealThen(at, anchor, () => this.openSpeaker(at, anchor, cursor))) return;
     const story = this.context.story();
     const speech = speechAt(story, at);
     if (!speech) {
@@ -351,10 +395,17 @@ export class StretchTools {
     // The name the dialogue tag gives, first: one of the cast, or someone new. A quote in the
     // narrator's words is the one its tag is about.
     const source = story.source;
-    const quote =
+    // The quote the cursor is in, or else the first.
+    const quotes =
       speech.speaker.toLowerCase() === story.meta.narrator.toLowerCase() && !speech.quoted
-        ? firstQuote(source, speech.range.from, speech.range.to)
-        : undefined;
+        ? quotesIn(source, speech.range.from, speech.range.to)
+        : [];
+    const quote =
+      quotes.find((found) => cursor !== undefined && found.from <= cursor && cursor <= found.to) ??
+      quotes[0];
+    // A quote after the first in the narrator's words is given on its own; the first goes as the
+    // core gives a passage.
+    const later = quote && quote !== quotes[0] ? quote : undefined;
     const quoteFrom = quote?.from ?? speech.mark?.range.from ?? speech.range.from;
     const quoteTo = quote?.to ?? speech.range.to;
     const lineStart = source.lastIndexOf("\n", quoteFrom - 1) + 1;
@@ -398,7 +449,7 @@ export class StretchTools {
       if (speaker === tagged || (tag && speaker.handle === tag && !tagged))
         button.dataset.tagged = "";
       button.dataset.handle = speaker.handle;
-      button.addEventListener("click", () => this.giveTo(speech.range.from, speaker.handle));
+      button.addEventListener("click", () => this.giveTo(speech.range.from, speaker.handle, later));
       item.append(button);
       list.append(item);
     }
@@ -433,7 +484,7 @@ export class StretchTools {
       const left = shown();
       const pick = exact ?? (name && left.length === 1 ? left[0] : undefined);
       if (pick?.dataset.handle) {
-        this.giveTo(speech.range.from, pick.dataset.handle);
+        this.giveTo(speech.range.from, pick.dataset.handle, later);
         return;
       }
       if (!isName(name)) {
@@ -441,7 +492,7 @@ export class StretchTools {
         input.reportValidity();
         return;
       }
-      this.giveTo(speech.range.from, name);
+      this.giveTo(speech.range.from, name, later);
     });
     // The box above the list: up from the list's top goes to it.
     this.showPopover("Who says this?", [form, list], anchor, at);
@@ -518,10 +569,19 @@ export class StretchTools {
     input.select();
   }
 
-  private giveTo(from: number, name: string): void {
+  private giveTo(from: number, name: string, quote?: Quote): void {
     const fresh = this.context.story();
     const target = speechAt(fresh, from);
     if (!target) {
+      this.closePopover(true);
+      return;
+    }
+    if (quote) {
+      const changes = giveQuote(fresh, quote, name);
+      this.context.apply(
+        changes,
+        `This quote can’t be given to ${name} without changing who says other lines, so nothing changed.`,
+      );
       this.closePopover(true);
       return;
     }

@@ -4,6 +4,7 @@ import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
 import { describe, expect, it, vi } from "vitest";
 import { applyChanges, bookText, lines, parse } from "voxdown";
+import { countsOf } from "../src/writer/counts";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, plainText, toggleEmphasis } from "../src/writer/emphasis";
 import { asStory, decode } from "../src/writer/files";
@@ -20,7 +21,9 @@ import { thinVersions } from "../src/writer/store";
 import {
   composed,
   dialogueTag,
+  giveQuote,
   nextNarratedQuote,
+  quotesIn,
   speechAt,
   speechOfMark,
 } from "../src/writer/stretch";
@@ -786,5 +789,40 @@ describe("a reading stopped", () => {
     expect(said).toEqual(["NEW"]);
     expect(hearing.on).toBe(false);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("two quotes in the narrator's words", () => {
+  const text = "“Hello,” said Alice. “Goodbye,” said Bob.";
+
+  it("gives the second to its speaker and leaves the first as it was", () => {
+    const story = parse(text);
+    const [, second] = quotesIn(text, 0, text.length);
+    const given = applyChanges(text, giveQuote(story, second as NonNullable<typeof second>, "Bob"));
+    expect(given).toBe("“Hello,” said Alice. @Bob “Goodbye,” said Bob.");
+    const heard = lines(parse(given)).map((line) => [line.speaker, line.text]);
+    expect(heard).toEqual([
+      ["Narrator", "“Hello,” said Alice."],
+      ["Bob", "Goodbye,"],
+      ["Narrator", "said Bob."],
+    ]);
+  });
+
+  it("are both found by the next quote with no speaker", () => {
+    const story = parse(text);
+    const first = nextNarratedQuote(story, -1);
+    const second = nextNarratedQuote(story, first?.from ?? 0);
+    expect([first?.text, second?.text]).toEqual(["Hello,", "Goodbye,"]);
+  });
+});
+
+describe("the counts", () => {
+  it("time what is heard, not what is printed, and add the pauses", () => {
+    const printed = `{book only} ${"word ".repeat(1000)}\n\n{audio only} Hi.`;
+    expect(countsOf(parse(printed)).heard).toBeLessThan(2);
+    expect(countsOf(parse(printed)).words).toBe(1000);
+    const heard = `{audio only} ${"word ".repeat(1000)}\n\n{pause 120s}`;
+    expect(Math.round(countsOf(parse(heard)).heard)).toBe(400 + 120);
+    expect(countsOf(parse(heard)).words).toBe(0);
   });
 });

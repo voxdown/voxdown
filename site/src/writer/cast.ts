@@ -30,6 +30,8 @@ export function castPanel(
   story: Story,
   colors: ReadonlyMap<string, string>,
   actions: CastActions,
+  /** Another tab writes the story: the cast is shown, not changed. */
+  readOnly = false,
 ): HTMLElement {
   const said = new Map<string, number>();
   const words = new Map<string, number>();
@@ -69,7 +71,21 @@ export function castPanel(
   const commit = (
     field: HTMLInputElement | HTMLTextAreaElement,
     run: (value: string) => { done: boolean; renamed?: string; from?: string } | undefined,
+    /** Made as typing pauses too, so nothing typed waits on the field being left. */
+    asTyped = false,
   ) => {
+    field.readOnly = readOnly;
+    if (asTyped) {
+      let pause: ReturnType<typeof setTimeout> | undefined;
+      field.addEventListener("input", () => {
+        clearTimeout(pause);
+        pause = setTimeout(() => {
+          if (field.value === field.defaultValue || document.activeElement !== field) return;
+          if (run(field.value)?.done) field.defaultValue = field.value;
+        }, 1200);
+      });
+      field.addEventListener("focusout", () => clearTimeout(pause));
+    }
     field.addEventListener("keydown", (event) => {
       const key = event as KeyboardEvent;
       if (key.key === "Enter" && !key.shiftKey) {
@@ -137,16 +153,25 @@ export function castPanel(
       }
       return { done: actions.rename(handle, next), renamed: next, from: handle };
     });
-    commit(nameInput, (value) => {
-      const next = value.trim();
-      if (next === nameInput.defaultValue) return undefined;
-      return { done: actions.fullName(handle, next || handle) };
-    });
-    commit(aboutInput, (value) => {
-      if (value.trim() === aboutInput.defaultValue.trim()) return undefined;
-      return { done: actions.about(handle, value.trim()) };
-    });
+    commit(
+      nameInput,
+      (value) => {
+        const next = value.trim();
+        if (next === nameInput.defaultValue.trim()) return undefined;
+        return { done: actions.fullName(handle, next || handle) };
+      },
+      true,
+    );
+    commit(
+      aboutInput,
+      (value) => {
+        if (value.trim() === aboutInput.defaultValue.trim()) return undefined;
+        return { done: actions.about(handle, value.trim()) };
+      },
+      true,
+    );
     const find = item.querySelector(".cast-find") as HTMLElement;
+    if (readOnly) item.dataset.readonly = "";
     find.dataset.focus = `${handle}:find`;
     find.addEventListener("click", () => actions.find(handle));
     if (!member && !isNarrator) {
@@ -154,6 +179,7 @@ export function castPanel(
       add.type = "button";
       add.className = "button quiet cast-add";
       add.textContent = "Add to the cast";
+      add.disabled = readOnly;
       add.dataset.focus = `${handle}:add`;
       add.addEventListener("click", () => {
         if (actions.fullName(handle, handle)) refocus(`${handle}:name`);

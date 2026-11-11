@@ -1476,6 +1476,23 @@ if (!/@Mara “Is anyone there\?”/.test(marked))
 // Someone new is added to the cast with the give, so the name raises no warning.
 if (!/^ {2}Mara:/m.test(marked))
   problems.push("writer: a passage given to someone new didn't add them to the cast");
+// Two quotes in the narrator's words: Ctrl+K in the second gives the second, to its tag's name.
+await author.keyboard.press("Control+End");
+await author.keyboard.insertText("\n\n“Hello,” said Alice. “Goodbye,” said Bob.\n");
+await settled();
+await author.keyboard.press("Control+f");
+await author.keyboard.type("Goodbye");
+await author.keyboard.press("Enter");
+await author.keyboard.press("Escape");
+await author.keyboard.press("Control+k");
+await author.waitForSelector(".speaker-choice");
+if (!(await author.locator(".speaker-choice").first().textContent())?.includes("Bob"))
+  problems.push("writer: in a line of two quotes, the picker offers the first quote's tag");
+await author.keyboard.press("Enter");
+await settled();
+const twoQuotes = await kept();
+if (!twoQuotes.includes("“Hello,” said Alice. @Bob “Goodbye,” said Bob."))
+  problems.push("writer: Ctrl+K in a line's second quote gave the wrong quote");
 // A name picked from the list has its space: the one typed after it out of habit isn't doubled.
 await author.keyboard.press("Control+End");
 await author.keyboard.type("\n\n@Ger");
@@ -1828,11 +1845,17 @@ await second
   )
   .catch(() => problems.push("writer: a tab that only reads doesn't follow the one that writes"));
 await first.keyboard.type(" Last words.");
+// What is typed about a character, the field not left, goes with the story to the other tab.
+await first.click('.side-tab[data-tab="cast"]');
+await first.locator(".cast-about").first().fill("Typed in the first tab, field not left.");
 await second.click("#edit-here");
 await second.waitForSelector("#elsewhere", { state: "hidden" });
 await second.waitForTimeout(300);
 if (!(await second.locator(".cm-content").innerText()).includes("Last words."))
   problems.push("writer: taking the story to a second tab lost the first tab's last words");
+await second.waitForTimeout(600);
+if (!(await draftIn(second)).includes("field not left"))
+  problems.push("writer: taking the story to another tab lost what was typed in the cast");
 await first.waitForSelector("#elsewhere:not([hidden])");
 // The first tab, now reading only, saves nothing over what the second writes: it asks.
 const diskBefore = await first.evaluate(() => localStorage.getItem("__disk"));

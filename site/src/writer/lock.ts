@@ -6,7 +6,7 @@
 
 const LOCK = "voxdown-writer-draft";
 
-type Message = { type: "flush" } | { type: "flushed" };
+type Message = { type: "flush" } | { type: "flushed" } | { type: "kept" };
 
 export class DraftLock {
   /** Whether this tab writes the story. */
@@ -19,13 +19,21 @@ export class DraftLock {
     private readonly onLost: () => void,
     /** Keeps the draft now, before another tab takes it. */
     private readonly flush: () => Promise<void>,
+    /** The tab that writes the story kept it: a tab that reads it can follow. */
+    private readonly onKept: () => void = () => {},
   ) {
     this.channel?.addEventListener("message", (event: MessageEvent<Message>) => {
+      if (event.data?.type === "kept" && !this.owner) this.onKept();
       if (event.data?.type !== "flush" || !this.owner) return;
       void this.flush().then(() =>
         this.channel?.postMessage({ type: "flushed" } satisfies Message),
       );
     });
+  }
+
+  /** Tells the tabs that read the story that its draft was just kept. */
+  kept(): void {
+    if (this.owner) this.channel?.postMessage({ type: "kept" } satisfies Message);
   }
 
   /**

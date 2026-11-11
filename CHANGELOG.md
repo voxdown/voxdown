@@ -12,7 +12,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - **View** switches what the editor draws (names, directions, sounds, character sounds, page turns, notes, colors by speaker, or every mark raw), remembered on this computer. **File** also tidies the story, with curly quotes or not.
 - A status line counts words, lines said, voices and scenes, and says where the cursor is and whether the draft is kept.
 - Resting the pointer on a passage brings a small bar over it: who says it, and how. Each opens a picker: a speaker from the cast (or someone new), and a direction, with those the story already uses. A click on a name in the text opens the speaker picker too, as do **Edit › Who says this…** and **How it's said…** for the passage at the cursor. The changes are the core's own `setSpeaker` and `setDirection`: where one would change other lines, the Writer says so and changes nothing.
-- **Cast**, on the side: rename a character everywhere by their short name, set their full name, or add a name the story uses to the cast; → goes to their first line.
+- **Cast**, on the side: rename a character everywhere by their short name, set their full name, or add a name the story uses to the cast; → goes to their next line.
 - Warnings with a fix offer it in one click, in the list and in a tip over the words in the text. The list also has the slips the editor sees as you type, such as `@ Wanda`.
 - Undo and redo, find and replace (Ctrl+F), and Alt+↑/↓ to move a paragraph past the one before or after it, never above the front matter; all in the **Edit** menu too.
 
@@ -36,11 +36,17 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - On a narrow window, **Preview** and **Write** switch between the side and the manuscript, and what is covered can't be reached until it shows. A long file name never pushes the bar past the window.
 - The rail is one stop for the keyboard, its scenes reached with the arrows; F10 goes to the menus, Escape closes any menu; the speaker picker finds a name as it is typed; the focus stays in the cast after a rename.
 - A tap on a passage shows its bar on a touch screen; an insert never lands inside another mark; Enter closes a quote after its last word; a new story starts plain; the status line gives the listening time, and a selection's words and listening time.
-- The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
+- Files changed elsewhere: Save reads the file before writing it, even after a restart, when the browser must first ask again; **Keep both** saves yours to a new file; whichever isn't kept stays in **Earlier versions**. A file read again stays the same story, with its versions, the cursor and the page where they were, and Undo takes it back.
+- **Earlier versions** keeps every version from the last hour, then one an hour for a day, one a day for a month and one a week after that, and those kept before a change the Writer made; saving by itself keeps one at most every ten minutes. **Compare** shows what a version had that is gone, and what is new since. Drafts with changes never saved are never let go; **Recover a draft** gives each story's title and first words.
+- **Go to a chapter or scene** (Ctrl+Shift+O) finds one as its name is typed. F8 and Shift+F8 go to the next warning and the one before, and say it; Ctrl+. puts it right. Ctrl+I and Ctrl+B put italics and bold in or take them out, and the editor shows them.
+- A tab that only reads follows the one that writes, and saves nothing over it; switching **Save automatically** off stops the save waiting. The speaker and direction pickers stay open as the page scrolls; the menu bar is one stop for Tab, and Escape on it goes back to the text; Undo from a field in the cast undoes in the story; an opened story is ready to type in.
+- Cast gives each character's words and goes to their next line. The status line counts the words written since the story was opened. Headings and scene breaks go in with one blank line either side, no more. The script's small labels are 11 px at least and readable in both themes; on a phone, the bar is two rows.
+- The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings, emphasis, inserts, comparing and keeping versions), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
 
 **@voxdown/editor**
 - In a story longer than 30,000 characters, the marks move along with each change and are worked out afresh once typing pauses (`settleMarks`, `marksPending`, `FRESH_BELOW`): reading the whole story on every key took 110 ms at 100,000 words.
 - `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
+- Lines printed but not read aloud are easier to read, and a page turn's label is 11 px.
 
 **The playground**
 - Undo and redo, and find and replace: Ctrl+Z did nothing. Opening another story starts a new undo history.

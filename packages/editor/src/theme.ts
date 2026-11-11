@@ -84,7 +84,7 @@ export const scriptTheme = EditorView.theme({
     textUnderlineOffset: "3px",
   },
   ".cm-line.vxd-unheard": {
-    color: "color-mix(in srgb, currentColor 55%, transparent)",
+    color: "color-mix(in srgb, currentColor 70%, transparent)",
     fontStyle: "italic",
   },
   ".vxd-in-group": {
@@ -213,7 +213,7 @@ export const scriptTheme = EditorView.theme({
     gap: "8px",
     margin: "12px 0",
     fontFamily: "var(--vxd-ui-font, system-ui, sans-serif)",
-    fontSize: "10.5px",
+    fontSize: "11px",
     fontWeight: "600",
     lineHeight: "1",
     letterSpacing: "0.03em",

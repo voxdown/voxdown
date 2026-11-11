@@ -1,9 +1,15 @@
 /**
  * Alt+↑ and Alt+↓ move the paragraph the cursor is in, or the paragraphs the selection touches,
  * past the one before or after it: a paragraph being the lines between blank lines. The front
- * matter stays where it is, and nothing moves above it.
+ * matter stays where it is, and nothing moves above it. And a line of its own (a heading, a scene
+ * break) goes in after the paragraph the cursor is in.
  */
-import { EditorSelection, type EditorState, type Text } from "@codemirror/state";
+import {
+  EditorSelection,
+  type EditorState,
+  type Text,
+  type TransactionSpec,
+} from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 
 type Block = { from: number; to: number; first: number; last: number };
@@ -75,4 +81,44 @@ export function moveParagraph(
     userEvent: "move.line",
   });
   return true;
+}
+
+/**
+ * A line of its own after the paragraph the cursor is in (after the front matter, if the cursor
+ * is in it), one blank line either side, as many as there already are and no more. `select` is
+ * the part of it selected to type over; otherwise the cursor goes where writing goes on: the next
+ * paragraph, or a new one after it at the end of the story.
+ */
+export function afterParagraph(
+  state: EditorState,
+  frontMatterEnd: number | null,
+  line: string,
+  select?: string,
+): TransactionSpec {
+  const doc = state.doc;
+  const head = state.selection.main.head;
+  let number = doc.lineAt(
+    frontMatterEnd !== null && head <= frontMatterEnd ? Math.min(frontMatterEnd, doc.length) : head,
+  ).number;
+  while (number < doc.lines && !blank(doc, number)) number++;
+  // The paragraph's last line (or the one before a blank line the cursor is on), and the next
+  // paragraph's first, if any.
+  const last = blank(doc, number) ? number - 1 : number;
+  let following = last + 1;
+  while (following <= doc.lines && blank(doc, following)) following++;
+  const atEnd = following > doc.lines;
+  const insert = last < 1 ? `${line}\n\n` : `\n\n${line}${atEnd ? "\n\n" : ""}`;
+  const from = last < 1 ? 0 : doc.line(last).to;
+  // At the end, the blank lines after the paragraph give way to the new one's.
+  const to = atEnd && last >= 1 ? doc.length : from;
+  const at = select ? insert.indexOf(select) : -1;
+  return {
+    changes: { from, to, insert },
+    selection:
+      at >= 0
+        ? EditorSelection.range(from + at, from + at + (select?.length ?? 0))
+        : EditorSelection.cursor(
+            last >= 1 && !atEnd ? doc.line(following).from + insert.length : from + insert.length,
+          ),
+  };
 }

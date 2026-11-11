@@ -3,8 +3,8 @@
  *
  * - each story's draft, as typed, a moment after each change, so a closed tab, a crash or another
  *   story opened loses nothing (`documents`, the open one named by `drafts/current`);
- * - earlier versions of each story: as it was opened, each time it was saved, and every few
- *   minutes while it is written (`versions`);
+ * - earlier versions of each story: as it was opened, when it was saved, and every few minutes
+ *   while it is written, fewer the older they are (`versions`);
  * - the files opened lately, to open again where the browser lets a page keep a file (`recent`).
  */
 
@@ -48,7 +48,11 @@ const CURRENT = "current";
 /** How many files Open recent lists, how many stories' drafts are kept, versions of each. */
 const KEEP = 8;
 const KEEP_DRAFTS = 30;
-const KEEP_VERSIONS = 40;
+const KEEP_VERSIONS = 120;
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+/** Versions kept as a story is written, as against those kept before a change the Writer made. */
+const ROUTINE = new Set(["Saved", "While writing"]);
 
 let opened: Promise<IDBDatabase> | undefined;
 
@@ -161,13 +165,22 @@ export async function markSaved(id: string, content: string, modified: number): 
   }
 }
 
-/** Every story's draft, the latest change first; the oldest beyond the limit are let go. */
+/**
+ * Every story's draft, the latest change first. Beyond the limit, the oldest are let go, but only
+ * those saved to their file: a draft with changes never saved stays until the writer lets it go.
+ */
 export async function listDrafts(): Promise<Draft[]> {
   try {
     const all = (await done((await store(DOCUMENTS, "readonly")).getAll())) as Draft[];
     all.sort((a, b) => b.changedAt - a.changedAt);
-    for (const old of all.slice(KEEP_DRAFTS)) await forgetDraft(old.id);
-    return all.slice(0, KEEP_DRAFTS);
+    const unsaved = (draft: Draft) =>
+      draft.text.replace(/\r\n?/g, "\n") !== draft.saved.replace(/\r\n?/g, "\n");
+    const kept: Draft[] = [];
+    for (const draft of all) {
+      if (kept.length < KEEP_DRAFTS || unsaved(draft)) kept.push(draft);
+      else await forgetDraft(draft.id);
+    }
+    return kept;
   } catch {
     return [];
   }
@@ -199,15 +212,49 @@ export async function draftForFile(handle: FileSystemFileHandle): Promise<Draft 
   return undefined;
 }
 
-/** Keeps a version of a story, unless it is the same as the last one kept. */
+/**
+ * The versions worth keeping, the latest first: every one from the last hour; for the last day,
+ * the latest of each hour, and every one kept before a change the Writer made (opening, going
+ * back, tidying, reading the file again); then the latest of each day for a month, and of each
+ * week beyond. At most `KEEP_VERSIONS`.
+ */
+export function thinVersions<V extends Pick<Version, "at" | "why">>(
+  versions: readonly V[],
+  now: number,
+): V[] {
+  const seen = new Set<string>();
+  const kept: V[] = [];
+  for (const version of [...versions].sort((a, b) => b.at - a.at)) {
+    const age = now - version.at;
+    const bucket =
+      age < HOUR
+        ? undefined
+        : age < DAY
+          ? ROUTINE.has(version.why)
+            ? `hour ${Math.floor(version.at / HOUR)}`
+            : undefined
+          : age < 30 * DAY
+            ? `day ${Math.floor(version.at / DAY)}`
+            : `week ${Math.floor(version.at / (7 * DAY))}`;
+    if (bucket !== undefined) {
+      if (seen.has(bucket)) continue;
+      seen.add(bucket);
+    }
+    kept.push(version);
+    if (kept.length >= KEEP_VERSIONS) break;
+  }
+  return kept;
+}
+
+/** Keeps a version of a story, unless it is the same as the last one kept; fewer older ones. */
 export async function keepVersion(version: Version): Promise<void> {
   try {
     const earlier = await versionsOf(version.doc);
     if (earlier[0]?.text === version.text) return;
+    const kept = new Set(thinVersions([version, ...earlier], Date.now()));
     const writer = await store(VERSIONS, "readwrite");
     writer.add({ doc: version.doc, at: version.at, text: version.text, why: version.why });
-    for (const old of earlier.slice(KEEP_VERSIONS - 1))
-      if (old.key !== undefined) writer.delete(old.key);
+    for (const old of earlier) if (!kept.has(old) && old.key !== undefined) writer.delete(old.key);
   } catch {
     // Without IndexedDB there are no versions; the draft is all there is.
   }

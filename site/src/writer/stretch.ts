@@ -107,7 +107,24 @@ export class StretchTools {
     });
     this.bar.addEventListener("mouseenter", () => clearTimeout(this.hideTimer));
     this.bar.addEventListener("mouseleave", () => this.hideSoon());
-    view.scrollDOM.addEventListener("scroll", () => this.hide(), { passive: true });
+    // The page scrolled: the bar goes, but a picker open stays, moving with its words while they
+    // are in view, so nothing typed in it is lost.
+    let scrolled = view.scrollDOM.scrollTop;
+    view.scrollDOM.addEventListener(
+      "scroll",
+      () => {
+        const by = view.scrollDOM.scrollTop - scrolled;
+        scrolled = view.scrollDOM.scrollTop;
+        if (this.popover.hidden) return this.hide();
+        clearTimeout(this.hideTimer);
+        this.bar.hidden = true;
+        this.shown = null;
+        const room = this.context.host.clientHeight - this.popover.offsetHeight - 4;
+        const top = Number.parseFloat(this.popover.style.top) || 0;
+        this.popover.style.top = `${Math.min(Math.max(4, top - by), Math.max(4, room))}px`;
+      },
+      { passive: true },
+    );
     document.addEventListener("pointerdown", (event) => {
       if (this.popover.hidden) return;
       const target = event.target as Node;
@@ -162,12 +179,19 @@ export class StretchTools {
     });
   }
 
-  /** Takes the bar and any picker away: the text changed, or the page moved. */
+  /** The page's layout moved (the front matter opened, say): the bar, no longer over its words, goes. */
+  moved(): void {
+    if (!this.popover.hidden || this.bar.hidden) return;
+    this.bar.hidden = true;
+    this.shown = null;
+  }
+
+  /** Takes the bar and any picker away: the text changed. The keyboard goes back to the text. */
   hide(): void {
     clearTimeout(this.hideTimer);
     this.bar.hidden = true;
     this.shown = null;
-    if (!this.popover.hidden) this.closePopover(false);
+    if (!this.popover.hidden) this.closePopover(this.popover.contains(document.activeElement));
   }
 
   /** The speaker picker for the passage at `at`, below `anchor` or the cursor. */
@@ -354,6 +378,11 @@ export class StretchTools {
     const { clientX: x, clientY: y } = event;
     clearTimeout(this.restTimer);
     this.restTimer = setTimeout(() => {
+      // A warning shows its own tip there: the bar would cover it.
+      if (document.elementFromPoint(x, y)?.closest(".vxd-warning")) {
+        this.hideSoon();
+        return;
+      }
       const at = this.context.view.posAtCoords({ x, y });
       const speech = at === null ? undefined : speechAt(this.context.story(), at);
       if (!speech) {

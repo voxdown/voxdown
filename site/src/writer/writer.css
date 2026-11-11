@@ -368,6 +368,8 @@ body.writer {
 
 /* The manuscript: a sheet of paper on the desk. */
 .manuscript {
+  /* Notes in the theme's note colour, dark enough on their tint to read. */
+  --vxd-note: var(--mark-note);
   position: relative;
   display: flex;
   justify-content: center;
@@ -538,12 +540,34 @@ body.writer {
 .side-sheet .vxd {
   --vxd-muted: var(--quiet);
 }
+/* Names, directions, chips and page numbers at 11 px or more; a character's colour mixed with the
+   ink, so it reads at 4.5:1 or better on the paper of either theme. */
+.side-sheet .vxd .vxd-name,
+.side-sheet .vxd .vxd-chip,
+.side-sheet .vxd .vxd-direction > span,
+.side-sheet .vxd .vxd-turn,
+.side-sheet .vxd .vxd-page-number {
+  font-size: max(0.72em, 11px);
+}
+.side-sheet .vxd .vxd-group-label {
+  font-size: max(0.76em, 11.5px);
+}
 .side-sheet .vxd .vxd-chip-label {
-  font-size: 0.7rem;
+  font-size: 11px;
   color: var(--quiet);
 }
+.side-sheet .vxd .vxd-name,
+.side-sheet .vxd .vxd-group-label,
+.side-sheet .vxd .vxd-chip-vocal {
+  color: color-mix(in oklab, var(--vxd-c, var(--vxd-muted)) 60%, var(--ink));
+}
+.side-sheet .vxd .vxd-name:has(+ .vxd-narration) {
+  color: var(--quiet);
+}
+/* What isn't read aloud is told by its label, not faded past reading. */
 .side-sheet .vxd [data-visibility] {
-  opacity: 0.8;
+  opacity: 1;
+  color: color-mix(in oklab, var(--ink) 80%, var(--paper));
 }
 
 /* A long book's parts off screen are laid out only when they come into view. */
@@ -605,6 +629,20 @@ body.writer {
 }
 
 /* Another tab writes the story: this one reads it. */
+/* The banner of a tab that only reads: the story's first line moves down from under it. */
+.manuscript:has(#elsewhere:not([hidden])) .cm-content {
+  padding-top: 4.6rem;
+}
+.elsewhere button {
+  flex: none;
+  white-space: nowrap;
+}
+/* The welcome has no story behind it: no scenes, no counts. */
+body[data-welcome] .scene-rail,
+body[data-welcome] #counts,
+body[data-welcome] #cursor-place {
+  visibility: hidden;
+}
 .elsewhere {
   position: absolute;
   top: 1.6rem;
@@ -982,6 +1020,145 @@ body.writer {
   visibility: hidden;
 }
 
+/* Emphasis as written: the words in italics or bold, the signs faint. */
+.manuscript .vxd-em {
+  font-style: italic;
+}
+.manuscript .vxd-strong {
+  font-weight: 700;
+}
+.manuscript .vxd-em-sign {
+  color: var(--quiet);
+  font-style: normal;
+  font-weight: 400;
+}
+
+.list-words .list-excerpt {
+  display: block;
+  color: var(--quiet);
+  font: italic 0.86rem / 1.4 var(--story);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A version beside the story now. */
+.compare {
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(52rem, 94vw);
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+}
+.compare::backdrop {
+  background: rgb(20 25 35 / 0.35);
+}
+.compare h2 {
+  margin: 0 0 0.3rem;
+  font: 600 1.05rem / 1.3 var(--story);
+}
+.compare-lines {
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--desk-edge);
+  border-radius: 7px;
+  padding: 0.5rem 0;
+  font: 0.86rem / 1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.compare-lines > * {
+  display: block;
+  padding: 0 0.8rem 0 2rem;
+}
+.compare-gone {
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  text-decoration-color: color-mix(in srgb, #dc2626 70%, transparent);
+}
+.compare-new {
+  background: color-mix(in srgb, #16a34a 13%, transparent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, #16a34a 70%, transparent);
+}
+.compare-gone::before,
+.compare-new::before {
+  display: inline-block;
+  width: 1.2em;
+  margin-left: -1.2em;
+  text-decoration: none;
+}
+.compare-gone::before {
+  content: "−";
+}
+.compare-new::before {
+  content: "+";
+}
+.compare-skip {
+  color: var(--quiet);
+  font-style: italic;
+  margin: 0.2rem 0;
+}
+
+/* The outline: every chapter and scene. */
+.outline {
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(30rem, 94vw);
+  margin-top: 12vh;
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+}
+.outline::backdrop {
+  background: rgb(20 25 35 / 0.35);
+}
+.outline h2 {
+  margin: 0 0 0.5rem;
+  font: 600 1.05rem / 1.2 var(--story);
+}
+#outline-filter {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 7px;
+  background: var(--paper);
+  font-size: 0.95rem;
+}
+#outline-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow: auto;
+}
+#outline-list [role="option"] {
+  padding: 0.35rem 0.6rem 0.35rem 1.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+#outline-list [role="option"][data-chapter] {
+  padding-left: 0.6rem;
+  font-weight: 600;
+}
+#outline-list [role="option"]:hover,
+#outline-list [role="option"][aria-selected="true"] {
+  background: var(--tab);
+}
+#outline-list [role="option"][aria-selected="true"] {
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.outline-none {
+  padding: 0.5rem 0.6rem;
+  color: var(--quiet);
+  font-size: 0.88rem;
+}
+
 /* Drafts and versions to go back to. */
 .list-dialog {
   border: 1px solid var(--desk-edge);
@@ -1189,6 +1366,15 @@ body.writer {
   .appbar .spacer {
     display: none;
   }
+  /* The logo alone, its name still read out. */
+  .appbar .wordmark .word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .scene-rail[data-labels] {
     width: 2.4rem;
   }
@@ -1197,5 +1383,30 @@ body.writer {
   }
   #counts {
     display: none;
+  }
+}
+
+/* A phone: the menus on one row, the story's name and its buttons on the next. */
+@media (max-width: 600px) {
+  .appbar {
+    gap: 0.3rem 0.4rem;
+  }
+  .menu-button {
+    padding: 0.25rem 0.45rem;
+  }
+  .appbar .theme-switch {
+    order: 1;
+    margin-left: auto;
+  }
+  .appbar .spacer {
+    display: block;
+    order: 2;
+    flex: 0 0 100%;
+    height: 0;
+  }
+  .document,
+  .preview-toggle,
+  .save-button {
+    order: 3;
   }
 }

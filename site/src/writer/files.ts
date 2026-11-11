@@ -176,7 +176,7 @@ export async function mayWriteNow(handle: FileSystemFileHandle): Promise<boolean
   }
 }
 
-async function allowed(handle: FileSystemFileHandle, mode: "read" | "readwrite") {
+export async function allowed(handle: FileSystemFileHandle, mode: "read" | "readwrite") {
   if (!handle.queryPermission || !handle.requestPermission) return true;
   if ((await handle.queryPermission({ mode })) === "granted") return true;
   return (await handle.requestPermission({ mode })) === "granted";

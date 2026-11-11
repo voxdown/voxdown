@@ -1,7 +1,8 @@
 /**
  * The menu bar: a button opens its list; arrow keys move through it and to the next menu; Escape,
  * a click outside or a choice closes it. Items run commands by their `data-command`; check items
- * (`role="menuitemcheckbox"`) flip and tell the page.
+ * (`role="menuitemcheckbox"`) flip and tell the page. The bar is one stop for Tab, the arrow keys
+ * moving along it; Escape on the bar goes back to the text (`onLeave`).
  */
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -17,8 +18,15 @@ export function keys(spec: string): string {
 export function menus(
   bar: HTMLElement,
   onCommand: (command: string, item: HTMLElement) => void,
+  onLeave: () => void = () => {},
 ): { close: () => void } {
   const buttons = [...bar.querySelectorAll<HTMLButtonElement>(".menu-button")];
+  // One stop for Tab: the button last used.
+  const current = (button: HTMLButtonElement) => {
+    for (const other of buttons) other.tabIndex = other === button ? 0 : -1;
+  };
+  if (buttons[0]) current(buttons[0]);
+  for (const button of buttons) button.addEventListener("focus", () => current(button));
   const listOf = (button: HTMLButtonElement) =>
     document.getElementById(button.getAttribute("aria-controls") ?? "") as HTMLElement;
   const items = (list: HTMLElement) =>
@@ -60,6 +68,9 @@ export function menus(
       } else if (event.key === "ArrowUp") {
         event.preventDefault();
         show(button, "last");
+      } else if (event.key === "Escape" && !open) {
+        event.preventDefault();
+        onLeave();
       }
     });
     // Moving from one open menu's button to another opens that one, as menu bars do.
@@ -141,6 +152,11 @@ export function menus(
   // Left and right move along the bar itself, as they do inside an open menu.
   for (const button of buttons) {
     button.addEventListener("keydown", (event) => {
+      if (event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        (event.key === "Home" ? buttons[0] : buttons.at(-1))?.focus();
+        return;
+      }
       const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
       if (!by) return;
       event.preventDefault();

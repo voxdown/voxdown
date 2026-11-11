@@ -8,7 +8,7 @@ import { type Story, isName, lines } from "voxdown";
 export type CastActions = {
   rename: (from: string, to: string) => boolean;
   fullName: (handle: string, name: string) => boolean;
-  /** Takes the cursor to the character's first line. */
+  /** Takes the cursor to the character's next line. */
   find: (handle: string) => void;
   /** Says why something wasn't done. */
   notice: (message: string) => void;
@@ -27,9 +27,13 @@ export function castPanel(
   actions: CastActions,
 ): HTMLElement {
   const said = new Map<string, number>();
+  const words = new Map<string, number>();
   for (const line of lines(story)) {
-    if ((line.kind === "speech" || line.kind === "vocal") && line.speaker)
+    if ((line.kind === "speech" || line.kind === "vocal") && line.speaker) {
       said.set(line.speaker, (said.get(line.speaker) ?? 0) + 1);
+      const count = line.text.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
+      words.set(line.speaker, (words.get(line.speaker) ?? 0) + count);
+    }
   }
   const narrator = story.meta.narrator;
   const inCast = new Map(story.cast.map((member) => [member.handle.toLowerCase(), member]));
@@ -57,7 +61,7 @@ export function castPanel(
     const item = document.createElement("li");
     item.className = "cast-member";
     if (!member && !isNarrator) item.dataset.provisional = "";
-    item.innerHTML = `<span class="dot"></span><label class="cast-handle"><span aria-hidden="true">@</span><input type="text" spellcheck="false" autocomplete="off"></label><input class="cast-name" type="text" autocomplete="off"><span class="cast-lines"></span><button type="button" class="cast-find" title="Go to their first line" aria-label="Go to their first line">→</button>`;
+    item.innerHTML = `<span class="dot"></span><label class="cast-handle"><span aria-hidden="true">@</span><input type="text" spellcheck="false" autocomplete="off"></label><input class="cast-name" type="text" autocomplete="off"><span class="cast-lines"></span><button type="button" class="cast-find" title="Go to their next line" aria-label="Go to their next line">→</button>`;
     (item.querySelector(".dot") as HTMLElement).style.setProperty(
       "--c",
       colors.get(handle) ?? "var(--quiet)",
@@ -70,8 +74,9 @@ export function castPanel(
     nameInput.value = member && member.name !== member.handle ? member.name : "";
     nameInput.placeholder = isNarrator ? "Narrator" : member ? "Full name" : "Not in the cast yet";
     nameInput.setAttribute("aria-label", `Full name of ${handle}`);
+    const spoken = words.get(handle) ?? 0;
     (item.querySelector(".cast-lines") as HTMLElement).textContent =
-      `${count} ${count === 1 ? "line" : "lines"}${isNarrator ? " · reads the rest" : ""}`;
+      `${count} ${count === 1 ? "line" : "lines"}${spoken ? ` · ${spoken.toLocaleString()} ${spoken === 1 ? "word" : "words"}` : ""}${isNarrator ? " · reads the rest" : ""}`;
 
     const commit = (input: HTMLInputElement, run: () => void) => {
       input.addEventListener("keydown", (event) => {

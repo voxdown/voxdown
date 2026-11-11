@@ -339,6 +339,24 @@ const current = await writer
   .catch(() => null);
 if (current !== railNames[3])
   problems.push(`writer: after a jump to “${railNames[3]}”, the rail marks “${current}”`);
+// The outline: the last chapter or scene found by typing its name, gone to with Enter.
+const lastScene = railNames.at(-1) ?? "";
+const headingLines = dragon
+  .split("\n")
+  .flatMap((line, index) =>
+    /^#{1,6} .+$|^\* \* \*$|^\*\*\*$/.test(line.trimEnd()) ? [index + 1] : [],
+  );
+await writer.keyboard.press("Control+Shift+O");
+await writer.waitForSelector("#outline[open]");
+await writer.keyboard.type(lastScene);
+await writer.keyboard.press("Enter");
+await writer.waitForSelector("#outline", { state: "hidden" });
+await writer.waitForTimeout(200);
+const outlinePlace = await writer.textContent("#cursor-place");
+if (!outlinePlace?.startsWith(`Line ${headingLines.at(-1)},`))
+  problems.push(`writer: going to “${lastScene}” from the outline went to ${outlinePlace}`);
+await writer.click("#rail-scenes li:nth-child(4) button");
+await writer.waitForTimeout(300);
 await writer.keyboard.type("New words. ");
 await writer.waitForTimeout(250);
 if ((await writer.getAttribute("#save-state", "data-state")) !== "unsaved")
@@ -516,6 +534,52 @@ else {
     problems.push("writer: Undo doesn't take back going back to a version");
 }
 await keeping.close();
+
+// Many stories: beyond the drafts kept, saved ones are let go, never one with unsaved changes.
+const many = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const manyPage = await many.newPage();
+watch(manyPage, "writer many drafts");
+await manyPage.goto(`${base}/writer/`);
+await manyPage.waitForSelector("#welcome:not([hidden])");
+await manyPage.evaluate(
+  () =>
+    new Promise((resolve) => {
+      const request = indexedDB.open("voxdown-writer");
+      request.onsuccess = () => {
+        const transaction = request.result.transaction("documents", "readwrite");
+        const documents = transaction.objectStore("documents");
+        for (let i = 0; i < 36; i++)
+          documents.put({
+            id: `old-${i}`,
+            name: `story-${i}.vxd`,
+            text: i % 2 ? `Story ${i}, changed.` : `Story ${i}.`,
+            saved: `Story ${i}.`,
+            changedAt: 1000 + i,
+          });
+        transaction.oncomplete = () => resolve(undefined);
+      };
+    }),
+);
+await manyPage.click("#file-menu-button");
+await manyPage.click('[data-command="recover"]');
+await manyPage.waitForSelector("#list-dialog[open]");
+const keptIds = await manyPage.evaluate(
+  () =>
+    new Promise((resolve) => {
+      const request = indexedDB.open("voxdown-writer");
+      request.onsuccess = () => {
+        const all = request.result.transaction("documents").objectStore("documents").getAllKeys();
+        all.onsuccess = () => resolve(all.result);
+      };
+    }),
+);
+const lostUnsaved = Array.from({ length: 36 }, (_, i) => i).filter(
+  (i) => i % 2 && !keptIds.includes(`old-${i}`),
+);
+if (lostUnsaved.length)
+  problems.push(`writer: ${lostUnsaved.length} drafts with unsaved changes were let go`);
+if (keptIds.length >= 36) problems.push("writer: saved drafts beyond the limit are never let go");
+await many.close();
 console.log("writer: recovering a draft, going back to a version: ok");
 
 // Round two: a second tab on the welcome reads only, and asks before writing; saving
@@ -895,8 +959,140 @@ if (!(await autoPage.evaluate(() => window.__files["auto.vxd"].includes("Saved b
   problems.push("writer: Save automatically didn't save the file");
 if ((await autoPage.getAttribute("#save-state", "data-state")) !== "saved")
   problems.push("writer: after saving automatically, it still shows changes to save");
+// Switched off just after typing, the save that was waiting doesn't happen, and nothing says it
+// failed.
+await autoPage.keyboard.type(" Not this.");
+await autoPage.click("#file-menu-button");
+await autoPage.click('[data-view="autosave"]');
+await autoPage.keyboard.press("Escape");
+await autoPage.waitForTimeout(2800);
+if (await autoPage.evaluate(() => window.__files["auto.vxd"].includes("Not this.")))
+  problems.push("writer: switched off, Save automatically still saved");
+if (
+  (await autoPage.getAttribute("#save-state", "data-state")) !== "unsaved" ||
+  !(await autoPage.isHidden("#notice"))
+)
+  problems.push("writer: switching Save automatically off shows it failing");
 await auto.close();
 console.log("writer: saving automatically: ok");
+
+// A file changed elsewhere: read again in place, the same story with its versions, the cursor
+// where it was, Undo to take it back; and after a restart, when the browser must ask before the
+// page writes again, Save still asks before writing over changes made elsewhere.
+const synced = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await synced.addInitScript(() => {
+  const paragraphs = Array.from({ length: 60 }, (_, i) => `Paragraph ${i}.`).join("\n\n");
+  const disk = { text: `# Synced\n\n${paragraphs}\n`, at: 1 };
+  window.__disk = disk;
+  let granted = true;
+  window.__restart = () => {
+    granted = false;
+  };
+  const handle = {
+    kind: "file",
+    name: "synced.vxd",
+    getFile: async () => new File([disk.text], "synced.vxd", { lastModified: disk.at }),
+    createWritable: async () => {
+      let written = "";
+      return {
+        write: async (text) => {
+          written += text;
+        },
+        close: async () => {
+          disk.text = written;
+          disk.at += 1;
+        },
+      };
+    },
+    isSameEntry: async (other) => other.name === "synced.vxd",
+    queryPermission: async () => (granted ? "granted" : "prompt"),
+    requestPermission: async () => {
+      granted = true;
+      return "granted";
+    },
+  };
+  window.showOpenFilePicker = async () => [handle];
+});
+const sync = await synced.newPage();
+watch(sync, "writer file changed elsewhere");
+await sync.goto(`${base}/writer/`);
+await sync.click('.welcome [data-command="open"]');
+await sync.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "synced.vxd",
+);
+await sync.click(".cm-content");
+await sync.keyboard.press("Control+End");
+const syncPlace = await sync.textContent("#cursor-place");
+await sync.evaluate(() => {
+  window.__disk.text = window.__disk.text.replace("Paragraph 3.", "Paragraph 3, from the laptop.");
+  window.__disk.at += 5;
+  window.dispatchEvent(new Event("focus"));
+});
+await sync.waitForTimeout(1200);
+if (!(await draftIn(sync)).includes("from the laptop"))
+  problems.push("writer: a file changed elsewhere wasn't read again");
+if ((await sync.textContent("#cursor-place")) !== syncPlace)
+  problems.push("writer: reading the file again lost the writer's place");
+const storiesKept = () =>
+  sync.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const request = indexedDB.open("voxdown-writer");
+        request.onsuccess = () => {
+          const all = request.result.transaction("documents").objectStore("documents").count();
+          all.onsuccess = () => resolve(all.result);
+        };
+      }),
+  );
+await sync.waitForTimeout(500);
+if ((await storiesKept()) !== 1)
+  problems.push("writer: reading the file again made it a new story in Recover a draft");
+await sync.keyboard.press("Control+z");
+await sync.waitForTimeout(900);
+if ((await draftIn(sync)).includes("laptop"))
+  problems.push("writer: Undo doesn't take back the file read again");
+await sync.keyboard.press("Control+Shift+z");
+// A restart: the browser must ask before the page writes again. The file changes elsewhere,
+// words are typed here, and Save asks first.
+await sync.keyboard.press("Control+End");
+await sync.keyboard.type(" Mine.");
+await sync.evaluate(() => {
+  window.__restart();
+  window.__disk.text = window.__disk.text.replace(
+    "Paragraph 5.",
+    "Paragraph 5, a whole new chapter.",
+  );
+  window.__disk.at += 5;
+});
+await sync.keyboard.press("Control+s");
+await sync.waitForSelector("#ask[open]");
+if (!(await sync.textContent("#ask-message"))?.includes("changed outside"))
+  problems.push("writer: after a restart, Save wrote over changes made elsewhere without asking");
+await sync.click('#ask-buttons button[value="theirs"]');
+await sync.waitForTimeout(500);
+if (!(await sync.evaluate(() => window.__disk.text.includes("a whole new chapter"))))
+  problems.push("writer: Open it as it is now wrote over the file");
+if ((await draftIn(sync)).includes("Mine."))
+  problems.push("writer: Open it as it is now kept the words typed here in the text");
+// What was here is kept as a version, and compares with the story now.
+await sync.click("#file-menu-button");
+await sync.click('[data-command="versions"]');
+await sync.waitForSelector("#list-dialog[open]");
+const keptBefore = sync
+  .locator("#list-items li", { hasText: "Before the file was read again" })
+  .first();
+if ((await keptBefore.count()) === 0)
+  problems.push("writer: what was written here wasn't kept before the file was read again");
+else {
+  await keptBefore.locator("button", { hasText: "Compare" }).click();
+  await sync.waitForSelector("#compare[open]");
+  const gone = await sync.locator("#compare-lines .compare-gone").allInnerTexts();
+  if (!gone.some((line) => line.includes("Mine.")))
+    problems.push("writer: comparing a version doesn't show what it had that is gone now");
+  await sync.click('#compare button[value="close"]');
+}
+await synced.close();
+console.log("writer: a file changed elsewhere, read again, compared: ok");
 
 // Writing in the Writer: who says a passage and how, from the bar over it; undo; search; moving
 // a paragraph; renaming in the cast; and a warning's fix. Each change is read back from the
@@ -953,7 +1149,20 @@ await author.click('#ask-buttons button[value="discard"]');
 await author.click(".cm-content");
 await author.keyboard.press("Control+End");
 await author.keyboard.type("\n@ Wanda “Hi there.”\n");
+// Pasted, so that the bracket stays open (typed, the editor closes it).
+await author.keyboard.insertText("\nThe door [creaks\n");
 await settled();
+// F8 goes to a warning and says it; Ctrl+. puts it right.
+await author.keyboard.press("Control+Home");
+await author.keyboard.press("F8");
+await author.waitForTimeout(200);
+if (!(await author.textContent("#notice"))?.includes("(1 of 2)"))
+  problems.push("writer: F8 doesn't go to the first warning and say it");
+await author.keyboard.press("F8");
+await author.keyboard.press("Control+.");
+await settled();
+if (!(await kept()).includes("[creaks]"))
+  problems.push("writer: Ctrl+. didn't put the warning at the cursor right");
 await author.click('.side-tab[data-tab="warnings"]');
 const mend = author.locator("#side-sheet .fix").first();
 if ((await mend.count()) === 0) problems.push("writer: no fix offered for “@ Wanda”");
@@ -1103,6 +1312,14 @@ if (
   !(await second.evaluate(() => document.querySelector(".cm-content")?.contentEditable === "false"))
 )
   problems.push("writer: a second tab can write over the first tab's story");
+await first.keyboard.type(" Followed.");
+await second
+  .waitForFunction(
+    () => document.querySelector(".cm-content")?.textContent?.includes("Followed."),
+    undefined,
+    { timeout: 5000 },
+  )
+  .catch(() => problems.push("writer: a tab that only reads doesn't follow the one that writes"));
 await first.keyboard.type(" Last words.");
 await second.click("#edit-here");
 await second.waitForSelector("#elsewhere", { state: "hidden" });
@@ -1110,6 +1327,16 @@ await second.waitForTimeout(300);
 if (!(await second.locator(".cm-content").innerText()).includes("Last words."))
   problems.push("writer: taking the story to a second tab lost the first tab's last words");
 await first.waitForSelector("#elsewhere:not([hidden])");
+// The first tab, now reading only, saves nothing over what the second writes: it asks.
+const diskBefore = await first.evaluate(() => localStorage.getItem("__disk"));
+await first.keyboard.press("Control+s");
+await first.waitForSelector("#ask[open]");
+if (!(await first.textContent("#ask-message"))?.includes("another tab"))
+  problems.push("writer: a tab that only reads saves without asking");
+await first.click('#ask-buttons button[value="cancel"]');
+await first.waitForTimeout(300);
+if ((await first.evaluate(() => localStorage.getItem("__disk"))) !== diskBefore)
+  problems.push("writer: a tab that only reads saved over the file");
 await tabs.close();
 console.log("writer: two tabs, a file changed on disk: ok");
 

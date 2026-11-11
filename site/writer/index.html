@@ -10,7 +10,7 @@
 </head>
 <body class="writer">
 <header class="appbar">
-  <a class="wordmark" href="../"><img class="logo" src="../icon.svg" alt="" width="26" height="26">VoxDown <span class="product">Writer</span></a>
+  <a class="wordmark" href="../"><img class="logo" src="../icon.svg" alt="" width="26" height="26"><span class="word">VoxDown <span class="product">Writer</span></span></a>
   <div class="menus" role="menubar" aria-label="Writer">
     <div class="menu">
       <button class="menu-button" role="menuitem" type="button" id="file-menu-button" aria-haspopup="menu" aria-controls="file-menu" aria-expanded="false">File</button>
@@ -47,9 +47,15 @@
         <button role="menuitem" type="button" data-command="undo">Undo<kbd data-keys="Mod+Z"></kbd></button>
         <button role="menuitem" type="button" data-command="redo">Redo<kbd data-keys="Mod+Shift+Z"></kbd></button>
         <button role="menuitem" type="button" data-command="find">Find and replace…<kbd data-keys="Mod+F"></kbd></button>
+        <button role="menuitem" type="button" data-command="outline">Go to a chapter or scene…<kbd data-keys="Mod+Shift+O"></kbd></button>
+        <button role="menuitem" type="button" data-command="next-warning">Next warning<kbd data-keys="F8"></kbd></button>
+        <button role="menuitem" type="button" data-command="fix-here">Fix the warning here<kbd data-keys="Mod+."></kbd></button>
         <hr>
-        <button role="menuitem" type="button" data-command="who">Who says this…</button>
-        <button role="menuitem" type="button" data-command="how">How it’s said…</button>
+        <button role="menuitem" type="button" data-command="italic">Italics<kbd data-keys="Mod+I"></kbd></button>
+        <button role="menuitem" type="button" data-command="bold">Bold<kbd data-keys="Mod+B"></kbd></button>
+        <hr>
+        <button role="menuitem" type="button" data-command="who">Who says this…<kbd data-keys="Mod+K"></kbd></button>
+        <button role="menuitem" type="button" data-command="how">How it’s said…<kbd data-keys="Mod+J"></kbd></button>
         <hr>
         <button role="menuitem" type="button" data-command="paragraph-up">Move paragraph up<kbd data-keys="Alt+↑"></kbd></button>
         <button role="menuitem" type="button" data-command="paragraph-down">Move paragraph down<kbd data-keys="Alt+↓"></kbd></button>
@@ -175,12 +181,32 @@
   </form>
 </dialog>
 
+<dialog class="outline" id="outline" aria-labelledby="outline-title">
+  <form method="dialog">
+    <h2 id="outline-title">Go to</h2>
+    <input type="text" id="outline-filter" autocomplete="off" spellcheck="false" placeholder="Type to find a chapter or scene" role="combobox" aria-expanded="true" aria-controls="outline-list" aria-autocomplete="list" aria-label="Find a chapter or scene">
+    <ul id="outline-list" role="listbox" aria-label="Chapters and scenes"></ul>
+  </form>
+</dialog>
+
 <dialog class="list-dialog" id="list-dialog" aria-labelledby="list-title">
   <form method="dialog">
     <h2 id="list-title"></h2>
     <p class="sheet-note" id="list-note"></p>
     <ul class="list-items" id="list-items"></ul>
     <div class="ask-buttons"><button class="button" value="close">Close</button></div>
+  </form>
+</dialog>
+
+<dialog class="compare" id="compare" aria-labelledby="compare-title">
+  <form method="dialog">
+    <h2 id="compare-title"></h2>
+    <p class="sheet-note">Struck through: in that version, not now. Underlined: new since. Select any of it to copy it.</p>
+    <div class="compare-lines" id="compare-lines" tabindex="0" role="region" aria-label="The changes"></div>
+    <div class="ask-buttons">
+      <button class="button" value="close">Close</button>
+      <button class="button primary" type="button" id="compare-back">Go back to it</button>
+    </div>
   </form>
 </dialog>
 

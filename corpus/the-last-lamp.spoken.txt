@@ -85,3 +85,12 @@ Narrator: he said,
 Pruett: that’s me told.
 
 Narrator: The last lamp on Quay Street burned until morning, as it always had, and nobody switched it off.
+
+---
+
+Narrator: The next evening Nell came down early. He was already there, polishing the brass.
+Abernethy (softly): Couldn’t sleep,
+Narrator: he said.
+
+Nell: Neither could I,
+Narrator: * she said, and sat on the wall to watch.

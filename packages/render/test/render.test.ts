@@ -88,6 +88,22 @@ describe("the book view", () => {
     expect(directed).not.toContain("*");
   });
 
+  it("emphasizes a quote in the script view as in the book, the emphasis around its marks", () => {
+    const emphasis = (html: string) =>
+      html
+        .replace(/<(?!\/?(?:em|strong)\b)[^>]*>/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    for (const [source, expected] of [
+      ["@Ann *“Hello.”* said Ann.", "<em>“Hello.”</em> said Ann."],
+      ["@Ann **“Hello.”** said Ann.", "<strong>“Hello.”</strong> said Ann."],
+    ] as const) {
+      const story = parse(source);
+      expect(emphasis(renderBook(story, { header: false }))).toBe(expected);
+      expect(emphasis(renderScript(story, { header: false }))).toBe(`Ann${expected}`);
+    }
+  });
+
   it("reads links with brackets in their text, and an address's title and angle brackets", () => {
     const html = (text: string) => renderBook(parse(text), { header: false });
     expect(html("[a [fine] story](https://example.com)")).toContain(
@@ -420,6 +436,26 @@ describe("safety", () => {
     for (const view of ["book", "script"] as const) {
       const html = render(source, view);
       expect(html).not.toMatch(/<(?:script|img|b|i|u)\b/);
+    }
+  });
+
+  it("escapes HTML in a group's labels: its direction and its character's full name", () => {
+    const source = [
+      "---",
+      "cast:",
+      '  Gerald: "<img src=x onerror=alert(1)>"',
+      "---",
+      "",
+      "::: <img src=x onerror=alert(2)> {book only}",
+      "Hush.",
+      ":::",
+      "",
+      "::: @Gerald (<b>loud</b>)",
+      "Roar.",
+      ":::",
+    ].join("\n");
+    for (const view of ["book", "script"] as const) {
+      expect(render(source, view)).not.toMatch(/<(?:img|b)\b/);
     }
   });
 

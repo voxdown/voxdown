@@ -1,6 +1,6 @@
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { curlQuotes } from "voxdown";
+import { curlQuotes, parse, quotationMarks } from "voxdown";
 
 /**
  * Typographer's quotes as you type: `"` opens with “ after a space, a line's start or an opening
@@ -90,8 +90,48 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   const before = view.state.sliceDoc(Math.max(0, from - 1), from);
   // 6" and 5' are measurements, not quotes.
   if (/\d/u.test(before)) return false;
+  // Where the formatter keeps marks as written, typing does too: the front matter, a group line,
+  // an instruction, a note, a mark or direction, an image, and a link's address.
+  const story = parse(view.state.doc.toString());
+  const within = (range: { from: number; to: number }) => range.from < from && from < range.to;
+  if (story.frontMatter && from <= story.frontMatter.range.to) return false;
+  // Front matter still being written: the story opens with `---`, and nothing closes it yet.
+  {
+    const head = view.state.sliceDoc(0, from);
+    if (/^\uFEFF?---[ \t]*\r?\n/.test(head) && !/\n(?:---|\.\.\.)[ \t]*\r?\n/.test(head.slice(3))) {
+      return false;
+    }
+  }
+  for (const group of story.groups) {
+    if (within(group.range) || (group.closeRange && within(group.closeRange))) return false;
+  }
+  for (const block of story.blocks) {
+    if (block.kind === "break") continue;
+    for (const item of (block.kind === "heading" ? [block.line] : block.lines).flatMap(
+      (l) => l.items,
+    )) {
+      if (
+        item.kind !== "speech" &&
+        item.kind !== "vocal" &&
+        item.kind !== "sound" &&
+        within(item.range)
+      )
+        return false;
+    }
+  }
+  {
+    // A link's address, and an instruction or note still being written: a `{` the line hasn't
+    // closed, or a `%%` that opens a note no `%%` has closed yet.
+    const line = view.state.doc.lineAt(from);
+    const head = line.text.slice(0, from - line.from);
+    if (/\]\([^)]*$/u.test(head) || /\{[^{}]*$/u.test(head)) return false;
+    const notes = view.state.sliceDoc(0, from).replace(/\\%/g, "").split("%%").length - 1;
+    if (notes % 2 === 1) return false;
+  }
+  const marks = quotationMarks(story.meta.language);
   // A quote inside the other kind opens (“‘…’”); straight after its own opener, it closes it.
-  const nested = (text === '"' && before === "‘") || (text === "'" && before === "“");
+  const nested =
+    (text === '"' && before === marks.innerOpen) || (text === "'" && before === marks.open);
   // Straight after a name or its direction, a quote is the line it says: it opens.
   const line = view.state.doc.lineAt(from);
   const head = line.text.slice(0, from - line.from);
@@ -99,11 +139,17 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
     text === '"' &&
     /(^|[^\p{L}\p{N}\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?\s*(\([^()]*\))?\s*$/u.test(head);
   // A `"` after a dash closes a quote the line has open (`“Wait—”`) rather than open another.
-  const open = (head.match(/“/gu)?.length ?? 0) > (head.match(/”/gu)?.length ?? 0);
+  const count = (mark: string) => head.split(mark).length - 1;
+  const open =
+    marks.open === marks.close
+      ? count(marks.open) % 2 === 1
+      : count(marks.open) > count(marks.close);
   const closes = text === '"' && open && !nested && !afterMark;
   const opening =
     !closes && (from === 0 || before === "" || OPENS_AFTER.test(before) || nested || afterMark);
-  const insert = text === '"' ? (opening ? "“" : "”") : opening ? "‘" : "’";
+  // In the story's language (front matter's `language`): „…“ in German, «…» in French.
+  const insert =
+    text === '"' ? (opening ? marks.open : marks.close) : opening ? marks.innerOpen : "’";
   view.dispatch({
     changes: { from, to, insert },
     selection: { anchor: from + insert.length },
@@ -321,7 +367,7 @@ const CLOSER: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
  * typed rather than breaking the line inside it. A suggestion picked from the list comes first.
  */
 /** Prose on both sides: words, not a group's `:::`, a heading, a break or a note's line. */
-const PROSE = /^(?!\s*(?::{3}|#{1,6}\s|-{3,}|\*{3,}|%%)).*[\p{L}\p{N}]/u;
+const PROSE = /^(?!\s*(?::{3}|#{1,6}\s|([-*_])[ \t]*(?:\1[ \t]*){2,}$|%%)).*[\p{L}\p{N}]/u;
 
 /**
  * Two lines of words joined with Backspace at the start of the second (or Delete at the end of

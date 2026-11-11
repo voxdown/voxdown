@@ -388,6 +388,14 @@ const STYLES: Record<string, Style> = {
   zh: { open: "「", close: "」", innerOpen: "『", innerClose: "』" },
 };
 
+/**
+ * The quotation marks a language's curly quotes are written with, as `format` writes them: the
+ * opening and closing marks, and those of a quote inside a quote. For an editor that types them.
+ */
+export function quotationMarks(language?: string): Style {
+  return { ...styleFor(language) };
+}
+
 function styleFor(language: string | undefined): Style {
   const tag = (language ?? "en").toLowerCase().replace(/_/g, "-");
   const [primary = "en", region] = tag.split("-");
@@ -435,6 +443,9 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
   const unsafe = new Set<number>();
   const lineAt = (at: number) => source.lastIndexOf("\n", at - 1);
   const paired = new Set<number>();
+  // The quotes' edges in order, and each one's place among them, worked out once.
+  const quotes = tokens.filter((other) => other.type === "open" || other.type === "close");
+  const quoteIndex = new Map(quotes.map((quote, index) => [quote, index]));
   for (const token of tokens) {
     if (token.type !== "open" && token.type !== "close") continue;
     if (token.char !== '"' && token.char !== "'") continue;
@@ -446,8 +457,7 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
       // An apostrophe the parser reads as a quote's edge. `'n'` read as a quote of its own, or a
       // decade (`'90s`) opening one, is apostrophes at both edges; a longer quote ending at an
       // apostrophe can't be written curly and still heard the same.
-      const quotes = tokens.filter((other) => other.type === "open" || other.type === "close");
-      const at = quotes.indexOf(token);
+      const at = quoteIndex.get(token) ?? -1;
       const partner = token.type === "open" ? quotes[at + 1] : quotes[at - 1];
       const own =
         partner !== undefined &&

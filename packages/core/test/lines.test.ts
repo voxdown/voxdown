@@ -107,10 +107,47 @@ describe("what review found", () => {
     );
   });
 
+  it("takes a name written with either apostrophe for the same name, without a warning (§5.2)", () => {
+    const story = parse(
+      "---\ncast:\n  O'Brien: Mr O'Brien\n---\n@O’Brien “Hello.” @o'brien “Bye.”",
+    );
+    expect(spokenScript(story)).toBe("O'Brien: Hello.\nO'Brien: Bye.");
+    expect(story.warnings.map((warning) => warning.code)).toEqual(["name-case"]);
+  });
+
   it("takes a name written in another Unicode form for the same name, without a warning", () => {
     const story = parse("---\ncast:\n  Zoë: Zoë the Cat\n---\n@Zoe\u0308 “Hi.”");
     expect(story.warnings).toEqual([]);
     expect(spokenScript(story)).toBe("Zoë: Hi.");
+  });
+});
+
+describe("page numbers", () => {
+  it("count on from a Roman numeral, a number, or a label of their own", () => {
+    const pages = (source: string) =>
+      [...new Set(lines(parse(source)).map((row) => row.page))].filter((page) => page !== null);
+    expect(pages("{page iv}\nA.\n{page}\nB.\n{page}\nC.")).toEqual(["iv", "v", "vi"]);
+    expect(pages("{page IX}\nA.\n{page}\nB.")).toEqual(["IX", "X"]);
+    expect(pages("{page 8–9}\nA.\n{page}\nB.")).toEqual(["8–9", "10"]);
+    expect(pages("{page Map}\nA.\n{page}\nB.\n{page}\nC.")).toEqual(["Map", "Map +1", "Map +2"]);
+  });
+});
+
+describe("scene breaks (§4.4)", () => {
+  it("are three or more of one sign, with or without spaces between them, as in Markdown", () => {
+    for (const line of ["***", "* * *", "- - -", "_ _ _", "*  *\t*", "-----"]) {
+      const story = parse(`End.\n\n${line}\n\nNext.`);
+      expect(
+        story.blocks.map((block) => block.kind),
+        line,
+      ).toEqual(["paragraph", "break", "paragraph"]);
+    }
+    for (const line of ["* - *", "**", "* * * x"]) {
+      expect(
+        parse(`End.\n\n${line}\n\nNext.`).blocks.some((block) => block.kind === "break"),
+        line,
+      ).toBe(false);
+    }
   });
 });
 

@@ -189,7 +189,7 @@ After the front matter comes the story, made of:
 
 - **paragraphs**: one or more lines, ended by a blank line;
 - **headings**: `#` to `######` followed by a space;
-- **scene breaks**: a line of three or more `-`, `*` or `_`;
+- **scene breaks**: a line of three or more `-`, `*` or `_`, all the same, with or without spaces between them (`***`, `* * *`, `---`);
 - **groups**: `:::` … `:::` (§7).
 
 Notes (§10) can sit anywhere, even across blank lines.
@@ -308,7 +308,7 @@ A character with a longer name gets a short one in the cast (`Clown: The Silly C
 SillyClown: Honk!
 ```
 
-Names ignore case: `@clown`, `@Clown` and `@CLOWN` are the same character. The spoken script uses the cast's spelling, or else the spelling the file uses first. The narrator is written as the cast or the `narrator:` key spells it, or else `Narrator`.
+Names ignore case: `@clown`, `@Clown` and `@CLOWN` are the same character. They ignore the kind of apostrophe too: `@O'Brien` and `@O’Brien` are one character. The spoken script uses the cast's spelling, or else the spelling the file uses first. The narrator is written as the cast or the `narrator:` key spells it, or else `Narrator`.
 
 ```example
 ---
@@ -1577,6 +1577,7 @@ The format is meant to be edited both by hand and through a visual editor. A vis
 3. **New marks are written in one way:**
    - a character mark and direction go directly before the speech's opening quote, with the cast's spelling: `@Gerald (yawning) “…`;
    - a direction for narration goes before its first word: `@(warmly) Once…`;
+   - a direction for a speech that takes its direction from its mark goes in the mark, so it covers the whole speech, over the paragraphs that carry it on; a stretch with a `@(…)` of its own has that one replaced instead;
    - a direction of its own for a paragraph that carries a speech on (§5.7) goes just inside its opening mark, so the paragraph still carries the speech on: `“@(softly)Two.”`;
    - a sound follows the word it belongs to, after one space: `fell over. [clatter]`;
    - a page turn, pause or note between lines goes on a line of its own;

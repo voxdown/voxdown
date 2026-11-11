@@ -69,6 +69,23 @@ const line: fc.Arbitrary<string> = fc.oneof(
   fc
     .tuple(pick(NAMES), pick(SOUNDS), pick(UTTERANCES))
     .map(([name, sound, words]) => `@${name} [${sound}] “${words}.”`),
+  // Markdown with the dialogue: emphasis around a quote and inside one, a link in a quote and in
+  // narration.
+  fc
+    .tuple(pick(NAMES), pick(QUOTES), pick(UTTERANCES), pick(SAID))
+    .map(
+      ([name, [open, close], words, said]) =>
+        `@${name} *${open}${words}.${close}* ${said} ${name}.`,
+    ),
+  fc
+    .tuple(pick(NAMES), pick(QUOTES), pick(UTTERANCES), pick(UTTERANCES))
+    .map(([name, [open, close], a, b]) => `@${name} ${open}${a}, **${b}**.${close}`),
+  fc
+    .tuple(pick(NAMES), pick(UTTERANCES))
+    .map(([name, words]) => `@${name} “${words}: look at [the map](https://example.com/map)!”`),
+  fc
+    .tuple(pick(NARRATION), pick(NAMES))
+    .map(([words, name]) => `${words} _${name}_ found [a note](note.html "A note").`),
   // A mark before the narration that leads up to its quote (§5.4).
   fc
     .tuple(pick(NAMES), pick(NAMES), pick(QUOTES), pick(UTTERANCES), fc.option(pick(DIRECTIONS)))

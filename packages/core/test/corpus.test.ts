@@ -16,6 +16,7 @@ import {
   type TextChange,
   applyChanges,
   bookText,
+  curlQuotes,
   format,
   insertSound,
   lines,
@@ -361,6 +362,16 @@ describe("real books", () => {
       expect(curly.slice(0, 5)).toBe(piece.startsWith('"') ? "“Hi,”" : "‘Hi,’");
       expect(performance.now() - start, piece).toBeLessThan(6000);
     }
+  }, 60_000);
+
+  it("curls thousands of quotes whose edge is an apostrophe in time that grows with them", async () => {
+    // Each such edge once looked through every quote of the file for its partner: 16,000 of
+    // them took seven seconds.
+    await turn();
+    const text = "@Tom 'Tis cold,' he said.\n\n".repeat(16_000);
+    const start = performance.now();
+    expect(curlQuotes(text).length).toBe(text.length);
+    expect(performance.now() - start).toBeLessThan(3000);
   }, 60_000);
 
   it("reads lines built to be slow in good time", async () => {

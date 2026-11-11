@@ -8,7 +8,9 @@ import { Window } from "happy-dom";
 import MarkdownIt from "markdown-it";
 import { describe, expect, it } from "vitest";
 import { bookText, parse, spokenScript } from "voxdown";
+import { proseStory } from "../../core/test/stories";
 import { renderBook, renderDocument, renderScript } from "../src/index";
+import { heardWords, shownWords } from "./words";
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
 const SEED =
@@ -258,6 +260,35 @@ const hasSound = (line: string) =>
       ),
   );
 
+describe("prose with its Markdown, in both views", () => {
+  it("the script view's emphasis and links are the book view's, however speech splits them", async () => {
+    // The book view's Markdown is CommonMark's (below). The script view draws the same text in
+    // pieces, a speech and the narration around it each its own, and must emphasize and link
+    // the same words.
+    const window = new Window();
+    const marked = (html: string) => {
+      window.document.body.innerHTML = html;
+      const letters = (selector: string) =>
+        [...window.document.querySelectorAll(selector)]
+          .map((element) => (element.textContent ?? "").replace(/[^\p{L}\p{N}]/gu, ""))
+          .join("");
+      const links = [...window.document.querySelectorAll("a")].map(
+        (a) => `${a.getAttribute("href")}:${(a.textContent ?? "").trim()}`,
+      );
+      return { em: letters("em"), strong: letters("strong"), links };
+    };
+    await check(
+      fc.property(proseStory, (source) => {
+        const story = parse(source);
+        expect(marked(renderScript(story, { header: false })), source).toEqual(
+          marked(renderBook(story, { header: false })),
+        );
+      }),
+      Math.max(20, Math.round(RUNS / 2)),
+    );
+  });
+});
+
 describe("Markdown, as a CommonMark reader (markdown-it) reads it", () => {
   const markdown = new MarkdownIt("commonmark");
   /** markdown-it's HTML as the views write it: `<img …>`, and addresses not percent-encoded. */
@@ -326,7 +357,7 @@ describe("the views, on stories made at random", () => {
           const parsed = parse(source);
           window.document.body.innerHTML = renderBook(parsed, { header: false });
           expect(plain(window.document.body.textContent ?? "")).toBe(
-            plain(bookText(parsed).replace(/^-{3,}$|^\*{3,}$|^_{3,}$/gm, "")),
+            plain(bookText(parsed).replace(/^([-*_])[ \t]*(?:\1[ \t]*){2,}$/gm, "")),
           );
         },
       ),
@@ -349,6 +380,20 @@ describe("the views, on stories made at random", () => {
         renderDocument(source, "script");
       }),
     );
+  });
+
+  it("show in the script view every word heard, and no mark or direction as a word", async () => {
+    const window = new Window();
+    for (const stories of [story, proseStory]) {
+      await check(
+        fc.property(stories, (source) => {
+          expect(shownWords(window, source), JSON.stringify(source)).toBe(
+            heardWords(parse(source)),
+          );
+        }),
+        Math.max(20, Math.round(RUNS / 2)),
+      );
+    }
   });
 
   it("say in the script view who says each stretch, as the parser does", async () => {

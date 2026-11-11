@@ -87,6 +87,10 @@ The editor reads these variables, with plain fallbacks:
 
 Drawn marks carry `data-vxd-chip` or `data-vxd-line` with their kind, and `data-speaker` where they belong to a character.
 
+## Sizes
+
+The editor reads the whole story again after each change: about 50 ms for a 250 KB story (a long novel), and about 200 ms for 1 MB, where typing starts to feel slow. A book that long is best kept in parts, a file each.
+
 ## License
 
 MIT.

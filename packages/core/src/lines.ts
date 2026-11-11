@@ -1,10 +1,11 @@
+import { hasLetterOrDigit } from "./chars";
+import { visibilityOf } from "./groups";
+import type { Block, Item, Line, Story } from "./model";
 /**
  * The spoken script as data: one row per thing heard, with who says it, how, and where it falls in
  * the story. This is the shape multi-voice text-to-speech tools take, as JSON or CSV.
  */
-import { hasLetterOrDigit } from "./chars";
-import { visibilityOf } from "./groups";
-import type { Block, Item, Line, Story } from "./model";
+import { nameKey } from "./names";
 import { bookLine } from "./readings";
 
 export type ScriptLineKind =
@@ -155,10 +156,61 @@ function isStory(item: Item): boolean {
   );
 }
 
-/** The page after one labeled `label`: its last number plus one, or the label with " +1". */
+/**
+ * The page after one labeled `label`: a Roman numeral counts on as one (`iv`, `v`), a label after
+ * `+` counts on (`Map +1`, `Map +2`), else its last number plus one, else the label with " +1".
+ */
 function nextPage(label: string): string {
+  const roman = /^(?:[ivxlcdm]+|[IVXLCDM]+)$/.test(label) ? fromRoman(label) : 0;
+  if (roman > 0) {
+    const next = toRoman(roman + 1);
+    return label === label.toUpperCase() ? next.toUpperCase() : next;
+  }
+  const counted = /^(.*) \+(\d+)$/u.exec(label);
+  if (counted) return `${counted[1]} +${Number(counted[2]) + 1}`;
   const match = /(\d+)(?!.*\d)/u.exec(label);
   return match?.[1] ? String(Number(match[1]) + 1) : `${label} +1`;
+}
+
+const NUMERALS: Array<[number, string]> = [
+  [1000, "m"],
+  [900, "cm"],
+  [500, "d"],
+  [400, "cd"],
+  [100, "c"],
+  [90, "xc"],
+  [50, "l"],
+  [40, "xl"],
+  [10, "x"],
+  [9, "ix"],
+  [5, "v"],
+  [4, "iv"],
+  [1, "i"],
+];
+
+/** A Roman numeral's value, or 0 if it isn't one written the usual way. */
+function fromRoman(text: string): number {
+  let rest = text.toLowerCase();
+  let value = 0;
+  for (const [amount, numeral] of NUMERALS) {
+    while (rest.startsWith(numeral)) {
+      value += amount;
+      rest = rest.slice(numeral.length);
+    }
+  }
+  return rest === "" && toRoman(value) === text.toLowerCase() ? value : 0;
+}
+
+function toRoman(value: number): string {
+  let out = "";
+  let rest = value;
+  for (const [amount, numeral] of NUMERALS) {
+    while (rest >= amount) {
+      out += numeral;
+      rest -= amount;
+    }
+  }
+  return out;
 }
 
 function positions(source: string): (offset: number) => { line: number; column: number } {
@@ -197,7 +249,7 @@ export function textByCharacter(story: Story): Map<string, string> {
   for (const member of story.cast) said.set(member.handle, []);
   for (const row of lines(story, { speechOnly: true })) {
     if (row.speaker === null) continue;
-    const key = [...said.keys()].find((name) => name.toLowerCase() === row.speaker?.toLowerCase());
+    const key = [...said.keys()].find((name) => nameKey(name) === nameKey(row.speaker ?? ""));
     const list = said.get(key ?? row.speaker) ?? [];
     const direction = row.direction ? `(${row.direction}) ` : "";
     list.push(row.kind === "vocal" ? `${direction}[${row.text}]` : `${direction}${row.text}`);

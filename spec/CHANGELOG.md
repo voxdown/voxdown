@@ -9,7 +9,10 @@ The spec is versioned on its own, apart from the packages (SPEC.md §16).
 Clarifications: no file reads differently.
 
 - §13, rule 3: a direction of its own for a paragraph that carries a speech on goes just inside its opening mark, and a mark between two characters with no space between them goes without its space, so the book doesn't change.
+- §13, rule 3 also says that a direction a speech takes from its mark is set in the mark, for the whole speech, and a stretch's own `@(…)` is replaced where it is.
 - §13, rule 4: a speech over paragraphs is given away whole, from any of its paragraphs.
+- §5.2: names ignore the kind of apostrophe, as they ignore case: `@O'Brien` and `@O’Brien` are one character.
+- §4.4: a scene break's signs may have spaces between them, as in Markdown: `* * *` and `- - -` are scene breaks.
 - §8.3: a link is written on one line, as marks are; one that runs onto the next line is read as a sound and text, and warned about. An image may be a link's text, as in Markdown, with a new example; §12.1 gives its line in the spoken script.
 
 ## 1.0 (9 November 2026)

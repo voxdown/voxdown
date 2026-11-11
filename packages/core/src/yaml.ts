@@ -328,8 +328,11 @@ class YamlReader {
         this.problem("This line is indented less than the start of its block.", next);
         break;
       }
-      body.push(blank ? "" : next.raw.slice(contentIndent ?? 0));
-      if (!blank) this.lastContent = this.index;
+      // A line of spaces alone is empty, but for the spaces past the block's indentation, which
+      // are its content (YAML 1.2, §8.1.1.2): `|-` with `  a` and `    ` is "a\n  ".
+      const spaces = blank && contentIndent !== null ? next.raw.slice(contentIndent) : "";
+      body.push(blank ? spaces : next.raw.slice(contentIndent ?? 0));
+      if (!blank || spaces !== "") this.lastContent = this.index;
       this.index++;
     }
     let trailing = 0;

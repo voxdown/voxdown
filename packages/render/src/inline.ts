@@ -32,10 +32,11 @@ export function safeUrl(url: string, image = false): string {
 }
 
 /**
- * A character of text, escaped (`literal`) or not; `edge` marks where one piece of text ends, and
- * `written` how a character reference was written (`&eacute;`).
+ * A character of text, escaped (`literal`) or not; `edge` marks where one piece of text ends
+ * (`joined` when the next follows it directly in the source, with nothing between), and `written`
+ * how a character reference was written (`&eacute;`).
  */
-type Piece = { text: string; literal: boolean; edge?: boolean; written?: string };
+type Piece = { text: string; literal: boolean; edge?: boolean; joined?: boolean; written?: string };
 
 /**
  * A link's address and title, as Markdown reads them: `<address>` or the address up to a space,
@@ -99,19 +100,28 @@ export function inlineHtml(source: string): string {
 
 /**
  * Pieces of one paragraph's text as HTML, each its own: the lines of a printed paragraph, or a
- * line's stretches between marks. Emphasis pairs across them as in the paragraph read whole (an
- * edge counts as a space), and a tag still open at a piece's end is closed there and opened again
- * at the next, so each piece's HTML stands alone. A link stays within its piece.
+ * line's stretches between marks. Emphasis pairs across them as in the paragraph read whole: an
+ * edge counts as a space, but where `joined` says a piece follows the one before directly in the
+ * source (`*“Hello.”*` split at the quote's end), as nothing. A tag still open at a piece's end is
+ * closed there and opened again at the next, so each piece's HTML stands alone. A link stays
+ * within its piece.
  */
-export function inlineHtmlPieces(sources: readonly string[]): string[] {
+export function inlineHtmlPieces(
+  sources: readonly string[],
+  joined: readonly boolean[] = [],
+): string[] {
   const chars: Piece[] = [];
   sources.forEach((source, index) => {
-    if (index > 0) chars.push({ text: " ", literal: true, edge: true });
+    if (index > 0)
+      chars.push({ text: " ", literal: true, edge: true, joined: joined[index] === true });
     for (const piece of pieces(source)) chars.push(piece);
   });
-  // A piece of only spaces needs no emphasis around it.
+  // A piece of only spaces needs no emphasis around it, and an emphasis closed as soon as it is
+  // opened again (at a piece that starts with the closing sign) is none.
   return renderPieces(chars).map((html) =>
-    html.replace(/^(?:<(?:em|strong)>)+(\s*)(?:<\/(?:em|strong)>)+$/, "$1"),
+    html
+      .replace(/^(?:<(?:em|strong)>)+(\s*)(?:<\/(?:em|strong)>)+$/, "$1")
+      .replace(/<(em|strong)><\/\1>/g, ""),
   );
 }
 
@@ -287,9 +297,10 @@ const PUNCTUATION = /[\p{P}\p{S}]/u;
 /** A run of emphasis signs, and whether it can open or close emphasis, as Markdown decides. */
 function runAt(chars: readonly Piece[], from: number, to: number): Run {
   const char = chars[from]?.text as "*" | "_";
-  // The characters around the run as written: a character reference is its `&…;` here.
-  const previous = chars[from - 1];
-  const next = chars[to];
+  // The characters around the run as written: a character reference is its `&…;` here, and an
+  // edge between pieces that follow each other directly is nothing.
+  const previous = chars[from - 1]?.joined ? chars[from - 2] : chars[from - 1];
+  const next = chars[to]?.joined ? chars[to + 1] : chars[to];
   const before = previous?.written?.slice(-1) ?? previous?.text ?? " ";
   const after = next?.written?.[0] ?? next?.text ?? " ";
   const left =

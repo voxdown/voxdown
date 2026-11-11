@@ -23,7 +23,7 @@ export {
   setMeta,
   setSpeaker,
 } from "./edit";
-export { type FormatOptions, curlQuotes, format } from "./format";
+export { type FormatOptions, curlQuotes, format, quotationMarks } from "./format";
 export {
   type LinesOptions,
   type ScriptLine,

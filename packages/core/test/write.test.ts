@@ -1089,6 +1089,24 @@ describe("review, round seven", () => {
   });
 });
 
+describe("review, round nine", () => {
+  it("gives narration that runs on over a mark, the mark going before its quote (§5.4)", () => {
+    const source = "He turned. @Waiter (softly) He bowed low, “Bonjour.”";
+    const story = parse(source);
+    expect(applyChanges(source, setSpeaker(story, speeches(story)[0] as Speech, "Zed"))).toBe(
+      "@Zed He turned. He bowed low, @Waiter (softly) “Bonjour.”",
+    );
+  });
+
+  it("changes nothing for a stretch with no words, which isn't heard", () => {
+    const story = parse("(@Hare “I only wish it was,” the March Hare said.)");
+    const bracket = speeches(story)[0] as Speech;
+    expect(bracket.text).toBe("(");
+    expect(setSpeaker(story, bracket, "Zed")).toEqual([]);
+    expect(setDirection(story, bracket, "softly")).toEqual([]);
+  });
+});
+
 describe("review, round eight", () => {
   it("renames the narrator however the front matter writes the name", () => {
     for (const written of [

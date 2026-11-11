@@ -296,4 +296,19 @@ describe("the front matter YAML subset", () => {
       expect(file.frontMatter?.data, JSON.stringify(document)).toEqual(data);
     }
   });
+
+  it("keeps the spaces of a line past its block's indentation, as YAML does", () => {
+    // Each as PyYAML 6 reads it: a line of spaces alone is content past the indentation.
+    const cases: Array<[string, string]> = [
+      ["title: |-\n  a\n    ", "a\n  "],
+      ["title: |\n  a\n    \n  b", "a\n  \nb\n"],
+      ["title: >\n  a\n    \n  b", "a\n  \nb\n"],
+      ["title: |+\n  a\n    \n", "a\n  \n\n"],
+      ["title: >-\n  a\n   \n  b", "a\n \nb"],
+      ["title: |\n  a\n  \n  b", "a\n\nb\n"],
+    ];
+    for (const [lines, title] of cases) {
+      expect(readYaml(lines).data.title, JSON.stringify(lines)).toBe(title);
+    }
+  });
 });

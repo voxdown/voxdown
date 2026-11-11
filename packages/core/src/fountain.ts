@@ -236,6 +236,6 @@ function escapeText(text: string): string {
     .replace(/([[\]{}])/g, "\\$1")
     .replace(/%%/g, "\\%%")
     .replace(/(^|[^\p{L}\p{N}])@(?=[\p{L}([])/gu, "$1\\@")
-    .replace(/^(#{1,6}\s|:{3,}|-{3,}\s*$|\*{3,}\s*$|_{3,}\s*$)/, "\\$1");
+    .replace(/^(#{1,6}\s|:{3,}|([-*_])[ \t]*(?:\2[ \t]*){2,}$)/, "\\$1");
   return escaped.replace(/\uE000(\d+)\uE000/g, (_m, index: string) => notes[Number(index)] ?? "");
 }

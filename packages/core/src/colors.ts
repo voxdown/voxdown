@@ -1,8 +1,9 @@
+import type { Item, Story } from "./model";
 /**
  * A color for each character, for tools that draw a story: the renderer's script view and the
  * editor. Assigned in cast order (SPEC.md §14), then in the order characters first speak.
  */
-import type { Item, Story } from "./model";
+import { nameKey } from "./names";
 
 /** Colors that read on white and on dark paper, assigned in cast order. */
 export const PALETTE = [
@@ -26,9 +27,9 @@ export function characterColors(
   const colors = new Map<string, string>();
   const names: string[] = [];
   // Each name once, whatever its case, found by key rather than by a search of those before.
-  const seen = new Set([story.meta.narrator.toLowerCase()]);
+  const seen = new Set([nameKey(story.meta.narrator)]);
   const add = (name: string) => {
-    const key = name.toLowerCase();
+    const key = nameKey(name);
     if (seen.has(key)) return;
     seen.add(key);
     names.push(name);

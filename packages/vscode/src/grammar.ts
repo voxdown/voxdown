@@ -290,7 +290,7 @@ function closer(chars: string): string {
 }
 
 /** A paragraph ends at a blank line, or at a line that is a heading, group or scene break. */
-const PARAGRAPH_END = String.raw`(?=^\s*$)|(?=^[ \t]*(?:#{1,6}[ \t]|:{3,}|(?:-{3,}|\*{3,}|_{3,})[ \t]*$))`;
+const PARAGRAPH_END = String.raw`(?=^\s*$)|(?=^[ \t]*(?:#{1,6}[ \t]|:{3,}|(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$))`;
 
 function quote(open: string, close: string, style: string, multiLine: boolean): Rule {
   // A `'`, `‘` or `"` straight after a letter or digit is an apostrophe or a measure (§5.5).
@@ -416,7 +416,8 @@ const heading: Rule = {
 const sceneBreak = match(
   undefined,
   "^[ \\t]*",
-  cap(vd(S.break), String.raw`(?:-{3,}|\*{3,}|_{3,})[ \t]*`),
+  // Three or more of one sign, spaces between them or not: `***`, `* * *` (§4.4).
+  cap(vd(S.break), String.raw`(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})`),
   "$",
 );
 

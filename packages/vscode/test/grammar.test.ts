@@ -335,6 +335,11 @@ describe("the grammar by hand", () => {
     expect(await scopesOf(text, "Dear")).toEqual(["text.voxdown", "meta.group.voxdown"]);
     expect(await scopesOf(text, ":::\n***")).toContain("keyword.control.group.end.voxdown");
     expect(await scopesOf(text, "***")).toContain("meta.separator.voxdown");
+    for (const spaced of ["* * *", "- - -"]) {
+      expect(await scopesOf(`One.\n\n${spaced}\n\nTwo.`, spaced)).toContain(
+        "meta.separator.voxdown",
+      );
+    }
   });
 
   it("tells a group's closing line from a line of colons that closes nothing", async () => {

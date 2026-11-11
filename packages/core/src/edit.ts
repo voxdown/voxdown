@@ -358,6 +358,8 @@ export function setSpeaker(story: Story, speech: Speech, name: string): TextChan
 }
 
 function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[] {
+  // A stretch with no letter or digit in it isn't heard (§12.1): nothing to give.
+  if (!hasLetterOrDigit(speech.text)) return [];
   // A later paragraph of an unmarked speech over paragraphs is given with the whole speech.
   const origin = narrationOrigin(story, speech);
   if (origin) return setSpeaker(story, origin, name);
@@ -424,6 +426,30 @@ function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[]
   // becomes the new speaker's, who says the rest of the line up to the next mark, and the mark
   // it was goes before its quote, as written.
   const ahead = markAhead(story, first);
+  // Narration that runs on over a mark to its quote (`He turned. @Waiter (softly) He bowed low,
+  // “Bonjour.”`, §5.4): the new speaker's mark goes before it, and the one inside it before its
+  // quote, so the new speaker says all of it up to there.
+  const across = markAcross(story, first);
+  if (across) {
+    const { mark, quote: given } = across;
+    const at = given.openQuote?.from ?? given.range.from;
+    const start = first.textRange.from;
+    const moved = settled(
+      story,
+      quote,
+      [
+        { from: start, to: start, insert: markAt(story.source, start, markText(spelling, null)) },
+        { ...removeWithSpace(story.source, mark.range), insert: "" },
+        {
+          from: at,
+          to: at,
+          insert: markAt(story.source, at, story.source.slice(mark.range.from, mark.range.to)),
+        },
+      ],
+      whole,
+    );
+    if (moved.length > 0) return moved;
+  }
   if (ahead) {
     const { mark, quote: given } = ahead;
     const at = given.openQuote?.from ?? given.range.from;
@@ -443,6 +469,30 @@ function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[]
     if (moved.length > 0) return moved;
   }
   return settled(story, quote, speakerChanges(story, first, name), whole);
+}
+
+/**
+ * A mark inside a stretch of narration, which the narration runs on over, and the quote after the
+ * stretch that it gives; null if there is none.
+ */
+function markAcross(story: Story, speech: Speech): { mark: Mark; quote: Speech } | null {
+  if (speech.quoted || speech.mark || speech.directionMark) return null;
+  const { line } = place(story, speech);
+  const mark = line.items.find(
+    (item): item is Mark =>
+      item.kind === "mark" &&
+      item.range.from > speech.textRange.from &&
+      item.range.to <= speech.textRange.to,
+  );
+  if (!mark) return null;
+  const quote = line.items.find(
+    (item): item is Speech =>
+      item.kind === "speech" &&
+      item.mark === mark &&
+      item.quoted &&
+      item.range.from >= speech.range.to,
+  );
+  return quote ? { mark, quote } : null;
 }
 
 /**
@@ -621,6 +671,8 @@ export function setDirection(story: Story, speech: Speech, direction: string | n
 }
 
 function setDirectionNow(story: Story, speech: Speech, direction: string | null): TextChange[] {
+  // A stretch with no letter or digit in it isn't heard (§12.1): nothing to say differently.
+  if (!hasLetterOrDigit(speech.text)) return [];
   // To its closing mark, or to the next `@(…)` inside it.
   const { stretches, items: quote } = quoteOf(story, speech, false);
   const changes = directionChanges(story, stretches[0] as Speech, direction);

@@ -321,7 +321,7 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
     switch (item.kind) {
       case "speech": {
         gap(item.range.from);
-        html += speechHtml(item, context, heading);
+        html += speechHtml(item, context, heading, line);
         at = Math.max(at, item.range.to);
         break;
       }
@@ -402,12 +402,16 @@ function inlinePieces(source: string, lines: readonly Line[]): Map<string, strin
     for (const item of items) {
       if (item.range.from < at && item.kind !== "speech") continue;
       gap(item.range.from);
-      if (item.kind === "speech") ranges.push([item.range.from, item.range.to]);
+      if (item.kind === "speech") for (const piece of ownPieces(item, line)) ranges.push(piece);
       at = Math.max(at, item.range.to);
     }
     gap(line.range.to);
   }
-  const htmls = inlineHtmlPieces(ranges.map(([from, to]) => source.slice(from, to)));
+  const htmls = inlineHtmlPieces(
+    ranges.map(([from, to]) => source.slice(from, to)),
+    // Whether each piece follows the one before with nothing between them in the source.
+    ranges.map(([from], index) => index > 0 && ranges[index - 1]?.[1] === from),
+  );
   return new Map(ranges.map(([from, to], index) => [`${from}:${to}`, htmls[index] ?? ""]));
 }
 
@@ -415,7 +419,52 @@ function inlineOf(context: ScriptContext, from: number, to: number): string {
   return context.inline?.get(`${from}:${to}`) ?? inlineHtml(context.story.source.slice(from, to));
 }
 
-function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): string {
+/** Where something is in the source. */
+type Span = { from: number; to: number };
+
+/** Each line's marks, directions and instructions, in order. */
+const unwritten = new WeakMap<Line, Span[]>();
+
+/**
+ * A stretch's text as pieces, the marks, directions and instructions inside it left out: narration
+ * can run on past a mark to its quote (`He turned. @Waiter (softly) He bowed low, “Bonjour.”`,
+ * §5.4), and over `{book only}`, which the paragraph's label shows.
+ */
+function ownPieces(speech: Speech, line: Line): Array<[number, number]> {
+  // The line's marks, directions and instructions in order, found once for all its stretches,
+  // and those inside this one found by halves: a line of thousands stays linear.
+  let hidden = unwritten.get(line);
+  if (!hidden) {
+    hidden = line.items
+      .filter(
+        (item) => item.kind === "mark" || item.kind === "direction" || item.kind === "instruction",
+      )
+      .map((item) => item.range)
+      .sort((a, b) => a.from - b.from);
+    unwritten.set(line, hidden);
+  }
+  let low = 0;
+  let high = hidden.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if ((hidden[middle] as Span).from < speech.range.from) low = middle + 1;
+    else high = middle;
+  }
+  const inside: Span[] = [];
+  for (let at = low; at < hidden.length && (hidden[at] as Span).from < speech.range.to; at++) {
+    if ((hidden[at] as Span).to <= speech.range.to) inside.push(hidden[at] as Span);
+  }
+  const pieces: Array<[number, number]> = [];
+  let at = speech.range.from;
+  for (const range of inside) {
+    if (range.from > at) pieces.push([at, range.from]);
+    at = Math.max(at, range.to);
+  }
+  if (speech.range.to > at || pieces.length === 0) pieces.push([at, speech.range.to]);
+  return pieces;
+}
+
+function speechHtml(speech: Speech, context: ScriptContext, heading: boolean, line: Line): string {
   const { story, colors, options } = context;
   const source = story.source;
   const narrator = speech.speaker === story.meta.narrator;
@@ -433,7 +482,9 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): s
     speech.direction && spoken && speech.direction !== groupSays(context.groups).direction
       ? `<span class="vxd-direction" aria-label="${escapeHtml(`(${speech.direction})`)}"><span>${escapeHtml(speech.direction)}</span></span>`
       : "";
-  const words = inlineOf(context, speech.range.from, speech.range.to);
+  const words = ownPieces(speech, line)
+    .map(([from, to]) => inlineOf(context, from, to))
+    .join("");
   const classes = [
     "vxd-speech",
     narrator ? "vxd-narration" : "",

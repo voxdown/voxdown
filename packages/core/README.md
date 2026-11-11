@@ -67,6 +67,10 @@ Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) tha
 
 **`format(source, options?)`** tidies a file and never changes who says what (§13, rule 8): it trims and collapses spaces, makes runs of blank lines one, puts a blank line after the front matter and around headings and scene breaks, ends with one line break, and writes names as the cast spells them. Options: `names` and `spacing` (both on unless `false`), and `quotes: "curly"` with an optional `language` (the front matter’s by default) to turn straight quotes into the language’s curly ones: `en`, `de`, `fr`, `it`, `es`, `pt`, `ca`, `ru`, `uk`, `da`, `pl`, `ja`, `zh`, and Swiss `de-CH` and `fr-CH`, English marks for any other. A formatted file comes back unchanged. **`curlQuotes(source, { language? })`** makes just the quotes curly, as `format` does, and changes nothing else, for an editor that curls what is pasted.
 
+## Sizes
+
+Everything reads in time that grows with the story. An edit reads the whole story again to check itself: about 0.2 s on a 100,000-word book, and `write()` makes one such edit for each speaker or direction changed on the model, so 50 changes there take about 10 s. For many changes at once on a long book, make them on the text with the edits instead, or in parts.
+
 ## Importing
 
 **`fromFountain(screenplay, { readSceneHeadings? })`** turns a [Fountain](https://fountain.io) screenplay into a VoxDown story: cues become marks, parentheticals directions, action narration, scene headings `{hidden}` headings (read aloud with `readSceneHeadings`), page breaks `{page}`, notes `%% %%`, and the cast is gathered from the cues.

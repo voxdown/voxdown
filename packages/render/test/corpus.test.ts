@@ -5,12 +5,27 @@ import { fileURLToPath } from "node:url";
 import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
 import { bookText, parse } from "voxdown";
+import { examples } from "../../core/test/examples";
 import { renderBook, renderScript } from "../src/index";
+import { heardWords, shownWords } from "./words";
 
 const corpus = resolve(dirname(fileURLToPath(import.meta.url)), "../../../corpus");
 const books = readdirSync(corpus)
   .filter((name) => name.endsWith(".vxd"))
   .map((name) => ({ name, source: readFileSync(join(corpus, name), "utf8") }));
+
+describe("the script view, on real books and the spec's examples", () => {
+  it("shows every word heard, and no mark or direction as a word", () => {
+    const window = new Window();
+    const spec = readFileSync(join(corpus, "..", "spec", "SPEC.md"), "utf8");
+    for (const { name, source } of [
+      ...books,
+      ...examples(spec).map((example) => ({ name: `§${example.section}`, source: example.input })),
+    ]) {
+      expect(shownWords(window, source), name).toBe(heardWords(parse(source)));
+    }
+  });
+});
 
 describe("the views, on real books", () => {
   for (const { name, source } of books) {
@@ -33,7 +48,7 @@ describe("the views, on real books", () => {
       document.body.innerHTML = renderBook(story, { positions: true, pages: true });
       const printed = bookText(story)
         .split(/\n\n+/)
-        .filter((paragraph) => !/^#|^\*\*\*$/.test(paragraph));
+        .filter((paragraph) => !/^#|^([-*_])[ \t]*(?:\1[ \t]*){2,}$/.test(paragraph));
       expect(document.querySelectorAll(".vxd-p").length).toBe(printed.length);
     });
   }

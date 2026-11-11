@@ -164,7 +164,7 @@
       "match": "^[ \\t]*:{3,}\\s*$"
     },
     "scene-break": {
-      "match": "^[ \\t]*((?:-{3,}|\\*{3,}|_{3,})[ \\t]*)$",
+      "match": "^[ \\t]*((?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,}))$",
       "captures": {
         "1": {
           "name": "meta.separator.voxdown"
@@ -683,7 +683,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(”)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(”)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -703,7 +703,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(’(?![\\p{L}\\p{M}\\p{N}]))|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(’(?![\\p{L}\\p{M}\\p{N}]))|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -723,7 +723,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(\")|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(\")|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -763,7 +763,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(“|”)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(“|”)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -783,7 +783,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(‘|’(?![\\p{L}\\p{M}\\p{N}]))|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(‘|’(?![\\p{L}\\p{M}\\p{N}]))|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -803,7 +803,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(»)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(»)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -823,7 +823,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(«|»)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(«|»)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -843,7 +843,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(›)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(›)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -863,7 +863,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(」)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(」)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"
@@ -883,7 +883,7 @@
               "name": "punctuation.definition.string.begin.voxdown"
             }
           },
-          "end": "(』)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*$))",
+          "end": "(』)|(?=^\\s*$)|(?=^[ \\t]*(?:#{1,6}[ \\t]|:{3,}|(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$))",
           "endCaptures": {
             "1": {
               "name": "punctuation.definition.string.end.voxdown"

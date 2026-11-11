@@ -256,6 +256,25 @@ for (const story of await listen.$$eval(".story", (buttons) =>
   console.log(`listen.html: ${story}: recorded, ${placed} parts placed`);
 }
 
+/** The text of the story the Writer keeps as the open one, from the page's IndexedDB. */
+const draftIn = (page) =>
+  page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const request = indexedDB.open("voxdown-writer");
+        request.onsuccess = () => {
+          const transaction = request.result.transaction(["drafts", "documents"]);
+          const pointer = transaction.objectStore("drafts").get("current");
+          pointer.onsuccess = () => {
+            const id = pointer.result?.id;
+            if (!id) return resolve("");
+            const draft = transaction.objectStore("documents").get(id);
+            draft.onsuccess = () => resolve(draft.result?.text ?? "");
+          };
+        };
+      }),
+  );
+
 // The Writer: the welcome, an example with its scenes on the rail, a jump to a scene, typing,
 // saving to a file (a stand-in for the one Chrome gives pages), the draft brought back after a
 // reload, asking before putting changes aside, and the warnings.
@@ -331,16 +350,7 @@ await writer.waitForTimeout(1200);
 await writer.reload();
 await writer.waitForSelector(".cm-content");
 await writer.waitForTimeout(300);
-const restored = await writer.evaluate(
-  () =>
-    new Promise((resolve) => {
-      const request = indexedDB.open("voxdown-writer");
-      request.onsuccess = () => {
-        const get = request.result.transaction("drafts").objectStore("drafts").get("current");
-        get.onsuccess = () => resolve(get.result?.text ?? "");
-      };
-    }),
-);
+const restored = await draftIn(writer);
 if (!restored.includes("Not saved yet."))
   problems.push("writer: the draft wasn't kept in the browser");
 if (!(await writer.textContent("#draft-state"))?.startsWith("Brought back"))
@@ -425,6 +435,77 @@ if (await safe.isVisible("#side"))
   problems.push("writer: the side's close button doesn't close it");
 await safety.close();
 console.log("writer: last words, place, Save as name, closing the side: ok");
+
+// Drafts and versions: a story put aside unsaved is kept and opens again from Recover a draft;
+// a saved version can be gone back to, and Undo takes that back.
+const keeping = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await keeping.addInitScript(() => {
+  window.showSaveFilePicker = async ({ suggestedName }) => ({
+    kind: "file",
+    name: suggestedName,
+    getFile: async () => new File([""], suggestedName, { lastModified: 1 }),
+    createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+    isSameEntry: async () => false,
+    queryPermission: async () => "granted",
+    requestPermission: async () => "granted",
+  });
+});
+const keeper = await keeping.newPage();
+watch(keeper, "writer drafts and versions");
+await keeper.goto(`${base}/writer/`);
+await keeper.click(`.welcome-example[data-name="${dragonName}"]`);
+await keeper.click(".cm-content");
+await keeper.keyboard.press("Control+End");
+await keeper.keyboard.type(" Kept for later.");
+await keeper.click("#file-menu-button");
+await keeper.click('[data-command="new"]');
+await keeper.waitForSelector("#ask[open]");
+await keeper.click('#ask-buttons button[value="discard"]');
+await keeper.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
+);
+await keeper.click("#file-menu-button");
+await keeper.click('[data-command="recover"]');
+await keeper.waitForSelector("#list-dialog[open]");
+const putAside = keeper.locator("#list-items li", { hasText: dragonName });
+if ((await putAside.count()) === 0)
+  problems.push("writer: a story put aside unsaved isn't in Recover a draft");
+else {
+  await putAside.locator("button.primary").click();
+  await keeper.waitForFunction(
+    (name) => document.querySelector("#file-name")?.textContent === name,
+    dragonName,
+  );
+  await keeper.waitForTimeout(300);
+  if (!(await draftIn(keeper)).includes("Kept for later."))
+    problems.push("writer: a recovered draft came back without its unsaved words");
+}
+await keeper.keyboard.press("Control+s");
+await keeper.waitForFunction(
+  () => document.querySelector("#save-state")?.getAttribute("data-state") === "saved",
+);
+await keeper.click(".cm-content");
+await keeper.keyboard.press("Control+End");
+await keeper.keyboard.type(" Written after saving.");
+await keeper.click("#file-menu-button");
+await keeper.click('[data-command="versions"]');
+await keeper.waitForSelector("#list-dialog[open]");
+const savedVersion = keeper.locator("#list-items li", { hasText: "Saved" }).first();
+if ((await savedVersion.count()) === 0)
+  problems.push("writer: saving keeps no version to go back to");
+else {
+  await savedVersion.locator("button.primary").click();
+  await keeper.waitForTimeout(900);
+  if ((await draftIn(keeper)).includes("Written after saving."))
+    problems.push("writer: going back to a version kept the words written since");
+  await keeper.click(".cm-content");
+  await keeper.keyboard.press("Control+z");
+  await keeper.waitForTimeout(900);
+  if (!(await draftIn(keeper)).includes("Written after saving."))
+    problems.push("writer: Undo doesn't take back going back to a version");
+}
+await keeping.close();
+console.log("writer: recovering a draft, going back to a version: ok");
 
 // Edges: a file dropped on the text opens rather than going into it; the bar never runs off the
 // page; the welcome shows nothing behind it; renaming to a name in use says why; Ctrl+K picks who.
@@ -604,17 +685,7 @@ console.log("writer: saving automatically: ok");
 const authoring = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const author = await authoring.newPage();
 watch(author, "writer authoring");
-const kept = () =>
-  author.evaluate(
-    () =>
-      new Promise((resolve) => {
-        const request = indexedDB.open("voxdown-writer");
-        request.onsuccess = () => {
-          const get = request.result.transaction("drafts").objectStore("drafts").get("current");
-          get.onsuccess = () => resolve(get.result?.text ?? "");
-        };
-      }),
-  );
+const kept = () => draftIn(author);
 const settled = () => author.waitForTimeout(900);
 await author.goto(`${base}/writer/`);
 await author.click(`.welcome-example[data-name="${dragonName}"]`);
@@ -684,17 +755,7 @@ const making = await browser.newContext({
 });
 const maker = await making.newPage();
 watch(maker, "writer insert and export");
-const draftOf = () =>
-  maker.evaluate(
-    () =>
-      new Promise((resolve) => {
-        const request = indexedDB.open("voxdown-writer");
-        request.onsuccess = () => {
-          const get = request.result.transaction("drafts").objectStore("drafts").get("current");
-          get.onsuccess = () => resolve(get.result?.text ?? "");
-        };
-      }),
-  );
+const draftOf = () => draftIn(maker);
 await maker.goto(`${base}/writer/`);
 await maker.click('.welcome [data-command="new"]');
 await maker.click(".cm-line >> text=Once upon a time");

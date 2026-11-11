@@ -1,10 +1,16 @@
 /**
- * What the Writer keeps in this browser (IndexedDB), and nowhere else: the story being written, as
- * typed, a moment after each change, so a closed tab or a crash loses nothing; and the files opened
- * lately, to open again where the browser lets a page keep a file (Chrome and Edge).
+ * What the Writer keeps in this browser (IndexedDB), and nowhere else:
+ *
+ * - each story's draft, as typed, a moment after each change, so a closed tab, a crash or another
+ *   story opened loses nothing (`documents`, the open one named by `drafts/current`);
+ * - earlier versions of each story: as it was opened, each time it was saved, and every few
+ *   minutes while it is written (`versions`);
+ * - the files opened lately, to open again where the browser lets a page keep a file (`recent`).
  */
 
 export type Draft = {
+  /** The story's own key, for as long as the browser keeps it. */
+  id: string;
   name: string;
   /** The story as typed, with the line breaks it is saved with. */
   text: string;
@@ -21,28 +27,69 @@ export type Draft = {
   place?: { cursor: number; top: number };
 };
 
+export type Version = {
+  key?: number;
+  /** The story it is a version of. */
+  doc: string;
+  at: number;
+  text: string;
+  /** Why it was kept: "Opened", "Saved", "While writing", "Before tidying" … */
+  why: string;
+};
+
 export type Recent = { name: string; handle: FileSystemFileHandle; openedAt: number };
 
 const DATABASE = "voxdown-writer";
 const DRAFTS = "drafts";
+const DOCUMENTS = "documents";
+const VERSIONS = "versions";
 const RECENT = "recent";
 const CURRENT = "current";
-/** How many files Open recent lists. */
+/** How many files Open recent lists, how many stories' drafts are kept, versions of each. */
 const KEEP = 8;
+const KEEP_DRAFTS = 30;
+const KEEP_VERSIONS = 40;
 
 let opened: Promise<IDBDatabase> | undefined;
 
 function database(): Promise<IDBDatabase> {
   opened ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(DRAFTS);
-      request.result.createObjectStore(RECENT, { autoIncrement: true });
+    const request = indexedDB.open(DATABASE, 2);
+    request.onupgradeneeded = (event) => {
+      const db = request.result;
+      const upgrade = request.transaction as IDBTransaction;
+      if (event.oldVersion < 1) {
+        db.createObjectStore(DRAFTS);
+        db.createObjectStore(RECENT, { autoIncrement: true });
+      }
+      if (event.oldVersion < 2) {
+        db.createObjectStore(DOCUMENTS, { keyPath: "id" });
+        db.createObjectStore(VERSIONS, { autoIncrement: true, keyPath: "key" }).createIndex(
+          "doc",
+          "doc",
+        );
+        // The one draft of before becomes the first story kept.
+        const drafts = upgrade.objectStore(DRAFTS);
+        const old = drafts.get(CURRENT);
+        old.onsuccess = () => {
+          const draft = old.result as (Omit<Draft, "id"> & { id?: string }) | undefined;
+          if (!draft || typeof draft.text !== "string" || draft.id) return;
+          const id = newId();
+          upgrade.objectStore(DOCUMENTS).put({ ...draft, id });
+          drafts.put({ id }, CURRENT);
+        };
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
   return opened;
+}
+
+export function newId(): string {
+  return (
+    crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  );
 }
 
 function done<T>(request: IDBRequest<T>): Promise<T> {
@@ -52,23 +99,39 @@ function done<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 
+function finished(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
 async function store(name: string, mode: IDBTransactionMode): Promise<IDBObjectStore> {
   return (await database()).transaction(name, mode).objectStore(name);
 }
 
-/** The draft from the last visit, if any. Undefined too where the browser keeps nothing. */
+/** The story open when the Writer was last used, if any. Undefined too where nothing is kept. */
 export async function loadDraft(): Promise<Draft | undefined> {
   try {
-    return (await done((await store(DRAFTS, "readonly")).get(CURRENT))) as Draft | undefined;
+    const pointer = (await done((await store(DRAFTS, "readonly")).get(CURRENT))) as
+      | { id?: string }
+      | undefined;
+    if (!pointer?.id) return undefined;
+    return (await done((await store(DOCUMENTS, "readonly")).get(pointer.id))) as Draft | undefined;
   } catch {
     return undefined;
   }
 }
 
-/** Keeps the draft. False where the browser refused (a private window, a full disk). */
+/** Keeps a story's draft, as the open one. False where the browser refused (a private window). */
 export async function keepDraft(draft: Draft): Promise<boolean> {
   try {
-    await done((await store(DRAFTS, "readwrite")).put(draft, CURRENT));
+    const db = await database();
+    const transaction = db.transaction([DOCUMENTS, DRAFTS], "readwrite");
+    transaction.objectStore(DOCUMENTS).put(draft);
+    transaction.objectStore(DRAFTS).put({ id: draft.id }, CURRENT);
+    await finished(transaction);
     return true;
   } catch {
     // A file handle the browser can't store: keep the draft without it.
@@ -80,11 +143,64 @@ export async function keepDraft(draft: Draft): Promise<boolean> {
   }
 }
 
-/** The files opened lately, newest first. */
-export async function recentFiles(): Promise<Recent[]> {
+/** Every story's draft, the latest change first; the oldest beyond the limit are let go. */
+export async function listDrafts(): Promise<Draft[]> {
   try {
-    const all = (await done((await store(RECENT, "readonly")).getAll())) as Recent[];
-    return all.sort((a, b) => b.openedAt - a.openedAt).slice(0, KEEP);
+    const all = (await done((await store(DOCUMENTS, "readonly")).getAll())) as Draft[];
+    all.sort((a, b) => b.changedAt - a.changedAt);
+    for (const old of all.slice(KEEP_DRAFTS)) await forgetDraft(old.id);
+    return all.slice(0, KEEP_DRAFTS);
+  } catch {
+    return [];
+  }
+}
+
+/** Lets a story's draft and its versions go. */
+export async function forgetDraft(id: string): Promise<void> {
+  try {
+    const keys = await done((await store(VERSIONS, "readonly")).index("doc").getAllKeys(id));
+    const db = await database();
+    const transaction = db.transaction([DOCUMENTS, VERSIONS], "readwrite");
+    transaction.objectStore(DOCUMENTS).delete(id);
+    for (const key of keys) transaction.objectStore(VERSIONS).delete(key);
+    await finished(transaction);
+  } catch {
+    // Nothing kept.
+  }
+}
+
+/** The kept story whose file this is, if any. */
+export async function draftForFile(handle: FileSystemFileHandle): Promise<Draft | undefined> {
+  for (const draft of await listDrafts()) {
+    try {
+      if (draft.handle && (await draft.handle.isSameEntry(handle))) return draft;
+    } catch {
+      // A file that is gone is no longer this one.
+    }
+  }
+  return undefined;
+}
+
+/** Keeps a version of a story, unless it is the same as the last one kept. */
+export async function keepVersion(version: Version): Promise<void> {
+  try {
+    const earlier = await versionsOf(version.doc);
+    if (earlier[0]?.text === version.text) return;
+    const writer = await store(VERSIONS, "readwrite");
+    writer.add({ doc: version.doc, at: version.at, text: version.text, why: version.why });
+    for (const old of earlier.slice(KEEP_VERSIONS - 1))
+      if (old.key !== undefined) writer.delete(old.key);
+  } catch {
+    // Without IndexedDB there are no versions; the draft is all there is.
+  }
+}
+
+/** A story's versions, the latest first. */
+export async function versionsOf(doc: string): Promise<Version[]> {
+  try {
+    const index = (await store(VERSIONS, "readonly")).index("doc");
+    const all = (await done(index.getAll(doc))) as Version[];
+    return all.sort((a, b) => b.at - a.at);
   } catch {
     return [];
   }
@@ -114,6 +230,16 @@ async function sameFile(
     }
   }
   return same;
+}
+
+/** The files opened lately, newest first. */
+export async function recentFiles(): Promise<Recent[]> {
+  try {
+    const all = (await done((await store(RECENT, "readonly")).getAll())) as Recent[];
+    return all.sort((a, b) => b.openedAt - a.openedAt).slice(0, KEEP);
+  } catch {
+    return [];
+  }
 }
 
 /** Puts a file at the top of Open recent, once. */

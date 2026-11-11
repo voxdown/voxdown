@@ -21,6 +21,8 @@
           <span class="menu-label" id="recent-label">Open recent</span>
           <div role="group" aria-labelledby="recent-label" id="recent-list"></div>
         </div>
+        <button role="menuitem" type="button" data-command="recover">Recover a draft…</button>
+        <button role="menuitem" type="button" data-command="versions">Earlier versions…</button>
         <hr>
         <button role="menuitem" type="button" data-command="save">Save<kbd data-keys="Mod+S"></kbd></button>
         <button role="menuitem" type="button" data-command="save-as">Save as…<kbd data-keys="Mod+Shift+S"></kbd></button>
@@ -168,6 +170,15 @@
     <h2 id="shortcuts-title">Keyboard shortcuts</h2>
     <dl id="shortcut-list"></dl>
     <div class="ask-buttons"><button class="button primary" value="close">Close</button></div>
+  </form>
+</dialog>
+
+<dialog class="list-dialog" id="list-dialog" aria-labelledby="list-title">
+  <form method="dialog">
+    <h2 id="list-title"></h2>
+    <p class="sheet-note" id="list-note"></p>
+    <ul class="list-items" id="list-items"></ul>
+    <div class="ask-buttons"><button class="button" value="close">Close</button></div>
   </form>
 </dialog>
 

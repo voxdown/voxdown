@@ -1,785 +1,620 @@
 {
- "story": "the-dragon-who-would-not-roar.vxd",
- "audio": "the-dragon-who-would-not-roar.mp3",
- "source": "1b07ebe5a1c321e22478ff7a6692a81d6f73dbbd3cae73bf2bdeaba2e11f98fa",
- "model": "eleven_v4",
- "voices": {
-  "Narrator": "George",
-  "King": "Daniel",
-  "Percival": "Harry",
-  "Gerald": "Gerald"
- },
- "duration": 148.885,
- "cues": [
-  {
-   "kind": "speech",
-   "from": 474,
-   "line": [
-    474,
-    503
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "The Dragon Who Would Not Roar",
-   "sent": "The Dragon Who Would Not Roar",
-   "start": 0,
-   "duration": 1.93
+  "story": "the-dragon-who-would-not-roar.vxd",
+  "audio": "the-dragon-who-would-not-roar.mp3",
+  "source": "1b07ebe5a1c321e22478ff7a6692a81d6f73dbbd3cae73bf2bdeaba2e11f98fa",
+  "model": "eleven_v4",
+  "voices": {
+    "Narrator": "George",
+    "King": "Daniel",
+    "Percival": "Harry",
+    "Gerald": "Gerald"
   },
-  {
-   "kind": "speech",
-   "from": 609,
-   "line": [
-    599,
-    669
-   ],
-   "speaker": "Narrator",
-   "direction": "warmly",
-   "text": "Sir Percival had been training his entire life for this day.",
-   "sent": "[warmly] Sir Percival had been training his entire life for this day.",
-   "start": 3.03,
-   "duration": 4.057
-  },
-  {
-   "kind": "speech",
-   "from": 671,
-   "line": [
-    671,
-    903
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "He had polished his armor until it squeaked.",
-   "sent": "He had polished his armor until it squeaked.",
-   "start": 7.886,
-   "duration": 2.485
-  },
-  {
-   "kind": "sound",
-   "from": 716,
-   "line": [
-    671,
-    903
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "armor squeaking",
-   "sent": "armor squeaking",
-   "start": 10.622,
-   "duration": 2.48
-  },
-  {
-   "kind": "speech",
-   "from": 734,
-   "line": [
-    671,
-    903
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "He had practiced his battle cry in front of the mirror. He had even read a book about dragons, although he had skipped the chapter called *Things Dragons Find Annoying*.",
-   "sent": "He had practiced his battle cry in front of the mirror. He had even read a book about dragons, although he had skipped the chapter called Things Dragons Find Annoying.",
-   "start": 13.352,
-   "duration": 9.746
-  },
-  {
-   "kind": "speech",
-   "from": 940,
-   "line": [
-    905,
-    1063
-   ],
-   "speaker": "King",
-   "direction": "grandly, to a crowded hall",
-   "text": "Whoever brings back the dragon of Mount Mumble,",
-   "sent": "[grandly, to a crowded hall] Whoever brings back the dragon of Mount Mumble,",
-   "start": 23.898,
-   "duration": 3.036
-  },
-  {
-   "kind": "speech",
-   "from": 990,
-   "line": [
-    905,
-    1063
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "proclaimed the King,",
-   "sent": "proclaimed the King,",
-   "start": 27.184,
-   "duration": 0.995
-  },
-  {
-   "kind": "speech",
-   "from": 1011,
-   "line": [
-    905,
-    1063
-   ],
-   "speaker": "King",
-   "direction": "grandly, to a crowded hall",
-   "text": "shall have half my kingdom and all of my biscuits.",
-   "sent": "[grandly, to a crowded hall] shall have half my kingdom and all of my biscuits.",
-   "start": 28.428,
-   "duration": 3.666
-  },
-  {
-   "kind": "speech",
-   "from": 1075,
-   "line": [
-    1065,
-    1108
-   ],
-   "speaker": "Percival",
-   "direction": null,
-   "text": "All of them?",
-   "sent": "All of them?",
-   "start": 32.895,
-   "duration": 0.647
-  },
-  {
-   "kind": "speech",
-   "from": 1090,
-   "line": [
-    1065,
-    1108
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "said Sir Percival.",
-   "sent": "said Sir Percival.",
-   "start": 33.791,
-   "duration": 1.017
-  },
-  {
-   "kind": "speech",
-   "from": 1131,
-   "line": [
-    1110,
-    1146
-   ],
-   "speaker": "King",
-   "direction": "less grandly",
-   "text": "Most of them.",
-   "sent": "[less grandly] Most of them.",
-   "start": 35.608,
-   "duration": 0.754
-  },
-  {
-   "kind": "page",
-   "from": 1148,
-   "line": [
-    1148,
-    1154
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "",
-   "sent": "a single page of a book turning, soft paper, close and quiet",
-   "start": 37.162,
-   "duration": 1
-  },
-  {
-   "kind": "speech",
-   "from": 1182,
-   "line": [
-    1182,
-    1303
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "Mount Mumble was very tall, and very quiet.",
-   "sent": "Mount Mumble was very tall, and very quiet.",
-   "start": 38.962,
-   "duration": 3.281
-  },
-  {
-   "kind": "sound",
-   "from": 1226,
-   "line": [
-    1182,
-    1303
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "wind across rocks",
-   "sent": "wind across rocks",
-   "start": 42.492,
-   "duration": 2.48
-  },
-  {
-   "kind": "speech",
-   "from": 1246,
-   "line": [
-    1182,
-    1303
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "Sir Percival climbed it all morning. Clank, clank, clank.",
-   "sent": "Sir Percival climbed it all morning. Clank, clank, clank.",
-   "start": 45.222,
-   "duration": 4.414
-  },
-  {
-   "kind": "speech",
-   "from": 1305,
-   "line": [
-    1305,
-    1369
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "Then he heard a deep rumble.",
-   "sent": "Then he heard a deep rumble.",
-   "start": 50.436,
-   "duration": 1.89
-  },
-  {
-   "kind": "sound",
-   "from": 1334,
-   "line": [
-    1305,
-    1369
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "deep rumbling, from inside a cave",
-   "sent": "deep rumbling, from inside a cave",
-   "start": 52.576,
-   "duration": 2.48
-  },
-  {
-   "kind": "speech",
-   "from": 1371,
-   "line": [
-    1371,
-    1411
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "The dragon was snoring.",
-   "sent": "The dragon was snoring.",
-   "start": 55.856,
-   "duration": 1.484
-  },
-  {
-   "kind": "vocal",
-   "from": 1403,
-   "line": [
-    1371,
-    1411
-   ],
-   "speaker": "Gerald",
-   "direction": null,
-   "text": "snores",
-   "sent": "snores: An old dragon. Deep, polite and utterly unbothered.",
-   "start": 57.59,
-   "duration": 2
-  },
-  {
-   "kind": "speech",
-   "from": 1428,
-   "line": [
-    1428,
-    1454
-   ],
-   "speaker": "Narrator",
-   "direction": "whispering",
-   "text": "Sir Percival crept inside.",
-   "sent": "[whispering] Sir Percival crept inside.",
-   "start": 60.39,
-   "duration": 2.132
-  },
-  {
-   "kind": "speech",
-   "from": 1455,
-   "line": [
-    1455,
-    1461
-   ],
-   "speaker": "Narrator",
-   "direction": "whispering",
-   "text": "Clank.",
-   "sent": "[whispering] Clank.",
-   "start": 62.972,
-   "duration": 0.461
-  },
-  {
-   "kind": "speech",
-   "from": 1462,
-   "line": [
-    1462,
-    1468
-   ],
-   "speaker": "Narrator",
-   "direction": "whispering",
-   "text": "Clank.",
-   "sent": "[whispering] Clank.",
-   "start": 63.883,
-   "duration": 0.537
-  },
-  {
-   "kind": "pause",
-   "from": 1469,
-   "line": [
-    1469,
-    1476
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "",
-   "sent": null,
-   "start": 64.87,
-   "duration": 1
-  },
-  {
-   "kind": "speech",
-   "from": 1477,
-   "line": [
-    1477,
-    1503
-   ],
-   "speaker": "Narrator",
-   "direction": "whispering",
-   "text": "The dragon opened one eye.",
-   "sent": "[whispering] The dragon opened one eye.",
-   "start": 66.32,
-   "duration": 1.811
-  },
-  {
-   "kind": "speech",
-   "from": 1555,
-   "line": [
-    1509,
-    1571
-   ],
-   "speaker": "Gerald",
-   "direction": "deep, polite and utterly unbothered",
-   "text": "Could you not?",
-   "sent": "[deep, polite and utterly unbothered] Could you not?",
-   "start": 68.931,
-   "duration": 0.779
-  },
-  {
-   "kind": "speech",
-   "from": 1573,
-   "line": [
-    1573,
-    1594
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "Sir Percival stopped.",
-   "sent": "Sir Percival stopped.",
-   "start": 70.51,
-   "duration": 1.252
-  },
-  {
-   "kind": "speech",
-   "from": 1604,
-   "line": [
-    1596,
-    1688
-   ],
-   "speaker": "Gerald",
-   "direction": null,
-   "text": "I’ve only just got to sleep,",
-   "sent": "I’ve only just got to sleep,",
-   "start": 72.561,
-   "duration": 1.842
-  },
-  {
-   "kind": "speech",
-   "from": 1635,
-   "line": [
-    1596,
-    1688
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "said the dragon.",
-   "sent": "said the dragon.",
-   "start": 74.653,
-   "duration": 0.819
-  },
-  {
-   "kind": "speech",
-   "from": 1652,
-   "line": [
-    1596,
-    1688
-   ],
-   "speaker": "Gerald",
-   "direction": null,
-   "text": "I was up all night counting sheep.",
-   "sent": "I was up all night counting sheep.",
-   "start": 75.722,
-   "duration": 2.452
-  },
-  {
-   "kind": "speech",
-   "from": 1700,
-   "line": [
-    1690,
-    1713
-   ],
-   "speaker": "Percival",
-   "direction": null,
-   "text": "Real sheep?",
-   "sent": "Real sheep?",
-   "start": 78.974,
-   "duration": 0.69
-  },
-  {
-   "kind": "speech",
-   "from": 1723,
-   "line": [
-    1715,
-    1775
-   ],
-   "speaker": "Gerald",
-   "direction": null,
-   "text": "Imaginary ones. They were very difficult to catch.",
-   "sent": "Imaginary ones. They were very difficult to catch.",
-   "start": 80.465,
-   "duration": 3.812
-  },
-  {
-   "kind": "page",
-   "from": 1777,
-   "line": [
-    1777,
-    1783
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "",
-   "sent": "a single page of a book turning, soft paper, close and quiet",
-   "start": 85.077,
-   "duration": 1
-  },
-  {
-   "kind": "speech",
-   "from": 1917,
-   "line": [
-    1917,
-    1957
-   ],
-   "speaker": "Percival",
-   "direction": "trying to sound brave",
-   "text": "I am Sir Percival of the Shining Shield!",
-   "sent": "[trying to sound brave] I am Sir Percival of the Shining Shield!",
-   "start": 86.877,
-   "duration": 2.499
-  },
-  {
-   "kind": "speech",
-   "from": 1958,
-   "line": [
-    1958,
-    1984
-   ],
-   "speaker": "Percival",
-   "direction": "trying to sound brave",
-   "text": "I have come to defeat you!",
-   "sent": "[trying to sound brave] I have come to defeat you!",
-   "start": 89.826,
-   "duration": 1.485
-  },
-  {
-   "kind": "speech",
-   "from": 1985,
-   "line": [
-    1985,
-    2010
-   ],
-   "speaker": "Percival",
-   "direction": "trying to sound brave",
-   "text": "Prepare to meet thy doom!",
-   "sent": "[trying to sound brave] Prepare to meet thy doom!",
-   "start": 91.761,
-   "duration": 1.724
-  },
-  {
-   "kind": "vocal",
-   "from": 2024,
-   "line": [
-    2016,
-    2081
-   ],
-   "speaker": "Gerald",
-   "direction": null,
-   "text": "yawns",
-   "sent": "[yawns] Is it a long doom? Only I’ve got a nap at four.",
-   "start": 94.286,
-   "duration": 1.064
-  },
-  {
-   "kind": "speech",
-   "from": 2032,
-   "line": [
-    2016,
-    2081
-   ],
-   "speaker": "Gerald",
-   "direction": null,
-   "text": "Is it a long doom? Only I’ve got a nap at four.",
-   "sent": "[yawns] Is it a long doom? Only I’ve got a nap at four.",
-   "start": 95.5,
-   "duration": 3.872
-  },
-  {
-   "kind": "speech",
-   "from": 2093,
-   "line": [
-    2083,
-    2120
-   ],
-   "speaker": "Percival",
-   "direction": null,
-   "text": "Aren’t you going to roar?",
-   "sent": "Aren’t you going to roar?",
-   "start": 100.172,
-   "duration": 1.239
-  },
-  {
-   "kind": "speech",
-   "from": 2122,
-   "line": [
-    2122,
-    2140
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "The dragon sighed.",
-   "sent": "The dragon sighed.",
-   "start": 102.212,
-   "duration": 1.261
-  },
-  {
-   "kind": "speech",
-   "from": 2182,
-   "line": [
-    2142,
-    2192
-   ],
-   "speaker": "Gerald",
-   "direction": "with no enthusiasm whatsoever",
-   "text": "Rooooar.",
-   "sent": "[with no enthusiasm whatsoever] Rooooar.",
-   "start": 104.272,
-   "duration": 1.252
-  },
-  {
-   "kind": "speech",
-   "from": 2204,
-   "line": [
-    2194,
-    2248
-   ],
-   "speaker": "Percival",
-   "direction": null,
-   "text": "That was the worst roar I have ever heard.",
-   "sent": "That was the worst roar I have ever heard.",
-   "start": 106.325,
-   "duration": 3.247
-  },
-  {
-   "kind": "speech",
-   "from": 2258,
-   "line": [
-    2250,
-    2322
-   ],
-   "speaker": "Gerald",
-   "direction": null,
-   "text": "Thank you,",
-   "sent": "Thank you,",
-   "start": 110.372,
-   "duration": 0.755
-  },
-  {
-   "kind": "speech",
-   "from": 2271,
-   "line": [
-    2250,
-    2322
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "said the dragon.",
-   "sent": "said the dragon.",
-   "start": 111.377,
-   "duration": 0.823
-  },
-  {
-   "kind": "speech",
-   "from": 2299,
-   "line": [
-    2250,
-    2322
-   ],
-   "speaker": "Gerald",
-   "direction": "proudly",
-   "text": "I’ve been practicing.",
-   "sent": "[proudly] I’ve been practicing.",
-   "start": 112.45,
-   "duration": 1.24
-  },
-  {
-   "kind": "pause",
-   "from": 2324,
-   "line": [
-    2324,
-    2334
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "2s",
-   "sent": null,
-   "start": 114.49,
-   "duration": 2
-  },
-  {
-   "kind": "page",
-   "from": 2336,
-   "line": [
-    2336,
-    2342
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "",
-   "sent": "a single page of a book turning, soft paper, close and quiet",
-   "start": 117.29,
-   "duration": 1
-  },
-  {
-   "kind": "speech",
-   "from": 2362,
-   "line": [
-    2362,
-    2537
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "So Sir Percival went home without a dragon, but with a jar of the dragon’s very best soup, which is better than half a kingdom on a cold night.",
-   "sent": "So Sir Percival went home without a dragon, but with a jar of the dragon’s very best soup, which is better than half a kingdom on a cold night.",
-   "start": 119.09,
-   "duration": 8.867
-  },
-  {
-   "kind": "sound",
-   "from": 2506,
-   "line": [
-    2362,
-    2537
-   ],
-   "speaker": null,
-   "direction": null,
-   "text": "door closes; a fire crackling",
-   "sent": "door closes; a fire crackling",
-   "start": 128.207,
-   "duration": 2.48
-  },
-  {
-   "kind": "speech",
-   "from": 2558,
-   "line": [
-    2539,
-    2580
-   ],
-   "speaker": "King",
-   "direction": "suspicious",
-   "text": "Where is the dragon?",
-   "sent": "[suspicious] Where is the dragon?",
-   "start": 131.487,
-   "duration": 1.441
-  },
-  {
-   "kind": "speech",
-   "from": 2592,
-   "line": [
-    2582,
-    2657
-   ],
-   "speaker": "Percival",
-   "direction": null,
-   "text": "Asleep,",
-   "sent": "Asleep,",
-   "start": 133.728,
-   "duration": 0.641
-  },
-  {
-   "kind": "speech",
-   "from": 2602,
-   "line": [
-    2582,
-    2657
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "said Sir Percival.",
-   "sent": "said Sir Percival.",
-   "start": 134.619,
-   "duration": 1.044
-  },
-  {
-   "kind": "speech",
-   "from": 2621,
-   "line": [
-    2582,
-    2657
-   ],
-   "speaker": "Percival",
-   "direction": null,
-   "text": "I thought it best not to wake him.",
-   "sent": "I thought it best not to wake him.",
-   "start": 135.913,
-   "duration": 1.69
-  },
-  {
-   "kind": "speech",
-   "from": 2669,
-   "line": [
-    2659,
-    2788
-   ],
-   "speaker": "Narrator",
-   "direction": "fondly",
-   "text": "And to this day, if you climb Mount Mumble very quietly, you can hear the dragon snoring.",
-   "sent": "[fondly] And to this day, if you climb Mount Mumble very quietly, you can hear the dragon snoring.",
-   "start": 138.403,
-   "duration": 6.132
-  },
-  {
-   "kind": "vocal",
-   "from": 2767,
-   "line": [
-    2659,
-    2788
-   ],
-   "speaker": "Gerald",
-   "direction": null,
-   "text": "snores, contentedly",
-   "sent": "snores, contentedly: An old dragon. Deep, polite and utterly unbothered.",
-   "start": 144.784,
-   "duration": 2
-  },
-  {
-   "kind": "speech",
-   "from": 2803,
-   "line": [
-    2790,
-    2827
-   ],
-   "speaker": "Narrator",
-   "direction": null,
-   "text": "Thank you for listening.",
-   "sent": "Thank you for listening.",
-   "start": 147.584,
-   "duration": 1.301
-  }
- ]
+  "duration": 148.885,
+  "cues": [
+    {
+      "kind": "speech",
+      "from": 474,
+      "line": [474, 503],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "The Dragon Who Would Not Roar",
+      "sent": "The Dragon Who Would Not Roar",
+      "start": 0,
+      "duration": 1.93
+    },
+    {
+      "kind": "speech",
+      "from": 609,
+      "line": [599, 669],
+      "speaker": "Narrator",
+      "direction": "warmly",
+      "text": "Sir Percival had been training his entire life for this day.",
+      "sent": "[warmly] Sir Percival had been training his entire life for this day.",
+      "start": 3.03,
+      "duration": 4.057
+    },
+    {
+      "kind": "speech",
+      "from": 671,
+      "line": [671, 903],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "He had polished his armor until it squeaked.",
+      "sent": "He had polished his armor until it squeaked.",
+      "start": 7.886,
+      "duration": 2.485
+    },
+    {
+      "kind": "sound",
+      "from": 716,
+      "line": [671, 903],
+      "speaker": null,
+      "direction": null,
+      "text": "armor squeaking",
+      "sent": "armor squeaking",
+      "start": 10.622,
+      "duration": 2.48
+    },
+    {
+      "kind": "speech",
+      "from": 734,
+      "line": [671, 903],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "He had practiced his battle cry in front of the mirror. He had even read a book about dragons, although he had skipped the chapter called *Things Dragons Find Annoying*.",
+      "sent": "He had practiced his battle cry in front of the mirror. He had even read a book about dragons, although he had skipped the chapter called Things Dragons Find Annoying.",
+      "start": 13.352,
+      "duration": 9.746
+    },
+    {
+      "kind": "speech",
+      "from": 940,
+      "line": [905, 1063],
+      "speaker": "King",
+      "direction": "grandly, to a crowded hall",
+      "text": "Whoever brings back the dragon of Mount Mumble,",
+      "sent": "[grandly, to a crowded hall] Whoever brings back the dragon of Mount Mumble,",
+      "start": 23.898,
+      "duration": 3.036
+    },
+    {
+      "kind": "speech",
+      "from": 990,
+      "line": [905, 1063],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "proclaimed the King,",
+      "sent": "proclaimed the King,",
+      "start": 27.184,
+      "duration": 0.995
+    },
+    {
+      "kind": "speech",
+      "from": 1011,
+      "line": [905, 1063],
+      "speaker": "King",
+      "direction": "grandly, to a crowded hall",
+      "text": "shall have half my kingdom and all of my biscuits.",
+      "sent": "[grandly, to a crowded hall] shall have half my kingdom and all of my biscuits.",
+      "start": 28.428,
+      "duration": 3.666
+    },
+    {
+      "kind": "speech",
+      "from": 1075,
+      "line": [1065, 1108],
+      "speaker": "Percival",
+      "direction": null,
+      "text": "All of them?",
+      "sent": "All of them?",
+      "start": 32.895,
+      "duration": 0.647
+    },
+    {
+      "kind": "speech",
+      "from": 1090,
+      "line": [1065, 1108],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "said Sir Percival.",
+      "sent": "said Sir Percival.",
+      "start": 33.791,
+      "duration": 1.017
+    },
+    {
+      "kind": "speech",
+      "from": 1131,
+      "line": [1110, 1146],
+      "speaker": "King",
+      "direction": "less grandly",
+      "text": "Most of them.",
+      "sent": "[less grandly] Most of them.",
+      "start": 35.608,
+      "duration": 0.754
+    },
+    {
+      "kind": "page",
+      "from": 1148,
+      "line": [1148, 1154],
+      "speaker": null,
+      "direction": null,
+      "text": "",
+      "sent": "a single page of a book turning, soft paper, close and quiet",
+      "start": 37.162,
+      "duration": 1
+    },
+    {
+      "kind": "speech",
+      "from": 1182,
+      "line": [1182, 1303],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "Mount Mumble was very tall, and very quiet.",
+      "sent": "Mount Mumble was very tall, and very quiet.",
+      "start": 38.962,
+      "duration": 3.281
+    },
+    {
+      "kind": "sound",
+      "from": 1226,
+      "line": [1182, 1303],
+      "speaker": null,
+      "direction": null,
+      "text": "wind across rocks",
+      "sent": "wind across rocks",
+      "start": 42.492,
+      "duration": 2.48
+    },
+    {
+      "kind": "speech",
+      "from": 1246,
+      "line": [1182, 1303],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "Sir Percival climbed it all morning. Clank, clank, clank.",
+      "sent": "Sir Percival climbed it all morning. Clank, clank, clank.",
+      "start": 45.222,
+      "duration": 4.414
+    },
+    {
+      "kind": "speech",
+      "from": 1305,
+      "line": [1305, 1369],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "Then he heard a deep rumble.",
+      "sent": "Then he heard a deep rumble.",
+      "start": 50.436,
+      "duration": 1.89
+    },
+    {
+      "kind": "sound",
+      "from": 1334,
+      "line": [1305, 1369],
+      "speaker": null,
+      "direction": null,
+      "text": "deep rumbling, from inside a cave",
+      "sent": "deep rumbling, from inside a cave",
+      "start": 52.576,
+      "duration": 2.48
+    },
+    {
+      "kind": "speech",
+      "from": 1371,
+      "line": [1371, 1411],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "The dragon was snoring.",
+      "sent": "The dragon was snoring.",
+      "start": 55.856,
+      "duration": 1.484
+    },
+    {
+      "kind": "vocal",
+      "from": 1403,
+      "line": [1371, 1411],
+      "speaker": "Gerald",
+      "direction": null,
+      "text": "snores",
+      "sent": "snores: An old dragon. Deep, polite and utterly unbothered.",
+      "start": 57.59,
+      "duration": 2
+    },
+    {
+      "kind": "speech",
+      "from": 1428,
+      "line": [1428, 1454],
+      "speaker": "Narrator",
+      "direction": "whispering",
+      "text": "Sir Percival crept inside.",
+      "sent": "[whispering] Sir Percival crept inside.",
+      "start": 60.39,
+      "duration": 2.132
+    },
+    {
+      "kind": "speech",
+      "from": 1455,
+      "line": [1455, 1461],
+      "speaker": "Narrator",
+      "direction": "whispering",
+      "text": "Clank.",
+      "sent": "[whispering] Clank.",
+      "start": 62.972,
+      "duration": 0.461
+    },
+    {
+      "kind": "speech",
+      "from": 1462,
+      "line": [1462, 1468],
+      "speaker": "Narrator",
+      "direction": "whispering",
+      "text": "Clank.",
+      "sent": "[whispering] Clank.",
+      "start": 63.883,
+      "duration": 0.537
+    },
+    {
+      "kind": "pause",
+      "from": 1469,
+      "line": [1469, 1476],
+      "speaker": null,
+      "direction": null,
+      "text": "",
+      "sent": null,
+      "start": 64.87,
+      "duration": 1
+    },
+    {
+      "kind": "speech",
+      "from": 1477,
+      "line": [1477, 1503],
+      "speaker": "Narrator",
+      "direction": "whispering",
+      "text": "The dragon opened one eye.",
+      "sent": "[whispering] The dragon opened one eye.",
+      "start": 66.32,
+      "duration": 1.811
+    },
+    {
+      "kind": "speech",
+      "from": 1555,
+      "line": [1509, 1571],
+      "speaker": "Gerald",
+      "direction": "deep, polite and utterly unbothered",
+      "text": "Could you not?",
+      "sent": "[deep, polite and utterly unbothered] Could you not?",
+      "start": 68.931,
+      "duration": 0.779
+    },
+    {
+      "kind": "speech",
+      "from": 1573,
+      "line": [1573, 1594],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "Sir Percival stopped.",
+      "sent": "Sir Percival stopped.",
+      "start": 70.51,
+      "duration": 1.252
+    },
+    {
+      "kind": "speech",
+      "from": 1604,
+      "line": [1596, 1688],
+      "speaker": "Gerald",
+      "direction": null,
+      "text": "I’ve only just got to sleep,",
+      "sent": "I’ve only just got to sleep,",
+      "start": 72.561,
+      "duration": 1.842
+    },
+    {
+      "kind": "speech",
+      "from": 1635,
+      "line": [1596, 1688],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "said the dragon.",
+      "sent": "said the dragon.",
+      "start": 74.653,
+      "duration": 0.819
+    },
+    {
+      "kind": "speech",
+      "from": 1652,
+      "line": [1596, 1688],
+      "speaker": "Gerald",
+      "direction": null,
+      "text": "I was up all night counting sheep.",
+      "sent": "I was up all night counting sheep.",
+      "start": 75.722,
+      "duration": 2.452
+    },
+    {
+      "kind": "speech",
+      "from": 1700,
+      "line": [1690, 1713],
+      "speaker": "Percival",
+      "direction": null,
+      "text": "Real sheep?",
+      "sent": "Real sheep?",
+      "start": 78.974,
+      "duration": 0.69
+    },
+    {
+      "kind": "speech",
+      "from": 1723,
+      "line": [1715, 1775],
+      "speaker": "Gerald",
+      "direction": null,
+      "text": "Imaginary ones. They were very difficult to catch.",
+      "sent": "Imaginary ones. They were very difficult to catch.",
+      "start": 80.465,
+      "duration": 3.812
+    },
+    {
+      "kind": "page",
+      "from": 1777,
+      "line": [1777, 1783],
+      "speaker": null,
+      "direction": null,
+      "text": "",
+      "sent": "a single page of a book turning, soft paper, close and quiet",
+      "start": 85.077,
+      "duration": 1
+    },
+    {
+      "kind": "speech",
+      "from": 1917,
+      "line": [1917, 1957],
+      "speaker": "Percival",
+      "direction": "trying to sound brave",
+      "text": "I am Sir Percival of the Shining Shield!",
+      "sent": "[trying to sound brave] I am Sir Percival of the Shining Shield!",
+      "start": 86.877,
+      "duration": 2.499
+    },
+    {
+      "kind": "speech",
+      "from": 1958,
+      "line": [1958, 1984],
+      "speaker": "Percival",
+      "direction": "trying to sound brave",
+      "text": "I have come to defeat you!",
+      "sent": "[trying to sound brave] I have come to defeat you!",
+      "start": 89.826,
+      "duration": 1.485
+    },
+    {
+      "kind": "speech",
+      "from": 1985,
+      "line": [1985, 2010],
+      "speaker": "Percival",
+      "direction": "trying to sound brave",
+      "text": "Prepare to meet thy doom!",
+      "sent": "[trying to sound brave] Prepare to meet thy doom!",
+      "start": 91.761,
+      "duration": 1.724
+    },
+    {
+      "kind": "vocal",
+      "from": 2024,
+      "line": [2016, 2081],
+      "speaker": "Gerald",
+      "direction": null,
+      "text": "yawns",
+      "sent": "[yawns] Is it a long doom? Only I’ve got a nap at four.",
+      "start": 94.286,
+      "duration": 1.064
+    },
+    {
+      "kind": "speech",
+      "from": 2032,
+      "line": [2016, 2081],
+      "speaker": "Gerald",
+      "direction": null,
+      "text": "Is it a long doom? Only I’ve got a nap at four.",
+      "sent": "[yawns] Is it a long doom? Only I’ve got a nap at four.",
+      "start": 95.5,
+      "duration": 3.872
+    },
+    {
+      "kind": "speech",
+      "from": 2093,
+      "line": [2083, 2120],
+      "speaker": "Percival",
+      "direction": null,
+      "text": "Aren’t you going to roar?",
+      "sent": "Aren’t you going to roar?",
+      "start": 100.172,
+      "duration": 1.239
+    },
+    {
+      "kind": "speech",
+      "from": 2122,
+      "line": [2122, 2140],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "The dragon sighed.",
+      "sent": "The dragon sighed.",
+      "start": 102.212,
+      "duration": 1.261
+    },
+    {
+      "kind": "speech",
+      "from": 2182,
+      "line": [2142, 2192],
+      "speaker": "Gerald",
+      "direction": "with no enthusiasm whatsoever",
+      "text": "Rooooar.",
+      "sent": "[with no enthusiasm whatsoever] Rooooar.",
+      "start": 104.272,
+      "duration": 1.252
+    },
+    {
+      "kind": "speech",
+      "from": 2204,
+      "line": [2194, 2248],
+      "speaker": "Percival",
+      "direction": null,
+      "text": "That was the worst roar I have ever heard.",
+      "sent": "That was the worst roar I have ever heard.",
+      "start": 106.325,
+      "duration": 3.247
+    },
+    {
+      "kind": "speech",
+      "from": 2258,
+      "line": [2250, 2322],
+      "speaker": "Gerald",
+      "direction": null,
+      "text": "Thank you,",
+      "sent": "Thank you,",
+      "start": 110.372,
+      "duration": 0.755
+    },
+    {
+      "kind": "speech",
+      "from": 2271,
+      "line": [2250, 2322],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "said the dragon.",
+      "sent": "said the dragon.",
+      "start": 111.377,
+      "duration": 0.823
+    },
+    {
+      "kind": "speech",
+      "from": 2299,
+      "line": [2250, 2322],
+      "speaker": "Gerald",
+      "direction": "proudly",
+      "text": "I’ve been practicing.",
+      "sent": "[proudly] I’ve been practicing.",
+      "start": 112.45,
+      "duration": 1.24
+    },
+    {
+      "kind": "pause",
+      "from": 2324,
+      "line": [2324, 2334],
+      "speaker": null,
+      "direction": null,
+      "text": "2s",
+      "sent": null,
+      "start": 114.49,
+      "duration": 2
+    },
+    {
+      "kind": "page",
+      "from": 2336,
+      "line": [2336, 2342],
+      "speaker": null,
+      "direction": null,
+      "text": "",
+      "sent": "a single page of a book turning, soft paper, close and quiet",
+      "start": 117.29,
+      "duration": 1
+    },
+    {
+      "kind": "speech",
+      "from": 2362,
+      "line": [2362, 2537],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "So Sir Percival went home without a dragon, but with a jar of the dragon’s very best soup, which is better than half a kingdom on a cold night.",
+      "sent": "So Sir Percival went home without a dragon, but with a jar of the dragon’s very best soup, which is better than half a kingdom on a cold night.",
+      "start": 119.09,
+      "duration": 8.867
+    },
+    {
+      "kind": "sound",
+      "from": 2506,
+      "line": [2362, 2537],
+      "speaker": null,
+      "direction": null,
+      "text": "door closes; a fire crackling",
+      "sent": "door closes; a fire crackling",
+      "start": 128.207,
+      "duration": 2.48
+    },
+    {
+      "kind": "speech",
+      "from": 2558,
+      "line": [2539, 2580],
+      "speaker": "King",
+      "direction": "suspicious",
+      "text": "Where is the dragon?",
+      "sent": "[suspicious] Where is the dragon?",
+      "start": 131.487,
+      "duration": 1.441
+    },
+    {
+      "kind": "speech",
+      "from": 2592,
+      "line": [2582, 2657],
+      "speaker": "Percival",
+      "direction": null,
+      "text": "Asleep,",
+      "sent": "Asleep,",
+      "start": 133.728,
+      "duration": 0.641
+    },
+    {
+      "kind": "speech",
+      "from": 2602,
+      "line": [2582, 2657],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "said Sir Percival.",
+      "sent": "said Sir Percival.",
+      "start": 134.619,
+      "duration": 1.044
+    },
+    {
+      "kind": "speech",
+      "from": 2621,
+      "line": [2582, 2657],
+      "speaker": "Percival",
+      "direction": null,
+      "text": "I thought it best not to wake him.",
+      "sent": "I thought it best not to wake him.",
+      "start": 135.913,
+      "duration": 1.69
+    },
+    {
+      "kind": "speech",
+      "from": 2669,
+      "line": [2659, 2788],
+      "speaker": "Narrator",
+      "direction": "fondly",
+      "text": "And to this day, if you climb Mount Mumble very quietly, you can hear the dragon snoring.",
+      "sent": "[fondly] And to this day, if you climb Mount Mumble very quietly, you can hear the dragon snoring.",
+      "start": 138.403,
+      "duration": 6.132
+    },
+    {
+      "kind": "vocal",
+      "from": 2767,
+      "line": [2659, 2788],
+      "speaker": "Gerald",
+      "direction": null,
+      "text": "snores, contentedly",
+      "sent": "snores, contentedly: An old dragon. Deep, polite and utterly unbothered.",
+      "start": 144.784,
+      "duration": 2
+    },
+    {
+      "kind": "speech",
+      "from": 2803,
+      "line": [2790, 2827],
+      "speaker": "Narrator",
+      "direction": null,
+      "text": "Thank you for listening.",
+      "sent": "Thank you for listening.",
+      "start": 147.584,
+      "duration": 1.301
+    }
+  ]
 }

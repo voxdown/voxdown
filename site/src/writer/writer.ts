@@ -62,7 +62,20 @@ import { keys, menus } from "./menu";
 import { moveParagraph } from "./paragraphs";
 import { type Problem, problems } from "./problems";
 import { SceneRail } from "./rail";
-import { type Draft, forgetFile, keepDraft, loadDraft, recentFiles, rememberFile } from "./store";
+import {
+  type Draft,
+  draftForFile,
+  forgetDraft,
+  forgetFile,
+  keepDraft,
+  keepVersion,
+  listDrafts,
+  loadDraft,
+  newId,
+  recentFiles,
+  rememberFile,
+  versionsOf,
+} from "./store";
 import { type Speaker, StretchTools, speechAt, speechOfMark } from "./stretch";
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
@@ -111,6 +124,8 @@ function keepPrefs(): void {
 // The story being written, and its file.
 
 const file = {
+  /** The story's own key in this browser: its draft and its versions go by it. */
+  id: newId(),
   name: "Untitled.vxd",
   handle: undefined as FileSystemFileHandle | undefined,
   /** The text as last opened or saved: the story has changes to save while it differs. */
@@ -358,8 +373,15 @@ function notice(message: string): void {
 /** Puts a story in the editor, with a fresh undo history, the cursor where the story starts. */
 function load(
   opened: Opened,
-  kept: { saved?: string; savedAt?: number; changedAt?: number; modified?: number } = {},
+  kept: {
+    id?: string;
+    saved?: string;
+    savedAt?: number;
+    changedAt?: number;
+    modified?: number;
+  } = {},
 ): Promise<void> {
+  file.id = kept.id ?? newId();
   file.name = opened.name;
   file.handle = opened.handle;
   file.modified = opened.modified ?? kept.modified;
@@ -440,6 +462,13 @@ function cancelIdle(): void {
   idle = undefined;
 }
 
+/** Keeps a version of the story as it is now, to go back to (File › Earlier versions). */
+let versionAt = Date.now();
+function snapshot(why: string, content = text()): Promise<void> {
+  versionAt = Date.now();
+  return keepVersion({ doc: file.id, at: Date.now(), text: content, why });
+}
+
 /** Asks the browser, once, not to clear what the Writer keeps when space runs short. */
 let persisted = false;
 function persistOnce(): void {
@@ -459,7 +488,9 @@ async function keep(): Promise<void> {
   keptAt = Date.now();
   const keeping = version;
   persistOnce();
+  if (Date.now() - versionAt > 10 * 60_000) void snapshot("While writing");
   file.kept = await keepDraft({
+    id: file.id,
     name: file.name,
     text: text(),
     saved: file.saved,
@@ -504,6 +535,7 @@ function rescue(): void {
     localStorage.setItem(
       RESCUE,
       JSON.stringify({
+        id: file.id,
         name: file.name,
         text: text(),
         saved: file.saved,
@@ -524,7 +556,8 @@ function forgetRescue(): void {
   }
 }
 
-function rescued(): Pick<Draft, "name" | "text" | "saved" | "changedAt" | "place"> | null {
+type Rescued = Pick<Draft, "name" | "text" | "saved" | "changedAt" | "place"> & { id?: string };
+function rescued(): Rescued | null {
   try {
     return JSON.parse(localStorage.getItem(RESCUE) ?? "null");
   } catch {
@@ -879,11 +912,15 @@ async function askText(message: string, placeholder: string, action: string): Pr
 async function mayLeave(): Promise<boolean> {
   if (!(await mayWrite())) return false;
   if (sameText(text(), file.saved)) return true;
-  const answer = await ask(`Save the changes to ${file.name} first?`, [
-    { label: "Cancel", value: "cancel" },
-    { label: "Don't save", value: "discard" },
-    { label: "Save", value: "save", main: true },
-  ]);
+  const answer = await ask(
+    `Save the changes to ${file.name} first? If you don't, they stay in this browser: File › Recover a draft brings them back.`,
+    [
+      { label: "Cancel", value: "cancel" },
+      { label: "Don't save", value: "discard" },
+      { label: "Save", value: "save", main: true },
+    ],
+  );
+  if (answer === "discard") await keep();
   if (answer === "discard") return true;
   if (answer === "save") return await save();
   return false;
@@ -894,7 +931,7 @@ async function open(): Promise<void> {
   try {
     const opened = await pickFile(input);
     if (!opened) return;
-    void load(opened);
+    await openStory(opened);
     if (opened.handle) await rememberFile(opened.name, opened.handle);
     void showRecent();
   } catch (error) {
@@ -906,13 +943,39 @@ async function openRecent(handle: FileSystemFileHandle): Promise<void> {
   if (!(await mayLeave())) return;
   try {
     const opened = await reopen(handle);
-    void load(opened);
+    await openStory(opened);
     await rememberFile(opened.name, handle);
   } catch {
     await forgetFile(handle);
     await tell(`${handle.name} can't be opened any more: it may have been moved or deleted.`);
   }
   void showRecent();
+}
+
+/**
+ * Opens a file as a story: with the draft this browser keeps for it, if there is one, and with the
+ * changes in it that were never saved, if the writer wants them.
+ */
+async function openStory(opened: Opened): Promise<void> {
+  const kept = opened.handle ? await draftForFile(opened.handle) : undefined;
+  if (kept && !sameText(kept.text, kept.saved) && !sameText(kept.text, opened.text)) {
+    const answer = await ask(
+      `This browser kept changes to ${kept.name} from ${time(kept.changedAt)} that were never saved. Open them, or the file as it is?`,
+      [
+        { label: "The file as it is", value: "file" },
+        { label: "My unsaved changes", value: "mine", main: true },
+      ],
+    );
+    if (answer === "mine") {
+      await restore({ ...kept, ...(opened.handle ? { handle: opened.handle } : {}) });
+      void checkDisk();
+      return;
+    }
+    // The changes aren't lost: they become a version of the story.
+    await keepVersion({ doc: kept.id, at: kept.changedAt, text: kept.text, why: "Not saved" });
+  }
+  await load(opened, kept ? { id: kept.id } : {});
+  if (!opened.imported) void snapshot("Opened", opened.text);
 }
 
 /** Saves to the story's file, or asks where. True once it is saved. */
@@ -1036,6 +1099,7 @@ function saved(content: string): void {
   file.savedAt = Date.now();
   showSaveState();
   void keep();
+  void snapshot("Saved", content);
 }
 
 // Saving automatically: to the story's own file, two seconds after typing stops, where the browser
@@ -1142,6 +1206,7 @@ function tidy(curly: boolean): void {
   const before = view.state.doc.toString();
   const after = format(before, curly ? { quotes: "curly" } : {});
   if (after === before) return;
+  void snapshot("Before tidying");
   let start = 0;
   while (start < before.length && before[start] === after[start]) start++;
   let endBefore = before.length;
@@ -1223,6 +1288,141 @@ function printBook(): void {
     setTimeout(() => frame.remove(), 1000);
   });
   document.body.append(frame);
+}
+
+// Drafts and versions kept in this browser, to go back to.
+
+const when = (at: number) =>
+  new Date(at).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+const wordCount = (content: string) => content.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
+
+/** A list in a dialog: each row a title, a line about it, and its buttons. */
+function showList(
+  title: string,
+  note: string,
+  rows: Array<{
+    title: string;
+    detail: string;
+    current?: boolean;
+    actions: Array<{ label: string; main?: boolean; run: () => unknown }>;
+  }>,
+): void {
+  const dialog = $<HTMLDialogElement>("#list-dialog");
+  $("#list-title").textContent = title;
+  $("#list-note").textContent = note;
+  $("#list-items").replaceChildren(
+    ...rows.map((row) => {
+      const item = document.createElement("li");
+      if (row.current) item.dataset.current = "";
+      const words = document.createElement("div");
+      words.className = "list-words";
+      const heading = document.createElement("strong");
+      heading.textContent = row.title;
+      const detail = document.createElement("span");
+      detail.textContent = row.detail;
+      words.append(heading, detail);
+      const buttons = document.createElement("div");
+      buttons.className = "list-actions";
+      for (const action of row.actions) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = action.main ? "button primary" : "button";
+        button.textContent = action.label;
+        button.addEventListener("click", () => {
+          dialog.close();
+          void action.run();
+        });
+        buttons.append(button);
+      }
+      item.append(words, buttons);
+      return item;
+    }),
+  );
+  dialog.showModal();
+}
+
+async function showDrafts(): Promise<void> {
+  await keep();
+  const drafts = await listDrafts();
+  showList(
+    "Recover a draft",
+    "Every story written here is kept in this browser as it was typed, saved or not, until you let it go.",
+    drafts.map((draft) => {
+      const open = draft.id === file.id;
+      const unsaved = !sameText(draft.text, draft.saved);
+      return {
+        title: draft.name,
+        detail: `${open ? "Open now · " : ""}${unsaved ? "changes not saved · " : ""}${wordCount(draft.text).toLocaleString()} words · ${when(draft.changedAt)}`,
+        current: open,
+        actions: open
+          ? []
+          : [
+              {
+                label: "Let it go",
+                run: async () => {
+                  const answer = await ask(
+                    `Let the draft of ${draft.name} go? ${unsaved ? "Its changes were never saved, and will be lost." : "The file itself is left as it is."}`,
+                    [
+                      { label: "Cancel", value: "cancel" },
+                      { label: "Let it go", value: "forget", main: true },
+                    ],
+                  );
+                  if (answer === "forget") await forgetDraft(draft.id);
+                  void showDrafts();
+                },
+              },
+              {
+                label: "Open",
+                main: true,
+                run: async () => {
+                  if (!(await mayWrite())) return;
+                  // The story open now is kept as it is: nothing to ask.
+                  await keep();
+                  await restore(draft);
+                  void checkDisk();
+                },
+              },
+            ],
+      };
+    }),
+  );
+}
+
+async function showVersions(): Promise<void> {
+  const versions = await versionsOf(file.id);
+  showList(
+    `Earlier versions of ${file.name}`,
+    versions.length
+      ? "Kept when the story was opened, each time it was saved, every ten minutes of writing and before tidying. Going back to one is a change like any other: Undo takes it back."
+      : "None yet: a version is kept when the story is opened or saved, and every ten minutes of writing.",
+    versions.map((kept) => ({
+      title: `${when(kept.at)} · ${kept.why}`,
+      detail: `${wordCount(kept.text).toLocaleString()} words${sameText(kept.text, text()) ? " · the same as now" : ""}`,
+      actions: sameText(kept.text, text())
+        ? []
+        : [
+            {
+              label: "Go back to it",
+              main: true,
+              run: () => {
+                if (lockedOut) return;
+                void snapshot("Before going back");
+                view.dispatch({
+                  changes: { from: 0, to: view.state.doc.length, insert: kept.text },
+                  userEvent: "input.version",
+                });
+                notice(`Back to the version from ${when(kept.at)}. Undo (Ctrl+Z) takes it back.`);
+                view.focus();
+              },
+            },
+          ],
+    })),
+  );
 }
 
 // Keyboard shortcuts, as this computer writes them.
@@ -1317,6 +1517,8 @@ const COMMANDS: Record<string, () => unknown> = {
       "text/plain",
     ),
   print: printBook,
+  recover: showDrafts,
+  versions: showVersions,
   shortcuts: showShortcuts,
   "paragraph-down": () => {
     moveParagraph(view, 1, frontMatterEnd());
@@ -1452,7 +1654,7 @@ async function openDropped(event: DragEvent): Promise<void> {
   if (!(await mayLeave())) return;
   const handle = await handlePromise.catch(() => null);
   const kept = handle?.kind === "file" ? (handle as FileSystemFileHandle) : undefined;
-  void load(asStory(dropped.name, await readText(dropped), kept, dropped.lastModified));
+  await openStory(asStory(dropped.name, await readText(dropped), kept, dropped.lastModified));
   if (kept) {
     await rememberFile(dropped.name, kept);
     void showRecent();
@@ -1533,11 +1735,13 @@ async function start(): Promise<void> {
  */
 async function restore(draft: Draft): Promise<void> {
   const late = rescued();
-  const newer = late && late.name === draft.name && late.changedAt > draft.changedAt ? late : null;
+  const same = late && (late.id ? late.id === draft.id : late.name === draft.name);
+  const newer = late && same && late.changedAt > draft.changedAt ? late : null;
   const kept = newer ? { ...draft, ...newer } : draft;
   await load(
     { name: kept.name, text: kept.text, ...(kept.handle ? { handle: kept.handle } : {}) },
     {
+      id: kept.id,
       saved: kept.saved,
       changedAt: kept.changedAt,
       ...(kept.savedAt ? { savedAt: kept.savedAt } : {}),

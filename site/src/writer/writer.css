@@ -949,6 +949,65 @@ body.writer {
   visibility: hidden;
 }
 
+/* Drafts and versions to go back to. */
+.list-dialog {
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 1.1rem 1.3rem 1rem;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(38rem, 94vw);
+  max-height: 80vh;
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+}
+.list-dialog::backdrop {
+  background: rgb(20 25 35 / 0.35);
+}
+.list-dialog h2 {
+  margin: 0 0 0.3rem;
+  font: 600 1.15rem / 1.2 var(--story);
+}
+.list-items {
+  list-style: none;
+  margin: 0.6rem 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.list-items li {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+}
+.list-items li[data-current] {
+  border-color: var(--brand);
+}
+.list-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.list-words strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-words span {
+  font-size: 0.8rem;
+  color: var(--quiet);
+}
+.list-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex: none;
+}
+
 /* Questions. */
 .ask {
   border: 1px solid var(--desk-edge);

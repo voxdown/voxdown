@@ -24,6 +24,7 @@ import {
   keptPairing,
   work,
 } from "./helper";
+import { keys } from "./menu";
 
 export type AiContext = {
   /** The story as the editor has it now. */
@@ -52,6 +53,36 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 let running: AbortController | undefined;
 /** A run the writer went back to writing beside: closing the dialog doesn't stop it. */
 let behind = false;
+
+/** The helper's command, copied in one click to paste in a terminal; "Copied" for a moment. */
+export function copyCommand(button: HTMLElement, command: HTMLElement): void {
+  const label = button.querySelector(".copy-label");
+  let resetting: ReturnType<typeof setTimeout> | undefined;
+  const say = (text: string, copied: boolean) => {
+    if (label) label.textContent = text;
+    button.setAttribute("aria-label", copied ? "Copied the command" : "Copy the command");
+    button.toggleAttribute("data-copied", copied);
+  };
+  button.addEventListener("click", async () => {
+    clearTimeout(resetting);
+    try {
+      await navigator.clipboard.writeText(command.textContent ?? "");
+      say("Copied", true);
+    } catch {
+      // No clipboard for this page: the command selected, for the writer's own keys.
+      const range = document.createRange();
+      range.selectNodeContents(command);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(range);
+      say(`${keys("Mod+C")} to copy`, false);
+    }
+    resetting = setTimeout(() => say("Copy", false), 2500);
+  });
+}
+
+const copyButton = document.getElementById("ai-copy");
+const commandText = document.getElementById("ai-command");
+if (copyButton && commandText) copyCommand(copyButton, commandText);
 
 /** Opens the dialog for naming speakers or making an audiobook. */
 export async function openAi(mode: Mode, context: AiContext): Promise<void> {

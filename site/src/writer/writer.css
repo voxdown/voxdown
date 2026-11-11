@@ -1854,14 +1854,63 @@ body[data-welcome] .manuscript .editor {
 .ai-dialog p {
   margin: 0 0 0.6rem;
 }
+.ai-command {
+  position: relative;
+}
 .ai-command code {
   display: block;
-  padding: 0.5rem 0.7rem;
+  /* Room on the right for the copy button. */
+  padding: 0.5rem 5.6rem 0.5rem 0.7rem;
   border: 1px solid var(--desk-edge);
   border-radius: 6px;
   background: var(--desk);
   font: 0.9rem / 1.4 var(--mono, ui-monospace, monospace);
   user-select: all;
+  overflow-wrap: anywhere;
+}
+/* Copy, inside the box at its right: the command to paste in a terminal, in one click. */
+.copy-button {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 0.78rem / 1.4 var(--ui);
+  cursor: pointer;
+}
+.copy-button:hover {
+  border-color: var(--quiet);
+}
+.copy-button:focus-visible {
+  outline: 2px solid var(--pencil);
+  outline-offset: 1px;
+}
+.copy-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.copy-button .copied-icon,
+.copy-button[data-copied] .copy-icon {
+  display: none;
+}
+.copy-button[data-copied] .copied-icon {
+  display: inline;
+}
+.copy-button[data-copied] {
+  color: var(--brand);
+  border-color: color-mix(in srgb, var(--brand) 50%, transparent);
 }
 #ai-ready label {
   display: block;

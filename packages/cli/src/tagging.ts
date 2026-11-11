@@ -358,17 +358,32 @@ export function jsonIn(text: string): unknown {
 }
 
 /**
- * The quotes an English dialogue tag names a cast member for (`“…” asked Mara`), as gifts: a pass
- * that needs no model, for writers without one or to save it work.
+ * The quotes an English dialogue tag names someone for (`“…” asked Mara`), as gifts: a pass that
+ * needs no model, for writers without one or to save it work. Someone the cast doesn't have joins
+ * it.
  */
 export function tagGifts(story: Story, only?: ReadonlySet<number>): Gift[] {
   const gifts: Gift[] = [];
+  const known = speakersOf(story);
   for (const quote of quotesOf(story)) {
     if (!quote.narrated || (only && !only.has(quote.number))) continue;
     const tag = taggedName(story, quote);
-    const member = tag ? castMemberNamed(story, tag) : undefined;
-    if (member && member !== story.meta.narrator)
-      gifts.push({ quote: quote.number, speaker: member });
+    if (!tag) continue;
+    const member =
+      castMemberNamed(story, tag) ??
+      known.find((other) => other.name.toLowerCase() === tag.toLowerCase())?.name;
+    if (member) {
+      if (member !== story.meta.narrator) gifts.push({ quote: quote.number, speaker: member });
+      continue;
+    }
+    // Someone the cast doesn't have yet: they join it, by a one-word name.
+    const short = isName(tag) ? tag : shortName(tag);
+    if (short)
+      gifts.push({
+        quote: quote.number,
+        speaker: short,
+        ...(short !== tag ? { fullName: tag } : {}),
+      });
   }
   return gifts;
 }

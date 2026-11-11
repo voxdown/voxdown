@@ -125,31 +125,57 @@ function joined(base: string, href: string): string {
   return parts.join("/");
 }
 
+/** A tag's attributes, however they are quoted. */
+function attributes(tag: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [, name, double, single] of tag.matchAll(/([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g))
+    if (name) out.set(name.replace(/^[\w.-]+:/, ""), fromXml(double ?? single ?? ""));
+  return out;
+}
+
+/** The elements named `name` in some XML, whatever namespace prefix they carry. */
+const elements = (xml: string, name: string) =>
+  [...xml.matchAll(new RegExp(`<(?:[\\w.-]+:)?${name}\\b[^>]*>`, "g"))].map((found) => found[0]);
+
+/** What an ebook holds that a story doesn't take, said plainly. */
+function leftOut(pages: readonly string[]): string[] {
+  const all = pages.join("");
+  const left: string[] = [];
+  if (/<(img|image|svg)\b/i.test(all)) left.push("pictures");
+  if (/<table\b/i.test(all)) left.push("tables (their text is kept, as paragraphs)");
+  if (/epub:type\s*=\s*["'](?:foot|end|rear)?notes?["']/i.test(all)) left.push("notes");
+  return left;
+}
+
 /** An ebook's chapters, in reading order, as a story; its title, author and language too. */
-export async function storyOfEpub(bytes: ArrayBuffer): Promise<string> {
+export async function storyOfEpub(bytes: ArrayBuffer): Promise<{ story: string; left: string[] }> {
   const files = await unzip(bytes);
   const decoder = new TextDecoder();
   const text = (name: string) => {
-    const data = files.get(name);
+    const data = files.get(name) ?? files.get(decodeURIComponent(name));
     return data ? decoder.decode(data) : undefined;
   };
   const container = text("META-INF/container.xml");
-  const root = container ? /full-path="([^"]+)"/.exec(container)?.[1] : undefined;
+  const root = container
+    ? elements(container, "rootfile")
+        .map((tag) => attributes(tag))
+        .find(
+          (rootfile) =>
+            (rootfile.get("media-type") ?? "").includes("oebps-package") ||
+            rootfile.has("full-path"),
+        )
+        ?.get("full-path")
+    : undefined;
   const opf = root ? text(root) : undefined;
   if (!root || !opf) throw new Error("This isn’t an ebook (no package file).");
-  // The package file read by its tags: no more of XML than its metadata, manifest and spine.
-  const attributes = (tag: string) => {
-    const out = new Map<string, string>();
-    for (const [, name, value] of tag.matchAll(/([\w:-]+)\s*=\s*"([^"]*)"/g))
-      if (name && value !== undefined) out.set(name, fromXml(value));
-    return out;
-  };
   const meta = (tag: string) => {
-    const found = new RegExp(`<dc:${tag}\\b[^>]*>([\\s\\S]*?)</dc:${tag}>`).exec(opf)?.[1];
+    const found = new RegExp(
+      `<(?:[\\w.-]+:)?${tag}\\b[^>]*>([\\s\\S]*?)</(?:[\\w.-]+:)?${tag}>`,
+    ).exec(opf)?.[1];
     return found ? fromXml(found.replace(/<[^>]+>/g, "")).trim() || undefined : undefined;
   };
   const items = new Map<string, string>();
-  for (const [tag] of opf.matchAll(/<item\b[^>]*>/g)) {
+  for (const tag of elements(opf, "item")) {
     const item = attributes(tag);
     const id = item.get("id");
     const href = item.get("href");
@@ -163,10 +189,13 @@ export async function storyOfEpub(bytes: ArrayBuffer): Promise<string> {
   }
   const parser = new DOMParser();
   const paragraphs: Paragraph[] = [];
-  for (const [tag] of opf.matchAll(/<itemref\b[^>]*>/g)) {
-    const href = items.get(attributes(tag).get("idref") ?? "");
+  const pages: string[] = [];
+  const spine = elements(opf, "itemref").map((tag) => attributes(tag).get("idref") ?? "");
+  for (const idref of spine) {
+    const href = items.get(idref);
     const page = href ? text(joined(root, href)) : undefined;
     if (!page) continue;
+    pages.push(page);
     // Only its words: nothing it links to (a style, an image) is fetched.
     const words = page
       .replace(/<(?:link|img|image|source|video|audio)\b[^>]*>/gi, "")
@@ -174,12 +203,22 @@ export async function storyOfEpub(bytes: ArrayBuffer): Promise<string> {
     const body = parser.parseFromString(words, "text/html").body;
     if (body) paragraphs.push(...paragraphsOf(body));
   }
+  // An ebook whose chapters couldn't be found isn't opened empty, as if it had none.
+  if (paragraphs.length === 0)
+    throw new Error(
+      spine.length
+        ? "None of this ebook's chapters could be read."
+        : "This ebook lists no chapters to read.",
+    );
   const title = meta("title");
   const author = meta("creator");
   const language = meta("language");
-  return writeStory(paragraphs, {
-    ...(title ? { title } : {}),
-    ...(author ? { author } : {}),
-    ...(language ? { language } : {}),
-  });
+  return {
+    story: writeStory(paragraphs, {
+      ...(title ? { title } : {}),
+      ...(author ? { author } : {}),
+      ...(language ? { language } : {}),
+    }),
+    left: leftOut(pages),
+  };
 }

@@ -125,7 +125,8 @@ describe("Word documents", () => {
     });
     const files = await unzip(written);
     expect([...files.keys()]).toContain("word/document.xml");
-    const story = await storyOfDocx(written.buffer as ArrayBuffer);
+    const { story, left } = await storyOfDocx(written.buffer as ArrayBuffer);
+    expect(left).toEqual([]);
     expect(story).toContain("title: The Owl");
     expect(story).toContain("author: A. Teller");
     expect(story).toContain("# One");
@@ -152,11 +153,120 @@ describe("ebooks", () => {
     expect([...files.keys()]).toEqual(
       expect.arrayContaining(["OEBPS/chapter-1.xhtml", "OEBPS/chapter-2.xhtml", "OEBPS/nav.xhtml"]),
     );
-    const story = await storyOfEpub(written.buffer as ArrayBuffer);
+    const { story } = await storyOfEpub(written.buffer as ArrayBuffer);
     expect(story).toContain("title: The Owl");
     expect(story).toContain("# One");
     expect(story).toContain("# Two");
     expect(story).toContain("*very*");
     expect(story.indexOf("# One")).toBeLessThan(story.indexOf("# Two"));
+  });
+});
+
+/** A Word document as another program writes it: its own styles, inherited, and more. */
+function wordFile(body: string, styles: string): ArrayBuffer {
+  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  return zip([
+    { name: "[Content_Types].xml", data: "<Types/>" },
+    { name: "word/document.xml", data: `<w:document ${W}><w:body>${body}</w:body></w:document>` },
+    { name: "word/styles.xml", data: `<w:styles ${W}>${styles}</w:styles>` },
+  ]).buffer as ArrayBuffer;
+}
+
+describe("Word documents from other programs", () => {
+  const styles = `
+    <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/></w:rPr></w:style>
+    <w:style w:type="paragraph" w:styleId="ChapterTitle"><w:name w:val="Chapter Title"/><w:basedOn w:val="Heading1"/></w:style>
+    <w:style w:type="paragraph" w:styleId='PartTitle'><w:name w:val='Part'/><w:pPr><w:outlineLvl w:val='0'/></w:pPr></w:style>
+    <w:style w:type="paragraph" w:styleId="Letter"><w:name w:val="Letter"/><w:rPr><w:i/></w:rPr></w:style>
+    <w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/><w:rPr><w:i/></w:rPr></w:style>
+    <w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/><w:rPr><w:b w:val="1"/></w:rPr></w:style>`;
+
+  it("take headings and emphasis from the styles they inherit", async () => {
+    const { story, left } = await storyOfDocx(
+      wordFile(
+        `<w:p><w:pPr><w:pStyle w:val="ChapterTitle"/></w:pPr><w:r><w:t>The Owl</w:t></w:r></w:p>
+         <w:p><w:pPr><w:pStyle w:val='PartTitle'/></w:pPr><w:r><w:t>Part One</w:t></w:r></w:p>
+         <w:p><w:r><w:t xml:space="preserve">It was </w:t></w:r><w:r><w:rPr><w:rStyle w:val="Emphasis"/></w:rPr><w:t>very</w:t></w:r><w:r><w:t xml:space="preserve"> still, and </w:t></w:r><w:r><w:rPr><w:rStyle w:val="Strong"/></w:rPr><w:t>cold</w:t></w:r><w:r><w:t>.</w:t></w:r></w:p>
+         <w:p><w:pPr><w:pStyle w:val="Letter"/></w:pPr><w:r><w:t xml:space="preserve">Dear Tom, </w:t></w:r><w:r><w:rPr><w:i w:val="0"/></w:rPr><w:t>come</w:t></w:r></w:p>
+         <w:tbl><w:tr><w:tc><w:p><w:r><w:t>In a table.</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+         <w:p><w:r><w:drawing/></w:r><w:r><w:t>After a picture.</w:t><w:footnoteReference w:id="1"/></w:r></w:p>`,
+        styles,
+      ),
+    );
+    expect(story).toContain("# The Owl\n");
+    expect(story).toContain("# Part One\n");
+    expect(story).not.toContain("**The Owl**");
+    expect(story).toContain("It was *very* still, and **cold**.");
+    expect(story).toContain("*Dear Tom,* come");
+    expect(story).toContain("In a table.");
+    expect(left).toEqual(["tables (their text is kept, as paragraphs)", "pictures", "footnotes"]);
+  });
+
+  it("with no text, say so rather than open empty", async () => {
+    await expect(storyOfDocx(wordFile("<w:p/>", ""))).rejects.toThrow("No text could be read");
+  });
+});
+
+/** An ebook as another program writes it: its quotes and prefixes its own. */
+function ebookFile(options: {
+  container: string;
+  opf: string;
+  pages?: Record<string, string>;
+}): ArrayBuffer {
+  return zip([
+    { name: "mimetype", data: "application/epub+zip" },
+    { name: "META-INF/container.xml", data: options.container },
+    { name: "OPS/package.opf", data: options.opf },
+    ...Object.entries(options.pages ?? {}).map(([name, data]) => ({ name: `OPS/${name}`, data })),
+  ]).buffer as ArrayBuffer;
+}
+
+describe("ebooks from other programs", () => {
+  const page = (body: string) =>
+    `<?xml version='1.0' encoding='utf-8'?><html xmlns='http://www.w3.org/1999/xhtml'><head><title>x</title></head><body>${body}</body></html>`;
+
+  it("are read whatever their quotes and namespace prefixes", async () => {
+    for (const container of [
+      `<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/package.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`,
+      `<container version='1.0'><rootfiles><rootfile full-path='OPS/package.opf' media-type='application/oebps-package+xml'/></rootfiles></container>`,
+    ]) {
+      const { story, left } = await storyOfEpub(
+        ebookFile({
+          container,
+          opf: `<opf:package xmlns:opf='http://www.idpf.org/2007/opf' xmlns:dc='http://purl.org/dc/elements/1.1/'>
+            <opf:metadata><dc:title>Two Rooms</dc:title><dc:creator opf:role='aut'>A. Teller</dc:creator></opf:metadata>
+            <opf:manifest>
+              <opf:item id='c1' href='one.xhtml' media-type='application/xhtml+xml'/>
+              <opf:item id='c2' href='two%20b.xhtml' media-type='application/xhtml+xml'/>
+              <opf:item id='ncx' href='toc.ncx' media-type='application/x-dtbncx+xml'/>
+            </opf:manifest>
+            <opf:spine toc='ncx'><opf:itemref idref='c1'/><opf:itemref idref='c2'/></opf:spine>
+          </opf:package>`,
+          pages: {
+            "one.xhtml": page("<h1>One</h1><p>The first room.</p>"),
+            "two b.xhtml": page("<h1>Two</h1><p>The <em>second</em> room.</p><img src='x.png'/>"),
+          },
+        }),
+      );
+      expect(story).toContain("title: Two Rooms");
+      expect(story).toContain("author: A. Teller");
+      expect(story).toContain("# One\n\nThe first room.\n\n# Two\n\nThe *second* room.");
+      expect(left).toEqual(["pictures"]);
+    }
+  });
+
+  it("whose chapters can't be found say so, rather than open empty", async () => {
+    const container = `<container><rootfiles><rootfile full-path="OPS/package.opf"/></rootfiles></container>`;
+    await expect(
+      storyOfEpub(
+        ebookFile({
+          container,
+          opf: `<package><manifest><item id="c1" href="gone.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>`,
+        }),
+      ),
+    ).rejects.toThrow("None of this ebook's chapters could be read.");
+    await expect(storyOfEpub(ebookFile({ container: "<container/>", opf: "" }))).rejects.toThrow(
+      "This isn’t an ebook",
+    );
   });
 });

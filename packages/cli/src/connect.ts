@@ -152,7 +152,7 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
               id: "tags",
               label: "Dialogue tags only (no AI)",
               kind: "local",
-              note: "free and instant, but only for quotes tagged with a name in the cast",
+              note: "free and instant: each quote goes to the name its dialogue tag gives (“…” asked Mara), and anyone new joins the cast; quotes with no such tag are left",
             },
           ],
           speech: speech.map(({ id, label, note }) => ({ id, label, ...(note ? { note } : {}) })),

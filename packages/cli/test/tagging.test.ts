@@ -145,11 +145,20 @@ describe("a model's answer", () => {
 });
 
 describe("dialogue tags alone", () => {
-  it("give quotes to the cast members their tags name", () => {
+  it("give quotes to the names their tags give, someone new joining the cast", () => {
     const story = parse(STORY);
     expect(tagGifts(story)).toEqual([
       { quote: 1, speaker: "Tom" },
       { quote: 2, speaker: "Mara" },
+    ]);
+    // With no cast at all, the names the tags give.
+    const bare = parse(
+      "“Who is there?” asked Tom.\n\n“Me,” said Old Nan.\n\n“Go,” said Mr. Fox.\n\n“No,” said Mr.\n",
+    );
+    expect(tagGifts(bare)).toEqual([
+      { quote: 1, speaker: "Tom" },
+      { quote: 2, speaker: "OldNan", fullName: "Old Nan" },
+      { quote: 3, speaker: "Fox", fullName: "Mr. Fox" },
     ]);
   });
 });

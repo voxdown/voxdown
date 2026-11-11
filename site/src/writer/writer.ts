@@ -1049,6 +1049,62 @@ function showWarningCount(): void {
 // The side: the script, the book, and the warnings.
 
 /** The side, drawn again: the script or the book (`drawn`, when the worker drew it), cast or warnings. */
+/** Each drawing of the side; one drawn in parts stops when a newer one starts. */
+let drawing = 0;
+
+/** Blocks that hold others: a part never ends inside one. */
+const OPENS = /<(?:div|section|blockquote|aside|ul|ol|figure|header|details|table)\b/g;
+const CLOSES = /<\/(?:div|section|blockquote|aside|ul|ol|figure|header|details|table)>/g;
+
+/**
+ * A long story's script or book, drawn a part at a time: the first at once, the rest while the
+ * browser is idle, so that the page never stops for a whole book at once. The renderer writes a
+ * block to a line; parts end only between whole blocks.
+ */
+function drawInParts(sheet: HTMLElement, html: string): void {
+  const run = drawing;
+  const lines = html.split("\n");
+  const head = lines[0] ?? "";
+  const tail = lines.at(-1) ?? "";
+  if (!/^<article\b/.test(head) || tail !== "</article>" || lines.length < 400) {
+    sheet.innerHTML = html;
+    return;
+  }
+  const parts: string[] = [];
+  let part: string[] = [];
+  let depth = 0;
+  for (const line of lines.slice(1, -1)) {
+    part.push(line);
+    depth += (line.match(OPENS)?.length ?? 0) - (line.match(CLOSES)?.length ?? 0);
+    if (depth <= 0 && part.length >= 200) {
+      parts.push(part.join("\n"));
+      part = [];
+      depth = 0;
+    }
+  }
+  if (part.length) parts.push(part.join("\n"));
+  sheet.innerHTML = `${head}\n${parts.shift() ?? ""}\n${tail}`;
+  const article = sheet.firstElementChild;
+  const next = () => {
+    if (run !== drawing || !article) return;
+    const more = parts.shift();
+    if (more === undefined) {
+      indexSheet();
+      markPlace();
+      return;
+    }
+    article.insertAdjacentHTML("beforeend", more);
+    later(next);
+  };
+  later(next);
+}
+
+/** When the browser is next idle (or soon, where it can't say). */
+const later = (run: () => void) =>
+  "requestIdleCallback" in window
+    ? window.requestIdleCallback(run, { timeout: 200 })
+    : setTimeout(run, 16);
+
 function showSide(drawn?: string): void {
   const sheet = $("#side-sheet");
   for (const tab of document.querySelectorAll<HTMLElement>(".side-tab")) {
@@ -1063,8 +1119,11 @@ function showSide(drawn?: string): void {
   const long = view.state.doc.length >= LONG;
   if (prefs.tab === "script" || prefs.tab === "book") {
     // A long story's comes from the worker: until it does, the page shows what it showed.
-    if (drawn !== undefined) sheet.innerHTML = drawn;
-    else if (!long)
+    drawing++;
+    if (drawn !== undefined) {
+      if (long) drawInParts(sheet, drawn);
+      else sheet.innerHTML = drawn;
+    } else if (!long)
       sheet.innerHTML =
         prefs.tab === "script"
           ? renderScript(story, { positions: true })
@@ -1743,7 +1802,7 @@ async function openStory(opened: Opened): Promise<void> {
   if (!opened.imported) void snapshot("Opened", opened.text);
   else if (opened.document)
     notice(
-      `${opened.document === "docx" ? "That Word document" : "That ebook"} was opened as a new story, its headings, paragraphs and emphasis kept: Ctrl+Shift+K finds the quotes to give their speakers, and Save writes it as VoxDown to a file of its own.`,
+      `${opened.document === "docx" ? "That Word document" : "That ebook"} was opened as a new story, its headings, paragraphs, italics and bold kept as it marks them${opened.left?.length ? `; not brought in: ${opened.left.join(", ")}` : ""}. Ctrl+Shift+K finds the quotes to give their speakers, and Save writes it as VoxDown to a file of its own.`,
     );
   else if (opened.encoding)
     // Its letters read as what they were, never written back over the original by themselves.
@@ -2844,7 +2903,12 @@ async function openDropped(event: DragEvent): Promise<void> {
   if (!(await mayLeave())) return;
   const handle = await handlePromise.catch(() => null);
   const kept = handle?.kind === "file" ? (handle as FileSystemFileHandle) : undefined;
-  await openStory(await openedFile(dropped, kept));
+  try {
+    await openStory(await openedFile(dropped, kept));
+  } catch (error) {
+    await tell(`That file couldn't be opened: ${(error as Error).message}`);
+    return;
+  }
   if (kept) {
     await rememberFile(dropped.name, kept);
     void showRecent();

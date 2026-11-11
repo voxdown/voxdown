@@ -1758,6 +1758,31 @@ for (const [name, bytes] of Object.entries(documents)) {
   }
   await reading.close();
 }
+// A damaged Word document, through the browser's own file chooser (no file picker): it says so.
+{
+  const plain = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await plain.addInitScript(() => {
+    window.showOpenFilePicker = undefined;
+  });
+  const opener = await plain.newPage();
+  watch(opener, "writer opening a damaged document");
+  await opener.goto(`${base}/writer/`);
+  const [chooser] = await Promise.all([
+    opener.waitForEvent("filechooser"),
+    opener.click('.welcome [data-command="open"]'),
+  ]);
+  await chooser.setFiles({
+    name: "Broken.docx",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("not a zip"),
+  });
+  await opener
+    .waitForFunction(() => document.querySelector("#ask")?.open, undefined, { timeout: 5000 })
+    .catch(() => {});
+  if (!(await opener.textContent("#ask-message"))?.includes("couldn't be opened"))
+    problems.push("writer: a damaged Word document opened through the file chooser says nothing");
+  await plain.close();
+}
 // F9 reads it aloud from the cursor, and says how to stop.
 await maker.click(".cm-content");
 await maker.keyboard.press("Control+Home");

@@ -144,7 +144,9 @@ export function taggedName(story: Story, quote: Quote): string | undefined {
   const lineEnd = source.indexOf("\n", quote.to);
   const before = source.slice(lineFrom, quote.from);
   const after = source.slice(quote.to, lineEnd < 0 ? source.length : lineEnd);
-  const name = "(\\p{Lu}[\\p{L}’'-]*(?:\\s+\\p{Lu}[\\p{L}’'-]*)?)";
+  // A name, one or two words, a title before it kept with it: `Mara`, `Old Tom`, `Mr. Fox`.
+  const name =
+    "((?:(?:Mr|Mrs|Ms|Mx|Dr|St)\\.?\\s+)?\\p{Lu}[\\p{L}’'-]*(?:\\s+\\p{Lu}[\\p{L}’'-]*)?)";
   const behind = new RegExp(
     `^[\\s,.!?—–-]*(?:(?:${SAYING})\\s+(?:the\\s+)?${name}|${name}\\s+(?:${SAYING})\\b)`,
     "u",
@@ -152,6 +154,8 @@ export function taggedName(story: Story, quote: Quote): string | undefined {
   const ahead = new RegExp(`${name}\\s+(?:${SAYING})[\\s,:]*$`, "u").exec(before);
   const found = behind?.[1] ?? behind?.[2] ?? ahead?.[1];
   if (!found || PRONOUNS.test(found.split(/\s+/)[0] ?? "")) return undefined;
+  // A title alone (`said Mr.`) names no one.
+  if (/^(?:Mr|Mrs|Ms|Mx|Dr|St|Sir|Lady|Lord|Miss|Madam)\.?$/.test(found)) return undefined;
   return found;
 }
 

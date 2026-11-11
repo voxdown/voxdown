@@ -57,6 +57,8 @@ export type Opened = {
   encoding?: string;
   /** A Word document or an ebook, opened as a new story. */
   document?: "docx" | "epub";
+  /** What such a document held that a story doesn't take (pictures, tables, notes). */
+  left?: string[];
   /** When the file was last changed on disk, to tell if something else changes it. */
   modified?: number;
 };
@@ -125,15 +127,16 @@ export async function openedFile(file: File, handle?: FileSystemFileHandle): Pro
   const document = /\.(docx|epub)$/i.exec(file.name)?.[1]?.toLowerCase();
   if (document === "docx" || document === "epub") {
     const bytes = await file.arrayBuffer();
-    const text =
+    const { story, left } =
       document === "docx"
         ? await (await import("./docx")).storyOfDocx(bytes)
         : await (await import("./epub")).storyOfEpub(bytes);
     return {
       name: file.name.replace(/\.(docx|epub)$/i, ".vxd"),
-      text,
+      text: story,
       imported: true,
       document,
+      ...(left.length ? { left } : {}),
     };
   }
   const { text, encoding } = await readFile(file);
@@ -152,12 +155,17 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
       throw error;
     }
   }
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const chosen = async () => {
       input.removeEventListener("cancel", gone);
       const file = input.files?.[0];
       input.value = "";
-      resolve(file ? await openedFile(file) : undefined);
+      // A file that can't be read (a damaged Word document) says so, as the picker's way does.
+      try {
+        resolve(file ? await openedFile(file) : undefined);
+      } catch (error) {
+        reject(error);
+      }
     };
     const gone = () => {
       input.removeEventListener("change", chosen);

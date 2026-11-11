@@ -178,7 +178,9 @@ async function nameSpeakers(pairing: Pairing, ai: string, context: AiContext): P
     progress.textContent = [
       changes.length
         ? `${plural(given, "speaker")} given${joined.length ? `, and ${joined.join(", ")} joined the cast` : ""}: Ctrl+Z takes them back.`
-        : "Nothing to give.",
+        : ai === "tags"
+          ? "Nothing to give: no quote waiting for a speaker has a dialogue tag naming someone (“…” asked Mara)."
+          : "Nothing to give: every quote the AI was asked about stayed as it was.",
       held.length ? `${plural(held.length, "quote")} held back, below.` : "",
       unknown ? `${plural(unknown, "quote")} the AI couldn't tell: Ctrl+Shift+K finds them.` : "",
       done.stopped ? `It stopped early: ${String(done.stopped)}` : "",

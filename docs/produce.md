@@ -7,7 +7,7 @@ npx -y @voxdown/cli produce story.vxd --dry-run
 npx -y @voxdown/cli produce story.vxd
 ```
 
-It needs [Node.js](https://nodejs.org) 20 or later, and [ffmpeg](https://ffmpeg.org) for MP3 and M4B (without it, each chapter is a WAV file).
+It needs [Node.js](https://nodejs.org) 20 or later, and [ffmpeg](https://ffmpeg.org) for MP3 and M4B (without it, each chapter is a WAV file). In the Writer, **File › Make an audiobook…** does the same, once `npx -y @voxdown/cli connect` runs on your computer ([how](ai.md#in-the-writer-vxd-connect)).
 
 ## Voice services
 

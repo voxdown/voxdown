@@ -29,8 +29,10 @@ import {
   findBackends,
   thisMachine,
 } from "./ai";
+import { WRITER, openInBrowser, startHelper } from "./connect";
 import { ERROR, Failure, OK, PROBLEMS } from "./errors";
 import { produceCommand } from "./produce";
+import { speechServices } from "./produce";
 import { type Tagged, scoreAgainst, tagStory, withoutSpeakers } from "./tag";
 import { passagesOf } from "./tagging";
 
@@ -743,6 +745,46 @@ async function produceAction({ io, values, files }: Context): Promise<number> {
   });
 }
 
+// connect
+
+async function connectCommand({ io, values }: Context): Promise<number> {
+  const machine = io.machine ?? thisMachine();
+  const writer = stringValue(values, "writer") ?? WRITER;
+  const extra = stringValue(values, "allow-origin");
+  const port = stringValue(values, "port");
+  if (port !== undefined && !/^\d+$/.test(port)) throw usage("--port takes a number", "connect");
+  const helper = await startHelper({
+    machine,
+    folder: io.cwd,
+    version: VERSION,
+    origins: [new URL(WRITER).origin, new URL(writer).origin, ...(extra ? [extra] : [])],
+    dev: flag(values, "dev"),
+    ...(port ? { port: Number(port) } : {}),
+  });
+  const [ais, voices] = await Promise.all([findBackends(machine), speechServices(machine)]);
+  const url = helper.pairUrl(writer);
+  io.stdout(
+    [
+      "The Writer can now use this computer:",
+      `  AIs to name speakers: ${ais.length ? ais.map((ai) => ai.label).join(", ") : "none found (vxd tag --list says how to get one)"}`,
+      `  Voices for audiobooks: ${voices.length ? voices.map((voice) => voice.label).join(", ") : "none found (vxd produce --help says how to get one)"}`,
+      `  Audiobooks are made in ${io.cwd}`,
+      "",
+    ].join("\n"),
+  );
+  const opened = !flag(values, "no-open") && (await openInBrowser(url, machine));
+  io.stdout(
+    `${opened ? "Opened the Writer, connected." : "Open this address to connect the Writer:"}\n  ${opened ? writer : url}\nLeave this running while you use it; Ctrl+C stops it.\n`,
+  );
+  // Until the process is stopped.
+  await new Promise<void>((done) => {
+    process.once("SIGINT", done);
+    process.once("SIGTERM", done);
+  });
+  await helper.close();
+  return OK;
+}
+
 // mcp
 
 async function mcpCommand({ io }: Context): Promise<number> {
@@ -1017,6 +1059,41 @@ const COMMANDS: Record<string, Command> = {
       },
     },
     action: produceAction,
+  },
+  connect: {
+    usage: "vxd connect [--no-open] [--port n]",
+    summary: "Let the Writer use this computer's AIs and voices",
+    about: [
+      "Lets VoxDown Writer, in your browser, name speakers with the AIs on this computer (as vxd tag",
+      "does) and make audiobooks with its voice services (as vxd produce does), in this folder. It",
+      "opens the Writer, connected; leave it running while you use it. Only the Writer can use it, with",
+      "a key made each time it starts, and only from this computer.",
+    ].join("\n"),
+    examples: ["vxd connect", "npx -y @voxdown/cli connect"],
+    files: "none",
+    options: {
+      "no-open": { type: "boolean", help: "Print the address to open instead of opening it." },
+      port: {
+        type: "string",
+        value: "<n>",
+        help: "The port to listen on. Default 47110, or the next free.",
+      },
+      writer: {
+        type: "string",
+        value: "<url>",
+        help: "Another copy of the Writer to open and allow.",
+      },
+      "allow-origin": {
+        type: "string",
+        value: "<origin>",
+        help: "Allow pages from this origin too.",
+      },
+      dev: {
+        type: "boolean",
+        help: "Allow pages from this computer (http://localhost:…), for working on the Writer.",
+      },
+    },
+    action: connectCommand,
   },
   mcp: {
     usage: "vxd mcp",

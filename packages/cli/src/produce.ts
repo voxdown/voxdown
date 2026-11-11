@@ -104,7 +104,7 @@ const NO_SERVICE = [
 ].join(" ");
 
 /** The service --with names, or the one found, or the one chosen. */
-async function chooseService(
+export async function chooseService(
   machine: Machine,
   named: string | undefined,
   model: string | undefined,
@@ -256,13 +256,174 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
     return OK;
   }
 
-  const { id, adapter } = await chooseService(
+  const service = await chooseService(
     context.machine,
     value("with"),
     value("model"),
     context.interactive ? context.question : undefined,
     context.stderr,
   );
+  const mode = flag("studio") ? "studio" : flag("dry-run") ? "estimate" : "make";
+  const asks = context.interactive && context.question && !flag("yes");
+  const result = await makeAudiobook({
+    machine: context.machine,
+    story,
+    script,
+    name: input.name,
+    out,
+    service,
+    mode,
+    sounds: flag("sounds"),
+    keepWav: flag("keep-wav"),
+    ...(value("model") ? { model: value("model") as string } : {}),
+    ...(chapters ? { chapters } : {}),
+    ...(asks
+      ? {
+          confirm: async () =>
+            !(
+              await (context.question as (text: string) => Promise<string>)(
+                mode === "studio"
+                  ? "Send it to ElevenLabs Studio as a new project? [Y/n] "
+                  : "Make it? [Y/n] ",
+              )
+            )
+              .trim()
+              .toLowerCase()
+              .startsWith("n"),
+        }
+      : {}),
+    onEvent: (event) => {
+      if (event.type === "casting") {
+        const width = Math.max(...event.people.map((person) => person.name.length));
+        context.stderr(`Casting (${event.file}):\n`);
+        for (const person of event.people)
+          context.stderr(
+            `  ${person.name.padEnd(width)}  ${person.voice}${person.description ? ` (${person.description})` : ""}\n`,
+          );
+      } else if (event.type === "estimate") context.stderr(`${estimateText(event)}\n`);
+      else if (event.type === "progress" && (event.done === event.total || event.done % 20 === 0))
+        context.stderr(
+          `  ${event.chapter}/${event.chapters} ${event.title}: ${event.done} of ${event.total}\n`,
+        );
+    },
+  });
+  if (result.type === "estimated") {
+    context.stderr(
+      `Nothing ${mode === "studio" ? "sent" : "made"} (--dry-run). Change the voices in casting.json, then run it again.\n`,
+    );
+    return OK;
+  }
+  if (result.type === "declined") return OK;
+  if (result.type === "studio") {
+    context.stdout(
+      `${script.title} is in ElevenLabs Studio, each line in its character's voice: ${result.url}\nListen, change and convert it there; nothing is converted (or paid for) until you do.\n`,
+    );
+    return OK;
+  }
+  context.stdout(
+    `${script.title}: ${result.chapters} chapter${result.chapters === 1 ? "" : "s"}, ${duration(result.durationMs)}, in ${out}${result.ffmpeg ? (chapters ? " (MP3 a chapter)" : " (an M4B, and an MP3 a chapter)") : " (WAV a chapter: install ffmpeg for MP3 and M4B)"}.\n` +
+      `${result.requests} line${result.requests === 1 ? "" : "s"} asked of ${result.service}, ${result.fromStore} already made.\n`,
+  );
+  return OK;
+}
+
+/** What making a book would cost and leave out, in a line. */
+export function estimateText(event: Extract<AudiobookEvent, { type: "estimate" }>): string {
+  const parts = [
+    `${event.requests} request${event.requests === 1 ? "" : "s"}, ${event.characters.toLocaleString("en")} characters`,
+    event.costUsd !== undefined
+      ? event.costUsd > 0
+        ? `about $${event.costUsd.toFixed(2)} at list price`
+        : "free"
+      : "",
+  ].filter(Boolean);
+  const left: string[] = [];
+  if (event.left.sounds)
+    left.push(
+      `${event.left.sounds} sound${event.left.sounds === 1 ? "" : "s"}${event.canSound ? " (--sounds makes them)" : ""}`,
+    );
+  if (event.left.vocals)
+    left.push(`${event.left.vocals} sound${event.left.vocals === 1 ? "" : "s"} characters make`);
+  if (event.left.directions)
+    left.push(
+      `${event.left.directions} direction${event.left.directions === 1 ? "" : "s"} (${event.service} can't follow them)`,
+    );
+  return `${event.service}: ${parts.join(", ")}, before any already made.${left.length ? `\nLeft out: ${left.join("; ")}.` : ""}`;
+}
+
+/** What happens while a book is made, for whoever shows it. */
+export type AudiobookEvent =
+  | {
+      type: "casting";
+      file: string;
+      people: Array<{ name: string; voice: string; description?: string }>;
+    }
+  | {
+      type: "estimate";
+      service: string;
+      requests: number;
+      characters: number;
+      costUsd?: number;
+      left: { sounds: number; vocals: number; directions: number };
+      canSound: boolean;
+    }
+  | {
+      type: "progress";
+      chapter: number;
+      chapters: number;
+      title: string;
+      done: number;
+      total: number;
+    };
+
+export type AudiobookResult =
+  | { type: "estimated" }
+  | { type: "declined" }
+  | { type: "studio"; url: string }
+  | {
+      type: "made";
+      folder: string;
+      files: string[];
+      chapters: number;
+      durationMs: number;
+      requests: number;
+      fromStore: number;
+      service: string;
+      ffmpeg: boolean;
+    };
+
+/**
+ * Casts a story's voices (kept in `casting.json` in `out`), says what the book would cost, and
+ * then, as `mode` says, stops there, sends it to ElevenLabs Studio, or makes it: chapters, an M4B,
+ * timings and what made it. For `vxd produce` and for the Writer, through `vxd connect`.
+ */
+export async function makeAudiobook(options: {
+  machine: Machine;
+  story: Story;
+  script: ProductionScript;
+  /** The story's file name. */
+  name: string;
+  out: string;
+  service: { id: string; adapter: Adapter };
+  mode: "estimate" | "make" | "studio";
+  model?: string;
+  chapters?: number[];
+  sounds?: boolean;
+  keepWav?: boolean;
+  /** Asked before anything is paid for; no answer, and it goes ahead. */
+  confirm?: () => Promise<boolean>;
+  onEvent?: (event: AudiobookEvent) => void;
+  signal?: AbortSignal;
+}): Promise<AudiobookResult> {
+  const { story, script, out, mode, chapters } = options;
+  const { id, adapter } = options.service;
+  const emit = options.onEvent ?? (() => {});
+  await mkdir(out, { recursive: true });
+  await writeFile(join(out, "script.json"), `${JSON.stringify(script, null, 1)}\n`);
+  const castingFile = join(out, "casting.json");
+  const allCasting: Record<string, Record<string, string>> = existsSync(castingFile)
+    ? (JSON.parse(await readFile(castingFile, "utf8")) as Record<string, Record<string, string>>)
+    : {};
   // The casting: kept from before, and a voice for anyone without one.
   const voices = await adapter.voices();
   if (voices.length === 0) throw new Failure(`${adapter.name} offers no voices to cast`);
@@ -284,80 +445,47 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
   const ids = Object.fromEntries(
     Object.entries(casting).map(([name, voice]) => [name, voiceId(voices, voice) as string]),
   );
-  const width = Math.max(...people.map((person) => person.name.length));
-  context.stderr(`Casting (${castingFile}):\n`);
-  for (const person of people) {
-    const voice = voices.find((candidate) => candidate.id === ids[person.name]);
-    context.stderr(
-      `  ${person.name.padEnd(width)}  ${voice?.name ?? casting[person.name]}${voice?.description ? ` (${voice.description})` : ""}\n`,
-    );
-  }
-  const sounds = flag("sounds");
+  emit({
+    type: "casting",
+    file: castingFile,
+    people: people.map((person) => {
+      const voice = voices.find((candidate) => candidate.id === ids[person.name]);
+      return {
+        name: person.name,
+        voice: voice?.name ?? (casting[person.name] as string),
+        ...(voice?.description ? { description: voice.description } : {}),
+      };
+    }),
+  });
+  const sounds = Boolean(options.sounds);
   const cost = estimate(script, {
     adapter,
     voices: ids,
     sounds,
     ...(chapters ? { chapters } : {}),
   });
-  const parts = [
-    `${cost.requests} request${cost.requests === 1 ? "" : "s"}, ${cost.characters.toLocaleString("en")} characters`,
-    cost.costUsd !== undefined
-      ? cost.costUsd > 0
-        ? `about $${cost.costUsd.toFixed(2)} at list price`
-        : "free"
-      : "",
-  ].filter(Boolean);
-  context.stderr(`${adapter.name}: ${parts.join(", ")}, before any already made.\n`);
-  const left: string[] = [];
-  if (cost.left.sounds)
-    left.push(
-      `${cost.left.sounds} sound${cost.left.sounds === 1 ? "" : "s"}${adapter.capabilities.sounds ? " (--sounds makes them)" : ""}`,
+  emit({
+    type: "estimate",
+    service: adapter.name,
+    requests: cost.requests,
+    characters: cost.characters,
+    ...(cost.costUsd !== undefined ? { costUsd: cost.costUsd } : {}),
+    left: cost.left,
+    canSound: adapter.capabilities.sounds,
+  });
+  if (mode === "studio" && id !== "elevenlabs")
+    throw new Failure(
+      "--studio sends the book to ElevenLabs Studio: use it with --with elevenlabs",
     );
-  if (cost.left.vocals)
-    left.push(`${cost.left.vocals} sound${cost.left.vocals === 1 ? "" : "s"} characters make`);
-  if (cost.left.directions)
-    left.push(
-      `${cost.left.directions} direction${cost.left.directions === 1 ? "" : "s"} (${adapter.name} can't follow them)`,
-    );
-  if (left.length) context.stderr(`Left out: ${left.join("; ")}.\n`);
-  if (flag("studio")) {
-    if (id !== "elevenlabs")
-      throw new Failure(
-        "--studio sends the book to ElevenLabs Studio: use it with --with elevenlabs",
-      );
-    if (flag("dry-run")) {
-      context.stderr(
-        "Nothing sent (--dry-run). Change the voices in casting.json, then run it again.\n",
-      );
-      return OK;
-    }
-    if (context.interactive && context.question && !flag("yes")) {
-      const answer = (
-        await context.question("Send it to ElevenLabs Studio as a new project? [Y/n] ")
-      )
-        .trim()
-        .toLowerCase();
-      if (answer.startsWith("n")) return OK;
-    }
+  if (mode === "estimate") return { type: "estimated" };
+  if (options.confirm && !(await options.confirm())) return { type: "declined" };
+  if (mode === "studio") {
     const project = await createStudioProject(script, ids, {
-      key: context.machine.env.ELEVENLABS_API_KEY as string,
-      fetch: context.machine.fetch,
-      ...(value("model") ? { model: value("model") as string } : {}),
+      key: options.machine.env.ELEVENLABS_API_KEY as string,
+      fetch: options.machine.fetch,
+      ...(options.model ? { model: options.model } : {}),
     });
-    context.stdout(
-      `${script.title} is in ElevenLabs Studio, each line in its character's voice: ${project.url}\nListen, change and convert it there; nothing is converted (or paid for) until you do.\n`,
-    );
-    return OK;
-  }
-  if (flag("dry-run")) {
-    context.stderr(
-      "Nothing made (--dry-run). Change the voices in casting.json, then run it again.\n",
-    );
-    return OK;
-  }
-  if (context.interactive && context.question && !flag("yes")) {
-    const answer = (await context.question("Make it? [Y/n] ")).trim().toLowerCase();
-    if (answer.startsWith("n")) return OK;
+    return { type: "studio", url: project.url };
   }
 
   // Making it.
@@ -376,17 +504,21 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
       rate,
       ...(chapters ? { chapters } : {}),
       ...(ffmpeg ? { decode: decodeWithFfmpeg } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
       output: async (chapter) => {
         const wav = join(folder, `${fileName(chapter.number, chapter.title)}.wav`);
         files.set(chapter.number, wav);
         return wavFile(wav, rate);
       },
-      onProgress: ({ chapter, done, total }) => {
-        if (done === total || done % 20 === 0)
-          context.stderr(
-            `  ${chapter.number}/${script.chapters.length} ${chapter.title}: ${done} of ${total}\n`,
-          );
-      },
+      onProgress: ({ chapter, done, total }) =>
+        emit({
+          type: "progress",
+          chapter: chapter.number,
+          chapters: script.chapters.length,
+          title: chapter.title,
+          done,
+          total,
+        }),
     });
   } catch (error) {
     throw new Failure(
@@ -399,16 +531,19 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
   for (const chapter of made.chapters)
     await writeTimings(out, script, chapter, id, adapter, casting, ffmpeg);
   const title = script.title;
+  const written: string[] = [];
   if (ffmpeg) {
     for (const chapter of made.chapters) {
       const wav = files.get(chapter.number) as string;
-      await chapterMp3(wav, wav.replace(/\.wav$/, ".mp3"), {
+      const mp3 = wav.replace(/\.wav$/, ".mp3");
+      await chapterMp3(wav, mp3, {
         title: chapter.title,
         album: title,
         ...(script.author ? { artist: script.author } : {}),
         track: chapter.number,
         tracks: script.chapters.length,
       });
+      written.push(mp3);
     }
     if (!chapters) {
       const m4b = join(out, `${fileName(0, title).slice(3) || "book"}.m4b`);
@@ -421,14 +556,16 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
         m4b,
         { title, ...(script.author ? { author: script.author } : {}) },
       );
+      written.unshift(m4b);
     }
-    if (!flag("keep-wav")) for (const wav of files.values()) await rm(wav, { force: true });
-  }
+    if (!options.keepWav) for (const wav of files.values()) await rm(wav, { force: true });
+    else written.push(...files.values());
+  } else written.push(...files.values());
   await writeFile(
     join(out, "about.json"),
     `${JSON.stringify(
       {
-        story: basename(input.name),
+        story: basename(options.name),
         title,
         ...(script.author ? { author: script.author } : {}),
         service: adapter.name,
@@ -443,12 +580,17 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
       2,
     )}\n`,
   );
-  const total = made.chapters.reduce((sum, chapter) => sum + chapter.durationMs, 0);
-  context.stdout(
-    `${title}: ${made.chapters.length} chapter${made.chapters.length === 1 ? "" : "s"}, ${duration(total)}, in ${out}${ffmpeg ? (chapters ? " (MP3 a chapter)" : " (an M4B, and an MP3 a chapter)") : " (WAV a chapter: install ffmpeg for MP3 and M4B)"}.\n` +
-      `${made.requests} line${made.requests === 1 ? "" : "s"} asked of ${adapter.name}, ${made.fromStore} already made.\n`,
-  );
-  return OK;
+  return {
+    type: "made",
+    folder: out,
+    files: written,
+    chapters: made.chapters.length,
+    durationMs: made.chapters.reduce((sum, chapter) => sum + chapter.durationMs, 0),
+    requests: made.requests,
+    fromStore: made.fromStore,
+    service: adapter.name,
+    ffmpeg,
+  };
 }
 
 async function writeTimings(

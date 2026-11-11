@@ -174,6 +174,14 @@ vxd produce story.vxd --with elevenlabs
 
 Reads the story aloud, each character in a voice of their own, with a voice service you have: ElevenLabs (`ELEVENLABS_API_KEY`), Azure (`AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`), Kokoro running on your computer (free), OpenAI (`OPENAI_API_KEY`), or any OpenAI-compatible speech server (`--with http://host:port --model name`). The first run writes a casting to change, `casting.json`; `--dry-run` shows it and what the book would cost. The book goes to `story.audiobook/`: an M4B with its chapters marked and an MP3 a chapter (with ffmpeg), and when each line is heard. Lines already made are kept, so making it again only pays for what changed. `--chapters 1` makes one chapter; `--sounds` makes sounds with the service's sound effects; `--studio` sends the book to ElevenLabs Studio as a project instead, to convert and publish there; `--script-only` writes the production script and SSML for other tools. [docs/produce.md](https://github.com/voxdown/voxdown/blob/main/docs/produce.md) has more.
 
+### `vxd connect`: the Writer, with this computer's AIs and voices
+
+```sh
+vxd connect
+```
+
+Lets [VoxDown Writer](https://voxdown.github.io/writer/), in your browser, name speakers with the AIs on your computer and make audiobooks with its voice services, as `vxd tag` and `vxd produce` do. It opens the Writer, connected; leave it running while you use it. It listens only on 127.0.0.1, and answers only the Writer, with a key made each time it starts.
+
 ### `vxd mcp`: VoxDown's tools for AI apps
 
 ```sh

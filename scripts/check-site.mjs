@@ -1988,6 +1988,191 @@ if (!(await first.locator(".cm-content").innerText()).includes("before it closed
 await tabs.close();
 console.log("writer: two tabs, a file changed on disk: ok");
 
+// The Writer and the helper on this computer (vxd connect): a stand-in that answers as it does,
+// to the Writer's page only, with its key.
+{
+  const key = "check-site-key-0123456789";
+  const sent = [];
+  const helperServer = createServer(async (request, response) => {
+    const origin = request.headers.origin;
+    if (origin !== base) return response.writeHead(403).end();
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    if (request.method === "OPTIONS") {
+      response.writeHead(204, {
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "authorization, content-type",
+        "Access-Control-Allow-Private-Network": "true",
+      });
+      return response.end();
+    }
+    if (request.headers.authorization !== `Bearer ${key}`) return response.writeHead(401).end("{}");
+    const path = new URL(request.url ?? "/", "http://x").pathname;
+    if (path === "/v1/hello") {
+      response.writeHead(200, { "content-type": "application/json" });
+      return response.end(
+        JSON.stringify({
+          version: "9",
+          folder: "/books",
+          ais: [{ id: "claude", label: "Claude Code (your Claude plan)", kind: "plan" }],
+          speech: [{ id: "kokoro", label: "Kokoro", note: "free, on this computer" }],
+        }),
+      );
+    }
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    const asked = JSON.parse(body);
+    sent.push({ path, ...asked });
+    response.writeHead(200, { "content-type": "application/x-ndjson" });
+    const say = (event) => response.write(`${JSON.stringify(event)}\n`);
+    if (path === "/v1/tag") {
+      const at = asked.text.indexOf("“Who");
+      say({ type: "start", ai: "Claude Code" });
+      say({ type: "passage", index: 1, of: 1, heading: null, asked: 2, named: 2 });
+      say({
+        type: "done",
+        changes: at >= 0 ? [{ from: at, to: at, insert: "@Tom " }] : [],
+        proposals: [
+          {
+            quote: 1,
+            line: 1,
+            words: "Who’s there?",
+            speaker: "Tom",
+            confidence: "high",
+            cue: "tag",
+            outcome: "given",
+          },
+          {
+            quote: 2,
+            line: 3,
+            words: "Me.",
+            speaker: "Mara",
+            confidence: "low",
+            cue: "guess",
+            outcome: "held",
+          },
+        ],
+        unknown: [],
+        carried: [],
+        joined: [],
+        problems: [],
+      });
+    } else if (asked.mode === "estimate") {
+      say({
+        type: "casting",
+        file: "/books/untitled.audiobook/casting.json",
+        people: [
+          { name: "Narrator", voice: "Heart", description: "female, en-US" },
+          { name: "Tom", voice: "Michael" },
+        ],
+      });
+      say({
+        type: "estimate",
+        service: "Kokoro",
+        requests: 3,
+        characters: 40,
+        costUsd: 0,
+        left: { sounds: 0, vocals: 0, directions: 0 },
+        canSound: false,
+      });
+      say({ type: "done", result: "estimated" });
+    } else {
+      say({ type: "progress", chapter: 1, chapters: 1, title: "Untitled", done: 3, total: 3 });
+      say({
+        type: "done",
+        result: "made",
+        folder: "/books/untitled.audiobook",
+        files: [
+          "/books/untitled.audiobook/untitled.m4b",
+          "/books/untitled.audiobook/chapters/01-untitled.mp3",
+        ],
+        chapters: 1,
+        durationMs: 60000,
+        requests: 3,
+        fromStore: 0,
+        service: "Kokoro",
+        ffmpeg: true,
+      });
+    }
+    response.end();
+  });
+  await new Promise((done) => helperServer.listen(0, "127.0.0.1", done));
+  const helperAt = `127.0.0.1:${helperServer.address().port}`;
+  const connected = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const writer = await connected.newPage();
+  watch(writer, "writer with vxd connect");
+  await writer.goto(`${base}/writer/#pair=${helperAt}:${key}`);
+  await writer.waitForSelector('.welcome [data-command="new"]');
+  if (writer.url().includes("#pair"))
+    problems.push("writer: the helper's key stayed in the address");
+  await writer.click('.welcome [data-command="new"]');
+  await writer.click(".cm-content");
+  await writer.keyboard.press("Control+End");
+  await writer.keyboard.type("“Who’s there?” asked Tom.");
+  await writer.waitForTimeout(400);
+  await writer.click("#edit-menu-button");
+  await writer.click('[data-command="ai-speakers"]');
+  await writer
+    .waitForSelector("#ai-choice option", { state: "attached", timeout: 5000 })
+    .catch(() => {});
+  if (
+    (await writer.locator("#ai-choice option").first().textContent()) !==
+    "Claude Code (your Claude plan)"
+  )
+    problems.push("writer: the AI dialog doesn't offer the helper's AIs");
+  await writer.click("#ai-go");
+  await writer
+    .waitForFunction(
+      () => document.querySelector("#ai-progress")?.textContent?.includes("1 speaker given"),
+      undefined,
+      { timeout: 5000 },
+    )
+    .catch(() =>
+      problems.push(`writer: naming the speakers said “${"…"}” instead of what was given`),
+    );
+  if (!(await writer.locator(".cm-content").innerText()).includes("@Tom “Who’s there?”"))
+    problems.push("writer: the AI's speakers weren't given");
+  if ((await writer.locator(".ai-held li").count()) !== 1)
+    problems.push("writer: the speakers held back aren't listed");
+  await writer.keyboard.press("Escape");
+  await writer.click(".cm-content");
+  await writer.keyboard.press("Control+z");
+  if ((await writer.locator(".cm-content").innerText()).includes("@Tom"))
+    problems.push("writer: the AI's speakers aren't one step to undo");
+  await writer.click("#file-menu-button");
+  await writer.click('[data-command="audiobook"]');
+  await writer.waitForSelector("#ai-ready:not([hidden])", { timeout: 5000 }).catch(() => {});
+  await writer.click("#ai-go");
+  await writer
+    .waitForSelector(".ai-casting", { timeout: 5000 })
+    .catch(() => problems.push("writer: the audiobook's casting isn't shown"));
+  if ((await writer.textContent("#ai-go")) !== "Make it")
+    problems.push("writer: no Make it after the casting");
+  await writer.click("#ai-go");
+  await writer
+    .waitForFunction(
+      () => document.querySelector("#ai-progress")?.textContent?.startsWith("Made: 1 chapter"),
+      undefined,
+      { timeout: 5000 },
+    )
+    .catch(() => problems.push("writer: making the audiobook didn't say where it is"));
+  if (sent.find((request) => request.path === "/v1/audiobook")?.with !== "kokoro")
+    problems.push("writer: the audiobook wasn't asked of the voices chosen");
+  await connected.close();
+  // Not connected: how to connect.
+  const alone = await browser.newPage();
+  watch(alone, "writer without vxd connect");
+  await alone.goto(`${base}/writer/`);
+  await alone.click('.welcome [data-command="new"]');
+  await alone.click("#edit-menu-button");
+  await alone.click('[data-command="ai-speakers"]');
+  await alone.waitForSelector("#ai-connect:not([hidden])", { timeout: 5000 }).catch(() => {});
+  if (!(await alone.textContent("#ai-connect"))?.includes("npx -y @voxdown/cli connect"))
+    problems.push("writer: the AI dialog doesn't say how to connect");
+  await alone.close();
+  helperServer.close();
+  console.log("writer: naming speakers and an audiobook, through vxd connect: ok");
+}
+
 const element = await browser.newPage();
 watch(element, "element.html");
 await element.goto(`${base}/element.html`);

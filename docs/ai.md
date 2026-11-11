@@ -2,12 +2,23 @@
 
 A story written as ordinary prose has quotes no one is marked to say: `“Who’s there?” asked Tom.` VoxDown reads those with the narrator. To give each one its character, an AI can read the story and say who speaks; VoxDown then writes the marks itself (`@Tom “Who’s there?” asked Tom.`), and reads each one back so that **no word of the story ever changes**. A mark that would change a word heard or printed, or give the quote to someone else, is refused.
 
-There are two ways to do it, both with an AI you already have, and no new account:
+There are three ways to do it, all with an AI you already have, and no new account:
 
+- **In the Writer**, with **Edit › Name the speakers with AI…**, once `vxd connect` runs on your computer;
 - **`vxd tag`**, the command, which finds the AIs on your computer and asks one;
 - **`vxd mcp`**, which lets the AI app you already use (Claude, ChatGPT, Codex, Cursor, VS Code…) use VoxDown's tools itself.
 
 Both need [Node.js](https://nodejs.org) 20 or later.
+
+## In the Writer: `vxd connect`
+
+```sh
+npx -y @voxdown/cli connect
+```
+
+Run it in a terminal and leave it running: it opens [the Writer](https://voxdown.github.io/writer/), connected to your computer. Then **Edit › Name the speakers with AI…** names the speakers with any AI `vxd tag` would find (choose one from the list; the choice is remembered), and gives them as one step to undo, listing the quotes it held back with their lines. **File › Make an audiobook…** does what `vxd produce` does, in the folder where `vxd connect` was started.
+
+The Writer is a web page, and pages can't run programs: `vxd connect` is the small helper that can. It listens only on your own computer (127.0.0.1), answers only the Writer, and only with the key it opened the Writer with, a new one each time it starts. Chrome, Edge and Firefox ask once to let the page reach apps on your computer: allow it. Safari doesn't let pages reach them; use the commands, or one of the other browsers.
 
 ## `vxd tag`
 

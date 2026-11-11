@@ -65,6 +65,7 @@ import { examples } from "../examples";
 import "../style.css";
 import "./writer.css";
 import "../theme";
+import { type AiContext, openAi } from "./ai-dialog";
 import { castPanel } from "./cast";
 import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
@@ -86,6 +87,7 @@ import {
   writeFile,
 } from "./files";
 import { Hearing, toHear } from "./hear";
+import { keepPairing, pairingIn } from "./helper";
 import { DraftLock } from "./lock";
 import { keys, menus } from "./menu";
 import { rankScenes } from "./outline";
@@ -2633,6 +2635,8 @@ const COMMANDS: Record<string, () => unknown> = {
   "print-sides": () => printPage(sidesHtml(current(), current().meta.title ?? baseName()), "Sides"),
   recover: showDrafts,
   versions: showVersions,
+  "ai-speakers": () => void openAi("speakers", aiContext),
+  audiobook: () => void openAi("audiobook", aiContext),
   shortcuts: showShortcuts,
   outline: showOutline,
   "paragraph-down": () => {
@@ -3061,6 +3065,38 @@ function goTo({ cursor, top }: { cursor: number; top: number }): void {
     selection: EditorSelection.cursor(Math.min(cursor, length)),
     effects: EditorView.scrollIntoView(Math.min(top, length), { y: "start" }),
   });
+}
+
+/** What the AI dialog needs of the Writer. */
+const aiContext: AiContext = {
+  text: () => view.state.doc.toString(),
+  apply: (changes) => apply(changes, "Nothing to give."),
+  notice: (message) => notice(message),
+  goToLine: (number) => {
+    const line = view.state.doc.line(Math.max(1, Math.min(number, view.state.doc.lines)));
+    view.dispatch({
+      selection: EditorSelection.cursor(line.from),
+      effects: EditorView.scrollIntoView(line.from, { y: "center" }),
+    });
+    view.focus();
+  },
+  name: () => file.name,
+};
+
+// Opened by `vxd connect`: the key to the helper on this computer, kept, and taken out of the address.
+{
+  const pairing = pairingIn(location.hash);
+  if (pairing) {
+    keepPairing(pairing);
+    window.history.replaceState(null, "", location.href.split("#")[0]);
+    setTimeout(
+      () =>
+        notice(
+          "Connected to this computer: Edit › Name the speakers with AI…, and File › Make an audiobook….",
+        ),
+      1200,
+    );
+  }
 }
 
 void start();

@@ -44,6 +44,7 @@
           <button role="menuitem" type="button" data-command="print-sides">Print each character’s lines…</button>
         </div>
         <hr>
+        <button role="menuitem" type="button" data-command="audiobook">Make an audiobook…</button>
         <button role="menuitem" type="button" data-command="details">Story details…</button>
         <button role="menuitem" type="button" data-command="format">Tidy the story</button>
         <button role="menuitem" type="button" data-command="format-curly">Tidy, with curly quotes</button>
@@ -64,6 +65,7 @@
         <hr>
         <button role="menuitem" type="button" data-command="who">Who says this…<kbd data-keys="Mod+K"></kbd></button>
         <button role="menuitem" type="button" data-command="next-quote">Next quote with no speaker<kbd data-keys="Mod+Shift+K"></kbd></button>
+        <button role="menuitem" type="button" data-command="ai-speakers">Name the speakers with AI…</button>
         <button role="menuitem" type="button" data-command="how">How it’s said…<kbd data-keys="Mod+J"></kbd></button>
         <hr>
         <button role="menuitem" type="button" data-command="paragraph-up">Move paragraph up<kbd data-keys="Alt+↑"></kbd></button>
@@ -276,6 +278,33 @@
     <div class="ask-buttons">
       <button class="button" value="close">Close</button>
       <button class="button primary" type="button" id="compare-back">Go back to it</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="ai-dialog" id="ai" aria-labelledby="ai-title">
+  <form method="dialog">
+    <h2 id="ai-title">Name the speakers with AI</h2>
+    <div id="ai-connect" hidden>
+      <p>The Writer uses the AI and the voices on your own computer, through a small helper. In a terminal, run:</p>
+      <p class="ai-command"><code>npx -y @voxdown/cli connect</code></p>
+      <p class="sheet-note">It opens the Writer, connected, and keeps running while you work. It needs <a href="https://nodejs.org" target="_blank" rel="noopener">Node.js</a> 20 or later, and Chrome, Edge or Firefox, which ask once to let this page reach apps on your computer. <a href="https://github.com/voxdown/voxdown/blob/main/docs/ai.md" target="_blank" rel="noopener">More</a></p>
+      <p class="sheet-note" id="ai-connect-why" role="status"></p>
+    </div>
+    <div id="ai-ready" hidden>
+      <label for="ai-choice" id="ai-choice-label">The AI</label>
+      <select id="ai-choice"></select>
+      <p class="sheet-note" id="ai-about"></p>
+      <div id="ai-book-options" hidden>
+        <label><input type="checkbox" id="ai-sounds"> Sounds and page turns, where the voices can make them (they cost too)</label>
+      </div>
+    </div>
+    <p id="ai-progress" role="status" aria-live="polite"></p>
+    <div id="ai-result"></div>
+    <div class="ask-buttons">
+      <button class="button" value="close">Close</button>
+      <button class="button" type="button" id="ai-second" hidden></button>
+      <button class="button primary" type="button" id="ai-go">Name the speakers</button>
     </div>
   </form>
 </dialog>

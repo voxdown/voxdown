@@ -9,7 +9,7 @@ export { parse } from "./parse";
 export { bookText, spokenScript } from "./readings";
 export { tokens } from "./tokens";
 export type { SyntaxToken, TokenKind } from "./tokens";
-export { write, changesFrom } from "./write";
+export { write, changesFrom, diffChanges } from "./write";
 export {
   type TextChange,
   applyChanges,

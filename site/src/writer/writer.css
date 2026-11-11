@@ -1789,3 +1789,87 @@ body[data-welcome] .manuscript .editor {
 .manuscript .vxd-page.vxd-raw {
   color: color-mix(in oklab, var(--vxd-page, #b45309) 65%, var(--ink));
 }
+
+/* Naming the speakers with AI, and making an audiobook. */
+.ai-dialog {
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(34rem, 94vw);
+  max-height: 86vh;
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+}
+.ai-dialog::backdrop {
+  background: rgb(20 25 35 / 0.2);
+}
+.ai-dialog h2 {
+  margin: 0 0 0.8rem;
+  font: 600 1.05rem / 1.3 var(--story);
+}
+.ai-dialog p {
+  margin: 0 0 0.6rem;
+}
+.ai-command code {
+  display: block;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  background: var(--desk);
+  font: 0.9rem / 1.4 var(--mono, ui-monospace, monospace);
+  user-select: all;
+}
+#ai-ready label {
+  display: block;
+  font-size: 0.88rem;
+  margin-bottom: 0.3rem;
+}
+#ai-choice {
+  width: 100%;
+  font: inherit;
+  padding: 0.35rem 0.4rem;
+  margin-bottom: 0.4rem;
+}
+#ai-book-options label {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+#ai-progress:empty {
+  display: none;
+}
+.ai-held,
+.ai-files {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+  max-height: 14rem;
+  overflow: auto;
+  font-size: 0.88rem;
+}
+.ai-casting {
+  border-collapse: collapse;
+  margin: 0 0 0.6rem;
+  font-size: 0.88rem;
+}
+.ai-casting caption {
+  text-align: left;
+  color: var(--quiet);
+  margin-bottom: 0.2rem;
+}
+.ai-casting td {
+  padding: 0.15rem 0.8rem 0.15rem 0;
+  vertical-align: top;
+}
+.ai-casting td:first-child {
+  font-weight: 600;
+}
+.link-button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent, inherit);
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+}

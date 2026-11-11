@@ -99,6 +99,7 @@ function book(source: string) {
 
 const STORY = `---
 title: The Owl
+subtitle: A Night Story
 author: A. Teller
 language: en-GB
 ---
@@ -120,6 +121,7 @@ describe("Word documents", () => {
     const paragraphs = book(STORY);
     const written = docxOf(paragraphs, {
       title: "The Owl",
+      subtitle: "A Night Story",
       author: "A. Teller",
       language: "en-GB",
     });
@@ -128,6 +130,7 @@ describe("Word documents", () => {
     const { story, left } = await storyOfDocx(written.buffer as ArrayBuffer);
     expect(left).toEqual([]);
     expect(story).toContain("title: The Owl");
+    expect(story).toContain("subtitle: A Night Story");
     expect(story).toContain("author: A. Teller");
     expect(story).toContain("# One");
     expect(story).toContain("The night was *very* still, and **cold**.\nA second line.");
@@ -141,11 +144,14 @@ describe("Word documents", () => {
   });
 
   it("read a title page as the story's title and author, when Word's own record has none", async () => {
-    const files = await unzip(docxOf(book(STORY), { title: "The Owl", author: "A. Teller" }));
+    const files = await unzip(
+      docxOf(book(STORY), { title: "The Owl", subtitle: "A Night Story", author: "A. Teller" }),
+    );
     files.delete("docProps/core.xml");
     const bare = zip([...files].map(([name, data]) => ({ name, data })));
     const { story } = await storyOfDocx(bare.buffer as ArrayBuffer);
     expect(story).toContain("title: The Owl");
+    expect(story).toContain("subtitle: A Night Story");
     expect(story).toContain("author: A. Teller");
     expect(book(story)).toEqual(book(STORY));
   });
@@ -156,6 +162,7 @@ describe("ebooks", () => {
     const paragraphs = book(STORY);
     const written = epubOf(paragraphs, {
       title: "The Owl",
+      subtitle: "A Night Story",
       author: "A. Teller",
       language: "en-GB",
       id: "00000000-0000-4000-8000-000000000000",
@@ -171,6 +178,8 @@ describe("ebooks", () => {
     // The title page is the story's details: the book read back is the book written.
     expect(book(story)).toEqual(book(STORY));
     expect(story).toContain("title: The Owl");
+    expect(story).toContain("subtitle: A Night Story");
+    expect(story).toContain("author: A. Teller");
     expect(story).toContain("# One");
     expect(story).toContain("# Two");
     expect(story).toContain("*very*");

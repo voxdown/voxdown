@@ -1675,7 +1675,11 @@ watch(maker, "writer insert and export");
 const draftOf = () => draftIn(maker);
 await maker.goto(`${base}/writer/`);
 await maker.click('.welcome [data-command="new"]');
-// A new story's title is selected (checked below): the page is beneath it.
+// Typed once the new story shows, as a writer would; its title is selected (checked below):
+// the page is beneath it.
+await maker.waitForFunction(() =>
+  document.querySelector("#notice")?.textContent?.includes("Type the story’s title"),
+);
 await maker.keyboard.press("Control+End");
 await maker.keyboard.type("Once upon a time, there was a witch.");
 await maker.click("#insert-menu-button");
@@ -1962,6 +1966,12 @@ if (await maker.isVisible("#toolbar"))
 await maker.click("#view-menu-button");
 await maker.click('#view-menu [data-view="toolbar"]');
 if (!(await maker.isVisible("#toolbar"))) problems.push("writer: View › Toolbar doesn't show it");
+// Ctrl+F from the side opens the story's own Find, not the browser's.
+await maker.click('.side-tab[data-tab="book"]');
+await maker.keyboard.press("Control+f");
+if (!(await maker.waitForSelector(".cm-search", { timeout: 2000 }).catch(() => null)))
+  problems.push("writer: Ctrl+F from the side doesn't open Find");
+await maker.keyboard.press("Escape");
 // The menus from the keyboard alone: every item reached once with the down arrow, in order.
 await maker.click(".cm-content");
 await maker.keyboard.press("F10");

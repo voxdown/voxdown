@@ -676,6 +676,8 @@ async function load(
     changedAt?: number;
     modified?: number;
   } = {},
+  /** What is selected when it opens, rather than the cursor where the story starts. */
+  selected?: { from: number; to: number },
 ): Promise<void> {
   const id = kept.id ?? newId();
   // The story open before is kept as it is (what keep() writes is read at once), and its lock
@@ -705,6 +707,11 @@ async function load(
   const start = front ? Math.min(front.range.to + 2, lf.length) : 0;
   view.setState(editorState(opened.text, start));
   view.scrollDOM.scrollTop = 0;
+  if (selected)
+    view.dispatch({
+      selection: EditorSelection.range(selected.from, selected.to),
+      scrollIntoView: true,
+    });
   $("#welcome").hidden = true;
   document.body.removeAttribute("data-welcome");
   storyCommands(true);
@@ -2125,15 +2132,17 @@ const NEW_STORY = [
 
 async function newStory(): Promise<void> {
   if (!(await mayLeave())) return;
-  await load({ name: "Untitled.vxd", text: NEW_STORY }, { saved: "" });
   // The title selected, so that what is typed first replaces it; Enter goes on to the page.
+  // Selected as the story is put in the editor, before it has the keyboard: selected later, after
+  // the draft is kept, it caught words already being typed.
   const title = NEW_STORY.indexOf("# Untitled") + 2;
-  view.dispatch({
-    selection: EditorSelection.range(title, title + "Untitled".length),
-    scrollIntoView: true,
-  });
-  view.focus();
+  const opening = load(
+    { name: "Untitled.vxd", text: NEW_STORY },
+    { saved: "" },
+    { from: title, to: title + "Untitled".length },
+  );
   notice("Type the story’s title, then Enter to write beneath it.");
+  await opening;
 }
 
 /** Tidies the story as `format` does, changing only what it changes, as one step to undo. */
@@ -2258,8 +2267,13 @@ async function exportDocument(kind: "docx" | "epub"): Promise<void> {
   const story = current();
   const body = new DOMParser().parseFromString(renderBook(story), "text/html").body;
   const paragraphs = paragraphsOf(body);
-  const { title = baseName(), author, language } = story.meta;
-  const details = { title, ...(author ? { author } : {}), ...(language ? { language } : {}) };
+  const { title = baseName(), subtitle, author, language } = story.meta;
+  const details = {
+    title,
+    ...(subtitle ? { subtitle } : {}),
+    ...(author ? { author } : {}),
+    ...(language ? { language } : {}),
+  };
   if (kind === "docx") {
     const { docxOf } = await import("./docx");
     download(
@@ -3009,7 +3023,7 @@ $("#scene-rail").addEventListener("rail-names", (event) =>
   checkMenu("rail-names", (event as CustomEvent<boolean>).detail),
 );
 
-// Ctrl+S, Ctrl+Shift+S and Ctrl+O, wherever the focus is.
+// Ctrl+S, Ctrl+Shift+S, Ctrl+O and Ctrl+F, wherever the focus is.
 document.addEventListener(
   "keydown",
   (event) => {
@@ -3044,6 +3058,20 @@ document.addEventListener(
       event.preventDefault();
       event.stopPropagation();
       view.dispatch({ effects: setShowMarks.of(!prefs.marks) });
+      return;
+    }
+    // Find, from the side, the toolbar or the menus too: the story's own, not the browser's. In
+    // the editor it is the editor's; in a dialog, the dialog's.
+    if (
+      key === "f" &&
+      !event.shiftKey &&
+      !view.dom.contains(document.activeElement) &&
+      !document.querySelector("dialog[open]") &&
+      !onWelcome()
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      openSearchPanel(view);
       return;
     }
     const command =

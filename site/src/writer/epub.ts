@@ -24,7 +24,8 @@ hr { border: 0; margin: 1.2em 0; text-align: center; }
 hr::after { content: "* * *"; }
 .titlepage { margin-top: 30%; text-align: center; }
 .titlepage h1 { margin: 0 0 1em; }
-.titlepage p { text-indent: 0; font-style: italic; }`;
+.titlepage p { text-indent: 0; }
+.titlepage .subtitle { font-style: italic; margin-bottom: 2em; }`;
 
 function runsXhtml(runs: readonly Run[]): string {
   return runs
@@ -47,7 +48,14 @@ const words = (runs: readonly Run[]) =>
 /** A book's paragraphs as an ebook: a chapter to each `#` heading (or each `##`, if none). */
 export function epubOf(
   paragraphs: readonly Paragraph[],
-  details: { title?: string; author?: string; language?: string; id: string; when: Date },
+  details: {
+    title?: string;
+    subtitle?: string;
+    author?: string;
+    language?: string;
+    id: string;
+    when: Date;
+  },
 ): Uint8Array {
   const top = paragraphs.some((p) => p.kind === "heading" && p.level === 1) ? 1 : 2;
   const chapters: Array<{ title: string; paragraphs: Paragraph[] }> = [];
@@ -87,7 +95,7 @@ ${body}
   // A title page first: the title and the author, as ebooks have it, read back as the details.
   const titlePage = page(
     title,
-    `<section epub:type="titlepage" class="titlepage"><h1>${xmlText(title)}</h1>${details.author ? `<p>${xmlText(details.author)}</p>` : ""}</section>`,
+    `<section epub:type="titlepage" class="titlepage"><h1>${xmlText(title)}</h1>${details.subtitle ? `<p class="subtitle">${xmlText(details.subtitle)}</p>` : ""}${details.author ? `<p class="author">${xmlText(details.author)}</p>` : ""}</section>`,
   );
   const nav = page(
     title,
@@ -103,8 +111,9 @@ ${body}
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id" xml:lang="${xmlText(language)}">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="id">urn:uuid:${xmlText(details.id)}</dc:identifier>
-<dc:title>${xmlText(title)}</dc:title>
-<dc:language>${xmlText(language)}</dc:language>
+<dc:title id="title">${xmlText(title)}</dc:title>
+<meta refines="#title" property="title-type">main</meta>
+${details.subtitle ? `<dc:title id="subtitle">${xmlText(details.subtitle)}</dc:title>\n<meta refines="#subtitle" property="title-type">subtitle</meta>\n` : ""}<dc:language>${xmlText(language)}</dc:language>
 ${details.author ? `<dc:creator>${xmlText(details.author)}</dc:creator>` : ""}
 <meta property="dcterms:modified">${modified}</meta>
 </metadata>
@@ -308,12 +317,37 @@ export async function storyOfEpub(
         ? "None of this ebook's chapters could be read."
         : "This ebook lists no chapters to read.",
     );
-  const title = meta("title");
+  // A book's titles: its main one, and a subtitle where the package says which is which.
+  const whole = (name: string) =>
+    [
+      ...opf.matchAll(
+        new RegExp(`<(?:[\\w.-]+:)?${name}\\b([^>]*)>([\\s\\S]*?)</(?:[\\w.-]+:)?${name}>`, "g"),
+      ),
+    ].map((found) => ({
+      attributes: attributes(found[1] ?? ""),
+      text: fromXml((found[2] ?? "").replace(/<[^>]+>/g, "")).trim(),
+    }));
+  // `<meta refines="#subtitle" property="title-type">subtitle</meta>`, its attributes in any order.
+  const kinds = new Map(
+    whole("meta")
+      .filter((meta) => meta.attributes.get("property") === "title-type")
+      .map((meta) => [(meta.attributes.get("refines") ?? "").replace(/^#/, ""), meta.text]),
+  );
+  const titles = whole("title").map((found) => ({
+    kind: kinds.get(found.attributes.get("id") ?? ""),
+    text: found.text,
+  }));
+  const title =
+    titles.find((found) => found.kind === "main")?.text ||
+    titles.find((found) => found.kind !== "subtitle")?.text ||
+    meta("title");
+  const subtitle = titles.find((found) => found.kind === "subtitle")?.text || undefined;
   const author = meta("creator");
   const language = meta("language");
   return {
     story: writeStory(paragraphs, {
       ...(title ? { title } : {}),
+      ...(subtitle ? { subtitle } : {}),
       ...(author ? { author } : {}),
       ...(language ? { language } : {}),
     }),

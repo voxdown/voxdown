@@ -120,6 +120,7 @@ export function castPanel(
     handleInput.defaultValue = handle;
     handleInput.dataset.focus = `${handle}:handle`;
     handleInput.setAttribute("aria-label", `Short name of ${handle}`);
+
     handleInput.size = Math.max(6, handle.length + 1);
     const nameInput = item.querySelector(".cast-name") as HTMLInputElement;
     nameInput.value = member && member.name !== member.handle ? member.name : "";
@@ -166,6 +167,10 @@ export function castPanel(
       true,
     );
     const find = item.querySelector(".cast-find") as HTMLElement;
+    // Named for whom it is: a list of buttons all called "Go to their next line" tells no one apart.
+    const whose = member?.name && member.name !== member.handle ? member.name : handle;
+    find.setAttribute("aria-label", `Go to ${whose}’s next line`);
+    find.title = `Go to ${whose}’s next line`;
     if (readOnly) item.dataset.readonly = "";
     find.dataset.focus = `${handle}:find`;
     find.addEventListener("click", () => actions.find(handle));

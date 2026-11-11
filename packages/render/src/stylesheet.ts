@@ -53,6 +53,8 @@ export const stylesheet = `
 :where(.vxd) .vxd-title { font-size: 1.9em; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; }
 :where(.vxd) .vxd-subtitle { font-size: 1.15em; color: var(--vxd-muted); margin-top: 0.2em; }
 :where(.vxd) .vxd-author { font-style: italic; color: var(--vxd-muted); margin-top: 0.6em; }
+/* Under a title the story opens with as its heading (centred, as an h1 is). */
+:where(.vxd) .vxd-byline { margin: -0.2em 0 2.5em; }
 :where(.vxd) .vxd-cast { list-style: none; padding: 0; margin: 1.4em 0 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35em 1.1em; font: 0.8em/1.4 var(--vxd-ui-font); color: var(--vxd-muted); }
 :where(.vxd) .vxd-cast li { display: inline-flex; align-items: center; gap: 0.4em; }
 :where(.vxd) .vxd-cast-dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--vxd-c); }

@@ -42,6 +42,21 @@ const plain = (text: string) =>
     .replace(/[*_]/g, "")
     .replace(/\s+/g, "");
 
+describe("the book's title, subtitle and author", () => {
+  it("follow a title the story opens with as its heading, rather than going", () => {
+    const front = "---\ntitle: The Review\nsubtitle: A Story\nauthor: A. Teller\n---\n\n";
+    const opening = renderBook(parse(`${front}# The Review\n\nOnce.\n`));
+    // The title once, as the heading; the subtitle and author right after it.
+    expect(opening.match(/The Review/g)).toHaveLength(1);
+    expect(opening.indexOf("A Story")).toBeGreaterThan(opening.indexOf("</h1>"));
+    expect(opening.indexOf("A. Teller")).toBeLessThan(opening.indexOf("Once."));
+    // Otherwise, all three head the book.
+    const plain = renderBook(parse(`${front}Once.\n`));
+    expect(plain.indexOf("The Review")).toBeLessThan(plain.indexOf("A Story"));
+    expect(plain.indexOf("A. Teller")).toBeLessThan(plain.indexOf("Once."));
+  });
+});
+
 describe("the book view", () => {
   it.each(inputs)("%s prints exactly the book text", (_name, source) => {
     const story = parse(source);
@@ -340,7 +355,11 @@ describe("the script view", () => {
     const story = parse(
       "---\ntitle: Toast\nauthor: Me\ncast:\n  Gerald:\n---\n# Toast\n@Gerald “Hi.”",
     );
-    expect(renderBook(story)).not.toContain("vxd-header");
+    // The book: the title once, as the heading, the author under it.
+    expect(renderBook(story)).not.toContain("vxd-title");
+    expect(renderBook(story)).toMatch(
+      /<\/h1>\n<header class="vxd-header vxd-byline"><div class="vxd-author">Me<\/div>/,
+    );
     expect(renderScript(story)).not.toContain("vxd-title");
     expect(renderScript(story)).toContain("vxd-cast");
   });

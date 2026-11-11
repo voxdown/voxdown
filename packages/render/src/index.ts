@@ -88,7 +88,12 @@ ${render(parsed, view, options)}
 export function renderBook(story: Story, options: RenderOptions = {}): string {
   fullNames.delete(story);
   const out: string[] = [];
-  if (options.header !== false && !opensWithTitle(story)) out.push(header(story, false, new Map()));
+  // A story that opens with its title as a heading: the subtitle and author follow that heading.
+  let byline = false;
+  if (options.header !== false) {
+    if (opensWithTitle(story)) byline = true;
+    else out.push(header(story, false, new Map()));
+  }
   let page = "1";
   // Page numbers wait for the next printed paragraph: a page turn on a line of its own prints nothing.
   let markers = "";
@@ -124,6 +129,10 @@ export function renderBook(story: Story, options: RenderOptions = {}): string {
     if (block.kind === "heading") {
       const level = Math.min(6, block.level);
       out.push(`<h${level} class="vxd-heading"${where}>${markers}${printed.join(" ")}</h${level}>`);
+      if (byline) {
+        out.push(bylineOf(story));
+        byline = false;
+      }
     } else {
       out.push(`<p class="vxd-p"${where}>${markers}${printed.join("<br>\n")}</p>`);
     }
@@ -535,6 +544,16 @@ function opensWithTitle(story: Story): boolean {
   if (first?.kind !== "heading" || !story.meta.title) return false;
   const text = printedLine(story.source, first.line).replace(/<[^>]+>/g, "");
   return text.trim().toLowerCase() === escapeHtml(story.meta.title).trim().toLowerCase();
+}
+
+/** The subtitle and author, under a title the story gives as its first heading. */
+function bylineOf(story: Story): string {
+  const { subtitle, author } = story.meta;
+  const parts = [
+    subtitle ? `<div class="vxd-subtitle">${escapeHtml(subtitle)}</div>` : "",
+    author ? `<div class="vxd-author">${escapeHtml(author)}</div>` : "",
+  ].filter(Boolean);
+  return parts.length ? `<header class="vxd-header vxd-byline">${parts.join("")}</header>` : "";
 }
 
 function header(story: Story, withCast: boolean, colors: Map<string, string>): string {

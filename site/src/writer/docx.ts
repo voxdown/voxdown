@@ -37,18 +37,23 @@ ${[1, 2, 3, 4, 5, 6]
   .join("\n")}
 <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Subtitle"/><w:qFormat/><w:pPr><w:jc w:val="center"/><w:spacing w:before="2400" w:after="240"/></w:pPr><w:rPr><w:sz w:val="56"/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:jc w:val="center"/><w:spacing w:after="240"/></w:pPr><w:rPr><w:i/><w:sz w:val="32"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Author"><w:name w:val="Author"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:jc w:val="center"/><w:spacing w:before="480" w:after="240"/></w:pPr><w:rPr><w:sz w:val="28"/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="SceneBreak"><w:name w:val="Scene break"/><w:basedOn w:val="Normal"/><w:pPr><w:jc w:val="center"/><w:spacing w:before="240" w:after="240"/></w:pPr></w:style>
 </w:styles>`;
 
 /** A book's paragraphs as a Word document. */
 export function docxOf(
   paragraphs: readonly Paragraph[],
-  details: { title?: string; author?: string; language?: string },
+  details: { title?: string; subtitle?: string; author?: string; language?: string },
 ): Uint8Array {
   // A title page in Word's own Title and Subtitle styles, then a new page for the story: read
   // back as the story's title and author, not as words to be read aloud.
+  const styled = (style: string, text: string | undefined) =>
+    text
+      ? `<w:p><w:pPr><w:pStyle w:val="${style}"/></w:pPr><w:r><w:t xml:space="preserve">${xmlText(text)}</w:t></w:r></w:p>`
+      : "";
   const titlePage = details.title
-    ? `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t xml:space="preserve">${xmlText(details.title)}</w:t></w:r></w:p>${details.author ? `<w:p><w:pPr><w:pStyle w:val="Subtitle"/></w:pPr><w:r><w:t xml:space="preserve">${xmlText(details.author)}</w:t></w:r></w:p>` : ""}<w:p><w:r><w:br w:type="page"/></w:r></w:p>`
+    ? `${styled("Title", details.title)}${styled("Subtitle", details.subtitle)}${styled("Author", details.author)}<w:p><w:r><w:br w:type="page"/></w:r></w:p>`
     : "";
   const body = titlePage + paragraphs.map(paragraphXml).join("");
   const language = details.language ? `<w:lang w:val="${xmlText(details.language)}"/>` : "";
@@ -201,8 +206,8 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
   const stylesFile = files.get("word/styles.xml");
   const styles = stylesOf(stylesFile ? decoder.decode(stylesFile) : "");
   const paragraphs: Paragraph[] = [];
-  /** A title page before the story: its Title, and the Subtitle right after it. */
-  const page: { title?: string; subtitle?: string } = {};
+  /** A title page before the story: its Title, then a Subtitle and an Author, if it has them. */
+  const page: { title?: string; subtitle?: string; author?: string } = {};
   const named = (id: string | undefined, name: string) => {
     let at = id;
     for (let depth = 0; at && depth < 12; depth++) {
@@ -245,13 +250,17 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
       .trim();
     if (!words) continue;
     // Before the story starts: a title page, read as its details.
-    if (paragraphs.length === 0 && page.subtitle === undefined) {
+    if (paragraphs.length === 0) {
       if (page.title === undefined && named(style, "title")) {
         page.title = words;
         continue;
       }
-      if (page.title !== undefined && named(style, "subtitle")) {
+      if (page.title !== undefined && page.subtitle === undefined && named(style, "subtitle")) {
         page.subtitle = words;
+        continue;
+      }
+      if (page.title !== undefined && page.author === undefined && named(style, "author")) {
+        page.author = words;
         continue;
       }
     }
@@ -269,17 +278,14 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
   };
   // The title on the page is the one its writer sees: Word's own record of it is often stale.
   const title = page.title ?? read("dc:title");
-  // A subtitle is often the author's name; else it is the story's own line, kept.
-  const author = read("dc:creator") ?? page.subtitle;
-  if (page.subtitle && page.subtitle !== author)
-    paragraphs.unshift({
-      kind: "text",
-      runs: [{ text: page.subtitle, italic: false, bold: false }],
-    });
+  const author = read("dc:creator") ?? page.author;
+  // A subtitle that only says the author's name, as some title pages have it, isn't a subtitle.
+  const subtitle = page.subtitle && page.subtitle !== author ? page.subtitle : undefined;
   const language = read("dc:language");
   return {
     story: writeStory(paragraphs, {
       ...(title ? { title } : {}),
+      ...(subtitle ? { subtitle } : {}),
       ...(author ? { author } : {}),
       ...(language ? { language } : {}),
     }),

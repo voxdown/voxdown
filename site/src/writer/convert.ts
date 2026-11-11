@@ -221,12 +221,13 @@ export function writeRuns(runs: readonly Run[]): string {
 /** Paragraphs as a story: a front matter with its details, then the text. */
 export function writeStory(
   paragraphs: readonly Paragraph[],
-  details: { title?: string; author?: string; language?: string },
+  details: { title?: string; subtitle?: string; author?: string; language?: string },
 ): string {
   const front = ["---", "voxdown: 1.1"];
   const quoted = (value: string) =>
     /^[\p{L}\p{N}][\p{L}\p{N} ,.'’!?-]*$/u.test(value) ? value : JSON.stringify(value);
   if (details.title) front.push(`title: ${quoted(details.title)}`);
+  if (details.subtitle) front.push(`subtitle: ${quoted(details.subtitle)}`);
   if (details.author) front.push(`author: ${quoted(details.author)}`);
   if (details.language) front.push(`language: ${quoted(details.language)}`);
   front.push("cast:", "---", "");

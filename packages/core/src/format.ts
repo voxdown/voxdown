@@ -51,6 +51,26 @@ function formatNow(source: string, options: FormatOptions): string {
   return text;
 }
 
+/**
+ * The text with its straight quotation marks and apostrophes made curly, as `format` makes them
+ * with `quotes: "curly"`, and nothing else changed: where curly marks would make anyone say
+ * anything differently, a line keeps its straight ones. Front matter, link addresses and titles,
+ * marks, sounds, notes and instructions are never touched. For an editor that curls what is
+ * pasted; each mark stays one character, so offsets don't move.
+ */
+export function curlQuotes(source: string, options: { language?: string } = {}): string {
+  return session(() => {
+    let text = source;
+    for (let round = 0; round < 8; round++) {
+      const before = text;
+      const story = parse(text);
+      text = guarded(text, story, byLine(text, quoteChanges(story, options.language)));
+      if (text === before) break;
+    }
+    return text;
+  });
+}
+
 /** The story's blocks, and each heading's level: tidying never makes a heading a paragraph. */
 function shapeOf(story: Story): string {
   return story.blocks
@@ -60,7 +80,7 @@ function shapeOf(story: Story): string {
 
 /** Every character but spaces, with quotation marks and apostrophes as one: what may never change. */
 function wordsOf(text: string): string {
-  return text.replace(/["'“”‘’„‚«»‹›]/g, "'").replace(/\s+/g, "");
+  return text.replace(/["'“”‘’„‚«»‹›「」『』]/g, "'").replace(/\s+/g, "");
 }
 
 /** Changes in runs, one per line: a quote's marks are decided together. */
@@ -346,15 +366,32 @@ function spacingRuns(source: string): TextChange[][] {
 
 type Style = { open: string; close: string; innerOpen: string; innerClose: string };
 
+/**
+ * Each language's quotation marks, and those inside them, as §5.5 reads them; a language not here
+ * gets English ones. A region's own (Swiss German `de-CH`) comes before its language's.
+ */
 const STYLES: Record<string, Style> = {
   en: { open: "“", close: "”", innerOpen: "‘", innerClose: "’" },
   de: { open: "„", close: "“", innerOpen: "‚", innerClose: "‘" },
+  "de-ch": { open: "«", close: "»", innerOpen: "‹", innerClose: "›" },
   fr: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  "fr-ch": { open: "«", close: "»", innerOpen: "‹", innerClose: "›" },
+  it: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  es: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  pt: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  ca: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  ru: { open: "«", close: "»", innerOpen: "„", innerClose: "“" },
+  uk: { open: "«", close: "»", innerOpen: "„", innerClose: "“" },
+  da: { open: "»", close: "«", innerOpen: "›", innerClose: "‹" },
+  pl: { open: "„", close: "”", innerOpen: "«", innerClose: "»" },
+  ja: { open: "「", close: "」", innerOpen: "『", innerClose: "』" },
+  zh: { open: "「", close: "」", innerOpen: "『", innerClose: "』" },
 };
 
 function styleFor(language: string | undefined): Style {
-  const primary = (language ?? "en").toLowerCase().split(/[-_]/)[0] ?? "en";
-  return STYLES[primary] ?? (STYLES.en as Style);
+  const tag = (language ?? "en").toLowerCase().replace(/_/g, "-");
+  const [primary = "en", region] = tag.split("-");
+  return STYLES[`${primary}-${region}`] ?? STYLES[primary] ?? (STYLES.en as Style);
 }
 
 /**
@@ -405,7 +442,7 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
     decided.add(token.range.from);
     // A mark after a digit stays as written, whatever it does (§13, rule 8): `6"`.
     if (afterDigit(token.range.from)) continue;
-    if (isElision(source, token.range.from)) {
+    if (isElision(source, token.range.from) || isCutShort(source, token.range.from)) {
       // An apostrophe the parser reads as a quote's edge. `'n'` read as a quote of its own, or a
       // decade (`'90s`) opening one, is apostrophes at both edges; a longer quote ending at an
       // apostrophe can't be written curly and still heard the same.

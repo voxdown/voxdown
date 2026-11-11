@@ -133,6 +133,13 @@ const PIECES = [
   '![a](<a  b.png> "A  (title")',
   "<b>",
   "&amp;",
+  "&quot;",
+  "&#8217;",
+  "&constructor;",
+  "&__proto__;",
+  "&toString;",
+  "&nosuch;",
+  "&",
   // groups, headings, breaks, front matter, lists, quotes
   ":::",
   "::: whispering",
@@ -414,6 +421,15 @@ describe("on stories made at random", () => {
         fc.nat(),
         fc.constantFrom("{page}", "{pause 2s}", "%% Slowly. %%"),
         fc.constantFrom(
+          "clatter",
+          "bells &amp; whistles",
+          "a &quot;clang&quot;",
+          "rock & roll",
+          "a [muffled] thud",
+          "back\\slash",
+          "&constructor;",
+        ),
+        fc.constantFrom(
           "{hidden}",
           "{book only}",
           "{audio only}",
@@ -423,7 +439,7 @@ describe("on stories made at random", () => {
           "---",
           "***",
         ),
-        (source, pick, word, text, wrong) => {
+        (source, pick, word, text, description, wrong) => {
           const story = parse(source);
           const at = pick % (source.length + 1);
           const said = speeches(story);
@@ -447,13 +463,17 @@ describe("on stories made at random", () => {
             [inWords, heard],
           ] as const) {
             if (offset === null) continue;
-            const sound = tryEdit(source, story, insertSound(story, offset, "clatter"), counted);
+            const sound = tryEdit(source, story, insertSound(story, offset, description), counted);
             if (sound) {
               expect(count(sound.after, "sound")).toBe(count(story, "sound") + 1);
               // And it is heard: one more sound among the lines read aloud.
               const heardSounds = (of: Story) =>
                 lines(of).filter((row) => row.kind === "sound").length;
               expect(heardSounds(sound.after)).toBe(heardSounds(story) + 1);
+              // As it was asked for, whatever its characters.
+              const descriptions = (of: Story) =>
+                allItems(of).flatMap((item) => (item.kind === "sound" ? [item.description] : []));
+              expect(descriptions(sound.after)).toContain(description);
             }
           }
           const line = tryEdit(source, story, insertLine(story, at, text), true);

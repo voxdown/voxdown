@@ -2,7 +2,7 @@
  * The playground: write on the left page, see what it becomes on the right. Everything runs in the
  * browser; the story is kept in this browser's local storage and in links you choose to copy.
  */
-import { EditorSelection } from "@codemirror/state";
+import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { type Character, scriptEditor, setShowMarks } from "@voxdown/editor";
 import {
@@ -54,9 +54,20 @@ const characters = (): readonly Character[] =>
     ...(state.story.cast.some((member) => member.handle === handle) ? {} : { provisional: true }),
   }));
 
+/**
+ * The story's line breaks, kept for saving it (§4.1): CRLF when every line ends so. The editor and
+ * the views work on `\n` throughout.
+ */
+const lineEnding = new Compartment();
+const lineBreaks = (text: string) =>
+  text.includes("\r\n") && !/(?:^|[^\r])\n|\r(?!\n)/.test(text)
+    ? EditorState.lineSeparator.of("\r\n")
+    : [];
+
 const view = new EditorView({
   parent: editorHost,
   extensions: [
+    lineEnding.of([]),
     scriptEditor({ characters }),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) schedule();
@@ -83,8 +94,11 @@ function load(text: string, name: string): void {
   state.name = name;
   following = false;
   $<HTMLElement>("#file-name").textContent = name;
-  const story = parse(text);
-  const start = story.frontMatter ? Math.min(story.frontMatter.range.to + 2, text.length) : 0;
+  // Where the story starts, in the editor's places, which count a line break as one character.
+  const lf = text.replace(/\r\n/g, "\n");
+  const story = parse(lf);
+  const start = story.frontMatter ? Math.min(story.frontMatter.range.to + 2, lf.length) : 0;
+  view.dispatch({ effects: lineEnding.reconfigure(lineBreaks(text)) });
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
     selection: EditorSelection.cursor(start),
@@ -373,7 +387,8 @@ $<HTMLButtonElement>("#download-output").addEventListener("click", () => {
 });
 
 $<HTMLButtonElement>("#download-story").addEventListener("click", () => {
-  save(view.state.doc.toString(), `${base()}.vxd`, "text/markdown");
+  // As written: with the line breaks the story came with.
+  save(view.state.sliceDoc(), `${base()}.vxd`, "text/markdown");
 });
 
 $<HTMLButtonElement>("#format").addEventListener("click", () => {

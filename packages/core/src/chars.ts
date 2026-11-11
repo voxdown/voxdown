@@ -95,6 +95,20 @@ export function removeEscapes(text: string): string {
 const REFERENCE_OR_ESCAPE =
   /\\([!-/:-@[-`{-~“”‘’„‚«»‹›「」『』])|&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{0,31});/g;
 
+/**
+ * Text with a backslash before each `&` that would start a character reference (§11), so it is
+ * read as written: `bells &amp; whistles` stays just that.
+ */
+export function escapeReferences(text: string): string {
+  if (!text.includes("&")) return text;
+  let out = "";
+  for (let at = 0; at < text.length; at++) {
+    if (text[at] === "&" && characterReference(text, at)) out += "\\";
+    out += text[at];
+  }
+  return out;
+}
+
 /** Unescaped, with every run of white space, line breaks included, made one space. */
 export function cleanText(text: string): string {
   return removeEscapes(text).replace(/\s+/g, " ").trim();

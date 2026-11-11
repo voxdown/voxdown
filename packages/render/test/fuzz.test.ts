@@ -72,6 +72,11 @@ const PIECES = [
   "[x](javascript:alert(1))",
   "<script>",
   "&",
+  "&amp;",
+  "&quot;",
+  "&constructor;",
+  "&__proto__;",
+  "&#0;",
   "*em*",
   "**strong**",
   "*very **quiet** indeed*",
@@ -138,10 +143,20 @@ function withoutLinks(text: string): string {
     const bang = text[i] === "!" && text[i + 1] === "[";
     if (text[i] === "[" || bang) {
       const open = bang ? i + 1 : i;
-      const close = text.indexOf("]", open + 1);
-      // A `[` before that `]` is the link's, if it is one: Markdown pairs a `]` with the nearest `[`.
+      // The `]` that balances it, if a `(` follows; else the next `]`, but a `[` before that one
+      // is the link's, if it is one: Markdown pairs a `]` with the nearest `[`.
+      let balanced = -1;
+      for (let at = open, depth = 0; at < text.length; at++) {
+        if (text[at] === "[") depth++;
+        else if (text[at] === "]" && --depth === 0) {
+          balanced = at;
+          break;
+        }
+      }
+      let close = text.indexOf("]", open + 1);
+      if (balanced > 0 && text[balanced + 1] === "(") close = balanced;
       const nested = text.indexOf("[", open + 1);
-      if (nested >= 0 && nested < close) {
+      if (close !== balanced && nested >= 0 && nested < close) {
         out += text[i];
         continue;
       }
@@ -222,6 +237,10 @@ const markdownLine = fc
       "&ast;",
       "&nosuch;",
       "[t](u?a=1&amp;b=2)",
+      '[t](caf&eacute; "caf&eacute;")',
+      // (Not a reference in an image's description: markdown-it 14 drops it from `alt`, where
+      // CommonMark keeps its character. The views' own tests check that one.)
+      "&#106;",
     ),
     { minLength: 1, maxLength: 12 },
   )
@@ -248,7 +267,7 @@ describe("Markdown, as a CommonMark reader (markdown-it) reads it", () => {
       .replace(/ \/>/g, ">")
       .replace(
         /(href|src)="([^"]*)"/g,
-        (_, name: string, url: string) => `${name}="${decodeURI(url)}"`,
+        (_, name: string, url: string) => `${name}="${decodeURI(url).replace(/"/g, "&quot;")}"`,
       );
 
   it("the book view shows a line's emphasis, links and images as Markdown does", async () => {

@@ -24,6 +24,8 @@ const fixturesPath = join(root, "spec", "conformance.json");
 type Fixture = {
   example: number;
   section: string;
+  /** The spec version the example is new in, when later than 1.0: a 1.0 reader may skip it. */
+  since?: string;
   line: number;
   input: string;
   script: string;
@@ -38,6 +40,7 @@ function fixtures(): Fixture[] {
     return {
       example: index + 1,
       section: example.section,
+      ...(example.since ? { since: example.since } : {}),
       line: example.line,
       input: example.input,
       script: example.script,

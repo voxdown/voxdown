@@ -145,6 +145,13 @@ describe("the book view", () => {
       '<a href="c.html?x=1&amp;y=2">Tom &quot;Cat&quot;</a>',
     );
     expect(html("Tom &amp; Jerry &ast;not em&ast;")).toBe("Tom &amp; Jerry *not em*");
+    // In an address, a title and a description, as the characters they stand for.
+    expect(html('[x](https://e.com/caf&eacute; "caf&eacute;")')).toBe(
+      '<a href="https://e.com/café" title="café">x</a>',
+    );
+    expect(html("![Tom &amp; Jerry \\*x\\*](caf&eacute;.png)")).toBe(
+      '<img src="café.png" alt="Tom &amp; Jerry *x*">',
+    );
   });
 
   it("makes the innermost of links inside links the link, as Markdown and the parser do", () => {

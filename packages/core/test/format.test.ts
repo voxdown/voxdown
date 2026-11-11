@@ -186,4 +186,15 @@ describe("the formatter (§13, rule 8)", () => {
       "@Abernethy 'When I started, there were forty lamps.",
     );
   });
+
+  it("curls quotes in each language's own marks, a region's before its language's", () => {
+    const curly = (language: string) =>
+      format(`@Ann "He said 'no' and left," she said.`, { quotes: "curly", language }).trimEnd();
+    expect(curly("it")).toBe("@Ann «He said “no” and left,» she said.");
+    expect(curly("de-CH")).toBe("@Ann «He said ‹no› and left,» she said.");
+    expect(curly("da")).toBe("@Ann »He said ›no‹ and left,« she said.");
+    expect(curly("pl")).toBe("@Ann „He said «no» and left,” she said.");
+    expect(curly("ja")).toBe("@Ann 「He said 『no』 and left,」 she said.");
+    expect(curly("sv")).toBe("@Ann “He said ‘no’ and left,” she said.");
+  });
 });

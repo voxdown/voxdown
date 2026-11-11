@@ -124,6 +124,14 @@ body.doc {
   color: var(--quiet);
   margin-bottom: 0.35rem;
 }
+/* An example new in a later version of the spec: a line across the top of it. */
+.example-since {
+  grid-column: 1 / -1;
+  padding: 0.35rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  font: 500 0.75rem / 1.4 var(--ui);
+  color: var(--quiet);
+}
 .doc .colophon {
   max-width: 64rem;
   margin: 0 auto;

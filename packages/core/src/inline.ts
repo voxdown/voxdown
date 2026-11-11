@@ -464,7 +464,7 @@ function lexImage(source: string, at: number, to: number): Atom | null {
   if (!link) return null;
   return {
     type: "image",
-    alt: label(source, at + 2, link.close, true),
+    alt: removeEscapes(label(source, at + 2, link.close, true)),
     src: destination(link.target).url,
     range: { from: at, to: link.end + 1 },
   };
@@ -744,7 +744,8 @@ function resolveQuotes(atoms: readonly Atom[], state: QuoteState, warn: Warn): T
     const afterLetter = isLetterOrDigit(lastChar(tokens[tokens.length - 1]));
     if (nothingAfter(atoms, index)) {
       tokens.push(plainText(atom));
-      if (!(afterLetter && (char === "'" || char === "‘"))) {
+      // Straight after a letter or digit, `'`, `‘` and `"` are no quote (§5.5): `12"` is inches.
+      if (!(afterLetter && (char === "'" || char === "‘" || char === '"'))) {
         warn(
           "stray-quote",
           "This quotation mark has nothing after it on its line, so it opens nothing.",

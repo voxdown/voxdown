@@ -1451,9 +1451,9 @@ She wrote \[sic\] and \{page\} on the board.
 Narrator: She wrote [sic] and {page} on the board.
 ```
 
-A character reference stands for its character, as in Markdown: `&amp;`, `&quot;`, `&#8217;`, `&#x2019;` and every name the HTML Standard gives one. It is heard and printed as that character, and a character written this way is never a mark: `&quot;` opens no quote. A name the HTML Standard doesn't know, or one without its `;`, is ordinary text.
+*New in 1.1 (draft).* A character reference stands for its character, as in Markdown: `&amp;`, `&quot;`, `&#8217;`, `&#x2019;` and every name the HTML Standard gives one. It is heard and printed as that character, and a character written this way is never a mark: `&quot;` opens no quote. A name the HTML Standard doesn't know, or one without its `;`, is ordinary text.
 
-```example
+```example 1.1
 Tom &amp; Jerry said &quot;hello&quot;.
 .
 Narrator: Tom & Jerry said "hello".

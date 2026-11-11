@@ -42,6 +42,15 @@ function dedent(text: string): string {
   return lines.map((line) => line.slice(cut)).join("\n");
 }
 
+/**
+ * The story's line breaks, kept as written (§4.1): CRLF when every line ends so. A story that mixes
+ * them is edited with the editor's own line breaks, `\n`, since it splits lines on one kind only.
+ */
+function lineEnding(text: string) {
+  const crlf = text.includes("\r\n") && !/(?:^|[^\r])\n|\r(?!\n)/.test(text);
+  return crlf ? EditorState.lineSeparator.of("\r\n") : [];
+}
+
 export class VoxdownEditorElement extends HTMLElement {
   static observedAttributes = ["show-marks", "readonly"];
 
@@ -50,10 +59,12 @@ export class VoxdownEditorElement extends HTMLElement {
   #characters: Character[] = [];
   #changed = false;
   readonly #editable = new Compartment();
+  readonly #lineEnding = new Compartment();
 
   /** The story as written. */
   get value(): string {
-    return this.#view ? this.#view.state.doc.toString() : (this.#value ?? this.#initial());
+    // `sliceDoc` writes the line breaks the story has; the document's own text has `\n`.
+    return this.#view ? this.#view.state.sliceDoc() : (this.#value ?? this.#initial());
   }
 
   set value(text: string) {
@@ -62,6 +73,7 @@ export class VoxdownEditorElement extends HTMLElement {
       return;
     }
     if (text === this.value) return;
+    this.#view.dispatch({ effects: this.#lineEnding.reconfigure(lineEnding(text)) });
     this.#view.dispatch({ changes: { from: 0, to: this.#view.state.doc.length, insert: text } });
   }
 
@@ -101,6 +113,7 @@ export class VoxdownEditorElement extends HTMLElement {
           smartQuotes: this.getAttribute("smart-quotes") !== "off",
         }),
         this.#editable.of(this.#readOnly()),
+        this.#lineEnding.of(lineEnding(text)),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             this.#characters = charactersOf(update.state.doc.toString());

@@ -46,6 +46,9 @@ const EXPECTED_WARNINGS: Record<string, string[]> = {
   "the-last-lamp.vxd": [],
 };
 
+/** A turn for the event loop, so a long test never keeps the worker from its runner. */
+const turn = () => new Promise((resolve) => setImmediate(resolve));
+
 /** The marks of each book that stay straight once straightened, and why (see below). */
 const STRAIGHT_STAYS: Record<string, string[]> = {
   // Abernethy's speech over three paragraphs, in single quotes: its second and third openings.
@@ -200,7 +203,7 @@ describe("real books", () => {
     });
   }
 
-  it("reads a long story in good time", () => {
+  it("reads a long story in good time", async () => {
     // About 100,000 words: every book over and over, as one file.
     const bodies = books
       .map(({ source }) => source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ""))
@@ -210,7 +213,9 @@ describe("real books", () => {
     const words = long.split(/\s+/).length;
     expect(words).toBeGreaterThan(100_000);
     expect(words).toBeLessThan(120_000);
-    const time = (work: () => unknown) => {
+    // Each step after the event loop has had a turn, so the test worker never goes quiet long.
+    const time = async (work: () => unknown) => {
+      await turn();
       const start = performance.now();
       work();
       return performance.now() - start;
@@ -218,22 +223,24 @@ describe("real books", () => {
     const story = parse(long);
     // About ten times what a laptop takes (parse 50 ms, format 300 ms, an edit 250 ms), for slow
     // machines: a step that turns quadratic still fails.
-    expect(time(() => parse(long))).toBeLessThan(750);
-    expect(time(() => lines(story))).toBeLessThan(500);
-    expect(time(() => tokens(story))).toBeLessThan(500);
-    expect(time(() => write(story))).toBeLessThan(750);
-    expect(time(() => format(long, { quotes: "curly" }))).toBeLessThan(4000);
+    expect(await time(() => parse(long))).toBeLessThan(750);
+    expect(await time(() => lines(story))).toBeLessThan(500);
+    expect(await time(() => tokens(story))).toBeLessThan(500);
+    expect(await time(() => write(story))).toBeLessThan(750);
+    expect(await time(() => format(long, { quotes: "curly" }))).toBeLessThan(4000);
     // Each edit about two readings of the whole story (on a laptop, 100 to 150 ms).
     const said = speeches(story);
     const middle = said[Math.floor(said.length / 2)] as (typeof said)[number];
-    expect(time(() => setSpeaker(story, middle, "Zed"))).toBeLessThan(1500);
-    expect(time(() => setDirection(story, middle, "brightly"))).toBeLessThan(1500);
-    expect(time(() => insertSound(story, middle.range.from + 2, "clatter"))).toBeLessThan(1500);
+    expect(await time(() => setSpeaker(story, middle, "Zed"))).toBeLessThan(1500);
+    expect(await time(() => setDirection(story, middle, "brightly"))).toBeLessThan(1500);
+    expect(await time(() => insertSound(story, middle.range.from + 2, "clatter"))).toBeLessThan(
+      1500,
+    );
     // A book detail touches only the front matter: it reads only that again.
-    expect(time(() => setMeta(story, "title", "A New Title"))).toBeLessThan(100);
+    expect(await time(() => setMeta(story, "title", "A New Title"))).toBeLessThan(100);
   }, 60_000);
 
-  it("parses, formats and edits in time that grows with the story, not with its square", () => {
+  it("parses, formats and edits in time that grows with the story, not with its square", async () => {
     // Twice the story takes about twice as long: a step that turns quadratic shows as about four
     // times, whatever the machine. Each time is the best of three.
     const bodies = books
@@ -248,11 +255,14 @@ describe("real books", () => {
           return performance.now() - start;
         }),
       );
-    const growth = (work: (text: string) => unknown, times: number) => {
+    const growth = async (work: (text: string) => unknown, times: number) => {
       const small = story(times);
       const large = story(times * 2);
       work(small);
-      return best(() => work(large)) / best(() => work(small));
+      await turn();
+      const slow = best(() => work(large));
+      await turn();
+      return slow / best(() => work(small));
     };
     const edit = (text: string) => {
       const parsed = parse(text);
@@ -261,18 +271,23 @@ describe("real books", () => {
     };
     // Parsing is quick, so it is measured larger (about 330,000 words and twice that), where a
     // search from every line to the end of the file once showed as three times, not two.
-    expect(
-      growth((text) => parse(text), 32),
-      "parse",
-    ).toBeLessThan(2.6);
-    expect(
-      growth((text) => format(text, { quotes: "curly" }), 8),
-      "format",
-    ).toBeLessThan(3);
-    expect(growth(edit, 8), "setSpeaker").toBeLessThan(3);
+    // Other work on a loaded machine (the whole suite at once) only ever makes a ratio look worse,
+    // so each may try up to three times: a step that is quadratic fails every one.
+    const settles = async (work: (text: string) => unknown, times: number, limit: number) => {
+      let ratio = Number.POSITIVE_INFINITY;
+      for (let attempt = 0; attempt < 3 && ratio >= limit; attempt++) {
+        ratio = Math.min(ratio, await growth(work, times));
+      }
+      return ratio;
+    };
+    expect(await settles((text) => parse(text), 32, 2.6), "parse").toBeLessThan(2.6);
+    expect(await settles((text) => format(text, { quotes: "curly" }), 8, 3), "format").toBeLessThan(
+      3,
+    );
+    expect(await settles(edit, 8, 3), "setSpeaker").toBeLessThan(3);
   }, 120_000);
 
-  it("formats a long manuscript with lines it must leave as they are, in good time", () => {
+  it("formats a long manuscript with lines it must leave as they are, in good time", async () => {
     // Straight quotes made curly, but some lines would give words to someone else as curly
     // marks: they stay as written, and finding them mustn't mean reading the book once each.
     const straight = books
@@ -292,11 +307,13 @@ describe("real books", () => {
     const once = format(manuscript, { quotes: "curly" });
     expect(performance.now() - start).toBeLessThan(15_000);
     expect(once.split("\n").filter((line) => line === bad).length).toBeGreaterThan(40);
+    await turn();
     start = performance.now();
     expect(format(once, { quotes: "curly" })).toBe(once);
     expect(performance.now() - start).toBeLessThan(10_000);
     // And short lines, every other one left as it is.
     const good = '@Ann "Hello," she said. "It\'s late."';
+    await turn();
     const lines = Array.from({ length: 4000 }, (_, at) => (at % 2 ? bad : good)).join("\n\n");
     start = performance.now();
     const alternate = format(lines, { quotes: "curly" });
@@ -333,10 +350,11 @@ describe("real books", () => {
     );
   }, 60_000);
 
-  it("makes the quotes of one very long line curly in time that grows with its length", () => {
+  it("makes the quotes of one very long line curly in time that grows with its length", async () => {
     // Each change once searched back to its line's start: 40,000 quotes on one line took about
     // ten seconds, and twice as many four times as long.
     for (const piece of ['"Hi," he said. ', "'Hi,' she said. "]) {
+      await turn();
       const line = piece.repeat(40_000);
       const start = performance.now();
       const curly = format(line, { quotes: "curly" });
@@ -345,7 +363,7 @@ describe("real books", () => {
     }
   }, 60_000);
 
-  it("reads lines built to be slow in good time", () => {
+  it("reads lines built to be slow in good time", async () => {
     // Each was quadratic once: an opening mark searched the rest of its line for its closing one.
     const worst = [
       "[",
@@ -365,6 +383,7 @@ describe("real books", () => {
       "\\",
     ].map((piece) => piece.repeat(Math.ceil(100_000 / piece.length)));
     for (const line of worst) {
+      await turn();
       const start = performance.now();
       format(line, { quotes: "curly" });
       expect(performance.now() - start, JSON.stringify(line.slice(0, 8))).toBeLessThan(2000);

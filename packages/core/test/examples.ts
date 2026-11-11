@@ -10,6 +10,8 @@ export type Example = {
   line: number;
   /** The section it is in, such as "5.6". */
   section: string;
+  /** The spec version it is new in, if later than 1.0: its fence says so (```` ```example 1.1 ````). */
+  since?: string;
   parts: number;
   input: string;
   script: string;
@@ -27,7 +29,8 @@ export function examples(markdown: string): Example[] {
   for (let i = 0; i < lines.length; i++) {
     const heading = /^#{2,3} (\d+(?:\.\d+)?)\.? /.exec(lines[i] ?? "");
     if (heading?.[1]) section = heading[1];
-    if (lines[i] !== "```example") continue;
+    const fence = /^```example(?: (\d+\.\d+))?$/.exec(lines[i] ?? "");
+    if (!fence) continue;
     const start = i + 1;
     let end = start;
     while (end < lines.length && lines[end] !== "```") end++;
@@ -40,6 +43,7 @@ export function examples(markdown: string): Example[] {
     found.push({
       line: start,
       section,
+      ...(fence[1] ? { since: fence[1] } : {}),
       parts: parts.length,
       input: input.join("\n"),
       script: script.join("\n"),

@@ -30,8 +30,10 @@ export function characterReference(
   if (!match) return null;
   const length = (match[0] as string).length;
   if (match[3] !== undefined) {
-    const char = names()[match[3]];
-    return char === undefined ? null : { char, length };
+    // Only the list's own names: `&constructor;` is no reference, whatever objects inherit.
+    const table = names();
+    const char = Object.hasOwn(table, match[3]) ? table[match[3]] : undefined;
+    return typeof char === "string" ? { char, length } : null;
   }
   const point = Number.parseInt((match[1] ?? match[2]) as string, match[1] !== undefined ? 16 : 10);
   const valid = point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff);

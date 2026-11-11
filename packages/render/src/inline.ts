@@ -31,8 +31,11 @@ export function safeUrl(url: string, image = false): string {
   return "#";
 }
 
-/** A character of text, escaped (`literal`) or not; `edge` marks where one piece of text ends. */
-type Piece = { text: string; literal: boolean; edge?: boolean };
+/**
+ * A character of text, escaped (`literal`) or not; `edge` marks where one piece of text ends, and
+ * `written` how a character reference was written (`&eacute;`).
+ */
+type Piece = { text: string; literal: boolean; edge?: boolean; written?: string };
 
 /**
  * A link's address and title, as Markdown reads them: `<address>` or the address up to a space,
@@ -76,7 +79,11 @@ function pieces(source: string): Piece[] {
       i++;
     } else if (reference) {
       // A character reference is its character, and never Markdown: `&ast;` is no emphasis.
-      out.push({ text: reference.char, literal: true });
+      out.push({
+        text: reference.char,
+        literal: true,
+        written: source.slice(i, i + reference.length),
+      });
       i += reference.length - 1;
     } else {
       out.push({ text: char, literal: false });
@@ -280,8 +287,11 @@ const PUNCTUATION = /[\p{P}\p{S}]/u;
 /** A run of emphasis signs, and whether it can open or close emphasis, as Markdown decides. */
 function runAt(chars: readonly Piece[], from: number, to: number): Run {
   const char = chars[from]?.text as "*" | "_";
-  const before = chars[from - 1]?.text ?? " ";
-  const after = chars[to]?.text ?? " ";
+  // The characters around the run as written: a character reference is its `&…;` here.
+  const previous = chars[from - 1];
+  const next = chars[to];
+  const before = previous?.written?.slice(-1) ?? previous?.text ?? " ";
+  const after = next?.written?.[0] ?? next?.text ?? " ";
   const left =
     !SPACE.test(after) &&
     (!PUNCTUATION.test(after) || SPACE.test(before) || PUNCTUATION.test(before));
@@ -391,11 +401,12 @@ function renderPieces(chars: Piece[]): string[] {
           const end = closers.links[close + 1] ?? -1;
           if (end > 0 && edges[end + 1] === edges[i]) {
             const label = chars.slice(open + 1, close);
-            // Escaped characters are written as escapes again, for `destination` to read.
+            // Escaped characters are written as escapes again, and character references as they
+            // were written, for `destination` to read.
             const target = destination(
               chars
                 .slice(close + 2, end)
-                .map((c) => (c.literal && !c.edge ? `\\${c.text}` : c.text))
+                .map((c) => c.written ?? (c.literal && !c.edge ? `\\${c.text}` : c.text))
                 .join(""),
             );
             const url = safeUrl(target.url, bang);

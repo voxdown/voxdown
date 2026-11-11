@@ -1088,3 +1088,47 @@ describe("review, round seven", () => {
     expect(insertSound(parse("Hello there."), 5, "thunder")).toHaveLength(1);
   });
 });
+
+describe("review, round eight", () => {
+  it("renames the narrator however the front matter writes the name", () => {
+    for (const written of [
+      "narrator: >-\n  Watson",
+      'narrator: "Wat\\u0073on"',
+      "narrator: Watson",
+    ]) {
+      const source = `---\n${written}\ncast:\n  Watson: Dr Watson\n---\nI arrived. @Watson “Hello.”`;
+      const text = applyChanges(source, renameCharacter(parse(source), "Watson", "John"));
+      expect(text, written).toContain("narrator: John\ncast:\n  John: Dr Watson");
+      expect(spokenScript(parse(text))).toBe("John: I arrived.\nJohn: Hello.");
+    }
+  });
+
+  it("throws for a book detail it can't set, rather than leave it out", () => {
+    const story = parse("---\ntitle:\n  - a list\n---\nHello.");
+    story.meta.title = "A Title";
+    expect(() => write(story)).toThrow(RangeError);
+  });
+
+  it("writes a sound, note or direction with `&` as given, not as a character reference", () => {
+    const sound = (description: string) => {
+      const text = applyChanges(
+        "The door shut.",
+        insertSound(parse("The door shut."), 14, description),
+      );
+      return { text, read: spokenScript(parse(text)) };
+    };
+    expect(sound("bells &amp; whistles")).toEqual({
+      text: "The door shut. [bells \\&amp; whistles]",
+      read: "Narrator: The door shut.\n[bells &amp; whistles]",
+    });
+    expect(sound("rock & roll").text).toBe("The door shut. [rock & roll]");
+    const story = parse("Hi [bang] there %% note %%");
+    for (const item of story.blocks
+      .flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+      .flatMap((line) => line.items)) {
+      if (item.kind === "sound") item.description = "x &amp; y";
+      if (item.kind === "note") item.text = "a &lt; b";
+    }
+    expect(write(story)).toBe("Hi [x \\&amp; y] there %% a \\&lt; b %%");
+  });
+});

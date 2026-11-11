@@ -1,5 +1,6 @@
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import { curlQuotes } from "voxdown";
 
 /**
  * Typographer's quotes as you type: `"` opens with “ after a space, a line's start or an opening
@@ -9,25 +10,26 @@ import { EditorView, keymap } from "@codemirror/view";
 const OPENS_AFTER = /[\s([{—–\-]$/u;
 
 /**
- * Pasted words get the quotes and apostrophes typing would give them (it's → it’s, "Hi" → “Hi”),
- * but a mark after a digit, a measurement (6'2"), is left as pasted, as the formatter leaves it.
+ * Pasted words get the quotes and apostrophes the formatter would give them (it's → it’s,
+ * "Hi" → “Hi”), checked against the parser as the formatter checks them: where curly marks would
+ * make anyone say anything differently, they stay straight. Front matter, link addresses and
+ * titles, marks, sounds, notes and instructions keep their marks, and so does a measurement
+ * (6'2"). Only what was pasted changes.
  */
 const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged || !tr.isUserEvent("input.paste")) return tr;
-  let found = false;
+  const after = tr.newDoc.toString();
+  const curled = curlQuotes(after);
+  // Each mark is one character either way, so the pasted ranges stand where they did.
+  if (curled === after || curled.length !== after.length) return tr;
   const specs: Array<{ from: number; to: number; insert: string }> = [];
-  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    const text = inserted.toString();
-    // A sound's label keeps its marks as written: `[Knight's armor]` is the
-    // same sound, its audio kept.
-    const line = tr.startState.doc.lineAt(fromA);
-    const startsInside = inLabel(line.text.slice(0, fromA - line.from));
-    const curly = outsideLabels(text, startsInside, curlQuotes);
-    if (curly !== text) found = true;
-    specs.push({ from: fromA, to: toA, insert: curly });
+  let found = false;
+  tr.changes.iterChanges((fromA, toA, fromB, toB) => {
+    const insert = curled.slice(fromB, toB);
+    if (insert !== after.slice(fromB, toB)) found = true;
+    specs.push({ from: fromA, to: toA, insert });
   });
   if (!found) return tr;
-  // Same length, so the selection and everything after stay where they were.
   return {
     changes: specs,
     selection: tr.selection,
@@ -35,25 +37,6 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
     userEvent: "input.paste",
   };
 });
-
-/** Straight quotes and apostrophes in pasted words, as typing would give them. */
-function curlQuotes(text: string): string {
-  // Straight double quotes too: one opening where a quote opens (a line's start,
-  // after a space, a bracket or a dash), else closing; pairs on the same line only.
-  return (
-    text
-      .replace(/(?<=\p{L})'(?=\p{L})/gu, "’")
-      .replace(/(^|[\s([{—–-])"/gmu, "$1“")
-      .replace(/(?<!\d)"/gu, "”")
-      // A word cut short at its start ('Twas, 'n', 'em) keeps an apostrophe.
-      .replace(
-        /(^|[\s([{—–-])'(?=(?:twas|tis|em|n|cause|til|round|bout|ere)(?![\p{L}])|\d)/gimu,
-        "$1’",
-      )
-      .replace(/(^|[\s([{—–-])'/gmu, "$1‘")
-      .replace(/(?<!\d)'/gu, "’")
-  );
-}
 
 /** Whether a line's text up to here leaves a sound's `[` open. */
 function inLabel(head: string): boolean {
@@ -65,35 +48,6 @@ function inLabel(head: string): boolean {
     else if (c === "]") inside = false;
   }
   return inside;
-}
-
-/** `change` applied to the text outside sounds' labels (`[…]`, on one line) only. */
-function outsideLabels(text: string, startsInside: boolean, change: (part: string) => string) {
-  let out = "";
-  let part = "";
-  let inside = startsInside;
-  const flush = () => {
-    out += inside ? part : change(part);
-    part = "";
-  };
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i] as string;
-    if (c === "\\") {
-      part += c + (text[i + 1] ?? "");
-      i++;
-    } else if (!inside && c === "[") {
-      flush();
-      inside = true;
-      part = c;
-    } else if (inside && (c === "]" || c === "\n")) {
-      part += c;
-      out += part;
-      part = "";
-      inside = false;
-    } else part += c;
-  }
-  flush();
-  return out;
 }
 
 export function smartQuotes(): Extension {
@@ -144,7 +98,11 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
   const afterMark =
     text === '"' &&
     /(^|[^\p{L}\p{N}\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?\s*(\([^()]*\))?\s*$/u.test(head);
-  const opening = from === 0 || before === "" || OPENS_AFTER.test(before) || nested || afterMark;
+  // A `"` after a dash closes a quote the line has open (`“Wait—”`) rather than open another.
+  const open = (head.match(/“/gu)?.length ?? 0) > (head.match(/”/gu)?.length ?? 0);
+  const closes = text === '"' && open && !nested && !afterMark;
+  const opening =
+    !closes && (from === 0 || before === "" || OPENS_AFTER.test(before) || nested || afterMark);
   const insert = text === '"' ? (opening ? "“" : "”") : opening ? "‘" : "’";
   view.dispatch({
     changes: { from, to, insert },

@@ -65,7 +65,7 @@ Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) tha
 
 ## Formatting
 
-**`format(source, options?)`** tidies a file and never changes who says what (§13, rule 8): it trims and collapses spaces, makes runs of blank lines one, puts a blank line after the front matter and around headings and scene breaks, ends with one line break, and writes names as the cast spells them. Options: `names` and `spacing` (both on unless `false`), and `quotes: "curly"` with an optional `language` (`en`, `de`, `fr`; the front matter’s by default) to turn straight quotes into the language’s curly ones. A formatted file comes back unchanged.
+**`format(source, options?)`** tidies a file and never changes who says what (§13, rule 8): it trims and collapses spaces, makes runs of blank lines one, puts a blank line after the front matter and around headings and scene breaks, ends with one line break, and writes names as the cast spells them. Options: `names` and `spacing` (both on unless `false`), and `quotes: "curly"` with an optional `language` (the front matter’s by default) to turn straight quotes into the language’s curly ones: `en`, `de`, `fr`, `it`, `es`, `pt`, `ca`, `ru`, `uk`, `da`, `pl`, `ja`, `zh`, and Swiss `de-CH` and `fr-CH`, English marks for any other. A formatted file comes back unchanged. **`curlQuotes(source, { language? })`** makes just the quotes curly, as `format` does, and changes nothing else, for an editor that curls what is pasted.
 
 ## Importing
 

@@ -1,5 +1,9 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
+import { lines, parse } from "voxdown";
 import { scriptEditor } from "../src";
 import { smartQuotes } from "../src/quotes";
 
@@ -33,6 +37,38 @@ describe("pasted text", () => {
     }).state;
     expect(height.doc.toString()).toBe(`He is 6'2" tall, “really”.`);
   });
+
+  const paste = (text: string) =>
+    EditorState.create({ doc: "", extensions: smartQuotes() })
+      .update({ changes: { from: 0, insert: text }, userEvent: "input.paste" })
+      .state.doc.toString();
+
+  it("curls quotes only where the parser hears the line the same, and never touches front matter, addresses or instructions", () => {
+    // A `"` after a dash closes the quote the line has open.
+    expect(paste(`@Ann "Wait—" she said. "Now."`)).toBe("@Ann “Wait—” she said. “Now.”");
+    expect(paste(`---\ntitle: "It's mine"\n---\nHi.`)).toBe(`---\ntitle: "It's mine"\n---\nHi.`);
+    expect(paste(`See [the map](https://example.com/it's "The 'map'") now.`)).toBe(
+      `See [the map](https://example.com/it's "The 'map'") now.`,
+    );
+    expect(paste(`Take {recorder:take "3"} and go.`)).toBe(`Take {recorder:take "3"} and go.`);
+  });
+
+  it("keeps who says what in every book pasted, as written and with its quotes made straight", () => {
+    const corpus = resolve(dirname(fileURLToPath(import.meta.url)), "../../../corpus");
+    const voices = (text: string) =>
+      lines(parse(text)).map((row) => [row.kind, row.speaker, row.direction]);
+    for (const name of readdirSync(corpus).filter((file) => file.endsWith(".vxd"))) {
+      const book = readFileSync(join(corpus, name), "utf8");
+      const straight = book.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+      for (const text of [book, straight]) {
+        const pasted = paste(text);
+        expect(voices(pasted), name).toEqual(voices(text));
+        // Pasted into a document, line breaks are the document's own.
+        const front = (of: string) => parse(of).frontMatter?.raw.replace(/\r\n/g, "\n");
+        expect(front(pasted), name).toBe(front(text));
+      }
+    }
+  }, 60_000);
 
   it("leaves one space where words were cut from between others", () => {
     const state = EditorState.create({

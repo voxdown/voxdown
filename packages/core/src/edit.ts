@@ -1,4 +1,4 @@
-import { hasLetterOrDigit } from "./chars";
+import { escapeReferences, hasLetterOrDigit } from "./chars";
 import { baseSpeaker } from "./groups";
 import { scanName } from "./inline";
 import { lexedTokens } from "./lexed";
@@ -68,13 +68,15 @@ function spelled(story: Story, name: string): string {
 }
 
 /** Parentheses inside a direction must balance (§6.1); unbalanced ones are escaped. */
-function directionText(direction: string): string {
+function directionText(given: string): string {
+  // One line, its backslashes and note marks escaped, so it reads back as given.
+  const direction = given.replace(/\s+/g, " ").replace(/([\\%])/g, "\\$1");
   let depth = 0;
   for (const char of direction) {
     if (char === "(") depth++;
     else if (char === ")" && --depth < 0) break;
   }
-  return depth === 0 ? direction : direction.replace(/([()])/g, "\\$1");
+  return escapeReferences(depth === 0 ? direction : direction.replace(/([()])/g, "\\$1"));
 }
 
 type Place = { block: Block; line: Line; groups: readonly Group[] };
@@ -622,7 +624,7 @@ function setDirectionNow(story: Story, speech: Speech, direction: string | null)
   // To its closing mark, or to the next `@(…)` inside it.
   const { stretches, items: quote } = quoteOf(story, speech, false);
   const changes = directionChanges(story, stretches[0] as Speech, direction);
-  const value = direction?.trim() || null;
+  const value = direction?.replace(/\s+/g, " ").trim() || null;
   return settled(story, quote, changes, {
     inside: (was, now) =>
       sameName(now.speaker, was.speaker) && (value === null || now.direction === value),
@@ -1108,7 +1110,7 @@ function editAt(
 
 /** The changes for a new direction, before the stretches after it are kept as they were. */
 function directionChanges(story: Story, speech: Speech, direction: string | null): TextChange[] {
-  const value = direction?.trim() || null;
+  const value = direction?.replace(/\s+/g, " ").trim() || null;
   if (value === speech.ownDirection) return [];
   const { line, groups } = place(story, speech);
   const own = ownDirectionMark(story, speech);
@@ -1212,13 +1214,15 @@ export function renameCharacter(story: Story, from: string, to: string): TextCha
 function renameCharacterNow(story: Story, from: string, to: string): TextChange[] {
   checkName(to);
   const key = nameKey(from);
-  if (key === nameKey(to)) return [];
+  if (from === to) return [];
+  // The same name in other capitals is this character, spelt anew (`Mcgregor` to `McGregor`):
+  // only someone else of that name is in the way.
   const known = [
     story.meta.narrator,
     ...story.cast.map((member) => member.handle),
     ...heard(story).map((char) => char.speaker),
   ];
-  if (known.some((name) => nameKey(name) === nameKey(to))) {
+  if (key !== nameKey(to) && known.some((name) => nameKey(name) === nameKey(to))) {
     throw new RangeError(`There is already a character called “${to}”.`);
   }
   const changes: TextChange[] = [];
@@ -1246,9 +1250,10 @@ function renameCharacterNow(story: Story, from: string, to: string): TextChange[
     }
     if (entry.path.length === 1 && entry.path[0] === "narrator") {
       narratorKey = true;
-      const value = writtenValue(entry);
-      if (nameKey(story.source.slice(value.from, value.to).replace(/^["']|["']$/g, "")) === key)
-        changes.push({ ...value, insert: yamlScalar(to) });
+      // The value as YAML reads it (quoted, escaped or a block scalar), written over whole.
+      const setting = story.frontMatter?.data.narrator;
+      if (typeof setting === "string" && nameKey(setting.trim()) === key)
+        changes.push({ ...replaceValue(entry), insert: ` ${yamlScalar(to)}` });
     }
   }
   // The narrator renamed: narration follows only if the front matter names them.
@@ -1452,17 +1457,21 @@ function insertSoundNow(story: Story, offset: number, description: string): Text
       }
     }
   }
-  const insert = ` [${description.trim().replace(/([[\]\\])/g, "\\$1")}]`;
+  const insert = ` [${escapeReferences(description.trim().replace(/([[\]\\])/g, "\\$1"))}]`;
   const changes = [{ from: at, to: at, insert }];
   const after = parsed(applyChanges(source, changes));
-  // The new sound, in a block that is read aloud: in `{book only}` or `{hidden}` text it would be
-  // written and never heard.
+  // The new sound, as asked, in a block that is read aloud: in `{book only}` or `{hidden}` text
+  // it would be written and never heard.
+  const asked = description.trim().replace(/\s+/g, " ");
   const added = after.blocks.some(
     (block) =>
       block.kind !== "break" &&
       (block.visibility === "both" || block.visibility === "audio") &&
       (block.kind === "heading" ? [block.line] : block.lines).some((line) =>
-        line.items.some((item) => item.kind === "sound" && item.range.from === at + 1),
+        line.items.some(
+          (item) =>
+            item.kind === "sound" && item.range.from === at + 1 && item.description === asked,
+        ),
       ),
   );
   return added && sameHearing(story, after) && bookOf(after) === bookOf(story) ? changes : [];
@@ -1570,10 +1579,10 @@ function writtenValue(entry: YamlEntry): Range {
 }
 
 /**
- * From just after `key:` to the end of its value, continuation lines and block scalars included.
- * A value on one line ends before a comment after it, so the comment stays.
+ * From just after `key:` to the end of its value, continuation lines and block scalars included
+ * (just after the colon, if it has none). A value on one line ends before a comment after it, so
+ * the comment stays.
  */
-/** Where a key's value is written: just after the colon if it has none. */
 function replaceValue(entry: YamlEntry): Range {
   const at = entry.value ?? { from: entry.range.to + 1, to: entry.range.to + 1 };
   return { from: at.from, to: at.to };

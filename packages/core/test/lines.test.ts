@@ -114,6 +114,21 @@ describe("what review found", () => {
   });
 });
 
+describe("a speech over paragraphs (§5.7)", () => {
+  it("passes over a paragraph of notes, page turns or pauses alone, and goes on after it", () => {
+    for (const between of ["%% A note %%", "{page}", "{pause 2s}"]) {
+      const story = parse(`@Ann “One.\n\n${between}\n\n“Two.”`);
+      expect(spokenScript(story), between).toMatch(/Ann: Two\.$/);
+      expect(
+        story.warnings.map((warning) => warning.code),
+        between,
+      ).not.toContain("unclosed-quote");
+    }
+    // A paragraph with words in it ends the speech.
+    expect(spokenScript(parse("@Ann “One.\n\nRain.\n\n“Two.”"))).toMatch(/Narrator: “Two\.”$/);
+  });
+});
+
 describe("the spec's other quotation marks (§5.5) and scripts written without spaces (§5.2)", () => {
   it("closes Swedish »…» and Danish »…«, and German ‚…‘ or ‚…’", () => {
     expect(spokenScript(parse("@Anna »Hej,» sa Anna."))).toBe("Anna: Hej,\nNarrator: sa Anna.");
@@ -124,6 +139,15 @@ describe("the spec's other quotation marks (§5.5) and scripts written without s
       expect(spokenScript(parse(`@Anna ‚nein${close}, sagte sie.`))).toBe(
         "Anna: nein\nNarrator: , sagte sie.",
       );
+    }
+  });
+
+  it('warns of no stray quote in a measurement: a `"` after a digit is no quote', () => {
+    for (const text of ['A 2" by 4" board.', 'She measured 12"']) {
+      expect(
+        parse(text).warnings.map((warning) => warning.code),
+        text,
+      ).not.toContain("stray-quote");
     }
   });
 
@@ -239,7 +263,13 @@ describe("links, as Markdown reads them (§8.3)", () => {
     expect(spokenScript(parse("@Tom “It&#8217;s mine &#x26; yours.”"))).toBe(
       "Tom: It’s mine & yours.",
     );
-    // An escaped `&`, an unknown name and a missing `;` are text as written.
+    // An escaped `&`, an unknown name and a missing `;` are text as written; so is a name only
+    // a JavaScript object has, never one of the HTML Standard's.
+    for (const name of ["constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"]) {
+      expect(spokenScript(parse(`He met &${name}; today.`))).toBe(
+        `Narrator: He met &${name}; today.`,
+      );
+    }
     expect(spokenScript(parse("A \\&amp; B, &nosuch; and &amp"))).toBe(
       "Narrator: A &amp; B, &nosuch; and &amp",
     );

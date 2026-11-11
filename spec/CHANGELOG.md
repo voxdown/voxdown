@@ -4,7 +4,7 @@ The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
 ## Unreleased
 
-- **Character references** (§11): `&amp;`, `&quot;`, `&#8217;` and the HTML Standard's other names stand for their characters, as in Markdown, heard and printed as them. This gives meaning to text a 1.0 file would rarely hold, so by §16 it belongs to the next minor version, 1.1.
+- **Character references** (§11): `&amp;`, `&quot;`, `&#8217;` and the HTML Standard's other names stand for their characters, as in Markdown, heard and printed as them. This gives meaning to text a 1.0 file would rarely hold, so by §16 it belongs to the next minor version, 1.1: SPEC.md marks the paragraph "new in 1.1 (draft)", and `conformance.json` gives its example `"since": "1.1"`, for 1.0 readers to skip.
 
 Clarifications: no file reads differently.
 

@@ -1,3 +1,10 @@
+/**
+ * The lossless writer (§13). A story is written back from its source, so an unchanged story gives
+ * back the same bytes. Fields changed in place on the model are written as the edits in `edit.ts`
+ * make them, one after another, each on the text the ones before it made: only the marks that
+ * changed are rewritten, and nothing else moves.
+ */
+import { escapeReferences } from "./chars";
 import {
   type TextChange,
   applyChanges,
@@ -14,12 +21,6 @@ import {
 } from "./edit";
 import type { Block, Item, Line, Speech, Story, Vocal } from "./model";
 import { nameKey } from "./names";
-/**
- * The lossless writer (§13). A story is written back from its source, so an unchanged story gives
- * back the same bytes. Fields changed in place on the model are written as the edits in `edit.ts`
- * make them, one after another, each on the text the ones before it made: only the marks that
- * changed are rewritten, and nothing else moves.
- */
 import { session } from "./session";
 
 /**
@@ -66,19 +67,35 @@ function writeNow(story: Story): string {
     text = next;
   };
 
+  // Each detail and cast change reads back as asked, or is an error: never quietly left out.
   for (const field of ["title", "subtitle", "author", "language"] as const) {
     if (story.meta[field] !== original.meta[field]) {
-      edit((current) => setMeta(current, field, story.meta[field] ?? null));
+      const asked = story.meta[field]?.trim() || undefined;
+      edit(
+        (current) => setMeta(current, field, story.meta[field] ?? null),
+        (now) => now.meta[field] === asked,
+        `meta.${field} set to “${story.meta[field] ?? ""}”`,
+      );
     }
   }
   story.cast.forEach((member, index) => {
     const before = original.cast[index];
     if (!before) return;
     if (member.name !== before.name) {
-      edit((current) => setFullName(current, before.handle, member.name));
+      edit(
+        (current) => setFullName(current, before.handle, member.name),
+        (now) =>
+          now.cast.find((other) => nameKey(other.handle) === nameKey(before.handle))?.name ===
+          member.name.trim(),
+        `${before.handle}'s full name set to “${member.name}”`,
+      );
     }
     if (member.handle !== before.handle) {
-      edit((current) => renameCharacter(current, before.handle, member.handle));
+      edit(
+        (current) => renameCharacter(current, before.handle, member.handle),
+        (now) => now.cast[index]?.handle === member.handle,
+        `${before.handle} renamed ${member.handle}`,
+      );
     }
   });
 
@@ -126,7 +143,7 @@ function writeNow(story: Story): string {
         );
       }
       if (after.ownDirection !== before.ownDirection) {
-        const direction = after.ownDirection?.trim() || null;
+        const direction = after.ownDirection?.replace(/\s+/g, " ").trim() || null;
         edit(
           (current) => setDirection(current, find(current, original, before), direction),
           (_, current, changes) =>
@@ -335,10 +352,17 @@ function contentChanges(current: Story, item: Item, after: Item): TextChange[] {
     return [{ from: open + 1, to: item.range.to - 1, insert: escapeBrackets(after.description) }];
   }
   if (item.kind === "note" && after.kind === "note") {
-    return [{ from: item.range.from + 2, to: item.range.to - 2, insert: ` ${after.text} ` }];
+    return [
+      {
+        from: item.range.from + 2,
+        to: item.range.to - 2,
+        insert: ` ${escapeReferences(after.text)} `,
+      },
+    ];
   }
   if (item.kind === "instruction" && after.kind === "instruction") {
-    const value = after.value?.replace(/([{}\\])/g, "\\$1");
+    const value =
+      after.value === null ? undefined : escapeReferences(after.value.replace(/([{}\\])/g, "\\$1"));
     const raw = value === undefined ? `{${item.name}}` : `{${item.name} ${value}}`;
     return [{ ...item.range, insert: raw }];
   }
@@ -421,7 +445,7 @@ function checkWritable(story: Story, original: Story): void {
 }
 
 function escapeBrackets(text: string): string {
-  return text.replace(/([[\]\\])/g, "\\$1");
+  return escapeReferences(text.replace(/([[\]\\])/g, "\\$1"));
 }
 
 const spaced = (text: string) => text.replace(/\s+/g, " ").trim();

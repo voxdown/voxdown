@@ -4495,6 +4495,7 @@
   {
     "example": 118,
     "section": "11",
+    "since": "1.1",
     "line": 1456,
     "input": "Tom &amp; Jerry said &quot;hello&quot;.",
     "script": "Narrator: Tom & Jerry said \"hello\".",

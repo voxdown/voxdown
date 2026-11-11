@@ -49,11 +49,16 @@ export function menus(
   const show = (button: HTMLButtonElement, first: "first" | "last" | null) => {
     if (open !== button) close();
     const list = listOf(button);
+    // Where it opens, so that it scrolls within the window rather than running past it.
+    list.style.setProperty(
+      "--menu-top",
+      `${Math.round(button.getBoundingClientRect().bottom + 6)}px`,
+    );
     list.hidden = false;
     button.setAttribute("aria-expanded", "true");
     open = button;
     const all = items(list);
-    if (first) (first === "first" ? all[0] : all.at(-1))?.focus();
+    if (first) (first === "first" ? all[0] : all.at(-1))?.focus({ preventScroll: false });
   };
 
   for (const button of buttons) {

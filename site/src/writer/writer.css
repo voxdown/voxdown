@@ -148,6 +148,10 @@ body.writer {
   top: calc(100% + 0.3rem);
   left: 0;
   min-width: 16rem;
+  /* Never past the window's foot: a long menu scrolls within it. */
+  max-height: calc(100dvh - var(--menu-top, 3.5rem) - 0.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.3rem;
   background: var(--paper);
   border: 1px solid var(--desk-edge);
@@ -432,6 +436,7 @@ body.writer {
   font: 600 clamp(1.6rem, 3vw, 2.3rem) / 1.15 var(--story);
   margin: 0;
   max-width: 34rem;
+  text-wrap: balance;
 }
 .welcome p {
   max-width: 36rem;
@@ -1706,4 +1711,62 @@ body[data-welcome] #draft-state {
 .page-settings input[type="range"] {
   width: 100%;
   accent-color: var(--brand);
+}
+
+/* Placeholders read as such: the muted colour, never the ink of what is written. */
+.cast-name::placeholder,
+.cast-about::placeholder,
+.details-fields input::placeholder,
+#outline-filter::placeholder,
+#ask-input::placeholder {
+  color: var(--quiet);
+  opacity: 1;
+}
+/* The side's notes in the theme's note colour, dark enough under the place's tint. */
+.side-sheet .vxd {
+  --vxd-note: var(--mark-note);
+}
+/* The welcome has no page: no shadow over the status line. */
+body[data-welcome] .manuscript .editor {
+  box-shadow: none;
+}
+
+/* Windows High Contrast and other forced colours: who says what, and every mark, still show,
+   drawn in the system's own colours. */
+@media (forced-colors: active) {
+  .manuscript .vxd-speech {
+    background: none;
+    text-decoration: underline 2px;
+    text-decoration-color: Highlight;
+    text-underline-offset: 3px;
+  }
+  .manuscript .vxd-directed {
+    background: none;
+    text-decoration: underline dashed 1px;
+    text-decoration-color: LinkText;
+  }
+  .manuscript .vxd-chip,
+  .side-sheet .vxd .vxd-chip,
+  .speaker-choice .dot,
+  .scene-rail-node {
+    border: 1px solid ButtonText;
+    forced-color-adjust: none;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .scene-rail-window {
+    outline: 2px solid Highlight;
+    background: none;
+  }
+  .side-sheet .linked,
+  .menu-list [role^="menuitem"]:focus-visible,
+  .speaker-choice:focus-visible {
+    outline: 2px solid Highlight;
+  }
+  .stretch-tools,
+  .popover,
+  .notice,
+  .warning-tip {
+    border: 1px solid CanvasText;
+  }
 }

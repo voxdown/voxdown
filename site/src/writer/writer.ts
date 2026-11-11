@@ -65,7 +65,7 @@ import "./writer.css";
 import "../theme";
 import { castPanel } from "./cast";
 import { changesOnly, diffLines, withWords } from "./diff";
-import { emphasis, toggleEmphasis } from "./emphasis";
+import { emphasis, plainText, toggleEmphasis } from "./emphasis";
 import {
   type Opened,
   allowed,
@@ -76,10 +76,11 @@ import {
   onDisk,
   pickFile,
   pickSaveTarget,
-  readText,
+  readFile,
   reopen,
   writeFile,
 } from "./files";
+import { Hearing, toHear } from "./hear";
 import { DraftLock } from "./lock";
 import { keys, menus } from "./menu";
 import { rankScenes } from "./outline";
@@ -115,7 +116,14 @@ import {
   passageNear,
   speechOfMark,
 } from "./stretch";
-import { fileNameFor, glimpse, listening, wordCount, words as wordsSaid } from "./words";
+import {
+  fileNameFor,
+  glimpse,
+  listening,
+  proseWords,
+  wordCount,
+  words as wordsSaid,
+} from "./words";
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector(selector) as T;
@@ -384,7 +392,11 @@ function editorState(source: string, cursor: number): EditorState {
             },
           },
           { key: "F8", run: () => nextProblem(1), shift: () => nextProblem(-1) },
+          { key: "F9", run: () => hearFromHere() },
           { key: "Mod-.", run: fixHere },
+          // Redo on Ctrl+Shift+Z everywhere, as the menu says (Windows has Ctrl+Y too).
+          { key: "Mod-Shift-z", run: redo, preventDefault: true },
+          { key: "Mod-y", run: redo, preventDefault: true },
           { key: "Mod-i", run: (v) => italics(v) },
           { key: "Mod-b", run: (v) => bold(v) },
           { key: "Alt-Shift-ArrowUp", run: () => moveSectionHere(false, -1) },
@@ -1076,6 +1088,43 @@ function nextQuote(): boolean {
   return true;
 }
 
+/**
+ * F9: the story read aloud by the browser from the cursor to the end of its scene, each speaker
+ * in a voice of their own, the cursor going with it; F9 or Escape again stops it.
+ */
+const hearing = new Hearing();
+function hearFromHere(): boolean {
+  if (hearing.on) {
+    hearing.stop();
+    notice("Stopped reading aloud.");
+    return true;
+  }
+  if (!("speechSynthesis" in window)) {
+    notice("This browser can’t read aloud.");
+    return true;
+  }
+  if (storyVersion !== version) refresh();
+  const story = current();
+  const rows = toHear(lines(story), view.state.doc.lineAt(view.state.selection.main.head).number);
+  if (rows.length === 0) {
+    notice("Nothing to hear from here to the end of the scene.");
+    return true;
+  }
+  notice(`Reading aloud to the end of the scene. ${keys("F9")} or Escape stops it.`);
+  void hearing.read(rows, story.meta.language ?? navigator.language, story.meta.narrator, (row) => {
+    const line = view.state.doc.line(Math.min(row.line, view.state.doc.lines));
+    const at = Math.min(line.from + row.column - 1, line.to);
+    view.dispatch({
+      selection: EditorSelection.cursor(at),
+      effects: EditorView.scrollIntoView(at, { y: "nearest" }),
+    });
+  });
+  return true;
+}
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && hearing.on) hearing.stop();
+});
+
 /** Ctrl+.: the fix for the warning at the cursor. */
 function fixHere(): boolean {
   if (lockedOut) return true;
@@ -1552,7 +1601,35 @@ async function openStory(opened: Opened): Promise<void> {
   }
   await load(opened, kept ? { id: kept.id } : {});
   if (!opened.imported) void snapshot("Opened", opened.text);
+  else if (opened.encoding)
+    // Its letters read as what they were, never written back over the original by themselves.
+    notice(
+      `That file wasn't UTF-8, so it was read as ${ENCODINGS[opened.encoding] ?? opened.encoding} and opened as a new story: Save writes it as UTF-8 to a file of its own, leaving the original as it was.`,
+    );
 }
+
+/** A name beside the one given, for a copy: `Story (2).vxd`, or the next number. */
+function anotherName(name: string): string {
+  const [, stem = name, number, extension = ""] =
+    /^(.*?)(?: \((\d+)\))?(\.[^.]+)?$/.exec(name) ?? [];
+  return `${stem} (${number ? Number(number) + 1 : 2})${extension}`;
+}
+
+/** Whether two handles are the same file, where the browser can tell. */
+async function sameEntry(a: FileSystemFileHandle, b: FileSystemFileHandle): Promise<boolean> {
+  try {
+    return await a.isSameEntry(b);
+  } catch {
+    return false;
+  }
+}
+
+/** Encodings by the names a writer knows them. */
+const ENCODINGS: Record<string, string> = {
+  "windows-1252": "Western (Windows-1252)",
+  "utf-16le": "UTF-16",
+  "utf-16be": "UTF-16",
+};
 
 /** Saves to the story's file, or asks where. True once it is saved. */
 /**
@@ -1577,7 +1654,7 @@ async function save(): Promise<boolean> {
   return write(file.handle);
 }
 
-async function saveAs(): Promise<boolean> {
+async function saveAs(keepBoth = false): Promise<boolean> {
   commitPending();
   if (!(await mayWrite())) return false;
   if (!keepsFiles) {
@@ -1587,8 +1664,15 @@ async function saveAs(): Promise<boolean> {
     saved(content);
     return true;
   }
-  const handle = await pickSaveTarget(suggestedName());
+  const handle = await pickSaveTarget(keepBoth ? anotherName(suggestedName()) : suggestedName());
   if (!handle) return false;
+  // Keeping both: never the file it is to be kept beside.
+  if (keepBoth && file.handle && (await sameEntry(handle, file.handle))) {
+    await tell(
+      `That is ${file.name} itself: keeping both needs a file of its own. Nothing was saved.`,
+    );
+    return false;
+  }
   // The new file is the story's from here: its name and handle go with what is kept, and back to
   // the old ones if it can't be written.
   const before = { handle: file.handle, name: file.name, modified: file.modified };
@@ -1654,7 +1738,7 @@ async function write(handle: FileSystemFileHandle): Promise<boolean> {
     if (answer === "both") {
       // Theirs stays in the file, and among this story's versions; mine goes to a new file.
       await snapshot("As it was on disk", disk.text);
-      return saveAs();
+      return saveAs(true);
     }
     if (answer !== "mine") return false;
     await snapshot("As it was on disk, before it was saved over", disk.text);
@@ -1918,10 +2002,10 @@ function tell(message: string): Promise<string> {
 }
 
 /** A new story: its details, a title, and a page to write on. The examples show the marks. */
+// No title in its details: the heading names it until the writer gives it one (Story details).
 const NEW_STORY = [
   "---",
   "voxdown: 1.1",
-  "title: Untitled",
   `language: ${navigator.language || "en"}`,
   "cast:",
   "---",
@@ -2163,7 +2247,7 @@ async function showDrafts(): Promise<void> {
             ? `${title} · ${draft.name}`
             : draft.name,
         excerpt: words,
-        detail: `${open ? "Open now · " : ""}${unsaved ? "changes not saved · " : ""}${wordsSaid(wordCount(draft.text))} · ${when(draft.changedAt)}`,
+        detail: `${open ? "Open now · " : ""}${unsaved ? "changes not saved · " : ""}${wordsSaid(proseWords(draft.text))} · ${when(draft.changedAt)}`,
         current: open,
         actions: open
           ? []
@@ -2206,7 +2290,7 @@ async function showVersions(): Promise<void> {
       : "None yet: a version is kept when the story is opened or saved, and every ten minutes of writing.",
     versions.map((kept) => ({
       title: `${when(kept.at)} · ${kept.why}`,
-      detail: `${wordsSaid(wordCount(kept.text))}${sameText(kept.text, text()) ? " · the same as now" : ""}`,
+      detail: `${wordsSaid(proseWords(kept.text))}${sameText(kept.text, text()) ? " · the same as now" : ""}`,
       actions: sameText(kept.text, text())
         ? []
         : [
@@ -2348,6 +2432,18 @@ function showOutline(): void {
     if (scene.chapter) chapter = scene.name;
     return scene.chapter ? "" : chapter;
   });
+  // And its words: a scene's to the next, a chapter's to the next chapter.
+  const doc = view.state.doc;
+  const own = scenes.map((scene, index) =>
+    proseWords(doc.sliceString(scene.from, scenes[index + 1]?.from ?? doc.length)),
+  );
+  const counts = scenes.map((scene, index) => {
+    if (!scene.chapter) return own[index] ?? 0;
+    let total = own[index] ?? 0;
+    for (let next = index + 1; next < scenes.length && !scenes[next]?.chapter; next++)
+      total += own[next] ?? 0;
+    return total;
+  });
   const here = view.state.selection.main.head;
   let active = Math.max(
     0,
@@ -2367,12 +2463,12 @@ function showOutline(): void {
         option.setAttribute("aria-selected", String(index === active));
         if (scene.chapter) option.dataset.chapter = "";
         option.textContent = scene.name;
-        if (within[index]) {
-          const where = document.createElement("span");
-          where.className = "outline-in";
-          where.textContent = within[index] as string;
-          option.append(where);
-        }
+        const where = document.createElement("span");
+        where.className = "outline-in";
+        where.textContent = [within[index], wordsSaid(counts[index] ?? 0)]
+          .filter(Boolean)
+          .join(" · ");
+        option.append(where);
         option.addEventListener("click", () => go(index));
         return option;
       }),
@@ -2440,6 +2536,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Alt+Shift+↑", "Move the scene up (Alt+Shift+↓: down)"],
   ["Mod+I", "Italics"],
   ["Mod+B", "Bold"],
+  ["F9", "Hear it read aloud, to the end of the scene"],
   ["Mod+K", "Who says this passage"],
   ["Mod+Shift+K", "The next quote with no speaker"],
   ["Mod+J", "How it’s said"],
@@ -2475,7 +2572,7 @@ const COMMANDS: Record<string, () => unknown> = {
   new: newStory,
   open,
   save,
-  "save-as": saveAs,
+  "save-as": () => saveAs(),
   download: () => download(text(), suggestedName()),
   format: () => tidy(false),
   "format-curly": () => tidy(true),
@@ -2509,6 +2606,10 @@ const COMMANDS: Record<string, () => unknown> = {
     view.focus();
   },
   details: showDetails,
+  hear: () => {
+    hearFromHere();
+    view.focus();
+  },
   "next-quote": () => {
     nextQuote();
     view.focus();
@@ -2550,8 +2651,13 @@ const COMMANDS: Record<string, () => unknown> = {
     download(renderDocument(current(), "book", { pages: true }), `${baseName()}.html`, "text/html"),
   "export-script": () =>
     download(renderDocument(current(), "script"), `${baseName()}-script.html`, "text/html"),
+  // A cue sheet: every line, sound, pause and page turn in order, in plain words.
   "export-csv": () =>
-    download(linesToCsv(lines(current(), { speechOnly: true })), `${baseName()}.csv`, "text/csv"),
+    download(
+      linesToCsv(lines(current()).map((line) => ({ ...line, text: plainText(line.text) }))),
+      `${baseName()}.csv`,
+      "text/csv",
+    ),
   "export-json": () =>
     download(
       `${JSON.stringify(lines(current()), null, 2)}\n`,
@@ -2761,7 +2867,8 @@ async function openDropped(event: DragEvent): Promise<void> {
   if (!(await mayLeave())) return;
   const handle = await handlePromise.catch(() => null);
   const kept = handle?.kind === "file" ? (handle as FileSystemFileHandle) : undefined;
-  await openStory(asStory(dropped.name, await readText(dropped), kept, dropped.lastModified));
+  const read = await readFile(dropped);
+  await openStory(asStory(dropped.name, read.text, kept, dropped.lastModified, read.encoding));
   if (kept) {
     await rememberFile(dropped.name, kept);
     void showRecent();

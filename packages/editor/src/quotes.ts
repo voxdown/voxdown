@@ -543,6 +543,17 @@ export const quoteEnter = keymap.of([
       // The quote closes straight after its last word, not after a space typed before Enter.
       const words = head.replace(/[ \t]+$/u, "");
       const splitAt = from - (head.length - words.length);
+      // Enter after the last word of a quote never closed, at its line's end: the quote closes
+      // there and the line ends, as a writer finishing the line means.
+      if (!speech.closeQuote && !rest) {
+        const closer = closerFor(opener, story.meta.language);
+        view.dispatch({
+          changes: { from: splitAt, to: to, insert: `${closer}\n` },
+          selection: { anchor: splitAt + closer.length + 1 },
+          userEvent: "input",
+        });
+        return true;
+      }
       // Right before the closing mark the quote is finished: the new line goes after the whole
       // line, whatever follows the quote (a sound, "he said").
       if (speech.closeQuote?.from === restFrom - shift) {

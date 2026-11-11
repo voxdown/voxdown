@@ -181,3 +181,18 @@ export function toggleEmphasis(
     return true;
   };
 }
+
+/** Text without its emphasis signs: `*very*` is `very`, for a spreadsheet or a speech engine. */
+export function plainText(text: string): string {
+  const signs = new Set<number>();
+  for (const found of emphasisIn(text))
+    for (let i = 0; i < found.sign; i++) {
+      signs.add(found.from + i);
+      signs.add(found.to - 1 - i);
+    }
+  // Places count UTF-16 units, as the text's own indices do.
+  return text
+    .split("")
+    .filter((_, index) => !signs.has(index))
+    .join("");
+}

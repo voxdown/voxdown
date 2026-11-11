@@ -46,22 +46,31 @@ export type Opened = {
   text: string;
   /** The file to save back to: none for a screenplay, which opens as a new story. */
   handle?: FileSystemFileHandle;
-  /** A screenplay turned into a story: it has never been saved as one. */
+  /** A screenplay turned into a story, or a file in another encoding: never saved as a story yet. */
   imported?: boolean;
+  /** The encoding the file was in, when it wasn't UTF-8: it opens as a new story. */
+  encoding?: string;
   /** When the file was last changed on disk, to tell if something else changes it. */
   modified?: number;
 };
 
-/** A file's text as a story: a Fountain screenplay is imported, and saved as a new `.vxd`. */
+/**
+ * A file's text as a story: a Fountain screenplay is imported, and saved as a new `.vxd`; so is a
+ * file that wasn't UTF-8 (`encoding`), read as what it was, so that nothing writes over the
+ * original by itself.
+ */
 export function asStory(
   name: string,
   text: string,
   handle?: FileSystemFileHandle,
   modified?: number,
+  encoding = "utf-8",
 ): Opened {
   if (/\.fountain$/i.test(name)) {
     return { name: name.replace(/\.fountain$/i, ".vxd"), text: fromFountain(text), imported: true };
   }
+  if (encoding !== "utf-8")
+    return { name: `${name.replace(/\.[^.]*$/, "")}.vxd`, text, imported: true, encoding };
   return {
     name,
     text,
@@ -70,9 +79,35 @@ export function asStory(
   };
 }
 
-/** A file's text as written, a byte order mark included (`file.text()` drops it). */
+/**
+ * A file's text as written, a byte order mark included (`file.text()` drops it), and the encoding
+ * it was in: UTF-8; UTF-16, by its byte order mark; or else, where the bytes aren't UTF-8, the
+ * Western encoding Windows wrote for years (Windows-1252), never read as UTF-8 with its letters
+ * lost.
+ */
+export function decode(bytes: ArrayBuffer): { text: string; encoding: string } {
+  const view = new Uint8Array(bytes);
+  if (view[0] === 0xff && view[1] === 0xfe)
+    return { text: new TextDecoder("utf-16le").decode(view), encoding: "utf-16le" };
+  if (view[0] === 0xfe && view[1] === 0xff)
+    return { text: new TextDecoder("utf-16be").decode(view), encoding: "utf-16be" };
+  try {
+    return {
+      text: new TextDecoder("utf-8", { ignoreBOM: true, fatal: true }).decode(view),
+      encoding: "utf-8",
+    };
+  } catch {
+    return { text: new TextDecoder("windows-1252").decode(view), encoding: "windows-1252" };
+  }
+}
+
+export async function readFile(file: Blob): Promise<{ text: string; encoding: string }> {
+  return decode(await file.arrayBuffer());
+}
+
+/** A file's text, as `readFile` reads it. */
 export async function readText(file: Blob): Promise<string> {
-  return new TextDecoder("utf-8", { ignoreBOM: true }).decode(await file.arrayBuffer());
+  return (await readFile(file)).text;
 }
 
 /** Asks for a file to open; undefined if the writer changes their mind. */
@@ -82,7 +117,8 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
       const [handle] = await window.showOpenFilePicker({ types: TYPES });
       if (!handle) return undefined;
       const file = await handle.getFile();
-      return asStory(file.name, await readText(file), handle, file.lastModified);
+      const { text, encoding } = await readFile(file);
+      return asStory(file.name, text, handle, file.lastModified, encoding);
     } catch (error) {
       if (cancelled(error)) return undefined;
       throw error;
@@ -93,7 +129,12 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
       input.removeEventListener("cancel", gone);
       const file = input.files?.[0];
       input.value = "";
-      resolve(file ? asStory(file.name, await readText(file)) : undefined);
+      const read = file ? await readFile(file) : undefined;
+      resolve(
+        file && read
+          ? asStory(file.name, read.text, undefined, undefined, read.encoding)
+          : undefined,
+      );
     };
     const gone = () => {
       input.removeEventListener("change", chosen);
@@ -109,7 +150,8 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
 export async function reopen(handle: FileSystemFileHandle): Promise<Opened> {
   if (!(await allowed(handle, "read"))) throw new Error(`${handle.name} can't be read.`);
   const file = await handle.getFile();
-  return asStory(file.name, await readText(file), handle, file.lastModified);
+  const { text, encoding } = await readFile(file);
+  return asStory(file.name, text, handle, file.lastModified, encoding);
 }
 
 /** The file as it is on disk now, if the browser lets the page read it without asking. */

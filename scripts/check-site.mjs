@@ -499,6 +499,61 @@ if (!askedFirst)
   problems.push("writer: leaving with the last words neither kept nor written down didn't ask");
 await fullStorage.close();
 
+// A file in Windows-1252 opens with its letters, as a new story, and nothing saves over it.
+const western = await browser.newContext({ viewport: { width: 1366, height: 657 } });
+await western.addInitScript(() => {
+  window.__writes = 0;
+  Object.defineProperty(navigator, "platform", { get: () => "Win32" });
+  const bytes = new Uint8Array([0x43, 0x61, 0x66, 0xe9, 0x20, 0x63, 0x72, 0xe8, 0x6d, 0x65, 0x2e]);
+  const handle = {
+    kind: "file",
+    name: "old.txt",
+    getFile: async () => new File([bytes], "old.txt", { lastModified: 1 }),
+    createWritable: async () => {
+      window.__writes++;
+      return { write: async () => {}, close: async () => {} };
+    },
+    isSameEntry: async () => false,
+    queryPermission: async () => "granted",
+    requestPermission: async () => "granted",
+  };
+  window.showOpenFilePicker = async () => [handle];
+});
+const west = await western.newPage();
+watch(west, "writer Windows-1252 file");
+await west.goto(`${base}/writer/`);
+await west.click('.welcome [data-command="open"]');
+await west.waitForFunction(() => document.querySelector("#file-name")?.textContent === "old.vxd");
+if (!(await west.locator(".cm-content").innerText()).includes("Café crème."))
+  problems.push("writer: a Windows-1252 file lost its letters");
+if (!(await west.textContent("#notice"))?.includes("wasn't UTF-8"))
+  problems.push("writer: a file that wasn't UTF-8 opened without a word");
+await west.click(".cm-content");
+await west.keyboard.press("Control+End");
+await west.keyboard.type(" More.");
+await west.waitForTimeout(2600);
+if ((await west.evaluate(() => window.__writes)) > 0)
+  problems.push("writer: a file that wasn't UTF-8 was saved over by itself");
+// Redo on Ctrl+Shift+Z, as the menu says, on Windows too.
+await west.keyboard.press("Control+z");
+await west.waitForTimeout(200);
+await west.keyboard.press("Control+Shift+Z");
+await west.waitForTimeout(600);
+if (!(await west.locator(".cm-content").innerText()).includes("More."))
+  problems.push("writer: Ctrl+Shift+Z doesn't redo on Windows");
+// On a laptop's short window, the File menu's last item can still be reached.
+await west.click("#file-menu-button");
+const fileMenu = await west.evaluate(
+  () => document.querySelector("#file-menu")?.getBoundingClientRect().bottom ?? 0,
+);
+if (fileMenu > 657)
+  problems.push(`writer: the File menu runs ${Math.round(fileMenu - 657)} px past a short window`);
+await west.locator('[data-command="format-curly"]').scrollIntoViewIfNeeded();
+if (!(await west.locator('[data-command="format-curly"]').isVisible()))
+  problems.push("writer: the File menu's last item can't be reached on a short window");
+await west.keyboard.press("Escape");
+await western.close();
+
 // Drafts and versions: a story put aside unsaved is kept and opens again from Recover a draft;
 // a saved version can be gone back to, and Undo takes that back.
 const keeping = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -1107,6 +1162,10 @@ await synced.addInitScript(() => {
     },
   };
   window.showOpenFilePicker = async () => [handle];
+  window.showSaveFilePicker = async ({ suggestedName }) => {
+    window.__suggested = suggestedName;
+    return handle;
+  };
 });
 const sync = await synced.newPage();
 watch(sync, "writer file changed elsewhere");
@@ -1222,7 +1281,16 @@ await sync
   .catch(() =>
     problems.push("writer: a file changed elsewhere with its date kept was saved over unasked"),
   );
-if (await sync.isVisible("#ask[open]")) await sync.click('#ask-buttons button[value="cancel"]');
+// Keep both: a new name is offered, and the file itself is refused.
+if (await sync.isVisible("#ask[open]")) await sync.click('#ask-buttons button[value="both"]');
+await sync.waitForTimeout(400);
+if (!(await sync.evaluate(() => window.__suggested))?.endsWith("(2).vxd"))
+  problems.push("writer: Keep both doesn't offer a name of its own");
+if (await sync.isVisible("#ask[open]")) {
+  if (!(await sync.textContent("#ask-message"))?.includes("itself"))
+    problems.push("writer: Keep both took the file it was to be kept beside");
+  await sync.click('#ask-buttons button[value="ok"]');
+}
 if (!(await sync.evaluate(() => window.__disk.text.includes("changed quietly"))))
   problems.push("writer: a file changed elsewhere with its date kept lost its change");
 // Saving by itself stops when the file changed on disk, and says so beside the name until saved.
@@ -1531,7 +1599,21 @@ for (const [command, name] of [
   ]);
   if (download.suggestedFilename() !== name)
     problems.push(`writer: ${command} downloaded ${download.suggestedFilename()}, not ${name}`);
+  // The cue sheet has the sounds and the pauses, in plain words.
+  if (command === "export-csv") {
+    const sheet = readFileSync(await download.path(), "utf8");
+    if (!/^sound,/m.test(sheet) || !/^pause,/m.test(sheet))
+      problems.push("writer: the CSV leaves out the sounds or the pauses");
+  }
 }
+// F9 reads it aloud from the cursor, and says how to stop.
+await maker.click(".cm-content");
+await maker.keyboard.press("Control+Home");
+await maker.keyboard.press("F9");
+await maker.waitForTimeout(200);
+if (!(await maker.textContent("#notice"))?.match(/Reading aloud|can’t read aloud|Nothing to hear/))
+  problems.push("writer: F9 doesn't read aloud or say why not");
+await maker.keyboard.press("Escape");
 // The side made wider with the keyboard on its edge; the text larger from Page and text.
 const sideBefore = await maker.evaluate(
   () => document.querySelector("#side")?.getBoundingClientRect().width ?? 0,

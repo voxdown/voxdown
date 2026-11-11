@@ -7,6 +7,19 @@
 export const wordCount = (content: string): number =>
   content.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
 
+/**
+ * The words a story's book holds, near enough, read straight from its text: the front matter,
+ * notes, names, directions, sounds and instructions left out, as the status line counts them.
+ */
+export function proseWords(source: string): number {
+  const front = /^\uFEFF?---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(source);
+  const body = source
+    .slice(front ? front[0].length : 0)
+    .replace(/%%[\s\S]*?(?:%%|$)/g, " ")
+    .replace(/@[\p{L}\p{N}_-]*(?:[ \t]*\([^)\n]*\))?|\[[^\]\n]*\]|\{[^}\n]*\}|^:::.*$/gmu, " ");
+  return wordCount(body);
+}
+
 /** A count of words, as said: 1 word, 2 words, 1,234 words. */
 export const words = (count: number): string =>
   `${count.toLocaleString()} ${count === 1 ? "word" : "words"}`;

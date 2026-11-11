@@ -3,9 +3,11 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
 import { describe, expect, it } from "vitest";
-import { applyChanges, parse } from "voxdown";
+import { applyChanges, lines, parse } from "voxdown";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
-import { emphasisIn, frontMatterEnd, toggleEmphasis } from "../src/writer/emphasis";
+import { emphasisIn, frontMatterEnd, plainText, toggleEmphasis } from "../src/writer/emphasis";
+import { asStory, decode } from "../src/writer/files";
+import { pauseSeconds, toHear, voicesFor } from "../src/writer/hear";
 import { rankScenes } from "../src/writer/outline";
 import { afterParagraph, moveParagraph } from "../src/writer/paragraphs";
 import { nearestName, problems } from "../src/writer/problems";
@@ -22,7 +24,7 @@ import {
   speechAt,
   speechOfMark,
 } from "../src/writer/stretch";
-import { fileNameFor, glimpse, listening, wordCount } from "../src/writer/words";
+import { fileNameFor, glimpse, listening, proseWords, wordCount } from "../src/writer/words";
 
 describe("the scene rail's layout", () => {
   it("places scenes in proportion to the text, apart where there is room", () => {
@@ -179,6 +181,12 @@ describe("emphasis", () => {
       ["*and italic*", false],
     ]);
     expect(shown("@Big_Bad_Wolf at a_b_c, \\*not* this, 2 * 3 * 4, and * this *.")).toEqual([]);
+  });
+
+  it("takes the signs away for plain text", () => {
+    expect(plainText("A *quiet* word and **loud** ones, 2 * 3.")).toBe(
+      "A quiet word and loud ones, 2 * 3.",
+    );
   });
 
   it("knows where the front matter ends without asking the story", () => {
@@ -389,6 +397,12 @@ describe("the versions kept", () => {
 describe("words", () => {
   it("counts words with their apostrophes and hyphens, in any script", () => {
     expect(wordCount("It’s a well-known fact, n'est-ce pas? Ünïcode 42 ok")).toBe(9);
+  });
+
+  it("counts a story's words as its book has them, marks and front matter left out", () => {
+    const story =
+      "---\ntitle: A long title here\ncast:\n  Ann:\n---\n# The Start\n\n@Ann (softly) “Hush now,” [an owl hoots] she said. %% a note %% {pause 1s}";
+    expect(proseWords(story)).toBe(6);
   });
 
   it("makes a file name from a title, as written, without the signs a file can't have", () => {
@@ -650,5 +664,63 @@ describe("words rescued as the page goes", () => {
     expect(tabStory(session)).toBeUndefined();
     expect(tabStory(session, "s1")).toBe("s1");
     expect(tabStory(session)).toBe("s1");
+  });
+});
+
+describe("files in other encodings", () => {
+  const bytes = (...values: number[]) => new Uint8Array(values).buffer;
+
+  it("reads UTF-8 as it is, its byte order mark kept", () => {
+    const utf8 = new TextEncoder().encode("\uFEFFCafé");
+    expect(decode(utf8.buffer)).toEqual({ text: "\uFEFFCafé", encoding: "utf-8" });
+  });
+
+  it("reads Windows-1252 as what it is, never as broken UTF-8", () => {
+    // "Café crème" in Windows-1252.
+    const western = bytes(0x43, 0x61, 0x66, 0xe9, 0x20, 0x63, 0x72, 0xe8, 0x6d, 0x65);
+    expect(decode(western)).toEqual({ text: "Café crème", encoding: "windows-1252" });
+  });
+
+  it("reads UTF-16 by its byte order mark", () => {
+    expect(decode(bytes(0xff, 0xfe, 0x48, 0x00, 0x69, 0x00)).text).toBe("Hi");
+    expect(decode(bytes(0xfe, 0xff, 0x00, 0x48, 0x00, 0x69)).encoding).toBe("utf-16be");
+  });
+
+  it("opens one that wasn't UTF-8 as a new story, never to be saved over the original by itself", () => {
+    const handle = {} as FileSystemFileHandle;
+    const opened = asStory("old.txt", "Café", handle, 5, "windows-1252");
+    expect(opened).toEqual({
+      name: "old.vxd",
+      text: "Café",
+      imported: true,
+      encoding: "windows-1252",
+    });
+    expect(asStory("new.vxd", "Hi", handle, 5).handle).toBe(handle);
+  });
+});
+
+describe("hearing it read aloud", () => {
+  const voices = [
+    { name: "Fr", lang: "fr-FR", default: false },
+    { name: "Ann", lang: "en-GB", default: false },
+    { name: "Usual", lang: "en-US", default: true },
+    { name: "Bob", lang: "en-AU", default: false },
+  ];
+
+  it("gives the narrator the language's usual voice and each character another", () => {
+    const chosen = voicesFor(["Narrator", "Ann", "Bob", "Cy"], voices, "en-GB", "Narrator");
+    expect(voices[chosen.get("Narrator") ?? -1]?.name).toBe("Usual");
+    expect(voices[chosen.get("Ann") ?? -1]?.name).toBe("Ann");
+    expect(voices[chosen.get("Bob") ?? -1]?.name).toBe("Bob");
+    expect(voices[chosen.get("Cy") ?? -1]?.name).toBe("Ann");
+    expect(voicesFor(["Ann"], [], "en", "Narrator").size).toBe(0);
+  });
+
+  it("reads from the cursor to the end of its scene, pauses included", () => {
+    const rows = lines(parse("@Ann “One.” {pause 2s}\n\n@Bob “Two.”\n\n* * *\n\n@Ann “Three.”"));
+    const heard = toHear(rows, 1);
+    expect(heard.map((row) => row.text)).toEqual(["One.", "2s", "Two."]);
+    expect(toHear(rows, 3).map((row) => row.text)).toEqual(["Two."]);
+    expect([pauseSeconds("2s"), pauseSeconds("500ms"), pauseSeconds("")]).toEqual([2, 0.5, 1]);
   });
 });

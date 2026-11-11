@@ -131,6 +131,16 @@ describe("Enter in a quote", () => {
     expect(press("Enter", "He said “no.| Never.”")).toBe("He said “no.\n| Never.”");
   });
 
+  it("closes a quote never closed when Enter comes after its last word, at the line's end", () => {
+    expect(press("Enter", "@Ann “Hello there|")).toBe("@Ann “Hello there”\n|");
+    expect(press("Enter", "@Ann “Hello there   |")).toBe("@Ann “Hello there”\n|");
+    expect(press("Enter", "---\nlanguage: de\n---\n@Anna „Hallo|")).toBe(
+      "---\nlanguage: de\n---\n@Anna „Hallo“\n|",
+    );
+    // Mid-line, or in narration, Enter is as before.
+    expect(press("Enter", "He said “no|")).toBe("He said “no\n|");
+  });
+
   it("closes the quote with its own mark, in every language and straight", () => {
     expect(press("Enter", "---\nlanguage: de\n---\n@Anna „Hallo.| Wie geht’s?“")).toBe(
       "---\nlanguage: de\n---\n@Anna „Hallo.“\n@Anna „|Wie geht’s?“",

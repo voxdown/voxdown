@@ -9,7 +9,7 @@ import { hasLetterOrDigit } from "./chars";
 import { type TextChange, applyChanges, isName, markAt, setFullName, spelled } from "./edit";
 import { lexedTokens } from "./lexed";
 import { lines } from "./lines";
-import type { Line, Speech, Story } from "./model";
+import type { Line, Mark, Speech, Story } from "./model";
 import { nameKey } from "./names";
 import { parse } from "./parse";
 import { bookText } from "./readings";
@@ -37,6 +37,8 @@ export type Quote = {
   continued: boolean;
   /** Its 1-based line in the file. */
   line: number;
+  /** Whether its closing mark is on its line; if not, it runs on (§5.7). */
+  closed: boolean;
 };
 
 /** Every quote in the story's paragraphs, in reading order. */
@@ -83,6 +85,7 @@ export function quotesOf(story: Story): Quote[] {
       narrated: !own && nameKey(speech.speaker) === narrator,
       continued: own && speech.continued,
       line: lineNumber(starts, at),
+      closed: close !== undefined,
     });
   }
   return quotes;
@@ -292,6 +295,20 @@ function attemptGifts(
   const narrator = nameKey(story.meta.narrator);
   const unmarked = new Set<number>();
   const marks: TextChange[] = [];
+  // Each quote's own mark, where one gives it (`@Tom “…”`), by where the quote opens.
+  const ownMark = new Map<number, Mark>();
+  for (const block of story.blocks)
+    if (block.kind === "paragraph")
+      for (const line of block.lines)
+        for (const item of line.items)
+          if (
+            item.kind === "speech" &&
+            item.quoted &&
+            item.mark &&
+            !item.continued &&
+            item.openQuote
+          )
+            ownMark.set(item.openQuote.from, item.mark);
   // Who says each quote once these are given, as far as the marks go: for a quote that could
   // carry on the one before it on its line.
   const after = new Map<number, string>();
@@ -319,6 +336,17 @@ function attemptGifts(
     }
     if (key === narrator) {
       // Back to the narrator would need a mark of the narrator's own: left to the writer.
+      continue;
+    }
+    // A quote with a mark of its own: the name in it changes (its direction stays), rather
+    // than a second mark going in front of it.
+    const own = ownMark.get(quote.from);
+    if (own) {
+      marks.push({
+        from: own.nameRange.from,
+        to: own.nameRange.to,
+        insert: spelled(story, gift.speaker),
+      });
       continue;
     }
     marks.push({

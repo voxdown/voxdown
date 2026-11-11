@@ -116,5 +116,6 @@ describe("the project names no host application", () => {
       (file) => !file.endsWith("boundary.test.ts") && /\bkinu\b/i.test(readFileSync(file, "utf8")),
     );
     expect(offending.map((file) => relative(repo, file))).toEqual([]);
-  });
+    // It reads every file in the tree: more time than a test usually needs, on a busy machine.
+  }, 60_000);
 });

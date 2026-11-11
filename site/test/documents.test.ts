@@ -396,3 +396,62 @@ describe("ebooks with chapters missing, and emphasis in their style sheets", () 
     expect(story).toContain("***From its own sheet.***");
   });
 });
+
+describe("imports, written as a story", () => {
+  it("leave numbers and dashes at a line's start as they are: a story has no lists", () => {
+    expect(
+      writeRuns([{ text: "1. Not a list - and > not a quote", italic: false, bold: false }]),
+    ).toBe("1. Not a list - and > not a quote");
+    expect(writeRuns([{ text: "---", italic: false, bold: false }])).toBe("\\---");
+    expect(writeRuns([{ text: "::: not a group", italic: false, bold: false }])).toBe(
+      "\\::: not a group",
+    );
+  });
+
+  it("leave notes, their numbers and ruby out, and keep verse lines shown as blocks", async () => {
+    const page = (body: string, head = "") =>
+      `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>x</title>${head}</head><body>${body}</body></html>`;
+    const { story, left } = await storyOfEpub(
+      ebookFile({
+        container: `<container><rootfiles><rootfile full-path="OPS/package.opf"/></rootfiles></container>`,
+        opf: `<package><manifest>
+          <item id="c1" href="one.xhtml" media-type="application/xhtml+xml"/>
+          <item id="n" href="notes.xhtml" media-type="application/xhtml+xml"/>
+        </manifest><spine><itemref idref="c1"/><itemref idref="n" linear="no"/></spine></package>`,
+        pages: {
+          "one.xhtml": page(
+            `<p>It was a <em>dark</em> night<a epub:type="noteref" href="notes.xhtml#n1">1</a>.</p>
+             <aside epub:type="footnote" id="n1"><p>A note.</p></aside>
+             <p><ruby>漢<rt>kan</rt>字<rt>ji</rt></ruby> written.</p>
+             <div class="stanza"><span class="line">Twinkle twinkle,</span><span class="line">little star.</span></div>`,
+            "<style>.line { display: block }</style>",
+          ),
+          "notes.xhtml": page("<p>1. The notes.</p>"),
+        },
+      }),
+    );
+    expect(story).toContain("It was a *dark* night.");
+    expect(story).not.toContain("A note.");
+    expect(story).not.toContain("The notes.");
+    expect(story).toContain("漢字 written.");
+    expect(story).toContain("Twinkle twinkle,\nlittle star.");
+    expect(left).toEqual([
+      "notes and their numbers",
+      "1 page outside the reading order (notes and the like)",
+    ]);
+  });
+
+  it("from Word, say list numbering was left out, and give a heading after a page break one space", async () => {
+    const { story, left } = await storyOfDocx(
+      wordFile(
+        `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:br w:type="page"/></w:r><w:r><w:t>Chapter One</w:t></w:r></w:p>
+         <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>A step.</w:t></w:r></w:p>
+         <w:p><w:r><w:t xml:space="preserve">A </w:t></w:r><w:r><w:sym w:font="Wingdings" w:char="F0E0"/></w:r><w:r><w:t xml:space="preserve"> symbol.</w:t></w:r></w:p>`,
+        `<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>`,
+      ),
+    );
+    expect(story).toContain("# Chapter One\n");
+    expect(story).toContain("A symbol.");
+    expect(left).toEqual(["list numbering", "symbols from symbol fonts"]);
+  });
+});

@@ -24,7 +24,7 @@ import {
 import { composed, mapped } from "./changes";
 import { type Scope, wholeScope } from "./local";
 import { withoutSpareMarks } from "./spare-marks";
-import type { Passage } from "./story-data";
+import { type Passage, type Wanting, nextWanting, wantingQuotes } from "./story-data";
 
 export type Speaker = { handle: string; name: string; color?: string };
 
@@ -146,34 +146,9 @@ export function firstQuote(source: string, from: number, to: number): Quote | un
   return quotesIn(source, from, to)[0];
 }
 
-/**
- * The next quote after `after` that wants a speaker, round to the first: one no one is marked to
- * say, which the narrator reads with the words around it; or one that carries on the speech before
- * it on its line (§5.6) while its own dialogue tag names someone else (`@Ann “Hi,” said Ann.
- * “Bye,” said Bob.`). `carried` says which.
- */
-export function nextNarratedQuote(
-  story: Story,
-  after: number,
-): (Quote & { carried?: { speaker: string; tag: string } }) | undefined {
-  const found: Array<Quote & { carried?: { speaker: string; tag: string } }> = [];
-  for (const quote of quotesOf(story)) {
-    if (quote.narrated) {
-      found.push({ from: quote.from, to: quote.to, text: quote.text });
-      continue;
-    }
-    if (!quote.continued) continue;
-    const tag = taggedName(story, quote);
-    const named = tag ? (castMemberNamed(story, tag) ?? tag) : undefined;
-    if (tag && named && named.toLowerCase() !== quote.speaker.toLowerCase())
-      found.push({
-        from: quote.from,
-        to: quote.to,
-        text: quote.text,
-        carried: { speaker: quote.speaker, tag: named },
-      });
-  }
-  return found.find((quote) => quote.from > after) ?? found[0];
+/** The next quote after `after` that wants a speaker (story-data.ts), round to the first. */
+export function nextNarratedQuote(story: Story, after: number): Wanting | undefined {
+  return nextWanting(wantingQuotes(story), after);
 }
 
 /**
@@ -614,6 +589,14 @@ export class StretchTools {
     });
     const [first] = went;
     if (!first) return;
+    // Another paragraph of the same speech: its quote runs on until a closing mark (§5.7).
+    const at = before.find((quote) => quote.from <= given && given < quote.to);
+    if (at && went.some((quote) => quote.line !== at.line)) {
+      this.context.notice(
+        `This speech runs over more than one paragraph (no closing quote mark ends it before the next), so all of it goes to ${name}. To give only part of it, close the quote where that part ends.`,
+      );
+      return;
+    }
     const words = first.text.length > 30 ? `${first.text.slice(0, 29)}…` : first.text;
     this.context.notice(
       went.length === 1

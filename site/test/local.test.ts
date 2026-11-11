@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { type Speech, type Story, applyChanges, parse, setDirection, setSpeaker } from "voxdown";
 import { paragraphScope } from "../src/writer/local";
@@ -59,6 +61,74 @@ describe("an edit in a long book's paragraph alone", () => {
     expect(paragraphScope(running, running.indexOf("two"))).toBeUndefined();
     expect(paragraphScope(running, running.indexOf("speech"))).toBeUndefined();
     expect(paragraphScope(STORY, 3)).toBeUndefined();
+  });
+});
+
+describe("the paragraph shortcut, against the whole story", () => {
+  // The repository's root, whether the tests run from it or from the site's folder.
+  const root = existsSync(join(process.cwd(), "corpus"))
+    ? process.cwd()
+    : join(process.cwd(), "..");
+  const books = ["corpus", "examples"].flatMap((folder) =>
+    readdirSync(join(root, folder))
+      .filter((name) => name.endsWith(".vxd"))
+      .map((name) => ({
+        name,
+        source: readFileSync(join(root, folder, name), "utf8").replace(/\r\n/g, "\n"),
+      })),
+  );
+  const edit = (story: Story, at: number, how: "speaker" | "direction") => {
+    const speech = speechAt(story, at);
+    if (!speech) return "none";
+    try {
+      return how === "speaker"
+        ? setSpeaker(story, speech, "Tester")
+        : setDirection(story, speech, "softly");
+    } catch (error) {
+      return `refused: ${(error as Error).message}`;
+    }
+  };
+
+  it.each(books)(
+    "gives what the whole story gives, in $name",
+    ({ source }) => {
+      const whole = parse(source);
+      const differ: string[] = [];
+      let taken = 0;
+      for (const block of whole.blocks) {
+        if (block.kind !== "paragraph") continue;
+        for (const line of block.lines)
+          for (const item of line.items) {
+            if (item.kind !== "speech" || !/[\p{L}\p{N}]/u.test(item.text)) continue;
+            const at = item.textRange.from;
+            const scope = paragraphScope(source, at);
+            if (!scope) continue;
+            taken++;
+            for (const how of ["speaker", "direction"] as const) {
+              const local = edit(scope.story, scope.at(at), how);
+              const everywhere = edit(whole, at, how);
+              const a = typeof local === "string" ? local : applyChanges(source, scope.back(local));
+              const b =
+                typeof everywhere === "string" ? everywhere : applyChanges(source, everywhere);
+              if (a !== b) differ.push(`${how} at line ${source.slice(0, at).split("\n").length}`);
+            }
+          }
+      }
+      expect(differ).toEqual([]);
+      expect(taken).toBeGreaterThan(0);
+      // Every passage of a book, edited twice each way: more time than a test usually needs.
+    },
+    60_000,
+  );
+
+  it("isn't taken in a speech over paragraphs in single quotes, or carried past a page turn", () => {
+    const single =
+      "@Ann ‘When I started, it was gas.\n\n‘Then they put in the electric, and I don’t hold with it.’\n\nThe end.\n";
+    expect(paragraphScope(single, single.indexOf("Then"))).toBeUndefined();
+    expect(paragraphScope(single, single.indexOf("When"))).toBeUndefined();
+    expect(paragraphScope(single, single.indexOf("The end"))).toBeDefined();
+    const paged = "@Holmes “Once upon a time.\n\n{page}\n\n“He believed he was the king.”\n";
+    expect(paragraphScope(paged, paged.indexOf("He believed"))).toBeUndefined();
   });
 });
 

@@ -4,7 +4,7 @@
  * the page for a short story, in a worker for a long one, so that the page never reads a long book
  * again while it is written.
  */
-import { type Story, lines } from "voxdown";
+import { type Story, castMemberNamed, lines, quotesOf, taggedName } from "voxdown";
 
 /** A chapter, heading or scene break: where it starts, its name, whether it opens a chapter. */
 export type SceneData = { from: number; name: string; chapter: boolean; break: boolean };
@@ -107,4 +107,43 @@ export function passageIn(passages: readonly Passage[], at: number): Passage | u
   }
   const passage = passages[found];
   return passage && at <= passage.to ? passage : undefined;
+}
+
+/** A quote that wants a speaker: where it is, its words, and, if it carries on someone, who and whom its tag names. */
+export type Wanting = {
+  from: number;
+  to: number;
+  text: string;
+  carried?: { speaker: string; tag: string };
+};
+
+/**
+ * Every quote that wants a speaker, in order: one no one is marked to say, which the narrator
+ * reads with the words around it; or one that carries on the speech before it on its line (§5.6)
+ * while its own dialogue tag names someone else (`@Ann “Hi,” said Ann. “Bye,” said Bob.`).
+ */
+export function wantingQuotes(story: Story): Wanting[] {
+  const found: Wanting[] = [];
+  for (const quote of quotesOf(story)) {
+    if (quote.narrated) {
+      found.push({ from: quote.from, to: quote.to, text: quote.text });
+      continue;
+    }
+    if (!quote.continued) continue;
+    const tag = taggedName(story, quote);
+    const named = tag ? (castMemberNamed(story, tag) ?? tag) : undefined;
+    if (tag && named && named.toLowerCase() !== quote.speaker.toLowerCase())
+      found.push({
+        from: quote.from,
+        to: quote.to,
+        text: quote.text,
+        carried: { speaker: quote.speaker, tag: named },
+      });
+  }
+  return found;
+}
+
+/** The next of them after `after`, round to the first. */
+export function nextWanting(wanting: readonly Wanting[], after: number): Wanting | undefined {
+  return wanting.find((quote) => quote.from > after) ?? wanting[0];
 }

@@ -207,7 +207,7 @@ export class SaveFlow {
       // What can be done there and then: save it somewhere else, or download it; the draft is
       // kept in this browser whatever is chosen.
       const answer = await host.ask(
-        `${file.name} couldn't be saved: ${(error as Error).message}. The story is kept in this browser; save it somewhere else, or download a copy?`,
+        `${file.name} couldn't be saved: ${(error as Error).message.replace(/[.\s]+$/, "")}. The story is kept in this browser; save it somewhere else, or download a copy?`,
         [
           { label: "Not now", value: "cancel" },
           { label: "Download a copy", value: "download" },

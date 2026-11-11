@@ -217,6 +217,8 @@ async function nameSpeakers(
     );
     if (!done) throw new HelperError("The helper stopped before it was done.");
     let changes = (done.changes ?? []) as TextChange[];
+    /** Quotes the writer gave someone while the AI worked: their choice kept. */
+    let keptOwn = 0;
     const proposals = (done.proposals ?? []) as Array<{
       quote: number;
       line: number;
@@ -241,10 +243,18 @@ async function nameSpeakers(
         if (behind) context.notice(said);
         return;
       }
+      // A quote the writer gave someone meanwhile keeps the writer's choice.
+      const waiting = quotesOf(now);
+      const theirs = proposals.filter(
+        (proposal) => proposal.outcome === "given" && !waiting[proposal.quote - 1]?.narrated,
+      ).length;
+      keptOwn = theirs;
       changes = giveQuotes(
         now,
         proposals
-          .filter((proposal) => proposal.outcome === "given")
+          .filter(
+            (proposal) => proposal.outcome === "given" && waiting[proposal.quote - 1]?.narrated,
+          )
           .map((proposal) => ({
             quote: proposal.quote,
             speaker: proposal.speaker,
@@ -258,10 +268,11 @@ async function nameSpeakers(
     }
     progress.textContent = [
       changes.length
-        ? `${plural(given, "speaker")} given${joined.length ? `, and ${joined.join(", ")} joined the cast` : ""}: Ctrl+Z takes them back.`
+        ? `${plural(given - keptOwn, "speaker")} given${joined.length ? `, and ${joined.join(", ")} joined the cast` : ""}: Ctrl+Z takes them back.`
         : ai === "tags"
           ? "Nothing to give: no quote waiting for a speaker has a dialogue tag naming someone (“…” asked Mara)."
           : "Nothing to give: every quote the AI was asked about stayed as it was.",
+      keptOwn ? `${plural(keptOwn, "quote")} you gave meanwhile kept as you gave them.` : "",
       held.length ? `${plural(held.length, "quote")} held back, below.` : "",
       unknown ? `${plural(unknown, "quote")} the AI couldn't tell: Ctrl+Shift+K finds them.` : "",
       done.stopped ? `It stopped early: ${String(done.stopped)}` : "",
@@ -291,7 +302,7 @@ async function nameSpeakers(
     }
     if (changes.length)
       context.notice(
-        `${plural(given, "speaker")} given by AI${held.length ? `, ${held.length} held back` : ""}: Ctrl+Z takes them back.`,
+        `${plural(given - keptOwn, "speaker")} given ${ai === "tags" ? "by their dialogue tags" : "by AI"}${keptOwn ? `, ${keptOwn} of yours kept` : ""}${held.length ? `, ${held.length} held back` : ""}: Ctrl+Z takes them back.`,
       );
     else if (behind) context.notice(progress.textContent ?? "");
   } catch (error) {

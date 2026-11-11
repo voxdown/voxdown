@@ -1048,11 +1048,12 @@ await longPage.evaluate(() => {
 });
 let gave = 0;
 for (let give = 0; give < 3; give++) {
-  await longPage.keyboard.press("Control+Shift+K");
-  await longPage.waitForTimeout(300);
   await longPage.evaluate(() => {
     window.__long = [];
   });
+  // The next quote, from the worker's reading of the book: never read on the page.
+  await longPage.keyboard.press("Control+Shift+K");
+  await longPage.waitForTimeout(1200);
   await longPage.keyboard.press("Control+K");
   if (!(await longPage.waitForSelector(".speaker-list", { timeout: 3000 }).catch(() => null)))
     break;
@@ -1061,7 +1062,7 @@ for (let give = 0; give < 3; give++) {
   const slow = await longPage.evaluate(() => window.__long.filter((duration) => duration > 100));
   if (slow.length)
     problems.push(
-      `writer: giving a speaker in a 100,000-word book held the page ${slow.map(Math.round).join(", ")} ms`,
+      `writer: finding and giving a speaker in a 100,000-word book held the page ${slow.map(Math.round).join(", ")} ms`,
     );
   gave++;
 }

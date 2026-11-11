@@ -7,7 +7,7 @@
  * Only a paragraph that stands alone is read so: not in a group (`:::`), not in a note left open,
  * no quote running into it or out of it. Otherwise the whole story is read, as for a short one.
  */
-import { type Story, type TextChange, parse } from "voxdown";
+import { type Story, type TextChange, parse, quotesOf } from "voxdown";
 
 /** The story an edit is worked out on, and how its places map to the editor's. */
 export type Scope = {
@@ -30,16 +30,14 @@ export function wholeScope(story: Story): Scope {
   };
 }
 
-/**
- * Whether a stretch of text may leave a quote open, or close one opened before it: its quotation
- * marks don't pair up. (Single quotes, which are apostrophes too, aren't counted.)
- */
-function leavesOpen(text: string): boolean {
-  const count = (pattern: RegExp) => text.match(pattern)?.length ?? 0;
-  const curly = /„/.test(text) ? count(/„/g) !== count(/[“”]/g) : count(/“/g) !== count(/”/g);
-  return (
-    curly || count(/«/g) !== count(/»/g) || count(/「/g) !== count(/」/g) || count(/"/g) % 2 === 1
-  );
+/** Whether a paragraph has words a quote could run over to: not only page turns, pauses or notes (§5.7). */
+const hasWords = (paragraph: string) =>
+  /[\p{L}\p{N}]/u.test(paragraph.replace(/\{[^}]*\}|%%[\s\S]*?%%/g, ""));
+
+/** Whether the text, read as a story with the front matter, leaves a quote open at its end (§5.7). */
+function leavesOpen(head: string, text: string): boolean {
+  const story = parse(`${head}${head ? "\n" : ""}${text}\n`);
+  return quotesOf(story).some((quote) => !quote.closed);
 }
 
 /** The paragraph at `place` with the front matter, as a scope of its own; undefined if it doesn't stand alone. */
@@ -59,11 +57,14 @@ export function paragraphScope(source: string, place: number): Scope | undefined
     (paragraph.match(/%%/g)?.length ?? 0) % 2 === 1
   )
     return undefined;
-  // A quote running over from the paragraph before, or on into the next (§5.7).
-  const kept = earlier.replace(/\n+$/, "");
-  const previous = kept.slice(kept.lastIndexOf("\n\n") + 1);
-  if (leavesOpen(paragraph) || leavesOpen(previous)) return undefined;
   const head = front && !front.endsWith("\n") ? `${front}\n` : front;
+  // A quote running on into the next paragraph, or over from the last one with words in it
+  // (page turns, pauses and notes between are passed over, §5.7), as the format reads quotes:
+  // single ones too.
+  if (leavesOpen(head, paragraph)) return undefined;
+  const paragraphs = earlier.replace(/\n+$/, "").split(/\n{2,}/);
+  const previous = [...paragraphs].reverse().find(hasWords);
+  if (previous !== undefined && leavesOpen(head, previous)) return undefined;
   const start = head ? head.length + 1 : 0;
   const text = `${head}${head ? "\n" : ""}${paragraph}\n`;
   const offset = from - start;

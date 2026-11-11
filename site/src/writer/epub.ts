@@ -160,6 +160,8 @@ export function emphasisOf(declarations: string): Emphasis {
       if (/^(bold|bolder)$/.test(value) || Number(value) >= 600) out.bold = true;
       else if (/^(normal|lighter)$/.test(value) || (Number(value) > 0 && Number(value) < 600))
         out.bold = false;
+    } else if (property === "display") {
+      if (value === "block") out.block = true;
     } else if (property === "font") {
       if (/\b(italic|oblique)\b/.test(value)) out.italic = true;
       if (/\b(bold|bolder|[6-9]00)\b/.test(value)) out.bold = true;
@@ -180,7 +182,8 @@ export function styleSheets(css: readonly string[]): StyleOf {
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
       const said = emphasisOf(body);
-      if (said.italic === undefined && said.bold === undefined) continue;
+      if (said.italic === undefined && said.bold === undefined && said.block === undefined)
+        continue;
       for (const selector of selectors.split(",")) {
         const key = selector.trim().toLowerCase();
         if (/^[a-z0-9]*(\.[\w-]+)?$/.test(key) && key)
@@ -205,7 +208,8 @@ function leftOut(pages: readonly string[]): string[] {
   const left: string[] = [];
   if (/<(img|image|svg)\b/i.test(all)) left.push("pictures");
   if (/<table\b/i.test(all)) left.push("tables (their text is kept, as paragraphs)");
-  if (/epub:type\s*=\s*["'](?:foot|end|rear)?notes?["']/i.test(all)) left.push("notes");
+  if (/(?:epub:type|role)\s*=\s*["'][^"']*\b(?:doc-)?(?:foot|end|rear)?notes?\b|noteref/i.test(all))
+    left.push("notes and their numbers");
   return left;
 }
 
@@ -252,10 +256,18 @@ export async function storyOfEpub(
   const parser = new DOMParser();
   const pages: Array<{ name: string; page: string }> = [];
   const missing: string[] = [];
-  const spine = elements(opf, "itemref").map((tag) => attributes(tag).get("idref") ?? "");
+  const refs = elements(opf, "itemref").map((tag) => attributes(tag));
+  const spine = refs.map((ref) => ref.get("idref") ?? "");
   let chapters = 0;
-  for (const idref of spine) {
+  let aside = 0;
+  for (const ref of refs) {
+    const idref = ref.get("idref") ?? "";
     const item = items.get(idref);
+    // Out of the reading order (`linear="no"`): notes and the like, left out and said.
+    if (ref.get("linear") === "no") {
+      aside++;
+      continue;
+    }
     // A picture page (a cover), or the contents: not part of the text.
     if (item && (!/html/.test(item.type) || item.nav)) continue;
     chapters++;
@@ -294,7 +306,12 @@ export async function storyOfEpub(
       ...(author ? { author } : {}),
       ...(language ? { language } : {}),
     }),
-    left: leftOut(pages.map(({ page }) => page)),
+    left: [
+      ...leftOut(pages.map(({ page }) => page)),
+      ...(aside
+        ? [`${aside} page${aside === 1 ? "" : "s"} outside the reading order (notes and the like)`]
+        : []),
+    ],
     missing,
     chapters,
   };

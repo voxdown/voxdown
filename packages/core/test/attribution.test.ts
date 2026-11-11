@@ -152,6 +152,15 @@ describe("giving quotes", () => {
     expect(result).toMatchObject({ changes: [], given: [1], refused: [] });
   });
 
+  it("change the name in a quote's own mark, rather than add a second", () => {
+    const story = parse("@Tom (softly) “Who’s there?” asked Tom.\n");
+    const result = giveQuotes(story, [{ quote: 1, speaker: "Bob" }]);
+    expect(applyChanges(story.source, result.changes)).toBe(
+      "@Bob (softly) “Who’s there?” asked Tom.\n",
+    );
+    expect(result.given).toEqual([1]);
+  });
+
   it("with no cast, adds none", () => {
     const story = parse("“Hi,” said Tom.\n");
     const result = giveQuotes(story, [{ quote: 1, speaker: "Tom" }]);

@@ -118,6 +118,7 @@ import {
   rememberFile,
   versionsOf,
 } from "./store";
+import { type Wanting, nextWanting } from "./story-data";
 import { type CastView, castOf, passageIn } from "./story-data";
 import {
   type Speaker,
@@ -1285,11 +1286,28 @@ function nextProblem(by: 1 | -1): boolean {
  * Ctrl+K then gives it to someone, the name its tag gives first.
  */
 function nextQuote(): boolean {
+  // A long story's from the worker's reading of it (asked for again if the text has changed),
+  // never by reading the book on the page.
+  if (view.state.doc.length >= LONG) {
+    const doc = view.state.doc;
+    const found = readNow() && read ? Promise.resolve(read.reply) : readInWorker(doc.toString());
+    void found.then((reply) => {
+      if (view.state.doc !== doc) return;
+      read = { doc, reply };
+      showQuote(nextWanting(reply.wanting, view.state.selection.main.head));
+    });
+    return true;
+  }
   if (storyVersion !== version) refresh();
-  const quote = nextNarratedQuote(current(), view.state.selection.main.head);
+  showQuote(nextNarratedQuote(current(), view.state.selection.main.head));
+  return true;
+}
+
+/** A quote that wants a speaker, selected and said; or that none does. */
+function showQuote(quote: Wanting | undefined): void {
   if (!quote) {
     notice("Every quote has its speaker: none is left for the narrator to read.");
-    return true;
+    return;
   }
   view.dispatch({
     selection: EditorSelection.range(quote.from, quote.to),
@@ -1302,7 +1320,6 @@ function nextQuote(): boolean {
       : `Line ${line}: the narrator reads this quote. ${keys("Mod+K")} gives it to someone; ${keys("Mod+Shift+K")} goes to the next.`,
     true,
   );
-  return true;
 }
 
 /**

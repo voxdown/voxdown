@@ -23,21 +23,34 @@ const BLOCK =
  * verse's stanza, a table cell) is a paragraph too, its line breaks kept, so no words are lost.
  */
 /** What a style sheet says of an element's emphasis: italic or not, bold or not, or nothing. */
-export type Emphasis = { italic?: boolean; bold?: boolean };
+export type Emphasis = {
+  italic?: boolean;
+  bold?: boolean;
+  /** Shown as a block of its own (`display: block`): a verse's line in a `span`. */
+  block?: boolean;
+};
+
+/** A note's reference or the note itself, in an ebook: left out, never read in the text. */
+export function isNote(element: Element): boolean {
+  const type = `${element.getAttribute("epub:type") ?? ""} ${element.getAttribute("role") ?? ""}`;
+  return /\b(noteref|footnote|endnote|endnotes|rearnote|rearnotes|doc-noteref|doc-footnote|doc-endnote|doc-endnotes)\b/i.test(
+    type,
+  );
+}
 
 /** An element's emphasis from its style sheets and its `style` attribute, where a book has them. */
 export type StyleOf = (element: Element) => Emphasis;
 
 export function paragraphsOf(root: Element, styleOf?: StyleOf): Paragraph[] {
   const out: Paragraph[] = [];
-  const runsOf = (nodes: readonly Node[], start: Required<Emphasis>, pre = false) =>
+  const runsOf = (nodes: readonly Node[], start: { italic: boolean; bold: boolean }, pre = false) =>
     readRuns(nodes, start, styleOf, pre);
   const text = (runs: Run[]) => {
     if (runs.some((run) => "text" in run && run.text.trim())) out.push({ kind: "text", runs });
   };
-  const visit = (element: Element, inherited: Required<Emphasis>) => {
+  const visit = (element: Element, inherited: { italic: boolean; bold: boolean }) => {
     const tag = element.tagName.toLowerCase();
-    if (/^(script|style|nav|head|title|template)$/.test(tag)) return;
+    if (/^(script|style|nav|head|title|template)$/.test(tag) || isNote(element)) return;
     // A block's own style (`<p style="font-style: italic">`, a class) holds for all it contains.
     const own = styleOf?.(element) ?? {};
     const here = {
@@ -83,7 +96,7 @@ export function paragraphsOf(root: Element, styleOf?: StyleOf): Paragraph[] {
  */
 function readRuns(
   nodes: readonly Node[],
-  start: Required<Emphasis>,
+  start: { italic: boolean; bold: boolean },
   styleOf: StyleOf | undefined,
   pre = false,
 ): Run[] {
@@ -110,11 +123,20 @@ function readRuns(
       runs.push({ lineBreak: true });
       return;
     }
-    if (/^(script|style|template)$/.test(tag)) return;
+    // Pronunciation over ruby text, and a note's number, aren't the words.
+    if (/^(script|style|template|rt|rp)$/.test(tag) || isNote(node as Element)) return;
     const own = styleOf?.(node as Element) ?? {};
+    // A verse's line in a span shown as a block: a line of its own.
+    const block = own.block === true;
+    const breakHere = () => {
+      const last = runs.at(-1);
+      if (last && !("lineBreak" in last)) runs.push({ lineBreak: true });
+    };
+    if (block) breakHere();
     const isItalic = own.italic ?? (italic || tag === "em" || tag === "i" || tag === "cite");
     const isBold = own.bold ?? (bold || tag === "strong" || tag === "b");
     for (const child of node.childNodes) walk(child, isItalic, isBold);
+    if (block) breakHere();
   };
   for (const node of nodes) walk(node, start.italic, start.bold);
   // Spaces at the ends of the paragraph and of its lines go.
@@ -176,11 +198,12 @@ export function writeRuns(runs: readonly Run[]): string {
     const [, before = "", words = "", after = ""] = /^(\s*)([\s\S]*?)(\s*)$/.exec(escaped) ?? [];
     out += `${before}${sign}${words}${sign}${after}`;
   }
-  // A line that would open as a heading, a group or a list keeps its first sign as text.
+  // A line that would open as a heading or a group, or be a scene break, keeps its first sign as
+  // text. Lists and quotations aren't marks in a story (§11): `1. Not a list` stays as it is.
   return out
     .split("\n")
-    .map((line) => line.trim())
-    .map((line) => line.replace(/^(#|:::|-|\+|>|\d+\.)(?=\s|$)/, "\\$1"))
+    .map((line) => line.replace(/[ \t]{2,}/g, " ").trim())
+    .map((line) => line.replace(/^(#|:::)(?=\s|#|$)/, "\\$1").replace(/^(-{3,}\s*)$/, "\\$1"))
     .join("\n");
 }
 
@@ -209,7 +232,9 @@ export function writeStory(
     paragraph.kind === "break" || isBreak(paragraph)
       ? "* * *"
       : paragraph.kind === "heading"
-        ? `${"#".repeat(Math.min(6, paragraph.level))} ${writeRuns(paragraph.runs).replace(/\n/g, " ")}`
+        ? `${"#".repeat(Math.min(6, paragraph.level))} ${writeRuns(paragraph.runs)
+            .replace(/\s*\n\s*/g, " ")
+            .trim()}`
         : writeRuns(paragraph.runs),
   );
   return `${front.join("\n")}\n${body.join("\n\n")}\n`;

@@ -13,9 +13,11 @@ import {
   type CastView,
   type Passage,
   type SceneData,
+  type Wanting,
   castOf,
   passagesOf,
   scenesOf,
+  wantingQuotes,
 } from "./story-data";
 
 export type RenderAsk = { id: number; text: string; tab: "script" | "book" | "none" };
@@ -28,6 +30,8 @@ export type StoryRead = {
   cast: CastView;
   passages: Passage[];
   problems: Problem[];
+  /** The quotes that want a speaker, for Ctrl+Shift+K. */
+  wanting: Wanting[];
 } & Counts;
 
 export type RenderReply = { id: number; html: string } & StoryRead;
@@ -67,6 +71,7 @@ export function readFor({ id, text, tab }: RenderAsk): RenderReply {
     colors: [...characterColors(story)],
     cast: castOf(story),
     passages: passagesOf(story),
+    wanting: wantingQuotes(story),
     problems: problems(story, marks, linesOf(text)),
     ...countsOf(story),
   };

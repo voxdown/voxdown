@@ -173,6 +173,8 @@ function leftOut(xml: string): string[] {
   if (/<w:drawing\b|<w:pict\b/.test(xml)) left.push("pictures");
   if (/<w:footnoteReference\b|<w:endnoteReference\b/.test(xml)) left.push("footnotes");
   if (/<w:commentReference\b/.test(xml)) left.push("comments");
+  if (/<w:numPr\b/.test(xml)) left.push("list numbering");
+  if (/<w:sym\b/.test(xml)) left.push("symbols from symbol fonts");
   return left;
 }
 

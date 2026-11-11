@@ -17,8 +17,14 @@
 import type { Range } from "./source";
 
 export type YamlProblem = { message: string; range: Range };
-/** Where each key was written. List items use their index as a path segment. */
-export type YamlKey = { path: readonly string[]; range: Range };
+/**
+ * Where each key was written. List items use their index as a path segment. `value` is where a
+ * map key's value is written: from just after its colon (`from`, the spaces included) to the end of
+ * its last line, or, for a value on the key's own line, to the end of the value before any
+ * comment. `text` is the value as written, without those spaces.
+ */
+export type YamlKey = { path: readonly string[]; range: Range; value?: YamlValue };
+export type YamlValue = { from: number; to: number; text: Range };
 export type YamlResult = {
   data: Record<string, unknown>;
   keys: YamlKey[];
@@ -44,6 +50,9 @@ class YamlReader {
   private index = 0;
   private readonly keys: YamlKey[] = [];
   private readonly problems: YamlProblem[] = [];
+  /** How deep the maps and lists being read are nested, and the last line read as content. */
+  private depth = 0;
+  private lastContent = -1;
 
   constructor(text: string, offset: number) {
     let from = offset;
@@ -78,6 +87,31 @@ class YamlReader {
 
   private readMap(indent: number, path: readonly string[]): Record<string, unknown> {
     const map: Record<string, unknown> = {};
+    if (this.tooDeep(indent)) return map;
+    this.depth++;
+    try {
+      this.readEntries(map, indent, path);
+    } finally {
+      this.depth--;
+    }
+    return map;
+  }
+
+  /** Past this depth the rest of a block is reported and skipped, so no file can exhaust the stack. */
+  private tooDeep(indent: number): boolean {
+    if (this.depth < MAX_DEPTH) return false;
+    const line = this.peek();
+    if (line) this.problem("The front matter is nested too deeply here.", line);
+    while (this.index < this.lines.length) {
+      const next = this.lines[this.index] as YamlLine;
+      if (!isBlank(next) && next.indent < indent) break;
+      if (!isBlank(next)) this.lastContent = this.index;
+      this.index++;
+    }
+    return true;
+  }
+
+  private readEntries(map: Record<string, unknown>, indent: number, path: readonly string[]): void {
     for (;;) {
       this.skipBlank();
       const line = this.peek();
@@ -90,26 +124,66 @@ class YamlReader {
             : "Couldn't read this line.",
           line,
         );
+        this.lastContent = this.index;
         this.index++;
         continue;
       }
       const keyPath = [...path, entry.key];
-      this.keys.push({ path: keyPath, range: entry.range });
+      const key: YamlKey = { path: keyPath, range: entry.range };
+      this.keys.push(key);
       if (Object.hasOwn(map, entry.key)) this.problem(`“${entry.key}” is set twice.`, line);
+      const keyLine = this.index;
+      this.lastContent = keyLine;
       this.index++;
       setKey(map, entry.key, this.readValue(entry.rest, line, indent, keyPath, true));
+      key.value = this.valueRange(line, entry.rest, keyLine);
     }
-    return map;
+  }
+
+  /** Where the value after `key:` on `line` is written, now that it has been read. */
+  private valueRange(line: YamlLine, rest: string, keyLine: number): YamlValue {
+    const from = line.from + line.raw.length - rest.length;
+    const lead = rest.length - rest.trimStart().length;
+    const value = rest.trimStart();
+    if (this.lastContent > keyLine) {
+      const last = this.lines[this.lastContent] as YamlLine;
+      const to = last.from + last.raw.length;
+      const start =
+        value === "" || value.startsWith("#") ? (this.lines[keyLine + 1]?.from ?? to) : from + lead;
+      return { from, to, text: { from: start, to } };
+    }
+    let length = stripComment(value).length;
+    if (value.startsWith('"') || value.startsWith("'")) length = parseQuoted(value)?.end ?? length;
+    // No value, perhaps a comment: it is written just after the colon, and the comment keeps its
+    // space.
+    if (length === 0) return { from, to: from, text: { from, to: from } };
+    return {
+      from,
+      to: from + lead + length,
+      text: { from: from + lead, to: from + lead + length },
+    };
   }
 
   private readList(indent: number, path: readonly string[]): unknown[] {
     const list: unknown[] = [];
+    if (this.tooDeep(indent)) return list;
+    this.depth++;
+    try {
+      this.readItems(list, indent, path);
+    } finally {
+      this.depth--;
+    }
+    return list;
+  }
+
+  private readItems(list: unknown[], indent: number, path: readonly string[]): void {
     for (;;) {
       this.skipBlank();
       const line = this.peek();
       if (!line || line.indent < indent) break;
       if (line.indent > indent) {
         this.problem("This line is indented more than expected.", line);
+        this.lastContent = this.index;
         this.index++;
         continue;
       }
@@ -127,10 +201,10 @@ class YamlReader {
         );
         continue;
       }
+      this.lastContent = this.index;
       this.index++;
       list.push(this.readValue(item, line, indent, itemPath, false));
     }
-    return list;
   }
 
   /**
@@ -155,7 +229,7 @@ class YamlReader {
       this.problem("Flow maps, anchors, aliases and tags are not supported here.", line);
       return stripComment(value);
     }
-    return plainScalar(this.continuePlain(stripComment(value), indent));
+    return plainScalar(this.continuePlain(value, indent));
   }
 
   private readNested(indent: number, path: readonly string[], sameIndentList: boolean): unknown {
@@ -163,9 +237,12 @@ class YamlReader {
     const next = this.peek();
     if (!next) return null;
     if (next.indent > indent) {
-      return isListItem(next.text)
-        ? this.readList(next.indent, path)
-        : this.readMap(next.indent, path);
+      if (isListItem(next.text)) return this.readList(next.indent, path);
+      if (readKey(next)) return this.readMap(next.indent, path);
+      // A scalar that starts on the line after its key (`narrator:` then `  Watson`).
+      this.lastContent = this.index;
+      this.index++;
+      return this.readValue(next.text, next, indent, path, false);
     }
     if (sameIndentList && next.indent === indent && isListItem(next.text)) {
       return this.readList(indent, path);
@@ -175,28 +252,50 @@ class YamlReader {
 
   /**
    * A plain scalar may continue on following lines that are indented more than its key. A line
-   * that reads as `key: value` is not a continuation; it is reported where it stands.
+   * that reads as `key: value` is not a continuation; it is reported where it stands. A comment
+   * ends the scalar (YAML 1.2, §7.3.3: no comment may sit inside a plain scalar), so a line after
+   * one is reported too, rather than read as part of it.
    */
   private continuePlain(value: string, indent: number): string {
-    let joined = value;
+    let joined = stripComment(value);
+    if (hasComment(value)) return joined;
     for (;;) {
-      const next = this.peek();
+      // Empty lines inside a plain scalar are line breaks (YAML folding): look past them.
+      let ahead = this.index;
+      while (this.lines[ahead]?.text === "") ahead++;
+      const next = this.lines[ahead];
       if (!next || isBlank(next) || next.indent <= indent || readKey(next)) return joined;
-      joined += ` ${stripComment(next.text)}`;
-      this.index++;
+      const empty = ahead - this.index;
+      joined += `${empty > 0 ? "\n".repeat(empty) : " "}${stripComment(next.text)}`;
+      this.lastContent = ahead;
+      this.index = ahead + 1;
+      if (hasComment(next.text)) return joined;
     }
   }
 
   private readQuoted(value: string, line: YamlLine, indent: number): unknown {
-    let text = value;
-    let quoted = parseQuoted(text);
-    while (!quoted) {
+    // Each line is scanned once for the closing quote, and the lines joined once at the end, so
+    // a long value reads in linear time.
+    const quote = value[0] as string;
+    const pieces = [value];
+    let scan = scanPiece(value, 1, quote);
+    let before = 0;
+    while (!("end" in scan)) {
       const next = this.peek();
       if (!next || (!isBlank(next) && next.indent <= indent)) break;
-      text += `\n${next.text}`;
+      before += (pieces[pieces.length - 1] as string).length + 1;
+      pieces.push(next.text);
+      if (next.text !== "") this.lastContent = this.index;
       this.index++;
-      quoted = parseQuoted(text);
+      scan = scanPiece(next.text, 0, quote);
     }
+    const text = pieces.join("\n");
+    const quoted =
+      "end" in scan
+        ? decodeQuoted(text, before + scan.end, () =>
+            this.problem("This escape is not a character, so it is kept as written.", line),
+          )
+        : null;
     if (!quoted) {
       this.problem("This quoted value is never closed.", line);
       return value;
@@ -229,7 +328,11 @@ class YamlReader {
         this.problem("This line is indented less than the start of its block.", next);
         break;
       }
-      body.push(blank ? "" : next.raw.slice(contentIndent ?? 0));
+      // A line of spaces alone is empty, but for the spaces past the block's indentation, which
+      // are its content (YAML 1.2, §8.1.1.2): `|-` with `  a` and `    ` is "a\n  ".
+      const spaces = blank && contentIndent !== null ? next.raw.slice(contentIndent) : "";
+      body.push(blank ? spaces : next.raw.slice(contentIndent ?? 0));
+      if (!blank || spaces !== "") this.lastContent = this.index;
       this.index++;
     }
     let trailing = 0;
@@ -237,13 +340,16 @@ class YamlReader {
       body.pop();
       trailing++;
     }
+    // Keep chomping (`+`) keeps the line breaks at the end, of an empty block too (YAML 1.2,
+    // §8.1.1.2): `|+` and two empty lines is two line breaks.
+    if (body.length === 0) return chomping === "+" ? "\n".repeat(trailing) : "";
     const content = folded ? fold(body) : body.join("\n");
-    if (body.length === 0 || chomping === "-") return content;
+    if (chomping === "-") return content;
     return chomping === "+" ? `${content}\n${"\n".repeat(trailing)}` : `${content}\n`;
   }
 
   private readFlowList(value: string, line: YamlLine): unknown {
-    const body = stripComment(value);
+    const body = stripFlowComment(value);
     if (!body.endsWith("]")) {
       this.problem("A list in brackets must close on the same line.", line);
       return body;
@@ -254,7 +360,12 @@ class YamlReader {
       return body;
     }
     return items.map((item) => {
-      const quoted = item.startsWith('"') || item.startsWith("'") ? parseQuoted(item) : null;
+      const quoted =
+        item.startsWith('"') || item.startsWith("'")
+          ? parseQuoted(item, () =>
+              this.problem("This escape is not a character, so it is kept as written.", line),
+            )
+          : null;
       return quoted ? quoted.value : plainScalar(item);
     });
   }
@@ -273,6 +384,8 @@ class YamlReader {
     this.problems.push({ message, range: { from: line.from, to: line.from + line.raw.length } });
   }
 }
+
+const MAX_DEPTH = 32;
 
 function isBlank(line: YamlLine): boolean {
   return line.text === "" || line.text.startsWith("#");
@@ -312,6 +425,31 @@ function endsToken(text: string, index: number): boolean {
   return index >= text.length || text[index] === " " || text[index] === "\t";
 }
 
+/** In a list in brackets, a comment starts at a `#` after white space outside quotes. */
+function stripFlowComment(text: string): string {
+  let quote: string | null = null;
+  let itemStart = true;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quote) {
+      if (char === "\\" && quote === '"') i++;
+      else if (char === quote) quote = null;
+    } else if ((char === '"' || char === "'") && itemStart) {
+      quote = char;
+    } else if (char === "#" && (i === 0 || /[ \t]/.test(text[i - 1] ?? ""))) {
+      return text.slice(0, i).trim();
+    }
+    // A quote opens an item only at its start, after `[`, a comma and spaces.
+    if (!quote) itemStart = char === "[" || char === "," || (itemStart && /[ \t]/.test(char ?? ""));
+  }
+  return text.trim();
+}
+
+/** Whether a line has a comment: a `#` at its start or after white space. */
+function hasComment(text: string): boolean {
+  return /^#|[ \t]#/.test(text.trimStart());
+}
+
 /** A comment starts with `#` at the start or after white space. */
 function stripComment(text: string): string {
   if (text.startsWith("#")) return "";
@@ -333,26 +471,51 @@ function plainScalar(text: string): unknown {
  * A quoted scalar at the start of `text`, which may run over line breaks. Returns its value and
  * the index just after its closing quote, or null when it doesn't close.
  */
-function parseQuoted(text: string): { value: string; end: number } | null {
-  const quote = text[0];
-  for (let i = 1; i < text.length; i++) {
-    const char = text[i];
+function parseQuoted(text: string, bad?: () => void): { value: string; end: number } | null {
+  const scan = scanQuoted(text, 1);
+  return "end" in scan ? decodeQuoted(text, scan.end, bad) : null;
+}
+
+/**
+ * Looks for the closing quote of the scalar that opens `text`: the index after it, or null when
+ * it doesn't close.
+ */
+function scanQuoted(text: string, from: number): { end: number } | { open: true } {
+  return scanPiece(text, from, text[0] as string);
+}
+
+/**
+ * Looks for a closing `quote` in one line of a quoted scalar, from `from` on. A backslash at the
+ * end of a line escapes the line break, so the next line starts afresh.
+ */
+function scanPiece(piece: string, from: number, quote: string): { end: number } | { open: true } {
+  for (let i = from; i < piece.length; i++) {
+    const char = piece[i];
     if (quote === '"' && char === "\\") {
       i++;
       continue;
     }
     if (char !== quote) continue;
-    if (quote === "'" && text[i + 1] === "'") {
+    if (quote === "'" && piece[i + 1] === "'") {
       i++;
       continue;
     }
-    const inner = foldLines(text.slice(1, i));
-    return {
-      value: quote === '"' ? unescapeDouble(inner) : inner.replaceAll("''", "'"),
-      end: i + 1,
-    };
+    return { end: i + 1 };
   }
-  return null;
+  return { open: true };
+}
+
+/** The value of the quoted scalar that opens `text` and closes just before `end`. */
+function decodeQuoted(text: string, end: number, bad?: () => void): { value: string; end: number } {
+  const quote = text[0];
+  let raw = text.slice(1, end - 1);
+  // In double quotes, a backslash at a line's end joins it to the next with nothing between.
+  if (quote === '"') raw = raw.replace(/\\\r?\n[ \t]*/g, "");
+  const inner = foldLines(raw);
+  return {
+    value: quote === '"' ? unescapeDouble(inner, bad) : inner.replaceAll("''", "'"),
+    end,
+  };
 }
 
 /** Line breaks inside a quoted scalar: one becomes a space, an empty line becomes a newline. */
@@ -394,11 +557,19 @@ const DOUBLE_ESCAPES: Record<string, string> = {
   _: " ",
 };
 
-function unescapeDouble(text: string): string {
+function unescapeDouble(text: string, bad?: () => void): string {
   return text.replace(
     /\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)/g,
     (whole, code: string) => {
-      if (code.length > 1) return String.fromCodePoint(Number.parseInt(code.slice(1), 16));
+      if (code.length > 1) {
+        const point = Number.parseInt(code.slice(1), 16);
+        // Past the last code point there is no character: the escape stays as written.
+        if (point > 0x10ffff) {
+          bad?.();
+          return whole;
+        }
+        return String.fromCodePoint(point);
+      }
       return DOUBLE_ESCAPES[code] ?? whole;
     },
   );
@@ -437,7 +608,8 @@ function splitFlowItems(inner: string): string[] {
     if (quote) {
       if (char === "\\" && quote === '"') i++;
       else if (char === quote) quote = null;
-    } else if (char === '"' || char === "'") {
+    } else if ((char === '"' || char === "'") && inner.slice(start, i).trim() === "") {
+      // A quote opens only at an item's start: `don't` is a plain word.
       quote = char;
     } else if (char === ",") {
       items.push(inner.slice(start, i).trim());

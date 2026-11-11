@@ -1,3 +1,4 @@
+import { characterReference } from "./entities";
 /**
  * Character classes the format depends on: letters and digits in any script, quotation marks
  * (§5.5) and backslash escapes (§11).
@@ -79,9 +80,33 @@ export function isEscapable(char: string | undefined): boolean {
   return char !== undefined && (ASCII_PUNCTUATION.test(char) || QUOTE_MARKS.has(char));
 }
 
-/** Removes the backslash from every escape. */
+/**
+ * Removes the backslash from every escape, and puts each character reference's character in its
+ * place (§11), in one pass: `\\&amp;` is `&amp;`.
+ */
 export function removeEscapes(text: string): string {
-  return text.replace(ESCAPE, "$1");
+  if (!text.includes("&")) return text.replace(ESCAPE, "$1");
+  return text.replace(REFERENCE_OR_ESCAPE, (whole, escaped: string | undefined, offset: number) => {
+    if (escaped !== undefined) return escaped;
+    return characterReference(text, offset)?.char ?? whole;
+  });
+}
+
+const REFERENCE_OR_ESCAPE =
+  /\\([!-/:-@[-`{-~“”‘’„‚«»‹›「」『』])|&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{0,31});/g;
+
+/**
+ * Text with a backslash before each `&` that would start a character reference (§11), so it is
+ * read as written: `bells &amp; whistles` stays just that.
+ */
+export function escapeReferences(text: string): string {
+  if (!text.includes("&")) return text;
+  let out = "";
+  for (let at = 0; at < text.length; at++) {
+    if (text[at] === "&" && characterReference(text, at)) out += "\\";
+    out += text[at];
+  }
+  return out;
 }
 
 /** Unescaped, with every run of white space, line breaks included, made one space. */

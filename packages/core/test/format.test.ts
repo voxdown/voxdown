@@ -42,8 +42,13 @@ describe("the formatter (§13, rule 8)", () => {
   });
 
   it("makes straight quotes curly in the story's language, apostrophes too", () => {
-    expect(format(`@Gerald "Don't," he said, "it's a 6" nail."\n`, { quotes: "curly" })).toBe(
-      "@Gerald “Don’t,” he said, “it’s a 6” nail.”\n",
+    expect(format(`@Gerald "Don't," he said, "it's a six-inch nail."\n`, { quotes: "curly" })).toBe(
+      "@Gerald “Don’t,” he said, “it’s a six-inch nail.”\n",
+    );
+    // A mark after a digit stays as written (§13, rule 8). Here the parser reads `6"` as the
+    // quote's end, so as curly marks the line would be heard differently: it stays as it is.
+    expect(format(`@Gerald "It's a 6" nail," he said.\n`, { quotes: "curly" })).toBe(
+      `@Gerald "It's a 6" nail," he said.\n`,
     );
     expect(format(`@Mother 'Now run along,' she said.\n`, { quotes: "curly" })).toBe(
       "@Mother ‘Now run along,’ she said.\n",
@@ -71,5 +76,125 @@ describe("the formatter (§13, rule 8)", () => {
       expect(format(once, options)).toBe(once);
       expect(voices(once)).toEqual(voices(source));
     }
+  });
+
+  it("never gives a file front matter, and settles at once", () => {
+    expect(format("---")).toBe("\n---\n");
+    expect(parse(format("  ---\nHi")).frontMatter).toBe(null);
+    for (const source of [" # Title\nText", "One.\uFEFF\nTwo.\r\r\n", "Hi\n  ***  \nThere"]) {
+      const once = format(source);
+      expect(format(once)).toBe(once);
+    }
+    expect(format("One.\uFEFF\nTwo.")).toBe("One.\nTwo.\n");
+  });
+
+  it("keeps feet and inches, makes rock 'n' roll's marks apostrophes, and never touches an address", () => {
+    const curly = { quotes: "curly" as const };
+    expect(format(`He is 6'2" tall.`, curly)).toBe(`He is 6'2" tall.\n`);
+    expect(format("It was rock 'n' roll.", curly)).toBe("It was rock ’n’ roll.\n");
+    expect(format(`@Gerald "I like rock 'n' roll."`, curly)).toBe(
+      "@Gerald “I like rock ’n’ roll.”\n",
+    );
+    expect(format("See [it](https://example.com/it's).", curly)).toBe(
+      "See [it](https://example.com/it's).\n",
+    );
+  });
+
+  it("keeps group lines and each line's own line ending as written", () => {
+    expect(format(":::   @Gerald   (whispering)  \nHi  there\n:::  ")).toBe(
+      ":::   @Gerald   (whispering)  \nHi there\n:::  \n",
+    );
+    expect(format("One.\r\nTwo.\n## Head\r\nThree.\n")).toBe(
+      "One.\r\nTwo.\n\n## Head\r\n\r\nThree.\n",
+    );
+  });
+
+  it("refuses curly quotes that would move words to another speaker, line by line", () => {
+    const curly = { quotes: "curly" as const };
+    // As curly marks, the first ” would close Ann's quote and give "she said" to the narrator.
+    expect(format('@Ann "Wait,” she said" and left.', curly)).toBe(
+      '@Ann "Wait,” she said" and left.\n',
+    );
+    // One line that can't change doesn't stop the others.
+    expect(format(`@Tom 'Hello,’ said Tom, 'it's late.'\n@Ann "Hi," she said.\n`, curly)).toBe(
+      `@Tom 'Hello,’ said Tom, 'it's late.'\n@Ann “Hi,” she said.\n`,
+    );
+  });
+
+  it("tidies every line it can, and leaves one whose tidying would change who says what", () => {
+    // Without its stray carriage return the second line would open a group.
+    expect(format("Hi  there.\n\r::: whispering\nHello\n:::\n")).toBe(
+      "Hi there.\n\r::: whispering\nHello\n:::\n",
+    );
+    // `#` alone is no heading: an empty heading keeps its space, and the rest is tidied.
+    expect(format("---\ntitle: X\n---\n# \n\n")).toBe("---\ntitle: X\n---\n\n# \n");
+  });
+
+  it("curls quotes inside quotes with the language's inner marks", () => {
+    const curly = (text: string, language?: string) =>
+      format(text, { quotes: "curly", ...(language ? { language } : {}) }).trimEnd();
+    expect(curly(`@Tom "'Hello,' he said," she told me.`)).toBe(
+      "@Tom “‘Hello,’ he said,” she told me.",
+    );
+    expect(curly(`@Tom "She called it '_The Raven_'."`)).toBe(
+      "@Tom “She called it ‘_The Raven_’.”",
+    );
+    expect(curly(`@Tom "It was '*no*', then '2 o'clock', then '...and so on'."`)).toBe(
+      "@Tom “It was ‘*no*’, then ‘2 o’clock’, then ‘...and so on’.”",
+    );
+    expect(curly(`@Tom "Er sagte 'nein' und ging", sagte sie.`, "de")).toBe(
+      "@Tom „Er sagte ‚nein‘ und ging“, sagte sie.",
+    );
+    expect(curly(`@Tom «Il a dit 'non', puis il est parti», dit-elle.`, "fr")).toBe(
+      "@Tom «Il a dit “non”, puis il est parti», dit-elle.",
+    );
+    // Apostrophes: a word's own, a plural's, a decade's, and rock 'n' roll's.
+    expect(curly(`The '90s were great. The dogs' bowls. Rock 'n' roll.`)).toBe(
+      "The ’90s were great. The dogs’ bowls. Rock ’n’ roll.",
+    );
+  });
+
+  it("keeps a link or image as written, the spaces in an address in angle brackets too", () => {
+    expect(format("See  [the map](<maps/old  town.png>)  now.")).toBe(
+      "See [the map](<maps/old  town.png>) now.\n",
+    );
+    expect(format('![a  pic](<a  b.png> "A  title")  x')).toBe(
+      '![a  pic](<a  b.png> "A  title") x\n',
+    );
+  });
+
+  it("opens a quote inside a quote after a dash too", () => {
+    expect(format(`@Tom "He said—'no'—and left."`, { quotes: "curly" })).toBe(
+      "@Tom “He said—‘no’—and left.”\n",
+    );
+  });
+
+  it("writes the apostrophes of words cut short, and opens an inner quote only inside its quote", () => {
+    const curly = (text: string) => format(text, { quotes: "curly" }).trimEnd();
+    expect(curly(`@Tom "Give 'em the boys' toys," he said.`)).toBe(
+      "@Tom “Give ’em the boys’ toys,” he said.",
+    );
+    expect(curly(`"Get 'em," said the twins' mother.`)).toBe("“Get ’em,” said the twins’ mother.");
+    expect(curly(`"Tell 'em I said 'hello',"`)).toBe("“Tell ’em I said ‘hello’,”");
+    expect(curly(`He said, "'Tis the dogs' dinner."`)).toBe("He said, “’Tis the dogs’ dinner.”");
+    expect(curly(`@Abernethy ''Tis a raw night, Miss Pruett.'`)).toBe(
+      "@Abernethy ‘’Tis a raw night, Miss Pruett.’",
+    );
+    // A `'` that starts a word and that nothing closes can't be told from an opening mark: it
+    // stays as written (a speech over paragraphs in single quotes, §5.5).
+    expect(curly(`@Abernethy 'When I started, there were forty lamps.`)).toBe(
+      "@Abernethy 'When I started, there were forty lamps.",
+    );
+  });
+
+  it("curls quotes in each language's own marks, a region's before its language's", () => {
+    const curly = (language: string) =>
+      format(`@Ann "He said 'no' and left," she said.`, { quotes: "curly", language }).trimEnd();
+    expect(curly("it")).toBe("@Ann «He said “no” and left,» she said.");
+    expect(curly("de-CH")).toBe("@Ann «He said ‹no› and left,» she said.");
+    expect(curly("da")).toBe("@Ann »He said ›no‹ and left,« she said.");
+    expect(curly("pl")).toBe("@Ann „He said «no» and left,” she said.");
+    expect(curly("ja")).toBe("@Ann 「He said 『no』 and left,」 she said.");
+    expect(curly("sv")).toBe("@Ann “He said ‘no’ and left,” she said.");
   });
 });

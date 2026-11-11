@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parse, spokenScript } from "../src/index";
 import { readYaml } from "../src/yaml";
 
 const read = (lines: string[]) => readYaml(lines.join("\n"));
@@ -193,5 +194,152 @@ describe("the front matter YAML subset", () => {
   it("handles CRLF line endings and empty input", () => {
     expect(readYaml("a: 1\r\nb: two\r\n").data).toEqual({ a: 1, b: "two" });
     expect(readYaml("").data).toEqual({});
+  });
+
+  it("never exhausts the stack: nesting past 32 levels is reported and skipped", () => {
+    const deep = `k:\n  ${"- ".repeat(5000)}x\nafter: true`;
+    const result = readYaml(deep);
+    expect(result.problems.map((problem) => problem.message)).toContain(
+      "The front matter is nested too deeply here.",
+    );
+    expect(result.data.after).toBe(true);
+    const story = parse(`---\n${deep}\n---\nHello.`);
+    expect(spokenScript(story)).toBe("Narrator: Hello.");
+  });
+
+  it("says where each value is written, to its last line and before a comment", () => {
+    const text = 'title: "Chapter #1" # keep\nblock: |\n  First\n\n  Second\nnext: 1';
+    const keys = readYaml(text).keys;
+    const value = (key: string) => {
+      const found = keys.find((entry) => entry.path[0] === key)?.value;
+      return found && text.slice(found.text.from, found.text.to);
+    };
+    expect(value("title")).toBe('"Chapter #1"');
+    expect(value("block")).toBe("|\n  First\n\n  Second");
+    expect(value("next")).toBe("1");
+  });
+
+  it("keeps an escape that is no character as written, with a problem, instead of failing", () => {
+    const result = readYaml('title: "a \\UFFFFFFFF b"');
+    expect(result.data.title).toBe("a \\UFFFFFFFF b");
+    expect(result.problems.map((problem) => problem.message)).toContain(
+      "This escape is not a character, so it is kept as written.",
+    );
+    expect(spokenScript(parse('---\ntitle: "\\UFFFFFFFF"\n---\nHello.'))).toBe("Narrator: Hello.");
+  });
+
+  it("reads a # inside a quoted list item, and a plain value past an empty line", () => {
+    expect(readYaml('tags: ["a # b", c] # x').data.tags).toEqual(["a # b", "c"]);
+    expect(readYaml("title: first\n\n  second\nnext: 1").data).toEqual({
+      title: "first\nsecond",
+      next: 1,
+    });
+  });
+
+  it("reads a long quoted value over many lines in linear time", () => {
+    const lines = Array.from({ length: 30_000 }, () => "  continuation").join("\n");
+    const start = performance.now();
+    const title = readYaml(`title: "start\n${lines}\n  end"`).data.title as string;
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(title.startsWith("start continuation")).toBe(true);
+  });
+
+  it("opens a quote in a list only at an item's start, and joins an escaped line break", () => {
+    expect(readYaml("tags: [don't, can't, stop]").data.tags).toEqual(["don't", "can't", "stop"]);
+    expect(readYaml('title: "The long\\\n  story"').data.title).toBe("The longstory");
+    expect(readYaml('title: "two\n  lines"').data.title).toBe("two lines");
+  });
+
+  it("reads a value that starts on the line after its key", () => {
+    expect(readYaml("narrator:\n  Watson").data).toEqual({ narrator: "Watson" });
+    expect(readYaml("title:\n  The Long\n  Night\nnarrator: Ann").data).toEqual({
+      title: "The Long Night",
+      narrator: "Ann",
+    });
+    expect(readYaml("cast:\n  Ann:\n    Ann Smith").data).toEqual({ cast: { Ann: "Ann Smith" } });
+    expect(readYaml("title:\n  'quoted'").data).toEqual({ title: "quoted" });
+    expect(readYaml("title:\n  - a list").data).toEqual({ title: ["a list"] });
+  });
+
+  it("ends a plain value at a comment, and reports a line that would carry it on", () => {
+    // YAML 1.2 (§7.3.3) has no comment inside a plain scalar: a YAML library refuses these.
+    // The value is read up to its comment, and the line after is reported where it stands.
+    for (const text of ["title: first # a comment\n  second", "title: first\n  # c\n  second"]) {
+      const read = readYaml(text);
+      expect(read.data).toEqual({ title: "first" });
+      expect(
+        read.problems.map((problem) => text.slice(problem.range.from, problem.range.to)),
+      ).toEqual(["  second"]);
+    }
+    expect(readYaml("title: first\n  second # c").data).toEqual({ title: "first second" });
+  });
+
+  it("keeps an empty block's line breaks with keep chomping, as YAML does", () => {
+    // Each as a YAML library (PyYAML 6) reads it (YAML 1.2, §8.1.1.2). The reader is given the
+    // lines between a file's `---` lines, joined: a document's last line break isn't in them.
+    const cases: Array<[string, unknown]> = [
+      ["title: |+\n\n\n", { title: "\n\n" }],
+      ["title: |+\n\n", { title: "\n" }],
+      ["title: |+\n", { title: "" }],
+      ["title: >+\n\n\n", { title: "\n\n" }],
+      ["title: |-\n\n\n", { title: "" }],
+      ["title: |\n\n\n", { title: "" }],
+      ["title: |+\n\n\nnext: x", { title: "\n\n", next: "x" }],
+      ["title: |+\n  a\n\n\n", { title: "a\n\n\n" }],
+      ["title: >+\n  a\n  b\n\n", { title: "a b\n\n" }],
+      ["a: |+\n\n  \nb: 1", { a: "\n\n", b: 1 }],
+    ];
+    for (const [document, data] of cases) {
+      const lines = document.replace(/\n$/, "");
+      expect(readYaml(lines).data, JSON.stringify(document)).toEqual(data);
+      const file = parse(`---\n${lines}\n---\nHello.`);
+      expect(file.frontMatter?.data, JSON.stringify(document)).toEqual(data);
+    }
+  });
+
+  it("keeps the spaces of a line past its block's indentation, as YAML does", () => {
+    // Each as PyYAML 6 reads it: a line of spaces alone is content past the indentation.
+    const cases: Array<[string, string]> = [
+      ["title: |-\n  a\n    ", "a\n  "],
+      ["title: |\n  a\n    \n  b", "a\n  \nb\n"],
+      ["title: >\n  a\n    \n  b", "a\n  \nb\n"],
+      ["title: |+\n  a\n    \n", "a\n  \n\n"],
+      ["title: >-\n  a\n   \n  b", "a\n \nb"],
+      ["title: |\n  a\n  \n  b", "a\n\nb\n"],
+    ];
+    for (const [lines, title] of cases) {
+      expect(readYaml(lines).data.title, JSON.stringify(lines)).toBe(title);
+    }
+  });
+});
+
+describe("the story's details", () => {
+  it("are their text as written, where YAML would read a number or true or false", () => {
+    const story = parse(
+      [
+        "---",
+        "title: 1.10",
+        "subtitle: 1e3",
+        "author: true # a pen name",
+        "cast:",
+        "  R2: 1.50",
+        "  C3:",
+        "    name: 007",
+        "    about: 3.0",
+        "---",
+        '@R2 "Beep." @C3 "Hello."',
+      ].join("\n"),
+    );
+    expect(story.meta.title).toBe("1.10");
+    expect(story.meta.subtitle).toBe("1e3");
+    expect(story.meta.author).toBe("true");
+    expect(story.cast.map(({ handle, name, about }) => [handle, name, about])).toEqual([
+      ["R2", "1.50", undefined],
+      ["C3", "007", "3.0"],
+    ]);
+    // The data keeps what YAML reads.
+    expect(story.frontMatter?.data.title).toBe(1.1);
+    // Quoted, it was always text.
+    expect(parse('---\ntitle: "1.10"\n---\nHi.').meta.title).toBe("1.10");
   });
 });

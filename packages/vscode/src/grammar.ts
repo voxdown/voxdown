@@ -290,7 +290,7 @@ function closer(chars: string): string {
 }
 
 /** A paragraph ends at a blank line, or at a line that is a heading, group or scene break. */
-const PARAGRAPH_END = String.raw`(?=^\s*$)|(?=^[ \t]*(?:#{1,6}[ \t]|:{3,}|(?:-{3,}|\*{3,}|_{3,})[ \t]*$))`;
+const PARAGRAPH_END = String.raw`(?=^\s*$)|(?=^[ \t]*(?:#{1,6}[ \t]|:{3,}|(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$))`;
 
 function quote(open: string, close: string, style: string, multiLine: boolean): Rule {
   // A `'`, `‘` or `"` straight after a letter or digit is an apostrophe or a measure (§5.5).
@@ -309,6 +309,9 @@ function quote(open: string, close: string, style: string, multiLine: boolean): 
   };
 }
 
+/** A note that doesn't close on its line. */
+const NOTE_OVER_LINE = "(?=%%(?!.*%%))";
+
 /** From a character mark to the end of its line, or to the next character mark. */
 function speech(multiLine: boolean): Rule {
   const { source, captures } = compile(characterMark);
@@ -316,8 +319,10 @@ function speech(multiLine: boolean): Rule {
   return {
     begin: source,
     beginCaptures: captures,
-    // `(?=^)`: a quote that ran to the end of its paragraph ends the line it was on.
-    end: multiLine ? `$|(?=^)|${nextMark}` : `$|${nextMark}`,
+    // `(?=^)`: a quote that ran to the end of its paragraph ends the line it was on. A note that
+    // runs on past the line's end ends what the mark does before it: the words after the note
+    // are the next line's (§5.3, §10), though a quote open in it carries on.
+    end: multiLine ? `$|(?=^)|${nextMark}|${NOTE_OVER_LINE}` : `$|${nextMark}|${NOTE_OVER_LINE}`,
     patterns: [
       include("escape"),
       include("note"),
@@ -416,7 +421,8 @@ const heading: Rule = {
 const sceneBreak = match(
   undefined,
   "^[ \\t]*",
-  cap(vd(S.break), String.raw`(?:-{3,}|\*{3,}|_{3,})[ \t]*`),
+  // Three or more of one sign, spaces between them or not: `***`, `* * *` (§4.4).
+  cap(vd(S.break), String.raw`(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})`),
   "$",
 );
 

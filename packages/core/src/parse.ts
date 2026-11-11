@@ -52,6 +52,8 @@ class BlockReader {
   readonly blocks: Block[] = [];
   readonly groups: Group[] = [];
   private readonly open: Group[] = [];
+  /** The open groups as a chain, innermost first, that each block keeps a link to. */
+  private chain: GroupChain | null = null;
   private carry: OpenQuote | null = null;
 
   constructor(
@@ -86,10 +88,12 @@ class BlockReader {
         );
         this.open.push(group);
         this.groups.push(group);
+        this.chain = { group, outer: this.chain };
         break;
       }
       case "group-close": {
         const group = this.open.pop();
+        this.chain = this.chain?.outer ?? null;
         if (group) group.closeRange = block.range;
         else this.warn("stray-group-close", "This line of colons closes no group.", block.range);
         break;
@@ -127,13 +131,17 @@ class BlockReader {
     const groups = [...this.open];
     const read = readParagraph(lines, { groups, names: this.names, warn: this.warn }, carried);
     if (read.open) this.carry = read.open;
-    this.blocks.push({
-      kind: "paragraph",
-      lines: read.lines,
-      visibility: resolveVisibility(instructionsOf(read.lines), groups),
-      groups,
-      range: block.range,
-    });
+    this.blocks.push(
+      withGroups(
+        {
+          kind: "paragraph",
+          lines: read.lines,
+          visibility: resolveVisibility(instructionsOf(read.lines), groups),
+          range: block.range,
+        },
+        this.chain,
+      ),
+    );
   }
 
   private heading(block: RawBlock & { kind: "heading" }): void {
@@ -142,14 +150,18 @@ class BlockReader {
     const read = readParagraph(lexed, { groups, names: this.names, warn: this.warn }, null);
     if (read.open) this.warnUnclosed(read.open);
     const line: Line = read.lines[0] ?? { range: block.content, items: [] };
-    this.blocks.push({
-      kind: "heading",
-      level: block.level,
-      line,
-      visibility: resolveVisibility(instructionsOf([line]), groups),
-      groups,
-      range: block.range,
-    });
+    this.blocks.push(
+      withGroups(
+        {
+          kind: "heading",
+          level: block.level,
+          line,
+          visibility: resolveVisibility(instructionsOf([line]), groups),
+          range: block.range,
+        },
+        this.chain,
+      ),
+    );
   }
 
   private endCarry(): void {
@@ -160,6 +172,35 @@ class BlockReader {
   private warnUnclosed(quote: OpenQuote): void {
     this.warn("unclosed-quote", "This quote is never closed.", quote.range);
   }
+}
+
+/** The groups open around a block, innermost first, each linked to the one around it. */
+type GroupChain = { group: Group; outer: GroupChain | null };
+
+/**
+ * Gives a block its `groups`, listed from the chain when read. Groups nested thousands deep would
+ * otherwise cost every block inside them a list of them all, and memory would grow with the
+ * square of the depth; this way each block keeps one link. Setting `groups` keeps the new list.
+ */
+function withGroups<T extends object>(block: T, chain: GroupChain | null): T & { groups: Group[] } {
+  Object.defineProperty(block, "groups", {
+    enumerable: true,
+    configurable: true,
+    get: () => {
+      const groups: Group[] = [];
+      for (let link = chain; link; link = link.outer) groups.push(link.group);
+      return groups.reverse();
+    },
+    set: (groups: Group[]) => {
+      Object.defineProperty(block, "groups", {
+        value: groups,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    },
+  });
+  return block as T & { groups: Group[] };
 }
 
 function instructionsOf(lines: readonly Line[]): Instruction[] {

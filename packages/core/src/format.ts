@@ -1,17 +1,17 @@
+import { type TextChange, applyChanges, hearingDifferences, sameHearing } from "./edit";
+import { lexedTokens } from "./lexed";
+import { type ScriptLine, lines } from "./lines";
+import type { Item, Story } from "./model";
+import { parse } from "./parse";
 /**
  * The formatter (§13, rule 8): tidies a file only when its author asks, and never changes who says
  * what. It writes names as the cast spells them, trims and collapses spaces, makes runs of blank
  * lines one, and puts a blank line around headings and scene breaks. Straight quotation marks
- * become curly ones only when asked, in the story's language.
+ * become curly ones only when asked, in the story's language. The front matter, group lines and
+ * each line's line ending stay as written.
  */
-import { findNotes, joinLines, scanBlocks } from "./blocks";
-import { type TextChange, applyChanges } from "./edit";
-import { readFrontMatter } from "./front-matter";
-import { type Token, lexLines } from "./inline";
-import { type ScriptLine, lines } from "./lines";
-import type { Item, Story } from "./model";
-import { parse } from "./parse";
-import { SourceText } from "./source";
+import { session } from "./session";
+import { type Range, SourceText } from "./source";
 
 export type FormatOptions = {
   /** Write every name as the cast spells it, or as the file first spells it. Default true. */
@@ -26,17 +26,199 @@ export type FormatOptions = {
 
 /** Formats a file. An already formatted file comes back unchanged. */
 export function format(source: string, options: FormatOptions = {}): string {
+  return session(() => formatNow(source, options));
+}
+
+function formatNow(source: string, options: FormatOptions): string {
   let text = source;
   if (options.names !== false) text = applyChanges(text, nameChanges(parse(text)));
-  if (options.quotes === "curly") {
-    const before = parse(text);
-    const curly = applyChanges(text, quoteChanges(before, options.language));
-    // Curly marks follow slightly different rules (§5.5); keep the straight ones if who says
-    // what would change.
-    if (sameVoices(lines(before), lines(parse(curly)))) text = curly;
+  // Each step keeps what it can: a line whose change would make anyone say anything differently
+  // keeps its old form, and the rest of the file is still tidied. A step runs until it settles,
+  // so formatting a formatted file changes nothing.
+  for (let round = 0; round < 8; round++) {
+    const before = text;
+    if (options.quotes === "curly") {
+      const story = parse(text);
+      text = guarded(text, story, byLine(text, quoteChanges(story, options.language)));
+    }
+    if (options.spacing !== false) {
+      // Line by line. Tidying can turn a line into a heading or a scene break, which then wants
+      // blank lines of its own: the next round gives them.
+      text = guarded(text, parse(text), spacingRuns(text));
+    }
+    if (text === before) break;
   }
-  if (options.spacing !== false) text = spacing(text);
   return text;
+}
+
+/**
+ * The text with its straight quotation marks and apostrophes made curly, as `format` makes them
+ * with `quotes: "curly"`, and nothing else changed: where curly marks would make anyone say
+ * anything differently, a line keeps its straight ones. Front matter, link addresses and titles,
+ * marks, sounds, notes and instructions are never touched. For an editor that curls what is
+ * pasted; each mark stays one character, so offsets don't move.
+ */
+export function curlQuotes(source: string, options: { language?: string } = {}): string {
+  return session(() => {
+    let text = source;
+    for (let round = 0; round < 8; round++) {
+      const before = text;
+      const story = parse(text);
+      text = guarded(text, story, byLine(text, quoteChanges(story, options.language)));
+      if (text === before) break;
+    }
+    return text;
+  });
+}
+
+/** The story's blocks, and each heading's level: tidying never makes a heading a paragraph. */
+function shapeOf(story: Story): string {
+  return story.blocks
+    .map((block) => (block.kind === "heading" ? `h${block.level}` : block.kind))
+    .join(" ");
+}
+
+/** Every character but spaces, with quotation marks and apostrophes as one: what may never change. */
+function wordsOf(text: string): string {
+  return text.replace(/["'“”‘’„‚«»‹›「」『』]/g, "'").replace(/\s+/g, "");
+}
+
+/** Changes in runs, one per line: a quote's marks are decided together. */
+function byLine(text: string, changes: readonly TextChange[]): TextChange[][] {
+  // Each change's line, by the line break before it, found by halves: on a long line, searching
+  // back from each change to the line's start would take time with the square of its length.
+  const breaks: number[] = [];
+  for (let at = text.indexOf("\n"); at >= 0; at = text.indexOf("\n", at + 1)) breaks.push(at);
+  const lineOf = (at: number) => {
+    let low = 0;
+    let high = breaks.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if ((breaks[middle] as number) < at) low = middle + 1;
+      else high = middle;
+    }
+    return low === 0 ? -1 : (breaks[low - 1] as number);
+  };
+  const runs = new Map<number, TextChange[]>();
+  for (const change of changes) {
+    const line = lineOf(change.from);
+    const run = runs.get(line);
+    if (run) run.push(change);
+    else runs.set(line, [change]);
+  }
+  return [...runs.values()];
+}
+
+/**
+ * The text with as many runs of changes made as keep its words, and who says what and how, exactly
+ * as before. All of them are tried at once; where a word would be heard differently, the runs of
+ * its line are left out (then, if that isn't enough, of its paragraph), and the rest tried again,
+ * so a long file with a few lines that can't change takes a few readings, not one per line. What
+ * that can't settle is narrowed down by halves.
+ */
+function guarded(text: string, story: Story, runs: readonly TextChange[][]): string {
+  const words = wordsOf(text);
+  const shape = shapeOf(story);
+  const rows = lines(story);
+  const lineStarts = [0];
+  for (let at = text.indexOf("\n"); at >= 0; at = text.indexOf("\n", at + 1))
+    lineStarts.push(at + 1);
+  const lineOf = (at: number) => {
+    let low = 0;
+    let high = lineStarts.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if ((lineStarts[middle] as number) <= at) low = middle;
+      else high = middle - 1;
+    }
+    return low;
+  };
+  // The block holding an offset, by halves: blocks come in order.
+  const blockOf = (at: number) => {
+    let low = 0;
+    let high = story.blocks.length - 1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      const range = (story.blocks[middle] as Story["blocks"][number]).range;
+      if (at < range.from) high = middle - 1;
+      else if (at > range.to) low = middle + 1;
+      else return middle;
+    }
+    return -1;
+  };
+  const runLines = runs.map((run) => lineOf((run[0] as TextChange).from));
+  const runBlocks = runs.map((run) => blockOf((run[0] as TextChange).from));
+  let left = runs.map((_, index) => index);
+  const widened = new Set<number>();
+  for (let round = 0; round <= runs.length; round++) {
+    const candidate = applyChanges(
+      text,
+      left.flatMap((index) => runs[index] as TextChange[]),
+    );
+    if (wordsOf(candidate) !== words) break;
+    const after = parse(candidate);
+    const differences = hearingDifferences(story, after);
+    if (differences.length === 0) {
+      if (shapeOf(after) === shape && sameVoices(rows, lines(after))) return candidate;
+      break;
+    }
+    // Leave out the runs on each line where a word is heard differently; a line already left
+    // out widens to its paragraph.
+    const differing = new Set(differences.map(lineOf));
+    const blocks = new Set<number>();
+    for (const at of differences) if (widened.has(lineOf(at))) blocks.add(blockOf(at));
+    const before = left.length;
+    left = left.filter(
+      (index) =>
+        !differing.has(runLines[index] as number) && !blocks.has(runBlocks[index] as number),
+    );
+    for (const line of differing) widened.add(line);
+    if (left.length === before && blocks.size === 0) {
+      // Nothing on those lines to leave out: the difference comes from further back.
+      for (const at of differences) blocks.add(blockOf(at));
+      left = left.filter((index) => !blocks.has(runBlocks[index] as number));
+      if (left.length === before) break;
+    }
+  }
+  return halving(
+    text,
+    story,
+    words,
+    shape,
+    rows,
+    left.map((index) => runs[index] as TextChange[]),
+  );
+}
+
+/** The runs that keep the reading, found by halves: all of them if they can, else each that can. */
+function halving(
+  text: string,
+  story: Story,
+  words: string,
+  shape: string,
+  rows: readonly ScriptLine[],
+  runs: readonly TextChange[][],
+): string {
+  const same = (candidate: string) => {
+    if (wordsOf(candidate) !== words) return false;
+    const after = parse(candidate);
+    return shapeOf(after) === shape && sameVoices(rows, lines(after)) && sameHearing(story, after);
+  };
+  const kept: TextChange[] = [];
+  const attempt = (part: readonly TextChange[][]) => {
+    if (part.length === 0) return;
+    const changes = part.flat();
+    if (same(applyChanges(text, [...kept, ...changes]))) {
+      for (const change of changes) kept.push(change);
+      return;
+    }
+    if (part.length === 1) return;
+    const half = Math.ceil(part.length / 2);
+    attempt(part.slice(0, half));
+    attempt(part.slice(half));
+  };
+  attempt(runs);
+  return applyChanges(text, kept);
 }
 
 /** `@clown` becomes `@Clown` when that is how the cast writes it (§5.2). */
@@ -64,12 +246,27 @@ function allItems(story: Story): Item[] {
 
 // Spacing
 
-function spacing(source: string): string {
+/**
+ * Tidied spacing, as one change for each line of the file (and one for the front matter): what the
+ * line becomes, with the blank lines it brings or loses. Each can be kept or left on its own.
+ */
+function spacingRuns(source: string): TextChange[][] {
   const bom = source.startsWith("\uFEFF") ? "\uFEFF" : "";
   const story = parse(source);
   const text = new SourceText(source);
-  const eol = /\r\n/.test(source) ? "\r\n" : "\n";
   const front = story.frontMatter;
+  // Each line keeps its own line ending; a line that has none (the last) or a new blank line
+  // takes the one before it.
+  const endings = text.lines.map((line, index) =>
+    source.slice(line.to, text.lines[index + 1]?.from ?? source.length),
+  );
+  const first = endings.find((ending) => ending !== "") ?? "\n";
+  let last = first;
+  const endingOf = (index: number) => {
+    const own = endings[index] ?? "";
+    if (own !== "") last = own;
+    return own || last;
+  };
   // The front matter is kept exactly as written; the story starts on the line after it.
   const firstBody = front ? text.position(front.range.to).line : 0;
   const structural = new Set<number>();
@@ -78,56 +275,207 @@ function spacing(source: string): string {
       structural.add(text.position(block.range.from).line - 1);
     }
   }
-  const out: string[] = front ? [source.slice(bom.length, front.range.to), ""] : [];
-  const ended = () => out.length === 0 || out[out.length - 1] === "";
+  // Group lines are kept exactly as written too.
+  const groupLines = new Set<number>();
+  for (const group of story.groups) {
+    groupLines.add(text.position(group.range.from).line - 1);
+    if (group.closeRange) groupLines.add(text.position(group.closeRange.from).line - 1);
+  }
+  // Links and images are kept as written: an address in `<…>` may hold spaces that matter.
+  const kept = lexedTokens(source)
+    .filter(
+      (token) =>
+        token.type === "image" ||
+        (token.type === "text" && !token.plain && source[token.range.from] === "["),
+    )
+    .map((token) => token.range);
+  let nextKept = 0;
+  /** A line's runs of spaces made one, but inside a link or image. */
+  const spaced = (from: number, raw: string) => {
+    while (nextKept < kept.length && (kept[nextKept] as Range).to <= from) nextKept++;
+    let out = "";
+    let at = 0;
+    for (let k = nextKept; k < kept.length; k++) {
+      const range = kept[k] as Range;
+      if (range.from >= from + raw.length) break;
+      const start = Math.max(range.from - from, at);
+      out += raw.slice(at, start).replace(/[ \t]{2,}|\t/g, " ") + raw.slice(start, range.to - from);
+      at = Math.min(range.to - from, raw.length);
+    }
+    return out + raw.slice(at).replace(/[ \t]{2,}|\t/g, " ");
+  };
+  /** A line of the result, and the line of the file it comes from (-1: the front matter). */
+  type Out = { line: string; ending: string; owner: number };
+  const out: Out[] = front
+    ? [
+        {
+          line: source.slice(bom.length, front.range.to),
+          ending: endingOf(firstBody - 1),
+          owner: -1,
+        },
+        { line: "", ending: last, owner: -1 },
+      ]
+    : [];
+  const ended = () => out.length === 0 || out[out.length - 1]?.line === "";
   for (let index = firstBody; index < text.lines.length; index++) {
     const line = text.lines[index] as (typeof text.lines)[number];
-    const raw = source.slice(index === 0 ? bom.length : line.from, line.to);
-    const tidy = raw.replace(/^[ \t]+|[ \t]+$/g, "").replace(/[ \t]{2,}|\t/g, " ");
+    const start = index === 0 ? bom.length : line.from;
+    const raw = source.slice(start, line.to);
+    const ending = endingOf(index);
+    // A stray carriage return or byte order mark at a line's edge is spacing too.
+    const lead = /^[ \t\r\uFEFF]*/.exec(raw)?.[0].length ?? 0;
+    const tidy = groupLines.has(index)
+      ? raw
+      : spaced(start + lead, raw.slice(lead)).replace(/[ \t\r\uFEFF]+$/, "");
+    const owner = index;
     if (tidy === "") {
-      if (!ended()) out.push("");
+      if (!ended()) out.push({ line: "", ending, owner });
     } else if (structural.has(index)) {
-      if (!ended()) out.push("");
-      out.push(tidy, "");
+      if (!ended()) out.push({ line: "", ending: out[out.length - 1]?.ending ?? ending, owner });
+      out.push({ line: tidy, ending, owner }, { line: "", ending, owner });
     } else {
-      out.push(tidy);
+      out.push({ line: tidy, ending, owner });
     }
   }
-  while (out.length > 0 && out[out.length - 1] === "") out.pop();
-  return out.length === 0 ? bom : `${bom}${out.join(eol)}${eol}`;
+  while (out.length > 0 && out[out.length - 1]?.line === "") out.pop();
+  // A file without front matter must not start with `---` once tidied, or it would have some:
+  // it keeps a blank line before it.
+  const opening = out[0];
+  if (!front && opening && /^-{3,}$/.test(opening.line)) {
+    out.unshift({ line: "", ending: first, owner: opening.owner });
+  }
+  const written = new Map<number, string>();
+  for (const { line, ending, owner } of out) {
+    written.set(owner, (written.get(owner) ?? "") + line + ending);
+  }
+  const runs: TextChange[][] = [];
+  const replace = (from: number, to: number, insert: string) => {
+    if (source.slice(from, to) !== insert) runs.push([{ from, to, insert }]);
+  };
+  if (front) {
+    replace(bom.length, text.lines[firstBody]?.from ?? source.length, written.get(-1) ?? "");
+  }
+  for (let index = firstBody; index < text.lines.length; index++) {
+    const from = index === 0 ? bom.length : (text.lines[index]?.from ?? source.length);
+    replace(from, text.lines[index + 1]?.from ?? source.length, written.get(index) ?? "");
+  }
+  return runs;
 }
 
 // Quotation marks
 
 type Style = { open: string; close: string; innerOpen: string; innerClose: string };
 
+/**
+ * Each language's quotation marks, and those inside them, as §5.5 reads them; a language not here
+ * gets English ones. A region's own (Swiss German `de-CH`) comes before its language's.
+ */
 const STYLES: Record<string, Style> = {
   en: { open: "“", close: "”", innerOpen: "‘", innerClose: "’" },
   de: { open: "„", close: "“", innerOpen: "‚", innerClose: "‘" },
+  "de-ch": { open: "«", close: "»", innerOpen: "‹", innerClose: "›" },
   fr: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  "fr-ch": { open: "«", close: "»", innerOpen: "‹", innerClose: "›" },
+  it: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  es: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  pt: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  ca: { open: "«", close: "»", innerOpen: "“", innerClose: "”" },
+  ru: { open: "«", close: "»", innerOpen: "„", innerClose: "“" },
+  uk: { open: "«", close: "»", innerOpen: "„", innerClose: "“" },
+  da: { open: "»", close: "«", innerOpen: "›", innerClose: "‹" },
+  pl: { open: "„", close: "”", innerOpen: "«", innerClose: "»" },
+  ja: { open: "「", close: "」", innerOpen: "『", innerClose: "』" },
+  zh: { open: "「", close: "」", innerOpen: "『", innerClose: "』" },
 };
 
+/**
+ * The quotation marks a language's curly quotes are written with, as `format` writes them: the
+ * opening and closing marks, and those of a quote inside a quote. For an editor that types them.
+ */
+export function quotationMarks(language?: string): Style {
+  return { ...styleFor(language) };
+}
+
 function styleFor(language: string | undefined): Style {
-  const primary = (language ?? "en").toLowerCase().split(/[-_]/)[0] ?? "en";
-  return STYLES[primary] ?? (STYLES.en as Style);
+  const tag = (language ?? "en").toLowerCase().replace(/_/g, "-");
+  const [primary = "en", region] = tag.split("-");
+  return STYLES[`${primary}-${region}`] ?? STYLES[primary] ?? (STYLES.en as Style);
 }
 
 /**
  * Straight marks the parser reads as quotes become the language's quotes; an apostrophe becomes
- * ’. Inches (`6"`), escaped marks and everything inside marks, sounds, notes and instructions are
- * left as written.
+ * ’. Feet and inches (`6'2"`), escaped marks, links and everything inside marks, sounds, notes,
+ * instructions and group lines are left as written.
  */
 function quoteChanges(story: Story, language: string | undefined): TextChange[] {
   const style = styleFor(language ?? story.meta.language);
   const source = story.source;
-  const skip = markRanges(story);
   const tokens = lexedTokens(source);
+  // A link's text and address are one token, never reworded: an address must stay as written.
+  const skip = new Uint8Array(source.length);
+  for (const range of [
+    ...markRanges(story),
+    ...tokens.filter((token) => token.type === "text" && !token.plain).map((token) => token.range),
+  ]) {
+    skip.fill(1, range.from, range.to);
+  }
+  const closer = closersAfter(source);
+  // Where the quote around each offset ends, as the parser reads its quotes: an inner quote must
+  // close inside it.
+  const outerEnd = new Int32Array(source.length + 1).fill(-1);
+  {
+    let open = -1;
+    for (const token of tokens) {
+      if (token.type === "open") open = token.range.to;
+      else if (token.type === "close" && open >= 0) {
+        outerEnd.fill(token.range.from, open, token.range.from);
+        open = -1;
+      }
+    }
+  }
   const changes: TextChange[] = [];
   const decided = new Set<number>();
+  // Where a quote opens, straight or curly: a quote right after one opens too (`"'Hello,'`).
+  const opened = new Set<number>();
+  const afterDigit = (at: number) => /\d/.test(source[at - 1] ?? "");
+  // Lines where the parser reads an apostrophe as a quote's edge (`'Rock 'n' roll,'`): no curly
+  // marks there could be both right and heard as before, so they keep their straight ones.
+  const unsafe = new Set<number>();
+  const lineAt = (at: number) => source.lastIndexOf("\n", at - 1);
+  const paired = new Set<number>();
+  // The quotes' edges in order, and each one's place among them, worked out once.
+  const quotes = tokens.filter((other) => other.type === "open" || other.type === "close");
+  const quoteIndex = new Map(quotes.map((quote, index) => [quote, index]));
   for (const token of tokens) {
     if (token.type !== "open" && token.type !== "close") continue;
     if (token.char !== '"' && token.char !== "'") continue;
+    if (paired.has(token.range.from)) continue;
+    decided.add(token.range.from);
+    // A mark after a digit stays as written, whatever it does (§13, rule 8): `6"`.
+    if (afterDigit(token.range.from)) continue;
+    if (isElision(source, token.range.from) || isCutShort(source, token.range.from)) {
+      // An apostrophe the parser reads as a quote's edge. `'n'` read as a quote of its own, or a
+      // decade (`'90s`) opening one, is apostrophes at both edges; a longer quote ending at an
+      // apostrophe can't be written curly and still heard the same.
+      const at = quoteIndex.get(token) ?? -1;
+      const partner = token.type === "open" ? quotes[at + 1] : quotes[at - 1];
+      const own =
+        partner !== undefined &&
+        partner.char === "'" &&
+        partner.type !== token.type &&
+        (Math.abs(partner.range.from - token.range.from) === 2 ||
+          (token.type === "open" && source[token.range.from + 1] !== "n"));
+      if (own && partner) {
+        for (const edge of [token, partner]) {
+          changes.push({ ...edge.range, insert: "’" });
+          decided.add(edge.range.from);
+          paired.add(edge.range.from);
+        }
+      } else unsafe.add(lineAt(token.range.from));
+      continue;
+    }
     const double = token.char === '"';
+    if (token.type === "open") opened.add(token.range.from);
     const insert =
       token.type === "open"
         ? double
@@ -137,31 +485,87 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
           ? style.close
           : style.innerClose;
     changes.push({ ...token.range, insert });
-    decided.add(token.range.from);
   }
+  // The marks the parser doesn't decide: quotes inside quotes, and apostrophes. On each line, an
+  // inner quote opens where a quote can open and a closer follows, and closes with the language's
+  // own inner mark.
+  const openContext = (at: number) => {
+    const before = source[at - 1];
+    return (
+      before === undefined ||
+      before === "\n" ||
+      /[\s([{—–-]/u.test(before) ||
+      isOpening(before) ||
+      opened.has(at - 1)
+    );
+  };
+  let inner = { double: false, single: false };
   for (let i = story.frontMatter?.range.to ?? 0; i < source.length; i++) {
     const char = source[i];
+    if (char === "\n") {
+      inner = { double: false, single: false };
+      continue;
+    }
     if (char === "\\") {
       i++;
       continue;
     }
-    if ((char !== '"' && char !== "'") || decided.has(i) || inside(skip, i)) continue;
-    const before = source[i - 1];
+    if ((char !== '"' && char !== "'") || decided.has(i) || skip[i]) continue;
+    // Feet and inches (`6'2"`) stay as written.
+    if (afterDigit(i)) continue;
     const after = source[i + 1];
+    const followed = after !== undefined && !/\s/u.test(after);
     if (char === '"') {
-      if (before !== undefined && /\d/.test(before)) continue;
-      const opens = before === undefined || /[\s([{—–-]/u.test(before) || isOpening(before);
-      changes.push({ from: i, to: i + 1, insert: opens ? style.open : style.close });
-    } else {
-      const opens =
-        (before === undefined || /[\s([{—–-]/u.test(before) || isOpening(before)) &&
-        after !== undefined &&
-        /[\p{L}\p{N}]/u.test(after) &&
-        closesLater(source, i);
-      changes.push({ from: i, to: i + 1, insert: opens ? style.innerOpen : "’" });
+      if (inner.double) {
+        changes.push({ from: i, to: i + 1, insert: style.close });
+        inner.double = false;
+      } else if (openContext(i) && followed) {
+        changes.push({ from: i, to: i + 1, insert: style.open });
+        opened.add(i);
+        inner.double = true;
+      } else {
+        changes.push({ from: i, to: i + 1, insert: style.close });
+      }
+      continue;
     }
+    // `rock 'n' roll`, a word cut short (`'em`, `'Tis`) and a word's own apostrophe (`don't`,
+    // `dogs'`) are apostrophes.
+    const letterBefore = /[\p{L}\p{N}]/u.test(source[i - 1] ?? "");
+    const letterAfter = after !== undefined && /[\p{L}\p{N}]/u.test(after);
+    // An inner quote's closing mark comes before the quote around it ends (or the line, outside one).
+    const end = outerEnd[i] ?? -1;
+    const closes = (closer[i + 1] ?? -1) >= 0 && (end < 0 || (closer[i + 1] as number) < end);
+    if (isElision(source, i) || isCutShort(source, i) || (letterBefore && letterAfter)) {
+      changes.push({ from: i, to: i + 1, insert: "’" });
+    } else if (inner.single && !letterAfter) {
+      changes.push({ from: i, to: i + 1, insert: style.innerClose });
+      inner.single = false;
+    } else if (!inner.single && openContext(i) && followed && closes) {
+      changes.push({ from: i, to: i + 1, insert: style.innerOpen });
+      opened.add(i);
+      inner.single = true;
+    } else if (letterBefore || !openContext(i)) {
+      changes.push({ from: i, to: i + 1, insert: "’" });
+    }
+    // Else a `'` that starts a word and nothing closes: an opening mark or an apostrophe, which
+    // can't be told apart, so it stays as written.
   }
-  return changes;
+  return unsafe.size === 0 ? changes : changes.filter((change) => !unsafe.has(lineAt(change.from)));
+}
+
+/**
+ * Whether the `'` at `at` is an apostrophe that stands for something left out: the two of
+ * ` 'n' `, as in rock 'n' roll, or a decade's (`'90s`).
+ */
+function isElision(source: string, at: number): boolean {
+  const word = /[\p{L}\p{N}]/u;
+  if (source[at] === "'" && /^'\d\ds?(?![\p{L}\p{N}])/u.test(source.slice(at, at + 5))) return true;
+  return [at, at - 2].some(
+    (from) =>
+      /^'n'$/i.test(source.slice(from, from + 3)) &&
+      !word.test(source[from - 1] ?? "") &&
+      !word.test(source[from + 3] ?? ""),
+  );
 }
 
 const OPENING = new Set(["“", "‘", "„", "‚", "«", "‹", "「", "『"]);
@@ -169,16 +573,39 @@ function isOpening(char: string): boolean {
   return OPENING.has(char);
 }
 
-/** Whether a straight `'` at `at` is closed later on its line by one that ends a word. */
-function closesLater(source: string, at: number): boolean {
-  for (let i = at + 1; i < source.length && source[i] !== "\n"; i++) {
-    if (source[i] !== "'") continue;
-    const before = source[i - 1] ?? "";
-    const after = source[i + 1] ?? "";
-    if (/\S/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) return true;
+/**
+ * For each offset, the next straight `'` on its line that ends a word, one that could close a
+ * quote opened before it, or -1.
+ */
+function closersAfter(source: string): Int32Array {
+  const after = new Int32Array(source.length + 1).fill(-1);
+  for (let i = source.length - 1; i >= 0; i--) {
+    const char = source[i];
+    if (char === "\n") continue;
+    const closes =
+      char === "'" &&
+      /\S/u.test(source[i - 1] ?? "") &&
+      !/[\p{L}\p{N}]/u.test(source[i + 1] ?? "") &&
+      !isCutShort(source, i);
+    after[i] = closes ? i : (after[i + 1] as number);
   }
-  return false;
+  return after;
 }
+
+/**
+ * Whether the `'` at `at` starts a word cut short, as dialogue writes them: `'em`, `'Tis`,
+ * `'twas`, `'cause`, `'til`, `'bout`, `'round`…
+ */
+function isCutShort(source: string, at: number): boolean {
+  return (
+    source[at] === "'" &&
+    !/[\p{L}\p{N}]/u.test(source[at - 1] ?? "") &&
+    CUT_SHORT.test(source.slice(at + 1, at + 8))
+  );
+}
+
+const CUT_SHORT =
+  /^(?:tis|twas|twere|twill|twould|em|cause|cos|til|till|bout|round|cept|fore|neath|gainst|mongst|ere)(?![\p{L}\p{N}])/iu;
 
 /** Where marks, directions, sounds, notes, instructions and images are: never reworded. */
 function markRanges(story: Story): Array<{ from: number; to: number }> {
@@ -190,26 +617,6 @@ function markRanges(story: Story): Array<{ from: number; to: number }> {
     if (group.closeRange) ranges.push(group.closeRange);
   }
   return ranges.sort((a, b) => a.from - b.from);
-}
-
-function inside(ranges: ReadonlyArray<{ from: number; to: number }>, at: number): boolean {
-  return ranges.some((range) => at >= range.from && at < range.to);
-}
-
-/** Every token of every paragraph and heading, lexed as the parser lexes them. */
-function lexedTokens(source: string): Token[] {
-  const text = new SourceText(source);
-  const ignore = () => {};
-  const front = readFrontMatter(text, ignore);
-  const bodyFrom = text.lines[front.bodyLine]?.from ?? source.length;
-  const notes = findNotes(source, bodyFrom, ignore);
-  const tokens: Token[] = [];
-  for (const block of scanBlocks(source, joinLines(text.lines, front.bodyLine, notes))) {
-    const ranges =
-      block.kind === "paragraph" ? block.lines : block.kind === "heading" ? [block.content] : [];
-    for (const line of lexLines(source, ranges, notes, ignore)) tokens.push(...line.tokens);
-  }
-  return tokens;
 }
 
 function sameVoices(a: readonly ScriptLine[], b: readonly ScriptLine[]): boolean {

@@ -114,7 +114,8 @@ export function scanBlocks(source: string, lines: readonly Range[]): RawBlock[] 
         content: headingContent(body, from, hashes),
         range,
       });
-    } else if (/^(?:-{3,}|\*{3,}|_{3,})[ \t]*$/.test(body)) {
+    } else if (/^([-*_])[ \t]*(?:\1[ \t]*){2,}$/.test(body)) {
+      // Three or more of one sign, spaces between them or not, as Markdown has it: `* * *` (§4.4).
       endParagraph();
       blocks.push({ kind: "break", range });
     } else {

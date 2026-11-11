@@ -36,7 +36,9 @@ export function markdownToHtml(markdown: string): string {
         return `<h${depth} id="${id}"><a class="anchor" href="#${id}" aria-hidden="true">#</a>${html}</h${depth}>\n`;
       },
       code({ text, lang }: Tokens.Code) {
-        if (lang !== "example") {
+        // `example`, or `example 1.1` for one new in a later version of the spec.
+        const [kind, since] = (lang ?? "").split(/\s+/);
+        if (kind !== "example") {
           return `<pre class="code"><code${lang ? ` class="language-${escapeHtml(lang)}"` : ""}>${escapeHtml(text)}</code></pre>\n`;
         }
         const [input = "", script = "", book] = text
@@ -44,7 +46,10 @@ export function markdownToHtml(markdown: string): string {
           .map((part) => part.replace(/^\n|\n$/g, ""));
         const cell = (label: string, body: string) =>
           `<div class="example-part"><div class="example-label">${label}</div><pre><code>${escapeHtml(body)}</code></pre></div>`;
-        return `<figure class="example">${cell("You write", input)}${cell("A listener hears", script)}${book === undefined ? "" : cell("A reader sees", book)}</figure>\n`;
+        const caption = since
+          ? `<figcaption class="example-since">New in ${escapeHtml(since)} (draft)</figcaption>`
+          : "";
+        return `<figure class="example">${caption}${cell("You write", input)}${cell("A listener hears", script)}${book === undefined ? "" : cell("A reader sees", book)}</figure>\n`;
       },
       link({ href, title, tokens }: Tokens.Link) {
         const target = LINKS[href] ?? href;

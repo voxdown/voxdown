@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { VoxdownEditorElement, charactersOf, defineVoxdownEditor } from "../src/element";
 
@@ -40,6 +43,20 @@ describe("<voxdown-editor>", () => {
     expect(inputs).toBe(1);
     editor.value = "@Wanda “Two.”";
     expect(inputs).toBe(1);
+  });
+
+  it("keeps a story's CRLF line endings and byte order mark as written", async () => {
+    const corpus = resolve(dirname(fileURLToPath(import.meta.url)), "../../../corpus");
+    const book = readFileSync(join(corpus, "the-keeper-and-the-gull.vxd"), "utf8");
+    expect(book).toContain("\r\n");
+    const editor = await mount("<voxdown-editor></voxdown-editor>");
+    editor.value = book;
+    expect(editor.value).toBe(book);
+    const small = "\uFEFF---\r\ntitle: T\r\n---\r\n@Ann “Hi.”\r\n";
+    editor.value = small;
+    expect(editor.value).toBe(small);
+    editor.value = "One.\nTwo.\n";
+    expect(editor.value).toBe("One.\nTwo.\n");
   });
 
   it("keeps a value set before it is in the page", () => {

@@ -107,16 +107,37 @@ const cursorLine = () =>
   });
 await page.click(`.example[data-name="${names[0]}"]`);
 await page.click('.tab[data-tab="script"]');
+// The view is drawn again a moment after a story opens: wait until it stays as it is.
+const settle = async () => {
+  let last = "";
+  for (let tries = 0; tries < 30; tries++) {
+    const now = await page.evaluate(() => document.querySelector("#output")?.innerHTML ?? "");
+    if (now === last) return;
+    last = now;
+    await page.waitForTimeout(150);
+  }
+};
+await settle();
 if (await page.locator("#output .linked").count())
   problems.push("linking: a story just opened already has a marked place");
 const speech = page.locator("#output .vxd-speech:not(.vxd-narration)").nth(3);
-await speech.scrollIntoViewIfNeeded();
-// The words alone, without the direction label drawn above them.
-const said = await speech.evaluate((element) => {
-  const words = element.cloneNode(true);
-  for (const label of words.querySelectorAll(".vxd-direction")) label.remove();
-  return words.textContent.replace(/[“”"]/g, "").trim().split(/\s+/).slice(0, 3).join(" ");
-});
+// The words alone, without the direction label drawn above them; tried again should the view
+// be drawn anew meanwhile.
+let said = "";
+for (let tries = 0; ; tries++) {
+  try {
+    await speech.scrollIntoViewIfNeeded();
+    said = await speech.evaluate((element) => {
+      const words = element.cloneNode(true);
+      for (const label of words.querySelectorAll(".vxd-direction")) label.remove();
+      return words.textContent.replace(/[“”"]/g, "").trim().split(/\s+/).slice(0, 3).join(" ");
+    });
+    break;
+  } catch (error) {
+    if (tries >= 3) throw error;
+    await settle();
+  }
+}
 await speech.click();
 const active = await cursorLine();
 if (!active.includes(said))

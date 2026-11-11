@@ -46,26 +46,30 @@ A line’s `items` are, in source order: `speech` (`speaker`, `direction`, `ownD
 
 The text is the source of truth. Writing never reflows or restyles it (§13).
 
-- **`write(story)`** gives back the source, byte for byte, with the changes you made on the model: a speech’s `speaker` or `ownDirection`, a sound’s or vocal sound’s `description`, a note’s `text`, an instruction’s `value`, a heading’s `level`, `meta.title`/`subtitle`/`author`/`language`, a cast member’s `name` or `handle`. Adding or removing items is done with the edits below.
+- **`write(story)`** gives back the source, byte for byte, with the changes you made on the model: a speech’s `speaker` or `ownDirection`, a sound’s or vocal sound’s `description`, a note’s `text`, an instruction’s `value`, a heading’s `level`, `meta.title`/`subtitle`/`author`/`language`, a cast member’s `name` or `handle`. Adding or removing items is done with the edits below. A change it can't make as asked, such as a note holding `%%`, throws a `RangeError`.
 - **`changesFrom(story)`**: the same, as text changes.
 
-Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) that makes it. Apply them with **`applyChanges(source, changes)`**, then parse again.
+Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) that makes it. Apply them with **`applyChanges(source, changes)`**, then parse again. An edit does exactly what it says: every other word is heard as before, by the same character and in the same way, and the printed book doesn't change. Where that can't be done, it returns no changes.
 
 | Edit | What it does (SPEC.md §13) |
 | --- | --- |
-| `setSpeaker(story, speech, name)` | Gives a stretch to another character. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. |
-| `setDirection(story, speech, direction \| null)` | Adds, replaces or removes a stretch’s own direction, where §13 says to write it. |
+| `setSpeaker(story, speech, name)` | Gives a stretch, or the whole quote it is part of (over lines and paragraphs), to another character; narration that holds quotes gives its first quote. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. |
+| `setDirection(story, speech, direction \| null)` | Adds, replaces or removes a stretch’s own direction, where §13 says to write it: to the quote's end, or to a direction of its own inside it. |
 | `renameCharacter(story, from, to)` | Renames a short name in the cast, the `narrator:` key and every mark. |
 | `setFullName(story, handle, name)` | Sets a character’s full name in the cast, adding the cast or the character if needed. |
-| `setMeta(story, key, value \| null)` | Sets or removes a front matter detail, such as `title`. |
-| `insertSound(story, offset, description)` | A sound after the word at `offset`. |
-| `insertLine(story, offset, text)` | A page turn, pause or note on a line of its own. |
+| `setMeta(story, key, value \| null)` | Sets or removes a front matter detail, such as `title`; a key whose value is a map or a list, such as `cast`, is left alone. |
+| `insertSound(story, offset, description)` | A sound after the word at `offset`, never inside or straight after a mark. |
+| `insertLine(story, offset, text)` | A page turn, pause or note on a line of its own, never in the front matter or a note. |
 
 `isName(word)` says whether a word can follow `@`.
 
 ## Formatting
 
-**`format(source, options?)`** tidies a file and never changes who says what (§13, rule 8): it trims and collapses spaces, makes runs of blank lines one, puts a blank line after the front matter and around headings and scene breaks, ends with one line break, and writes names as the cast spells them. Options: `names` and `spacing` (both on unless `false`), and `quotes: "curly"` with an optional `language` (`en`, `de`, `fr`; the front matter’s by default) to turn straight quotes into the language’s curly ones. A formatted file comes back unchanged.
+**`format(source, options?)`** tidies a file and never changes who says what (§13, rule 8): it trims and collapses spaces, makes runs of blank lines one, puts a blank line after the front matter and around headings and scene breaks, ends with one line break, and writes names as the cast spells them. Options: `names` and `spacing` (both on unless `false`), and `quotes: "curly"` with an optional `language` (the front matter’s by default) to turn straight quotes into the language’s curly ones: `en`, `de`, `fr`, `it`, `es`, `pt`, `ca`, `ru`, `uk`, `da`, `pl`, `ja`, `zh`, and Swiss `de-CH` and `fr-CH`, English marks for any other. A formatted file comes back unchanged. **`curlQuotes(source, { language? })`** makes just the quotes curly, as `format` does, and changes nothing else, for an editor that curls what is pasted.
+
+## Sizes
+
+Everything reads in time that grows with the story. An edit reads the whole story again to check itself: about 0.2 s on a 100,000-word book, and `write()` makes one such edit for each speaker or direction changed on the model, so 50 changes there take about 10 s. For many changes at once on a long book, make them on the text with the edits instead, or in parts.
 
 ## Importing
 
@@ -75,6 +79,7 @@ Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) tha
 
 - **`tokens(story)`**: syntax ranges for highlighting (`mark`, `name`, `direction`, `sound`, `vocal`, `instruction`, `note`, `group`, `heading`, `break`, `frontmatter`, `escape`, `quote`).
 - **`characterColors(story, overrides?)`**: a color for each character, in cast order, from `PALETTE` unless the cast gives one (`color: "#2563eb"`).
+- **`characterReference(text, at)`**: the character a reference such as `&amp;` or `&#8217;` at `at` stands for, and its length, or `null` (SPEC.md §11). The parser decodes them already; this is for tools that render the text themselves.
 - **`SPEC_VERSION`**: the spec version this package follows, `"1.0"`.
 
 ## License

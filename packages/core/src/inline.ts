@@ -22,6 +22,7 @@ import {
   isSpace,
   removeEscapes,
 } from "./chars";
+import { characterReference } from "./entities";
 import type { Range } from "./source";
 import type { Warn } from "./warnings";
 
@@ -45,8 +46,9 @@ export type InstructionToken = {
   raw: string;
   range: Range;
 };
-export type NoteToken = { type: "note"; text: string; range: Range };
-export type ImageToken = { type: "image"; alt: string; src: string; range: Range };
+/** `breaks` when the note runs over a line break: what a mark does ends there (§5.3). */
+export type NoteToken = { type: "note"; text: string; range: Range; breaks?: true };
+export type ImageToken = { type: "image"; alt: string; src: string; link?: string; range: Range };
 export type OpenToken = { type: "open"; char: string; range: Range };
 export type CloseToken = { type: "close"; char: string; range: Range };
 export type QuoteToken = OpenToken | CloseToken;
@@ -109,7 +111,13 @@ function lexAtoms(source: string, line: Range, notes: readonly NoteSpan[], warn:
   let at = line.from;
   for (const note of notesWithin(notes, line)) {
     lexSegment(source, at, note.from, atoms, warn);
-    atoms.push({ type: "note", text: note.text, range: { from: note.from, to: note.to } });
+    const breaks = /[\n\r]/.test(source.slice(note.from, note.to));
+    atoms.push({
+      type: "note",
+      text: note.text,
+      range: { from: note.from, to: note.to },
+      ...(breaks ? { breaks: true as const } : {}),
+    });
     at = note.to;
   }
   lexSegment(source, at, line.to, atoms, warn);
@@ -135,6 +143,7 @@ function notesWithin(notes: readonly NoteSpan[], line: Range): NoteSpan[] {
 
 /** Lexes `from`..`to`, a stretch of a line with no notes in it. */
 function lexSegment(source: string, from: number, to: number, atoms: Atom[], warn: Warn): void {
+  segment = scanSegment(source, from, to);
   let textFrom = from;
   let i = from;
   while (i < to) {
@@ -149,6 +158,216 @@ function lexSegment(source: string, from: number, to: number, atoms: Atom[], war
     textFrom = i;
   }
   if (to > textFrom) atoms.push(sourceText(source, textFrom, to));
+  segment = null;
+}
+
+/**
+ * Where each `(` of the segment being lexed closes, and where the next `]` and `}` are, escapes
+ * aside: worked out once, so a line of thousands of unclosed brackets lexes in linear time. Every
+ * search starts just after an opening mark, where the escapes pair up as they do from the start.
+ */
+type Segment = {
+  source: string;
+  from: number;
+  to: number;
+  parens: Map<number, number>;
+  /** For each `[`, its `]`, with brackets inside balanced: a link's text may hold some. */
+  squares: Map<number, number>;
+  /** The `[` of each would-be link that holds another: it isn't one (Markdown). */
+  nesting: Set<number>;
+  /** For each `(`, the `)` that ends the link address and title it starts (see `linkEnds`). */
+  links: Int32Array;
+  next: { "]": Int32Array; "}": Int32Array; "[": Int32Array };
+};
+let segment: Segment | null = null;
+
+function scanSegment(source: string, from: number, to: number): Segment {
+  const parens = new Map<number, number>();
+  const squares = new Map<number, number>();
+  const open: number[] = [];
+  const openSquare: number[] = [];
+  const plain = new Uint8Array(to - from);
+  for (let i = from; i < to; i++) {
+    const char = source[i];
+    if (char === "\\" && isEscapable(source[i + 1])) {
+      i++;
+      continue;
+    }
+    plain[i - from] = 1;
+    if (char === "(") open.push(i);
+    else if (char === ")" && open.length > 0) parens.set(open.pop() as number, i);
+    else if (char === "[") openSquare.push(i);
+    else if (char === "]" && openSquare.length > 0) squares.set(openSquare.pop() as number, i);
+  }
+  const brackets = new Int32Array(to - from + 1).fill(-1);
+  const braces = new Int32Array(to - from + 1).fill(-1);
+  const openers = new Int32Array(to - from + 1).fill(-1);
+  for (let i = to - 1; i >= from; i--) {
+    const at = i - from;
+    brackets[at] = plain[at] && source[i] === "]" ? i : (brackets[at + 1] as number);
+    braces[at] = plain[at] && source[i] === "}" ? i : (braces[at + 1] as number);
+    openers[at] = plain[at] && source[i] === "[" ? i : (openers[at + 1] as number);
+  }
+  // Only a segment where a `]` meets a `(` can hold a link: most hold none. Searched for in the
+  // segment alone: a search on to the end of the file, from every line, took time with its square.
+  const linked = source.slice(from, to).indexOf("](");
+  const links =
+    linked >= 0
+      ? linkEnds(
+          to - from,
+          (at) => source[from + at],
+          (at) => plain[at] === 1,
+        )
+      : NO_LINKS;
+  // A link may not hold another (Markdown): where links nest, the innermost is the link. An
+  // image may sit in a link's text, and a link in an image's description: only links count.
+  const isImage = (open: number) => source[open - 1] === "!" && plain[open - 1 - from] === 1;
+  // How many images' descriptions hold each place: a link in one is the image's words.
+  const inImage = new Int32Array(to - from + 1);
+  for (const [open, close] of squares) {
+    if (!isImage(open)) continue;
+    (inImage[open + 1 - from] as number)++;
+    (inImage[close - from] as number)--;
+  }
+  for (let at = 1; at < inImage.length; at++) {
+    inImage[at] = (inImage[at] as number) + (inImage[at - 1] as number);
+  }
+  const candidates = [...squares.keys()]
+    .filter((open) => {
+      const close = squares.get(open) as number;
+      return (
+        source[close + 1] === "(" &&
+        (links[close + 1 - from] ?? -1) >= 0 &&
+        !isImage(open) &&
+        (inImage[open - from] as number) === 0
+      );
+    })
+    .sort((a, b) => a - b);
+  const nesting = new Set<number>();
+  candidates.forEach((open, index) => {
+    const next = candidates[index + 1];
+    if (next !== undefined && next < (squares.get(open) as number)) nesting.add(open);
+  });
+  return {
+    source,
+    from,
+    to,
+    parens,
+    squares,
+    nesting,
+    links,
+    next: { "]": brackets, "}": braces, "[": openers },
+  };
+}
+
+const NO_LINKS = new Int32Array(0);
+
+/**
+ * Where the parentheses after each would-be link's text close, as Markdown reads a link's address
+ * and title (CommonMark 0.31, §6.3): from a `(`, spaces, then an address (`<…>` on one line, or up
+ * to a space with its own parentheses balanced), then perhaps a title in `"…"`, `'…'` or `(…)`
+ * after a space, then spaces and `)`. So a title may hold a lone `(` and a `<…>` address a `)`.
+ * For each `(` of the `length` characters, the index of that `)`, or -1 where no address and
+ * title close; for every `(` at once, in linear time. `plain` says which characters aren't escaped.
+ */
+export function linkEnds(
+  length: number,
+  char: (at: number) => string | undefined,
+  plain: (at: number) => boolean,
+): Int32Array {
+  const is = (at: number, sign: string) => char(at) === sign && plain(at);
+  const space = (code: number) => code === 32 || code === 9 || code === 10 || code === 13;
+  // For each position, the first at or after it of: no space; a space or control character (an
+  // address's end); `<`, `>` or a line break (an `<…>` address's end); each title's closing mark.
+  const solid = new Int32Array(length + 1).fill(length);
+  const gap = new Int32Array(length + 1).fill(length);
+  const angle = new Int32Array(length + 1).fill(length);
+  const double = new Int32Array(length + 1).fill(length);
+  const single = new Int32Array(length + 1).fill(length);
+  const paren = new Int32Array(length + 1).fill(length);
+  for (let at = length - 1; at >= 0; at--) {
+    const sign = char(at) ?? "";
+    const code = sign.charCodeAt(0);
+    solid[at] = space(code) ? (solid[at + 1] as number) : at;
+    gap[at] = code <= 32 || code === 127 ? at : (gap[at + 1] as number);
+    angle[at] =
+      sign === "\n" || (plain(at) && (sign === "<" || sign === ">"))
+        ? at
+        : (angle[at + 1] as number);
+    double[at] = is(at, '"') ? at : (double[at + 1] as number);
+    single[at] = is(at, "'") ? at : (single[at + 1] as number);
+    paren[at] = is(at, "(") || is(at, ")") ? at : (paren[at + 1] as number);
+  }
+  // How deep in parentheses each position is, and the `)` that balances each `(`.
+  const depth = new Int32Array(length + 1);
+  const balance = new Int32Array(length).fill(-1);
+  const open: number[] = [];
+  for (let at = 0; at < length; at++) {
+    depth[at + 1] = (depth[at] as number) + (is(at, "(") ? 1 : is(at, ")") ? -1 : 0);
+    if (is(at, "(")) open.push(at);
+    else if (is(at, ")") && open.length > 0) balance[open.pop() as number] = at;
+  }
+  const ends = new Int32Array(length).fill(-1);
+  for (let start = 0; start < length; start++) {
+    if (!is(start, "(")) continue;
+    const at = solid[start + 1] as number;
+    if (at >= length) continue;
+    let end: number;
+    if (is(at, "<")) {
+      // `<…>`: to the first `>`, with no `<` or line break before it.
+      const close = angle[at + 1] as number;
+      if (!is(close, ">")) continue;
+      end = close + 1;
+    } else {
+      // Up to a space, its parentheses balanced; a `)` that balances the link's own `(` before
+      // then ends the address and the link.
+      const balanced = balance[start] as number;
+      const stop = gap[at] as number;
+      if (balanced >= 0 && balanced < stop) {
+        ends[start] = balanced;
+        continue;
+      }
+      if ((depth[stop] as number) !== (depth[at] as number)) continue;
+      end = stop;
+    }
+    let next = solid[end] as number;
+    if (is(next, ")")) {
+      ends[start] = next;
+      continue;
+    }
+    // A title, after a space if there was an address.
+    if (next === end && end > at) continue;
+    const close = is(next, '"')
+      ? (double[next + 1] as number)
+      : is(next, "'")
+        ? (single[next + 1] as number)
+        : is(next, "(")
+          ? (paren[next + 1] as number)
+          : length;
+    if (close >= length || (is(next, "(") && !is(close, ")"))) continue;
+    next = solid[close + 1] as number;
+    if (is(next, ")")) ends[start] = next;
+  }
+  return ends;
+}
+
+/**
+ * The segment being lexed, for a search inside it: up to its end, or up to a mark inside it (a
+ * link's text, an image's description). What it found past the search's end is not found.
+ */
+function inSegment(source: string, from: number, to: number): Segment | null {
+  return segment !== null &&
+    segment.source === source &&
+    to <= segment.to &&
+    from >= segment.from &&
+    from <= to
+    ? segment
+    : null;
+}
+
+/** A position found in the segment, if it comes before the search's end; -1 otherwise. */
+function before(found: number | undefined, to: number): number {
+  return found === undefined || found < 0 || found >= to ? -1 : found;
 }
 
 function lexAtom(source: string, i: number, to: number, warn: Warn): Atom | null {
@@ -158,6 +377,18 @@ function lexAtom(source: string, i: number, to: number, warn: Warn): Atom | null
       return i + 1 < to && isEscapable(source[i + 1])
         ? { type: "text", value: source[i + 1] ?? "", range: { from: i, to: i + 2 }, plain: false }
         : null;
+    case "&": {
+      // A character reference stands for its character (§11), and is never a mark: `&quot;`.
+      const reference = characterReference(source, i);
+      return reference && i + reference.length <= to
+        ? {
+            type: "text",
+            value: reference.char,
+            range: { from: i, to: i + reference.length },
+            plain: false,
+          }
+        : null;
+    }
     case "@":
       return lexAt(source, i, to);
     case "!":
@@ -190,7 +421,7 @@ function lexAt(source: string, at: number, to: number): Atom | null {
   if (next === "[") {
     const close = findUnescaped(source, at + 2, to, "]");
     // A bracket followed directly by "(" is a Markdown link, after an @ too (§8.3).
-    if (close >= 0 && source[close + 1] === "(" && matchParen(source, close + 1, to) >= 0) {
+    if (close >= 0 && source[close + 1] === "(" && matchLink(source, close + 1, to) >= 0) {
       return null;
     }
     const description = close < 0 ? "" : cleanText(source.slice(at + 2, close));
@@ -221,7 +452,7 @@ function lexAt(source: string, at: number, to: number): Atom | null {
  * A name starts with a letter and continues with letters, digits, `-` and `_`, and apostrophes
  * between two letters (§5.2). Returns the index after it, or `from` when there is none.
  */
-function scanName(source: string, from: number, to: number): number {
+export function scanName(source: string, from: number, to: number): number {
   const first = codePointAt(source, from);
   if (from >= to || !first || !/^\p{L}$/u.test(first)) return from;
   let i = from + first.length;
@@ -245,27 +476,170 @@ function scanName(source: string, from: number, to: number): number {
 
 /** `![description](file)`, shown in the book and not heard (§8.3). */
 function lexImage(source: string, at: number, to: number): Atom | null {
-  const close = findUnescaped(source, at + 2, to, "]");
-  if (close < 0 || close + 1 >= to || source[close + 1] !== "(") return null;
-  const end = matchParen(source, close + 1, to);
-  if (end < 0) return null;
+  const link = linkAt(source, at + 1, to);
+  if (!link) return null;
   return {
     type: "image",
-    alt: source.slice(at + 2, close),
-    src: source.slice(close + 2, end).trim(),
-    range: { from: at, to: end + 1 },
+    alt: removeEscapes(label(source, at + 2, link.close, true)),
+    src: destination(link.target).url,
+    range: { from: at, to: link.end + 1 },
   };
+}
+
+/**
+ * A link's text or an image's description as text: a link in it as its text, and an image in it
+ * as its description in a description (`alt`), or as nothing in what is heard. Links and images
+ * nested inside one another are read with a stack of their own, not the call stack, so no depth
+ * of them runs out of it.
+ */
+function label(source: string, from: number, to: number, alt: boolean): string {
+  if (!source.slice(from, to).includes("](")) return source.slice(from, to);
+  type Frame = { at: number; to: number; alt: boolean; out: string; image: boolean; next: number };
+  const stack: Frame[] = [{ at: from, to, alt, out: "", image: false, next: to }];
+  for (;;) {
+    const frame = stack[stack.length - 1] as Frame;
+    if (frame.at >= frame.to) {
+      stack.pop();
+      const outer = stack[stack.length - 1];
+      if (!outer) return frame.out;
+      // An image's description is read as its own (`alt`), escapes and all, as `lexImage` reads it.
+      if (!frame.image) outer.out += frame.out;
+      else if (outer.alt) outer.out += removeEscapes(frame.out);
+      outer.at = frame.next;
+      continue;
+    }
+    const i = frame.at;
+    if (source[i] === "!" && source[i + 1] === "[") {
+      const link = linkAt(source, i + 1, frame.to);
+      if (link) {
+        // In what is heard an image is nothing: its description needn't be read at all.
+        if (frame.alt) {
+          stack.push({
+            at: i + 2,
+            to: link.close,
+            alt: true,
+            out: "",
+            image: true,
+            next: link.end + 1,
+          });
+        } else {
+          frame.at = link.end + 1;
+        }
+        continue;
+      }
+    }
+    if (source[i] === "[") {
+      const link = linkAt(source, i, frame.to);
+      if (link) {
+        stack.push({
+          at: i + 1,
+          to: link.close,
+          alt: frame.alt,
+          out: "",
+          image: false,
+          next: link.end + 1,
+        });
+        continue;
+      }
+    }
+    frame.out += source[i];
+    frame.at = i + 1;
+  }
+}
+
+/**
+ * A Markdown link from the `[` at `at`: its text runs to the `]` that balances it (a link's text
+ * may hold brackets), then an address in parentheses, balanced too. Null if there isn't one.
+ */
+function linkAt(
+  source: string,
+  at: number,
+  to: number,
+): { close: number; end: number; target: string } | null {
+  if (inSegment(source, at, to)?.nesting.has(at)) return null;
+  const close = matchSquare(source, at, to);
+  if (close < 0 || close + 1 >= to || source[close + 1] !== "(") return null;
+  const end = matchLink(source, close + 1, to);
+  if (end < 0) return null;
+  return { close, end, target: source.slice(close + 2, end).trim() };
+}
+
+/**
+ * A link's address and title, as Markdown reads them: `<address>` or the address up to a space,
+ * then an optional title in quotes or parentheses.
+ */
+export function destination(target: string): { url: string; title: string | null } {
+  const text = target.trim();
+  // `<address>` to the first `>` not escaped, or the address up to a space; backslash escapes
+  // count in both, and in the title.
+  const bracketed = /^<((?:\\.|[^<>\n\\])*)>\s*(.*)$/s.exec(text);
+  const first = /^\S*/.exec(text)?.[0] ?? "";
+  const [url, rest] = bracketed
+    ? [bracketed[1] as string, bracketed[2] as string]
+    : [first, text.slice(first.length).trim()];
+  const title = /^(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|\(((?:\\.|[^()\\])*)\))$/s.exec(rest);
+  const said = title ? (title[1] ?? title[2] ?? title[3] ?? null) : null;
+  return { url: removeEscapes(url), title: said === null ? null : removeEscapes(said) };
+}
+
+/** The index of the `]` that balances the `[` at `open`, or -1. Escaped brackets don't count. */
+function matchSquare(source: string, open: number, to: number): number {
+  const known = inSegment(source, open, to);
+  if (known) return before(known.squares.get(open), to);
+  let depth = 0;
+  for (let i = open; i < to; i++) {
+    const char = source[i];
+    if (char === "\\" && isEscapable(source[i + 1])) i++;
+    else if (char === "[") depth++;
+    else if (char === "]" && --depth === 0) return i;
+  }
+  return -1;
 }
 
 /** `[a sound]` (§8.1), or a Markdown link, `[text](address)`, whose text is read (§8.3). */
 function lexBracket(source: string, at: number, to: number, warn: Warn): Atom | null {
+  // A `[` whose link holds another link is text: the inner one is the link (Markdown).
+  if (inSegment(source, at, to)?.nesting.has(at)) return null;
+  // A link whose text holds brackets: `[a [fine] story](…)`.
+  const link = linkAt(source, at, to);
+  // A link around an image and nothing else, `[![A map](map.png)](map-large.png)`: the image,
+  // with its link.
+  if (link) {
+    const lead = at + 1 + (/^\s*/.exec(source.slice(at + 1, link.close))?.[0].length ?? 0);
+    const image = source[lead] === "!" ? lexImage(source, lead, link.close) : null;
+    if (image?.type === "image" && source.slice(image.range.to, link.close).trim() === "") {
+      return {
+        ...image,
+        link: destination(link.target).url,
+        range: { from: at, to: link.end + 1 },
+      };
+    }
+  }
+  if (link && link.close !== findUnescaped(source, at + 1, to, "]")) {
+    return {
+      type: "text",
+      value: removeEscapes(label(source, at + 1, link.close, false)),
+      range: { from: at, to: link.end + 1 },
+      plain: false,
+    };
+  }
   const close = findUnescaped(source, at + 1, to, "]");
   if (close < 0) return null;
   const inner = source.slice(at + 1, close);
+  // A `[` before that `]` is the link's, if it is one, and this one is text (Markdown pairs a
+  // `]` with the nearest `[`): `[[t](u)` links `t`.
+  const nested = findUnescaped(source, at + 1, to, "[");
+  if (source[close + 1] === "(" && nested >= 0 && nested < close) return null;
   if (close + 1 < to && source[close + 1] === "(") {
-    const end = matchParen(source, close + 1, to);
+    const end = matchLink(source, close + 1, to);
     const target = end < 0 ? "" : source.slice(close + 2, end).trim();
-    if (end < 0 || !looksLikeAddress(target)) {
+    if (end < 0) {
+      warn(
+        "sound-looks-like-link",
+        `“[${inner}](” doesn't close on its line, so it reads as a sound and text: a link is written on one line (§8.3). If it is a sound, put a space after it.`,
+        { from: at, to: close + 2 },
+      );
+    } else if (!looksLikeAddress(target)) {
       warn(
         "sound-looks-like-link",
         `A sound followed directly by “(” reads as a Markdown link. If “[${inner}]” is a sound, put a space after it.`,
@@ -288,7 +662,8 @@ function lexBracket(source: string, at: number, to: number, warn: Warn): Atom | 
 
 /** Whether a link's target looks like an address rather than words, such as `(softly)`. */
 function looksLikeAddress(target: string): boolean {
-  return target !== "" && !/\s/.test(target) && /[./:#?=@]/.test(target);
+  const { url } = destination(target);
+  return url !== "" && !/\s/.test(url) && /[./:#?=@]/.test(url);
 }
 
 /** `{name}` or `{name value}` (§9). Anything else in braces stays text. */
@@ -323,8 +698,31 @@ function parseInstruction(content: string): { name: string; value: string | null
   return match?.[1] ? { name: match[1], value: match[2] ?? null } : null;
 }
 
+/** The `)` that ends a link's address and title from the `(` at `open`, or -1 (see `linkEnds`). */
+function matchLink(source: string, open: number, to: number): number {
+  const known = inSegment(source, open, to);
+  if (known) {
+    const end = known.links[open - known.from] ?? -1;
+    return end < 0 ? -1 : before(end + known.from, to);
+  }
+  const plain = new Uint8Array(to - open);
+  for (let i = open; i < to; i++) {
+    if (source[i] === "\\" && isEscapable(source[i + 1])) i++;
+    else plain[i - open] = 1;
+  }
+  const end =
+    linkEnds(
+      to - open,
+      (at) => source[open + at],
+      (at) => plain[at] === 1,
+    )[0] ?? -1;
+  return end < 0 ? -1 : end + open;
+}
+
 /** The index of the `)` that closes the `(` at `open`, or -1. Escaped parentheses don't count. */
 function matchParen(source: string, open: number, to: number): number {
+  const known = inSegment(source, open, to);
+  if (known) return before(known.parens.get(open), to);
   let depth = 0;
   for (let i = open; i < to; i++) {
     const char = source[i];
@@ -335,7 +733,9 @@ function matchParen(source: string, open: number, to: number): number {
   return -1;
 }
 
-function findUnescaped(source: string, from: number, to: number, target: string): number {
+function findUnescaped(source: string, from: number, to: number, target: "]" | "}" | "["): number {
+  const known = inSegment(source, from, to);
+  if (known) return before(known.next[target][from - known.from], to);
   for (let i = from; i < to; i++) {
     if (source[i] === "\\" && isEscapable(source[i + 1])) i++;
     else if (source[i] === target) return i;
@@ -369,6 +769,11 @@ const APOSTROPHE_LIKE = new Set(["'", "‘", '"']);
  */
 function resolveQuotes(atoms: readonly Atom[], state: QuoteState, warn: Warn): Token[] {
   const tokens: Token[] = [];
+  // The last straight `'` on the line that would close a quote: one opens only before it.
+  let lastCloser = -1;
+  atoms.forEach((atom, index) => {
+    if (atom.type === "quote" && atom.char === "'" && closes("'", atoms, index)) lastCloser = index;
+  });
   atoms.forEach((atom, index) => {
     if (atom.type !== "quote") {
       tokens.push(atom);
@@ -391,7 +796,8 @@ function resolveQuotes(atoms: readonly Atom[], state: QuoteState, warn: Warn): T
     const afterLetter = isLetterOrDigit(lastChar(tokens[tokens.length - 1]));
     if (nothingAfter(atoms, index)) {
       tokens.push(plainText(atom));
-      if (!(afterLetter && (char === "'" || char === "‘"))) {
+      // Straight after a letter or digit, `'`, `‘` and `"` are no quote (§5.5): `12"` is inches.
+      if (!(afterLetter && (char === "'" || char === "‘" || char === '"'))) {
         warn(
           "stray-quote",
           "This quotation mark has nothing after it on its line, so it opens nothing.",
@@ -400,10 +806,7 @@ function resolveQuotes(atoms: readonly Atom[], state: QuoteState, warn: Warn): T
       }
       return;
     }
-    if (
-      (afterLetter && APOSTROPHE_LIKE.has(char)) ||
-      (char === "'" && !hasStraightCloser(atoms, index))
-    ) {
+    if ((afterLetter && APOSTROPHE_LIKE.has(char)) || (char === "'" && lastCloser <= index)) {
       tokens.push(plainText(atom));
       return;
     }
@@ -418,14 +821,6 @@ function closes(opener: string, atoms: readonly Atom[], index: number): boolean 
   if (atom?.type !== "quote" || !CLOSERS.get(opener)?.includes(atom.char)) return false;
   const apostrophe = atom.char === "’" || atom.char === "'";
   return !(apostrophe && isLetterOrDigit(firstChar(atoms[index + 1])));
-}
-
-function hasStraightCloser(atoms: readonly Atom[], index: number): boolean {
-  for (let i = index + 1; i < atoms.length; i++) {
-    const atom = atoms[i];
-    if (atom?.type === "quote" && atom.char === "'" && closes("'", atoms, i)) return true;
-  }
-  return false;
 }
 
 function nothingAfter(atoms: readonly Atom[], index: number): boolean {

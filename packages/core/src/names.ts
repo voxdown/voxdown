@@ -3,7 +3,8 @@ import type { Warn } from "./warnings";
 
 /** Names ignore case (§5.2). */
 export function nameKey(name: string): string {
-  return name.normalize("NFC").toLowerCase();
+  // Whatever its capitals, its Unicode form, and its apostrophes (O'Brien is O’Brien) (§5.2).
+  return name.normalize("NFC").toLowerCase().replace(/’/g, "'");
 }
 
 /**
@@ -39,7 +40,11 @@ export class Names {
     const key = nameKey(written);
     const expected = this.spelling.get(key);
     if (expected === undefined) this.spelling.set(key, written);
-    else if (expected !== written) {
+    // The same letters written in another Unicode form (`ë` as `e` and a combining mark), or with
+    // another apostrophe (`O'Brien`, `O’Brien`), look the same: only another case is worth a warning.
+    else if (
+      expected.normalize("NFC").replace(/’/g, "'") !== written.normalize("NFC").replace(/’/g, "'")
+    ) {
       this.warn("name-case", `“${written}” is written “${expected}” elsewhere.`, range);
     }
     if (this.hasCast && !this.cast.has(key) && key !== this.narratorKey) {

@@ -146,6 +146,8 @@ Any other key is allowed and must be kept by tools that rewrite the file. A tool
 
 Front matter is YAML, and a reader understands at least this part of it: maps nested by indentation; plain, single-quoted and double-quoted values, including ones continued on more indented lines; block values (`|`, `>` and their `-` and `+` forms); lists written as `- item` or `[a, b]`; and comments. A tool that writes front matter keeps to that part. Anything else (anchors, aliases, tags, `{…}` maps) may be read as plain text, with a warning.
 
+A value the format reads as text (a title, an author, a language, a name) is that text as written, even where YAML would read a number or `true`: `title: 1.10` is the title `1.10`, not `1.1`.
+
 ```example
 ---
 title: The Tale of Peter Rabbit
@@ -189,7 +191,7 @@ After the front matter comes the story, made of:
 
 - **paragraphs**: one or more lines, ended by a blank line;
 - **headings**: `#` to `######` followed by a space;
-- **scene breaks**: a line of three or more `-`, `*` or `_`;
+- **scene breaks**: a line of three or more `-`, `*` or `_`, all the same (`***`, `---`), or, new in 1.1, with spaces between them (`* * *`);
 - **groups**: `:::` … `:::` (§7).
 
 Notes (§10) can sit anywhere, even across blank lines.
@@ -221,6 +223,28 @@ and Peter.
 Spaces at the start of a line are ignored.
 
 A file that starts with a `---` line has front matter only if a second `---` line closes it. To start a story with a scene break, use `***`.
+
+*New in 1.1 (draft).* A scene break's signs may have spaces between them, as in Markdown: `* * *` and `- - -` are scene breaks.
+
+```example 1.1
+The door closed.
+
+* * *
+
+Morning came.
+.
+Narrator: The door closed.
+
+---
+
+Narrator: Morning came.
+.
+The door closed.
+
+* * *
+
+Morning came.
+```
 
 Headings are part of the story: they are read aloud by the narrator unless marked `{book only}` or `{hidden}` (§9.3). By convention `#` is the title, or a chapter in a longer book, and `##` names a scene. The spec gives the levels no other meaning.
 
@@ -327,6 +351,15 @@ Clown: Honk honk!
 .
 clown: Honk!
 clown: Honk honk!
+```
+
+*New in 1.1 (draft).* Names ignore the kind of apostrophe too: `@O'Brien` and `@O’Brien` are one character.
+
+```example 1.1
+@O'Brien “Hello.” @O’Brien “Goodbye.”
+.
+O'Brien: Hello.
+O'Brien: Goodbye.
 ```
 
 ```example
@@ -1221,7 +1254,7 @@ Narrator [gasps]
 
 ### 8.3 Square brackets that are not sounds
 
-A Markdown link, `[text](address)`, stays a link: its text is read aloud and printed. So a sound followed directly by a parenthesis would become a link. Leave a space between them.
+A Markdown link, `[text](address)`, stays a link: its text is read aloud and printed. So a sound followed directly by a parenthesis would become a link. Leave a space between them. A link is written on one line, as marks are (§5.3): its text, address and title end on the line they start on. One that runs onto the next line is read as a sound and text, and warned about.
 
 ```example
 Read more at [our website](https://example.com).
@@ -1243,6 +1276,14 @@ An image, `![description](file)`, is shown in the book and not heard.
 ![Peter squeezing under the gate](peter-gate.png)
 .
 ![Peter squeezing under the gate](peter-gate.png)
+```
+
+An image may be a link's text, as in Markdown: it is still an image, shown and not heard, and links where the link does.
+
+```example
+[![A map of the garden](garden.png)](garden-large.png)
+.
+[![A map of the garden](garden.png)](garden-large.png)
 ```
 
 Write `\[` for a literal square bracket.
@@ -1417,6 +1458,19 @@ The knight’s cry is the only loud line.
 %% Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line. %%
 ```
 
+A note that runs over a line break leaves the lines two lines: what a mark does still ends with its line (§5.3), so the words after the note are the next line's. A quote left open carries on over it, as over any line break.
+
+```example
+@Alice “Hello.” %% A note for the
+producer. %% “Goodbye.”
+.
+Alice: Hello.
+%% A note for the producer. %%
+Narrator: “Goodbye.”
+.
+“Hello.” “Goodbye.”
+```
+
 Write `\%` for a literal percent sign where it would otherwise start a note.
 
 ## 11. Markdown inside the story
@@ -1443,6 +1497,16 @@ She wrote \[sic\] and \{page\} on the board.
 Narrator: She wrote [sic] and {page} on the board.
 ```
 
+*New in 1.1 (draft).* A character reference stands for its character, as in Markdown: `&amp;`, `&quot;`, `&#8217;`, `&#x2019;` and every name the HTML Standard gives one. It is heard and printed as that character, and a character written this way is never a mark: `&quot;` opens no quote. A name the HTML Standard doesn't know, or one without its `;`, is ordinary text.
+
+```example 1.1
+Tom &amp; Jerry said &quot;hello&quot;.
+.
+Narrator: Tom & Jerry said "hello".
+.
+Tom & Jerry said "hello".
+```
+
 Links and images work as in Markdown (§8.3). Other Markdown blocks (lists, block quotes, tables, code, HTML) are not part of version 1.0. Their lines are treated as ordinary paragraph text.
 
 ## 12. The two readings
@@ -1464,6 +1528,7 @@ The examples write it like this:
 | `{page}`, `{page 12}`, `{pause}`, `{pause 2s}`, `{name value}` | An instruction. |
 | `%% text %%` | A note. |
 | `![description](file)` | An image. |
+| `[![description](file)](address)` | An image that is a link. |
 | `# Character: text` | A heading read aloud, with as many `#` as its level. |
 | `## text {hidden}`, `## text {book only}` | A heading that is not read aloud. |
 | `{book only} text`, `{hidden} text` | A paragraph that is not read aloud. |
@@ -1558,9 +1623,12 @@ The format is meant to be edited both by hand and through a visual editor. A vis
 3. **New marks are written in one way:**
    - a character mark and direction go directly before the speech's opening quote, with the cast's spelling: `@Gerald (yawning) “…`;
    - a direction for narration goes before its first word: `@(warmly) Once…`;
+   - a direction for a speech that takes its direction from its mark goes in the mark, so it covers the whole speech, over the paragraphs that carry it on; a stretch with a `@(…)` of its own has that one replaced instead;
+   - a direction of its own for a paragraph that carries a speech on (§5.7) goes just inside its opening mark, so the paragraph still carries the speech on: `“@(softly)Two.”`;
    - a sound follows the word it belongs to, after one space: `fell over. [clatter]`;
-   - a page turn, pause or note between lines goes on a line of its own.
-4. **Changing who says a line.** Replace the name in its mark. If the speech had no mark because it carried on an earlier one (§5.6), add a mark to it. If a later quote on the same line carried this one on, add a mark to that quote too, so its speaker stays the same.
+   - a page turn, pause or note between lines goes on a line of its own;
+   - between two characters with no space between them, a mark goes without the space after it, which would show in the book: `“Hi.”@Ann—he said.` Where the mark would then run on into what follows, as a name runs on into a word's letters, there is no way to write it without changing the book.
+4. **Changing who says a line.** Replace the name in its mark. If the speech had no mark because it carried on an earlier one (§5.6), add a mark to it. If a later quote on the same line carried this one on, add a mark to that quote too, so its speaker stays the same. A speech over paragraphs (§5.7) is given away whole, from any of its paragraphs: the mark goes before the quote it starts with.
 5. **Removing a direction.** Delete the parentheses, their content and one space. If the remaining character mark is not needed, remove it too.
 6. **Renaming a character.** Changing a full name touches only the front matter. Changing a short name replaces it in the cast and in every mark.
 7. **A tool's own divisions are never line breaks or words.** How a tool cuts the spoken script into pieces of its own, such as one audio recording per sentence, is the tool's business. A tool that keeps such a division in the file writes its own instruction (§9.5), such as a recording tool's `{recorder:join}` between two sentences it records as one; it never adds a line break or changes the words to make one.
@@ -1633,7 +1701,9 @@ A file without a `voxdown` key is read by the latest version the reader knows.
 Questions for later versions. None of them changes a 1.0 file.
 
 - **Dialogue with dashes.** Spanish, French and other languages often mark speech with dashes instead of quotes. A rule for where a dash speech ends.
-- **Speaking together.** A chorus line said by two characters at once: perhaps `@Wanda @Marmalade “Fine.”`.
+- **Speaking together.** A chorus line said by two characters at once, as in “they both cried”: perhaps `@Wanda @Marmalade “Fine.”`.
+- **A speech broken by a song.** In novels, a character's quote can stop for a song or a letter in a paragraph of its own, then go on after it with no opening mark: `“…and I had to sing` ¶ `‘Twinkle, twinkle, little bat!’` ¶ `You know the song, perhaps?”`. A quote carries on only into a paragraph that opens with the same mark (§5.7), so today the first part warns, and the rest needs a mark of its own.
+- **Quotes of the same kind inside a quote.** `“…things are “much of a muchness”—did you…”` closes at the inner mark (§5.5), so today the inner quote is escaped: `\“much of a muchness\”`.
 - **Pronunciation.** A front matter list of how to say names and invented words.
 - **Language changes.** A way to mark a phrase in another language.
 - **Sound timing.** Lengths, overlaps and background sounds that run under the words, if they belong in the story file at all.

@@ -90,7 +90,10 @@ export type Group = {
   notes: Note[];
 };
 
-/** A line of a paragraph. A note that runs over several lines makes them one line. */
+/**
+ * A line of a paragraph. A note that runs over several lines keeps them in one `Line`, but what a
+ * mark does still ends at each line break, the note's own included (§5.3).
+ */
 export type Line = { range: Range; items: Item[] };
 
 /**
@@ -153,7 +156,8 @@ export type Instruction = {
 /** `%% … %%` (§10). `text` has its spaces and line breaks run together. */
 export type Note = { kind: "note"; text: string; range: Range };
 
-export type Image = { kind: "image"; alt: string; src: string; range: Range };
+/** An image (§8.3): shown in the book, not heard. `link` is where it links to, if a link holds it. */
+export type Image = { kind: "image"; alt: string; src: string; link?: string; range: Range };
 
 /** A character mark, `@Gerald` or `@Gerald (yawning)` (§5.2, §6.1). */
 export type Mark = {

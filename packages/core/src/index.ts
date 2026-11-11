@@ -23,7 +23,7 @@ export {
   setMeta,
   setSpeaker,
 } from "./edit";
-export { type FormatOptions, format } from "./format";
+export { type FormatOptions, curlQuotes, format, quotationMarks } from "./format";
 export {
   type LinesOptions,
   type ScriptLine,
@@ -34,6 +34,7 @@ export {
 } from "./lines";
 export { type FountainOptions, fromFountain } from "./fountain";
 export { PALETTE, characterColors } from "./colors";
+export { characterReference } from "./entities";
 export type {
   Block,
   Break,

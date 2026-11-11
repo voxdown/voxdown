@@ -23,6 +23,7 @@ const SCRIPT_LINE = new RegExp(
     String.raw`^\{(?:book only|hidden)\} .+$`,
     String.raw`^%% .+ %%$`,
     String.raw`^!\[[^\]]*\]\([^)]+\)$`,
+    String.raw`^\[!\[[^\]]*\]\([^)]+\)\]\([^)]+\)$`,
   ].join("|"),
   "u",
 );

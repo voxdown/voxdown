@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  bookText,
   fromFountain,
   lines,
   linesToCsv,
@@ -9,6 +10,7 @@ import {
   spokenScript,
   textByCharacter,
 } from "../src/index";
+import { lexedTokens } from "../src/lexed";
 import { root } from "./examples";
 
 const peter = parse(readFileSync(join(root, "examples", "peter-rabbit.vxd"), "utf8"));
@@ -95,6 +97,276 @@ describe("lines", () => {
   });
 });
 
+describe("what review found", () => {
+  it("opens a straight ' quote only before a closing one on its line (§5.5)", () => {
+    expect(spokenScript(parse(`@Gerald "Hi," he said ' and left.`))).toBe(
+      "Gerald: Hi,\nNarrator: he said ' and left.",
+    );
+    expect(spokenScript(parse("@Gerald 'Hi,' he said, 'and bye.'"))).toBe(
+      "Gerald: Hi,\nNarrator: he said,\nGerald: and bye.",
+    );
+  });
+
+  it("takes a name written with either apostrophe for the same name, without a warning (§5.2)", () => {
+    const story = parse(
+      "---\ncast:\n  O'Brien: Mr O'Brien\n---\n@O’Brien “Hello.” @o'brien “Bye.”",
+    );
+    expect(spokenScript(story)).toBe("O'Brien: Hello.\nO'Brien: Bye.");
+    expect(story.warnings.map((warning) => warning.code)).toEqual(["name-case"]);
+  });
+
+  it("takes a name written in another Unicode form for the same name, without a warning", () => {
+    const story = parse("---\ncast:\n  Zoë: Zoë the Cat\n---\n@Zoe\u0308 “Hi.”");
+    expect(story.warnings).toEqual([]);
+    expect(spokenScript(story)).toBe("Zoë: Hi.");
+  });
+});
+
+describe("page numbers", () => {
+  it("count on from a Roman numeral, a number, or a label of their own", () => {
+    const pages = (source: string) =>
+      [...new Set(lines(parse(source)).map((row) => row.page))].filter((page) => page !== null);
+    expect(pages("{page iv}\nA.\n{page}\nB.\n{page}\nC.")).toEqual(["iv", "v", "vi"]);
+    expect(pages("{page IX}\nA.\n{page}\nB.")).toEqual(["IX", "X"]);
+    expect(pages("{page 8–9}\nA.\n{page}\nB.")).toEqual(["8–9", "10"]);
+    expect(pages("{page Map}\nA.\n{page}\nB.\n{page}\nC.")).toEqual(["Map", "Map +1", "Map +2"]);
+  });
+});
+
+describe("scene breaks (§4.4)", () => {
+  it("are three or more of one sign, with or without spaces between them, as in Markdown", () => {
+    for (const line of ["***", "* * *", "- - -", "_ _ _", "*  *\t*", "-----"]) {
+      const story = parse(`End.\n\n${line}\n\nNext.`);
+      expect(
+        story.blocks.map((block) => block.kind),
+        line,
+      ).toEqual(["paragraph", "break", "paragraph"]);
+    }
+    for (const line of ["* - *", "**", "* * * x"]) {
+      expect(
+        parse(`End.\n\n${line}\n\nNext.`).blocks.some((block) => block.kind === "break"),
+        line,
+      ).toBe(false);
+    }
+  });
+});
+
+describe("a speech over paragraphs (§5.7)", () => {
+  it("passes over a paragraph of notes, page turns or pauses alone, and goes on after it", () => {
+    for (const between of ["%% A note %%", "{page}", "{pause 2s}"]) {
+      const story = parse(`@Ann “One.\n\n${between}\n\n“Two.”`);
+      expect(spokenScript(story), between).toMatch(/Ann: Two\.$/);
+      expect(
+        story.warnings.map((warning) => warning.code),
+        between,
+      ).not.toContain("unclosed-quote");
+    }
+    // A paragraph with words in it ends the speech.
+    expect(spokenScript(parse("@Ann “One.\n\nRain.\n\n“Two.”"))).toMatch(/Narrator: “Two\.”$/);
+  });
+});
+
+describe("the spec's other quotation marks (§5.5) and scripts written without spaces (§5.2)", () => {
+  it("closes Swedish »…» and Danish »…«, and German ‚…‘ or ‚…’", () => {
+    expect(spokenScript(parse("@Anna »Hej,» sa Anna."))).toBe("Anna: Hej,\nNarrator: sa Anna.");
+    expect(spokenScript(parse("@Anna »Hej,« sagde Anna."))).toBe(
+      "Anna: Hej,\nNarrator: sagde Anna.",
+    );
+    for (const close of ["‘", "’"]) {
+      expect(spokenScript(parse(`@Anna ‚nein${close}, sagte sie.`))).toBe(
+        "Anna: nein\nNarrator: , sagte sie.",
+      );
+    }
+  });
+
+  it('warns of no stray quote in a measurement: a `"` after a digit is no quote', () => {
+    for (const text of ['A 2" by 4" board.', 'She measured 12"']) {
+      expect(
+        parse(text).warnings.map((warning) => warning.code),
+        text,
+      ).not.toContain("stray-quote");
+    }
+  });
+
+  it("reads a mark straight after Thai, as after Chinese or Japanese", () => {
+    expect(spokenScript(parse("สมชาย@Somchai “สวัสดี”"))).toBe("Narrator: สมชาย\nSomchai: สวัสดี");
+    expect(spokenScript(parse("花子は@Hanako「はい」"))).toBe("Narrator: 花子は\nHanako: はい");
+  });
+});
+
+describe("links, as Markdown reads them (§8.3)", () => {
+  it("runs a link's text to the bracket that balances it", () => {
+    const story = parse("[a [fine] story](https://example.com) and on.");
+    expect(spokenScript(story)).toBe("Narrator: a [fine] story and on.");
+    expect(story.warnings).toEqual([]);
+  });
+
+  it("reads an image's address without its title or angle brackets", () => {
+    const image = (text: string) =>
+      parse(text)
+        .blocks.flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+        .flatMap((line) => line.items)
+        .find((item) => item.kind === "image");
+    expect(image('![a [b] c](pic.png "A title")')).toMatchObject({
+      alt: "a [b] c",
+      src: "pic.png",
+    });
+    expect(image("![x](<my pic.png>)")).toMatchObject({ src: "my pic.png" });
+    // An address with a title is an address: no warning that a sound reads as a link.
+    expect(parse('[story](https://example.com "A story")').warnings).toEqual([]);
+  });
+
+  it("makes the innermost of links inside links the link, the rest text, as Markdown does", () => {
+    // CommonMark: a link may not hold a link, so the inner one is the link.
+    expect(spokenScript(parse("[a [b](x) c](y)"))).toBe("Narrator: [a b c](y)");
+    expect(spokenScript(parse("[[b](x)](y)"))).toBe("Narrator: [b](y)");
+    expect(spokenScript(parse("[a](x) [b](y)"))).toBe("Narrator: a b");
+  });
+
+  it("reads a link's address and title as Markdown does, lone parentheses and all", () => {
+    // Each as CommonMark reads it (checked with markdown-it): a title may hold a lone `(` or `)`,
+    // an address in `<…>` a `)`, and an escape counts. Where Markdown sees no link, neither does
+    // the parser: a sound, then text.
+    const said = (text: string) => spokenScript(parse(text));
+    for (const link of [
+      '[the chapter](book.html "Chapter (one")',
+      "[the chapter](<https://example.com/a)b>)",
+      '[the chapter](b "t)")',
+      "[the chapter](b 't)')",
+      "[the chapter](b (t))",
+      "[the chapter](<b c>)",
+      "[the chapter]( b )",
+      "[the chapter](<>)",
+      "[the chapter](b(c)d)",
+      "[the chapter](b\\)c)",
+      "[the chapter](<b\\>c>)",
+      '[the chapter](b "t" )',
+      '[the chapter]("t")',
+    ]) {
+      expect(said(`Read ${link} now.`), link).toBe("Narrator: Read the chapter now.");
+    }
+    for (const text of ["(b (t()", '(<b>"t")', "(b(c d)", "(<b<c>)", '(b "t" x)']) {
+      expect(said(`Read [a]${text} now.`), text).toBe(
+        `Narrator: Read\n[a]\nNarrator: ${text} now.`,
+      );
+    }
+    const image = parse('See ![pic](<a b\\>.png> "A (big") here.')
+      .blocks.flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+      .flatMap((line) => line.items)
+      .find((item) => item.kind === "image");
+    expect(image).toMatchObject({ alt: "pic", src: "a b>.png" });
+  });
+
+  it("reads a link on one line: one that runs onto the next is a sound and text, and warned of", () => {
+    const story = parse('See [the map](maps.png\n"A map").');
+    expect(spokenScript(story)).toBe(
+      'Narrator: See\n[the map]\nNarrator: (maps.png\nNarrator: "A map").',
+    );
+    expect(story.warnings.map((warning) => warning.code)).toContain("sound-looks-like-link");
+    expect(story.warnings[0]?.message).toMatch(/doesn't close on its line/);
+  });
+
+  it("opens a link at the `[` nearest its `]`: a `[` left open before it is text", () => {
+    const story = parse("Read [[the map](maps.png) now.");
+    expect(spokenScript(story)).toBe("Narrator: Read [the map now.");
+    const tokens = lexedTokens(story.source).filter(
+      (token) => token.type === "text" && !token.plain,
+    );
+    expect(tokens.map((token) => story.source.slice(token.range.from, token.range.to))).toEqual([
+      "[the map](maps.png)",
+    ]);
+  });
+
+  it("reads an image that is a link's text as an image, with its link (§8.3)", () => {
+    const story = parse("See [![A map](map.png)](map-large.png) here.");
+    const image = story.blocks
+      .flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+      .flatMap((line) => line.items)
+      .find((item) => item.kind === "image");
+    expect(image).toMatchObject({ alt: "A map", src: "map.png", link: "map-large.png" });
+    expect(spokenScript(story)).toBe(
+      "Narrator: See\n[![A map](map.png)](map-large.png)\nNarrator: here.",
+    );
+    // An image with words beside it in a link's text: the words are heard, the image isn't.
+    expect(spokenScript(parse("[![a](i.png) and more](y)"))).toBe("Narrator: and more");
+    // A link in an image's description is its words.
+    expect(spokenScript(parse("![a [b](x)](y.png)"))).toBe("![a b](y.png)");
+  });
+
+  it("reads a character reference as its character, never as a mark (§11)", () => {
+    expect(spokenScript(parse("Tom &amp; Jerry said &quot;hello&quot;."))).toBe(
+      'Narrator: Tom & Jerry said "hello".',
+    );
+    expect(spokenScript(parse("@Tom “It&#8217;s mine &#x26; yours.”"))).toBe(
+      "Tom: It’s mine & yours.",
+    );
+    // An escaped `&`, an unknown name and a missing `;` are text as written; so is a name only
+    // a JavaScript object has, never one of the HTML Standard's.
+    for (const name of ["constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"]) {
+      expect(spokenScript(parse(`He met &${name}; today.`))).toBe(
+        `Narrator: He met &${name}; today.`,
+      );
+    }
+    expect(spokenScript(parse("A \\&amp; B, &nosuch; and &amp"))).toBe(
+      "Narrator: A &amp; B, &nosuch; and &amp",
+    );
+    expect(bookText(parse("[Tom &quot;Cat&quot;](c.html?x=1&amp;y=2)"))).toBe(
+      '[Tom "Cat"](c.html?x=1&y=2)',
+    );
+  });
+
+  it("ends what a mark does at a line break inside a note, CRLF too (§5.3, §10)", () => {
+    for (const end of ["\n", "\r\n"]) {
+      const script = (text: string) => spokenScript(parse(text.replace(/\n/g, end)));
+      // A closed speech, a mark without a quote, and a direction: each ends with its line.
+      expect(script("@Alice “Hello.” %% producer\nnote %% “Goodbye.”")).toBe(
+        "Alice: Hello.\n%% producer note %%\nNarrator: “Goodbye.”",
+      );
+      expect(script("@Bob Hello %% a\nnote %% world.")).toBe(
+        "Bob: Hello\n%% a note %%\nNarrator: world.",
+      );
+      expect(script("@(quietly) Hello %% a\nnote %% world.")).toBe(
+        "Narrator (quietly): Hello\n%% a note %%\nNarrator: world.",
+      );
+      // A quote left open carries on over it, as over any line break, and is warned about.
+      const open = parse(`@Alice “Hello %% a${end}note %% there.”`);
+      expect(spokenScript(open)).toBe("Alice: Hello\n%% a note %%\nAlice: there.");
+      expect(open.warnings.map((w) => w.code)).toEqual(["quote-over-line-break"]);
+      // A note on one line changes nothing.
+      expect(script("@Alice “Hello.” %% a note %% “Goodbye.”")).toBe(
+        "Alice: Hello.\n%% a note %%\nAlice: Goodbye.",
+      );
+    }
+  });
+
+  it("reads an image's description with images and links nested in it, at any depth", () => {
+    expect(spokenScript(parse("A ![x ![y](b) z](a) and [![m](i) n](l)."))).toBe(
+      "Narrator: A\n![x y z](a)\nNarrator: and n.",
+    );
+    const deep = parse(`${"![".repeat(20_000)}bird${"](a)".repeat(20_000)}`);
+    const image = deep.blocks[0]?.kind === "paragraph" ? deep.blocks[0].lines[0]?.items[0] : null;
+    expect(image?.kind === "image" && image.alt).toBe("bird");
+  });
+
+  it("reads brackets nested deep, and lines of many links, in linear time", () => {
+    for (const text of [
+      `${"[".repeat(150_000)}x${"]".repeat(150_000)}(y)`,
+      "[a](".repeat(40_000),
+      "[x](y) ".repeat(25_000),
+      // Images and links nested in one another, each in the description or text of the one
+      // around it: they once ran out of stack, and took time with the square of their depth.
+      `Hi ${"![".repeat(50_000)}bird${"](a)".repeat(50_000)} end.`,
+      `Hi ${"[![".repeat(30_000)}bird${"](a)](b)".repeat(30_000)} end.`,
+    ]) {
+      const start = performance.now();
+      const story = parse(text);
+      spokenScript(story);
+      lines(story);
+      expect(performance.now() - start, text.slice(0, 6)).toBeLessThan(2000);
+    }
+  });
+});
+
 describe("the Fountain import", () => {
   const screenplay = [
     "Title: The Dragon Who Wouldn't Roar",
@@ -164,5 +436,12 @@ describe("the Fountain import", () => {
     expect(spokenScript(story)).toContain(
       'SirPercival (nervous): Hello? Is anyone "home"?\nSirPercival (louder): HELLO?',
     );
+  });
+
+  it("writes a cue in capitals as a name: an apostrophe takes a capital only after one letter", () => {
+    const vxd = fromFountain("INT. HOUSE - DAY\n\nBOB'S MOTHER\nHello.\n\nO'BRIEN\nHi.\n");
+    expect(vxd).toContain("Bob'sMother: Bob's Mother");
+    expect(vxd).toContain("@Bob'sMother “Hello.”");
+    expect(vxd).toContain("@O'Brien “Hi.”");
   });
 });

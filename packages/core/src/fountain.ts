@@ -186,11 +186,15 @@ function readCue(line: string): Cue {
   return { handle: handle || "Someone", name, ...(extension ? { extension } : {}) };
 }
 
+/**
+ * A word in capitals written as a name: `MARY-JANE` is Mary-Jane, `O'BRIEN` O'Brien, but `BOB'S`
+ * is Bob's (a capital after an apostrophe only after one letter, as in O', D' or L').
+ */
 function titleCase(word: string): string {
   return word
     .toLowerCase()
     .replace(
-      /(^|[-'’.])(\p{L})/gu,
+      /(^|[-.]|(?<=^\p{L})['’])(\p{L})/gu,
       (_match, lead: string, letter: string) => lead + letter.toUpperCase(),
     );
 }
@@ -232,6 +236,6 @@ function escapeText(text: string): string {
     .replace(/([[\]{}])/g, "\\$1")
     .replace(/%%/g, "\\%%")
     .replace(/(^|[^\p{L}\p{N}])@(?=[\p{L}([])/gu, "$1\\@")
-    .replace(/^(#{1,6}\s|:{3,}|-{3,}\s*$|\*{3,}\s*$|_{3,}\s*$)/, "\\$1");
+    .replace(/^(#{1,6}\s|:{3,}|([-*_])[ \t]*(?:\2[ \t]*){2,}$)/, "\\$1");
   return escaped.replace(/\uE000(\d+)\uE000/g, (_m, index: string) => notes[Number(index)] ?? "");
 }

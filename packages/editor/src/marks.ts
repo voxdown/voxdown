@@ -540,7 +540,7 @@ function drawRuns(
   if (drop.size) {
     const kept = out.filter((_, k) => !drop.has(k));
     out.length = 0;
-    out.push(...kept);
+    for (const mark of kept) out.push(mark);
   }
 }
 

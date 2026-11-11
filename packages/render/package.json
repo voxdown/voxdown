@@ -28,6 +28,6 @@
     "test": "vitest run"
   },
   "dependencies": { "voxdown": "workspace:^" },
-  "devDependencies": { "happy-dom": "^20.14.6" },
+  "devDependencies": { "happy-dom": "^20.14.6", "markdown-it": "14.3.3" },
   "engines": { "node": ">=20" }
 }

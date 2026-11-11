@@ -14,7 +14,7 @@ import {
   characterColors,
   parse,
 } from "voxdown";
-import { escapeHtml, inlineHtml, safeUrl } from "./inline";
+import { escapeHtml, inlineHtml, inlineHtmlPieces, safeUrl } from "./inline";
 import { stylesheet } from "./stylesheet";
 
 export { stylesheet };
@@ -81,6 +81,7 @@ ${render(parsed, view, options)}
 
 /** The printed story: the book text typeset, with emphasis, links and images (§12.2). */
 export function renderBook(story: Story, options: RenderOptions = {}): string {
+  fullNames.delete(story);
   const out: string[] = [];
   if (options.header !== false && !opensWithTitle(story)) out.push(header(story, false, new Map()));
   let page = "1";
@@ -101,9 +102,12 @@ export function renderBook(story: Story, options: RenderOptions = {}): string {
           }
     }
     if (block.visibility === "audio" || block.visibility === "hidden") continue;
+    // Emphasis can run over a paragraph's lines: they are rendered together, each its own.
+    const texts = lines.map((line) => printedText(story.source, line));
+    const htmls = inlineHtmlPieces(texts);
     const printed = lines
-      .map((line) => {
-        const html = printedLine(story.source, line);
+      .map((line, index) => {
+        const html = texts[index] === "" ? "" : (htmls[index] ?? "");
         // With positions, each printed line says where it comes from.
         return html && options.positions && block.kind !== "heading"
           ? `<span class="vxd-line"${placed(line.range, options)}>${html}</span>`
@@ -134,13 +138,23 @@ const NOT_PRINTED: ReadonlySet<Item["kind"]> = new Set([
 
 /** A line as printed (§12.2), as HTML. Where a removed mark leaves two spaces, one remains. */
 function printedLine(source: string, line: Line): string {
-  let printed = "";
+  return inlineHtml(printedText(source, line));
+}
+
+/** A line as printed (§12.2), its Markdown not yet read. */
+function printedText(source: string, line: Line): string {
+  // Pieces joined once at the end: a long line of many marks stays linear.
+  const printed: string[] = [];
+  let spaced = false;
   let at = line.range.from;
   let joint = false;
   const append = (to: number) => {
     let piece = source.slice(at, to);
-    if (joint && /[ \t]$/.test(printed)) piece = piece.replace(/^[ \t]+/, "");
-    printed += piece;
+    if (joint && spaced) piece = piece.replace(/^[ \t]+/, "");
+    if (piece !== "") {
+      printed.push(piece);
+      spaced = /[ \t]$/.test(piece);
+    }
   };
   for (const item of line.items) {
     if (!NOT_PRINTED.has(item.kind) || item.range.from < at) continue;
@@ -149,13 +163,14 @@ function printedLine(source: string, line: Line): string {
     joint = true;
   }
   append(line.range.to);
-  return inlineHtml(printed.trim());
+  return printed.join("").trim();
 }
 
 // The script view
 
 /** A script for reading aloud (§14): who says what, how, and every sound, pause and page turn. */
 export function renderScript(story: Story, options: RenderOptions = {}): string {
+  fullNames.delete(story);
   const colors = characterColors(story, options.colors);
   const out: string[] = [];
   if (options.header !== false) out.push(header(story, true, colors));
@@ -192,6 +207,8 @@ type ScriptContext = {
   last: string | null;
   /** The groups around the block being written, outermost first. */
   groups: readonly Group[];
+  /** The block's text as HTML, by its range (`from:to`), rendered together (see `inlinePieces`). */
+  inline?: Map<string, string>;
 };
 
 /** What the labels of the groups around a block already say: a character, and a direction. */
@@ -244,11 +261,13 @@ function scriptBlock(block: Block, context: ScriptContext): string {
       return `<div class="vxd-heading-label vxd-h${level}" data-visibility="hidden"${placed(block.range, context.options)}><span class="vxd-chip vxd-chip-label">hidden</span> ${printedLine(context.story.source, block.line)}</div>`;
     }
     context.last = null;
+    context.inline = inlinePieces(context.story.source, [block.line]);
     const inner = scriptLine(block.line, context, true);
     return `<h${level} class="vxd-heading"${visibilityAttr(block.visibility)}${placed(block.range, context.options)}>${label}${inner}</h${level}>`;
   }
   // Each paragraph names its speakers afresh, except the character its group's label names.
   context.last = groupSays(context.groups).character ?? null;
+  context.inline = inlinePieces(context.story.source, block.lines);
   // A line holding only a page turn is a rule across the page.
   const lines = block.lines.map((line) => {
     const solid = line.items.filter((item) => !(item.kind === "speech" && item.text === ""));
@@ -294,7 +313,7 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
   let html = "";
   let at = line.range.from;
   const gap = (to: number) => {
-    if (to > at) html += inlineHtml(source.slice(at, to));
+    if (to > at) html += inlineOf(context, at, to);
     at = Math.max(at, to);
   };
   for (const item of items) {
@@ -302,7 +321,7 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
     switch (item.kind) {
       case "speech": {
         gap(item.range.from);
-        html += speechHtml(item, context, heading);
+        html += speechHtml(item, context, heading, line);
         at = Math.max(at, item.range.to);
         break;
       }
@@ -352,7 +371,13 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
         break;
       case "image":
         gap(item.range.from);
-        html += `<img class="vxd-image" src="${escapeHtml(safeUrl(item.src, true))}" alt="${escapeHtml(item.alt)}"${placed(item.range, options)}>`;
+        {
+          const image = `<img class="vxd-image" src="${escapeHtml(safeUrl(item.src, true))}" alt="${escapeHtml(item.alt)}"${item.link === undefined ? placed(item.range, options) : ""}>`;
+          html +=
+            item.link === undefined
+              ? image
+              : `<a href="${escapeHtml(safeUrl(item.link))}"${placed(item.range, options)}>${image}</a>`;
+        }
         at = item.range.to;
         break;
     }
@@ -361,7 +386,85 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
   return html.trim();
 }
 
-function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): string {
+/**
+ * The pieces of text a script's lines show (between their items, and each stretch), rendered
+ * together so emphasis can run across a line break or a direction: by range.
+ */
+function inlinePieces(source: string, lines: readonly Line[]): Map<string, string> {
+  const ranges: Array<[number, number]> = [];
+  for (const line of lines) {
+    const items = [...line.items].sort((a, b) => a.range.from - b.range.from);
+    let at = line.range.from;
+    const gap = (to: number) => {
+      if (to > at) ranges.push([at, to]);
+      at = Math.max(at, to);
+    };
+    for (const item of items) {
+      if (item.range.from < at && item.kind !== "speech") continue;
+      gap(item.range.from);
+      if (item.kind === "speech") for (const piece of ownPieces(item, line)) ranges.push(piece);
+      at = Math.max(at, item.range.to);
+    }
+    gap(line.range.to);
+  }
+  const htmls = inlineHtmlPieces(
+    ranges.map(([from, to]) => source.slice(from, to)),
+    // Whether each piece follows the one before with nothing between them in the source.
+    ranges.map(([from], index) => index > 0 && ranges[index - 1]?.[1] === from),
+  );
+  return new Map(ranges.map(([from, to], index) => [`${from}:${to}`, htmls[index] ?? ""]));
+}
+
+function inlineOf(context: ScriptContext, from: number, to: number): string {
+  return context.inline?.get(`${from}:${to}`) ?? inlineHtml(context.story.source.slice(from, to));
+}
+
+/** Where something is in the source. */
+type Span = { from: number; to: number };
+
+/** Each line's marks, directions and instructions, in order. */
+const unwritten = new WeakMap<Line, Span[]>();
+
+/**
+ * A stretch's text as pieces, the marks, directions and instructions inside it left out: narration
+ * can run on past a mark to its quote (`He turned. @Waiter (softly) He bowed low, “Bonjour.”`,
+ * §5.4), and over `{book only}`, which the paragraph's label shows.
+ */
+function ownPieces(speech: Speech, line: Line): Array<[number, number]> {
+  // The line's marks, directions and instructions in order, found once for all its stretches,
+  // and those inside this one found by halves: a line of thousands stays linear.
+  let hidden = unwritten.get(line);
+  if (!hidden) {
+    hidden = line.items
+      .filter(
+        (item) => item.kind === "mark" || item.kind === "direction" || item.kind === "instruction",
+      )
+      .map((item) => item.range)
+      .sort((a, b) => a.from - b.from);
+    unwritten.set(line, hidden);
+  }
+  let low = 0;
+  let high = hidden.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if ((hidden[middle] as Span).from < speech.range.from) low = middle + 1;
+    else high = middle;
+  }
+  const inside: Span[] = [];
+  for (let at = low; at < hidden.length && (hidden[at] as Span).from < speech.range.to; at++) {
+    if ((hidden[at] as Span).to <= speech.range.to) inside.push(hidden[at] as Span);
+  }
+  const pieces: Array<[number, number]> = [];
+  let at = speech.range.from;
+  for (const range of inside) {
+    if (range.from > at) pieces.push([at, range.from]);
+    at = Math.max(at, range.to);
+  }
+  if (speech.range.to > at || pieces.length === 0) pieces.push([at, speech.range.to]);
+  return pieces;
+}
+
+function speechHtml(speech: Speech, context: ScriptContext, heading: boolean, line: Line): string {
   const { story, colors, options } = context;
   const source = story.source;
   const narrator = speech.speaker === story.meta.narrator;
@@ -379,7 +482,9 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): s
     speech.direction && spoken && speech.direction !== groupSays(context.groups).direction
       ? `<span class="vxd-direction" aria-label="${escapeHtml(`(${speech.direction})`)}"><span>${escapeHtml(speech.direction)}</span></span>`
       : "";
-  const words = inlineHtml(source.slice(speech.range.from, speech.range.to));
+  const words = ownPieces(speech, line)
+    .map(([from, to]) => inlineOf(context, from, to))
+    .join("");
   const classes = [
     "vxd-speech",
     narrator ? "vxd-narration" : "",
@@ -392,11 +497,24 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean): s
 }
 
 function fullName(story: Story, speaker: string): string {
-  return (
-    story.cast.find((member) => member.handle.toLowerCase() === speaker.toLowerCase())?.name ??
-    speaker
-  );
+  let names = fullNames.get(story);
+  if (!names) {
+    names = new Map();
+    // The first member of each name, as a search through the cast would find.
+    for (const member of story.cast) {
+      const key = member.handle.toLowerCase();
+      if (!names.has(key)) names.set(key, member.name);
+    }
+    fullNames.set(story, names);
+  }
+  return names.get(speaker.toLowerCase()) ?? speaker;
 }
+
+/**
+ * Each story's full names by handle, whatever its case: a view looks one up for every line. Made
+ * afresh for each view, so a cast changed in place between two views is read as it is now.
+ */
+const fullNames = new WeakMap<Story, Map<string, string>>();
 
 // Shared
 

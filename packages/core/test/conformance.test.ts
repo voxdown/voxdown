@@ -1,8 +1,18 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { bookText, format, lines, parse, spokenScript, write } from "../src/index";
+import {
+  bookText,
+  format,
+  lines,
+  parse,
+  setDirection,
+  setSpeaker,
+  spokenScript,
+  write,
+} from "../src/index";
 import { examples, root, spec } from "./examples";
+import { EDITS, brokenPromise, speeches } from "./voices";
 
 /**
  * Every example in SPEC.md, run through the parser (§3), and the conformance file other
@@ -14,6 +24,8 @@ const fixturesPath = join(root, "spec", "conformance.json");
 type Fixture = {
   example: number;
   section: string;
+  /** The spec version the example is new in, when later than 1.0: a 1.0 reader may skip it. */
+  since?: string;
   line: number;
   input: string;
   script: string;
@@ -28,6 +40,7 @@ function fixtures(): Fixture[] {
     return {
       example: index + 1,
       section: example.section,
+      ...(example.since ? { since: example.since } : {}),
       line: example.line,
       input: example.input,
       script: example.script,
@@ -91,4 +104,27 @@ describe("spec/conformance.json", () => {
       expect(voices(formatted)).toEqual(voices(fixture.input));
     },
   );
+});
+
+describe("the spec's examples, edited", () => {
+  it("take a new speaker and a new direction on every stretch, but one glued to Japanese", () => {
+    // Every stretch of every example, as an author would edit them: each edit keeps its promise
+    // (voices.ts), and declines only where no mark can go without showing in the book.
+    const declined: string[] = [];
+    for (const example of examples(spec)) {
+      const story = parse(example.input);
+      for (const target of speeches(story)) {
+        const speaker = setSpeaker(story, target, "Zed");
+        if (speaker.length === 0) declined.push(`§${example.section} speaker: ${target.text}`);
+        else expect(brokenPromise(story, target, speaker, EDITS.speaker), target.text).toBe(null);
+        if (target.direction === "softly") continue;
+        const direction = setDirection(story, target, "softly");
+        if (direction.length === 0) declined.push(`§${example.section} direction: ${target.text}`);
+        else
+          expect(brokenPromise(story, target, direction, EDITS.direction), target.text).toBe(null);
+      }
+    }
+    // `花子は「はい」と言った。`: a name glued to `と` would run on into it, and a space would print.
+    expect(declined).toEqual(["§5.5 speaker: と言った。"]);
+  });
 });

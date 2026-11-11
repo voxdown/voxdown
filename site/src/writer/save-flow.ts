@@ -103,9 +103,12 @@ export class SaveFlow {
       return true;
     }
     const name = host.suggestedName();
+    // The story this is for: another opened while the picker was up is never written over it.
+    const story = file.id;
     const handle = await host.files.pickSaveTarget(keepBoth ? anotherName(name) : name);
-    if (!handle) return false;
+    if (!handle || file.id !== story) return false;
     const itself = file.handle ? await host.files.sameEntry(handle, file.handle) : false;
+    if (file.id !== story) return false;
     // Keeping both: never the file it is to be kept beside.
     if (keepBoth && itself) {
       await host.tell(
@@ -138,16 +141,24 @@ export class SaveFlow {
   async write(handle: FileSystemFileHandle): Promise<boolean> {
     const { host } = this;
     const { file } = host;
+    // The story this save is for, and its file. Each wait below (the browser's question, reading
+    // the file, the writer's answer) may see another story opened, and the writer tell the Writer
+    // not to save this one: then nothing is written, never that story's words into this file.
+    // Its draft stays in this browser.
+    const story = file.id;
+    const still = () => file.id === story && (handle === file.handle || file.handle === undefined);
     // The browser may want to ask before the page writes the file again (after a restart):
     // asked now, on the click, so that the file can be read before it is written.
     try {
       if (!(await host.files.allowed(handle, "readwrite"))) {
-        await host.tell(`${file.name} wasn’t saved: the browser didn’t allow writing it.`);
+        if (still())
+          await host.tell(`${file.name} wasn’t saved: the browser didn’t allow writing it.`);
         return false;
       }
     } catch {
       // Writing will say what is wrong.
     }
+    if (!still()) return false;
     // Changed on disk since the Writer read it (another app, another computer syncing it):
     // asked first, never overwritten unseen; whichever is kept, the other is in Earlier versions.
     const check =
@@ -157,6 +168,7 @@ export class SaveFlow {
             saved: file.saved,
           })
         : ({ kind: "write" } as const);
+    if (!still()) return false;
     if (check.kind === "unread") {
       const answer = await host.ask(
         `${file.name} couldn’t be read to see whether it changed outside the Writer. Save over it anyway?`,
@@ -189,6 +201,9 @@ export class SaveFlow {
       if (answer !== "mine") return false;
       await host.snapshot("As it was on disk, before it was saved over", disk.text);
     }
+    // The words as they are now, of the story the save is for: read after the waiting, never
+    // before it (words typed meanwhile are saved too) and never another story's.
+    if (!still()) return false;
     const content = host.text();
     host.showState("saving", "Saving…");
     try {
@@ -275,6 +290,8 @@ export class SaveFlow {
     const { host } = this;
     const { file } = host;
     const handle = file.handle;
+    // The story it is for: another opened while the file was looked at is never written into it.
+    const story = file.id;
     const base = {
       on: host.autosaveOn(),
       owner: host.owner(),
@@ -311,7 +328,7 @@ export class SaveFlow {
       );
       return;
     }
-    if (check.kind !== "write" || handle !== file.handle) return;
+    if (check.kind !== "write" || handle !== file.handle || file.id !== story) return;
     const content = host.text();
     const id = file.id;
     try {

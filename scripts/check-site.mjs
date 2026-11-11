@@ -2001,6 +2001,51 @@ await maker.keyboard.press("Control+f");
 if (!(await maker.waitForSelector(".cm-search", { timeout: 2000 }).catch(() => null)))
   problems.push("writer: Ctrl+F from the side doesn't open Find");
 await maker.keyboard.press("Escape");
+// A web page pasted into a new story, its title selected as it opens: its headings, paragraphs
+// and italics, the title's line taken by them (never `# # The Book`); and over everything
+// (Ctrl+A), the front matter kept.
+{
+  const pasting = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    permissions: ["clipboard-read", "clipboard-write"],
+  });
+  const paster = await pasting.newPage();
+  watch(paster, "writer paste");
+  await paster.goto(`${base}/writer/`);
+  await paster.click('.welcome [data-command="new"]');
+  await paster.waitForFunction(() =>
+    document.querySelector("#notice")?.textContent?.includes("Type the story’s title"),
+  );
+  const copy = (html) =>
+    paster.evaluate(
+      (page) =>
+        navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([page], { type: "text/html" }),
+            "text/plain": new Blob([page.replace(/<[^>]+>/g, "")], { type: "text/plain" }),
+          }),
+        ]),
+      html,
+    );
+  await copy("<h1>THE BOOK</h1><p>One <i>quiet</i> night.</p><p>Two.</p>");
+  await paster.keyboard.press("Control+v");
+  await paster.waitForTimeout(900);
+  const pasted = await draftIn(paster);
+  if (!pasted.includes("\n# THE BOOK\n\nOne *quiet* night.\n\nTwo.") || pasted.includes("# #"))
+    problems.push(
+      `writer: a web page pasted over a new story's title: ${JSON.stringify(pasted.slice(-80))}`,
+    );
+  await copy("<h2>Chapter 1</h2><p>Call me <b>Ishmael</b>.</p>");
+  await paster.keyboard.press("Control+a");
+  await paster.keyboard.press("Control+v");
+  await paster.waitForTimeout(900);
+  const over = await draftIn(paster);
+  if (!/^---\n[\s\S]*?\n---\n\n## Chapter 1\n\nCall me \*\*Ishmael\*\*\./.test(over))
+    problems.push(
+      `writer: a web page pasted over everything: ${JSON.stringify(over.slice(0, 120))}`,
+    );
+  await pasting.close();
+}
 // The menus from the keyboard alone: every item reached once with the down arrow, in order.
 await maker.click(".cm-content");
 await maker.keyboard.press("F10");

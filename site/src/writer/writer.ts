@@ -2206,15 +2206,33 @@ async function newStory(): Promise<void> {
 function pasteShaped(event: ClipboardEvent, editor: EditorView): boolean {
   const html = event.clipboardData?.getData("text/html");
   if (!html || lockedOut || editor.state.readOnly) return false;
-  const { from, to } = editor.state.selection.main;
-  // In the front matter, the words alone.
-  if (from < (current().frontMatter?.range.to ?? 0)) return false;
+  let { from, to } = editor.state.selection.main;
+  // The front matter selected with the story (Ctrl+A): the front matter kept, the story replaced.
+  // Inside the front matter alone, the words alone.
+  const front = current().frontMatter?.range.to ?? 0;
+  if (from < front) {
+    if (to <= front) return false;
+    from = Math.min(front + 1, to);
+  }
   const text = pastedStory(html);
   if (text === undefined) return false;
+  // A heading's words selected (a new story's title, as it opens): what is pasted takes the
+  // heading's whole line where it brings headings or paragraphs of its own, never `# # The Book`.
+  const line = editor.state.doc.lineAt(from);
+  const sign = /^#{1,6}[ \t]+/.exec(line.text)?.[0].length ?? 0;
+  if (
+    sign &&
+    from >= line.from + sign &&
+    to === line.to &&
+    (text.includes("\n") || /^#/.test(text))
+  )
+    from = line.from;
   event.preventDefault();
+  // Under the front matter, a blank line between them.
+  const insert = from === front + 1 && front > 0 ? `\n${text}` : text;
   editor.dispatch({
-    changes: { from, to, insert: text },
-    selection: EditorSelection.cursor(from + text.length),
+    changes: { from, to, insert },
+    selection: EditorSelection.cursor(from + insert.length),
     userEvent: "input.paste",
     scrollIntoView: true,
   });

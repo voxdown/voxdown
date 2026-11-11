@@ -15,6 +15,8 @@ function page(options: {
   mayWriteNow?: boolean;
   failWrite?: boolean;
   slowWrite?: Promise<void>;
+  /** The browser's question about writing the file, answered when this settles. */
+  slowAllowed?: Promise<void>;
   keepsFiles?: boolean;
   pick?: string;
 }) {
@@ -54,7 +56,10 @@ function page(options: {
     keepsFiles: options.keepsFiles ?? true,
     suggestedName: () => file.name,
     files: {
-      allowed: async () => options.allowed ?? true,
+      allowed: async () => {
+        await options.slowAllowed;
+        return options.allowed ?? true;
+      },
       mayWriteNow: async () => options.mayWriteNow ?? true,
       onDisk: async (at) => disk[at.name],
       writeFile: async (at, content) => {
@@ -113,6 +118,14 @@ function page(options: {
     state,
     type: (more: string) => {
       text += more;
+    },
+    /** Another story in the editor, as opening one puts it there. */
+    open: (id: string, words: string) => {
+      file.id = id;
+      file.name = "Untitled.vxd";
+      file.handle = undefined;
+      file.saved = "";
+      text = words;
     },
   };
 }
@@ -223,6 +236,37 @@ describe("saving to the story's file", () => {
     expect(await saving).toBe(false);
     expect(run.marked).toEqual(["story"]);
     expect(run.file.saved).toBe("Another story.");
+  });
+
+  it("never writes another story into the file, whatever opened while the browser asked", async () => {
+    let answer = () => {};
+    const slowAllowed = new Promise<void>((done) => {
+      answer = done;
+    });
+    const run = page({ disk: { "tale.vxd": { text: "Saved.", modified: 1 } }, slowAllowed });
+    const saving = run.flow.save();
+    await new Promise((done) => setTimeout(done, 0));
+    // Meanwhile: a new story, its first words typed, "Don't save" told about this one.
+    run.open("new", "Second story.");
+    answer();
+    expect(await saving).toBe(false);
+    expect(run.disk["tale.vxd"]?.text).toBe("Saved.");
+    expect(run.file.saved).toBe("");
+    expect(run.marked).toEqual([]);
+  });
+
+  it("saves the words typed while the browser asked, in the same story", async () => {
+    let answer = () => {};
+    const slowAllowed = new Promise<void>((done) => {
+      answer = done;
+    });
+    const run = page({ disk: { "tale.vxd": { text: "Saved.", modified: 1 } }, slowAllowed });
+    const saving = run.flow.save();
+    await new Promise((done) => setTimeout(done, 0));
+    run.type(" And more.");
+    answer();
+    expect(await saving).toBe(true);
+    expect(run.disk["tale.vxd"]?.text).toBe("Mine. And more.");
   });
 
   it("downloads where the browser can't keep files", async () => {

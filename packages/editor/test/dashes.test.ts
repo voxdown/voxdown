@@ -1,8 +1,14 @@
 // @vitest-environment happy-dom
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { scriptEditor, setSmartPunctuation } from "../src";
+
+// Every editor made, closed after its test: nothing of one left to run once the page is gone.
+const views: EditorView[] = [];
+afterEach(() => {
+  for (const view of views.splice(0)) view.destroy();
+});
 
 /** An editor with `doc`, the cursor at its end (or at `|`), and the keys typed one by one. */
 function typed(doc: string, keys: string, smart = true) {
@@ -15,6 +21,7 @@ function typed(doc: string, keys: string, smart = true) {
     }),
     parent: document.body,
   });
+  views.push(view);
   if (!smart) view.dispatch({ effects: setSmartPunctuation.of(false) });
   for (const key of keys) {
     const { from, to } = view.state.selection.main;

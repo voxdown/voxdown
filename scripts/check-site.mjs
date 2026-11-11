@@ -1455,6 +1455,20 @@ await maker.click('#ask-buttons button[value="cancel"]');
 await maker.waitForTimeout(300);
 if (!(await maker.textContent("#counts"))?.includes("of 3)"))
   problems.push("writer: Cancel took the writing goal away");
+// A title that would close the print page's style and open a script stays words: nothing runs.
+await maker.click("#file-menu-button");
+await maker.click('[data-command="details"]');
+await maker.waitForSelector("#details[open]");
+await maker.fill("#detail-title", "</style><script>parent.__ran = true</script><style>");
+await maker.click('#details button[value="done"]');
+await maker.waitForTimeout(300);
+for (const command of ["print", "print-script", "print-sides"]) {
+  await maker.click("#file-menu-button");
+  await maker.click(`[data-command="${command}"]`);
+  await maker.waitForTimeout(400);
+}
+if (await maker.evaluate(() => "__ran" in window))
+  problems.push("writer: a story's title ran as a script in the print page");
 // Sides give each line with its cue, the end of the line before.
 await maker.click(".cm-content");
 await maker.keyboard.press("Control+End");

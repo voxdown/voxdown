@@ -2009,7 +2009,10 @@ const baseName = () => suggestedName().replace(/\.(?:vxd|md|txt)$/i, "") || "sto
  */
 function printPage(html: string, what: string): void {
   const title = current().meta.title ?? baseName();
-  const quoted = (text: string) => `"${text.replace(/[\\"]/g, "\\$&")}"`;
+  // A CSS string that can hold no sign HTML or CSS would read: every one but letters, digits
+  // and spaces written as its code, so a title such as `</style><script>` stays words.
+  const quoted = (text: string) =>
+    `"${text.replace(/[^\p{L}\p{N} ]/gu, (sign) => `\\${(sign.codePointAt(0) ?? 32).toString(16)} `)}"`;
   const margins = `<style>@page { margin: 18mm 16mm 20mm;
   @top-left { content: ${quoted(title)}; font: 9pt system-ui, sans-serif; color: #666; }
   @top-right { content: ${quoted(what)}; font: 9pt system-ui, sans-serif; color: #666; }
@@ -2018,6 +2021,8 @@ body { padding: 0 !important; }</style>`;
   const frame = document.createElement("iframe");
   frame.className = "print-frame";
   frame.setAttribute("aria-hidden", "true");
+  // Nothing in the page runs: it is only printed (by this page, which shares its origin).
+  frame.setAttribute("sandbox", "allow-same-origin allow-modals");
   frame.srcdoc = html.replace("</head>", `${margins}</head>`);
   frame.addEventListener("load", () => {
     frame.contentWindow?.focus();

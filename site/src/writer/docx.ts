@@ -35,6 +35,8 @@ ${[1, 2, 3, 4, 5, 6]
       `<w:style w:type="paragraph" w:styleId="Heading${level}"><w:name w:val="heading ${level}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="${level === 1 ? 480 : 320}" w:after="160"/><w:outlineLvl w:val="${level - 1}"/></w:pPr><w:rPr><w:b/><w:sz w:val="${Math.max(24, 40 - level * 4)}"/></w:rPr></w:style>`,
   )
   .join("\n")}
+<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Subtitle"/><w:qFormat/><w:pPr><w:jc w:val="center"/><w:spacing w:before="2400" w:after="240"/></w:pPr><w:rPr><w:sz w:val="56"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:jc w:val="center"/><w:spacing w:after="240"/></w:pPr><w:rPr><w:i/><w:sz w:val="32"/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="SceneBreak"><w:name w:val="Scene break"/><w:basedOn w:val="Normal"/><w:pPr><w:jc w:val="center"/><w:spacing w:before="240" w:after="240"/></w:pPr></w:style>
 </w:styles>`;
 
@@ -43,7 +45,12 @@ export function docxOf(
   paragraphs: readonly Paragraph[],
   details: { title?: string; author?: string; language?: string },
 ): Uint8Array {
-  const body = paragraphs.map(paragraphXml).join("");
+  // A title page in Word's own Title and Subtitle styles, then a new page for the story: read
+  // back as the story's title and author, not as words to be read aloud.
+  const titlePage = details.title
+    ? `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t xml:space="preserve">${xmlText(details.title)}</w:t></w:r></w:p>${details.author ? `<w:p><w:pPr><w:pStyle w:val="Subtitle"/></w:pPr><w:r><w:t xml:space="preserve">${xmlText(details.author)}</w:t></w:r></w:p>` : ""}<w:p><w:r><w:br w:type="page"/></w:r></w:p>`
+    : "";
+  const body = titlePage + paragraphs.map(paragraphXml).join("");
   const language = details.language ? `<w:lang w:val="${xmlText(details.language)}"/>` : "";
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="${W}"><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
@@ -194,6 +201,17 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
   const stylesFile = files.get("word/styles.xml");
   const styles = stylesOf(stylesFile ? decoder.decode(stylesFile) : "");
   const paragraphs: Paragraph[] = [];
+  /** A title page before the story: its Title, and the Subtitle right after it. */
+  const page: { title?: string; subtitle?: string } = {};
+  const named = (id: string | undefined, name: string) => {
+    let at = id;
+    for (let depth = 0; at && depth < 12; depth++) {
+      const style = styles.get(at);
+      if ((style?.name ?? at).toLowerCase() === name) return true;
+      at = style?.basedOn;
+    }
+    return false;
+  };
   for (const [p] of xml.matchAll(/<w:p\b[^>]*\/>|<w:p\b[^>]*>[\s\S]*?<\/w:p>/g)) {
     const pPr = /<w:pPr\b[^>]*>([\s\S]*?)<\/w:pPr>/.exec(p)?.[1] ?? "";
     const style = value(pPr, "w:pStyle");
@@ -226,6 +244,17 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
       .join("")
       .trim();
     if (!words) continue;
+    // Before the story starts: a title page, read as its details.
+    if (paragraphs.length === 0 && page.subtitle === undefined) {
+      if (page.title === undefined && named(style, "title")) {
+        page.title = words;
+        continue;
+      }
+      if (page.title !== undefined && named(style, "subtitle")) {
+        page.subtitle = words;
+        continue;
+      }
+    }
     const level = headingLevel(styles, style, value(pPr, "w:outlineLvl"));
     if (/^([*#~·•—–-]\s*){3,}$|^[#*]$/.test(words)) paragraphs.push({ kind: "break" });
     else if (level) paragraphs.push({ kind: "heading", level: Math.min(level, 6), runs });
@@ -238,8 +267,15 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
     const found = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`).exec(coreXml)?.[1];
     return found ? fromXml(found).trim() || undefined : undefined;
   };
-  const title = read("dc:title");
-  const author = read("dc:creator");
+  // The title on the page is the one its writer sees: Word's own record of it is often stale.
+  const title = page.title ?? read("dc:title");
+  // A subtitle is often the author's name; else it is the story's own line, kept.
+  const author = read("dc:creator") ?? page.subtitle;
+  if (page.subtitle && page.subtitle !== author)
+    paragraphs.unshift({
+      kind: "text",
+      runs: [{ text: page.subtitle, italic: false, bold: false }],
+    });
   const language = read("dc:language");
   return {
     story: writeStory(paragraphs, {

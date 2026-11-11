@@ -2,7 +2,7 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
-import { renderDocument } from "@voxdown/render";
+import { renderBook } from "@voxdown/render";
 import { describe, expect, it, vi } from "vitest";
 import { applyChanges, bookText, lines, parse, setSpeaker } from "voxdown";
 import { countsOf } from "../src/writer/counts";
@@ -45,6 +45,16 @@ describe("the scene rail's layout", () => {
     }
     // A place in the text and its height on the rail go both ways.
     for (const at of [0, 250, 700, 1000]) expect(railAt(points, railY(points, at))).toBeCloseTo(at);
+  });
+
+  it("starts after the front matter: a new story's first heading at the top, not near the foot", () => {
+    // `---\ntitle: Untitled\ncast:\n---\n\n# Untitled\n\n`: the story starts at its heading, 31
+    // characters in, of 43; before, the heading sat 72% of the way down.
+    const points = railPoints([31], 43, 400, 31);
+    expect(points[1]?.y).toBe(points[0]?.y);
+    // The front matter sits at the top, and the top goes to where the story starts.
+    expect(railY(points, 10)).toBe(points[0]?.y);
+    expect(railAt(points, 0)).toBe(31);
   });
 
   it("keeps scenes in order and on the rail when there are more than fit", () => {
@@ -240,7 +250,7 @@ describe("emphasis", () => {
 
   // Emphasis is read a line at a time (§11): one pair of signs around two paragraphs is text.
   const emphasized = (doc: string) => {
-    const book = renderDocument(parse(doc), "book");
+    const book = renderBook(parse(doc));
     const script = lines(parse(doc))
       .map((line) => line.text ?? "")
       .join("\n");

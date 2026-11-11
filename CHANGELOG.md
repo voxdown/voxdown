@@ -51,6 +51,9 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Italics and bold over several lines give each line's words their own signs, as the format reads emphasis a line at a time (one pair around two paragraphs was printed as asterisks); after a heading's `#`, past a speaker's name, and inside a quote's marks, where both the book and the script keep them. Lines with no words are left alone.
 - Name the speakers with AI: writing on while it works no longer loses the run; each quote is given where it is now, unless its line changed meanwhile (those are listed). A tag naming a cast member by their full name's last word, or with "the", finds them (`the March Hare` is `Hare: The March Hare`), where it once added someone new.
 - Giving a speaker or a direction is said to a screen reader. Placeholders in every field, the pickers' too, have the contrast of the rest of the muted text. Make an audiobook says where the story goes for voices, not for AI ([docs/produce.md](docs/produce.md#where-your-story-goes)).
+- Word and EPUB exports open with a title page (Word's own Title and Subtitle styles; an ebook's `titlepage`), read back as the story's title and author rather than as words to be read aloud; an ebook's title page or cover from elsewhere is left out of the story too.
+- Find and replace says how many matches there are and which is selected ("4 of 15"), and its close button is as big as the others. The toolbar's Italics and Bold show when the cursor is in italics or bold. Ctrl+Home takes the side back to its top.
+- A new story's scene sits at the top of the rail, which starts after the front matter, and the status line counts the scenes the rail shows (a story's headings too, not only its scene breaks).
 - The tests' time budgets scale with how fast the computer is at the moment, and are tried again before failing, so a busy machine passes and a quadratic step still fails; asynchronous tests wait for what they expect rather than a fixed time. The menus are walked from the keyboard in the site check.
 - A long story's script, book and counts are drawn in a worker, and the Writer reads the story the editor read rather than reading it again; Enter and a typed quote read only the paragraphs near them. The side follows the cursor in a long story and after a jump from the rail.
 - On a narrow window, **Preview** and **Write** switch between the side and the manuscript, and what is covered can't be reached until it shows. A long file name never pushes the bar past the window.
@@ -107,6 +110,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - A group that keeps its lines from being heard or printed (`::: {book only}`, `{audio only}`, `{hidden}`) says so on its line, and its lines not heard look it, as a paragraph's own do.
 
 **@voxdown/render**
+- The script view reads closer: the room above a line for a direction's label is kept only in paragraphs that have one.
 - A direction longer than 20 characters is written in the line, in brackets, where it wraps, rather than over the first word, where it ran past the line.
 
 **voxdown**

@@ -71,7 +71,9 @@ export const stylesheet = `
 :where(.vxd) .vxd-page-number { float: right; margin-right: -3.2em; width: 2.4em; text-align: left; font: 0.7em/2.4 var(--vxd-ui-font); color: var(--vxd-muted); text-indent: 0; }
 
 /* The script view */
-.vxd-script { line-height: 2.35; }
+/* Room above a line for a direction's label only where a paragraph has one: the rest reads close. */
+.vxd-script { line-height: 1.75; }
+.vxd-script .vxd-p:has(.vxd-direction:not(.vxd-direction-long)) { line-height: 2.35; }
 .vxd-script .vxd-p { margin-bottom: 0.9em; }
 /* Two lanes under the words: the speaker's solid line just below them, a direction's dashes below that. */
 :where(.vxd) .vxd-speech {

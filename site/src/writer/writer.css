@@ -1462,7 +1462,8 @@ body[data-welcome] #draft-state {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem 0.5rem;
-  padding: 0.5rem 0.9rem;
+  /* Room on the right for the close button. */
+  padding: 0.5rem 3rem 0.5rem 0.9rem;
 }
 .manuscript .cm-search input.cm-textfield {
   padding: 0.3rem 0.5rem;
@@ -1491,13 +1492,27 @@ body[data-welcome] #draft-state {
   gap: 0.25rem;
   color: var(--quiet);
 }
-.manuscript .cm-search button[name="close"] {
-  margin-left: auto;
+/* A target as big as the other buttons, not the size of its ×; above CodeMirror's own rule. */
+.manuscript .cm-panel.cm-search button[name="close"] {
+  top: 0.4rem;
+  right: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
   background: none;
   border: 0;
   color: var(--quiet);
-  font-size: 1.1rem;
+  font: 1.35rem / 1 var(--ui);
   cursor: pointer;
+}
+.manuscript .cm-panel.cm-search button[name="close"]:hover {
+  background: var(--tab);
+  color: var(--ink);
+}
+.manuscript .cm-search .search-count {
+  min-width: 5.5em;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
 }
 .manuscript .cm-searchMatch {
   background: color-mix(in srgb, #facc15 45%, transparent);

@@ -79,7 +79,13 @@ import { castPanel } from "./cast";
 import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
 import { changesOnly, diffLines, withWords } from "./diff";
-import { emphasis, plainText, toggleEmphasis } from "./emphasis";
+import {
+  emphasis,
+  frontMatterEnd as emphasisFrom,
+  emphasisIn,
+  plainText,
+  toggleEmphasis,
+} from "./emphasis";
 import {
   type Opened,
   allowed,
@@ -108,6 +114,7 @@ import type { RenderAsk, RenderReply } from "./render-worker";
 import { Rescue, tabStory as tabStoryIn } from "./rescue";
 import { SaveFlow } from "./save-flow";
 import { sameText } from "./saving";
+import { searchCount } from "./search-count";
 import { moveSection } from "./sections";
 import { sidesHtml, sidesText } from "./sides";
 import {
@@ -380,6 +387,7 @@ function editorState(source: string, cursor: number): EditorState {
         bottom: Math.min(240, Math.round(margins.scrollDOM.clientHeight / 4)),
       })),
       search({ top: true }),
+      searchCount,
       // The search panel's words, as the rest of the Writer writes them.
       EditorState.phrases.of({
         Find: "Find",
@@ -458,6 +466,7 @@ function editorState(source: string, cursor: number): EditorState {
         }
         if (update.docChanged || update.selectionSet) cursorMoved();
         if (update.transactions.length) showUndoState(update.state);
+        if (update.docChanged || update.selectionSet) showEmphasisState(update.state);
         if (update.heightChanged) tools.moved();
         if (update.selectionSet && !update.docChanged) keepPlaceSoon();
         const raw = update.state.field(showMarksField);
@@ -1079,7 +1088,8 @@ let nudged = "";
 let session: { id: string; words: number; reached: boolean } | undefined;
 
 function showCounts({ words, said, voices, heard }: Counts): void {
-  const scenes = Math.max(0, ...sceneNumbers(view.state).values());
+  // As many as the rail shows: a story's chapters and headings, and its scene breaks.
+  const scenes = rail.size;
   const plural = (n: number, one: string, many = `${one}s`) =>
     `${n.toLocaleString()} ${n === 1 ? one : many}`;
   // The words written since the story was opened here, and the goal for the sitting, if any.
@@ -1709,7 +1719,11 @@ function markPlace(): void {
   if (element === marked) return;
   marked?.classList.remove("linked");
   marked = element;
-  if (!element) return;
+  if (!element) {
+    // Before the story's first part (Ctrl+Home, the front matter): the side from its top too.
+    if (view.hasFocus && low === 0) $("#side-sheet").scrollTop = 0;
+    return;
+  }
   element.classList.add("linked");
   bringIntoView(element);
 }
@@ -2940,6 +2954,25 @@ function showUndoState(state: EditorState): void {
     $(`#toolbar [data-command="${command}"]`).setAttribute("aria-disabled", String(depth === 0));
 }
 
+/** The toolbar's Italics and Bold, pressed when the cursor is in words in italics or bold. */
+function showEmphasisState(state: EditorState): void {
+  const head = state.selection.main.head;
+  const line = state.doc.lineAt(head);
+  const at = head - line.from;
+  const inside =
+    /[*_]/.test(line.text) && head > emphasisFrom(state)
+      ? emphasisIn(line.text).filter((found) => found.from < at && at < found.to)
+      : [];
+  for (const [command, strong] of [
+    ["italic", false],
+    ["bold", true],
+  ] as const)
+    $(`#toolbar [data-command="${command}"]`).setAttribute(
+      "aria-pressed",
+      String(inside.some((found) => found.strong === strong)),
+    );
+}
+
 /** The toolbar's Hear, pressed while the story is read aloud. */
 function showHearing(on: boolean): void {
   $('#toolbar [data-command="hear"]').setAttribute("aria-pressed", String(on));
@@ -3261,6 +3294,7 @@ async function start(): Promise<void> {
   checkMenu("toolbar", prefs.toolbar);
   $("#toolbar").hidden = !prefs.toolbar;
   showUndoState(view.state);
+  showEmphasisState(view.state);
   focusMode(prefs.focus);
   // Where the browser can't keep files, there's no file to save to automatically.
   $("#autosave-item").hidden = !keepsFiles;

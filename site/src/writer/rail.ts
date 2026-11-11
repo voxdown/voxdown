@@ -8,6 +8,7 @@ import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { sceneNumbers } from "@voxdown/editor";
 import type { Story } from "voxdown";
+import { frontMatterEnd } from "./emphasis";
 import { type SceneData, scenesOf } from "./story-data";
 
 /** Room above the story's start and below its end, for a node's ring. */
@@ -27,19 +28,26 @@ export type RailScene = { from: number; name: string; chapter: boolean };
  * starts keep GAP apart. The start, every scene and the end are points; between them the text is
  * spread evenly, so the window lines up with the nodes.
  */
-export function railPoints(starts: readonly number[], length: number, height: number): Point[] {
+export function railPoints(
+  starts: readonly number[],
+  length: number,
+  height: number,
+  /** Where the story starts: after its front matter, which the rail doesn't give room to. */
+  start = 0,
+): Point[] {
   const top = PAD;
   const bottom = Math.max(top + 1, height - PAD);
   const span = bottom - top;
   const total = Math.max(1, length);
+  const begin = Math.min(Math.max(0, start), total - 1);
   const gap = Math.min(GAP, span / Math.max(1, starts.length));
-  const at = starts.map((offset) => Math.min(Math.max(0, offset), total));
-  const ys = at.map((offset) => top + (offset / total) * span);
+  const at = starts.map((offset) => Math.min(Math.max(begin, offset), total));
+  const ys = at.map((offset) => top + ((offset - begin) / (total - begin)) * span);
   for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i] ?? 0, (ys[i - 1] ?? top) + gap);
   for (let i = ys.length - 1; i >= 0; i--)
     ys[i] = Math.min(ys[i] ?? 0, i === ys.length - 1 ? bottom : (ys[i + 1] ?? bottom) - gap);
   return [
-    { at: 0, y: top },
+    { at: begin, y: top },
     ...at.map((offset, i) => ({ at: offset, y: Math.max(top, ys[i] ?? top) })),
     { at: total, y: bottom },
   ];
@@ -47,6 +55,8 @@ export function railPoints(starts: readonly number[], length: number, height: nu
 
 /** The height a place in the text sits at. */
 export function railY(points: readonly Point[], at: number): number {
+  // The front matter, before the story: at the top.
+  if (at <= (points[0]?.at ?? 0)) return points[0]?.y ?? 0;
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i] as Point;
     const b = points[i + 1] as Point;
@@ -130,6 +140,19 @@ export class SceneRail {
     this.root.dispatchEvent(new CustomEvent("rail-names", { detail: names, bubbles: true }));
   }
 
+  /** Where the story starts: after its front matter and the blank lines after that. */
+  private storyStart(): number {
+    const { state } = this.view;
+    const front = frontMatterEnd(state);
+    const next = state.sliceDoc(front, Math.min(state.doc.length, front + 400));
+    return front + next.length - next.trimStart().length;
+  }
+
+  /** How many scenes the rail shows: its chapters, headings and scene breaks. */
+  get size(): number {
+    return this.scenes.length;
+  }
+
   /** The story's scenes, read again after a change. */
   update(story: Story): void {
     this.show(railScenes(story, sceneNumbers(this.view.state)));
@@ -193,6 +216,7 @@ export class SceneRail {
       this.scenes.map((scene) => scene.from),
       length,
       this.height,
+      this.storyStart(),
     );
     const line = this.part("#rail-line");
     line.style.top = `${this.points[0]?.y ?? PAD}px`;

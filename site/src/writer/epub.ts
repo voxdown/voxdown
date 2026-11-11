@@ -21,7 +21,10 @@ h1 { margin: 2em 0 1em; text-align: center; }
 p { margin: 0; text-indent: 1.4em; }
 h1 + p, h2 + p, h3 + p, hr + p { text-indent: 0; }
 hr { border: 0; margin: 1.2em 0; text-align: center; }
-hr::after { content: "* * *"; }`;
+hr::after { content: "* * *"; }
+.titlepage { margin-top: 30%; text-align: center; }
+.titlepage h1 { margin: 0 0 1em; }
+.titlepage p { text-indent: 0; font-style: italic; }`;
 
 function runsXhtml(runs: readonly Run[]): string {
   return runs
@@ -81,6 +84,11 @@ ${body}
         .join("\n"),
     ),
   }));
+  // A title page first: the title and the author, as ebooks have it, read back as the details.
+  const titlePage = page(
+    title,
+    `<section epub:type="titlepage" class="titlepage"><h1>${xmlText(title)}</h1>${details.author ? `<p>${xmlText(details.author)}</p>` : ""}</section>`,
+  );
   const nav = page(
     title,
     `<nav epub:type="toc" id="toc"><h1>${xmlText(title)}</h1><ol>${chapters
@@ -103,9 +111,11 @@ ${details.author ? `<dc:creator>${xmlText(details.author)}</dc:creator>` : ""}
 <manifest>
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
 <item id="style" href="style.css" media-type="text/css"/>
+<item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
 ${chapterFiles.map((file, index) => `<item id="c${index + 1}" href="${file.name}" media-type="application/xhtml+xml"/>`).join("\n")}
 </manifest>
 <spine>
+<itemref idref="title"/>
 ${chapterFiles.map((_, index) => `<itemref idref="c${index + 1}"/>`).join("\n")}
 </spine>
 </package>`;
@@ -119,6 +129,7 @@ ${chapterFiles.map((_, index) => `<itemref idref="c${index + 1}"/>`).join("\n")}
     },
     { name: "OEBPS/content.opf", data: opf },
     { name: "OEBPS/nav.xhtml", data: nav },
+    { name: "OEBPS/title.xhtml", data: titlePage },
     { name: "OEBPS/style.css", data: STYLE },
     ...chapterFiles.map((file) => ({ name: `OEBPS/${file.name}`, data: file.data })),
   ]);

@@ -135,6 +135,19 @@ describe("Word documents", () => {
     expect(story).toContain("“Who’s there?” she asked.");
     // Read back as VoxDown, it reads with no warning.
     expect(parse(story).warnings).toEqual([]);
+    // Nothing more: the title page is the story's details, not words to read aloud.
+    expect(book(story)).toEqual(book(STORY));
+    expect(story).not.toMatch(/^The Owl$/m);
+  });
+
+  it("read a title page as the story's title and author, when Word's own record has none", async () => {
+    const files = await unzip(docxOf(book(STORY), { title: "The Owl", author: "A. Teller" }));
+    files.delete("docProps/core.xml");
+    const bare = zip([...files].map(([name, data]) => ({ name, data })));
+    const { story } = await storyOfDocx(bare.buffer as ArrayBuffer);
+    expect(story).toContain("title: The Owl");
+    expect(story).toContain("author: A. Teller");
+    expect(book(story)).toEqual(book(STORY));
   });
 });
 
@@ -153,7 +166,10 @@ describe("ebooks", () => {
     expect([...files.keys()]).toEqual(
       expect.arrayContaining(["OEBPS/chapter-1.xhtml", "OEBPS/chapter-2.xhtml", "OEBPS/nav.xhtml"]),
     );
+    expect([...files.keys()]).toContain("OEBPS/title.xhtml");
     const { story } = await storyOfEpub(written.buffer as ArrayBuffer);
+    // The title page is the story's details: the book read back is the book written.
+    expect(book(story)).toEqual(book(STORY));
     expect(story).toContain("title: The Owl");
     expect(story).toContain("# One");
     expect(story).toContain("# Two");

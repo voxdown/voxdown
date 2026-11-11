@@ -14,7 +14,9 @@ export const workspaceAliases = [
 ];
 
 /**
- * How long a test may take: the default, or more for a deep fuzz run (`FUZZ_RUNS`), so the
- * documented commands finish however many stories they try.
+ * How long a test may take before it is taken to hang: long enough for a busy computer (the whole
+ * suite at once, a browser beside it), or more for a deep fuzz run (`FUZZ_RUNS`), so the
+ * documented commands finish however many stories they try. How fast the work is, is for the
+ * tests' own budgets (test-support/timing.ts), not this.
  */
-export const testTimeout = Math.max(5_000, Number(process.env.FUZZ_RUNS ?? 0) * 60);
+export const testTimeout = Math.max(30_000, Number(process.env.FUZZ_RUNS ?? 0) * 60);

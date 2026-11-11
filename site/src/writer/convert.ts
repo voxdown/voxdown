@@ -38,6 +38,16 @@ export function isNote(element: Element): boolean {
   );
 }
 
+/**
+ * A title page: the book's own header (its title and author, which the front matter holds), or an
+ * ebook's title page or cover. Its words aren't the story's, to be read aloud.
+ */
+export function isTitlePage(element: Element): boolean {
+  if (element.classList.contains("vxd-header")) return true;
+  const type = `${element.getAttribute("epub:type") ?? ""} ${element.getAttribute("role") ?? ""}`;
+  return /\b(titlepage|halftitlepage|cover|doc-cover)\b/i.test(type);
+}
+
 /** An element's emphasis from its style sheets and its `style` attribute, where a book has them. */
 export type StyleOf = (element: Element) => Emphasis;
 
@@ -51,6 +61,7 @@ export function paragraphsOf(root: Element, styleOf?: StyleOf): Paragraph[] {
   const visit = (element: Element, inherited: { italic: boolean; bold: boolean }) => {
     const tag = element.tagName.toLowerCase();
     if (/^(script|style|nav|head|title|template)$/.test(tag) || isNote(element)) return;
+    if (isTitlePage(element)) return;
     // A block's own style (`<p style="font-style: italic">`, a class) holds for all it contains.
     const own = styleOf?.(element) ?? {};
     const here = {

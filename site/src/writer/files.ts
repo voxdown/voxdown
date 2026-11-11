@@ -70,6 +70,11 @@ export function asStory(
   };
 }
 
+/** A file's text as written, a byte order mark included (`file.text()` drops it). */
+export async function readText(file: Blob): Promise<string> {
+  return new TextDecoder("utf-8", { ignoreBOM: true }).decode(await file.arrayBuffer());
+}
+
 /** Asks for a file to open; undefined if the writer changes their mind. */
 export async function pickFile(input: HTMLInputElement): Promise<Opened | undefined> {
   if (keepsFiles && window.showOpenFilePicker) {
@@ -77,7 +82,7 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
       const [handle] = await window.showOpenFilePicker({ types: TYPES });
       if (!handle) return undefined;
       const file = await handle.getFile();
-      return asStory(file.name, await file.text(), handle, file.lastModified);
+      return asStory(file.name, await readText(file), handle, file.lastModified);
     } catch (error) {
       if (cancelled(error)) return undefined;
       throw error;
@@ -88,7 +93,7 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
       input.removeEventListener("cancel", gone);
       const file = input.files?.[0];
       input.value = "";
-      resolve(file ? asStory(file.name, await file.text()) : undefined);
+      resolve(file ? asStory(file.name, await readText(file)) : undefined);
     };
     const gone = () => {
       input.removeEventListener("change", chosen);
@@ -104,7 +109,7 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
 export async function reopen(handle: FileSystemFileHandle): Promise<Opened> {
   if (!(await allowed(handle, "read"))) throw new Error(`${handle.name} can't be read.`);
   const file = await handle.getFile();
-  return asStory(file.name, await file.text(), handle, file.lastModified);
+  return asStory(file.name, await readText(file), handle, file.lastModified);
 }
 
 /** The file as it is on disk now, if the browser lets the page read it without asking. */
@@ -115,7 +120,7 @@ export async function onDisk(
     if (handle.queryPermission && (await handle.queryPermission({ mode: "read" })) !== "granted")
       return undefined;
     const file = await handle.getFile();
-    return { text: await file.text(), modified: file.lastModified };
+    return { text: await readText(file), modified: file.lastModified };
   } catch {
     return undefined;
   }

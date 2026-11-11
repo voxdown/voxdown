@@ -134,6 +134,9 @@ importers:
         specifier: workspace:^
         version: link:../packages/core
     devDependencies:
+      happy-dom:
+        specifier: ^20.14.6
+        version: 20.14.6
       marked:
         specifier: 18.2.0
         version: 18.2.0

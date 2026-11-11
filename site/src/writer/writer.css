@@ -24,7 +24,7 @@ body.writer {
 .writer[data-welcome] .workspace[data-side] {
   grid-template-columns: auto minmax(0, 1fr);
 }
-.writer[data-welcome] .side,
+.writer[data-welcome] .workspace .side,
 .writer[data-welcome] .scene-rail-window {
   display: none;
 }
@@ -71,8 +71,10 @@ body.writer {
   align-items: baseline;
   gap: 0.6rem;
   min-width: 0;
+  flex: 0 1 auto;
 }
 .file-name {
+  min-width: 0;
   font-family: var(--mono);
   font-variation-settings: "MONO" 1;
   font-size: 0.85rem;
@@ -337,6 +339,20 @@ body.writer {
 .scene-rail-scenes button[aria-current="true"] .scene-rail-node {
   border-color: var(--pencil);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--pencil) 25%, transparent);
+}
+/* A node among crowded ones: no name beside it (its title names it), and a smaller target. */
+.scene-rail-scenes [data-crowded] button {
+  top: -6px;
+  height: 12px;
+  padding: 0 2px;
+}
+.scene-rail-scenes [data-crowded] .scene-rail-name {
+  display: none !important;
+}
+.scene-rail-scenes [data-crowded] .scene-rail-node {
+  width: 8px;
+  height: 8px;
+  border-width: 1.5px;
 }
 .scene-rail-name {
   overflow: hidden;
@@ -868,7 +884,7 @@ body.writer {
   background: none;
   border: 0;
   padding: 0;
-  color: #b45309;
+  color: var(--mark-page);
   cursor: pointer;
   font-size: inherit;
 }
@@ -953,6 +969,88 @@ body.writer {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+/* In the dark, the brand's buttons take dark ink: white on its teal is too faint to read. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-vxd-theme="light"]) .writer {
+    --brand-ink: #0b1d1e;
+  }
+}
+:root[data-vxd-theme="dark"] .writer {
+  --brand-ink: #0b1d1e;
+}
+
+/* Find and replace, in the page's own hand. */
+.manuscript .cm-panels {
+  background: var(--paper);
+  border-color: var(--rule);
+  color: var(--ink);
+  font: 0.85rem / 1.4 var(--ui);
+}
+.manuscript .cm-panels-top {
+  border-bottom: 1px solid var(--rule);
+}
+.manuscript .cm-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  padding: 0.5rem 0.9rem;
+}
+.manuscript .cm-search input.cm-textfield {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+.manuscript .cm-search .cm-button {
+  background: var(--paper);
+  background-image: none;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.manuscript .cm-search .cm-button:hover {
+  border-color: var(--quiet);
+}
+.manuscript .cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--quiet);
+}
+.manuscript .cm-search button[name="close"] {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--quiet);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.manuscript .cm-searchMatch {
+  background: color-mix(in srgb, #facc15 45%, transparent);
+}
+.manuscript .cm-searchMatch-selected {
+  background: color-mix(in srgb, #f97316 50%, transparent);
+}
+
+/* A window too narrow for the whole bar: the file's state shrinks to its dot first. */
+@media (max-width: 1000px) {
+  .save-state {
+    font-size: 0;
+  }
+  .save-state::before {
+    margin-right: 0;
+  }
+  .appbar .wordmark .product {
+    display: none;
+  }
 }
 
 /* A narrower window: the side lies over the manuscript, from the right. */

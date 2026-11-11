@@ -426,6 +426,133 @@ if (await safe.isVisible("#side"))
 await safety.close();
 console.log("writer: last words, place, Save as name, closing the side: ok");
 
+// Edges: a file dropped on the text opens rather than going into it; the bar never runs off the
+// page; the welcome shows nothing behind it; renaming to a name in use says why; Ctrl+K picks who.
+const edges = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const edge = await edges.newPage();
+watch(edge, "writer edges");
+await edge.goto(`${base}/writer/`);
+await edge.waitForSelector("#welcome:not([hidden])");
+if (await edge.isVisible("#side")) problems.push("writer: the welcome shows the side behind it");
+await edge.click(`.welcome-example[data-name="${dragonName}"]`);
+await edge.waitForTimeout(500);
+await edge.evaluate(() => {
+  const data = new DataTransfer();
+  data.items.add(new File(["DROPPED FILE TEXT\n"], "other.vxd", { type: "text/markdown" }));
+  const target = document.querySelector(".cm-content");
+  target?.dispatchEvent(
+    new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true }),
+  );
+});
+await edge.waitForSelector("#ask[open]");
+await edge.click('#ask-buttons button[value="discard"]');
+await edge.waitForFunction(() => document.querySelector("#file-name")?.textContent === "other.vxd");
+const droppedText = await edge.locator(".cm-content").innerText();
+if (!droppedText.startsWith("DROPPED FILE TEXT") || droppedText.includes("Sir Percival"))
+  problems.push("writer: a file dropped on the text went into the story instead of opening");
+await edge.click(".welcome-example").catch(() => {});
+await edge.click("#file-menu-button");
+await edge.click('[data-command="new"]');
+await edge.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
+);
+for (const width of [800, 960, 1100]) {
+  await edge.setViewportSize({ width, height: 800 });
+  await edge.waitForTimeout(150);
+  const wide = await edge.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  const save = await edge.evaluate(
+    () => document.querySelector("#save-button")?.getBoundingClientRect().right ?? 0,
+  );
+  if (wide > 0 || save > width)
+    problems.push(`writer: at ${width} px wide, the page runs ${wide} px past the window`);
+}
+await edge.setViewportSize({ width: 1440, height: 900 });
+await edge.click('.side-tab[data-tab="cast"]').catch(async () => {
+  await edge.click("#view-menu-button");
+  await edge.click('[data-view="side"]');
+  await edge.click('.side-tab[data-tab="cast"]');
+});
+await edge.click(".cm-content");
+await edge.keyboard.press("Control+End");
+await edge.keyboard.type("\n@Bob “Hi.”");
+await edge.waitForTimeout(400);
+const wanda = edge.locator('.cast-handle input[value="Wanda"]');
+await wanda.fill("Bob");
+await wanda.press("Enter");
+await edge.waitForSelector("#notice:not([hidden])");
+if (!(await edge.textContent("#notice"))?.includes("Bob"))
+  problems.push("writer: renaming to a name in use doesn't say why it can't");
+await edge.click(".cm-line >> text=Hi.");
+await edge.keyboard.press("Control+k");
+await edge.waitForSelector(".popover:not([hidden]) .speaker-choice");
+// Bob, the last in the list, has the focus: up goes to the name before.
+const before = await edge.evaluate(() => document.activeElement?.textContent ?? "");
+await edge.keyboard.press("ArrowUp");
+const after = await edge.evaluate(() => ({
+  name: document.activeElement?.textContent ?? "",
+  choice: document.activeElement?.classList.contains("speaker-choice") ?? false,
+}));
+if (!after.choice || after.name === before)
+  problems.push("writer: arrow keys don't move in the speaker picker");
+await edge.keyboard.press("Escape");
+if (await edge.isVisible(".popover"))
+  problems.push("writer: Escape doesn't close the speaker picker");
+await edges.close();
+console.log("writer: drop, bar width, welcome, rename, Ctrl+K: ok");
+
+// Typing in a long book stays quick: no key held up for long, with the script beside it.
+const long = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const corpusDir = join(site, "..", "corpus");
+const bodies = readdirSync(corpusDir)
+  .filter((name) => name.endsWith(".vxd"))
+  .map((name) =>
+    readFileSync(join(corpusDir, name), "utf8")
+      .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "")
+      .replace(/\r\n/g, "\n"),
+  )
+  .join("\n\n");
+const book = `---\ntitle: Long\n---\n\n${Array.from({ length: Math.ceil(100_000 / bodies.split(/\s+/).length) }, () => bodies).join("\n\n")}`;
+await long.addInitScript((text) => {
+  window.showOpenFilePicker = async () => [
+    {
+      kind: "file",
+      name: "long.vxd",
+      getFile: async () => new File([text], "long.vxd"),
+      queryPermission: async () => "granted",
+      requestPermission: async () => "granted",
+      isSameEntry: async () => false,
+    },
+  ];
+}, book);
+const longPage = await long.newPage();
+watch(longPage, "writer long book");
+await longPage.goto(`${base}/writer/`);
+await longPage.click('.welcome [data-command="open"]');
+await longPage.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "long.vxd",
+);
+await longPage.waitForTimeout(800);
+await longPage.click(".cm-content");
+await longPage.keyboard.press("Control+End");
+await longPage.waitForTimeout(800);
+await longPage.evaluate(() => {
+  window.__keys = [];
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries())
+      if (entry.name === "keydown") window.__keys.push(entry.duration);
+  }).observe({ type: "event", durationThreshold: 16 });
+});
+for (const char of "the quick brown fox jumps") {
+  await longPage.keyboard.press(char === " " ? "Space" : char);
+  await longPage.waitForTimeout(80);
+}
+await longPage.waitForTimeout(600);
+const slowest = await longPage.evaluate(() => Math.max(0, ...window.__keys));
+if (slowest > 400)
+  problems.push(`writer: in a 100,000-word book, a key took ${slowest} ms (budget 400 ms)`);
+await long.close();
+console.log(`writer: a 100,000-word book, slowest key ${slowest} ms: ok`);
+
 // Saving automatically: a file opened, typed in, and two seconds later it is on disk.
 const auto = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 await auto.addInitScript(() => {
@@ -608,7 +735,6 @@ console.log("writer: insert, export, shortcuts: ok");
 // the first then reads only. A file changed on disk since it was opened isn't saved over unasked.
 const tabs = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 await tabs.addInitScript(() => {
-  const files = (window.__disk ??= JSON.parse(localStorage.getItem("__disk") ?? "{}"));
   const handle = (name) => ({
     kind: "file",
     name,

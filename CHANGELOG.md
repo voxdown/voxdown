@@ -16,7 +16,22 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Warnings with a fix offer it in one click, in the list and in a tip over the words in the text. The list also has the slips the editor sees as you type, such as `@ Wanda`.
 - Undo and redo, find and replace (Ctrl+F), and Alt+↑/↓ to move a paragraph past the one before or after it, never above the front matter; all in the **Edit** menu too.
 
+- Typing keeps up in a long book: at 100,000 words a key takes about a frame (it took 170 ms, and up to a second), with the script or book beside it. The side follows the cursor through an index, and is drawn again when the browser is idle; parts of it off screen aren't laid out.
+- Never losing work:
+  - One tab writes the story at a time: another opens it to read, with **Write here instead**, which takes it with the first tab's last words.
+  - The words typed just before the page goes are written down at once, and come back with the writer's place.
+  - Saving over a file changed outside the Writer asks first; coming back to the Writer reads it again when nothing here is unsaved.
+  - **Save automatically**, on by default where the browser keeps files, two seconds after typing stops.
+  - **Save as** keeps the new name, and a file dropped on the text opens instead of going into the story.
+  - The browser is asked to keep the Writer's drafts when space runs short, and a byte order mark and mixed line endings open as they are.
+- **Insert**: a sound, a pause, a page turn, a note, a scene break, a chapter or a scene heading. **File › Export**: the book or the script as a web page, the lines as CSV or JSON, each character's lines; **Print the book** (Ctrl+P).
+- Keys: Ctrl+K for who says a passage and Ctrl+J for how; arrows in the speaker picker; Ctrl+/ lists them all. Escape closes a picker wherever the focus is.
+- Warnings offer more fixes: a name not in the cast is added to it, a sound or instruction left open is closed. A rename the core refuses says why.
+- The rail keeps the names of crowded scenes from running into each other, chapters first; the bar never runs off a narrow window; the side has a close button, and its cast stacks when narrow. The welcome hides what is behind it from the keyboard too; search and replace has the page's look; the spelling check follows the story's language; a dot in the tab's title marks changes to save; screen readers hear saves, not every keystroke; buttons in the dark are readable.
+- The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings), and the site check drives two tabs, a reload straight after typing, a file changed on disk, a dropped file, narrow windows and a 100,000-word book.
+
 **@voxdown/editor**
+- In a story longer than 30,000 characters, the marks move along with each change and are worked out afresh once typing pauses (`settleMarks`, `marksPending`, `FRESH_BELOW`): reading the whole story on every key took 110 ms at 100,000 words.
 - `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
 
 **The playground**

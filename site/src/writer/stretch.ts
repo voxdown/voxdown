@@ -106,11 +106,42 @@ export class StretchTools {
       const target = event.target as Node;
       if (!this.popover.contains(target) && !this.bar.contains(target)) this.closePopover(false);
     });
-    this.popover.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
+    // Escape closes a picker wherever the focus is; leaving it for elsewhere on the page too.
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key !== "Escape" || this.popover.hidden) return;
         event.preventDefault();
+        event.stopPropagation();
         this.closePopover(true);
-      }
+      },
+      true,
+    );
+    this.popover.addEventListener("focusout", (event) => {
+      const next = event.relatedTarget as Node | null;
+      if (next && !this.popover.contains(next) && !this.bar.contains(next))
+        this.closePopover(false);
+    });
+    // Up and down move between the names, as in any list of choices.
+    this.popover.addEventListener("keydown", (event) => {
+      const choices = [...this.popover.querySelectorAll<HTMLElement>(".speaker-choice")];
+      const at = choices.indexOf(document.activeElement as HTMLElement);
+      if (at < 0) return;
+      const to =
+        event.key === "ArrowDown"
+          ? at + 1
+          : event.key === "ArrowUp"
+            ? at - 1
+            : event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? choices.length - 1
+                : null;
+      if (to === null) return;
+      event.preventDefault();
+      if (to >= choices.length)
+        this.popover.querySelector<HTMLElement>(".new-speaker input")?.focus();
+      else choices[Math.max(0, to)]?.focus();
     });
   }
 
@@ -210,7 +241,13 @@ export class StretchTools {
         this.closePopover(true);
         return;
       }
-      const changes = setDirection(fresh, target, direction);
+      let changes: TextChange[];
+      try {
+        changes = setDirection(fresh, target, direction);
+      } catch (error) {
+        this.context.apply([], error instanceof Error ? error.message : "That can’t be set here.");
+        return;
+      }
       const done = this.context.apply(
         changes,
         direction
@@ -242,7 +279,17 @@ export class StretchTools {
       this.closePopover(true);
       return;
     }
-    const changes = setSpeaker(fresh, target, name);
+    let changes: TextChange[];
+    try {
+      changes = setSpeaker(fresh, target, name);
+    } catch (error) {
+      this.context.apply(
+        [],
+        error instanceof Error ? error.message : `${name} can’t be given this.`,
+      );
+      this.closePopover(true);
+      return;
+    }
     this.context.apply(
       changes,
       `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,

@@ -11,8 +11,10 @@ import type { Story } from "voxdown";
 
 /** Room above the story's start and below its end, for a node's ring. */
 const PAD = 12;
-/** Scenes never sit closer than this, so every node and name stays readable. */
+/** Scenes never sit closer than this where there is room, so every node and name stays readable. */
 const GAP = 22;
+/** A name's height: names closer than this to another are left out. */
+const LABEL = 18;
 
 type Point = { at: number; y: number };
 
@@ -195,9 +197,26 @@ export class SceneRail {
     line.style.top = `${this.points[0]?.y ?? PAD}px`;
     line.style.height = `${(this.points.at(-1)?.y ?? 0) - (this.points[0]?.y ?? 0)}px`;
     const items = this.part("#rail-scenes").children;
+    // Where scenes crowd together, only some keep their names: chapters first, then the rest in
+    // order, each a label's height from the next. The others are nodes, named when pointed at.
+    const ys = this.scenes.map((_, index) => this.points[index + 1]?.y ?? 0);
+    const order = this.scenes
+      .map((scene, index) => ({ scene, index }))
+      .sort((a, b) => Number(b.scene.chapter) - Number(a.scene.chapter) || a.index - b.index);
+    const named: number[] = [];
+    const labelled = new Set<number>();
+    for (const { index } of order) {
+      const y = ys[index] ?? 0;
+      if (named.every((other) => Math.abs(other - y) >= LABEL)) {
+        named.push(y);
+        labelled.add(index);
+      }
+    }
     for (const [index] of this.scenes.entries()) {
       const item = items[index] as HTMLElement | undefined;
-      if (item) item.style.top = `${this.points[index + 1]?.y ?? 0}px`;
+      if (!item) continue;
+      item.style.top = `${ys[index] ?? 0}px`;
+      item.toggleAttribute("data-crowded", !labelled.has(index));
     }
     this.place();
   }

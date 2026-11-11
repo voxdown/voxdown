@@ -33,6 +33,8 @@
         <div role="group" aria-labelledby="export-label">
           <button role="menuitem" type="button" data-command="export-book">The book, as a web page</button>
           <button role="menuitem" type="button" data-command="export-script">The script, as a web page</button>
+          <button role="menuitem" type="button" data-command="export-docx">The book, as a Word document</button>
+          <button role="menuitem" type="button" data-command="export-epub">The book, as an ebook (EPUB)</button>
           <button role="menuitem" type="button" data-command="export-csv">The lines, as a spreadsheet (CSV)</button>
           <button role="menuitem" type="button" data-command="export-json">The lines, as data (JSON)</button>
           <button role="menuitem" type="button" data-command="export-sides">Each character’s lines (sides)</button>
@@ -192,7 +194,7 @@
 
 <p class="sr-only" id="announce" aria-live="polite"></p>
 
-<input type="file" id="file-input" accept=".vxd,.md,.txt,.fountain" hidden>
+<input type="file" id="file-input" accept=".vxd,.md,.txt,.fountain,.docx,.epub" hidden>
 
 <dialog class="shortcuts" id="shortcuts" aria-labelledby="shortcuts-title">
   <form method="dialog">

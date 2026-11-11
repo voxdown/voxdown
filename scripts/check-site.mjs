@@ -1686,6 +1686,65 @@ for (const [command, name] of [
       problems.push("writer: the CSV leaves out the sounds or the pauses");
   }
 }
+// The book as a Word document and as an ebook, each opened again as a new story.
+const documents = {};
+for (const [command, name] of [
+  ["export-docx", "Untitled.docx"],
+  ["export-epub", "Untitled.epub"],
+]) {
+  await maker.click("#file-menu-button");
+  const [download] = await Promise.all([
+    maker.waitForEvent("download"),
+    maker.click(`[data-command="${command}"]`),
+  ]);
+  if (download.suggestedFilename() !== name)
+    problems.push(`writer: ${command} downloaded ${download.suggestedFilename()}, not ${name}`);
+  const bytes = readFileSync(await download.path());
+  if (bytes.subarray(0, 2).toString() !== "PK") problems.push(`writer: ${name} isn't a zip file`);
+  documents[name] = [...bytes];
+}
+for (const [name, bytes] of Object.entries(documents)) {
+  const reading = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await reading.addInitScript(
+    ({ name, bytes }) => {
+      window.showOpenFilePicker = async () => [
+        {
+          kind: "file",
+          name,
+          getFile: async () => new File([new Uint8Array(bytes)], name),
+          queryPermission: async () => "granted",
+          requestPermission: async () => "granted",
+          isSameEntry: async () => false,
+        },
+      ];
+    },
+    { name, bytes },
+  );
+  const reader = await reading.newPage();
+  watch(reader, `writer opening ${name}`);
+  await reader.goto(`${base}/writer/`);
+  await reader.click('.welcome [data-command="open"]');
+  // Opened as a new story (the welcome gone), its words in the editor and kept as its draft.
+  const opened = await reader
+    .waitForFunction(
+      () =>
+        document.querySelector("#welcome")?.hidden &&
+        document.querySelector(".cm-content")?.textContent?.includes("there was a witch"),
+      undefined,
+      { timeout: 5000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!opened) problems.push(`writer: ${name} didn't open as a new story with its words`);
+  else {
+    await reader.waitForTimeout(300);
+    if ((await reader.textContent("#file-name")) !== "Untitled.vxd")
+      problems.push(`writer: ${name} opened as ${await reader.textContent("#file-name")}`);
+    if (!(await draftIn(reader)).includes("Once upon a time, there was a witch."))
+      problems.push(`writer: ${name} opened without its words kept as a draft`);
+  }
+  await reading.close();
+}
 // F9 reads it aloud from the cursor, and says how to stop.
 await maker.click(".cm-content");
 await maker.keyboard.press("Control+Home");

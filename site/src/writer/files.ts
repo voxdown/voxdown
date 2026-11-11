@@ -28,8 +28,13 @@ declare global {
 
 const TYPES: PickerType[] = [
   {
-    description: "VoxDown stories",
-    accept: { "text/markdown": [".vxd", ".md"], "text/plain": [".txt", ".fountain"] },
+    description: "Stories, Word documents and ebooks",
+    accept: {
+      "text/markdown": [".vxd", ".md"],
+      "text/plain": [".txt", ".fountain"],
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+      "application/epub+zip": [".epub"],
+    },
   },
 ];
 const SAVE_TYPES: PickerType[] = [
@@ -50,6 +55,8 @@ export type Opened = {
   imported?: boolean;
   /** The encoding the file was in, when it wasn't UTF-8: it opens as a new story. */
   encoding?: string;
+  /** A Word document or an ebook, opened as a new story. */
+  document?: "docx" | "epub";
   /** When the file was last changed on disk, to tell if something else changes it. */
   modified?: number;
 };
@@ -110,15 +117,36 @@ export async function readText(file: Blob): Promise<string> {
   return (await readFile(file)).text;
 }
 
+/**
+ * A file opened as a story: a Word document or an ebook read in as a new one (its converter loaded
+ * only then), anything else read as text.
+ */
+export async function openedFile(file: File, handle?: FileSystemFileHandle): Promise<Opened> {
+  const document = /\.(docx|epub)$/i.exec(file.name)?.[1]?.toLowerCase();
+  if (document === "docx" || document === "epub") {
+    const bytes = await file.arrayBuffer();
+    const text =
+      document === "docx"
+        ? await (await import("./docx")).storyOfDocx(bytes)
+        : await (await import("./epub")).storyOfEpub(bytes);
+    return {
+      name: file.name.replace(/\.(docx|epub)$/i, ".vxd"),
+      text,
+      imported: true,
+      document,
+    };
+  }
+  const { text, encoding } = await readFile(file);
+  return asStory(file.name, text, handle, file.lastModified, encoding);
+}
+
 /** Asks for a file to open; undefined if the writer changes their mind. */
 export async function pickFile(input: HTMLInputElement): Promise<Opened | undefined> {
   if (keepsFiles && window.showOpenFilePicker) {
     try {
       const [handle] = await window.showOpenFilePicker({ types: TYPES });
       if (!handle) return undefined;
-      const file = await handle.getFile();
-      const { text, encoding } = await readFile(file);
-      return asStory(file.name, text, handle, file.lastModified, encoding);
+      return openedFile(await handle.getFile(), handle);
     } catch (error) {
       if (cancelled(error)) return undefined;
       throw error;
@@ -129,12 +157,7 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
       input.removeEventListener("cancel", gone);
       const file = input.files?.[0];
       input.value = "";
-      const read = file ? await readFile(file) : undefined;
-      resolve(
-        file && read
-          ? asStory(file.name, read.text, undefined, undefined, read.encoding)
-          : undefined,
-      );
+      resolve(file ? await openedFile(file) : undefined);
     };
     const gone = () => {
       input.removeEventListener("change", chosen);
@@ -149,9 +172,7 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
 /** Opens a file kept from before, asking to read it again if the browser wants that. */
 export async function reopen(handle: FileSystemFileHandle): Promise<Opened> {
   if (!(await allowed(handle, "read"))) throw new Error(`${handle.name} can't be read.`);
-  const file = await handle.getFile();
-  const { text, encoding } = await readFile(file);
-  return asStory(file.name, text, handle, file.lastModified, encoding);
+  return openedFile(await handle.getFile(), handle);
 }
 
 /** The file as it is on disk now, if the browser lets the page read it without asking. */
@@ -198,8 +219,10 @@ export async function writeFile(handle: FileSystemFileHandle, text: string): Pro
 }
 
 /** Saves a copy as a download. */
-export function download(text: string, name: string, type = "text/markdown"): void {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+export function download(text: string | Uint8Array, name: string, type = "text/markdown"): void {
+  const url = URL.createObjectURL(
+    new Blob([typeof text === "string" ? text : new Uint8Array(text)], { type }),
+  );
   const link = document.createElement("a");
   link.href = url;
   link.download = name;

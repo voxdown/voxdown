@@ -66,6 +66,7 @@ import "../style.css";
 import "./writer.css";
 import "../theme";
 import { castPanel } from "./cast";
+import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
 import { changesOnly, diffLines, withWords } from "./diff";
 import { emphasis, plainText, toggleEmphasis } from "./emphasis";
@@ -77,6 +78,7 @@ import {
   keepsFiles,
   mayWriteNow,
   onDisk,
+  openedFile,
   pickFile,
   pickSaveTarget,
   readFile,
@@ -1730,6 +1732,10 @@ async function openStory(opened: Opened): Promise<void> {
   }
   await load(opened, kept ? { id: kept.id } : {});
   if (!opened.imported) void snapshot("Opened", opened.text);
+  else if (opened.document)
+    notice(
+      `${opened.document === "docx" ? "That Word document" : "That ebook"} was opened as a new story, its headings, paragraphs and emphasis kept: Ctrl+Shift+K finds the quotes to give their speakers, and Save writes it as VoxDown to a file of its own.`,
+    );
   else if (opened.encoding)
     // Its letters read as what they were, never written back over the original by themselves.
     notice(
@@ -2039,6 +2045,30 @@ function insertAfterParagraph(line: string, select?: string): void {
 }
 
 // Export: what the story becomes, as files.
+
+/** The book as a Word document or an ebook: its headings, paragraphs and emphasis. */
+async function exportDocument(kind: "docx" | "epub"): Promise<void> {
+  const story = current();
+  const body = new DOMParser().parseFromString(renderBook(story), "text/html").body;
+  const paragraphs = paragraphsOf(body);
+  const { title = baseName(), author, language } = story.meta;
+  const details = { title, ...(author ? { author } : {}), ...(language ? { language } : {}) };
+  if (kind === "docx") {
+    const { docxOf } = await import("./docx");
+    download(
+      docxOf(paragraphs, details),
+      `${baseName()}.docx`,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+  } else {
+    const { epubOf } = await import("./epub");
+    download(
+      epubOf(paragraphs, { ...details, id: newId(), when: new Date() }),
+      `${baseName()}.epub`,
+      "application/epub+zip",
+    );
+  }
+}
 
 /**
  * The name to save under: the file's own, or for a new story never saved, its title's, or, while
@@ -2586,6 +2616,8 @@ const COMMANDS: Record<string, () => unknown> = {
       `${baseName()}.json`,
       "application/json",
     ),
+  "export-docx": () => void exportDocument("docx"),
+  "export-epub": () => void exportDocument("epub"),
   "export-sides": () => download(sidesText(current()), `${baseName()}-sides.txt`, "text/plain"),
   print: () => printPage(renderDocument(current(), "book", { pages: true }), "The book"),
   "print-script": () => printPage(renderDocument(current(), "script"), "The script"),
@@ -2789,8 +2821,7 @@ async function openDropped(event: DragEvent): Promise<void> {
   if (!(await mayLeave())) return;
   const handle = await handlePromise.catch(() => null);
   const kept = handle?.kind === "file" ? (handle as FileSystemFileHandle) : undefined;
-  const read = await readFile(dropped);
-  await openStory(asStory(dropped.name, read.text, kept, dropped.lastModified, read.encoding));
+  await openStory(await openedFile(dropped, kept));
   if (kept) {
     await rememberFile(dropped.name, kept);
     void showRecent();

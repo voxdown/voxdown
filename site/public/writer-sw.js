@@ -16,7 +16,9 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((names) => Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name))))
+      .then((names) =>
+        Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name))),
+      )
       .then(() => self.clients.claim()),
   );
 });
@@ -25,13 +27,15 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data?.type !== "keep" || !Array.isArray(event.data.urls)) return;
   event.waitUntil(
-    caches.open(CACHE).then((cache) =>
-      Promise.all(
-        event.data.urls
-          .filter((url) => new URL(url).origin === self.location.origin)
-          .map((url) => cache.match(url).then((kept) => kept ?? cache.add(url).catch(() => {}))),
+    caches
+      .open(CACHE)
+      .then((cache) =>
+        Promise.all(
+          event.data.urls
+            .filter((url) => new URL(url).origin === self.location.origin)
+            .map((url) => cache.match(url).then((kept) => kept ?? cache.add(url).catch(() => {}))),
+        ),
       ),
-    ),
   );
 });
 

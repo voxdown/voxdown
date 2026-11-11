@@ -1390,6 +1390,105 @@ function fullNameChanges(story: Story, handle: string, name: string): TextChange
 }
 
 /**
+ * Sets what the cast says about a character (`about`, §4.3): who they are and how they sound in
+ * plain words; null or nothing takes it away. A character not in the cast is added to it, and one
+ * written with a full name alone becomes a map keeping that name. Nothing in the story changes.
+ */
+export function setAbout(story: Story, handle: string, about: string | null): TextChange[] {
+  return session(() => setAboutNow(story, handle, about));
+}
+
+function setAboutNow(story: Story, handle: string, about: string | null): TextChange[] {
+  checkName(handle);
+  const asked = about === null || about.trim() === "" ? null : about.trim();
+  const changes = aboutChanges(story, handle, asked);
+  if (changes.length === 0) return [];
+  // Read back: the character says what was asked, with the same full name and everything else
+  // they had, and everyone else in the cast is as they were.
+  const key = nameKey(handle);
+  const after = parsed(applyChanges(story.source, changes)).cast;
+  const member = after.find((other) => nameKey(other.handle) === key);
+  const before = story.cast.find((other) => nameKey(other.handle) === key);
+  const rest = (data: Record<string, unknown> | undefined) =>
+    JSON.stringify(
+      Object.entries(data ?? {})
+        .filter(([field]) => field !== "about" && field !== "name")
+        .sort(),
+    );
+  const others = (cast: Story["cast"]) =>
+    JSON.stringify(
+      cast
+        .filter((other) => nameKey(other.handle) !== key)
+        .map((other) => [other.handle, other.name, other.about ?? null, rest(other.data)]),
+    );
+  const same =
+    (member?.about ?? null) === asked &&
+    (member?.name ?? handle) === (before?.name ?? handle) &&
+    rest(member?.data) === rest(before?.data) &&
+    others(after) === others(story.cast);
+  return same ? changes : [];
+}
+
+function aboutChanges(story: Story, handle: string, about: string | null): TextChange[] {
+  const nl = eol(story);
+  const source = story.source;
+  const keys = frontMatterKeys(story);
+  const entry = keys.find(
+    (k) =>
+      k.path.length === 2 && k.path[0] === "cast" && nameKey(k.path[1] ?? "") === nameKey(handle),
+  );
+  if (!entry) {
+    if (about === null) return [];
+    // A new member, its `about` a step further in than the members.
+    const cast = keys.find((k) => k.path.length === 1 && k.path[0] === "cast");
+    const first = keys.find((k) => k.path.length === 2 && k.path[0] === "cast");
+    const members = first
+      ? lineIndent(source, first.range.from)
+      : `${cast ? lineIndent(source, cast.range.from) : ""}  `;
+    return addToFrontMatter(
+      story,
+      ["cast"],
+      `${spelled(story, handle)}:${nl}${members}  about: ${yamlScalar(about)}`,
+    );
+  }
+  const children = keys.filter(
+    (k) => k.path.length === 3 && k.path[0] === "cast" && k.path[1] === entry.path[1],
+  );
+  const written = children.find((k) => k.path[2] === "about");
+  if (written) {
+    if (about !== null) return [{ ...replaceValue(written), insert: ` ${yamlScalar(about)}` }];
+    // Its line or lines taken out whole.
+    const from = lineStart(source, written.range.from);
+    const end = replaceValue(written).to;
+    const next = source.indexOf("\n", end);
+    return [{ from, to: next < 0 ? end : next + 1, insert: "" }];
+  }
+  if (about === null) return [];
+  const indent = lineIndent(source, entry.range.from);
+  const first = children[0];
+  if (first) {
+    // After the full name when it comes first, else before the first of the rest.
+    const child = lineIndent(source, first.range.from);
+    const line = `${child}about: ${yamlScalar(about)}${nl}`;
+    if (first.path[2] === "name") {
+      const end = replaceValue(first).to;
+      const next = source.indexOf("\n", end);
+      if (next >= 0) return [{ from: next + 1, to: next + 1, insert: line }];
+    }
+    const at = lineStart(source, first.range.from);
+    return [{ from: at, to: at, insert: line }];
+  }
+  // `Ann:` or `Ann: Ann Smith` becomes a map, the full name kept.
+  const value = writtenValue(entry);
+  const name = source.slice(value.from, value.to).trim();
+  const member = story.cast.find((other) => nameKey(other.handle) === nameKey(handle));
+  const named = name === "" ? "" : `${nl}${indent}  name: ${yamlScalar(member?.name ?? name)}`;
+  return [
+    { ...replaceValue(entry), insert: `${named}${nl}${indent}  about: ${yamlScalar(about)}` },
+  ];
+}
+
+/**
  * Book details in the front matter: `title`, `subtitle`, `author`, `language`, `narrator`… set
  * to one value, or removed with null. A key whose value is a map or list (the cast) is left alone.
  */

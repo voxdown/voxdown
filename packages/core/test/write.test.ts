@@ -15,6 +15,7 @@ import {
   isName,
   parse,
   renameCharacter,
+  setAbout,
   setDirection,
   setFullName,
   setMeta,
@@ -1161,5 +1162,55 @@ describe("review, round ten", () => {
     const script = spokenScript(parse(applyChanges(source, changes)));
     expect(script).not.toContain("@Gerald");
     if (changes.length > 0) expect(script).toBe("[clatter]");
+  });
+});
+
+describe("what the cast says about a character (§4.3)", () => {
+  const about = (source: string, handle: string, text: string | null) => {
+    const story = parse(source);
+    const changed = applyChanges(source, setAbout(story, handle, text));
+    return { text: changed, member: parse(changed).cast.find((m) => m.handle === handle) };
+  };
+
+  it("adds it to a member written as a name alone, keeping the full name", () => {
+    const done = about(
+      "---\ncast:\n  Ann: Ann Smith\n  Bob:\n---\n@Ann “Hi.”\n",
+      "Ann",
+      "Brisk: kind.",
+    );
+    expect(done.text).toBe(
+      '---\ncast:\n  Ann:\n    name: Ann Smith\n    about: "Brisk: kind."\n  Bob:\n---\n@Ann “Hi.”\n',
+    );
+    expect(done.member).toMatchObject({ name: "Ann Smith", about: "Brisk: kind." });
+    expect(about("---\ncast:\n  Bob:\n---\n", "Bob", "Slow").text).toBe(
+      "---\ncast:\n  Bob:\n    about: Slow\n---\n",
+    );
+  });
+
+  it("changes it, or takes it away, and adds a character who isn't in the cast", () => {
+    const source =
+      "---\ncast:\n  Ann:\n    name: Ann Smith\n    about: Old.\n    voice: alto\n---\n";
+    expect(about(source, "Ann", "New.").text).toContain("    about: New.\n    voice: alto");
+    const gone = about(source, "Ann", null);
+    expect(gone.text).toBe("---\ncast:\n  Ann:\n    name: Ann Smith\n    voice: alto\n---\n");
+    expect(gone.member?.about).toBeUndefined();
+    expect(about(source, "Zed", "Quiet.").text).toContain("  Zed:\n    about: Quiet.\n");
+    expect(about("Just a story.\n", "Zed", "Quiet.").member?.about).toBe("Quiet.");
+  });
+
+  it("goes after the full name in a map, and keeps CRLF", () => {
+    const source = "---\r\ncast:\r\n  Ann:\r\n    name: Ann\r\n    voice: alto\r\n---\r\n";
+    expect(about(source, "Ann", "Kind.").text).toBe(
+      "---\r\ncast:\r\n  Ann:\r\n    name: Ann\r\n    about: Kind.\r\n    voice: alto\r\n---\r\n",
+    );
+  });
+
+  it("changes nothing it can't change exactly", () => {
+    // Whatever the full name reads as, it reads the same after.
+    const flow = "---\ncast:\n  Ann: {name: Ann Smith, voice: alto}\n---\n";
+    const story = parse(flow);
+    const after = parse(applyChanges(flow, setAbout(story, "Ann", "Kind."))).cast[0];
+    expect(after).toMatchObject({ name: story.cast[0]?.name, about: "Kind." });
+    expect(setAbout(parse("---\ncast:\n  Ann:\n---\n"), "Ann", null)).toEqual([]);
   });
 });

@@ -8,16 +8,21 @@ import { type Story, isName, lines } from "voxdown";
 export type CastActions = {
   rename: (from: string, to: string) => boolean;
   fullName: (handle: string, name: string) => boolean;
+  /** What the cast says about them: who they are, how they sound. */
+  about: (handle: string, text: string) => boolean;
   /** Takes the cursor to the character's next line. */
   find: (handle: string) => void;
   /** Says why something wasn't done. */
   notice: (message: string) => void;
 };
 
-/** After the side is drawn again, the focus goes back to the field that was changed. */
-function refocus(selector: string): void {
+/**
+ * After the side is drawn again, the focus goes where it was going: the field just changed, or
+ * the one Tab went on to (a field of the character just renamed, under their new name).
+ */
+function refocus(key: string): void {
   requestAnimationFrame(() =>
-    document.querySelector<HTMLElement>(`#side-sheet ${selector}`)?.focus(),
+    document.querySelector<HTMLElement>(`#side-sheet [data-focus="${CSS.escape(key)}"]`)?.focus(),
   );
 }
 
@@ -51,9 +56,40 @@ export function castPanel(
   const note = document.createElement("p");
   note.className = "sheet-note";
   note.textContent =
-    "Rename a character everywhere by their short name, the word after @. Their full name is what the script shows; it goes in the front matter.";
+    "Rename a character everywhere by their short name, the word after @. Their full name is what the script shows, and what you write about them is for whoever performs them; both go in the front matter.";
   const list = document.createElement("ul");
   list.className = "cast-list";
+
+  /**
+   * A field's change is made as the focus leaves it (Enter, Tab, a click elsewhere); Escape puts
+   * it back as it was. The focus then goes where it was going.
+   */
+  const commit = (
+    field: HTMLInputElement | HTMLTextAreaElement,
+    run: (value: string) => { done: boolean; renamed?: string; from?: string } | undefined,
+  ) => {
+    field.addEventListener("keydown", (event) => {
+      const key = event as KeyboardEvent;
+      if (key.key === "Enter" && !key.shiftKey) {
+        key.preventDefault();
+        field.blur();
+      } else if (key.key === "Escape") {
+        field.value = field.defaultValue;
+        field.blur();
+      }
+    });
+    field.addEventListener("focusout", (event) => {
+      if (field.value === field.defaultValue) return;
+      const to = (event as FocusEvent).relatedTarget as HTMLElement | null;
+      // Gone elsewhere on the page: the focus stays there.
+      const going = to === null ? field.dataset.focus : wrap.contains(to) ? to.dataset.focus : null;
+      const result = run(field.value);
+      if (!result?.done || !going) return;
+      const [handle, part] = going.split(":");
+      refocus(result.renamed && handle === result.from ? `${result.renamed}:${part}` : going);
+    });
+  };
+
   for (const handle of names) {
     const member = inCast.get(handle.toLowerCase());
     const isNarrator = handle.toLowerCase() === narrator.toLowerCase();
@@ -61,63 +97,65 @@ export function castPanel(
     const item = document.createElement("li");
     item.className = "cast-member";
     if (!member && !isNarrator) item.dataset.provisional = "";
-    item.innerHTML = `<span class="dot"></span><label class="cast-handle"><span aria-hidden="true">@</span><input type="text" spellcheck="false" autocomplete="off"></label><input class="cast-name" type="text" autocomplete="off"><span class="cast-lines"></span><button type="button" class="cast-find" title="Go to their next line" aria-label="Go to their next line">→</button>`;
+    item.innerHTML = `<span class="dot"></span><label class="cast-handle"><span aria-hidden="true">@</span><input type="text" spellcheck="false" autocomplete="off"></label><input class="cast-name" type="text" autocomplete="off"><span class="cast-lines"></span><button type="button" class="cast-find" title="Go to their next line" aria-label="Go to their next line">→</button><textarea class="cast-about" rows="1"></textarea>`;
     (item.querySelector(".dot") as HTMLElement).style.setProperty(
       "--c",
       colors.get(handle) ?? "var(--quiet)",
     );
     const handleInput = item.querySelector(".cast-handle input") as HTMLInputElement;
     handleInput.value = handle;
+    handleInput.defaultValue = handle;
+    handleInput.dataset.focus = `${handle}:handle`;
     handleInput.setAttribute("aria-label", `Short name of ${handle}`);
     handleInput.size = Math.max(6, handle.length + 1);
     const nameInput = item.querySelector(".cast-name") as HTMLInputElement;
     nameInput.value = member && member.name !== member.handle ? member.name : "";
+    nameInput.defaultValue = nameInput.value;
+    nameInput.dataset.focus = `${handle}:name`;
     nameInput.placeholder = isNarrator ? "Narrator" : member ? "Full name" : "Not in the cast yet";
     nameInput.setAttribute("aria-label", `Full name of ${handle}`);
+    const aboutInput = item.querySelector(".cast-about") as HTMLTextAreaElement;
+    aboutInput.value = member?.about ?? "";
+    aboutInput.defaultValue = aboutInput.value;
+    aboutInput.dataset.focus = `${handle}:about`;
+    aboutInput.placeholder = "Who they are, how they sound";
+    aboutInput.spellcheck = true;
+    aboutInput.setAttribute("aria-label", `About ${handle}`);
     const spoken = words.get(handle) ?? 0;
     (item.querySelector(".cast-lines") as HTMLElement).textContent =
       `${count} ${count === 1 ? "line" : "lines"}${spoken ? ` · ${spoken.toLocaleString()} ${spoken === 1 ? "word" : "words"}` : ""}${isNarrator ? " · reads the rest" : ""}`;
 
-    const commit = (input: HTMLInputElement, run: () => void) => {
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          input.blur();
-        } else if (event.key === "Escape") {
-          input.value = input.defaultValue;
-          input.blur();
-        }
-      });
-      input.addEventListener("change", run);
-    };
-    handleInput.defaultValue = handle;
-    nameInput.defaultValue = nameInput.value;
-    commit(handleInput, () => {
-      const next = handleInput.value.trim();
-      if (next === handle) return;
+    commit(handleInput, (value) => {
+      const next = value.trim();
+      if (next === handle) return undefined;
       if (!isName(next)) {
         handleInput.value = handle;
         actions.notice(`“${next}” isn’t a name: one word of letters, digits, - and _.`);
-        return;
+        return undefined;
       }
-      // The focus stays with the name just changed, in the list drawn again.
-      if (actions.rename(handle, next)) refocus(`.cast-handle input[value="${CSS.escape(next)}"]`);
+      return { done: actions.rename(handle, next), renamed: next, from: handle };
     });
-    commit(nameInput, () => {
-      const next = nameInput.value.trim();
-      if (next === nameInput.defaultValue) return;
-      if (actions.fullName(handle, next || handle))
-        refocus(`.cast-name[aria-label="Full name of ${CSS.escape(handle)}"]`);
+    commit(nameInput, (value) => {
+      const next = value.trim();
+      if (next === nameInput.defaultValue) return undefined;
+      return { done: actions.fullName(handle, next || handle) };
     });
-    (item.querySelector(".cast-find") as HTMLElement).addEventListener("click", () =>
-      actions.find(handle),
-    );
+    commit(aboutInput, (value) => {
+      if (value.trim() === aboutInput.defaultValue.trim()) return undefined;
+      return { done: actions.about(handle, value.trim()) };
+    });
+    const find = item.querySelector(".cast-find") as HTMLElement;
+    find.dataset.focus = `${handle}:find`;
+    find.addEventListener("click", () => actions.find(handle));
     if (!member && !isNarrator) {
       const add = document.createElement("button");
       add.type = "button";
       add.className = "button quiet cast-add";
       add.textContent = "Add to the cast";
-      add.addEventListener("click", () => actions.fullName(handle, handle));
+      add.dataset.focus = `${handle}:add`;
+      add.addEventListener("click", () => {
+        if (actions.fullName(handle, handle)) refocus(`${handle}:name`);
+      });
       item.append(add);
     }
     list.append(item);

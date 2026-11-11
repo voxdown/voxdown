@@ -17,6 +17,7 @@ export {
   insertSound,
   isName,
   renameCharacter,
+  setAbout,
   setDirection,
   setFullName,
   setMeta,

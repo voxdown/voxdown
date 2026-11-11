@@ -37,6 +37,7 @@
         <button role="menuitem" type="button" data-command="export-sides">Each character’s lines (sides)</button>
         <button role="menuitem" type="button" data-command="print">Print the book…<kbd data-keys="Mod+P"></kbd></button>
         <hr>
+        <button role="menuitem" type="button" data-command="details">Story details…</button>
         <button role="menuitem" type="button" data-command="format">Tidy the story</button>
         <button role="menuitem" type="button" data-command="format-curly">Tidy, with curly quotes</button>
       </div>
@@ -78,6 +79,8 @@
       <button class="menu-button" role="menuitem" type="button" id="view-menu-button" aria-haspopup="menu" aria-controls="view-menu" aria-expanded="false">View</button>
       <div class="menu-list" role="menu" id="view-menu" aria-labelledby="view-menu-button" hidden>
         <button role="menuitemcheckbox" type="button" data-view="focus" aria-checked="false">Focus<kbd data-keys="Mod+Shift+F"></kbd></button>
+        <button role="menuitemcheckbox" type="button" data-view="typewriter" aria-checked="false">Typewriter scrolling</button>
+        <button role="menuitem" type="button" data-command="goal">Writing goal…</button>
         <button role="menuitemcheckbox" type="button" data-view="marks" aria-checked="false">Every mark raw<kbd data-keys="Mod+Shift+M"></kbd></button>
         <hr>
         <span class="menu-label">Draw</span>
@@ -195,6 +198,26 @@
     <p class="sheet-note" id="list-note"></p>
     <ul class="list-items" id="list-items"></ul>
     <div class="ask-buttons"><button class="button" value="close">Close</button></div>
+  </form>
+</dialog>
+
+<dialog class="details" id="details" aria-labelledby="details-title">
+  <form method="dialog">
+    <h2 id="details-title">Story details</h2>
+    <p class="sheet-note">Written in the story’s front matter. Leave one empty to take it out.</p>
+    <div class="details-fields">
+      <label for="detail-title">Title</label><input id="detail-title" data-key="title" type="text" autocomplete="off">
+      <label for="detail-subtitle">Subtitle</label><input id="detail-subtitle" data-key="subtitle" type="text" autocomplete="off">
+      <label for="detail-author">Author</label><input id="detail-author" data-key="author" type="text" autocomplete="off">
+      <label for="detail-language">Language</label><input id="detail-language" data-key="language" type="text" autocomplete="off" spellcheck="false" placeholder="en, fr, de-CH…" aria-describedby="detail-language-note">
+      <span class="sheet-note" id="detail-language-note">What it is read and spelt in.</span>
+      <label for="detail-narrator">Narrator</label><input id="detail-narrator" data-key="narrator" type="text" autocomplete="off" spellcheck="false" placeholder="Narrator" aria-describedby="detail-narrator-note">
+      <span class="sheet-note" id="detail-narrator-note">The name that reads every line no one else says.</span>
+    </div>
+    <div class="ask-buttons">
+      <button class="button" value="cancel">Cancel</button>
+      <button class="button primary" value="done">Done</button>
+    </div>
   </form>
 </dialog>
 

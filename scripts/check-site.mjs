@@ -1091,6 +1091,22 @@ else {
     problems.push("writer: comparing a version doesn't show what it had that is gone now");
   await sync.click('#compare button[value="close"]');
 }
+// Read again with other line endings: Undo still takes it back.
+await sync.evaluate(() => {
+  window.__disk.text = window.__disk.text
+    .replace("Paragraph 7.", "Paragraph 7, on Windows.")
+    .replace(/\n/g, "\r\n");
+  window.__disk.at += 5;
+  window.dispatchEvent(new Event("focus"));
+});
+await sync.waitForTimeout(1200);
+if (!(await draftIn(sync)).includes("on Windows.\r\n"))
+  problems.push("writer: a file read again with CRLF line endings wasn't read as it is");
+await sync.click(".cm-content");
+await sync.keyboard.press("Control+z");
+await sync.waitForTimeout(900);
+if ((await draftIn(sync)).includes("on Windows."))
+  problems.push("writer: Undo doesn't take back a file read again with other line endings");
 await synced.close();
 console.log("writer: a file changed elsewhere, read again, compared: ok");
 
@@ -1143,6 +1159,52 @@ await settled();
 const renamed = await kept();
 if (!renamed.includes("@Monarch") || renamed.includes("@King"))
   problems.push("writer: renaming King in the cast didn't rename every mark");
+// A full name changed and Tab: the change made, and the focus where Tab sent it.
+const geraldName = author.locator('.cast-name[data-focus="Gerald:name"]');
+await geraldName.fill("Gerald the Dragon");
+await author.keyboard.press("Tab");
+await settled();
+if (!(await kept()).includes("Gerald the Dragon"))
+  problems.push("writer: a full name changed in the cast wasn't written");
+const tabbedTo = await author.evaluate(() => document.activeElement?.getAttribute("data-focus"));
+if (tabbedTo !== "Gerald:find")
+  problems.push(`writer: Tab from a full name in the cast went to ${tabbedTo}, not the next field`);
+// What the cast says about a character, written without YAML.
+const geraldAbout = author.locator('.cast-about[data-focus="Gerald:about"]');
+await geraldAbout.fill("A dragon who would rather cook.");
+await geraldAbout.press("Enter");
+await settled();
+if (!/about: A dragon who would rather cook\./.test(await kept()))
+  problems.push("writer: what the cast says about a character wasn't written");
+// The story's details, from a form.
+await author.click("#file-menu-button");
+await author.click('[data-command="details"]');
+await author.waitForSelector("#details[open]");
+await author.fill("#detail-author", "A. Teller");
+await author.click('#details button[value="done"]');
+await settled();
+if (!(await kept()).includes("author: A. Teller"))
+  problems.push("writer: Story details didn't write the author");
+// A fix clicked straight after typing elsewhere fixes its own warning, where it is now.
+await author.click(".cm-content");
+await author.keyboard.press("Control+End");
+await author.keyboard.insertText("\n\nThe gate [creaks\n");
+await settled();
+await author.click('.side-tab[data-tab="warnings"]');
+await author.keyboard.press("Control+Home");
+await author.evaluate(() => document.querySelector(".cm-content")?.focus());
+await author.keyboard.press("Control+Home");
+await author.keyboard.insertText("PREFIX");
+await author.locator("#side-sheet .fix", { hasText: "Close it" }).first().click();
+await settled();
+const fixedLate = await kept();
+if (
+  !fixedLate.includes("[creaks]") ||
+  /\][^\n]*\[creaks/.test(fixedLate.split("The gate")[1] ?? "")
+)
+  problems.push("writer: a fix clicked just after typing landed in the wrong place");
+await author.keyboard.press("Control+Home");
+for (let i = 0; i < 6; i++) await author.keyboard.press("Delete");
 await author.click("#file-menu-button");
 await author.click('[data-command="new"]');
 await author.click('#ask-buttons button[value="discard"]');
@@ -1213,6 +1275,19 @@ for (const [command, name] of [
   if (download.suggestedFilename() !== name)
     problems.push(`writer: ${command} downloaded ${download.suggestedFilename()}, not ${name}`);
 }
+// A writing goal: the words written since opening, out of it, and a word when it is reached.
+await maker.click("#view-menu-button");
+await maker.click('[data-command="goal"]');
+await maker.fill("#ask-input", "3");
+await maker.keyboard.press("Enter");
+await maker.click(".cm-content");
+await maker.keyboard.press("Control+End");
+await maker.keyboard.type(" Three more words.");
+await maker.waitForTimeout(900);
+if (!(await maker.textContent("#counts"))?.includes("of 3)"))
+  problems.push("writer: the writing goal isn't shown with the words written");
+if (!(await maker.textContent("#notice"))?.includes("goal is reached"))
+  problems.push("writer: reaching the writing goal says nothing");
 // Sides give each line with its cue, the end of the line before.
 await maker.click(".cm-content");
 await maker.keyboard.press("Control+End");

@@ -49,11 +49,14 @@ import {
   format,
   insertLine,
   insertSound,
+  isName,
   lines,
   linesToCsv,
   parse,
   renameCharacter,
+  setAbout,
   setFullName,
+  setMeta,
   textByCharacter,
 } from "voxdown";
 import { examples } from "../examples";
@@ -100,6 +103,7 @@ import {
   versionsOf,
 } from "./store";
 import { type Speaker, StretchTools, speechAt, speechOfMark } from "./stretch";
+import { glimpse, listening, wordCount } from "./words";
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector(selector) as T;
@@ -117,6 +121,10 @@ type Prefs = ViewSwitches & {
   tab: Tab;
   autosave: boolean;
   focus: boolean;
+  /** The cursor's line kept in the middle of the page as it goes, focus or not. */
+  typewriter: boolean;
+  /** Words to write in a sitting; 0 for none. */
+  goal: number;
 };
 const PREFS_KEY = "vxd-writer-view";
 const prefs: Prefs = {
@@ -132,6 +140,8 @@ const prefs: Prefs = {
   tab: "script",
   autosave: true,
   focus: false,
+  typewriter: false,
+  goal: 0,
   ...savedPrefs(),
 };
 
@@ -209,7 +219,7 @@ const lineBreaks = (source: string): Extension =>
  * Another text in place of the story's, changing only what differs, so the cursor, the page and
  * Undo stay with the words: a version gone back to, the file read again.
  */
-function replaceText(next: string, userEvent: string): void {
+function replaceText(next: string, userEvent: string, crlf?: boolean): void {
   const now = view.state.doc.toString();
   const lines = Text.of(next.split(/\r\n?|\n/));
   const then = lines.toString();
@@ -222,13 +232,19 @@ function replaceText(next: string, userEvent: string): void {
     now.charCodeAt(now.length - 1 - end) === then.charCodeAt(then.length - 1 - end)
   )
     end++;
-  if (start === now.length && start === then.length) return;
+  // Its line breaks, when they change too, with the words in the same step.
+  const effects =
+    crlf === undefined || crlf === (view.state.lineBreak === "\r\n")
+      ? []
+      : [breaks.reconfigure(crlf ? EditorState.lineSeparator.of("\r\n") : [])];
+  if (start === now.length && start === then.length && effects.length === 0) return;
   view.dispatch({
     changes: {
       from: start,
       to: now.length - end,
       insert: lines.slice(start, then.length - end),
     },
+    effects,
     userEvent,
   });
 }
@@ -249,7 +265,7 @@ const focusLines = ViewPlugin.fromClass(
       const switched = update.transactions.some((tr) => tr.effects.length > 0);
       if (update.docChanged || update.selectionSet || update.viewportChanged || switched)
         this.decorations = this.build();
-      if (prefs.focus && update.selectionSet && update.view.hasFocus) {
+      if ((prefs.focus || prefs.typewriter) && update.selectionSet && update.view.hasFocus) {
         const head = update.state.selection.main.head;
         requestAnimationFrame(() =>
           update.view.dispatch({ effects: EditorView.scrollIntoView(head, { y: "center" }) }),
@@ -277,6 +293,8 @@ const focusLines = ViewPlugin.fromClass(
 
 /** Read only while another tab writes the story. */
 const editable = new Compartment();
+/** The line breaks the story is saved with: changed when the file is read again with others. */
+const breaks = new Compartment();
 let lockedOut = false;
 const editability = () =>
   lockedOut ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [];
@@ -286,7 +304,7 @@ function editorState(source: string, cursor: number): EditorState {
     doc: source,
     selection: EditorSelection.cursor(cursor),
     extensions: [
-      lineBreaks(source),
+      breaks.of(lineBreaks(source)),
       editable.of(editability()),
       focusLines,
       // The browser's spelling check, in the story's own language.
@@ -390,39 +408,44 @@ function editorState(source: string, cursor: number): EditorState {
 const frontMatterEnd = () => current().frontMatter?.range.to ?? null;
 
 /** A warning's message, and its fix as one click, over the words it underlines. */
-const warningTips = hoverTooltip((tipView, at) => {
-  const mark = tipView.state
-    .field(marksField)
-    .find((m) => m.kind === "warning" && m.from <= at && at <= m.to);
-  if (!mark || mark.kind !== "warning") return null;
-  return {
-    pos: mark.from,
-    end: mark.to,
-    above: true,
-    create: () => {
-      const dom = document.createElement("div");
-      dom.className = "warning-tip";
-      const message = document.createElement("span");
-      message.textContent = mark.message;
-      dom.append(message);
-      const fix = mark.fix;
-      if (fix) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "button";
-        button.textContent = fix.label ?? "Fix it";
-        button.addEventListener("mousedown", (event) => {
-          event.preventDefault();
-          if (tipView.state.readOnly) return;
-          tipView.dispatch({ changes: fix, userEvent: "input.fix" });
-          tipView.focus();
-        });
-        dom.append(button);
-      }
-      return { dom };
-    },
-  };
-});
+const warningTips = hoverTooltip(
+  (tipView, at) => {
+    const mark = tipView.state
+      .field(marksField)
+      .find((m) => m.kind === "warning" && m.from <= at && at <= m.to);
+    if (!mark || mark.kind !== "warning") return null;
+    return {
+      pos: mark.from,
+      end: mark.to,
+      above: true,
+      create: () => {
+        const dom = document.createElement("div");
+        dom.className = "warning-tip";
+        const message = document.createElement("span");
+        message.textContent = mark.message;
+        dom.append(message);
+        const fix = mark.fix;
+        if (fix) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "button";
+          button.textContent = fix.label ?? "Fix it";
+          // Pressed, the text keeps the focus; clicked (or Enter, Space, a screen reader), it fixes.
+          button.addEventListener("mousedown", (event) => event.preventDefault());
+          button.addEventListener("click", () => {
+            if (tipView.state.readOnly) return;
+            tipView.dispatch({ changes: fix, userEvent: "input.fix" });
+            tipView.focus();
+          });
+          dom.append(button);
+        }
+        return { dom };
+      },
+    };
+    // The text changed: the tip, and the places its fix knows, go.
+  },
+  { hideOnChange: true },
+);
 
 const view = new EditorView({ parent: $("#editor"), state: editorState("", 0) });
 const rail = new SceneRail($("#scene-rail"), view);
@@ -796,7 +819,7 @@ function showDraftState(): void {
 }
 
 /** The story open, and its words when it was opened here. */
-let session: { id: string; words: number } | undefined;
+let session: { id: string; words: number; reached: boolean } | undefined;
 
 function showCounts({
   words,
@@ -806,11 +829,18 @@ function showCounts({
   const scenes = Math.max(0, ...sceneNumbers(view.state).values());
   const plural = (n: number, one: string, many = `${one}s`) =>
     `${n.toLocaleString()} ${n === 1 ? one : many}`;
-  // The words written since the story was opened here.
-  if (session?.id !== file.id) session = { id: file.id, words };
+  // The words written since the story was opened here, and the goal for the sitting, if any.
+  if (session?.id !== file.id) session = { id: file.id, words, reached: false };
   const since = words - session.words;
+  const signed = `${since > 0 ? "+" : since < 0 ? "−" : ""}${Math.abs(since).toLocaleString()}`;
+  const goal = prefs.goal > 0 ? ` of ${prefs.goal.toLocaleString()}` : "";
+  if (prefs.goal > 0 && since >= prefs.goal && !session.reached) {
+    session.reached = true;
+    notice(`${prefs.goal.toLocaleString()} words written: the goal is reached.`);
+    announce("Writing goal reached.");
+  }
   $("#counts").textContent = [
-    `${plural(words, "word")}${since ? ` (${since > 0 ? "+" : "−"}${Math.abs(since).toLocaleString()})` : ""}`,
+    `${plural(words, "word")}${since || goal ? ` (${signed}${goal})` : ""}`,
     plural(said, "line said", "lines said"),
     plural(voices, "voice"),
     plural(scenes, "scene"),
@@ -831,14 +861,6 @@ function cursorMoved(): void {
     ? `${words.toLocaleString()} ${words === 1 ? "word" : "words"} selected · ${listening(words)}`
     : `Line ${line.number}, column ${head - line.from + 1}`;
   markPlace();
-}
-
-/** How long words take to hear, read aloud at a storyteller's pace (150 words a minute). */
-function listening(words: number): string {
-  const minutes = words / 150;
-  if (minutes < 1) return `${Math.max(1, Math.round(minutes * 60))} s to hear`;
-  if (minutes < 60) return `${Math.round(minutes)} min to hear`;
-  return `${Math.floor(minutes / 60)} h ${Math.round(minutes % 60)} min to hear`;
 }
 
 function showWarningCount(): void {
@@ -891,6 +913,11 @@ function showSide(drawn?: string): void {
           attempt(
             () => setFullName(current(), handle, name),
             `The cast can’t give ${handle} that name as written.`,
+          ),
+        about: (handle, about) =>
+          attempt(
+            () => setAbout(current(), handle, about || null),
+            `The cast can’t say that about ${handle} as written.`,
           ),
         // Their next line after the cursor, round to the first after the last.
         find: (handle) => {
@@ -969,6 +996,19 @@ function fixHere(): boolean {
   return true;
 }
 
+/** A warning's fix as the story is now: the same warning, over the same words, nearest `near`. */
+function fixNow(code: string, words: string, near: number): Problem["fix"] {
+  if (storyVersion !== version) refresh();
+  return currentProblems()
+    .filter(
+      (problem) =>
+        problem.code === code &&
+        problem.fix &&
+        view.state.sliceDoc(problem.from, problem.to) === words,
+    )
+    .sort((a, b) => Math.abs(a.from - near) - Math.abs(b.from - near))[0]?.fix;
+}
+
 /** What to put right, with its fixes. */
 function currentProblems(): Problem[] {
   const doc = view.state.doc;
@@ -1010,9 +1050,19 @@ function warningList(): HTMLElement {
       mend.type = "button";
       mend.className = "button fix";
       mend.textContent = fix.label ?? "Fix it";
+      const drawn = version;
+      const words = view.state.sliceDoc(problem.from, problem.to);
       mend.addEventListener("click", () => {
         if (lockedOut) return;
-        view.dispatch({ changes: fix, userEvent: "input.fix" });
+        // Typed in since the list was drawn: the warning found again where it is now, or not
+        // fixed at all.
+        const now = drawn === version ? fix : fixNow(problem.code, words, problem.from);
+        if (!now) {
+          notice("That warning has changed since; the list shows it as it is now.");
+          refresh();
+          return;
+        }
+        view.dispatch({ changes: now, userEvent: "input.fix" });
         refresh();
         view.focus();
       });
@@ -1408,17 +1458,7 @@ async function readAgain(disk: { text: string; modified: number }): Promise<void
   file.saved = disk.text;
   file.savedAt = Date.now();
   file.modified = disk.modified;
-  if ((view.state.lineBreak === "\r\n") === allCrlf(disk.text))
-    replaceText(disk.text, "input.disk");
-  else {
-    // Its line breaks changed too: read anew, the writer kept where they were.
-    const at = place();
-    await load(
-      { name: file.name, text: disk.text, ...(file.handle ? { handle: file.handle } : {}) },
-      { id: file.id, saved: disk.text, savedAt: file.savedAt, modified: disk.modified },
-    );
-    goTo(at);
-  }
+  replaceText(disk.text, "input.disk", allCrlf(disk.text));
   showSaveState();
   await keep();
   await snapshot("Read again from disk", disk.text);
@@ -1743,7 +1783,6 @@ const when = (at: number) =>
     hour: "numeric",
     minute: "2-digit",
   });
-const wordCount = (content: string) => content.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
 
 /** A list in a dialog: each row a title, a line about it, and its buttons. */
 function showList(
@@ -1796,24 +1835,6 @@ function showList(
     }),
   );
   dialog.showModal();
-}
-
-/** A kept story's title, from its front matter, and its first words, marks left out. */
-function glimpse(source: string): { title?: string; words: string } {
-  const front = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(source.slice(0, 20_000));
-  const title = front?.[1]
-    ? /^title:[ \t]*(["']?)(.+?)\1[ \t]*$/m.exec(front[1])?.[2]?.trim()
-    : undefined;
-  const body = source
-    .slice(front ? front[0].length : 0)
-    .slice(0, 1500)
-    .replace(/%%[\s\S]*?(?:%%|$)/g, " ")
-    .replace(/^#{1,6}[ \t]+/gm, "")
-    .replace(/@[\p{L}\p{N}_-]+|\{[^}\n]*\}|\([^)\n]*\)|\[[^\]\n]*\]|[*_]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const words = body.length > 90 ? `${body.slice(0, 90).replace(/\s\S*$/, "")}…` : body;
-  return { ...(title ? { title } : {}), words };
 }
 
 async function showDrafts(): Promise<void> {
@@ -1894,6 +1915,38 @@ function goBack(kept: Version): void {
   replaceText(kept.text, "input.version");
   notice(`Back to the version from ${when(kept.at)}. Undo (Ctrl+Z) takes it back.`);
   view.focus();
+}
+
+/** The story's details, from its front matter, changed in a form rather than in YAML. */
+function showDetails(): void {
+  const dialog = $<HTMLDialogElement>("#details");
+  const fields = [...dialog.querySelectorAll<HTMLInputElement>("input[data-key]")];
+  const written = (key: string) => {
+    const value = current().frontMatter?.data[key];
+    return typeof value === "string" || typeof value === "number" ? String(value) : "";
+  };
+  for (const field of fields) field.value = written(field.dataset.key ?? "");
+  dialog.returnValue = "";
+  dialog.onclose = () => {
+    if (dialog.returnValue !== "done" || lockedOut) return;
+    for (const field of fields) {
+      const key = field.dataset.key ?? "";
+      const value = field.value.trim();
+      if (value === written(key)) continue;
+      // Each detail is one value: set, or taken out.
+      if (key === "narrator" && value && !isName(value)) {
+        notice(`“${value}” isn’t a name: one word of letters, digits, - and _.`);
+        continue;
+      }
+      attempt(
+        () => setMeta(current(), key, value || null),
+        `The ${key} can’t be set to that as written.`,
+      );
+    }
+    view.focus();
+  };
+  dialog.showModal();
+  fields[0]?.focus();
 }
 
 /** A version beside the story now: what it had that is gone, what is new since. */
@@ -2104,6 +2157,20 @@ const COMMANDS: Record<string, () => unknown> = {
     view.focus();
   },
   find: () => openSearchPanel(view),
+  goal: async () => {
+    const answer = await askText(
+      `Words to write in this sitting${prefs.goal ? ` (now ${prefs.goal.toLocaleString()})` : ""}. Empty or 0 for none.`,
+      "500",
+      "Set the goal",
+    );
+    const wanted = Number.parseInt(answer.replace(/[^\d]/g, ""), 10);
+    prefs.goal = Number.isFinite(wanted) && wanted > 0 ? wanted : 0;
+    keepPrefs();
+    if (session) session.reached = false;
+    refresh();
+    view.focus();
+  },
+  details: showDetails,
   "next-warning": () => {
     nextProblem(1);
     view.focus();
@@ -2172,6 +2239,13 @@ const SWITCHES = ["color", "names", "directions", "sounds", "vocal", "pages", "n
 function viewCommand(name: string, on: boolean): void {
   if (name === "focus") {
     focusMode(on);
+  } else if (name === "typewriter") {
+    prefs.typewriter = on;
+    keepPrefs();
+    if (on) {
+      const head = view.state.selection.main.head;
+      view.dispatch({ effects: EditorView.scrollIntoView(head, { y: "center" }) });
+    }
   } else if (name === "autosave") {
     prefs.autosave = on;
     keepPrefs();
@@ -2370,7 +2444,7 @@ function showWelcome(): void {
 // Start: the draft from last time, or the welcome.
 
 async function start(): Promise<void> {
-  for (const name of [...SWITCHES, "marks", "autosave", "focus"] as const)
+  for (const name of [...SWITCHES, "marks", "autosave", "focus", "typewriter"] as const)
     checkMenu(name, prefs[name]);
   focusMode(prefs.focus);
   // Where the browser can't keep files, there's no file to save to automatically.

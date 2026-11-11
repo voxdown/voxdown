@@ -11,6 +11,7 @@ import { problems } from "../src/writer/problems";
 import { railAt, railPoints, railScenes, railY } from "../src/writer/rail";
 import { thinVersions } from "../src/writer/store";
 import { speechAt, speechOfMark } from "../src/writer/stretch";
+import { glimpse, listening, wordCount } from "../src/writer/words";
 
 describe("the scene rail's layout", () => {
   it("places scenes in proportion to the text, apart where there is room", () => {
@@ -300,5 +301,29 @@ describe("the versions kept", () => {
     expect(ages.filter((age) => age >= 24 && age < 72).length).toBeLessThanOrEqual(3);
     expect(kept.at(-1)?.why).toBe("Opened");
     expect(ages).toEqual([...ages].sort((a, b) => a - b));
+  });
+});
+
+describe("words", () => {
+  it("counts words with their apostrophes and hyphens, in any script", () => {
+    expect(wordCount("It’s a well-known fact, n'est-ce pas? Ünïcode 42 ok")).toBe(9);
+  });
+
+  it("says how long they take to hear, never 60 minutes past an hour", () => {
+    expect(listening(10)).toBe("4 s to hear");
+    expect(listening(1500)).toBe("10 min to hear");
+    expect(listening(150 * 119.7)).toBe("2 h 0 min to hear");
+    expect(listening(150 * 75)).toBe("1 h 15 min to hear");
+  });
+
+  it("knows a kept story by its title and first words, marks left out", () => {
+    const story =
+      '---\ntitle: "The Owl"\ncast:\n  Ann:\n---\n\n# One\n\n@Ann (softly) “Hush,” [an owl hoots] she said. %% a note %% {pause 1s} Then *quiet*.';
+    expect(glimpse(story)).toEqual({
+      title: "The Owl",
+      words: "One “Hush,” she said. Then quiet.",
+    });
+    expect(glimpse("No front matter here.").title).toBeUndefined();
+    expect(glimpse("word ".repeat(40)).words).toMatch(/^word( word)*…$/);
   });
 });

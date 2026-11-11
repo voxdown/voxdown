@@ -94,6 +94,13 @@ export class StretchTools {
       if (this.shown !== null) this.openDirection(this.shown, this.bar);
     });
     view.contentDOM.addEventListener("mousemove", (event) => this.hover(event));
+    // A touch has no hover: a tap on a passage brings its bar at once.
+    view.contentDOM.addEventListener("pointerup", (event) => {
+      if (event.pointerType !== "touch" || !this.popover.hidden) return;
+      const at = this.context.view.posAtCoords({ x: event.clientX, y: event.clientY });
+      const speech = at === null ? undefined : speechAt(this.context.story(), at);
+      if (speech) this.show(speech);
+    });
     view.contentDOM.addEventListener("mouseleave", () => {
       clearTimeout(this.restTimer);
       this.hideSoon();

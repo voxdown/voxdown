@@ -634,6 +634,29 @@ if (slowest > 400)
 await long.close();
 console.log(`writer: a 100,000-word book, slowest key ${slowest} ms: ok`);
 
+// Offline: opened once, the Writer opens again with no network, its story with it.
+const offline = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const off = await offline.newPage();
+watch(off, "writer offline");
+await off.goto(`${base}/writer/`);
+await off.click(`.welcome-example[data-name="${dragonName}"]`);
+await off.evaluate(() => navigator.serviceWorker.ready);
+await off.waitForTimeout(1500);
+await offline.setOffline(true);
+await off.reload();
+await off.waitForSelector(".cm-content", { timeout: 10_000 }).catch(() => {});
+if (
+  !(
+    await off
+      .locator(".cm-content")
+      .innerText()
+      .catch(() => "")
+  ).includes("Sir Percival")
+)
+  problems.push("writer: with no network, the Writer doesn't open again with its story");
+await offline.close();
+console.log("writer: offline: ok");
+
 // Saving automatically: a file opened, typed in, and two seconds later it is on disk.
 const auto = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 await auto.addInitScript(() => {

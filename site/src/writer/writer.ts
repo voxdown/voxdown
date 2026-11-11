@@ -1765,3 +1765,21 @@ function goTo({ cursor, top }: { cursor: number; top: number }): void {
 }
 
 void start();
+
+// Offline: the Writer opens again with no network, once it has been opened with one.
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  void navigator.serviceWorker
+    .register("../writer-sw.js", { scope: "./" })
+    .then(() => navigator.serviceWorker.ready)
+    .then((registration) => {
+      const urls = [
+        location.href.split("#")[0] as string,
+        ...performance
+          .getEntriesByType("resource")
+          .map((entry) => entry.name)
+          .filter((url) => url.startsWith(location.origin)),
+      ];
+      registration.active?.postMessage({ type: "keep", urls });
+    })
+    .catch(() => {});
+}

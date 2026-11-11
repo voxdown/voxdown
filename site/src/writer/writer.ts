@@ -1666,13 +1666,16 @@ async function saveAs(keepBoth = false): Promise<boolean> {
   }
   const handle = await pickSaveTarget(keepBoth ? anotherName(suggestedName()) : suggestedName());
   if (!handle) return false;
+  const itself = file.handle ? await sameEntry(handle, file.handle) : false;
   // Keeping both: never the file it is to be kept beside.
-  if (keepBoth && file.handle && (await sameEntry(handle, file.handle))) {
+  if (keepBoth && itself) {
     await tell(
       `That is ${file.name} itself: keeping both needs a file of its own. Nothing was saved.`,
     );
     return false;
   }
+  // The story's own file, chosen again: a Save, with its check for changes made elsewhere.
+  if (itself && file.handle) return write(file.handle);
   // The new file is the story's from here: its name and handle go with what is kept, and back to
   // the old ones if it can't be written.
   const before = { handle: file.handle, name: file.name, modified: file.modified };

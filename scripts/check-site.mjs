@@ -1293,6 +1293,22 @@ if (await sync.isVisible("#ask[open]")) {
 }
 if (!(await sync.evaluate(() => window.__disk.text.includes("changed quietly"))))
   problems.push("writer: a file changed elsewhere with its date kept lost its change");
+// Save as, the same file chosen: a Save, asking first about changes made elsewhere.
+await sync.evaluate(() => {
+  window.__disk.text += "\nWritten on another computer.\n";
+  window.__disk.at += 3;
+});
+await sync.click(".cm-content");
+await sync.keyboard.type(" Saved as.");
+await sync.keyboard.press("Control+Shift+S");
+await sync
+  .waitForSelector("#ask[open]", { timeout: 3000 })
+  .catch(() =>
+    problems.push("writer: Save as onto the story's own file wrote over changes made elsewhere"),
+  );
+if (await sync.isVisible("#ask[open]")) await sync.click('#ask-buttons button[value="cancel"]');
+if (!(await sync.evaluate(() => window.__disk.text.includes("another computer"))))
+  problems.push("writer: Save as onto the story's own file lost changes made elsewhere");
 // Saving by itself stops when the file changed on disk, and says so beside the name until saved.
 await sync.keyboard.press("Control+End");
 await sync.keyboard.type(" More here.");

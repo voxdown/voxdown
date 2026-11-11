@@ -2,12 +2,12 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { applyChanges, lines, parse } from "voxdown";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, plainText, toggleEmphasis } from "../src/writer/emphasis";
 import { asStory, decode } from "../src/writer/files";
-import { pauseSeconds, toHear, voicesFor } from "../src/writer/hear";
+import { Hearing, type Voice, pauseSeconds, toHear, voicesFor } from "../src/writer/hear";
 import { rankScenes } from "../src/writer/outline";
 import { afterParagraph, moveParagraph } from "../src/writer/paragraphs";
 import { nearestName, problems } from "../src/writer/problems";
@@ -558,25 +558,34 @@ describe("going to a chapter or scene", () => {
 
 describe("sides", () => {
   const story = parse(
-    "@Ann “Hello, how are you today?” @Bob (gruffly) “Fine.” @Bob [coughs] @Ann “Good.”",
+    "# The Inn\n\n@Ann “Hello, how are you today?” @Bob (gruffly) “Fine.” @Bob [coughs] @Ann “Good.”\n\n* * *\n\n@Bob “Later.”",
   );
 
-  it("gives each character's lines with their cues and how they are said", () => {
-    const [ann, bob] = sidesOf(story);
-    expect(ann?.lines.map((line) => [line.cue?.speaker ?? null, line.text])).toEqual([
+  it("gives each character's lines scene by scene, with cues, how, and where they are", () => {
+    const sides = sidesOf(story);
+    const ann = sides.find((side) => side.name === "Ann");
+    const bob = sides.find((side) => side.name === "Bob");
+    expect(ann?.scenes.map((scene) => [scene.scene, scene.title])).toEqual([[1, "The Inn"]]);
+    expect(ann?.scenes[0]?.lines.map((line) => [line.cue?.speaker ?? null, line.text])).toEqual([
       [null, "Hello, how are you today?"],
       ["Bob", "Good."],
     ]);
-    expect(bob?.lines[0]).toMatchObject({
+    const first = bob?.scenes[0]?.lines;
+    expect(first?.[0]).toMatchObject({
       cue: { words: "Hello, how are you today?", speaker: "Ann" },
       direction: "gruffly",
+      line: 3,
     });
-    expect(bob?.lines[1]).toMatchObject({ text: "coughs", vocal: true });
-    expect(bob?.lines[1]?.cue).toBeUndefined();
+    expect(first?.[1]).toMatchObject({ text: "coughs", vocal: true });
+    // A new scene: no cue from the one before.
+    expect(bob?.scenes[1]).toMatchObject({ scene: 2, title: "The Inn" });
+    expect(bob?.scenes[1]?.lines[0]?.cue).toBeUndefined();
   });
 
   it("writes them as text, and as pages to print, one character to a page, escaped", () => {
-    expect(sidesText(story)).toContain("Bob (gruffly): Fine.");
+    const text = sidesText(story);
+    expect(text).toContain("-- Scene 1 · The Inn --");
+    expect(text).toContain("Bob (gruffly): Fine.    [line 3]");
     const html = sidesHtml(parse("@Ann “<b>&</b>”"), "A & B");
     expect(html).toContain("&lt;b&gt;&amp;&lt;/b&gt;");
     expect(html).toContain("<title>A &amp; B: sides</title>");
@@ -722,5 +731,46 @@ describe("hearing it read aloud", () => {
     expect(heard.map((row) => row.text)).toEqual(["One.", "2s", "Two."]);
     expect(toHear(rows, 3).map((row) => row.text)).toEqual(["Two."]);
     expect([pauseSeconds("2s"), pauseSeconds("500ms"), pauseSeconds("")]).toEqual([2, 0.5, 1]);
+  });
+});
+
+describe("a reading stopped", () => {
+  it("is never heard again, in a pause or a line, after another starts", async () => {
+    const said: string[] = [];
+    vi.stubGlobal(
+      "SpeechSynthesisUtterance",
+      class {
+        onend: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        lang = "";
+        voice: unknown = null;
+        constructor(readonly text: string) {}
+      },
+    );
+    const voice = {
+      getVoices: () => [],
+      speak: (utterance: { text: string; onend: (() => void) | null }) => {
+        said.push(utterance.text);
+        setTimeout(() => utterance.onend?.(), 5);
+      },
+      cancel: () => {},
+    } as unknown as Voice;
+    const hearing = new Hearing(() => voice);
+    const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+    // Stopped in a pause: its next line never comes.
+    const old = hearing.read(
+      toHear(lines(parse("{pause 200ms}\n\n@Ann “OLD WORDS”")), 1),
+      "en",
+      "Narrator",
+      () => {},
+    );
+    await wait(50);
+    hearing.stop();
+    const fresh = hearing.read(toHear(lines(parse("@Bob “NEW”")), 1), "en", "Narrator", () => {});
+    await Promise.all([old, fresh]);
+    await wait(300);
+    expect(said).toEqual(["NEW"]);
+    expect(hearing.on).toBe(false);
+    vi.unstubAllGlobals();
   });
 });

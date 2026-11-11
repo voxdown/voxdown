@@ -1770,3 +1770,13 @@ body[data-welcome] .manuscript .editor {
     border: 1px solid CanvasText;
   }
 }
+
+/* A speaker's name, raw or as a chip, mixed with the ink: 4.5:1 or better on either paper,
+   whatever the character's colour. */
+.manuscript .vxd-name {
+  color: color-mix(in oklab, var(--vxd-speaker, var(--quiet)) 55%, var(--ink));
+}
+/* A page turn shown raw keeps its colour, mixed with the ink enough to read. */
+.manuscript .vxd-page.vxd-raw {
+  color: color-mix(in oklab, var(--vxd-page, #b45309) 65%, var(--ink));
+}

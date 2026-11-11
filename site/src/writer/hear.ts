@@ -50,11 +50,23 @@ export function toHear(rows: readonly ScriptLine[], fromLine: number): ScriptLin
     .filter((row) => row.kind === "speech" || row.kind === "vocal" || row.kind === "pause");
 }
 
+/** What reads aloud: the browser's speech synthesis, or a stand-in for a test. */
+export type Voice = Pick<SpeechSynthesis, "getVoices" | "speak" | "cancel">;
+
+/**
+ * One reading at a time. Each has its own turn: stopping it, or starting another, ends it where it
+ * is (in a pause or a line), and nothing of it is ever heard after.
+ */
 export class Hearing {
-  private stopped = true;
+  private turn = 0;
+  private reading = false;
+  /** Ends the wait the reading is in: a pause, or a line being said. */
+  private wake: (() => void) | undefined;
+
+  constructor(private readonly voice: () => Voice | undefined = () => window.speechSynthesis) {}
 
   get on(): boolean {
-    return !this.stopped;
+    return this.reading;
   }
 
   /** Reads the rows, calling `at` as each starts; resolves when done or stopped. */
@@ -64,17 +76,23 @@ export class Hearing {
     narrator: string,
     at: (row: ScriptLine) => void,
   ): Promise<void> {
-    const synth = window.speechSynthesis;
+    const synth = this.voice();
+    if (!synth) return;
     this.stop();
-    this.stopped = false;
+    const mine = ++this.turn;
+    const live = () => mine === this.turn;
+    this.reading = true;
     const voices = synth.getVoices();
     const speakers = [...new Set(rows.flatMap((row) => (row.speaker ? [row.speaker] : [])))];
     const chosen = voicesFor(speakers, voices, language, narrator);
     for (const row of rows) {
-      if (this.stopped) return;
+      if (!live()) return;
       at(row);
       if (row.kind === "pause") {
-        await new Promise((done) => setTimeout(done, pauseSeconds(row.text) * 1000));
+        await this.wait((done) => {
+          const timer = setTimeout(done, pauseSeconds(row.text) * 1000);
+          return () => clearTimeout(timer);
+        });
         continue;
       }
       const words = plainText(row.text).trim();
@@ -83,17 +101,40 @@ export class Hearing {
       utterance.lang = language;
       const voice = voices[chosen.get(row.speaker ?? narrator) ?? -1];
       if (voice) utterance.voice = voice;
-      await new Promise<void>((done) => {
+      if (!live()) return;
+      await this.wait((done) => {
         utterance.onend = () => done();
         utterance.onerror = () => done();
         synth.speak(utterance);
+        return () => {};
       });
     }
-    this.stopped = true;
+    if (live()) this.reading = false;
   }
 
   stop(): void {
-    this.stopped = true;
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    this.turn++;
+    this.reading = false;
+    const wake = this.wake;
+    this.wake = undefined;
+    wake?.();
+    this.voice()?.cancel();
+  }
+
+  /** Waits for `start`'s end, or for the reading to be stopped, whichever comes first. */
+  private wait(start: (done: () => void) => () => void): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let undo = () => {};
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        undo();
+        if (this.wake === done) this.wake = undefined;
+        resolve();
+      };
+      this.wake = done;
+      undo = start(done);
+    });
   }
 }

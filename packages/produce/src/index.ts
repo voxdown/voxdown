@@ -17,6 +17,7 @@ export {
   fromBase64,
 } from "./adapter";
 export { type ElevenLabsOptions, elevenlabs, wordsFromAlignment } from "./adapters/elevenlabs";
+export { createStudioProject, studioContent } from "./adapters/elevenlabs-studio";
 export {
   type OpenAiSpeechOptions,
   PRESETS,

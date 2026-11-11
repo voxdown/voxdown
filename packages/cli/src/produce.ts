@@ -17,6 +17,7 @@ import {
   azure,
   castVoices,
   chapterSsml,
+  createStudioProject,
   elevenlabs,
   estimate,
   openaiSpeech,
@@ -319,6 +320,35 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
       `${cost.left.directions} direction${cost.left.directions === 1 ? "" : "s"} (${adapter.name} can't follow them)`,
     );
   if (left.length) context.stderr(`Left out: ${left.join("; ")}.\n`);
+  if (flag("studio")) {
+    if (id !== "elevenlabs")
+      throw new Failure(
+        "--studio sends the book to ElevenLabs Studio: use it with --with elevenlabs",
+      );
+    if (flag("dry-run")) {
+      context.stderr(
+        "Nothing sent (--dry-run). Change the voices in casting.json, then run it again.\n",
+      );
+      return OK;
+    }
+    if (context.interactive && context.question && !flag("yes")) {
+      const answer = (
+        await context.question("Send it to ElevenLabs Studio as a new project? [Y/n] ")
+      )
+        .trim()
+        .toLowerCase();
+      if (answer.startsWith("n")) return OK;
+    }
+    const project = await createStudioProject(script, ids, {
+      key: context.machine.env.ELEVENLABS_API_KEY as string,
+      fetch: context.machine.fetch,
+      ...(value("model") ? { model: value("model") as string } : {}),
+    });
+    context.stdout(
+      `${script.title} is in ElevenLabs Studio, each line in its character's voice: ${project.url}\nListen, change and convert it there; nothing is converted (or paid for) until you do.\n`,
+    );
+    return OK;
+  }
   if (flag("dry-run")) {
     context.stderr(
       "Nothing made (--dry-run). Change the voices in casting.json, then run it again.\n",

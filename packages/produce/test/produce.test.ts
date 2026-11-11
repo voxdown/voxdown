@@ -11,6 +11,7 @@ import {
   azure,
   castVoices,
   chapterSsml,
+  createStudioProject,
   elevenlabs,
   estimate,
   fromWav,
@@ -25,6 +26,7 @@ import {
   resample,
   silence,
   speakersOf,
+  studioContent,
   styleFor,
   toPcm16,
   toWav,
@@ -440,6 +442,47 @@ describe("ElevenLabs", () => {
     await expect(busy.speak({ text: "Hi", voice: "v", direction: null })).rejects.toMatchObject({
       retry: true,
     });
+  });
+});
+
+describe("ElevenLabs Studio", () => {
+  const voices = { Narrator: "n1", Mara: "m1", Tom: "t1" };
+
+  it("gets the book as chapters, blocks a paragraph, each line in its voice", () => {
+    const content = studioContent(productionScript(parse(STORY)), voices, { tags: true });
+    expect(content.map((chapter) => chapter.name)).toEqual(["One", "Two"]);
+    expect(content[0]?.blocks).toEqual([
+      { sub_type: "h1", nodes: [{ type: "tts_node", voice_id: "n1", text: "One" }] },
+      { sub_type: "p", nodes: [{ type: "tts_node", voice_id: "n1", text: "Night fell." }] },
+      {
+        sub_type: "p",
+        nodes: [
+          { type: "tts_node", voice_id: "m1", text: "[softly] Who’s there?" },
+          { type: "tts_node", voice_id: "m1", text: "[gasps]" },
+        ],
+      },
+      { sub_type: "p", nodes: [{ type: "tts_node", voice_id: "t1", text: "Only me." }] },
+      { sub_type: "p", nodes: [{ type: "tts_node", voice_id: "n1", text: "The next day." }] },
+    ]);
+  });
+
+  it("is sent as a new project, with the book's details, converting nothing", async () => {
+    const { fetch, calls } = stand(
+      () => new Response(JSON.stringify({ project: { project_id: "p42" } })),
+    );
+    const made = await createStudioProject(productionScript(parse(STORY)), voices, {
+      key: "k",
+      fetch,
+    });
+    expect(made).toEqual({ projectId: "p42", url: "https://elevenlabs.io/app/studio/p42" });
+    expect(calls[0]?.url).toBe("https://api.elevenlabs.io/v1/studio/projects");
+    const form = calls[0]?.init.body as FormData;
+    expect(form.get("name")).toBe("The Owl");
+    expect(form.get("author")).toBe("A. Teller");
+    expect(form.get("language")).toBe("en");
+    expect(form.get("default_paragraph_voice_id")).toBe("n1");
+    expect(form.get("auto_convert")).toBeNull();
+    expect(JSON.parse(String(form.get("from_content_json")))[1].name).toBe("Two");
   });
 });
 

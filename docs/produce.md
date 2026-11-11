@@ -45,6 +45,8 @@ In `story.audiobook/`, beside the story (or `--out`):
 | `about.json` | Which service, model and voices made it, and a line saying it is narrated by synthetic voices. |
 | `.clips/` | Every line made, kept: making the book again only asks for lines that changed. |
 
+**ElevenLabs Studio.** `vxd produce story.vxd --with elevenlabs --studio` makes nothing here: it sends the book to [ElevenLabs Studio](https://elevenlabs.io/docs/product-guides/products/studio) as a new project, each chapter a chapter, each paragraph a block and each line in its character's voice (directions as audio tags). You listen, change and convert it there, and nothing is converted, or paid for, until you do. From Studio a book can be published where only books made in ElevenLabs are taken.
+
 `--chapters 1` makes one chapter to listen to first. `--script-only` writes the production script and an SSML file a chapter, with no service, for other tools.
 
 **Where an AI-narrated book can go.** Google Play Books, Kobo and Spotify for Authors take audiobooks narrated by synthetic voices, each with a label saying so. ACX (Audible) takes only human narration. Each store's terms change; check them before you publish.

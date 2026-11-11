@@ -157,6 +157,45 @@ describe("vxd produce", () => {
     expect(named.stderr).toContain("Kokoro isn't running: docker run -p 8880:8880");
   });
 
+  it("sends the book to ElevenLabs Studio", async () => {
+    const asked: string[] = [];
+    const eleven: Machine = {
+      ...kokoro([]),
+      env: { ELEVENLABS_API_KEY: "k" },
+      fetch: (async (url: string | URL | Request) => {
+        const address = String(url);
+        asked.push(address);
+        if (address.includes("/v2/voices"))
+          return new Response(
+            JSON.stringify({
+              voices: [
+                {
+                  voice_id: "g1",
+                  name: "George",
+                  labels: { gender: "male", descriptive: "narration" },
+                },
+                { voice_id: "l1", name: "Lily", labels: { gender: "female" } },
+                { voice_id: "b1", name: "Bill", labels: { gender: "male" } },
+              ],
+              has_more: false,
+            }),
+          );
+        if (address.endsWith("/v1/studio/projects"))
+          return new Response(JSON.stringify({ project: { project_id: "p7" } }));
+        throw new TypeError("fetch failed");
+      }) as typeof fetch,
+    };
+    const result = await vxd(
+      ["produce", "owl.vxd", "--with", "elevenlabs", "--studio", "--yes"],
+      eleven,
+    );
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("https://elevenlabs.io/app/studio/p7");
+    expect(asked.some((url) => url.includes("text-to-speech"))).toBe(false);
+    const wrong = await vxd(["produce", "owl.vxd", "--with", "kokoro", "--studio"], kokoro([]));
+    expect(wrong.stderr).toContain("use it with --with elevenlabs");
+  });
+
   it("takes chapters and names files as stores want them", () => {
     expect(chapterList("1,3-5")).toEqual([1, 3, 4, 5]);
     expect(() => chapterList("one")).toThrow("--chapters takes numbers");

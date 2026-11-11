@@ -2619,6 +2619,15 @@ const COMMANDS: Record<string, () => unknown> = {
   "export-docx": () => void exportDocument("docx"),
   "export-epub": () => void exportDocument("epub"),
   "export-sides": () => download(sidesText(current()), `${baseName()}-sides.txt`, "text/plain"),
+  // Everything heard, with ids, chapters and pauses: for `vxd produce` and other voice tools.
+  "export-production": () =>
+    void import("@voxdown/produce").then(({ productionScript }) =>
+      download(
+        `${JSON.stringify(productionScript(current()), null, 1)}\n`,
+        `${baseName()}.production.json`,
+        "application/json",
+      ),
+    ),
   print: () => printPage(renderDocument(current(), "book", { pages: true }), "The book"),
   "print-script": () => printPage(renderDocument(current(), "script"), "The script"),
   "print-sides": () => printPage(sidesHtml(current(), current().meta.title ?? baseName()), "Sides"),

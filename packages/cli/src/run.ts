@@ -971,6 +971,7 @@ const COMMANDS: Record<string, Command> = {
     examples: [
       "vxd produce story.vxd --dry-run",
       "vxd produce story.vxd --with elevenlabs --chapters 1",
+      "vxd produce story.vxd --with elevenlabs --studio",
       "vxd produce story.vxd --with http://127.0.0.1:8000 --model qwen3-tts",
     ],
     files: "one",
@@ -1009,6 +1010,10 @@ const COMMANDS: Record<string, Command> = {
       "script-only": {
         type: "boolean",
         help: "Write only the production script and SSML: no service needed.",
+      },
+      studio: {
+        type: "boolean",
+        help: "ElevenLabs: send the book to ElevenLabs Studio as a project, to convert and publish there.",
       },
     },
     action: produceAction,

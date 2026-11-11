@@ -1671,6 +1671,7 @@ for (const [command, name] of [
   ["export-book", "Untitled.html"],
   ["export-script", "Untitled-script.html"],
   ["export-csv", "Untitled.csv"],
+  ["export-production", "Untitled.production.json"],
 ]) {
   await maker.click("#file-menu-button");
   const [download] = await Promise.all([
@@ -1684,6 +1685,16 @@ for (const [command, name] of [
     const sheet = readFileSync(await download.path(), "utf8");
     if (!/^sound,/m.test(sheet) || !/^pause,/m.test(sheet))
       problems.push("writer: the CSV leaves out the sounds or the pauses");
+  }
+  // The production script, for voice tools: every line with its id, the pauses with their length.
+  if (command === "export-production") {
+    const production = JSON.parse(readFileSync(await download.path(), "utf8"));
+    if (
+      production.format !== "voxdown-production/1" ||
+      !production.lines?.some((line) => line.kind === "pause" && line.ms === 1000) ||
+      !production.lines?.every((line) => /^c\d\d-l\d{4}$/.test(line.id))
+    )
+      problems.push("writer: the production script is missing its lines, ids or pauses");
   }
 }
 // The book as a Word document and as an ebook, each opened again as a new story.

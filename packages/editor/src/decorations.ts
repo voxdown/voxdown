@@ -14,7 +14,7 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import { LabelWidget, stackLabels } from "./labels";
-import { type EditorMark, editorMarks } from "./marks";
+import { type EditorMark, editorMarks, readStory } from "./marks";
 import { nameReadAt, readNamesField, spokenName } from "./scene-names";
 import { ChipWidget, LineWidget, type PageTurnTools, type ReadAloud } from "./widgets";
 
@@ -202,7 +202,16 @@ const settleMarksPlugin = ViewPlugin.fromClass(
     update(update: ViewUpdate) {
       if (!update.docChanged || !marksPending(update.state)) return;
       clearTimeout(this.timer);
-      this.timer = setTimeout(() => settleMarks(this.view), SETTLE_MS);
+      // In two steps, each its own task, so neither holds a key typed meanwhile: the story read
+      // (kept, see `readStory`), then its marks worked out, if the text is still the same.
+      this.timer = setTimeout(() => {
+        const text = this.view.state.doc.toString();
+        readStory(text);
+        this.timer = setTimeout(() => {
+          if (this.view.state.doc.length === text.length && this.view.state.doc.toString() === text)
+            settleMarks(this.view);
+        }, 0);
+      }, SETTLE_MS);
     }
     destroy() {
       clearTimeout(this.timer);

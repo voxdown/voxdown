@@ -180,6 +180,9 @@ function plain(
 export { distance as editDistance };
 
 /** A `[` or `{` with no partner on its line reads aloud as text: say so where it is. */
+/** What every slip below is made of: a bracket, a brace, an opening quote, a parenthesis or an @. */
+const SIGNS = /[[{“(@]/;
+
 function unclosedBrackets(story: Story): EditorMark[] {
   const out: EditorMark[] = [];
   const body = story.frontMatter ? story.frontMatter.range.to : 0;
@@ -198,6 +201,11 @@ function unclosedBrackets(story: Story): EditorMark[] {
     handles.add((m[1] ?? "").toLowerCase());
   let offset = body;
   for (const line of story.source.slice(body).split("\n")) {
+    // Most lines of prose hold none of the signs these slips are made of: passed over at once.
+    if (!SIGNS.test(line)) {
+      offset += line.length + 1;
+      continue;
+    }
     for (const [open, close, what] of [
       ["[", "]", "A sound needs its closing ]"],
       ["{", "}", "An instruction needs its closing }"],

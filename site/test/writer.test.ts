@@ -12,6 +12,7 @@ import { nearestName, problems } from "../src/writer/problems";
 import { railAt, railPoints, railScenes, railY } from "../src/writer/rail";
 import { SaveQueue, autosaveCheck, checkDisk, sameText } from "../src/writer/saving";
 import { moveSection } from "../src/writer/sections";
+import { sidesHtml, sidesOf, sidesText } from "../src/writer/sides";
 import { thinVersions } from "../src/writer/store";
 import { speechAt, speechOfMark } from "../src/writer/stretch";
 import { fileNameFor, glimpse, listening, wordCount } from "../src/writer/words";
@@ -522,5 +523,33 @@ describe("going to a chapter or scene", () => {
     expect(names("visit")).toEqual([3, 5]);
     expect(names("visit 31")).toEqual([5]);
     expect(names("")).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+});
+
+describe("sides", () => {
+  const story = parse(
+    "@Ann “Hello, how are you today?” @Bob (gruffly) “Fine.” @Bob [coughs] @Ann “Good.”",
+  );
+
+  it("gives each character's lines with their cues and how they are said", () => {
+    const [ann, bob] = sidesOf(story);
+    expect(ann?.lines.map((line) => [line.cue?.speaker ?? null, line.text])).toEqual([
+      [null, "Hello, how are you today?"],
+      ["Bob", "Good."],
+    ]);
+    expect(bob?.lines[0]).toMatchObject({
+      cue: { words: "Hello, how are you today?", speaker: "Ann" },
+      direction: "gruffly",
+    });
+    expect(bob?.lines[1]).toMatchObject({ text: "coughs", vocal: true });
+    expect(bob?.lines[1]?.cue).toBeUndefined();
+  });
+
+  it("writes them as text, and as pages to print, one character to a page, escaped", () => {
+    expect(sidesText(story)).toContain("Bob (gruffly): Fine.");
+    const html = sidesHtml(parse("@Ann “<b>&</b>”"), "A & B");
+    expect(html).toContain("&lt;b&gt;&amp;&lt;/b&gt;");
+    expect(html).toContain("<title>A &amp; B: sides</title>");
+    expect(html).toContain(".side + .side { break-before: page; }");
   });
 });

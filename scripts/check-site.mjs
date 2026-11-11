@@ -1344,8 +1344,47 @@ else {
   if (!(await kept()).includes("@Wanda “Hi there.”"))
     problems.push("writer: the fix didn't close the gap in “@ Wanda”");
 }
+// What is being typed about a character stays while the side is drawn again behind it.
+await author.click(".cm-content");
+await author.keyboard.type(" More.");
+await author.click('.side-tab[data-tab="cast"]');
+const typingAbout = author.locator(".cast-about").nth(1);
+await typingAbout.fill("Still being typed.");
+await author.waitForTimeout(900);
+if ((await typingAbout.inputValue()) !== "Still being typed.")
+  problems.push("writer: the side drawn again lost what was being typed about a character");
+await author.keyboard.press("Escape");
+// A warning clicked in a list drawn before the story changed goes where it is now, or says so.
+await author.click('.side-tab[data-tab="warnings"]');
+await author.click(".cm-content");
+await author.keyboard.press("Control+a");
+await author.keyboard.press("Delete");
+const stale = author.locator("#side-sheet .warning").first();
+if (await stale.count()) await stale.click();
+await author.waitForTimeout(300);
 await authoring.close();
 console.log("writer: speaker, direction, undo, search, move, cast, fix: ok");
+
+// On a phone, going from the side to the text closes the side over it, and the text has the keys.
+const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const phonePage = await phone.newPage();
+watch(phonePage, "writer on a phone");
+await phonePage.goto(`${base}/writer/`);
+await phonePage.click(`.welcome-example[data-name="${dragonName}"]`);
+await phonePage.waitForSelector("#welcome", { state: "hidden" });
+await phonePage.click("#preview-toggle");
+await phonePage.click('.side-tab[data-tab="cast"]');
+await phonePage.locator(".cast-find").first().click();
+await phonePage.waitForTimeout(300);
+if (
+  await phonePage.evaluate(
+    () =>
+      document.querySelector(".manuscript")?.inert ||
+      !document.activeElement?.classList.contains("cm-content"),
+  )
+)
+  problems.push("writer: on a phone, a jump from the side to the text leaves the side over it");
+await phone.close();
 
 // Insert and export: a sound, a page turn and a scene break put in where the cursor is; the book,
 // the script and the lines downloaded; the shortcuts listed.

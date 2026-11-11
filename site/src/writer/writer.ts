@@ -89,6 +89,7 @@ import { SceneRail, railScenes } from "./rail";
 import type { RenderAsk, RenderReply } from "./render-worker";
 import { SaveQueue, autosaveCheck, checkDisk as diskCheck, sameText } from "./saving";
 import { moveSection } from "./sections";
+import { sidesHtml, sidesText } from "./sides";
 import {
   type Draft,
   type Version,
@@ -980,7 +981,8 @@ function showSide(drawn?: string): void {
   }
   sheet.setAttribute("aria-labelledby", `tab-${prefs.tab}`);
   // A name being typed on the side isn't redrawn under the writer's fingers.
-  if (sheet.contains(document.activeElement) && document.activeElement?.matches("input")) return;
+  if (sheet.contains(document.activeElement) && document.activeElement?.matches("input, textarea"))
+    return;
   const long = view.state.doc.length >= LONG;
   if (prefs.tab === "script" || prefs.tab === "book") {
     // A long story's comes from the worker: until it does, the page shows what it showed.
@@ -1030,7 +1032,7 @@ function showSide(drawn?: string): void {
             effects: EditorView.scrollIntoView(at, { y: "center" }),
           });
           announce(`${handle}, line ${theirs.indexOf(at) + 1} of ${theirs.length}`);
-          view.focus();
+          toTheText();
         },
         notice,
       }),
@@ -1156,17 +1158,20 @@ function moveSectionHere(chapters: boolean, by: 1 | -1): boolean {
   return true;
 }
 
-/** A warning's fix as the story is now: the same warning, over the same words, nearest `near`. */
-function fixNow(code: string, words: string, near: number): Problem["fix"] {
+/** A warning as the story is now: the same one, over the same words, nearest `near`. */
+function problemNow(code: string, words: string, near: number): Problem | undefined {
   if (storyVersion !== version) refresh();
   return currentProblems()
     .filter(
-      (problem) =>
-        problem.code === code &&
-        problem.fix &&
-        view.state.sliceDoc(problem.from, problem.to) === words,
+      (problem) => problem.code === code && view.state.sliceDoc(problem.from, problem.to) === words,
     )
-    .sort((a, b) => Math.abs(a.from - near) - Math.abs(b.from - near))[0]?.fix;
+    .sort((a, b) => Math.abs(a.from - near) - Math.abs(b.from - near))[0];
+}
+
+/** From the side to the text: on a narrow window the side lies over it, so it goes first. */
+function toTheText(): void {
+  if (narrow.matches && prefs.side) showSidePanel(false);
+  view.focus();
 }
 
 /** What to put right, with its fixes. */
@@ -1189,6 +1194,7 @@ function warningList(): HTMLElement {
   }
   const list = document.createElement("ol");
   list.className = "warning-list";
+  const drawn = version;
   for (const problem of all) {
     const item = document.createElement("li");
     const button = document.createElement("button");
@@ -1196,12 +1202,20 @@ function warningList(): HTMLElement {
     button.className = "warning";
     button.dataset.severity = problem.severity;
     button.innerHTML = `<span class="where">Line ${problem.line}</span><span class="message">${escapeHtml(problem.message)}</span><code>${escapeHtml(problem.code)}</code>`;
+    const words = view.state.sliceDoc(problem.from, problem.to);
     button.addEventListener("click", () => {
+      // Typed in since the list was drawn: the warning where it is now, or none.
+      const now = drawn === version ? problem : problemNow(problem.code, words, problem.from);
+      if (!now) {
+        notice("That warning has changed since; the list shows it as it is now.");
+        refresh();
+        return;
+      }
       view.dispatch({
-        selection: EditorSelection.range(problem.from, problem.to),
+        selection: EditorSelection.range(now.from, now.to),
         scrollIntoView: true,
       });
-      view.focus();
+      toTheText();
     });
     item.append(button);
     const fix = problem.fix;
@@ -1210,13 +1224,11 @@ function warningList(): HTMLElement {
       mend.type = "button";
       mend.className = "button fix";
       mend.textContent = fix.label ?? "Fix it";
-      const drawn = version;
-      const words = view.state.sliceDoc(problem.from, problem.to);
       mend.addEventListener("click", () => {
         if (lockedOut) return;
         // Typed in since the list was drawn: the warning found again where it is now, or not
         // fixed at all.
-        const now = drawn === version ? fix : fixNow(problem.code, words, problem.from);
+        const now = drawn === version ? fix : problemNow(problem.code, words, problem.from)?.fix;
         if (!now) {
           notice("That warning has changed since; the list shows it as it is now.");
           refresh();
@@ -1224,7 +1236,7 @@ function warningList(): HTMLElement {
         }
         view.dispatch({ changes: now, userEvent: "input.fix" });
         refresh();
-        view.focus();
+        toTheText();
       });
       item.append(mend);
     }
@@ -1278,7 +1290,7 @@ $("#side-sheet").addEventListener("click", (event) => {
     selection: EditorSelection.cursor(at),
     effects: EditorView.scrollIntoView(at, { y: "center" }),
   });
-  view.focus();
+  toTheText();
 });
 
 /** The script's or book's parts by where they start in the story, read once each time it is drawn. */
@@ -1991,11 +2003,22 @@ function suggestedName(): string {
 const baseName = () => suggestedName().replace(/\.(?:vxd|md|txt)$/i, "") || "story";
 
 /** Prints the book from a frame of its own, as a reader would see it. */
-function printBook(): void {
+/**
+ * Prints a page from a frame of its own: the book, the script or the sides, each page with the
+ * story's title and what it is at its head, and its number at its foot.
+ */
+function printPage(html: string, what: string): void {
+  const title = current().meta.title ?? baseName();
+  const quoted = (text: string) => `"${text.replace(/[\\"]/g, "\\$&")}"`;
+  const margins = `<style>@page { margin: 18mm 16mm 20mm;
+  @top-left { content: ${quoted(title)}; font: 9pt system-ui, sans-serif; color: #666; }
+  @top-right { content: ${quoted(what)}; font: 9pt system-ui, sans-serif; color: #666; }
+  @bottom-center { content: counter(page) " / " counter(pages); font: 9pt system-ui, sans-serif; color: #666; } }
+body { padding: 0 !important; }</style>`;
   const frame = document.createElement("iframe");
   frame.className = "print-frame";
   frame.setAttribute("aria-hidden", "true");
-  frame.srcdoc = renderDocument(current(), "book", { pages: true });
+  frame.srcdoc = html.replace("</head>", `${margins}</head>`);
   frame.addEventListener("load", () => {
     frame.contentWindow?.focus();
     frame.contentWindow?.print();
@@ -2244,30 +2267,6 @@ function compare(kept: Version): void {
   $("#compare-lines").scrollTop = 0;
 }
 
-/**
- * Each character's lines, with their cues: the end of the line before each one, as a performer's
- * sides give it, and what the line is said like.
- */
-function sides(of: Story): string {
-  const said = lines(of).filter((line) => line.kind === "speech" || line.kind === "vocal");
-  const parts: string[] = [];
-  for (const name of textByCharacter(of).keys()) {
-    const out = [`== ${name} ==`, ""];
-    for (const [index, line] of said.entries()) {
-      if (line.speaker !== name) continue;
-      const before = said[index - 1];
-      if (before && before.speaker !== name) {
-        const words = before.text.split(/\s+/).filter(Boolean);
-        out.push(`    …${words.slice(-8).join(" ")} (${before.speaker})`);
-      }
-      const text = line.kind === "vocal" ? `[${line.text}]` : line.text;
-      out.push(`${name}${line.direction ? ` (${line.direction})` : ""}: ${text}`, "");
-    }
-    parts.push(out.join("\n"));
-  }
-  return `${parts.join("\n\n")}\n`;
-}
-
 function focusMode(on: boolean): void {
   prefs.focus = on;
   keepPrefs();
@@ -2496,8 +2495,10 @@ const COMMANDS: Record<string, () => unknown> = {
       `${baseName()}.json`,
       "application/json",
     ),
-  "export-sides": () => download(sides(current()), `${baseName()}-sides.txt`, "text/plain"),
-  print: printBook,
+  "export-sides": () => download(sidesText(current()), `${baseName()}-sides.txt`, "text/plain"),
+  print: () => printPage(renderDocument(current(), "book", { pages: true }), "The book"),
+  "print-script": () => printPage(renderDocument(current(), "script"), "The script"),
+  "print-sides": () => printPage(sidesHtml(current(), current().meta.title ?? baseName()), "Sides"),
   recover: showDrafts,
   versions: showVersions,
   shortcuts: showShortcuts,

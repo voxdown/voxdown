@@ -7,7 +7,8 @@
 body.writer {
   /* One column, the window's width: the bar and the workspace shrink to it, never past it. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* The bar, the toolbar (when it shows), the workspace and the status bar, each in its row. */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   /* The window's height at every width: the playground's narrow pages grow instead. */
   height: 100vh;
   height: 100dvh;
@@ -38,6 +39,19 @@ body.writer {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+body.writer > .appbar {
+  grid-row: 1;
+}
+body.writer > .toolbar {
+  grid-row: 2;
+}
+body.writer > .workspace {
+  grid-row: 3;
+}
+body.writer > .statusbar {
+  grid-row: 4;
 }
 
 /* The bar along the top. */
@@ -1889,4 +1903,300 @@ body[data-welcome] .manuscript .editor {
   text-decoration: underline;
   font: inherit;
   cursor: pointer;
+}
+
+/* What happens to the writer's story, said plainly. */
+.ai-private {
+  margin: 0.2rem 0 0.6rem;
+  padding: 0.55rem 0.7rem 0.55rem 2.1rem;
+  border-radius: 8px;
+  background: var(--desk);
+  border: 1px solid var(--desk-edge);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  position: relative;
+}
+.ai-private::before {
+  /* A small lock, drawn: no icon font. */
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  width: 0.7rem;
+  height: 0.55rem;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.7;
+}
+.ai-private::after {
+  content: "";
+  position: absolute;
+  left: 0.92rem;
+  top: 0.38rem;
+  width: 0.36rem;
+  height: 0.42rem;
+  border: 2px solid currentColor;
+  border-bottom: 0;
+  border-radius: 0.3rem 0.3rem 0 0;
+  opacity: 0.7;
+}
+.ai-private-short {
+  margin-top: 0.1rem;
+}
+
+/* A menu inside a menu (Open recent): beside its item, or under it on a phone. */
+.menu-list .submenu-list {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  min-width: min(15rem, calc(100vw - 8px));
+  max-height: min(60vh, 24rem);
+}
+.menu-list .submenu-button::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--quiet);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.menu-list .submenu-button[aria-expanded="true"] {
+  background: var(--tab);
+}
+@media (max-width: 600px) {
+  .menu-list .submenu-list {
+    position: static;
+    box-shadow: none;
+    border: 0;
+    border-left: 2px solid var(--desk-edge);
+    border-radius: 0;
+    margin: 0 0 0.2rem 0.9rem;
+    padding: 0 0 0 0.3rem;
+    max-height: none;
+  }
+  .menu-list .submenu-button::after {
+    transform: rotate(90deg);
+  }
+}
+
+/* Export: what to export, by what it is for. */
+.export-dialog {
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(34rem, 94vw);
+  max-height: 88vh;
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+}
+.export-dialog::backdrop {
+  background: rgb(20 25 35 / 0.2);
+}
+.export-dialog h2 {
+  margin: 0 0 0.8rem;
+  font: 600 1.05rem / 1.3 var(--story);
+}
+.export-groups {
+  display: grid;
+  gap: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+.export-groups h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.export-groups .sheet-note {
+  margin: 0.1rem 0 0.4rem;
+}
+.export-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.export-choices .button {
+  font-size: 0.85rem;
+}
+
+/* Help › About. */
+.about-dialog {
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 1.1rem 1.3rem;
+  background: var(--paper);
+  color: var(--ink);
+  width: min(30rem, 94vw);
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.about-dialog::backdrop {
+  background: rgb(20 25 35 / 0.2);
+}
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.6rem;
+}
+.about-head h2 {
+  margin: 0;
+  font: 600 1.2rem / 1.2 var(--story);
+}
+.about-head .sheet-note {
+  margin: 0.15rem 0 0;
+}
+.about-dialog p {
+  margin: 0 0 0.6rem;
+}
+.about-private {
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  background: var(--desk);
+  border: 1px solid var(--desk-edge);
+}
+.about-links {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+}
+.about-links li {
+  margin: 0.15rem 0;
+}
+
+/* The toolbar: what a writer reaches for most, one click away (View › Toolbar). */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0.18rem clamp(0.6rem, 1.6vw, 1.2rem);
+  background: var(--paper);
+  border-bottom: 1px solid var(--desk-edge);
+  position: relative;
+  z-index: 4;
+  /* A narrow window scrolls it sideways rather than cutting it off. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.toolbar[hidden],
+.writer[data-welcome] .toolbar,
+.writer[data-focus] .toolbar {
+  display: none;
+}
+.toolbar button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 1.9rem;
+  height: 1.9rem;
+  padding: 0 0.45rem;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.toolbar button:hover {
+  background: var(--tab);
+}
+.toolbar button:focus-visible {
+  outline: 2px solid var(--pencil);
+  outline-offset: -2px;
+}
+.toolbar button[aria-pressed="true"] {
+  background: var(--tab);
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent);
+}
+.toolbar button[aria-disabled="true"] {
+  color: var(--quiet);
+  opacity: 0.55;
+  cursor: default;
+}
+.toolbar button[aria-disabled="true"]:hover {
+  background: none;
+}
+.toolbar svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.toolbar .glyph {
+  width: 16px;
+  font-family: var(--story);
+  font-size: 1.02rem;
+  line-height: 1;
+  text-align: center;
+}
+.toolbar .glyph.italic {
+  font-style: italic;
+}
+.toolbar .glyph.bold {
+  font-weight: 700;
+}
+.tool-gap {
+  flex: none;
+  width: 1px;
+  height: 1.1rem;
+  margin: 0 0.4rem;
+  background: var(--desk-edge);
+}
+.tool-spacer {
+  flex: 1 0 0.5rem;
+}
+/* A button's name and keys, under it. */
+.tool-tip {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 18rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 5px;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px -6px rgb(20 30 50 / 0.45);
+}
+.tool-tip[hidden] {
+  display: none;
+}
+.tool-tip kbd {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+/* A narrower window: the buttons' pictures alone, their names in the tip. */
+@media (max-width: 1100px) {
+  .toolbar .tool-label {
+    display: none;
+  }
+  .toolbar button {
+    padding: 0;
+  }
+  .tool-gap {
+    margin: 0 0.25rem;
+  }
+}
+@media (forced-colors: active) {
+  .toolbar button[aria-pressed="true"] {
+    outline: 2px solid ButtonText;
+    outline-offset: -2px;
+  }
+  .tool-tip {
+    border: 1px solid CanvasText;
+  }
 }

@@ -61,6 +61,10 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   const sounds = $<HTMLInputElement>("#ai-sounds");
   title.textContent = mode === "speakers" ? "Name the speakers with AI" : "Make an audiobook";
   $("#ai-choice-label").textContent = mode === "speakers" ? "The AI" : "The voices";
+  $("#ai-private-short").textContent =
+    mode === "speakers"
+      ? "Your story goes only to the AI you choose, through the helper on your computer. VoxDown never sees it, nor your keys."
+      : "Your story goes only to the voice service you choose, through the helper on your computer; the audiobook is made there. VoxDown never sees it, nor your keys.";
   bookOptions.hidden = mode !== "audiobook";
   $("#ai-scope-options").hidden = mode !== "speakers";
   const selected = context.selection();

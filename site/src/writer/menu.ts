@@ -2,7 +2,9 @@
  * The menu bar: a button opens its list; arrow keys move through it and to the next menu; Escape,
  * a click outside or a choice closes it. Items run commands by their `data-command`; check items
  * (`role="menuitemcheckbox"`) flip and tell the page. The bar is one stop for Tab, the arrow keys
- * moving along it; Escape on the bar goes back to the text (`onLeave`).
+ * moving along it; Escape on the bar goes back to the text (`onLeave`). An item can open a menu of
+ * its own (`aria-haspopup`, Open recent): the right arrow, Enter or the pointer opens it, the left
+ * arrow or Escape goes back.
  */
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -29,11 +31,76 @@ export function menus(
   for (const button of buttons) button.addEventListener("focus", () => current(button));
   const listOf = (button: HTMLButtonElement) =>
     document.getElementById(button.getAttribute("aria-controls") ?? "") as HTMLElement;
+  // A menu's own items: not those of a menu inside it.
   const items = (list: HTMLElement) =>
     [...list.querySelectorAll<HTMLElement>('[role^="menuitem"]')].filter(
-      (item) => !item.closest("[hidden]"),
+      (item) => !item.closest("[hidden]") && item.parentElement?.closest('[role="menu"]') === list,
     );
   let open: HTMLButtonElement | undefined;
+  /** The item whose own menu is open, if one is. */
+  let opened: HTMLElement | undefined;
+  const subOf = (item: HTMLElement) =>
+    document.getElementById(item.getAttribute("aria-controls") ?? "") as HTMLElement | null;
+  const closeSub = (focus = false) => {
+    if (!opened) return;
+    const sub = subOf(opened);
+    if (sub) sub.hidden = true;
+    opened.setAttribute("aria-expanded", "false");
+    if (focus) opened.focus();
+    opened = undefined;
+  };
+  const showSub = (item: HTMLElement, focusFirst: boolean) => {
+    if (opened && opened !== item) closeSub();
+    const sub = subOf(item);
+    if (!sub) return;
+    sub.hidden = false;
+    item.setAttribute("aria-expanded", "true");
+    opened = item;
+    // Beside its item (fixed, so the scrolling menu it is in doesn't cut it off), or on the
+    // other side where the window ends; on a phone, under it, in the menu (the stylesheet's).
+    sub.style.left = "";
+    sub.style.top = "";
+    if (getComputedStyle(sub).position === "fixed") {
+      const at = item.getBoundingClientRect();
+      const width = sub.offsetWidth;
+      const left = at.right + width + 4 > window.innerWidth ? at.left - width - 2 : at.right + 2;
+      sub.style.left = `${Math.max(4, left)}px`;
+      sub.style.top = `${Math.max(4, Math.min(at.top - 4, window.innerHeight - sub.offsetHeight - 4))}px`;
+    }
+    if (focusFirst) items(sub)[0]?.focus();
+  };
+  for (const item of bar.querySelectorAll<HTMLElement>('[aria-haspopup="menu"][role="menuitem"]')) {
+    const sub = subOf(item);
+    if (!sub) continue;
+    // The pointer crossing the gap between the item and its menu doesn't close it.
+    let leaving: ReturnType<typeof setTimeout> | undefined;
+    item.parentElement?.addEventListener("pointerenter", () => clearTimeout(leaving));
+    item.addEventListener("pointerenter", () => showSub(item, false));
+    item.parentElement?.addEventListener("pointerleave", () => {
+      clearTimeout(leaving);
+      leaving = setTimeout(() => {
+        if (opened === item && !item.parentElement?.contains(document.activeElement)) closeSub();
+      }, 300);
+    });
+    sub.addEventListener("keydown", (event) => {
+      const all = items(sub);
+      const at = all.indexOf(document.activeElement as HTMLElement);
+      const step = (by: number) => all[(at + by + all.length) % all.length]?.focus();
+      if (event.key === "ArrowDown") step(1);
+      else if (event.key === "ArrowUp") step(-1);
+      else if (event.key === "Home") all[0]?.focus();
+      else if (event.key === "End") all.at(-1)?.focus();
+      else if (event.key === "ArrowLeft" || event.key === "Escape") closeSub(true);
+      else if (event.key === "Tab") {
+        closeSub();
+        close();
+        return;
+      } else return;
+      // The menu it is in doesn't take the key too.
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  }
 
   for (const kbd of bar.querySelectorAll<HTMLElement>("kbd[data-keys]")) {
     kbd.textContent = keys(kbd.dataset.keys ?? "");
@@ -41,6 +108,7 @@ export function menus(
 
   const close = (focus = false) => {
     if (!open) return;
+    closeSub();
     listOf(open).hidden = true;
     open.setAttribute("aria-expanded", "false");
     if (focus) open.focus();
@@ -90,6 +158,12 @@ export function menus(
     list.addEventListener("click", (event) => {
       const item = (event.target as HTMLElement).closest<HTMLElement>('[role^="menuitem"]');
       if (!item || item.getAttribute("aria-disabled") === "true") return;
+      // An item with a menu of its own opens it.
+      if (item.getAttribute("aria-haspopup") === "menu") {
+        if (opened === item) closeSub();
+        else showSub(item, event.detail === 0);
+        return;
+      }
       // A link goes where it goes; the menu just closes behind it.
       if (item instanceof HTMLAnchorElement) {
         close();
@@ -122,15 +196,25 @@ export function menus(
         case "End":
           all.at(-1)?.focus();
           break;
-        case "ArrowRight":
-          across(1);
+        case "ArrowRight": {
+          const here = all[at];
+          if (here?.getAttribute("aria-haspopup") === "menu") showSub(here, true);
+          else across(1);
           break;
+        }
         case "ArrowLeft":
           across(-1);
           break;
         case "Escape":
           close(true);
           break;
+        case "Enter":
+        case " ": {
+          const here = all[at];
+          if (here?.getAttribute("aria-haspopup") !== "menu") return;
+          showSub(here, true);
+          break;
+        }
         case "Tab":
           close();
           return;
@@ -159,7 +243,9 @@ export function menus(
     (event) => {
       if (event.key === "Escape" && open) {
         event.preventDefault();
-        close(true);
+        // From a menu inside a menu, back to the item that opened it; else the menu closes.
+        if (opened) closeSub(true);
+        else close(true);
       } else if (event.key === "F10" && !event.shiftKey) {
         event.preventDefault();
         if (open) close(true);

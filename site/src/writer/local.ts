@@ -34,6 +34,24 @@ export function wholeScope(story: Story): Scope {
 const hasWords = (paragraph: string) =>
   /[\p{L}\p{N}]/u.test(paragraph.replace(/\{[^}]*\}|%%[\s\S]*?%%/g, ""));
 
+/**
+ * The last paragraph between `start` and `end` with words in it, found walking back: a long book's
+ * paragraphs aren't all split out for one.
+ */
+function previousWithWords(source: string, start: number, end: number): string | undefined {
+  let to = end;
+  while (to > start) {
+    while (to > start && source[to - 1] === "\n") to--;
+    if (to <= start) return undefined;
+    const gap = source.lastIndexOf("\n\n", to - 1);
+    const from = gap < start ? start : gap + 2;
+    const paragraph = source.slice(from, to);
+    if (hasWords(paragraph)) return paragraph;
+    to = from;
+  }
+  return undefined;
+}
+
 /** Whether the text, read as a story with the front matter, leaves a quote open at its end (§5.7). */
 function leavesOpen(head: string, text: string): boolean {
   const story = parse(`${head}${head ? "\n" : ""}${text}\n`);
@@ -62,8 +80,7 @@ export function paragraphScope(source: string, place: number): Scope | undefined
   // (page turns, pauses and notes between are passed over, §5.7), as the format reads quotes:
   // single ones too.
   if (leavesOpen(head, paragraph)) return undefined;
-  const paragraphs = earlier.replace(/\n+$/, "").split(/\n{2,}/);
-  const previous = [...paragraphs].reverse().find(hasWords);
+  const previous = previousWithWords(source, front.length, from);
   if (previous !== undefined && leavesOpen(head, previous)) return undefined;
   const start = head ? head.length + 1 : 0;
   const text = `${head}${head ? "\n" : ""}${paragraph}\n`;

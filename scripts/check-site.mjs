@@ -275,6 +275,14 @@ const draftIn = (page) =>
       }),
   );
 
+/** A choice in File › Export…, as a writer makes it: the menu, the dialog, the choice. */
+const exportChoice = async (page, command) => {
+  await page.click("#file-menu-button");
+  await page.click('#file-menu [data-command="export"]');
+  await page.waitForSelector("#export[open]");
+  await page.click(`#export [data-command="${command}"]`);
+};
+
 /** The real books, one after another: long stories to try the Writer on. */
 const corpusDir = join(site, "..", "corpus");
 const bodies = readdirSync(corpusDir)
@@ -548,9 +556,12 @@ const fileMenu = await west.evaluate(
 );
 if (fileMenu > 657)
   problems.push(`writer: the File menu runs ${Math.round(fileMenu - 657)} px past a short window`);
-await west.locator('[data-command="format-curly"]').scrollIntoViewIfNeeded();
-if (!(await west.locator('[data-command="format-curly"]').isVisible()))
+await west.locator('#file-menu [data-command="versions"]').scrollIntoViewIfNeeded();
+if (!(await west.locator('#file-menu [data-command="versions"]').isVisible()))
   problems.push("writer: the File menu's last item can't be reached on a short window");
+// The File menu is short: a story's exports and prints are in one dialog.
+const fileRows = await west.locator('#file-menu > [role^="menuitem"]').count();
+if (fileRows > 13) problems.push(`writer: the File menu has ${fileRows} rows`);
 await west.keyboard.press("Escape");
 await western.close();
 
@@ -1705,10 +1716,9 @@ for (const [command, name] of [
   ["export-csv", "Untitled.csv"],
   ["export-production", "Untitled.production.json"],
 ]) {
-  await maker.click("#file-menu-button");
   const [download] = await Promise.all([
     maker.waitForEvent("download"),
-    maker.click(`[data-command="${command}"]`),
+    exportChoice(maker, command),
   ]);
   if (download.suggestedFilename() !== name)
     problems.push(`writer: ${command} downloaded ${download.suggestedFilename()}, not ${name}`);
@@ -1737,10 +1747,9 @@ for (const [command, name] of [
   ["export-docx", "Untitled.docx"],
   ["export-epub", "Untitled.epub"],
 ]) {
-  await maker.click("#file-menu-button");
   const [download] = await Promise.all([
     maker.waitForEvent("download"),
-    maker.click(`[data-command="${command}"]`),
+    exportChoice(maker, command),
   ]);
   if (download.suggestedFilename() !== name)
     problems.push(`writer: ${command} downloaded ${download.suggestedFilename()}, not ${name}`);
@@ -1888,8 +1897,7 @@ await maker.fill("#detail-title", "</style><script>parent.__ran = true</script><
 await maker.click('#details button[value="done"]');
 await maker.waitForTimeout(300);
 for (const command of ["print", "print-script", "print-sides"]) {
-  await maker.click("#file-menu-button");
-  await maker.click(`[data-command="${command}"]`);
+  await exportChoice(maker, command);
   await maker.waitForTimeout(400);
 }
 if (await maker.evaluate(() => "__ran" in window))
@@ -1898,10 +1906,9 @@ if (await maker.evaluate(() => "__ran" in window))
 await maker.click(".cm-content");
 await maker.keyboard.press("Control+End");
 await maker.keyboard.type("\n\n@Ann “Where were you all night?”\n\n@Bob “Out.”");
-await maker.click("#file-menu-button");
 const [sidesFile] = await Promise.all([
   maker.waitForEvent("download"),
-  maker.click('[data-command="export-sides"]'),
+  exportChoice(maker, "export-sides"),
 ]);
 const sidesText = readFileSync(await sidesFile.path(), "utf8");
 if (!/…Where were you all night\? \(Ann\)\nBob: Out\./.test(sidesText))
@@ -1918,11 +1925,45 @@ if ((await maker.locator(".cm-line.in-focus").count()) === 0)
 await maker.keyboard.press("Control+Shift+f");
 if (await maker.evaluate(() => document.body.hasAttribute("data-focus")))
   problems.push("writer: Ctrl+Shift+F doesn't leave focus");
+// Focus away from the toolbar too, and back with it.
+await maker.keyboard.press("Control+Shift+f");
+if (await maker.isVisible("#toolbar")) problems.push("writer: in focus, the toolbar stays");
+await maker.keyboard.press("Control+Shift+f");
 await maker.keyboard.press("Control+/");
 if ((await maker.locator("#shortcut-list dt").count()) < 8)
   problems.push("writer: Ctrl+/ doesn't list the shortcuts");
+await maker.keyboard.press("Escape");
+// The toolbar: a click does what the menu does, the cursor staying in the story; Undo wakes.
+await maker.click(".cm-content");
+await maker.keyboard.press("Control+End");
+await maker.keyboard.type("\n\nAnd then");
+await maker.waitForTimeout(200);
+await maker.click('#toolbar [data-command="insert-pause"]');
+await maker.waitForTimeout(900);
+if (!(await draftOf()).includes("And then {pause 1s}"))
+  problems.push("writer: the toolbar's Pause put no pause in");
+if (!(await maker.evaluate(() => document.activeElement?.closest(".cm-editor") !== null)))
+  problems.push("writer: a click on the toolbar took the focus from the story");
+if ((await maker.getAttribute('#toolbar [data-command="undo"]', "aria-disabled")) !== "false")
+  problems.push("writer: the toolbar's Undo stays dimmed after a change");
+await maker.click('#toolbar [data-command="undo"]');
+await maker.waitForTimeout(900);
+if ((await draftOf()).includes("And then {pause 1s}"))
+  problems.push("writer: the toolbar's Undo didn't undo");
+// Off from View, and still off the next time.
+await maker.click("#view-menu-button");
+await maker.click('#view-menu [data-view="toolbar"]');
+if (await maker.isVisible("#toolbar")) problems.push("writer: View › Toolbar doesn't hide it");
+await maker.reload();
+await maker.waitForSelector(".cm-content");
+await maker.waitForTimeout(400);
+if (await maker.isVisible("#toolbar"))
+  problems.push("writer: the toolbar came back after a reload, though hidden");
+await maker.click("#view-menu-button");
+await maker.click('#view-menu [data-view="toolbar"]');
+if (!(await maker.isVisible("#toolbar"))) problems.push("writer: View › Toolbar doesn't show it");
 await making.close();
-console.log("writer: insert, export, shortcuts: ok");
+console.log("writer: insert, export, shortcuts, toolbar: ok");
 
 // Two tabs: the second reads only, until it takes the story, with the first tab's last words;
 // the first then reads only. A file changed on disk since it was opened isn't saved over unasked.

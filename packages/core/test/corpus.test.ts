@@ -392,12 +392,29 @@ describe("real books", () => {
       "%% a ",
       "@Gerald ",
       "\\",
-    ].map((piece) => piece.repeat(Math.ceil(100_000 / piece.length)));
-    for (const line of worst) {
-      await turn();
+    ];
+    const timed = (line: string) => {
       const start = performance.now();
       format(line, { quotes: "curly" });
-      expect(performance.now() - start, JSON.stringify(line.slice(0, 8))).toBeLessThan(2000);
+      return performance.now() - start;
+    };
+    // A time alone says as much about the computer as the code: here a line twice as long must
+    // take about twice the time, where a quadratic search takes four. A line read in well under
+    // a second on any computer needs no such proof.
+    for (const piece of worst) {
+      const line = piece.repeat(Math.ceil(100_000 / piece.length));
+      const half = line.slice(0, Math.ceil(50_000 / piece.length) * piece.length);
+      let took = 0;
+      let ratio = Number.POSITIVE_INFINITY;
+      for (let attempt = 0; attempt < 2 && ratio >= 3; attempt++) {
+        await turn();
+        const short = timed(half);
+        took = timed(line);
+        ratio = took / Math.max(short, 1);
+      }
+      const label = `${JSON.stringify(piece)}: ${Math.round(took)} ms, ${ratio.toFixed(1)}× the half`;
+      expect(took < 300 || ratio < 3, label).toBe(true);
+      expect(took, label).toBeLessThan(15_000);
     }
-  }, 60_000);
+  }, 120_000);
 });

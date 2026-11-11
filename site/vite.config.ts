@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Plugin, defineConfig } from "vite";
@@ -22,8 +23,21 @@ function markdownPages(): Plugin {
  * The playground is a static site: relative paths, so it works from any folder on GitHub Pages,
  * and the workspace packages read from source.
  */
+/** Which build this is, for the Writer's About: the commit, and the day it was built. */
+function buildOf(): { commit: string; date: string } {
+  let commit = "";
+  try {
+    commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      cwd: here,
+      encoding: "utf8",
+    }).trim();
+  } catch {}
+  return { commit, date: new Date().toISOString().slice(0, 10) };
+}
+
 export default defineConfig({
   base: "./",
+  define: { __WRITER_BUILD__: JSON.stringify(buildOf()) },
   plugins: [markdownPages()],
   resolve: { alias: workspaceAliases },
   server: { fs: { allow: [".."] } },

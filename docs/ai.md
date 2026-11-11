@@ -88,4 +88,9 @@ They read and write only `.vxd` and `.md` files, and a story is written whole or
 
 ## Where your words go
 
-Only to the AI you choose, and only when you run `vxd tag` or ask your app to: VoxDown itself sends nothing anywhere. A local model keeps everything on your computer.
+Only to the AI you choose, and only when you run `vxd tag`, ask your app to, or press **Name the speakers** in the Writer: VoxDown itself sends nothing anywhere. A local model keeps everything on your computer.
+
+- **VoxDown has no server and no account.** The Writer is a page your browser keeps; your stories stay in your browser and in your own files.
+- **`vxd connect` runs on your computer, and only for the Writer.** It listens on your computer alone (127.0.0.1), answers only the Writer's page, and only with a key made when it starts; it sends a story only to the AI or voice service you choose for it.
+- **Your keys and sign-ins stay on your computer.** The helper uses the programs you're signed in to (Claude Code, Codex…) as they are, and API keys from your own computer's settings; it never sends them, or your stories, to VoxDown, which has nowhere to receive them.
+- **What the AI or voice service does with what it's sent is up to its own terms**: your Claude, ChatGPT or ElevenLabs account's, as when you use them yourself.

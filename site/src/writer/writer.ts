@@ -3,7 +3,15 @@
  * and what it becomes on the right. Everything runs in the browser. The story is kept in this
  * browser as it is typed, so a closed tab loses nothing, and goes to a file only when it is saved.
  */
-import { defaultKeymap, history, historyKeymap, redo, undo } from "@codemirror/commands";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  redo,
+  redoDepth,
+  undo,
+  undoDepth,
+} from "@codemirror/commands";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import {
   Compartment,
@@ -45,6 +53,7 @@ import {
   stylesheet,
 } from "@voxdown/render";
 import {
+  SPEC_VERSION,
   type Story,
   type TextChange,
   bookText,
@@ -130,6 +139,7 @@ import {
   speechAt,
   speechOfMark,
 } from "./stretch";
+import { toolbar } from "./toolbar";
 import {
   fileNameFor,
   glimpse,
@@ -162,6 +172,8 @@ type Prefs = ViewSwitches & {
   goal: number;
   /** Resting the pointer on a passage brings its bar. */
   hoverBar: boolean;
+  /** The toolbar under the menus. */
+  toolbar: boolean;
   /** The manuscript's font, its size in pixels, and its line length in rem. */
   font: "story" | "ui" | "mono";
   size: number;
@@ -186,6 +198,7 @@ const prefs: Prefs = {
   typewriter: false,
   goal: 0,
   hoverBar: true,
+  toolbar: true,
   font: "story",
   size: 17,
   measure: 52,
@@ -444,6 +457,7 @@ function editorState(source: string, cursor: number): EditorState {
           changed();
         }
         if (update.docChanged || update.selectionSet) cursorMoved();
+        if (update.transactions.length) showUndoState(update.state);
         if (update.heightChanged) tools.moved();
         if (update.selectionSet && !update.docChanged) keepPlaceSoon();
         const raw = update.state.field(showMarksField);
@@ -1330,6 +1344,7 @@ const hearing = new Hearing();
 function hearFromHere(): boolean {
   if (hearing.on) {
     hearing.stop();
+    showHearing(false);
     notice("Stopped reading aloud.");
     return true;
   }
@@ -1377,19 +1392,24 @@ function readFromHere(): boolean {
     return true;
   }
   notice(`Reading aloud to the end of the scene. ${keys("F9")} or Escape stops it.`);
-  void hearing.read(rows, story.meta.language ?? navigator.language, story.meta.narrator, (row) => {
-    const line = view.state.doc.line(Math.min(row.line, view.state.doc.lines));
-    const at = Math.min(line.from + row.column - 1, line.to);
-    view.dispatch({
-      selection: EditorSelection.cursor(at),
-      effects: EditorView.scrollIntoView(at, { y: "nearest" }),
-    });
-  });
+  showHearing(true);
+  void hearing
+    .read(rows, story.meta.language ?? navigator.language, story.meta.narrator, (row) => {
+      const line = view.state.doc.line(Math.min(row.line, view.state.doc.lines));
+      const at = Math.min(line.from + row.column - 1, line.to);
+      view.dispatch({
+        selection: EditorSelection.cursor(at),
+        effects: EditorView.scrollIntoView(at, { y: "nearest" }),
+      });
+    })
+    // Done, or stopped: pressed only if another reading took its place.
+    .finally(() => showHearing(hearing.on));
   return true;
 }
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && hearing.on) {
     hearing.stop();
+    showHearing(false);
     $("#notice").hidden = true;
   }
 });
@@ -2808,6 +2828,8 @@ const COMMANDS: Record<string, () => unknown> = {
   "print-sides": () => printPage(sidesHtml(current(), current().meta.title ?? baseName()), "Sides"),
   recover: showDrafts,
   versions: showVersions,
+  export: () => $<HTMLDialogElement>("#export").showModal(),
+  about: showAbout,
   "ai-speakers": () => void openAi("speakers", aiContext),
   audiobook: () => void openAi("audiobook", aiContext),
   shortcuts: showShortcuts,
@@ -2821,6 +2843,16 @@ const COMMANDS: Record<string, () => unknown> = {
 /** Where the passage the cursor is in starts, or the cursor, for the pickers to find it. */
 function passageAtCursor(): number {
   const head = view.state.selection.main.head;
+  // A long book's from its paragraph alone, or as the worker last read it: reading the whole
+  // book again here, just after a give, held the page a fifth of a second on a slow computer.
+  if (view.state.doc.length >= LONG && storyVersion !== version) {
+    const scope = paragraphScope(view.state.doc.toString(), head);
+    if (scope) {
+      const near = passageNear(scope.story, scope.at(head));
+      return near ? scope.toDoc(near.range.from) : head;
+    }
+    if (readNow()) return passageIn(read?.reply.passages ?? [], head)?.from ?? head;
+  }
   return passageNear(current(), head)?.range.from ?? head;
 }
 
@@ -2829,6 +2861,10 @@ const SWITCHES = ["color", "names", "directions", "sounds", "vocal", "pages", "n
 function viewCommand(name: string, on: boolean): void {
   if (name === "focus") {
     focusMode(on);
+  } else if (name === "toolbar") {
+    prefs.toolbar = on;
+    keepPrefs();
+    $("#toolbar").hidden = !on;
   } else if (name === "hover-bar") {
     prefs.hoverBar = on;
     keepPrefs();
@@ -2871,15 +2907,42 @@ menus(
       const handle = recentHandles[Number(command.slice(7))];
       if (handle) void openRecent(handle);
     } else void COMMANDS[command]?.();
-    // Back to the text, unless the command opened a dialog or a picker of its own.
-    requestAnimationFrame(() => {
-      const at = document.activeElement;
-      const left = !at || at === document.body || Boolean(at.closest(".menus"));
-      if (left && !document.querySelector("dialog[open]") && !lockedOut) view.focus();
-    });
+    backToText(".menus");
   },
   () => view.focus(),
 );
+
+toolbar(
+  $("#toolbar"),
+  (command) => {
+    void COMMANDS[command]?.();
+    backToText(".toolbar");
+  },
+  () => view.focus(),
+);
+
+/** Back to the text after a command from `from`, unless it opened a dialog or a picker of its own. */
+function backToText(from: string): void {
+  requestAnimationFrame(() => {
+    const at = document.activeElement;
+    const left = !at || at === document.body || Boolean(at.closest(from));
+    if (left && !document.querySelector("dialog[open]") && !lockedOut) view.focus();
+  });
+}
+
+/** Undo and Redo in the toolbar, dimmed when there is nothing to undo or redo. */
+function showUndoState(state: EditorState): void {
+  for (const [command, depth] of [
+    ["undo", undoDepth(state)],
+    ["redo", redoDepth(state)],
+  ] as const)
+    $(`#toolbar [data-command="${command}"]`).setAttribute("aria-disabled", String(depth === 0));
+}
+
+/** The toolbar's Hear, pressed while the story is read aloud. */
+function showHearing(on: boolean): void {
+  $('#toolbar [data-command="hear"]').setAttribute("aria-pressed", String(on));
+}
 
 // Undo and Redo from a field on the side that hasn't been changed (a name just renamed in the
 // cast): the story's, as anywhere else.
@@ -2893,6 +2956,14 @@ $("#side").addEventListener("keydown", (event) => {
   (key === "y" || event.shiftKey ? redo : undo)(view);
   view.focus();
 });
+
+// Export: each choice closes the dialog and does what the menu used to.
+for (const button of document.querySelectorAll<HTMLElement>("#export [data-command]")) {
+  button.addEventListener("click", () => {
+    $<HTMLDialogElement>("#export").close();
+    void COMMANDS[button.dataset.command ?? ""]?.();
+  });
+}
 
 for (const button of document.querySelectorAll<HTMLElement>(
   "#save-button, .welcome [data-command]",
@@ -3186,6 +3257,9 @@ async function start(): Promise<void> {
   for (const name of [...SWITCHES, "marks", "autosave", "focus", "typewriter"] as const)
     checkMenu(name, prefs[name]);
   checkMenu("hover-bar", prefs.hoverBar);
+  checkMenu("toolbar", prefs.toolbar);
+  $("#toolbar").hidden = !prefs.toolbar;
+  showUndoState(view.state);
   focusMode(prefs.focus);
   // Where the browser can't keep files, there's no file to save to automatically.
   $("#autosave-item").hidden = !keepsFiles;
@@ -3243,6 +3317,21 @@ function goTo({ cursor, top }: { cursor: number; top: number }): void {
     selection: EditorSelection.cursor(Math.min(cursor, length)),
     effects: EditorView.scrollIntoView(Math.min(top, length), { y: "start" }),
   });
+}
+
+/** The build the page is, from vite.config.ts; none in tests. */
+declare const __WRITER_BUILD__: { commit: string; date: string } | undefined;
+
+/** Help › About: what the Writer is, which build, and where to learn more. */
+function showAbout(): void {
+  const build = typeof __WRITER_BUILD__ === "undefined" ? undefined : __WRITER_BUILD__;
+  $("#about-version").textContent = [
+    build ? `Built ${build.date}${build.commit ? ` (${build.commit})` : ""}` : "",
+    `VoxDown format ${SPEC_VERSION}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  $<HTMLDialogElement>("#about").showModal();
 }
 
 /** What the AI dialog needs of the Writer. */

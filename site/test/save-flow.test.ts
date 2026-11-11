@@ -255,6 +255,32 @@ describe("saving to the story's file", () => {
     expect(run.marked).toEqual([]);
   });
 
+  it("leaves a story opened during a Save as with its own name and file, whatever the save did", async () => {
+    for (const outcome of ["allowed", "refused", "failed"] as const) {
+      let answer = () => {};
+      const slowAllowed = new Promise<void>((done) => {
+        answer = done;
+      });
+      const run = page({
+        disk: { "tale.vxd": { text: "Saved.", modified: 1 } },
+        slowAllowed,
+        allowed: outcome !== "refused",
+        failWrite: outcome === "failed",
+        pick: "copy.vxd",
+      });
+      const saving = run.flow.saveAs();
+      await new Promise((done) => setTimeout(done, 0));
+      run.open("new", "Second story.");
+      answer();
+      expect(await saving).toBe(false);
+      // The new story is as it was opened: Untitled, no file; neither file has its words.
+      expect(run.file.name).toBe("Untitled.vxd");
+      expect(run.file.handle).toBeUndefined();
+      expect(run.disk["copy.vxd"]).toBeUndefined();
+      expect(run.disk["tale.vxd"]?.text).toBe("Saved.");
+    }
+  });
+
   it("saves the words typed while the browser asked, in the same story", async () => {
     let answer = () => {};
     const slowAllowed = new Promise<void>((done) => {

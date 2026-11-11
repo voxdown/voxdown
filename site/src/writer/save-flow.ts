@@ -127,7 +127,9 @@ export class SaveFlow {
     host.named(file.name);
     const done = await this.write(handle);
     if (done) await host.remember(handle);
-    else {
+    else if (file.id === story) {
+      // Back to the story's own file and name: only this story's, never another's opened while
+      // it was being saved (which has its own, or none).
       file.handle = before.handle;
       file.name = before.name;
       file.modified = before.modified;

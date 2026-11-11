@@ -1075,6 +1075,22 @@ if (drift > 0.04)
     document.querySelector(".cm-scroller").scrollTop = 0;
   });
 }
+// A rail crowded with chapters: each node's centre its own to click, none another's.
+{
+  const crowded = await longPage.evaluate(() => {
+    const buttons = [...document.querySelectorAll("#rail-scenes button")];
+    const others = buttons.filter((button) => {
+      const dot = button.querySelector(".scene-rail-node").getBoundingClientRect();
+      const at = document.elementFromPoint(dot.left + dot.width / 2, dot.top + dot.height / 2);
+      return at?.closest("button") !== button;
+    });
+    return { others: others.length, of: buttons.length };
+  });
+  if (crowded.others > 0)
+    problems.push(
+      `writer: on a crowded rail, ${crowded.others} of ${crowded.of} nodes' centres are another node's to click`,
+    );
+}
 await longPage.click(".cm-content");
 await longPage.keyboard.press("Control+End");
 await longPage.waitForTimeout(800);

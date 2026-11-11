@@ -371,6 +371,12 @@ body.writer > .statusbar {
   border-color: var(--pencil);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--pencil) 25%, transparent);
 }
+/* Nodes closer than their targets: each target the room it has (rail.ts), the dot drawn but not
+   a target of its own, so that no node's dot takes another's click. */
+.scene-rail-scenes [data-tight] .scene-rail-node,
+.scene-rail-scenes [data-tight] .scene-rail-name {
+  pointer-events: none;
+}
 /* A node among crowded ones: no name beside it (its title names it), and a smaller target. */
 .scene-rail-scenes [data-crowded] button {
   top: -6px;

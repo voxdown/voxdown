@@ -243,9 +243,25 @@ export class SceneRail {
     for (const [index, scene] of this.scenes.entries()) {
       const item = items[index] as HTMLElement | undefined;
       if (!item) continue;
-      item.style.top = `${ys[index] ?? 0}px`;
+      const y = ys[index] ?? 0;
+      item.style.top = `${y}px`;
       item.toggleAttribute("data-crowded", !labelled.has(index));
       item.toggleAttribute("data-minor", packed && !scene.chapter);
+      // Its target as tall as the room it has, half to each side: crowded nodes' targets meet
+      // without covering each other, so a node's centre is its own (151 of Moby-Dick's chapters
+      // on one rail: each was another's to click).
+      const room = Math.min(
+        y - (ys[index - 1] ?? Number.NEGATIVE_INFINITY),
+        (ys[index + 1] ?? Number.POSITIVE_INFINITY) - y,
+      );
+      const button = item.firstElementChild as HTMLElement | null;
+      if (button) {
+        // Its target's height, named (20px) or not (12px): tighter than that, tiled.
+        const tight = room < (labelled.has(index) ? 20 : 12);
+        button.style.height = tight ? `${Math.max(2, room)}px` : "";
+        button.style.top = tight ? `${-Math.max(2, room) / 2}px` : "";
+        item.toggleAttribute("data-tight", tight);
+      }
     }
     this.place();
   }

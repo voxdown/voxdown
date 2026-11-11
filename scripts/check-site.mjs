@@ -468,6 +468,37 @@ if (await safe.isVisible("#side"))
 await safety.close();
 console.log("writer: last words, place, Save as name, closing the side: ok");
 
+// The last words neither kept yet nor written down as the page goes (the storage full): leaving
+// asks first.
+const fullStorage = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const full = await fullStorage.newPage();
+watch(full, "writer storage full");
+await full.goto(`${base}/writer/`);
+await full.click(`.welcome-example[data-name="${dragonName}"]`);
+await full.waitForSelector("#welcome", { state: "hidden" });
+await full.waitForTimeout(2500);
+await full.evaluate(() => {
+  const set = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (key, value) {
+    if (String(key).startsWith("vxd-writer-rescue"))
+      throw new DOMException("full", "QuotaExceededError");
+    return set.call(this, key, value);
+  };
+});
+await full.click(".cm-content");
+await full.keyboard.press("Control+End");
+let askedFirst = false;
+full.on("dialog", (dialog) => {
+  askedFirst ||= dialog.type() === "beforeunload";
+  void dialog.dismiss();
+});
+await full.keyboard.type(" LAST WORDS");
+await full.close({ runBeforeUnload: true });
+await full.waitForTimeout(500);
+if (!askedFirst)
+  problems.push("writer: leaving with the last words neither kept nor written down didn't ask");
+await fullStorage.close();
+
 // Drafts and versions: a story put aside unsaved is kept and opens again from Recover a draft;
 // a saved version can be gone back to, and Undo takes that back.
 const keeping = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -1173,6 +1204,27 @@ await sync.keyboard.press("Control+z");
 await sync.waitForTimeout(900);
 if ((await draftIn(sync)).includes("on Windows."))
   problems.push("writer: Undo doesn't take back a file read again with other line endings");
+// Changed elsewhere with its date kept (a sync, a copy): Save still asks, by what the file says.
+await sync.click(".cm-content");
+await sync.keyboard.press("Control+End");
+await sync.keyboard.type(" Before the quiet change.");
+await sync.keyboard.press("Control+s");
+await sync.waitForTimeout(500);
+if (await sync.isVisible("#ask[open]")) await sync.click('#ask-buttons button[value="mine"]');
+await sync.waitForTimeout(500);
+await sync.evaluate(() => {
+  window.__disk.text = window.__disk.text.replace("Paragraph 9.", "Paragraph 9, changed quietly.");
+});
+await sync.keyboard.type(" Mine again.");
+await sync.keyboard.press("Control+s");
+await sync
+  .waitForSelector("#ask[open]", { timeout: 3000 })
+  .catch(() =>
+    problems.push("writer: a file changed elsewhere with its date kept was saved over unasked"),
+  );
+if (await sync.isVisible("#ask[open]")) await sync.click('#ask-buttons button[value="cancel"]');
+if (!(await sync.evaluate(() => window.__disk.text.includes("changed quietly"))))
+  problems.push("writer: a file changed elsewhere with its date kept lost its change");
 // Saving by itself stops when the file changed on disk, and says so beside the name until saved.
 await sync.keyboard.press("Control+End");
 await sync.keyboard.type(" More here.");
@@ -1480,6 +1532,32 @@ for (const [command, name] of [
   if (download.suggestedFilename() !== name)
     problems.push(`writer: ${command} downloaded ${download.suggestedFilename()}, not ${name}`);
 }
+// The side made wider with the keyboard on its edge; the text larger from Page and text.
+const sideBefore = await maker.evaluate(
+  () => document.querySelector("#side")?.getBoundingClientRect().width ?? 0,
+);
+await maker.focus("#side-resize");
+for (let i = 0; i < 4; i++) await maker.keyboard.press("ArrowLeft");
+await maker.waitForTimeout(200);
+const sideAfter = await maker.evaluate(
+  () => document.querySelector("#side")?.getBoundingClientRect().width ?? 0,
+);
+if (sideAfter <= sideBefore + 20)
+  problems.push("writer: the side's edge doesn't widen it from the keyboard");
+const sizeBefore = await maker.evaluate(
+  () => getComputedStyle(document.querySelector(".cm-content")).fontSize,
+);
+await maker.click("#view-menu-button");
+await maker.click('[data-command="page"]');
+await maker.waitForSelector("#page-settings[open]");
+await maker.fill("#page-size", "21");
+await maker.dispatchEvent("#page-size", "input");
+await maker.click('#page-settings button[value="done"]');
+const sizeAfter = await maker.evaluate(
+  () => getComputedStyle(document.querySelector(".cm-content")).fontSize,
+);
+if (sizeAfter === sizeBefore || sizeAfter !== "21px")
+  problems.push(`writer: Page and text set the text to ${sizeAfter}, not 21px`);
 // A writing goal: the words written since opening, out of it, and a word when it is reached.
 await maker.click("#view-menu-button");
 await maker.click('[data-command="goal"]');

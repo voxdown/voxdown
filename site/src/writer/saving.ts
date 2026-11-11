@@ -28,7 +28,7 @@ export type OnDisk = { text: string; modified: number } | undefined;
 
 /** What the file on disk says about writing over it. */
 export type DiskCheck =
-  /** As the Writer last read or wrote it (or changed only in its date): write. */
+  /** As the Writer last read or wrote it (whatever its date says): write. */
   | { kind: "write" }
   /** It couldn't be read: writing would be blind. */
   | { kind: "unread" }
@@ -46,8 +46,8 @@ export function checkDisk(
 ): DiskCheck {
   if (known.modified === undefined) return { kind: "write" };
   if (!disk) return { kind: "unread" };
-  if (disk.modified === known.modified || sameText(disk.text, known.saved))
-    return { kind: "write" };
+  // What it says, not when it says it was changed: a sync or a copy can keep the date.
+  if (sameText(disk.text, known.saved)) return { kind: "write" };
   return { kind: "changed", disk };
 }
 

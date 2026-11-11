@@ -419,9 +419,12 @@ describe("words", () => {
 describe("saving", () => {
   const known = { modified: 10, saved: "One.\nTwo.\n" };
 
-  it("writes over a file as it was read, and one changed only in its date or line breaks", () => {
-    expect(checkDisk({ text: "Anything.", modified: 10 }, known)).toEqual({ kind: "write" });
+  it("writes over a file as it was read, its date or line breaks changed or not", () => {
     expect(checkDisk({ text: "One.\r\nTwo.\r\n", modified: 99 }, known)).toEqual({ kind: "write" });
+    expect(checkDisk({ text: "One.\nTwo.\n", modified: 10 }, known)).toEqual({ kind: "write" });
+    // Other words with the same date: changed elsewhere all the same.
+    const sameDate = { text: "Other words.", modified: 10 };
+    expect(checkDisk(sameDate, known)).toEqual({ kind: "changed", disk: sameDate });
     expect(sameText("a\r\nb", "a\nb")).toBe(true);
   });
 
@@ -639,7 +642,9 @@ describe("words rescued as the page goes", () => {
       removeItem: () => {},
     };
     const rescue = new Rescue(full);
-    expect(() => rescue.write("a", words)).not.toThrow();
+    // A storage that refuses says so, so that leaving can ask first.
+    expect(rescue.write("a", words)).toBe(false);
+    expect(new Rescue(memory()).write("a", words)).toBe(true);
     expect(rescue.read("a")).toBeNull();
     const session = memory();
     expect(tabStory(session)).toBeUndefined();

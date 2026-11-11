@@ -139,6 +139,12 @@ type Prefs = ViewSwitches & {
   goal: number;
   /** Resting the pointer on a passage brings its bar. */
   hoverBar: boolean;
+  /** The manuscript's font, its size in pixels, and its line length in rem. */
+  font: "story" | "ui" | "mono";
+  size: number;
+  measure: number;
+  /** The side's width, as a share of the window (percent); 0 for the usual. */
+  sideWidth: number;
 };
 const PREFS_KEY = "vxd-writer-view";
 const prefs: Prefs = {
@@ -157,6 +163,10 @@ const prefs: Prefs = {
   typewriter: false,
   goal: 0,
   hoverBar: true,
+  font: "story",
+  size: 17,
+  measure: 52,
+  sideWidth: 0,
   ...savedPrefs(),
 };
 
@@ -793,10 +803,11 @@ function place(): { cursor: number; top: number } {
 
 const rescues = new Rescue(localStorage);
 
-function rescue(): void {
+/** Writes the last words down as the page goes: true if nothing of them would be lost. */
+function rescue(): boolean {
   commitPending();
-  if (!lock.owner || keptVersion === version) return;
-  rescues.write(file.id, {
+  if (!lock.owner || keptVersion === version) return true;
+  return rescues.write(file.id, {
     name: file.name,
     text: text(),
     saved: file.saved,
@@ -809,7 +820,7 @@ const rescued = (id: string) => rescues.read(id);
 /** The story this tab has open, kept for its reloads; set with `id`. */
 const tabStory = (id?: string) => tabStoryIn(sessionStorage, id);
 
-window.addEventListener("pagehide", rescue);
+window.addEventListener("pagehide", () => void rescue());
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     rescue();
@@ -1697,10 +1708,13 @@ async function checkDisk(): Promise<void> {
   const handle = file.handle;
   if (!handle || file.modified === undefined || !lock.owner) return;
   const disk = await onDisk(handle);
-  if (!disk || disk.modified === file.modified || handle !== file.handle) return;
+  if (!disk || handle !== file.handle) return;
+  // What it says, not its date: a sync or a copy can keep the date and change the words.
   if (sameText(disk.text, file.saved)) {
-    file.modified = disk.modified;
-    void keep();
+    if (disk.modified !== file.modified) {
+      file.modified = disk.modified;
+      void keep();
+    }
     return;
   }
   if (sameText(text(), file.saved)) {
@@ -2474,6 +2488,7 @@ const COMMANDS: Record<string, () => unknown> = {
     view.focus();
   },
   find: () => openSearchPanel(view),
+  page: showPageSettings,
   "scene-up": () => moveSectionHere(false, -1),
   "scene-down": () => moveSectionHere(false, 1),
   "chapter-up": () => moveSectionHere(true, -1),
@@ -2755,9 +2770,13 @@ async function openDropped(event: DragEvent): Promise<void> {
 
 // Leaving with nothing kept anywhere: the browser asks first.
 window.addEventListener("beforeunload", (event) => {
-  rescue();
-  // Nothing of this tab's changes kept anywhere: the browser asks first.
-  if (lock.owner && !file.kept && !sameText(text(), file.saved)) event.preventDefault();
+  // The last words neither in the draft yet nor written down now (the storage full): the
+  // browser asks first, and staying lets the draft catch up.
+  const safe = rescue();
+  if (lock.owner && (!safe || !file.kept) && !sameText(text(), file.saved)) {
+    event.preventDefault();
+    void keep();
+  }
 });
 
 $("#side-close").addEventListener("click", () => {
@@ -2818,6 +2837,97 @@ for (const dialog of document.querySelectorAll("dialog")) {
     });
   });
 }
+
+// The page and its text: font, size and line length, as the writer likes them.
+
+function applyPage(): void {
+  const style = document.body.style;
+  style.setProperty("--page-font", `var(--${prefs.font})`);
+  style.setProperty("--page-size", `${prefs.size}px`);
+  style.setProperty("--page-measure", `${prefs.measure}rem`);
+  if (prefs.sideWidth) style.setProperty("--side-width", `minmax(18rem, ${prefs.sideWidth}%)`);
+  else style.removeProperty("--side-width");
+  $("#side-resize").setAttribute("aria-valuenow", String(prefs.sideWidth || 34));
+  view.requestMeasure();
+}
+
+function showPageSettings(): void {
+  const dialog = $<HTMLDialogElement>("#page-settings");
+  const size = $<HTMLInputElement>("#page-size");
+  const measure = $<HTMLInputElement>("#page-measure");
+  const fonts = [...dialog.querySelectorAll<HTMLInputElement>('input[name="font"]')];
+  const show = () => {
+    for (const font of fonts) font.checked = font.value === prefs.font;
+    size.value = String(prefs.size);
+    measure.value = String(prefs.measure);
+    $("#page-size-shown").textContent = `${prefs.size} px`;
+    $("#page-measure-shown").textContent = `about ${Math.round(prefs.measure * 1.6)} letters`;
+  };
+  const change = () => {
+    prefs.font = (fonts.find((font) => font.checked)?.value ?? "story") as Prefs["font"];
+    prefs.size = Number(size.value);
+    prefs.measure = Number(measure.value);
+    keepPrefs();
+    applyPage();
+    show();
+  };
+  for (const input of [size, measure, ...fonts]) input.oninput = change;
+  $("#page-reset").onclick = () => {
+    Object.assign(prefs, { font: "story", size: 17, measure: 52 });
+    keepPrefs();
+    applyPage();
+    show();
+  };
+  show();
+  dialog.showModal();
+}
+
+// The edge between the manuscript and the side: dragged, or moved with the arrow keys.
+{
+  const edge = $("#side-resize");
+  const set = (percent: number) => {
+    prefs.sideWidth = Math.round(Math.min(60, Math.max(20, percent)));
+    keepPrefs();
+    applyPage();
+  };
+  edge.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    edge.setPointerCapture(event.pointerId);
+    edge.toggleAttribute("data-dragging", true);
+    const work = $("#workspace").getBoundingClientRect();
+    const move = (moved: PointerEvent) => set(((work.right - moved.clientX) / work.width) * 100);
+    const done = () => {
+      edge.removeAttribute("data-dragging");
+      edge.removeEventListener("pointermove", move);
+    };
+    edge.addEventListener("pointermove", move);
+    edge.addEventListener("pointerup", done, { once: true });
+    edge.addEventListener("pointercancel", done, { once: true });
+  });
+  edge.addEventListener("keydown", (event) => {
+    const now = prefs.sideWidth || 34;
+    const to =
+      event.key === "ArrowLeft"
+        ? now + 2
+        : event.key === "ArrowRight"
+          ? now - 2
+          : event.key === "Home"
+            ? 20
+            : event.key === "End"
+              ? 60
+              : null;
+    if (to === null) return;
+    event.preventDefault();
+    set(to);
+  });
+  // A double click: back to the usual width.
+  edge.addEventListener("dblclick", () => {
+    prefs.sideWidth = 0;
+    keepPrefs();
+    applyPage();
+  });
+}
+applyPage();
 
 // Start: the draft from last time, or the welcome.
 

@@ -16,12 +16,16 @@ export type Rescued = Pick<Draft, "name" | "text" | "saved" | "changedAt" | "pla
 export class Rescue {
   constructor(private readonly storage: Pick<Storage, "getItem" | "setItem" | "removeItem">) {}
 
-  /** Writes a story's last words down; too long for the storage, the kept draft will do. */
-  write(id: string, words: Rescued): void {
+  /**
+   * Writes a story's last words down: true if they are, false if the storage refused (full, or
+   * too long), when only the draft kept a moment ago would come back.
+   */
+  write(id: string, words: Rescued): boolean {
     try {
       this.storage.setItem(`${RESCUE}:${id}`, JSON.stringify({ ...words, id }));
+      return true;
     } catch {
-      // Too long for this storage: the draft from a moment ago is what comes back.
+      return false;
     }
   }
 

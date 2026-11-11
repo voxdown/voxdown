@@ -91,6 +91,7 @@
         <button role="menuitemcheckbox" type="button" data-view="typewriter" aria-checked="false">Typewriter scrolling</button>
         <button role="menuitemcheckbox" type="button" data-view="hover-bar" aria-checked="true">The bar over a passage</button>
         <button role="menuitem" type="button" data-command="goal">Writing goal…</button>
+        <button role="menuitem" type="button" data-command="page">Page and text…</button>
         <button role="menuitemcheckbox" type="button" data-view="marks" aria-checked="false">Every mark raw<kbd data-keys="Mod+Shift+M"></kbd></button>
         <hr>
         <span class="menu-label" id="draw-label" aria-hidden="true">Draw</span>
@@ -163,6 +164,7 @@
   </section>
 
   <aside class="side" id="side" aria-label="What the story becomes">
+    <div class="side-resize" id="side-resize" role="separator" aria-orientation="vertical" aria-label="Width of the side" aria-controls="side" tabindex="0" aria-valuemin="20" aria-valuemax="60" aria-valuenow="34"></div>
     <div class="side-head">
       <div class="side-tabs" role="tablist" aria-label="Show">
         <button class="side-tab" role="tab" type="button" id="tab-script" data-tab="script" aria-controls="side-sheet">Script</button>
@@ -212,6 +214,32 @@
     <p class="sheet-note" id="list-note"></p>
     <ul class="list-items" id="list-items"></ul>
     <div class="ask-buttons"><button class="button" value="close">Close</button></div>
+  </form>
+</dialog>
+
+<dialog class="page-settings" id="page-settings" aria-labelledby="page-title">
+  <form method="dialog">
+    <h2 id="page-title">Page and text</h2>
+    <fieldset>
+      <legend>Font</legend>
+      <div class="fonts">
+        <label><input type="radio" name="font" value="story"> Serif</label>
+        <label><input type="radio" name="font" value="ui"> Sans</label>
+        <label><input type="radio" name="font" value="mono"> Typewriter</label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <label for="page-size">Size: <output id="page-size-shown"></output></label>
+      <input type="range" id="page-size" min="13" max="26" step="0.5">
+    </fieldset>
+    <fieldset>
+      <label for="page-measure">Line length: <output id="page-measure-shown"></output></label>
+      <input type="range" id="page-measure" min="30" max="80" step="1">
+    </fieldset>
+    <div class="ask-buttons">
+      <button class="button" type="button" id="page-reset">As it was</button>
+      <button class="button primary" value="done">Done</button>
+    </div>
   </form>
 </dialog>
 

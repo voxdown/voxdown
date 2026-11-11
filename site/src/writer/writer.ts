@@ -1846,6 +1846,18 @@ async function openRecent(handle: FileSystemFileHandle): Promise<void> {
  * changes in it that were never saved, if the writer wants them.
  */
 async function openStory(opened: Opened): Promise<void> {
+  // An ebook some of whose chapters couldn't be read: never opened as if it were whole.
+  if (opened.missing?.length) {
+    const named = opened.missing.slice(0, 4).join(", ") + (opened.missing.length > 4 ? "…" : "");
+    const answer = await ask(
+      `${opened.missing.length} of this ebook’s ${opened.chapters ?? opened.missing.length} chapters couldn’t be read (${named}): the file may be damaged. Open the chapters that could be read, as a new story?`,
+      [
+        { label: "Cancel", value: "cancel" },
+        { label: "Open what could be read", value: "open", main: true },
+      ],
+    );
+    if (answer !== "open") return;
+  }
   const kept = opened.handle ? await draftForFile(opened.handle) : undefined;
   if (kept && !sameText(kept.text, kept.saved) && !sameText(kept.text, opened.text)) {
     const answer = await ask(

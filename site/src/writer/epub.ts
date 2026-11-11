@@ -3,7 +3,16 @@
  * contents, title, author and language; and one read in as a new story, its chapters in reading
  * order, ready to be marked up.
  */
-import { type Paragraph, type Run, fromXml, paragraphsOf, writeStory, xmlText } from "./convert";
+import {
+  type Emphasis,
+  type Paragraph,
+  type Run,
+  type StyleOf,
+  fromXml,
+  paragraphsOf,
+  writeStory,
+  xmlText,
+} from "./convert";
 import { unzip, zip } from "./zip";
 
 const STYLE = `body { font-family: Georgia, "Iowan Old Style", serif; line-height: 1.5; margin: 0 5%; }
@@ -137,6 +146,59 @@ function attributes(tag: string): Map<string, string> {
 const elements = (xml: string, name: string) =>
   [...xml.matchAll(new RegExp(`<(?:[\\w.-]+:)?${name}\\b[^>]*>`, "g"))].map((found) => found[0]);
 
+/** What some CSS declarations say of emphasis: `font-style`, `font-weight`, the `font` shorthand. */
+export function emphasisOf(declarations: string): Emphasis {
+  const out: Emphasis = {};
+  for (const declaration of declarations.split(";")) {
+    const [property = "", value = ""] = declaration
+      .split(":")
+      .map((part) => part.trim().toLowerCase());
+    if (property === "font-style") {
+      if (/^(italic|oblique)/.test(value)) out.italic = true;
+      else if (value === "normal") out.italic = false;
+    } else if (property === "font-weight") {
+      if (/^(bold|bolder)$/.test(value) || Number(value) >= 600) out.bold = true;
+      else if (/^(normal|lighter)$/.test(value) || (Number(value) > 0 && Number(value) < 600))
+        out.bold = false;
+    } else if (property === "font") {
+      if (/\b(italic|oblique)\b/.test(value)) out.italic = true;
+      if (/\b(bold|bolder|[6-9]00)\b/.test(value)) out.bold = true;
+    }
+  }
+  return out;
+}
+
+/**
+ * Emphasis from a book's style sheets and `style` attributes: rules for an element (`em`), a
+ * class (`.calibre3`) or both (`span.italic`), the ones books are made with; a `style` attribute
+ * over them.
+ */
+export function styleSheets(css: readonly string[]): StyleOf {
+  const rules = new Map<string, Emphasis>();
+  for (const sheet of css)
+    for (const [, selectors = "", body = ""] of sheet
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
+      const said = emphasisOf(body);
+      if (said.italic === undefined && said.bold === undefined) continue;
+      for (const selector of selectors.split(",")) {
+        const key = selector.trim().toLowerCase();
+        if (/^[a-z0-9]*(\.[\w-]+)?$/.test(key) && key)
+          rules.set(key, { ...rules.get(key), ...said });
+      }
+    }
+  return (element) => {
+    const tag = element.tagName.toLowerCase();
+    let found: Emphasis = { ...rules.get(tag) };
+    for (const name of element.classList) {
+      const key = name.toLowerCase();
+      found = { ...found, ...rules.get(`.${key}`), ...rules.get(`${tag}.${key}`) };
+    }
+    const inline = element.getAttribute("style");
+    return inline ? { ...found, ...emphasisOf(inline) } : found;
+  };
+}
+
 /** What an ebook holds that a story doesn't take, said plainly. */
 function leftOut(pages: readonly string[]): string[] {
   const all = pages.join("");
@@ -148,7 +210,9 @@ function leftOut(pages: readonly string[]): string[] {
 }
 
 /** An ebook's chapters, in reading order, as a story; its title, author and language too. */
-export async function storyOfEpub(bytes: ArrayBuffer): Promise<{ story: string; left: string[] }> {
+export async function storyOfEpub(
+  bytes: ArrayBuffer,
+): Promise<{ story: string; left: string[]; missing: string[]; chapters: number }> {
   const files = await unzip(bytes);
   const decoder = new TextDecoder();
   const text = (name: string) => {
@@ -174,34 +238,45 @@ export async function storyOfEpub(bytes: ArrayBuffer): Promise<{ story: string; 
     ).exec(opf)?.[1];
     return found ? fromXml(found.replace(/<[^>]+>/g, "")).trim() || undefined : undefined;
   };
-  const items = new Map<string, string>();
+  const items = new Map<string, { href: string; type: string; nav: boolean }>();
+  const css: string[] = [];
   for (const tag of elements(opf, "item")) {
     const item = attributes(tag);
     const id = item.get("id");
     const href = item.get("href");
-    if (
-      id &&
-      href &&
-      /html/.test(item.get("media-type") ?? "") &&
-      !/\bnav\b/.test(item.get("properties") ?? "")
-    )
-      items.set(id, href);
+    const type = item.get("media-type") ?? "";
+    if (!id || !href) continue;
+    items.set(id, { href, type, nav: /\bnav\b/.test(item.get("properties") ?? "") });
+    if (type === "text/css") css.push(text(joined(root, href)) ?? "");
   }
   const parser = new DOMParser();
-  const paragraphs: Paragraph[] = [];
-  const pages: string[] = [];
+  const pages: Array<{ name: string; page: string }> = [];
+  const missing: string[] = [];
   const spine = elements(opf, "itemref").map((tag) => attributes(tag).get("idref") ?? "");
+  let chapters = 0;
   for (const idref of spine) {
-    const href = items.get(idref);
-    const page = href ? text(joined(root, href)) : undefined;
-    if (!page) continue;
-    pages.push(page);
+    const item = items.get(idref);
+    // A picture page (a cover), or the contents: not part of the text.
+    if (item && (!/html/.test(item.type) || item.nav)) continue;
+    chapters++;
+    const page = item ? text(joined(root, item.href)) : undefined;
+    // A chapter the reading order names, that isn't there: said, never left out quietly.
+    if (!page) missing.push(item?.href ?? idref);
+    else pages.push({ name: item?.href ?? idref, page });
+  }
+  // Its style sheets, and those inside its pages, say which words are in italics or bold.
+  for (const { page } of pages)
+    for (const [, sheet = ""] of page.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi))
+      css.push(sheet);
+  const styleOf = styleSheets(css);
+  const paragraphs: Paragraph[] = [];
+  for (const { page } of pages) {
     // Only its words: nothing it links to (a style, an image) is fetched.
     const words = page
       .replace(/<(?:link|img|image|source|video|audio)\b[^>]*>/gi, "")
       .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, "");
     const body = parser.parseFromString(words, "text/html").body;
-    if (body) paragraphs.push(...paragraphsOf(body));
+    if (body) paragraphs.push(...paragraphsOf(body, styleOf));
   }
   // An ebook whose chapters couldn't be found isn't opened empty, as if it had none.
   if (paragraphs.length === 0)
@@ -219,6 +294,8 @@ export async function storyOfEpub(bytes: ArrayBuffer): Promise<{ story: string; 
       ...(author ? { author } : {}),
       ...(language ? { language } : {}),
     }),
-    left: leftOut(pages),
+    left: leftOut(pages.map(({ page }) => page)),
+    missing,
+    chapters,
   };
 }

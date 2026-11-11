@@ -59,6 +59,9 @@ export type Opened = {
   document?: "docx" | "epub";
   /** What such a document held that a story doesn't take (pictures, tables, notes). */
   left?: string[];
+  /** An ebook's chapters its reading order names that couldn't be read, and how many it has. */
+  missing?: string[];
+  chapters?: number;
   /** When the file was last changed on disk, to tell if something else changes it. */
   modified?: number;
 };
@@ -127,16 +130,17 @@ export async function openedFile(file: File, handle?: FileSystemFileHandle): Pro
   const document = /\.(docx|epub)$/i.exec(file.name)?.[1]?.toLowerCase();
   if (document === "docx" || document === "epub") {
     const bytes = await file.arrayBuffer();
-    const { story, left } =
+    const read: { story: string; left: string[]; missing?: string[]; chapters?: number } =
       document === "docx"
         ? await (await import("./docx")).storyOfDocx(bytes)
         : await (await import("./epub")).storyOfEpub(bytes);
     return {
       name: file.name.replace(/\.(docx|epub)$/i, ".vxd"),
-      text: story,
+      text: read.story,
       imported: true,
       document,
-      ...(left.length ? { left } : {}),
+      ...(read.left.length ? { left: read.left } : {}),
+      ...(read.missing?.length ? { missing: read.missing, chapters: read.chapters ?? 0 } : {}),
     };
   }
   const { text, encoding } = await readFile(file);

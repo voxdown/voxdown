@@ -22,17 +22,32 @@ const BLOCK =
  * read as such; any other block that holds text of its own (a `div` paragraph, a quotation, a
  * verse's stanza, a table cell) is a paragraph too, its line breaks kept, so no words are lost.
  */
-export function paragraphsOf(root: Element): Paragraph[] {
+/** What a style sheet says of an element's emphasis: italic or not, bold or not, or nothing. */
+export type Emphasis = { italic?: boolean; bold?: boolean };
+
+/** An element's emphasis from its style sheets and its `style` attribute, where a book has them. */
+export type StyleOf = (element: Element) => Emphasis;
+
+export function paragraphsOf(root: Element, styleOf?: StyleOf): Paragraph[] {
   const out: Paragraph[] = [];
+  const runsOf = (nodes: readonly Node[], start: Required<Emphasis>, pre = false) =>
+    readRuns(nodes, start, styleOf, pre);
   const text = (runs: Run[]) => {
     if (runs.some((run) => "text" in run && run.text.trim())) out.push({ kind: "text", runs });
   };
-  const visit = (element: Element) => {
+  const visit = (element: Element, inherited: Required<Emphasis>) => {
     const tag = element.tagName.toLowerCase();
     if (/^(script|style|nav|head|title|template)$/.test(tag)) return;
+    // A block's own style (`<p style="font-style: italic">`, a class) holds for all it contains.
+    const own = styleOf?.(element) ?? {};
+    const here = {
+      italic: own.italic ?? inherited.italic,
+      bold: own.bold ?? inherited.bold,
+    };
     const heading = /^h([1-6])$/.exec(tag);
     if (heading) {
-      const runs = runsOf([...element.childNodes]);
+      // A heading is bold by itself: that isn't emphasis.
+      const runs = runsOf([...element.childNodes], { italic: here.italic, bold: false });
       if (runs.length) out.push({ kind: "heading", level: Number(heading[1]), runs });
       return;
     }
@@ -41,29 +56,37 @@ export function paragraphsOf(root: Element): Paragraph[] {
       return;
     }
     if (tag === "pre") {
-      text(runsOf([...element.childNodes], true));
+      text(runsOf([...element.childNodes], here, true));
       return;
     }
     // The text between blocks, a paragraph to each stretch of it; the blocks, each as itself.
     let inline: Node[] = [];
     const flush = () => {
-      if (inline.length) text(runsOf(inline));
+      if (inline.length) text(runsOf(inline, here));
       inline = [];
     };
     for (const child of element.childNodes) {
       if (child.nodeType === 1 && BLOCK.test((child as Element).tagName.toLowerCase())) {
         flush();
-        visit(child as Element);
+        visit(child as Element, here);
       } else inline.push(child);
     }
     flush();
   };
-  visit(root);
+  visit(root, { italic: false, bold: false });
   return out;
 }
 
-/** Nodes' text as runs: italics and bold as their tags say, line breaks kept (all, in `pre`). */
-function runsOf(nodes: readonly Node[], pre = false): Run[] {
+/**
+ * Nodes' text as runs: italics and bold as their tags and styles say, line breaks kept (all, in
+ * `pre`).
+ */
+function readRuns(
+  nodes: readonly Node[],
+  start: Required<Emphasis>,
+  styleOf: StyleOf | undefined,
+  pre = false,
+): Run[] {
   const runs: Run[] = [];
   const walk = (node: Node, italic: boolean, bold: boolean) => {
     if (node.nodeType === 3) {
@@ -88,11 +111,12 @@ function runsOf(nodes: readonly Node[], pre = false): Run[] {
       return;
     }
     if (/^(script|style|template)$/.test(tag)) return;
-    const isItalic = italic || tag === "em" || tag === "i" || tag === "cite";
-    const isBold = bold || tag === "strong" || tag === "b";
+    const own = styleOf?.(node as Element) ?? {};
+    const isItalic = own.italic ?? (italic || tag === "em" || tag === "i" || tag === "cite");
+    const isBold = own.bold ?? (bold || tag === "strong" || tag === "b");
     for (const child of node.childNodes) walk(child, isItalic, isBold);
   };
-  for (const node of nodes) walk(node, false, false);
+  for (const node of nodes) walk(node, start.italic, start.bold);
   // Spaces at the ends of the paragraph and of its lines go.
   runs.forEach((run, index) => {
     if (!("text" in run)) return;

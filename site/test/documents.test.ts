@@ -346,3 +346,53 @@ describe("a book written as Word", () => {
     });
   });
 });
+
+describe("ebooks with chapters missing, and emphasis in their style sheets", () => {
+  const page = (body: string, head = "") =>
+    `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>x</title>${head}</head><body>${body}</body></html>`;
+  const container = `<container><rootfiles><rootfile full-path="OPS/package.opf"/></rootfiles></container>`;
+
+  it("say which chapters couldn't be read, and read the rest", async () => {
+    const read = await storyOfEpub(
+      ebookFile({
+        container,
+        opf: `<package><manifest>
+          <item id="cover" href="cover.svg" media-type="image/svg+xml"/>
+          <item id="c1" href="one.xhtml" media-type="application/xhtml+xml"/>
+          <item id="c2" href="two.xhtml" media-type="application/xhtml+xml"/>
+        </manifest><spine><itemref idref="cover"/><itemref idref="c1"/><itemref idref="c2"/><itemref idref="gone"/></spine></package>`,
+        pages: { "one.xhtml": page("<p>The first chapter.</p>") },
+      }),
+    );
+    expect(read.story).toContain("The first chapter.");
+    expect(read.missing).toEqual(["two.xhtml", "gone"]);
+    expect(read.chapters).toBe(3);
+  });
+
+  it("keep italics and bold set by style sheets, classes and style attributes", async () => {
+    const { story } = await storyOfEpub(
+      ebookFile({
+        container,
+        opf: `<package><manifest>
+          <item id="css" href="style.css" media-type="text/css"/>
+          <item id="c1" href="one.xhtml" media-type="application/xhtml+xml"/>
+        </manifest><spine><itemref idref="c1"/></spine></package>`,
+        pages: {
+          "style.css":
+            ".calibre3 { font-style: italic } span.loud, .strong { font-weight: 700 } .plain { font-style: normal }",
+          "one.xhtml": page(
+            `<p style="font-style:italic">A letter, all in italics.</p>
+             <p>A <span class="calibre3">quiet</span> and <span class="loud">loud</span> word.</p>
+             <div class="calibre3">Italic, but <span class="plain">not this.</span></div>
+             <p class="note">From its own sheet.</p>`,
+            "<style>.note { font: italic bold 1em serif }</style>",
+          ),
+        },
+      }),
+    );
+    expect(story).toContain("*A letter, all in italics.*");
+    expect(story).toContain("A *quiet* and **loud** word.");
+    expect(story).toContain("*Italic, but* not this.");
+    expect(story).toContain("***From its own sheet.***");
+  });
+});

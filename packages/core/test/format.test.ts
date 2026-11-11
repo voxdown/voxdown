@@ -162,4 +162,28 @@ describe("the formatter (§13, rule 8)", () => {
       '![a  pic](<a  b.png> "A  title") x\n',
     );
   });
+
+  it("opens a quote inside a quote after a dash too", () => {
+    expect(format(`@Tom "He said—'no'—and left."`, { quotes: "curly" })).toBe(
+      "@Tom “He said—‘no’—and left.”\n",
+    );
+  });
+
+  it("writes the apostrophes of words cut short, and opens an inner quote only inside its quote", () => {
+    const curly = (text: string) => format(text, { quotes: "curly" }).trimEnd();
+    expect(curly(`@Tom "Give 'em the boys' toys," he said.`)).toBe(
+      "@Tom “Give ’em the boys’ toys,” he said.",
+    );
+    expect(curly(`"Get 'em," said the twins' mother.`)).toBe("“Get ’em,” said the twins’ mother.");
+    expect(curly(`"Tell 'em I said 'hello',"`)).toBe("“Tell ’em I said ‘hello’,”");
+    expect(curly(`He said, "'Tis the dogs' dinner."`)).toBe("He said, “’Tis the dogs’ dinner.”");
+    expect(curly(`@Abernethy ''Tis a raw night, Miss Pruett.'`)).toBe(
+      "@Abernethy ‘’Tis a raw night, Miss Pruett.’",
+    );
+    // A `'` that starts a word and that nothing closes can't be told from an opening mark: it
+    // stays as written (a speech over paragraphs in single quotes, §5.5).
+    expect(curly(`@Abernethy 'When I started, there were forty lamps.`)).toBe(
+      "@Abernethy 'When I started, there were forty lamps.",
+    );
+  });
 });

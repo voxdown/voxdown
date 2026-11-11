@@ -34,6 +34,7 @@ export {
 } from "./lines";
 export { type FountainOptions, fromFountain } from "./fountain";
 export { PALETTE, characterColors } from "./colors";
+export { characterReference } from "./entities";
 export type {
   Block,
   Break,

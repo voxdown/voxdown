@@ -1,10 +1,12 @@
 /**
- * The editor on stories made at random, and typed at random: what it draws never fails and stays
- * inside the text. FUZZ_RUNS and FUZZ_SEED as in the core package's fuzz tests.
+ * The editor on stories made at random, and typed at random: what it draws never fails, stays
+ * inside the text, gives each character's words to the speaker the parser does, and after each
+ * edit is what it would draw for the new text from scratch. FUZZ_RUNS and FUZZ_SEED as in the core package's fuzz tests.
  */
 import { EditorState } from "@codemirror/state";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { parse } from "voxdown";
 import { editorMarks, marksField, scriptEditor } from "../src/index";
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
@@ -85,6 +87,34 @@ describe("the editor, on stories made at random", () => {
     );
   });
 
+  it("marks each character's words as the parser says them, and the narrator's not at all", async () => {
+    await check(
+      fc.property(story, (source) => {
+        const parsed = parse(source);
+        const said = (of: Array<{ from: number; to: number; speaker: string }>) =>
+          of.map((m) => `${m.from}:${m.to}:${m.speaker}`).sort();
+        const expected: Array<{ from: number; to: number; speaker: string }> = [];
+        // A heading is drawn as one, so only paragraphs' words are marked by who says them.
+        for (const block of parsed.blocks) {
+          if (block.kind !== "paragraph") continue;
+          for (const line of block.lines) {
+            for (const item of line.items) {
+              if (item.kind !== "speech") continue;
+              if (item.speaker.toLowerCase() === parsed.meta.narrator.toLowerCase()) continue;
+              // A stretch with no text at all has nothing to draw.
+              if (item.textRange.from === item.textRange.to) continue;
+              expected.push({ ...item.textRange, speaker: item.speaker });
+            }
+          }
+        }
+        const marks = editorMarks(source).filter(
+          (m): m is Extract<typeof m, { kind: "speech" }> => m.kind === "speech",
+        );
+        expect(said(marks), JSON.stringify(source)).toEqual(said(expected));
+      }),
+    );
+  });
+
   it("keeps up with typing anywhere, a piece at a time", async () => {
     const characters = () => [{ handle: "Gerald", name: "Gerald the Dragon" }];
     await check(
@@ -99,6 +129,8 @@ describe("the editor, on stories made at random", () => {
             state = state.update({ changes: { from, to, insert: text } }).state;
             const marks = state.field(marksField);
             expect(marks.every(inside(state.doc.length))).toBe(true);
+            // What it draws after the edit is what it would draw for the new text from scratch.
+            expect(marks).toEqual(editorMarks(state.doc.toString()));
           }
         },
       ),

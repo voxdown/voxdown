@@ -166,7 +166,13 @@ class ParagraphReader {
           break;
         case "image":
           this.flush();
-          this.items.push({ kind: "image", alt: token.alt, src: token.src, range: token.range });
+          this.items.push({
+            kind: "image",
+            alt: token.alt,
+            src: token.src,
+            ...(token.link === undefined ? {} : { link: token.link }),
+            range: token.range,
+          });
           break;
       }
     }

@@ -1,7 +1,8 @@
 /**
- * The Markdown a story's text may hold (§11): backslash escapes, emphasis, links and images, as
- * HTML. Everything else is text, escaped.
+ * The Markdown a story's text may hold (§11): backslash escapes, character references, emphasis,
+ * links and images, as HTML. Everything else is text, escaped.
  */
+import { characterReference } from "voxdown";
 
 const ESCAPABLE = /[!-/:-@[-`{-~“”‘’„‚«»‹›「」『』]/u;
 
@@ -51,9 +52,17 @@ function destination(target: string): { url: string; title: string | null } {
   return { url: withoutEscapes(url), title: said === null ? null : withoutEscapes(said) };
 }
 
-/** Text with its backslash escapes taken out. */
+/** Text with its backslash escapes taken out, and each character reference's character in its place. */
 function withoutEscapes(text: string): string {
-  return text.replace(/\\(.)/gsu, (whole, char: string) => (ESCAPABLE.test(char) ? char : whole));
+  return text.replace(
+    /\\(.)|&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{0,31});/gsu,
+    (whole, char: string | undefined, offset: number) =>
+      char !== undefined
+        ? ESCAPABLE.test(char)
+          ? char
+          : whole
+        : (characterReference(text, offset)?.char ?? whole),
+  );
 }
 
 /** Splits text into literal characters (escaped ones) and characters that may be Markdown. */
@@ -61,9 +70,14 @@ function pieces(source: string): Piece[] {
   const out: Piece[] = [];
   for (let i = 0; i < source.length; i++) {
     const char = source[i] as string;
+    const reference = char === "&" ? characterReference(source, i) : null;
     if (char === "\\" && ESCAPABLE.test(source[i + 1] ?? "")) {
       out.push({ text: source[i + 1] as string, literal: true });
       i++;
+    } else if (reference) {
+      // A character reference is its character, and never Markdown: `&ast;` is no emphasis.
+      out.push({ text: reference.char, literal: true });
+      i += reference.length - 1;
     } else {
       out.push({ text: char, literal: false });
     }
@@ -101,14 +115,18 @@ export function inlineHtmlPieces(sources: readonly string[]): string[] {
  */
 function closersOf(chars: readonly Piece[]): {
   bracket: Int32Array;
+  opener: Int32Array;
   squares: Map<number, number>;
   links: Int32Array;
   nesting: Set<number>;
 } {
   const isChar = (at: number, text: string) => chars[at]?.text === text && !chars[at]?.literal;
+  // For each position, the next `]`, and the next `[`.
   const bracket = new Int32Array(chars.length + 1).fill(-1);
+  const opener = new Int32Array(chars.length + 1).fill(-1);
   for (let at = chars.length - 1; at >= 0; at--) {
     bracket[at] = isChar(at, "]") ? at : (bracket[at + 1] as number);
+    opener[at] = isChar(at, "[") ? at : (opener[at + 1] as number);
   }
   const squares = new Map<number, number>();
   const openSquare: number[] = [];
@@ -122,11 +140,27 @@ function closersOf(chars: readonly Piece[]): {
     (at) => chars[at]?.literal === false,
   );
   // A link may not hold another (Markdown): where links nest, the innermost is the link, so a
-  // link's text never holds one and rendering it goes one level deep at most.
+  // link's text never holds one and rendering it goes one level deep at most. An image may sit
+  // in a link's text, and a link in an image's description: only links count.
+  // How many images' descriptions hold each place: a link in one is the image's words.
+  const inImage = new Int32Array(chars.length + 1);
+  for (const [open, close] of squares) {
+    if (!isChar(open - 1, "!")) continue;
+    (inImage[open + 1] as number)++;
+    (inImage[close] as number)--;
+  }
+  for (let at = 1; at < inImage.length; at++) {
+    inImage[at] = (inImage[at] as number) + (inImage[at - 1] as number);
+  }
   const candidates = [...squares.keys()]
     .filter((open) => {
       const close = squares.get(open) as number;
-      return isChar(close + 1, "(") && (links[close + 1] ?? -1) >= 0;
+      return (
+        isChar(close + 1, "(") &&
+        (links[close + 1] ?? -1) >= 0 &&
+        !isChar(open - 1, "!") &&
+        (inImage[open] as number) === 0
+      );
     })
     .sort((a, b) => a - b);
   const nesting = new Set<number>();
@@ -134,7 +168,7 @@ function closersOf(chars: readonly Piece[]): {
     const next = candidates[index + 1];
     if (next !== undefined && next < (squares.get(open) as number)) nesting.add(open);
   });
-  return { bracket, squares, links, nesting };
+  return { bracket, opener, squares, links, nesting };
 }
 
 /**
@@ -347,8 +381,12 @@ function renderPieces(chars: Piece[]): string[] {
         const open = bang ? i + 1 : i;
         // The text runs to the `]` that balances it, as the parser reads a link (§8.3).
         const balanced = closers.squares.get(open) ?? -1;
-        const close =
+        let close =
           balanced > 0 && isChar(balanced + 1, "(") ? balanced : (closers.bracket[open + 1] ?? -1);
+        // A `[` whose text would hold another `[` before that `]` opens nothing: that `[` is
+        // the link's, and this one is text (Markdown pairs a `]` with the nearest `[`).
+        const inner = closers.opener[open + 1] ?? -1;
+        if (close !== balanced && inner >= 0 && inner < close) close = -1;
         if (close > 0 && isChar(close + 1, "(")) {
           const end = closers.links[close + 1] ?? -1;
           if (end > 0 && edges[end + 1] === edges[i]) {
@@ -363,10 +401,15 @@ function renderPieces(chars: Piece[]): string[] {
             const url = safeUrl(target.url, bang);
             const title = target.title === null ? "" : ` title="${escapeHtml(target.title)}"`;
             flush();
+            // An image's description as text: emphasis, links and images in it as their words.
+            const alt = () =>
+              render(label)
+                .replace(/<img [^>]*alt="([^"]*)"[^>]*>/g, "$1")
+                .replace(/<[^>]+>/g, "");
             nodes.push({
               kind: "html",
               html: bang
-                ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(label.map((c) => c.text).join(""))}"${title}>`
+                ? `<img src="${escapeHtml(url)}" alt="${alt()}"${title}>`
                 : `<a href="${escapeHtml(url)}"${title}>${render(label)}</a>`,
             });
             i = end + 1;

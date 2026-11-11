@@ -9,8 +9,8 @@ import { EditorView, keymap } from "@codemirror/view";
 const OPENS_AFTER = /[\s([{—–\-]$/u;
 
 /**
- * Pasted words get the apostrophes typing would give them (it's → it’s). Only an apostrophe
- * between two letters: quotes and measurements (6'2") are left as pasted.
+ * Pasted words get the quotes and apostrophes typing would give them (it's → it’s, "Hi" → “Hi”),
+ * but a mark after a digit, a measurement (6'2"), is left as pasted, as the formatter leaves it.
  */
 const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged || !tr.isUserEvent("input.paste")) return tr;
@@ -44,14 +44,14 @@ function curlQuotes(text: string): string {
     text
       .replace(/(?<=\p{L})'(?=\p{L})/gu, "’")
       .replace(/(^|[\s([{—–-])"/gmu, "$1“")
-      .replace(/"/gu, "”")
+      .replace(/(?<!\d)"/gu, "”")
       // A word cut short at its start ('Twas, 'n', 'em) keeps an apostrophe.
       .replace(
         /(^|[\s([{—–-])'(?=(?:twas|tis|em|n|cause|til|round|bout|ere)(?![\p{L}])|\d)/gimu,
         "$1’",
       )
       .replace(/(^|[\s([{—–-])'/gmu, "$1‘")
-      .replace(/'/gu, "’")
+      .replace(/(?<!\d)'/gu, "’")
   );
 }
 

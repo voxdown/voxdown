@@ -371,7 +371,13 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
         break;
       case "image":
         gap(item.range.from);
-        html += `<img class="vxd-image" src="${escapeHtml(safeUrl(item.src, true))}" alt="${escapeHtml(item.alt)}"${placed(item.range, options)}>`;
+        {
+          const image = `<img class="vxd-image" src="${escapeHtml(safeUrl(item.src, true))}" alt="${escapeHtml(item.alt)}"${item.link === undefined ? placed(item.range, options) : ""}>`;
+          html +=
+            item.link === undefined
+              ? image
+              : `<a href="${escapeHtml(safeUrl(item.link))}"${placed(item.range, options)}>${image}</a>`;
+        }
         at = item.range.to;
         break;
     }

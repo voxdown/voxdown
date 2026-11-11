@@ -21,6 +21,9 @@ const UTTERANCES = [
   "Not again",
   "Is anyone there",
   "Rock ’n’ roll, then",
+  "Give ’em a chance",
+  "’Tis the boys’ dinner",
+  "It’s the twins’ turn",
 ];
 const NARRATION = [
   "The dragon yawned.",

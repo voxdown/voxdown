@@ -46,6 +46,7 @@ function writeNow(story: Story): string {
   let text = story.source;
   // What the edits wrote, kept up to date as later edits move it.
   let written: Span[] = [];
+  let changeCount = 0;
   // Each word a speaker change gave, by its place among what is heard (edits never move words).
   const given: Array<{ index: number; speaker: string; what: string }> = [];
   // Each change is made on the text the ones before made, then read back: one that can't be made
@@ -61,7 +62,7 @@ function writeNow(story: Story): string {
     if (made && !made(parsed(next), current, changes)) {
       throw new RangeError(`write() can't make this change as asked: ${what}.`);
     }
-    written = afterChanges(written, changes);
+    written = afterChanges(written, changes, changeCount++);
     text = next;
   };
 
@@ -196,7 +197,12 @@ function withoutSpareMarks(text: string, spans: readonly Span[]): string {
     const mark = itemsOf(story).filter(
       (item): item is Extract<Item, { kind: "mark" }> =>
         item.kind === "mark" &&
-        written.some((span) => span.from <= item.range.from && item.range.to <= span.to),
+        written.some(
+          (span) =>
+            span.from <= item.range.from &&
+            item.range.to <= span.to &&
+            nearAnother(story, span, written),
+        ),
     )[tried];
     if (!mark) break;
     const found = shorter(current, mark).find((option) =>
@@ -214,10 +220,40 @@ function withoutSpareMarks(text: string, spans: readonly Span[]): string {
   return current;
 }
 
-type Span = { from: number; to: number };
+/** What an edit wrote, and which of the writer's changes it was. */
+type Span = { from: number; to: number; change?: number };
 
-/** Spans moved by changes, with what the changes inserted added. */
-function afterChanges(spans: readonly Span[], changes: readonly TextChange[]): Span[] {
+/**
+ * Whether another of the writer's changes wrote near this one: in its paragraph, or a few on
+ * either side, where a speech carried over paragraphs could join them (§5.7). Only there can one
+ * change make another's mark spare, so marks far from any other aren't read again.
+ */
+function nearAnother(story: Story, span: Span, written: readonly Span[]): boolean {
+  const blockAt = (at: number) => {
+    let low = 0;
+    let high = story.blocks.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if ((story.blocks[middle] as Block).range.from <= at) low = middle;
+      else high = middle - 1;
+    }
+    return low;
+  };
+  const here = blockAt(span.from);
+  return written.some(
+    (other) =>
+      other.change !== undefined &&
+      other.change !== span.change &&
+      Math.abs(blockAt(other.from) - here) <= 3,
+  );
+}
+
+/** Spans moved by changes, with what the changes inserted added (as `change`'s). */
+function afterChanges(
+  spans: readonly Span[],
+  changes: readonly TextChange[],
+  change?: number,
+): Span[] {
   const sorted = [...changes].sort((a, b) => a.from - b.from);
   const at = (offset: number) => {
     let delta = 0;
@@ -228,15 +264,20 @@ function afterChanges(spans: readonly Span[], changes: readonly TextChange[]): S
     }
     return offset + delta;
   };
-  const moved = spans.map((span) => ({
+  const moved: Span[] = spans.map((span) => ({
+    ...span,
     from: at(span.from),
     to: Math.max(at(span.from), at(span.to)),
   }));
   let delta = 0;
-  for (const change of sorted) {
-    const from = change.from + delta;
-    moved.push({ from, to: from + change.insert.length });
-    delta += change.insert.length - (change.to - change.from);
+  for (const made of sorted) {
+    const from = made.from + delta;
+    moved.push({
+      from,
+      to: from + made.insert.length,
+      ...(change === undefined ? {} : { change }),
+    });
+    delta += made.insert.length - (made.to - made.from);
   }
   return moved;
 }
@@ -357,7 +398,7 @@ function checkWritable(story: Story, original: Story): void {
   const fixed: Partial<Record<Item["kind"], readonly string[]>> = {
     speech: ["text", "quoted"],
     vocal: ["speaker", "direction"],
-    image: ["alt", "src"],
+    image: ["alt", "src", "link"],
     mark: ["speaker", "direction"],
     direction: ["direction"],
     instruction: ["name"],

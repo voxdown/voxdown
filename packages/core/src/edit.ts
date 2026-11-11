@@ -666,7 +666,7 @@ function heard(story: Story, target: readonly Item[] = []): Heard[] {
   const all = heardCache.get(story) ?? hear(story);
   if (remembering()) {
     heardCache.set(story, all);
-    held.add(story);
+    hold(story);
   }
   if (target.length === 0) return all;
   const targets = new Set(target);
@@ -678,7 +678,20 @@ function heard(story: Story, target: readonly Item[] = []): Heard[] {
 const heardCache = new WeakMap<Story, Heard[]>();
 const bookCache = new WeakMap<Story, string>();
 const recentStories: Story[] = [];
+/**
+ * The stories whose readings are kept, most recently used last, and only a few: the writer makes
+ * change after change, and a long story's readings are large.
+ */
 const held = new Set<Story>();
+function hold(story: Story): void {
+  held.delete(story);
+  held.add(story);
+  if (held.size <= 6) return;
+  const oldest = held.values().next().value as Story;
+  held.delete(oldest);
+  heardCache.delete(oldest);
+  bookCache.delete(oldest);
+}
 onForget(() => {
   for (const story of held) {
     heardCache.delete(story);
@@ -707,7 +720,7 @@ function bookOf(story: Story): string {
   const book = bookCache.get(story) ?? readBook(story);
   if (remembering()) {
     bookCache.set(story, book);
-    held.add(story);
+    hold(story);
   }
   return book;
 }
@@ -879,9 +892,9 @@ function kept(
 }
 
 /**
- * The changes with nothing left over: a mark the edit left claiming nothing is removed (as §13.5
- * removes a mark no longer needed), and so is a mark given back that turns out not to be needed.
- * Each removal is kept only if the promise still holds.
+ * The changes with nothing left over: a mark given back that turns out not to be needed is taken
+ * out again, and so is a direction given back that the group around it gives anyway. Each removal
+ * is kept only if the promise still holds.
  */
 function tidied(
   story: Story,
@@ -889,29 +902,9 @@ function tidied(
   changes: TextChange[],
   promise: Promise,
 ): TextChange[] {
-  const idleBefore = story.warnings.filter((warning) => warning.code === "idle-mark").length;
+  // A mark the edit left claiming nothing would be a new `idle-mark` warning, which no edit
+  // may bring (noNewWarnings): such an edit declines rather than be tidied here.
   let current = changes;
-  for (let round = 0; round < 8; round++) {
-    const edited = parsed(applyChanges(story.source, current));
-    const idle = edited.warnings.filter((warning) => warning.code === "idle-mark");
-    if (idle.length <= idleBefore) break;
-    // Only a mark the edit wrote: the author's own marks stay, idle or not.
-    const written = insertedSpans(current);
-    const ours = idle.filter((warning) =>
-      written.some((span) => warning.range.from >= span.from && warning.range.to <= span.to),
-    );
-    let removed = false;
-    for (const warning of ours) {
-      const range = removeWithSpace(edited.source, warning.range);
-      const next = editAt(current, range.from, range.to, "");
-      if (next && kept(story, before, next, promise) === "kept") {
-        current = next;
-        removed = true;
-        break;
-      }
-    }
-    if (!removed) break;
-  }
   // Marks given back that another one already covers.
   for (const change of [...current]) {
     if (change.from !== change.to || !change.insert.startsWith("@")) continue;
@@ -925,6 +918,20 @@ function tidied(
       const without = next.filter((other) => other.from !== other.to || other.insert !== "");
       if (kept(story, before, without, promise) === "kept") {
         current = without;
+        break;
+      }
+    }
+  }
+  // A name given back with a direction that the group around it gives anyway
+  // (`::: whispering` … `@Narrator (whispering) [gasps]`): the name alone will do.
+  for (const change of [...current]) {
+    if (change.from !== change.to) continue;
+    for (const match of change.insert.matchAll(/(?<=[\p{L}\p{N}_'’-]) \([^)]*\)/gu)) {
+      const at = match.index ?? 0;
+      const insert = change.insert.slice(0, at) + change.insert.slice(at + match[0].length);
+      const next = current.map((other) => (other === change ? { ...other, insert } : other));
+      if (kept(story, before, next, promise) === "kept") {
+        current = next;
         break;
       }
     }
@@ -956,18 +963,6 @@ function noNewWarnings(story: Story, changes: readonly TextChange[]): boolean {
 /** Whether the book reads the same after the changes: an edit adds or moves marks, never print. */
 function sameBook(story: Story, changes: readonly TextChange[]): boolean {
   return bookOf(parsed(applyChanges(story.source, changes))) === bookOf(story);
-}
-
-/** Where the changes' own text is, in the text they make. */
-function insertedSpans(changes: readonly TextChange[]): Range[] {
-  let delta = 0;
-  return [...changes]
-    .sort((a, b) => a.from - b.from || a.to - b.to)
-    .map((change) => {
-      const from = change.from + delta;
-      delta += change.insert.length - (change.to - change.from);
-      return { from, to: from + change.insert.length };
-    });
 }
 
 /**
@@ -1460,9 +1455,16 @@ function insertSoundNow(story: Story, offset: number, description: string): Text
   const insert = ` [${description.trim().replace(/([[\]\\])/g, "\\$1")}]`;
   const changes = [{ from: at, to: at, insert }];
   const after = parsed(applyChanges(source, changes));
-  const added = allLines(after)
-    .flatMap((line) => line.items)
-    .some((item) => item.kind === "sound" && item.range.from === at + 1);
+  // The new sound, in a block that is read aloud: in `{book only}` or `{hidden}` text it would be
+  // written and never heard.
+  const added = after.blocks.some(
+    (block) =>
+      block.kind !== "break" &&
+      (block.visibility === "both" || block.visibility === "audio") &&
+      (block.kind === "heading" ? [block.line] : block.lines).some((line) =>
+        line.items.some((item) => item.kind === "sound" && item.range.from === at + 1),
+      ),
+  );
   return added && sameHearing(story, after) && bookOf(after) === bookOf(story) ? changes : [];
 }
 

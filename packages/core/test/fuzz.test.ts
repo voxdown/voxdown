@@ -42,6 +42,7 @@ import {
   allItems,
   allLines,
   brokenPromise,
+  exactChanges,
   heardAt,
   narrationBefore,
   newWarnings,
@@ -430,13 +431,30 @@ describe("on stories made at random", () => {
           const inWords = stretch
             ? stretch.textRange.from + (pick % (stretch.textRange.to - stretch.textRange.from + 1))
             : null;
+          // A sound has no place in words that aren't read aloud: there it declines, uncounted.
+          const heard =
+            stretch !== undefined &&
+            story.blocks.some(
+              (block) =>
+                block.kind !== "break" &&
+                (block.visibility === "both" || block.visibility === "audio") &&
+                (block.kind === "heading" ? [block.line] : block.lines).some((line) =>
+                  line.items.includes(stretch),
+                ),
+            );
           for (const [offset, counted] of [
             [at, false],
-            [inWords, true],
+            [inWords, heard],
           ] as const) {
             if (offset === null) continue;
             const sound = tryEdit(source, story, insertSound(story, offset, "clatter"), counted);
-            if (sound) expect(count(sound.after, "sound")).toBe(count(story, "sound") + 1);
+            if (sound) {
+              expect(count(sound.after, "sound")).toBe(count(story, "sound") + 1);
+              // And it is heard: one more sound among the lines read aloud.
+              const heardSounds = (of: Story) =>
+                lines(of).filter((row) => row.kind === "sound").length;
+              expect(heardSounds(sound.after)).toBe(heardSounds(story) + 1);
+            }
           }
           const line = tryEdit(source, story, insertLine(story, at, text), true);
           if (line) expect(line.out.replace(/^\uFEFF/, "").split(/\r?\n/)).toContain(text);
@@ -864,7 +882,7 @@ describe("on prose made at random", () => {
             );
             expect(made || sameName(target.speaker, name), `${name}: ${target.text}`).toBe(true);
           }
-          expect(spareMark(original, diffChanges(source, text))).toBe(null);
+          expect(spareMark(original, exactChanges(source, diffChanges(source, text)))).toBe(null);
         },
       ),
     );

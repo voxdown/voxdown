@@ -106,23 +106,39 @@ export function quoteOf(story: Story, target: Speech, acrossDirections = true): 
 
 const OPENS = /^\s*["'“‘„‚«‹»›]/u;
 
-/** Whether a paragraph's text leaves a quote open: its last quotation mark opens one. */
+/** Each opening mark and the marks that close it (§5.5). */
+const CLOSES: Record<string, string> = {
+  "“": "”",
+  "‘": "’",
+  "„": "“”",
+  "‚": "‘’",
+  "«": "»",
+  "»": "«»",
+  "‹": "›",
+  '"': '"',
+  "'": "'",
+};
+
+/**
+ * Whether a paragraph's text leaves a quote open: its marks paired as they come, each closing the
+ * last one open if it can, else opening one (so `»` closes a French `«`, and opens a Danish quote).
+ */
 function leavesOpen(paragraph: string): boolean {
   // Apostrophes aside: rock ’n’ roll's, a word's own, and one that starts a word (’90s).
   const text = paragraph.replace(/[’']n[’']/gu, "n");
-  const marks = [...text.matchAll(/["'“”‘’„‚«»‹›]/gu)].filter((m) => {
+  const open: string[] = [];
+  for (const m of text.matchAll(/["'“”‘’„‚«»‹›]/gu)) {
     const at = m.index ?? 0;
+    const mark = m[0];
     const before = text[at - 1] ?? " ";
     const after = text[at + 1] ?? " ";
-    if (!/['’]/u.test(m[0])) return true;
-    return (
-      !(/\p{L}/u.test(before) && /\p{L}/u.test(after)) && !(m[0] === "’" && /\s/u.test(before))
-    );
-  });
-  const last = marks.at(-1);
-  if (!last) return false;
-  const before = text[(last.index ?? 0) - 1] ?? " ";
-  return /[“‘„‚«‹]/u.test(last[0]) || (/["']/u.test(last[0]) && /\s/u.test(before));
+    if (/['’]/u.test(mark) && /\p{L}/u.test(before) && /\p{L}/u.test(after)) continue;
+    if (mark === "’" && /\s/u.test(before)) continue;
+    const top = open[open.length - 1];
+    if (top && (CLOSES[top] ?? "").includes(mark)) open.pop();
+    else if (/[“‘„‚«»‹]/u.test(mark) || (/["']/u.test(mark) && /\s/u.test(before))) open.push(mark);
+  }
+  return open.length > 0;
 }
 
 /**
@@ -453,4 +469,58 @@ export function quoteEnd(source: string, open: number): number {
     at++;
   }
   return source.length;
+}
+
+/**
+ * The changes, each split into just what it removes and inserts, character by character: the
+ * writer's line-by-line changes can span words that didn't change between two that did, which a
+ * check of what was written must not count as written.
+ */
+export function exactChanges(source: string, changes: readonly TextChange[]): TextChange[] {
+  const out: TextChange[] = [];
+  for (const change of changes) {
+    const a = source.slice(change.from, change.to);
+    const b = change.insert;
+    // The longest common subsequence of the two, as a table of suffix lengths.
+    const table = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1));
+    for (let i = a.length - 1; i >= 0; i--) {
+      for (let j = b.length - 1; j >= 0; j--) {
+        const row = table[i] as Uint16Array;
+        row[j] =
+          a[i] === b[j]
+            ? ((table[i + 1] as Uint16Array)[j + 1] as number) + 1
+            : Math.max((table[i + 1] as Uint16Array)[j] as number, row[j + 1] as number);
+      }
+    }
+    let i = 0;
+    let j = 0;
+    let pending: TextChange | null = null;
+    const flush = () => {
+      if (pending) out.push(pending);
+      pending = null;
+    };
+    while (i < a.length || j < b.length) {
+      if (i < a.length && j < b.length && a[i] === b[j]) {
+        flush();
+        i++;
+        j++;
+        continue;
+      }
+      pending ??= { from: change.from + i, to: change.from + i, insert: "" };
+      const removing =
+        j >= b.length ||
+        (i < a.length &&
+          ((table[i + 1] as Uint16Array)[j] as number) >=
+            ((table[i] as Uint16Array)[j + 1] as number));
+      if (removing) {
+        pending.to = change.from + i + 1;
+        i++;
+      } else {
+        pending.insert += b[j];
+        j++;
+      }
+    }
+    flush();
+  }
+  return out;
 }

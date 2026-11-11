@@ -5,8 +5,9 @@
  */
 import fc from "fast-check";
 import { Window } from "happy-dom";
+import MarkdownIt from "markdown-it";
 import { describe, expect, it } from "vitest";
-import { bookText, parse } from "voxdown";
+import { bookText, parse, spokenScript } from "voxdown";
 import { renderBook, renderDocument, renderScript } from "../src/index";
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1000);
@@ -127,7 +128,10 @@ function balanced(html: string): boolean {
   return true;
 }
 
-/** A link as its text and an image as nothing, an address running to its balancing `)`. */
+/**
+ * A link as its text and an image as nothing, an address running to its balancing `)`, the link
+ * opening at the `[` nearest its `]`.
+ */
 function withoutLinks(text: string): string {
   let out = "";
   for (let i = 0; i < text.length; i++) {
@@ -135,6 +139,12 @@ function withoutLinks(text: string): string {
     if (text[i] === "[" || bang) {
       const open = bang ? i + 1 : i;
       const close = text.indexOf("]", open + 1);
+      // A `[` before that `]` is the link's, if it is one: Markdown pairs a `]` with the nearest `[`.
+      const nested = text.indexOf("[", open + 1);
+      if (nested >= 0 && nested < close) {
+        out += text[i];
+        continue;
+      }
       let end = -1;
       for (
         let at = close + 1, depth = 0;
@@ -169,6 +179,122 @@ const plain = (text: string) =>
     .join("\n")
     .replace(/[*_#]|-{3,}/g, "")
     .replace(/\s+/g, "");
+
+/**
+ * Lines of Markdown alone (§8.3: links and images work as in Markdown, and so does emphasis): words,
+ * emphasis signs, brackets, parentheses, escapes, links with titles and addresses in `<…>`.
+ */
+const markdownLine = fc
+  .array(
+    fc.constantFrom(
+      "a",
+      "word",
+      " ",
+      "*",
+      "**",
+      "***",
+      "_",
+      "__",
+      ".",
+      ",",
+      "!",
+      "snake_case",
+      "x*y",
+      "[",
+      "]",
+      "(",
+      ")",
+      "[x](y)",
+      "![i](p.png)",
+      "\\*",
+      "\\_",
+      "\\[",
+      '[t](u "T (a")',
+      "[t](<u v>)",
+      "](",
+      "*[x](y)*",
+      "[![i](p.png)](y)",
+      "![a [b](x)](q.png)",
+      "[![i](p.png) and more](y)",
+      "&amp;",
+      "&quot;",
+      "&#8217;",
+      "&ast;",
+      "&nosuch;",
+      "[t](u?a=1&amp;b=2)",
+    ),
+    { minLength: 1, maxLength: 12 },
+  )
+  .map((pieces) => pieces.join("").trim())
+  // Not a list item, a scene break or a line of nothing but signs, which Markdown reads as blocks.
+  .filter((line) => line !== "" && !/^[*-] /.test(line) && !/^[-*_ ]+$/.test(line));
+
+/** Whether the line holds a sound (§8.1), VoxDown's own: Markdown keeps its brackets as text. */
+const hasSound = (line: string) =>
+  parse(line).blocks.some(
+    (block) =>
+      block.kind === "paragraph" &&
+      block.lines.some((row) =>
+        row.items.some((item) => item.kind === "sound" || item.kind === "image"),
+      ),
+  );
+
+describe("Markdown, as a CommonMark reader (markdown-it) reads it", () => {
+  const markdown = new MarkdownIt("commonmark");
+  /** markdown-it's HTML as the views write it: `<img …>`, and addresses not percent-encoded. */
+  const theirs = (line: string) =>
+    markdown
+      .renderInline(line)
+      .replace(/ \/>/g, ">")
+      .replace(
+        /(href|src)="([^"]*)"/g,
+        (_, name: string, url: string) => `${name}="${decodeURI(url)}"`,
+      );
+
+  it("the book view shows a line's emphasis, links and images as Markdown does", async () => {
+    let compared = 0;
+    await check(
+      fc.property(markdownLine, (line) => {
+        // A sound is left out of the book; a line with one isn't Markdown alone.
+        const story = parse(line);
+        if (
+          story.blocks.some(
+            (b) =>
+              b.kind === "paragraph" &&
+              b.lines.some((r) => r.items.some((i) => i.kind === "sound")),
+          )
+        )
+          return;
+        const ours = renderBook(story, { header: false }).match(/<p[^>]*>(.*)<\/p>/s)?.[1] ?? "";
+        compared++;
+        expect(ours, line).toBe(theirs(line));
+      }),
+    );
+    expect(compared).toBeGreaterThan(RUNS / 2);
+  });
+
+  it("the parser hears a line's words as Markdown shows them, addresses and signs aside", async () => {
+    const words = (html: string) =>
+      html
+        .replace(/<[^>]*>/g, "")
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/[*_]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    await check(
+      fc.property(markdownLine, (line) => {
+        if (hasSound(line)) return;
+        const shown = words(theirs(line));
+        // A line with no letter or digit isn't read aloud (§12.1).
+        if (!/[\p{L}\p{N}]/u.test(shown)) return;
+        expect(words(spokenScript(parse(line)).replace(/^Narrator: /gm, "")), line).toBe(shown);
+      }),
+    );
+  });
+});
 
 describe("the views, on stories made at random", () => {
   it("print the book text in the book view, as a reader sees it", async () => {

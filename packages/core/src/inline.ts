@@ -22,6 +22,7 @@ import {
   isSpace,
   removeEscapes,
 } from "./chars";
+import { characterReference } from "./entities";
 import type { Range } from "./source";
 import type { Warn } from "./warnings";
 
@@ -46,7 +47,7 @@ export type InstructionToken = {
   range: Range;
 };
 export type NoteToken = { type: "note"; text: string; range: Range };
-export type ImageToken = { type: "image"; alt: string; src: string; range: Range };
+export type ImageToken = { type: "image"; alt: string; src: string; link?: string; range: Range };
 export type OpenToken = { type: "open"; char: string; range: Range };
 export type CloseToken = { type: "close"; char: string; range: Range };
 export type QuoteToken = OpenToken | CloseToken;
@@ -169,7 +170,7 @@ type Segment = {
   nesting: Set<number>;
   /** For each `(`, the `)` that ends the link address and title it starts (see `linkEnds`). */
   links: Int32Array;
-  next: { "]": Int32Array; "}": Int32Array };
+  next: { "]": Int32Array; "}": Int32Array; "[": Int32Array };
 };
 let segment: Segment | null = null;
 
@@ -193,26 +194,46 @@ function scanSegment(source: string, from: number, to: number): Segment {
   }
   const brackets = new Int32Array(to - from + 1).fill(-1);
   const braces = new Int32Array(to - from + 1).fill(-1);
+  const openers = new Int32Array(to - from + 1).fill(-1);
   for (let i = to - 1; i >= from; i--) {
     const at = i - from;
     brackets[at] = plain[at] && source[i] === "]" ? i : (brackets[at + 1] as number);
     braces[at] = plain[at] && source[i] === "}" ? i : (braces[at + 1] as number);
+    openers[at] = plain[at] && source[i] === "[" ? i : (openers[at + 1] as number);
   }
-  // Only a segment where a `]` meets a `(` can hold a link: most hold none.
-  const linked = source.indexOf("](", from);
+  // Only a segment where a `]` meets a `(` can hold a link: most hold none. Searched for in the
+  // segment alone: a search on to the end of the file, from every line, took time with its square.
+  const linked = source.slice(from, to).indexOf("](");
   const links =
-    linked >= 0 && linked < to
+    linked >= 0
       ? linkEnds(
           to - from,
           (at) => source[from + at],
           (at) => plain[at] === 1,
         )
       : NO_LINKS;
-  // A link may not hold another (Markdown): where links nest, the innermost is the link.
+  // A link may not hold another (Markdown): where links nest, the innermost is the link. An
+  // image may sit in a link's text, and a link in an image's description: only links count.
+  const isImage = (open: number) => source[open - 1] === "!" && plain[open - 1 - from] === 1;
+  // How many images' descriptions hold each place: a link in one is the image's words.
+  const inImage = new Int32Array(to - from + 1);
+  for (const [open, close] of squares) {
+    if (!isImage(open)) continue;
+    (inImage[open + 1 - from] as number)++;
+    (inImage[close - from] as number)--;
+  }
+  for (let at = 1; at < inImage.length; at++) {
+    inImage[at] = (inImage[at] as number) + (inImage[at - 1] as number);
+  }
   const candidates = [...squares.keys()]
     .filter((open) => {
       const close = squares.get(open) as number;
-      return source[close + 1] === "(" && (links[close + 1 - from] ?? -1) >= 0;
+      return (
+        source[close + 1] === "(" &&
+        (links[close + 1 - from] ?? -1) >= 0 &&
+        !isImage(open) &&
+        (inImage[open - from] as number) === 0
+      );
     })
     .sort((a, b) => a - b);
   const nesting = new Set<number>();
@@ -228,7 +249,7 @@ function scanSegment(source: string, from: number, to: number): Segment {
     squares,
     nesting,
     links,
-    next: { "]": brackets, "}": braces },
+    next: { "]": brackets, "}": braces, "[": openers },
   };
 }
 
@@ -340,6 +361,18 @@ function lexAtom(source: string, i: number, to: number, warn: Warn): Atom | null
       return i + 1 < to && isEscapable(source[i + 1])
         ? { type: "text", value: source[i + 1] ?? "", range: { from: i, to: i + 2 }, plain: false }
         : null;
+    case "&": {
+      // A character reference stands for its character (§11), and is never a mark: `&quot;`.
+      const reference = characterReference(source, i);
+      return reference && i + reference.length <= to
+        ? {
+            type: "text",
+            value: reference.char,
+            range: { from: i, to: i + reference.length },
+            plain: false,
+          }
+        : null;
+    }
     case "@":
       return lexAt(source, i, to);
     case "!":
@@ -431,10 +464,35 @@ function lexImage(source: string, at: number, to: number): Atom | null {
   if (!link) return null;
   return {
     type: "image",
-    alt: source.slice(at + 2, link.close),
+    alt: label(source, at + 2, link.close, true),
     src: destination(link.target).url,
     range: { from: at, to: link.end + 1 },
   };
+}
+
+/**
+ * A link's text or an image's description as text: a link in it as its text, and an image in it
+ * as its description in a description (`alt`), or as nothing in what is heard.
+ */
+function label(source: string, from: number, to: number, alt: boolean): string {
+  if (!source.slice(from, to).includes("](")) return source.slice(from, to);
+  let out = "";
+  for (let i = from; i < to; i++) {
+    const image = source[i] === "!" && source[i + 1] === "[" ? lexImage(source, i, to) : null;
+    if (image?.type === "image") {
+      if (alt) out += image.alt;
+      i = image.range.to - 1;
+      continue;
+    }
+    const link = source[i] === "[" ? linkAt(source, i, to) : null;
+    if (link) {
+      out += label(source, i + 1, link.close, alt);
+      i = link.end;
+      continue;
+    }
+    out += source[i];
+  }
+  return out;
 }
 
 /**
@@ -492,10 +550,23 @@ function lexBracket(source: string, at: number, to: number, warn: Warn): Atom | 
   if (inSegment(source, at, to)?.nesting.has(at)) return null;
   // A link whose text holds brackets: `[a [fine] story](…)`.
   const link = linkAt(source, at, to);
+  // A link around an image and nothing else, `[![A map](map.png)](map-large.png)`: the image,
+  // with its link.
+  if (link) {
+    const lead = at + 1 + (/^\s*/.exec(source.slice(at + 1, link.close))?.[0].length ?? 0);
+    const image = source[lead] === "!" ? lexImage(source, lead, link.close) : null;
+    if (image?.type === "image" && source.slice(image.range.to, link.close).trim() === "") {
+      return {
+        ...image,
+        link: destination(link.target).url,
+        range: { from: at, to: link.end + 1 },
+      };
+    }
+  }
   if (link && link.close !== findUnescaped(source, at + 1, to, "]")) {
     return {
       type: "text",
-      value: removeEscapes(source.slice(at + 1, link.close)),
+      value: removeEscapes(label(source, at + 1, link.close, false)),
       range: { from: at, to: link.end + 1 },
       plain: false,
     };
@@ -503,10 +574,20 @@ function lexBracket(source: string, at: number, to: number, warn: Warn): Atom | 
   const close = findUnescaped(source, at + 1, to, "]");
   if (close < 0) return null;
   const inner = source.slice(at + 1, close);
+  // A `[` before that `]` is the link's, if it is one, and this one is text (Markdown pairs a
+  // `]` with the nearest `[`): `[[t](u)` links `t`.
+  const nested = findUnescaped(source, at + 1, to, "[");
+  if (source[close + 1] === "(" && nested >= 0 && nested < close) return null;
   if (close + 1 < to && source[close + 1] === "(") {
     const end = matchLink(source, close + 1, to);
     const target = end < 0 ? "" : source.slice(close + 2, end).trim();
-    if (end < 0 || !looksLikeAddress(target)) {
+    if (end < 0) {
+      warn(
+        "sound-looks-like-link",
+        `“[${inner}](” doesn't close on its line, so it reads as a sound and text: a link is written on one line (§8.3). If it is a sound, put a space after it.`,
+        { from: at, to: close + 2 },
+      );
+    } else if (!looksLikeAddress(target)) {
       warn(
         "sound-looks-like-link",
         `A sound followed directly by “(” reads as a Markdown link. If “[${inner}]” is a sound, put a space after it.`,
@@ -600,7 +681,7 @@ function matchParen(source: string, open: number, to: number): number {
   return -1;
 }
 
-function findUnescaped(source: string, from: number, to: number, target: "]" | "}"): number {
+function findUnescaped(source: string, from: number, to: number, target: "]" | "}" | "["): number {
   const known = inSegment(source, from, to);
   if (known) return known.next[target][from - known.from] ?? -1;
   for (let i = from; i < to; i++) {

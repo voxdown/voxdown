@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  bookText,
   fromFountain,
   lines,
   linesToCsv,
@@ -9,6 +10,7 @@ import {
   spokenScript,
   textByCharacter,
 } from "../src/index";
+import { lexedTokens } from "../src/lexed";
 import { root } from "./examples";
 
 const peter = parse(readFileSync(join(root, "examples", "peter-rabbit.vxd"), "utf8"));
@@ -112,6 +114,25 @@ describe("what review found", () => {
   });
 });
 
+describe("the spec's other quotation marks (§5.5) and scripts written without spaces (§5.2)", () => {
+  it("closes Swedish »…» and Danish »…«, and German ‚…‘ or ‚…’", () => {
+    expect(spokenScript(parse("@Anna »Hej,» sa Anna."))).toBe("Anna: Hej,\nNarrator: sa Anna.");
+    expect(spokenScript(parse("@Anna »Hej,« sagde Anna."))).toBe(
+      "Anna: Hej,\nNarrator: sagde Anna.",
+    );
+    for (const close of ["‘", "’"]) {
+      expect(spokenScript(parse(`@Anna ‚nein${close}, sagte sie.`))).toBe(
+        "Anna: nein\nNarrator: , sagte sie.",
+      );
+    }
+  });
+
+  it("reads a mark straight after Thai, as after Chinese or Japanese", () => {
+    expect(spokenScript(parse("สมชาย@Somchai “สวัสดี”"))).toBe("Narrator: สมชาย\nSomchai: สวัสดี");
+    expect(spokenScript(parse("花子は@Hanako「はい」"))).toBe("Narrator: 花子は\nHanako: はい");
+  });
+});
+
 describe("links, as Markdown reads them (§8.3)", () => {
   it("runs a link's text to the bracket that balances it", () => {
     const story = parse("[a [fine] story](https://example.com) and on.");
@@ -173,6 +194,58 @@ describe("links, as Markdown reads them (§8.3)", () => {
       .flatMap((line) => line.items)
       .find((item) => item.kind === "image");
     expect(image).toMatchObject({ alt: "pic", src: "a b>.png" });
+  });
+
+  it("reads a link on one line: one that runs onto the next is a sound and text, and warned of", () => {
+    const story = parse('See [the map](maps.png\n"A map").');
+    expect(spokenScript(story)).toBe(
+      'Narrator: See\n[the map]\nNarrator: (maps.png\nNarrator: "A map").',
+    );
+    expect(story.warnings.map((warning) => warning.code)).toContain("sound-looks-like-link");
+    expect(story.warnings[0]?.message).toMatch(/doesn't close on its line/);
+  });
+
+  it("opens a link at the `[` nearest its `]`: a `[` left open before it is text", () => {
+    const story = parse("Read [[the map](maps.png) now.");
+    expect(spokenScript(story)).toBe("Narrator: Read [the map now.");
+    const tokens = lexedTokens(story.source).filter(
+      (token) => token.type === "text" && !token.plain,
+    );
+    expect(tokens.map((token) => story.source.slice(token.range.from, token.range.to))).toEqual([
+      "[the map](maps.png)",
+    ]);
+  });
+
+  it("reads an image that is a link's text as an image, with its link (§8.3)", () => {
+    const story = parse("See [![A map](map.png)](map-large.png) here.");
+    const image = story.blocks
+      .flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+      .flatMap((line) => line.items)
+      .find((item) => item.kind === "image");
+    expect(image).toMatchObject({ alt: "A map", src: "map.png", link: "map-large.png" });
+    expect(spokenScript(story)).toBe(
+      "Narrator: See\n[![A map](map.png)](map-large.png)\nNarrator: here.",
+    );
+    // An image with words beside it in a link's text: the words are heard, the image isn't.
+    expect(spokenScript(parse("[![a](i.png) and more](y)"))).toBe("Narrator: and more");
+    // A link in an image's description is its words.
+    expect(spokenScript(parse("![a [b](x)](y.png)"))).toBe("![a b](y.png)");
+  });
+
+  it("reads a character reference as its character, never as a mark (§11)", () => {
+    expect(spokenScript(parse("Tom &amp; Jerry said &quot;hello&quot;."))).toBe(
+      'Narrator: Tom & Jerry said "hello".',
+    );
+    expect(spokenScript(parse("@Tom “It&#8217;s mine &#x26; yours.”"))).toBe(
+      "Tom: It’s mine & yours.",
+    );
+    // An escaped `&`, an unknown name and a missing `;` are text as written.
+    expect(spokenScript(parse("A \\&amp; B, &nosuch; and &amp"))).toBe(
+      "Narrator: A &amp; B, &nosuch; and &amp",
+    );
+    expect(bookText(parse("[Tom &quot;Cat&quot;](c.html?x=1&amp;y=2)"))).toBe(
+      '[Tom "Cat"](c.html?x=1&y=2)',
+    );
   });
 
   it("reads brackets nested deep, and lines of many links, in linear time", () => {
@@ -259,5 +332,12 @@ describe("the Fountain import", () => {
     expect(spokenScript(story)).toContain(
       'SirPercival (nervous): Hello? Is anyone "home"?\nSirPercival (louder): HELLO?',
     );
+  });
+
+  it("writes a cue in capitals as a name: an apostrophe takes a capital only after one letter", () => {
+    const vxd = fromFountain("INT. HOUSE - DAY\n\nBOB'S MOTHER\nHello.\n\nO'BRIEN\nHi.\n");
+    expect(vxd).toContain("Bob'sMother: Bob's Mother");
+    expect(vxd).toContain("@Bob'sMother “Hello.”");
+    expect(vxd).toContain("@O'Brien “Hi.”");
   });
 });

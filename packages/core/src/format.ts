@@ -375,6 +375,19 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
     skip.fill(1, range.from, range.to);
   }
   const closer = closersAfter(source);
+  // Where the quote around each offset ends, as the parser reads its quotes: an inner quote must
+  // close inside it.
+  const outerEnd = new Int32Array(source.length + 1).fill(-1);
+  {
+    let open = -1;
+    for (const token of tokens) {
+      if (token.type === "open") open = token.range.to;
+      else if (token.type === "close" && open >= 0) {
+        outerEnd.fill(token.range.from, open, token.range.from);
+        open = -1;
+      }
+    }
+  }
   const changes: TextChange[] = [];
   const decided = new Set<number>();
   // Where a quote opens, straight or curly: a quote right after one opens too (`"'Hello,'`).
@@ -468,21 +481,27 @@ function quoteChanges(story: Story, language: string | undefined): TextChange[] 
       }
       continue;
     }
-    // `rock 'n' roll` and a word's own apostrophe (`don't`, `dogs'`) are apostrophes.
+    // `rock 'n' roll`, a word cut short (`'em`, `'Tis`) and a word's own apostrophe (`don't`,
+    // `dogs'`) are apostrophes.
     const letterBefore = /[\p{L}\p{N}]/u.test(source[i - 1] ?? "");
     const letterAfter = after !== undefined && /[\p{L}\p{N}]/u.test(after);
-    if (isElision(source, i) || (letterBefore && letterAfter)) {
+    // An inner quote's closing mark comes before the quote around it ends (or the line, outside one).
+    const end = outerEnd[i] ?? -1;
+    const closes = (closer[i + 1] ?? -1) >= 0 && (end < 0 || (closer[i + 1] as number) < end);
+    if (isElision(source, i) || isCutShort(source, i) || (letterBefore && letterAfter)) {
       changes.push({ from: i, to: i + 1, insert: "’" });
     } else if (inner.single && !letterAfter) {
       changes.push({ from: i, to: i + 1, insert: style.innerClose });
       inner.single = false;
-    } else if (!inner.single && openContext(i) && followed && (closer[i + 1] ?? 0) === 1) {
+    } else if (!inner.single && openContext(i) && followed && closes) {
       changes.push({ from: i, to: i + 1, insert: style.innerOpen });
       opened.add(i);
       inner.single = true;
-    } else {
+    } else if (letterBefore || !openContext(i)) {
       changes.push({ from: i, to: i + 1, insert: "’" });
     }
+    // Else a `'` that starts a word and nothing closes: an opening mark or an apostrophe, which
+    // can't be told apart, so it stays as written.
   }
   return unsafe.size === 0 ? changes : changes.filter((change) => !unsafe.has(lineAt(change.from)));
 }
@@ -508,20 +527,38 @@ function isOpening(char: string): boolean {
 }
 
 /**
- * For each offset, whether a straight `'` that ends a word follows it on its line: one that could
- * close a quote opened before it.
+ * For each offset, the next straight `'` on its line that ends a word, one that could close a
+ * quote opened before it, or -1.
  */
-function closersAfter(source: string): Uint8Array {
-  const after = new Uint8Array(source.length + 1);
+function closersAfter(source: string): Int32Array {
+  const after = new Int32Array(source.length + 1).fill(-1);
   for (let i = source.length - 1; i >= 0; i--) {
     const char = source[i];
     if (char === "\n") continue;
     const closes =
-      char === "'" && /\S/u.test(source[i - 1] ?? "") && !/[\p{L}\p{N}]/u.test(source[i + 1] ?? "");
-    after[i] = closes || after[i + 1] === 1 ? 1 : 0;
+      char === "'" &&
+      /\S/u.test(source[i - 1] ?? "") &&
+      !/[\p{L}\p{N}]/u.test(source[i + 1] ?? "") &&
+      !isCutShort(source, i);
+    after[i] = closes ? i : (after[i + 1] as number);
   }
   return after;
 }
+
+/**
+ * Whether the `'` at `at` starts a word cut short, as dialogue writes them: `'em`, `'Tis`,
+ * `'twas`, `'cause`, `'til`, `'bout`, `'round`…
+ */
+function isCutShort(source: string, at: number): boolean {
+  return (
+    source[at] === "'" &&
+    !/[\p{L}\p{N}]/u.test(source[at - 1] ?? "") &&
+    CUT_SHORT.test(source.slice(at + 1, at + 8))
+  );
+}
+
+const CUT_SHORT =
+  /^(?:tis|twas|twere|twill|twould|em|cause|cos|til|till|bout|round|cept|fore|neath|gainst|mongst|ere)(?![\p{L}\p{N}])/iu;
 
 /** Where marks, directions, sounds, notes, instructions and images are: never reworded. */
 function markRanges(story: Story): Array<{ from: number; to: number }> {

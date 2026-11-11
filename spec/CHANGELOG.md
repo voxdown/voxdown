@@ -4,10 +4,13 @@ The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
 ## Unreleased
 
+- **Character references** (§11): `&amp;`, `&quot;`, `&#8217;` and the HTML Standard's other names stand for their characters, as in Markdown, heard and printed as them. This gives meaning to text a 1.0 file would rarely hold, so by §16 it belongs to the next minor version, 1.1.
+
 Clarifications: no file reads differently.
 
 - §13, rule 3: a direction of its own for a paragraph that carries a speech on goes just inside its opening mark, and a mark between two characters with no space between them goes without its space, so the book doesn't change.
 - §13, rule 4: a speech over paragraphs is given away whole, from any of its paragraphs.
+- §8.3: a link is written on one line, as marks are; one that runs onto the next line is read as a sound and text, and warned about. An image may be a link's text, as in Markdown, with a new example; §12.1 gives its line in the spoken script.
 
 ## 1.0 (9 November 2026)
 

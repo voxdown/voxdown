@@ -123,6 +123,30 @@ describe("the book view", () => {
     expect(html("[a](b(c d)")).toBe("Read (b(c d) now.");
   });
 
+  it("opens a link at the `[` nearest its `]`, a `[` left open before it being text", () => {
+    // As markdown-it reads each.
+    const html = (text: string) =>
+      renderBook(parse(text), { header: false }).match(/<p[^>]*>(.*)<\/p>/s)?.[1];
+    expect(html("[[t](u) now")).toBe('[<a href="u">t</a> now');
+    expect(html("[a *[x](y)* b")).toBe('[a <em><a href="y">x</a></em> b');
+    expect(html("[![i](p.png) here")).toBe('[<img src="p.png" alt="i"> here');
+  });
+
+  it("links an image that is a link's text, and decodes character references", () => {
+    const html = (text: string) =>
+      renderBook(parse(text), { header: false }).match(/<p[^>]*>(.*)<\/p>/s)?.[1];
+    expect(html("[![A map](map.png)](map-large.png)")).toBe(
+      '<a href="map-large.png"><img src="map.png" alt="A map"></a>',
+    );
+    expect(renderScript(parse("[![A map](map.png)](map-large.png)"), { header: false })).toContain(
+      '<a href="map-large.png"><img class="vxd-image" src="map.png" alt="A map"></a>',
+    );
+    expect(html("[Tom &quot;Cat&quot;](c.html?x=1&amp;y=2)")).toBe(
+      '<a href="c.html?x=1&amp;y=2">Tom &quot;Cat&quot;</a>',
+    );
+    expect(html("Tom &amp; Jerry &ast;not em&ast;")).toBe("Tom &amp; Jerry *not em*");
+  });
+
   it("makes the innermost of links inside links the link, as Markdown and the parser do", () => {
     const html = (text: string) => renderBook(parse(text), { header: false });
     expect(html("[a [b](x) c](y)")).toContain('[a <a href="x">b</a> c](y)');

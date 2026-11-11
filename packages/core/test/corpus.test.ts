@@ -46,6 +46,12 @@ const EXPECTED_WARNINGS: Record<string, string[]> = {
   "the-last-lamp.vxd": [],
 };
 
+/** The marks of each book that stay straight once straightened, and why (see below). */
+const STRAIGHT_STAYS: Record<string, string[]> = {
+  // Abernethy's speech over three paragraphs, in single quotes: its second and third openings.
+  "the-last-lamp.vxd": ["‘When", "‘Then"],
+};
+
 /** Who says what, and how: the words as heard, whatever their quotation marks and apostrophes. */
 const who = (source: string) =>
   lines(parse(source)).map((row) => [
@@ -146,6 +152,39 @@ describe("real books", () => {
         60_000,
       );
 
+      it("gets its quotation marks back when they are made straight and curled again", () => {
+        // The author's curly marks made straight (but in notes and escapes), then curled by the
+        // formatter in the book's language: every curly mark comes back as the author wrote it.
+        // A single-quoted speech over paragraphs can't be written with straight marks (§5.5:
+        // a straight `'` quote never runs past its line), so its later paragraphs' openings stay
+        // straight rather than be guessed.
+        const body = story.frontMatter ? story.frontMatter.range.to : 0;
+        const kept = new Uint8Array(source.length);
+        for (const item of allItems(story)) {
+          if (item.kind === "note") kept.fill(1, item.range.from, item.range.to);
+        }
+        let straight = "";
+        for (const [at, char] of [...source].entries()) {
+          const own = at < body || kept[at] || source[at - 1] === "\\";
+          straight += own
+            ? char
+            : char === "“" || char === "”"
+              ? '"'
+              : char === "‘" || char === "’"
+                ? "'"
+                : char;
+        }
+        const curled = format(straight, { quotes: "curly", names: false });
+        expect(curled.length).toBe(source.length);
+        const differ: string[] = [];
+        for (const [at, char] of [...source].entries()) {
+          if (/[“”‘’]/u.test(char) && curled[at] !== char) {
+            differ.push(source.slice(at, source.indexOf(" ", at)));
+          }
+        }
+        expect(differ).toEqual(STRAIGHT_STAYS[name] ?? []);
+      });
+
       it("takes a new speaker and a new direction on every stretch, changing nothing else", () => {
         for (const target of speeches(story)) {
           const speaker = setSpeaker(story, target, "Zed");
@@ -193,6 +232,45 @@ describe("real books", () => {
     // A book detail touches only the front matter: it reads only that again.
     expect(time(() => setMeta(story, "title", "A New Title"))).toBeLessThan(100);
   }, 60_000);
+
+  it("parses, formats and edits in time that grows with the story, not with its square", () => {
+    // Twice the story takes about twice as long: a step that turns quadratic shows as about four
+    // times, whatever the machine. Each time is the best of three.
+    const bodies = books
+      .map(({ source }) => source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ""))
+      .join("\n\n");
+    const story = (times: number) => Array.from({ length: times }, () => bodies).join("\n\n");
+    const best = (work: () => unknown) =>
+      Math.min(
+        ...[0, 1, 2].map(() => {
+          const start = performance.now();
+          work();
+          return performance.now() - start;
+        }),
+      );
+    const growth = (work: (text: string) => unknown, times: number) => {
+      const small = story(times);
+      const large = story(times * 2);
+      work(small);
+      return best(() => work(large)) / best(() => work(small));
+    };
+    const edit = (text: string) => {
+      const parsed = parse(text);
+      const said = speeches(parsed);
+      setSpeaker(parsed, said[Math.floor(said.length / 2)] as (typeof said)[number], "Zed");
+    };
+    // Parsing is quick, so it is measured larger (about 330,000 words and twice that), where a
+    // search from every line to the end of the file once showed as three times, not two.
+    expect(
+      growth((text) => parse(text), 32),
+      "parse",
+    ).toBeLessThan(2.6);
+    expect(
+      growth((text) => format(text, { quotes: "curly" }), 8),
+      "format",
+    ).toBeLessThan(3);
+    expect(growth(edit, 8), "setSpeaker").toBeLessThan(3);
+  }, 120_000);
 
   it("formats a long manuscript with lines it must leave as they are, in good time", () => {
     // Straight quotes made curly, but some lines would give words to someone else as curly

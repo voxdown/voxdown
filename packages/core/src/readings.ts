@@ -79,7 +79,9 @@ function scriptLine(item: Item): string | null {
     case "note":
       return item.text ? `%% ${item.text} %%` : null;
     case "image":
-      return `![${item.alt}](${item.src})`;
+      return item.link === undefined
+        ? `![${item.alt}](${item.src})`
+        : `[![${item.alt}](${item.src})](${item.link})`;
     case "mark":
     case "direction":
       return null;

@@ -26,6 +26,12 @@ describe("pasted text", () => {
       userEvent: "input.paste",
     }).state;
     expect(decade.doc.toString()).toBe("Back in the ’90s.");
+    // A measurement keeps its marks as pasted, as the formatter keeps them.
+    const height = state.update({
+      changes: { from: 0, insert: `He is 6'2" tall, "really".` },
+      userEvent: "input.paste",
+    }).state;
+    expect(height.doc.toString()).toBe(`He is 6'2" tall, “really”.`);
   });
 
   it("leaves one space where words were cut from between others", () => {

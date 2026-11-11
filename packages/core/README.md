@@ -57,7 +57,7 @@ Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) tha
 | `setDirection(story, speech, direction \| null)` | Adds, replaces or removes a stretch’s own direction, where §13 says to write it: to the quote's end, or to a direction of its own inside it. |
 | `renameCharacter(story, from, to)` | Renames a short name in the cast, the `narrator:` key and every mark. |
 | `setFullName(story, handle, name)` | Sets a character’s full name in the cast, adding the cast or the character if needed. |
-| `setMeta(story, key, value \| null)` | Sets or removes a front matter detail, such as `title`. |
+| `setMeta(story, key, value \| null)` | Sets or removes a front matter detail, such as `title`; a key whose value is a map or a list, such as `cast`, is left alone. |
 | `insertSound(story, offset, description)` | A sound after the word at `offset`, never inside or straight after a mark. |
 | `insertLine(story, offset, text)` | A page turn, pause or note on a line of its own, never in the front matter or a note. |
 
@@ -75,6 +75,7 @@ Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) tha
 
 - **`tokens(story)`**: syntax ranges for highlighting (`mark`, `name`, `direction`, `sound`, `vocal`, `instruction`, `note`, `group`, `heading`, `break`, `frontmatter`, `escape`, `quote`).
 - **`characterColors(story, overrides?)`**: a color for each character, in cast order, from `PALETTE` unless the cast gives one (`color: "#2563eb"`).
+- **`characterReference(text, at)`**: the character a reference such as `&amp;` or `&#8217;` at `at` stands for, and its length, or `null` (SPEC.md §11). The parser decodes them already; this is for tools that render the text themselves.
 - **`SPEC_VERSION`**: the spec version this package follows, `"1.0"`.
 
 ## License

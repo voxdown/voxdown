@@ -1059,3 +1059,32 @@ function findItem<K extends Item["kind"]>(
     }
   }
 }
+
+describe("review, round seven", () => {
+  const edit = (
+    source: string,
+    make: (story: Story, first: Speech) => ReturnType<typeof setSpeaker>,
+  ) => {
+    const story = parse(source);
+    return applyChanges(source, make(story, speeches(story)[0] as Speech));
+  };
+
+  it("gives back a voice without the direction its group gives anyway", () => {
+    expect(
+      edit("::: whispering\nThe fox froze. @[gasps]\n:::", (story, first) =>
+        setDirection(story, first, "softly"),
+      ),
+    ).toBe("::: whispering\n@(softly) The fox froze. @Narrator [gasps]\n:::");
+    expect(
+      edit("::: @Ann reading\nThe fox froze. @[gasps]\n:::", (story, first) =>
+        setSpeaker(story, first, "Zed"),
+      ),
+    ).toBe("::: @Ann reading\n@Zed (reading) The fox froze. @Ann [gasps]\n:::");
+  });
+
+  it("puts no sound where nothing is read aloud", () => {
+    expect(insertSound(parse("{book only} First published 1902."), 18, "thunder")).toEqual([]);
+    expect(insertSound(parse("## The Cave {hidden}"), 6, "thunder")).toEqual([]);
+    expect(insertSound(parse("Hello there."), 5, "thunder")).toHaveLength(1);
+  });
+});

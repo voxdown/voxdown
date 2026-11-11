@@ -1221,7 +1221,7 @@ Narrator [gasps]
 
 ### 8.3 Square brackets that are not sounds
 
-A Markdown link, `[text](address)`, stays a link: its text is read aloud and printed. So a sound followed directly by a parenthesis would become a link. Leave a space between them.
+A Markdown link, `[text](address)`, stays a link: its text is read aloud and printed. So a sound followed directly by a parenthesis would become a link. Leave a space between them. A link is written on one line, as marks are (§5.3): its text, address and title end on the line they start on. One that runs onto the next line is read as a sound and text, and warned about.
 
 ```example
 Read more at [our website](https://example.com).
@@ -1243,6 +1243,14 @@ An image, `![description](file)`, is shown in the book and not heard.
 ![Peter squeezing under the gate](peter-gate.png)
 .
 ![Peter squeezing under the gate](peter-gate.png)
+```
+
+An image may be a link's text, as in Markdown: it is still an image, shown and not heard, and links where the link does.
+
+```example
+[![A map of the garden](garden.png)](garden-large.png)
+.
+[![A map of the garden](garden.png)](garden-large.png)
 ```
 
 Write `\[` for a literal square bracket.
@@ -1443,6 +1451,16 @@ She wrote \[sic\] and \{page\} on the board.
 Narrator: She wrote [sic] and {page} on the board.
 ```
 
+A character reference stands for its character, as in Markdown: `&amp;`, `&quot;`, `&#8217;`, `&#x2019;` and every name the HTML Standard gives one. It is heard and printed as that character, and a character written this way is never a mark: `&quot;` opens no quote. A name the HTML Standard doesn't know, or one without its `;`, is ordinary text.
+
+```example
+Tom &amp; Jerry said &quot;hello&quot;.
+.
+Narrator: Tom & Jerry said "hello".
+.
+Tom & Jerry said "hello".
+```
+
 Links and images work as in Markdown (§8.3). Other Markdown blocks (lists, block quotes, tables, code, HTML) are not part of version 1.0. Their lines are treated as ordinary paragraph text.
 
 ## 12. The two readings
@@ -1464,6 +1482,7 @@ The examples write it like this:
 | `{page}`, `{page 12}`, `{pause}`, `{pause 2s}`, `{name value}` | An instruction. |
 | `%% text %%` | A note. |
 | `![description](file)` | An image. |
+| `[![description](file)](address)` | An image that is a link. |
 | `# Character: text` | A heading read aloud, with as many `#` as its level. |
 | `## text {hidden}`, `## text {book only}` | A heading that is not read aloud. |
 | `{book only} text`, `{hidden} text` | A paragraph that is not read aloud. |

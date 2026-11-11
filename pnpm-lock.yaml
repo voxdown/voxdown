@@ -75,6 +75,9 @@ importers:
       happy-dom:
         specifier: ^20.14.6
         version: 20.14.6
+      markdown-it:
+        specifier: 14.3.3
+        version: 14.3.3
 
   packages/vscode:
     dependencies:

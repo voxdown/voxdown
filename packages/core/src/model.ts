@@ -153,7 +153,8 @@ export type Instruction = {
 /** `%% … %%` (§10). `text` has its spaces and line breaks run together. */
 export type Note = { kind: "note"; text: string; range: Range };
 
-export type Image = { kind: "image"; alt: string; src: string; range: Range };
+/** An image (§8.3): shown in the book, not heard. `link` is where it links to, if a link holds it. */
+export type Image = { kind: "image"; alt: string; src: string; link?: string; range: Range };
 
 /** A character mark, `@Gerald` or `@Gerald (yawning)` (§5.2, §6.1). */
 export type Mark = {

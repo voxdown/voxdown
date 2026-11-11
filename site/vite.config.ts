@@ -27,6 +27,8 @@ export default defineConfig({
   plugins: [markdownPages()],
   resolve: { alias: workspaceAliases },
   server: { fs: { allow: [".."] } },
+  // The Writer draws a long story's script and book in a worker, which imports the packages.
+  worker: { format: "es" },
   build: {
     target: "es2022",
     outDir: "dist",

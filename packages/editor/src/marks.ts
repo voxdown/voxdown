@@ -747,8 +747,21 @@ export function marksOf(story: Story): EditorMark[] {
   return out;
 }
 
+let lastRead: { source: string; story: Story } | undefined;
+
+/**
+ * The story a text reads as: the one the editor read last if it is the same text, so a host that
+ * reads the story too reads it once, not twice.
+ */
+export function readStory(source: string): Story {
+  if (lastRead?.source === source) return lastRead.story;
+  const story = parse(source);
+  lastRead = { source, story };
+  return story;
+}
+
 export function editorMarks(source: string): EditorMark[] {
-  const marks = marksOf(parse(source));
+  const marks = marksOf(readStory(source));
   // A direction left open after a name is the mistake: its mark then gives the name
   // nothing to say, but that follows from it, and the fix is to close the direction.
   const open = new Set(

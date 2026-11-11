@@ -143,6 +143,24 @@ export async function keepDraft(draft: Draft): Promise<boolean> {
   }
 }
 
+/** A story saved after another was opened: its kept draft learns it, the open story is kept open. */
+export async function markSaved(id: string, content: string, modified: number): Promise<void> {
+  try {
+    const draft = (await done((await store(DOCUMENTS, "readonly")).get(id))) as Draft | undefined;
+    if (!draft) return;
+    await done(
+      (await store(DOCUMENTS, "readwrite")).put({
+        ...draft,
+        saved: content,
+        savedAt: Date.now(),
+        modified,
+      } satisfies Draft),
+    );
+  } catch {
+    // Nothing kept to tell.
+  }
+}
+
 /** Every story's draft, the latest change first; the oldest beyond the limit are let go. */
 export async function listDrafts(): Promise<Draft[]> {
   try {

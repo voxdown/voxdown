@@ -11,6 +11,7 @@ import {
   type Character,
   type ViewSwitches,
   marksField,
+  readStory,
   sceneNumbers,
   scriptEditor,
   setShowMarks,
@@ -62,6 +63,7 @@ import { keys, menus } from "./menu";
 import { moveParagraph } from "./paragraphs";
 import { type Problem, problems } from "./problems";
 import { SceneRail } from "./rail";
+import type { RenderAsk, RenderReply } from "./render-worker";
 import {
   type Draft,
   draftForFile,
@@ -71,6 +73,7 @@ import {
   keepVersion,
   listDrafts,
   loadDraft,
+  markSaved,
   newId,
   recentFiles,
   rememberFile,
@@ -398,6 +401,7 @@ function load(
   $("#welcome").hidden = true;
   document.body.removeAttribute("data-welcome");
   for (const behind of ["#editor", "#scene-rail", "#side"]) $(behind).inert = false;
+  overlaid();
   $("#file-name").textContent = file.name;
   refresh();
   return keep();
@@ -430,7 +434,7 @@ function changed(): void {
  */
 function refresh(): void {
   clearTimeout(refreshTimer);
-  story = parse(view.state.doc.toString());
+  story = readStory(view.state.doc.toString());
   storyVersion = version;
   colors = characterColors(story);
   rail.update(story);
@@ -442,9 +446,37 @@ function refresh(): void {
 
 function showRest(): void {
   if (storyVersion !== version) return;
-  showCounts();
   showWarningCount();
+  // A long story's script or book, and its counts, are worked out in a worker of their own.
+  if (view.state.doc.length >= LONG) {
+    const tab = prefs.side && (prefs.tab === "script" || prefs.tab === "book") ? prefs.tab : "none";
+    const drawn = tab !== "none";
+    renderer.postMessage({ id: ++asked, text: view.state.doc.toString(), tab } satisfies RenderAsk);
+    if (prefs.side && !drawn) showSide();
+    return;
+  }
+  showCounts(countsOf(story));
   if (prefs.side) showSide();
+}
+
+const renderer = new Worker(new URL("./render-worker.ts", import.meta.url), { type: "module" });
+let asked = 0;
+renderer.addEventListener("message", ({ data: reply }: MessageEvent<RenderReply>) => {
+  // Only the latest: a reply for a text since changed is let go.
+  if (reply.id !== asked || storyVersion !== version) return;
+  showCounts(reply);
+  if (reply.html && prefs.side && (prefs.tab === "script" || prefs.tab === "book")) {
+    showSide(reply.html);
+  }
+});
+
+function countsOf(of: Story): { words: number; said: number; voices: number } {
+  const said = lines(of).filter((line) => line.kind === "speech" || line.kind === "vocal");
+  return {
+    words: bookText(of).match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0,
+    said: said.length,
+    voices: new Set(said.map((line) => line.speaker)).size,
+  };
 }
 
 let idle: number | undefined;
@@ -617,16 +649,17 @@ function showDraftState(): void {
   state.dataset.kept = String(file.kept);
 }
 
-function showCounts(): void {
-  const words = bookText(story).match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
-  const said = lines(story).filter((line) => line.kind === "speech" || line.kind === "vocal");
-  const voices = new Set(said.map((line) => line.speaker)).size;
+function showCounts({
+  words,
+  said,
+  voices,
+}: { words: number; said: number; voices: number }): void {
   const scenes = Math.max(0, ...sceneNumbers(view.state).values());
   const plural = (n: number, one: string, many = `${one}s`) =>
     `${n.toLocaleString()} ${n === 1 ? one : many}`;
   $("#counts").textContent = [
     plural(words, "word"),
-    plural(said.length, "line said", "lines said"),
+    plural(said, "line said", "lines said"),
     plural(voices, "voice"),
     plural(scenes, "scene"),
   ].join(" · ");
@@ -649,7 +682,8 @@ function showWarningCount(): void {
 
 // The side: the script, the book, and the warnings.
 
-function showSide(): void {
+/** The side, drawn again: the script or the book (`drawn`, when the worker drew it), cast or warnings. */
+function showSide(drawn?: string): void {
   const sheet = $("#side-sheet");
   for (const tab of document.querySelectorAll<HTMLElement>(".side-tab")) {
     const selected = tab.dataset.tab === prefs.tab;
@@ -659,10 +693,24 @@ function showSide(): void {
   sheet.setAttribute("aria-labelledby", `tab-${prefs.tab}`);
   // A name being typed on the side isn't redrawn under the writer's fingers.
   if (sheet.contains(document.activeElement) && document.activeElement?.matches("input")) return;
-  if (prefs.tab === "script") sheet.innerHTML = renderScript(story, { positions: true });
-  else if (prefs.tab === "book")
-    sheet.innerHTML = renderBook(story, { pages: true, positions: true });
-  else if (prefs.tab === "cast")
+  const long = view.state.doc.length >= LONG;
+  if (prefs.tab === "script" || prefs.tab === "book") {
+    // A long story's comes from the worker: until it does, the page shows what it showed.
+    if (drawn !== undefined) sheet.innerHTML = drawn;
+    else if (!long)
+      sheet.innerHTML =
+        prefs.tab === "script"
+          ? renderScript(story, { positions: true })
+          : renderBook(story, { pages: true, positions: true });
+    else {
+      renderer.postMessage({
+        id: ++asked,
+        text: view.state.doc.toString(),
+        tab: prefs.tab,
+      } satisfies RenderAsk);
+      return;
+    }
+  } else if (prefs.tab === "cast")
     sheet.replaceChildren(
       castPanel(story, colors, {
         rename: (from, to) =>
@@ -857,7 +905,30 @@ function showSidePanel(shown: boolean): void {
   $("#workspace").toggleAttribute("data-side", shown);
   checkMenu("side", shown);
   if (shown) showSide();
+  overlaid();
 }
+
+/**
+ * On a narrow window the side lies over the manuscript: then it is what is read, and what is
+ * behind it can't be reached by the keyboard or a screen reader until it is closed.
+ */
+const narrow = window.matchMedia("(max-width: 1099px)");
+function overlaid(): void {
+  const over = narrow.matches && prefs.side;
+  const toggle = $("#preview-toggle");
+  toggle.setAttribute("aria-pressed", String(over));
+  toggle.textContent = over ? "Write" : "Preview";
+  if (document.body.hasAttribute("data-welcome")) return;
+  $(".manuscript").inert = over;
+  $("#scene-rail").inert = over;
+}
+narrow.addEventListener("change", overlaid);
+$("#preview-toggle").addEventListener("click", () => {
+  const preview = !(narrow.matches && prefs.side);
+  showSidePanel(preview);
+  if (preview) document.querySelector<HTMLElement>('.side-tab[aria-selected="true"]')?.focus();
+  else view.focus();
+});
 
 // Files: open, save, and asking first.
 
@@ -922,7 +993,11 @@ async function mayLeave(): Promise<boolean> {
   );
   if (answer === "discard") await keep();
   if (answer === "discard") return true;
-  if (answer === "save") return await save();
+  if (answer === "save") {
+    if (!(await save())) return false;
+    // Words typed while it saved are changes too: asked about again, never left behind.
+    return sameText(text(), file.saved) || mayLeave();
+  }
   return false;
 }
 
@@ -1042,8 +1117,9 @@ async function write(handle: FileSystemFileHandle): Promise<boolean> {
   state.dataset.state = "saving";
   state.textContent = "Saving…";
   try {
-    file.modified = await writeFile(handle, content);
-    saved(content);
+    const id = file.id;
+    const modified = await queued(() => writeFile(handle, content));
+    if (!savedAs(id, content, modified)) return false;
     announce(`Saved ${file.name}`);
     return true;
   } catch (error) {
@@ -1127,12 +1203,38 @@ async function autosave(): Promise<void> {
   }
   if (handle !== file.handle) return;
   const content = text();
+  const id = file.id;
   try {
-    file.modified = await writeFile(handle, content);
-    saved(content);
+    savedAs(id, content, await queued(() => writeFile(handle, content)));
   } catch {
     // Save shows what went wrong.
   }
+}
+
+/**
+ * Saving one at a time: a save started while another is under way waits for it, so two never
+ * write the same file at once, and the later always lands last.
+ */
+let writing: Promise<unknown> = Promise.resolve();
+function queued<T>(work: () => Promise<T>): Promise<T> {
+  const run = writing.then(work, work);
+  writing = run.catch(() => undefined);
+  return run;
+}
+
+/**
+ * A save finished: the story it was for is saved as `content`. If another story is open by now,
+ * only that story's kept draft learns it; the open one is left as it is. True if it is the open
+ * story.
+ */
+function savedAs(id: string, content: string, modified: number): boolean {
+  if (id !== file.id) {
+    void markSaved(id, content, modified);
+    return false;
+  }
+  file.modified = modified;
+  saved(content);
+  return true;
 }
 
 // One tab writes the story at a time.

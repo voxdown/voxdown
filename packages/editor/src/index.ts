@@ -116,5 +116,5 @@ export {
   spokenName,
 } from "./scene-names";
 export { smartQuotes } from "./quotes";
-export { type EditorMark, editDistance, editorMarks } from "./marks";
+export { type EditorMark, editDistance, editorMarks, readStory } from "./marks";
 export { startCompletion } from "@codemirror/autocomplete";

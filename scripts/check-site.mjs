@@ -507,6 +507,69 @@ else {
 await keeping.close();
 console.log("writer: recovering a draft, going back to a version: ok");
 
+// Slow saves: words typed while a save before leaving is under way are asked about again, not
+// left behind; a save that ends after another story was opened leaves that story alone.
+const slow = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await slow.addInitScript(() => {
+  window.__written = {};
+  window.showSaveFilePicker = async ({ suggestedName }) => ({
+    kind: "file",
+    name: suggestedName,
+    getFile: async () =>
+      new File([window.__written[suggestedName] ?? ""], suggestedName, { lastModified: 1 }),
+    createWritable: async () => {
+      let text = "";
+      return {
+        write: async (chunk) => {
+          text += chunk;
+        },
+        close: () =>
+          new Promise((done) =>
+            setTimeout(() => {
+              window.__written[suggestedName] = text;
+              done();
+            }, 800),
+          ),
+      };
+    },
+    isSameEntry: async () => false,
+    queryPermission: async () => "granted",
+    requestPermission: async () => "granted",
+  });
+});
+const racer = await slow.newPage();
+watch(racer, "writer slow saves");
+await racer.goto(`${base}/writer/`);
+await racer.click(`.welcome-example[data-name="${dragonName}"]`);
+await racer.click("#file-menu-button");
+await racer.click('[data-command="new"]');
+await racer.waitForSelector("#ask[open]");
+await racer.click('#ask-buttons button[value="save"]');
+await racer.waitForTimeout(150);
+await racer.click(".cm-content");
+await racer.keyboard.press("Control+End");
+await racer.keyboard.type(" LAST WORDS WHILE SAVING");
+await racer.waitForSelector("#ask[open]", { timeout: 5_000 }).catch(() => {});
+const askedAgain = await racer.isVisible("#ask[open]");
+const stillThere = await draftIn(racer);
+if (!askedAgain && !stillThere.includes("LAST WORDS WHILE SAVING"))
+  problems.push("writer: words typed while saving before leaving were left behind");
+if (askedAgain) await racer.click('#ask-buttons button[value="cancel"]');
+// A save still under way when another story opens.
+await racer.keyboard.press("Control+s");
+await racer.waitForTimeout(100);
+await racer.click("#file-menu-button");
+await racer.click('[data-command="new"]');
+if (await racer.isVisible("#ask[open]")) await racer.click('#ask-buttons button[value="discard"]');
+await racer.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
+);
+await racer.waitForTimeout(1500);
+if ((await racer.getAttribute("#save-state", "data-state")) !== "unsaved")
+  problems.push("writer: a save of the story before marked the new story as saved");
+await slow.close();
+console.log("writer: slow saves: ok");
+
 // Edges: a file dropped on the text opens rather than going into it; the bar never runs off the
 // page; the welcome shows nothing behind it; renaming to a name in use says why; Ctrl+K picks who.
 const edges = await browser.newContext({ viewport: { width: 1440, height: 900 } });

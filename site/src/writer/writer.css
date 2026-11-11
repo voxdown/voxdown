@@ -1110,10 +1110,32 @@ body.writer {
   .appbar .wordmark .product {
     display: none;
   }
+  .appbar {
+    gap: 0.35rem 0.6rem;
+  }
+  .appbar .theme-switch {
+    font-size: 0;
+    padding: 0.2rem 0.55rem;
+  }
+  .appbar .theme-switch::before {
+    font-size: 0.85rem;
+    margin-right: 0;
+  }
+}
+
+/* Write or preview: on a narrow window, one at a time, switched in the bar. */
+.preview-toggle {
+  display: none;
+}
+.preview-toggle[aria-pressed="true"] {
+  background: var(--tab);
 }
 
 /* A narrower window: the side lies over the manuscript, from the right. */
 @media (max-width: 1099px) {
+  .preview-toggle {
+    display: inline-block;
+  }
   .workspace[data-side] {
     grid-template-columns: auto minmax(0, 1fr);
   }

@@ -13,32 +13,69 @@ export type Paragraph =
   | { kind: "break" }
   | { kind: "text"; runs: Run[] };
 
-/** A book's HTML (an element holding it) as paragraphs. */
+/** Elements that make blocks of their own; anything else is part of the text around it. */
+const BLOCK =
+  /^(address|article|aside|blockquote|body|center|dd|details|dialog|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hgroup|hr|li|main|menu|nav|ol|p|pre|section|summary|table|tbody|td|tfoot|th|thead|tr|ul)$/;
+
+/**
+ * A book's HTML (an element holding it) as paragraphs. Paragraphs, list items and headings are
+ * read as such; any other block that holds text of its own (a `div` paragraph, a quotation, a
+ * verse's stanza, a table cell) is a paragraph too, its line breaks kept, so no words are lost.
+ */
 export function paragraphsOf(root: Element): Paragraph[] {
   const out: Paragraph[] = [];
+  const text = (runs: Run[]) => {
+    if (runs.some((run) => "text" in run && run.text.trim())) out.push({ kind: "text", runs });
+  };
   const visit = (element: Element) => {
     const tag = element.tagName.toLowerCase();
-    if (/^(script|style|nav|head|title)$/.test(tag)) return;
+    if (/^(script|style|nav|head|title|template)$/.test(tag)) return;
     const heading = /^h([1-6])$/.exec(tag);
     if (heading) {
-      const runs = runsOf(element);
+      const runs = runsOf([...element.childNodes]);
       if (runs.length) out.push({ kind: "heading", level: Number(heading[1]), runs });
-    } else if (tag === "hr") out.push({ kind: "break" });
-    else if (tag === "p" || tag === "li" || tag === "dt" || tag === "dd") {
-      const runs = runsOf(element);
-      if (runs.some((run) => "text" in run && run.text.trim())) out.push({ kind: "text", runs });
-    } else for (const child of element.children) visit(child);
+      return;
+    }
+    if (tag === "hr") {
+      out.push({ kind: "break" });
+      return;
+    }
+    if (tag === "pre") {
+      text(runsOf([...element.childNodes], true));
+      return;
+    }
+    // The text between blocks, a paragraph to each stretch of it; the blocks, each as itself.
+    let inline: Node[] = [];
+    const flush = () => {
+      if (inline.length) text(runsOf(inline));
+      inline = [];
+    };
+    for (const child of element.childNodes) {
+      if (child.nodeType === 1 && BLOCK.test((child as Element).tagName.toLowerCase())) {
+        flush();
+        visit(child as Element);
+      } else inline.push(child);
+    }
+    flush();
   };
   visit(root);
   return out;
 }
 
-/** An element's text as runs: italics and bold as its tags say, line breaks kept. */
-function runsOf(element: Element): Run[] {
+/** Nodes' text as runs: italics and bold as their tags say, line breaks kept (all, in `pre`). */
+function runsOf(nodes: readonly Node[], pre = false): Run[] {
   const runs: Run[] = [];
   const walk = (node: Node, italic: boolean, bold: boolean) => {
     if (node.nodeType === 3) {
-      const text = (node.textContent ?? "").replace(/\s+/g, " ");
+      const raw = node.textContent ?? "";
+      if (pre) {
+        raw.split("\n").forEach((part, index) => {
+          if (index > 0) runs.push({ lineBreak: true });
+          if (part) runs.push({ text: part.replace(/[ \t]+/g, " "), italic, bold });
+        });
+        return;
+      }
+      const text = raw.replace(/\s+/g, " ");
       if (text) runs.push({ text, italic, bold });
       return;
     }
@@ -50,17 +87,46 @@ function runsOf(element: Element): Run[] {
       runs.push({ lineBreak: true });
       return;
     }
+    if (/^(script|style|template)$/.test(tag)) return;
     const isItalic = italic || tag === "em" || tag === "i" || tag === "cite";
     const isBold = bold || tag === "strong" || tag === "b";
     for (const child of node.childNodes) walk(child, isItalic, isBold);
   };
-  for (const child of element.childNodes) walk(child, false, false);
+  for (const node of nodes) walk(node, false, false);
   // Spaces at the ends of the paragraph and of its lines go.
-  const first = runs[0];
-  if (first && "text" in first) first.text = first.text.trimStart();
-  const last = runs.at(-1);
-  if (last && "text" in last) last.text = last.text.trimEnd();
-  return runs.filter((run) => !("text" in run) || run.text);
+  runs.forEach((run, index) => {
+    if (!("text" in run)) return;
+    const before = runs[index - 1];
+    const after = runs[index + 1];
+    if (!before || "lineBreak" in before) run.text = run.text.trimStart();
+    if (!after || "lineBreak" in after) run.text = run.text.trimEnd();
+  });
+  // No line break at either end.
+  const kept = runs.filter((run) => !("text" in run) || run.text);
+  while (kept[0] && "lineBreak" in kept[0]) kept.shift();
+  while (kept.at(-1) && "lineBreak" in (kept.at(-1) as Run)) kept.pop();
+  return kept;
+}
+
+/**
+ * Runs side by side in the same style as one: Word splits a word into several runs (`Drag` and
+ * `ons`), which written one by one would read `*Drag**ons*`.
+ */
+export function mergedRuns(runs: readonly Run[]): Run[] {
+  const out: Run[] = [];
+  for (const run of runs) {
+    const last = out.at(-1);
+    if (
+      last &&
+      "text" in last &&
+      "text" in run &&
+      last.italic === run.italic &&
+      last.bold === run.bold
+    )
+      out[out.length - 1] = { ...last, text: last.text + run.text };
+    else out.push({ ...run });
+  }
+  return out;
 }
 
 /** Text as it reads, its signs escaped where they would read as marks or emphasis. */
@@ -71,7 +137,7 @@ export function escapeText(text: string): string {
 /** Runs as a story's text: italics as `*…*`, bold as `**…**`, a line break as one. */
 export function writeRuns(runs: readonly Run[]): string {
   let out = "";
-  for (const run of runs) {
+  for (const run of mergedRuns(runs)) {
     if ("lineBreak" in run) {
       out = `${out.trimEnd()}\n`;
       continue;
@@ -106,8 +172,17 @@ export function writeStory(
   if (details.author) front.push(`author: ${quoted(details.author)}`);
   if (details.language) front.push(`language: ${quoted(details.language)}`);
   front.push("cast:", "---", "");
+  // A paragraph that is only a scene break's signs (`#`, `* * *`, `~~~`) is one.
+  const isBreak = (paragraph: Paragraph) =>
+    paragraph.kind === "text" &&
+    /^(?:[*#~·•—–-]\s*){3,}$|^[#*]$/.test(
+      paragraph.runs
+        .map((run) => ("text" in run ? run.text : " "))
+        .join("")
+        .trim(),
+    );
   const body = paragraphs.map((paragraph) =>
-    paragraph.kind === "break"
+    paragraph.kind === "break" || isBreak(paragraph)
       ? "* * *"
       : paragraph.kind === "heading"
         ? `${"#".repeat(Math.min(6, paragraph.level))} ${writeRuns(paragraph.runs).replace(/\n/g, " ")}`

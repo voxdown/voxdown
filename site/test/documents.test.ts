@@ -270,3 +270,79 @@ describe("ebooks from other programs", () => {
     );
   });
 });
+
+describe("Word documents as Word writes them", () => {
+  it("keep words Word splits, tabs, hyphens and scene breaks; leave text boxes out, saying so", async () => {
+    const { story, left } = await storyOfDocx(
+      wordFile(
+        `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Drag</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">ons </w:t></w:r><w:r><w:t>are </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>ve</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>ry</w:t></w:r><w:r><w:t> old.</w:t></w:r></w:p>
+         <w:p><w:r><w:t>Line two</w:t><w:tab/><w:t>tabbed, well</w:t><w:noBreakHyphen/><w:t>known.</w:t></w:r></w:p>
+         <w:p><w:r><mc:AlternateContent><mc:Choice><w:drawing><wps:txbx><w:txbxContent><w:p><w:r><w:t>Boxed text.</w:t></w:r></w:p></w:txbxContent></wps:txbx></w:drawing></mc:Choice><mc:Fallback><w:pict><v:textbox><w:txbxContent><w:p><w:r><w:t>Boxed text.</w:t></w:r></w:p></w:txbxContent></v:textbox></w:pict></mc:Fallback></mc:AlternateContent></w:r><w:r><w:t>Beside the box.</w:t></w:r></w:p>
+         <w:p><w:r><w:t>After box.</w:t></w:r></w:p>
+         <w:p><w:r><w:t>#</w:t></w:r></w:p>
+         <w:p><w:r><w:t>Next scene.</w:t></w:r></w:p>`,
+        "",
+      ),
+    );
+    expect(story).toContain("*Dragons* are **very** old.");
+    expect(story).toContain("Line two tabbed, well-known.");
+    expect(story).not.toContain("Boxed text.");
+    expect(story).toContain("Beside the box.\n\nAfter box.");
+    expect(story).toContain("After box.\n\n* * *\n\nNext scene.");
+    expect(left).toEqual(["pictures", "text boxes"]);
+  });
+});
+
+describe("ebooks' text, wherever it is", () => {
+  const page = (body: string) =>
+    `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>x</title></head><body>${body}</body></html>`;
+
+  it("is read from any block that holds it, verse with its lines", async () => {
+    const { story } = await storyOfEpub(
+      ebookFile({
+        container: `<container><rootfiles><rootfile full-path="OPS/package.opf"/></rootfiles></container>`,
+        opf: `<package><manifest><item id="c1" href="one.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>`,
+        pages: {
+          "one.xhtml": page(`<h1>One</h1>
+            <p>A paragraph.</p>
+            <div>A paragraph in a div.</div>
+            <blockquote>A quotation, <em>quoted</em>.</blockquote>
+            <section>Text in a section.<p>And a paragraph in it.</p>More after it.</section>
+            <div class="poem"><div class="stanza"><span>The first line,</span><br/><span>the second line.</span></div></div>
+            <table><tr><td>In a cell.</td></tr></table>
+            <pre>Kept
+  as written.</pre>
+            <p class="center">* * *</p>
+            <p>The end.</p>`),
+        },
+      }),
+    );
+    for (const words of [
+      "A paragraph.",
+      "A paragraph in a div.",
+      "A quotation, *quoted*.",
+      "Text in a section.\n\nAnd a paragraph in it.\n\nMore after it.",
+      "The first line,\nthe second line.",
+      "In a cell.",
+      "Kept\nas written.",
+      "* * *\n\nThe end.",
+    ])
+      expect(story).toContain(words);
+  });
+});
+
+describe("a book written as Word", () => {
+  it("has no space at the start of a line after a line break", () => {
+    const html = renderBook(parse("Bang.\nClank.\n"));
+    const root = new DOMParser().parseFromString(html, "text/html").body;
+    const [paragraph] = paragraphsOf(root);
+    expect(paragraph).toEqual({
+      kind: "text",
+      runs: [
+        { text: "Bang.", italic: false, bold: false },
+        { lineBreak: true },
+        { text: "Clank.", italic: false, bold: false },
+      ],
+    });
+  });
+});

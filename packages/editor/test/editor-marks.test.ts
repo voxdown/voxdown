@@ -219,6 +219,12 @@ describe("editor warnings", () => {
     expect(warnings("@(whispering) Line one.")).toEqual([]);
     expect(warnings(`${cast}@Rupert (softly) “Hello.”`)).toEqual([]);
     expect(warnings("He paused (for effect) and went on.")).toEqual([]);
+    // Prose in parentheses is no direction: no warning, and no fix that would silence it.
+    expect(warnings("(An aside in parentheses.) Then more.")).toEqual([]);
+    expect(warnings("(Later that day) they met.")).toEqual([]);
+    expect(warnings("(softly) “Come here.”").map((w) => w.message)).toEqual([
+      "Did you mean @(softly)? Without @ it's read aloud.",
+    ]);
   });
 
   it("carries the edit each “Did you mean” suggests", () => {

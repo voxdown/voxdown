@@ -11,14 +11,18 @@ import {
   type Story,
   type TextChange,
   applyChanges,
+  castMemberNamed,
   isName,
   lines,
   parse,
+  quotesOf,
   setDirection,
   setFullName,
   setSpeaker,
+  taggedName,
 } from "voxdown";
 import { composed, mapped } from "./changes";
+import { type Scope, wholeScope } from "./local";
 import { withoutSpareMarks } from "./spare-marks";
 import type { Passage } from "./story-data";
 
@@ -41,6 +45,15 @@ export type StretchContext = {
    * while it waits to be read again: the pointer passing by never makes the page read a long story.
    */
   passageAt?: (at: number) => Passage | undefined;
+  /**
+   * A long book's passage worked on in its paragraph alone (local.ts): the scope for an edit at
+   * `at`, or undefined to read the whole story.
+   */
+  scope?: (at: number) => Scope | undefined;
+  /** A word to the writer: a quote that went along with the one given, say. */
+  notice?: (message: string) => void;
+  /** The directions the story uses, for the picker's list. */
+  directions?: () => string[];
 };
 
 const hasWords = (text: string) => /[\p{L}\p{N}]/u.test(text);
@@ -134,22 +147,33 @@ export function firstQuote(source: string, from: number, to: number): Quote | un
 }
 
 /**
- * The next quote after `after` that no one is marked to say, so that the narrator reads it with
- * the words around it; round to the first.
+ * The next quote after `after` that wants a speaker, round to the first: one no one is marked to
+ * say, which the narrator reads with the words around it; or one that carries on the speech before
+ * it on its line (§5.6) while its own dialogue tag names someone else (`@Ann “Hi,” said Ann.
+ * “Bye,” said Bob.`). `carried` says which.
  */
-export function nextNarratedQuote(story: Story, after: number): Quote | undefined {
-  const narrator = story.meta.narrator.toLowerCase();
-  const quotes: Quote[] = [];
-  for (const block of story.blocks) {
-    if (block.kind !== "paragraph") continue;
-    for (const line of block.lines)
-      for (const item of line.items) {
-        if (item.kind !== "speech" || item.quoted || item.speaker.toLowerCase() !== narrator)
-          continue;
-        quotes.push(...quotesIn(story.source, item.range.from, item.range.to));
-      }
+export function nextNarratedQuote(
+  story: Story,
+  after: number,
+): (Quote & { carried?: { speaker: string; tag: string } }) | undefined {
+  const found: Array<Quote & { carried?: { speaker: string; tag: string } }> = [];
+  for (const quote of quotesOf(story)) {
+    if (quote.narrated) {
+      found.push({ from: quote.from, to: quote.to, text: quote.text });
+      continue;
+    }
+    if (!quote.continued) continue;
+    const tag = taggedName(story, quote);
+    const named = tag ? (castMemberNamed(story, tag) ?? tag) : undefined;
+    if (tag && named && named.toLowerCase() !== quote.speaker.toLowerCase())
+      found.push({
+        from: quote.from,
+        to: quote.to,
+        text: quote.text,
+        carried: { speaker: quote.speaker, tag: named },
+      });
   }
-  return quotes.find((quote) => quote.from > after) ?? quotes[0];
+  return found.find((quote) => quote.from > after) ?? found[0];
 }
 
 /**
@@ -363,8 +387,10 @@ export class StretchTools {
   /** The speaker picker for the passage at `at`, below `anchor` or the cursor. */
   openSpeaker(at: number, anchor?: Element, cursor?: number): void {
     if (this.revealThen(at, anchor, () => this.openSpeaker(at, anchor, cursor))) return;
-    const story = this.context.story();
-    const speech = speechAt(story, at);
+    const scope = this.scopeAt(at);
+    const story = scope.story;
+    const speech = speechAt(story, scope.at(at));
+    const inScope = cursor === undefined ? undefined : scope.at(cursor);
     if (!speech) {
       this.nothingHere();
       return;
@@ -381,11 +407,16 @@ export class StretchTools {
         ? quotesIn(source, speech.range.from, speech.range.to)
         : [];
     const quote =
-      quotes.find((found) => cursor !== undefined && found.from <= cursor && cursor <= found.to) ??
-      quotes[0];
+      quotes.find(
+        (found) => inScope !== undefined && found.from <= inScope && inScope <= found.to,
+      ) ?? quotes[0];
     // A quote after the first in the narrator's words is given on its own; the first goes as the
-    // core gives a passage.
-    const later = quote && quote !== quotes[0] ? quote : undefined;
+    // core gives a passage. Given in the editor's places.
+    const later =
+      quote && quote !== quotes[0]
+        ? { ...quote, from: scope.toDoc(quote.from), to: scope.toDoc(quote.to) }
+        : undefined;
+    const passageFrom = scope.toDoc(speech.range.from);
     const quoteFrom = quote?.from ?? speech.mark?.range.from ?? speech.range.from;
     const quoteTo = quote?.to ?? speech.range.to;
     const lineStart = source.lastIndexOf("\n", quoteFrom - 1) + 1;
@@ -429,7 +460,7 @@ export class StretchTools {
       if (speaker === tagged || (tag && speaker.handle === tag && !tagged))
         button.dataset.tagged = "";
       button.dataset.handle = speaker.handle;
-      button.addEventListener("click", () => this.giveTo(speech.range.from, speaker.handle, later));
+      button.addEventListener("click", () => this.giveTo(passageFrom, speaker.handle, later));
       item.append(button);
       list.append(item);
     }
@@ -464,7 +495,7 @@ export class StretchTools {
       const left = shown();
       const pick = exact ?? (name && left.length === 1 ? left[0] : undefined);
       if (pick?.dataset.handle) {
-        this.giveTo(speech.range.from, pick.dataset.handle, later);
+        this.giveTo(passageFrom, pick.dataset.handle, later);
         return;
       }
       if (!isName(name)) {
@@ -472,7 +503,7 @@ export class StretchTools {
         input.reportValidity();
         return;
       }
-      this.giveTo(speech.range.from, name, later);
+      this.giveTo(passageFrom, name, later);
     });
     // The box above the list: up from the list's top goes to it.
     this.showPopover("Who says this?", [form, list], anchor, at);
@@ -488,18 +519,21 @@ export class StretchTools {
   /** The direction picker for the passage at `at`. */
   openDirection(at: number, anchor?: Element): void {
     if (this.revealThen(at, anchor, () => this.openDirection(at, anchor))) return;
-    const story = this.context.story();
-    const speech = speechAt(story, at);
+    const scope = this.scopeAt(at);
+    const story = scope.story;
+    const speech = speechAt(story, scope.at(at));
     if (!speech) {
       this.nothingHere();
       return;
     }
-    const used = new Set<string>();
-    for (const block of story.blocks)
-      if (block.kind === "paragraph")
-        for (const line of block.lines)
-          for (const item of line.items)
-            if (item.kind === "speech" && item.ownDirection) used.add(item.ownDirection);
+    const passageFrom = scope.toDoc(speech.range.from);
+    const used = new Set<string>(this.context.directions?.() ?? []);
+    if (!this.context.directions)
+      for (const block of story.blocks)
+        if (block.kind === "paragraph")
+          for (const line of block.lines)
+            for (const item of line.items)
+              if (item.kind === "speech" && item.ownDirection) used.add(item.ownDirection);
     const form = document.createElement("form");
     form.className = "direction-form";
     const listId = "vxd-directions";
@@ -516,15 +550,16 @@ export class StretchTools {
     const remove = form.querySelector(".remove") as HTMLButtonElement;
     remove.hidden = !speech.ownDirection;
     const set = (direction: string | null) => {
-      const fresh = this.context.story();
-      const target = speechAt(fresh, speech.range.from);
+      const now = this.scopeAt(passageFrom);
+      const fresh = now.story;
+      const target = speechAt(fresh, now.at(passageFrom));
       if (!target) {
         this.closePopover(true);
         return;
       }
       let changes: TextChange[];
       try {
-        changes = withoutSpareMarks(fresh, setDirection(fresh, target, direction));
+        changes = now.back(withoutSpareMarks(fresh, setDirection(fresh, target, direction)));
       } catch (error) {
         this.context.apply([], error instanceof Error ? error.message : "That can’t be set here.");
         return;
@@ -549,19 +584,60 @@ export class StretchTools {
     input.select();
   }
 
+  /** The story an edit at `at` is worked out on: its paragraph alone in a long book, else all of it. */
+  private scopeAt(at: number): Scope {
+    return this.context.scope?.(at) ?? wholeScope(this.context.story());
+  }
+
+  /**
+   * Quotes the changes give to someone along with the one given, by the format's rule that a
+   * quote later on a line carries on the speech before it (§5.6): said, so it isn't a surprise.
+   */
+  private sayCarried(
+    story: Story,
+    changes: readonly TextChange[],
+    given: number,
+    name: string,
+  ): void {
+    if (!this.context.notice || changes.length === 0) return;
+    const before = quotesOf(story);
+    const after = quotesOf(parse(applyChanges(story.source, changes)));
+    if (after.length !== before.length) return;
+    const went = before.filter((quote, index) => {
+      const now = after[index];
+      return (
+        now !== undefined &&
+        !(quote.from <= given && given < quote.to) &&
+        (now.speaker.toLowerCase() !== quote.speaker.toLowerCase() ||
+          now.narrated !== quote.narrated)
+      );
+    });
+    const [first] = went;
+    if (!first) return;
+    const words = first.text.length > 30 ? `${first.text.slice(0, 29)}…` : first.text;
+    this.context.notice(
+      went.length === 1
+        ? `“${words}” goes to ${name} too: a quote later on a line carries on the speech before it. Ctrl+K there gives it to someone else.`
+        : `${went.length} more quotes on that line go to ${name} too: a quote later on a line carries on the speech before it. Ctrl+K on one gives it to someone else.`,
+    );
+  }
+
   private giveTo(from: number, name: string, quote?: Quote): void {
-    const fresh = this.context.story();
-    const target = speechAt(fresh, from);
+    const scope = this.scopeAt(from);
+    const fresh = scope.story;
+    const target = speechAt(fresh, scope.at(from));
     if (!target) {
       this.closePopover(true);
       return;
     }
     if (quote) {
-      const changes = giveQuote(fresh, quote, name);
-      this.context.apply(
-        changes,
+      const scoped = { ...quote, from: scope.at(quote.from), to: scope.at(quote.to) };
+      const changes = giveQuote(fresh, scoped, name);
+      const done = this.context.apply(
+        scope.back(changes),
         `This quote can’t be given to ${name} without changing who says other lines, so nothing changed.`,
       );
+      if (done) this.sayCarried(fresh, changes, scoped.from + 1, name);
       this.closePopover(true);
       return;
     }
@@ -590,15 +666,21 @@ export class StretchTools {
       this.closePopover(true);
       return;
     }
+    const docChanges = scope.back(changes);
     const done = this.context.apply(
-      changes,
+      docChanges,
       `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,
     );
+    if (done) {
+      // The quote given: the first in the passage, when it is narration that holds quotes.
+      const first = quotesOf(fresh).find((found) => found.from >= target.range.from);
+      this.sayCarried(fresh, changes, (first?.from ?? target.range.from) + 1, name);
+    }
     this.closePopover(true);
     // A cursor left before the new mark goes into the passage, so the next key (Ctrl+J, a word)
     // is about it.
     const { view } = this.context;
-    const words = mapped(changes, target.textRange.from);
+    const words = mapped(docChanges, scope.toDoc(target.textRange.from));
     if (done && view.state.selection.main.empty && view.state.selection.main.head < words)
       view.dispatch({ selection: EditorSelection.cursor(Math.min(words, view.state.doc.length)) });
   }

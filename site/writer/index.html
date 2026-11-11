@@ -286,15 +286,25 @@
   <form method="dialog">
     <h2 id="ai-title">Name the speakers with AI</h2>
     <div id="ai-connect" hidden>
-      <p>The Writer uses the AI and the voices on your own computer, through a small helper. In a terminal, run:</p>
-      <p class="ai-command"><code>npx -y @voxdown/cli connect</code></p>
-      <p class="sheet-note">It opens the Writer, connected, and keeps running while you work. It needs <a href="https://nodejs.org" target="_blank" rel="noopener">Node.js</a> 20 or later, and Chrome, Edge or Firefox, which ask once to let this page reach apps on your computer. <a href="https://github.com/voxdown/voxdown/blob/main/docs/ai.md" target="_blank" rel="noopener">More</a></p>
+      <div id="ai-connect-how">
+        <p>The Writer uses the AI and the voices on your own computer, through a small helper. In a terminal, run:</p>
+        <p class="ai-command"><code>npx -y @voxdown/cli connect</code></p>
+        <p class="sheet-note">It opens the Writer, connected, and keeps running while you work. It needs <a href="https://nodejs.org" target="_blank" rel="noopener">Node.js</a> 20 or later, and Chrome, Edge or Firefox, which ask once to let this page reach apps on your computer. <a href="https://github.com/voxdown/voxdown/blob/main/docs/ai.md" target="_blank" rel="noopener">More</a></p>
+      </div>
       <p class="sheet-note" id="ai-connect-why" role="status"></p>
     </div>
     <div id="ai-ready" hidden>
       <label for="ai-choice" id="ai-choice-label">The AI</label>
       <select id="ai-choice"></select>
       <p class="sheet-note" id="ai-about"></p>
+      <div id="ai-scope-options">
+        <label for="ai-scope">The quotes</label>
+        <select id="ai-scope">
+          <option value="story">In the whole story</option>
+          <option value="chapter">In this chapter</option>
+          <option value="selection">In the selection</option>
+        </select>
+      </div>
       <div id="ai-book-options" hidden>
         <label><input type="checkbox" id="ai-sounds"> Sounds and page turns, where the voices can make them (they cost too)</label>
       </div>

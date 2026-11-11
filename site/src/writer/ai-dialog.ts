@@ -5,7 +5,7 @@
  * choice remembered, and shows the work as it goes. Speakers come back as changes to the story,
  * one step to undo; an audiobook is made in a folder on the computer.
  */
-import type { TextChange } from "voxdown";
+import { type Story, type TextChange, bookText, giveQuotes, parse, quotesOf } from "voxdown";
 import {
   type Found,
   type Hello,
@@ -27,6 +27,10 @@ export type AiContext = {
   goToLine(line: number): void;
   /** The story's file name. */
   name(): string;
+  /** The story as it is now, read. */
+  story(): Story;
+  /** The selection, in the text. */
+  selection(): { from: number; to: number };
 };
 
 type Mode = "speakers" | "audiobook";
@@ -38,6 +42,8 @@ const $ = <T extends HTMLElement>(selector: string) => document.querySelector(se
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 let running: AbortController | undefined;
+/** A run the writer went back to writing beside: closing the dialog doesn't stop it. */
+let behind = false;
 
 /** Opens the dialog for naming speakers or making an audiobook. */
 export async function openAi(mode: Mode, context: AiContext): Promise<void> {
@@ -56,6 +62,11 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   title.textContent = mode === "speakers" ? "Name the speakers with AI" : "Make an audiobook";
   $("#ai-choice-label").textContent = mode === "speakers" ? "The AI" : "The voices";
   bookOptions.hidden = mode !== "audiobook";
+  $("#ai-scope-options").hidden = mode !== "speakers";
+  const selected = context.selection();
+  ($("#ai-scope").querySelector('option[value="selection"]') as HTMLOptionElement).disabled =
+    selected.from === selected.to;
+  $("#ai-connect-how").hidden = false;
   progress.textContent = "";
   result.replaceChildren();
   second.hidden = true;
@@ -64,6 +75,7 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   ready.hidden = true;
   if (!dialog.open) dialog.showModal();
   dialog.onclose = () => {
+    if (behind) return;
     running?.abort();
     running = undefined;
   };
@@ -89,7 +101,9 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   }
   const options: Found[] = mode === "speakers" ? found.ais : found.speech;
   if (options.length === 0) {
+    // Connected: only what is missing is said.
     connect.hidden = false;
+    $("#ai-connect-how").hidden = true;
     $("#ai-connect-why").textContent =
       mode === "speakers"
         ? "The helper found no AI on this computer: sign in to Claude Code or Codex, run a model in Ollama or LM Studio, or set an API key, then start vxd connect again."
@@ -112,38 +126,87 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   const describe = () => {
     const option = options.find((candidate) => candidate.id === choice.value);
     about.textContent = option?.note ? `${option.label}: ${option.note}.` : "";
-    localStorage.setItem(CHOICE[mode], choice.value);
   };
   choice.onchange = describe;
   describe();
+  // Remembered once the writer uses it, not before.
+  const keep = () => localStorage.setItem(CHOICE[mode], choice.value);
+  choice.focus();
 
   if (mode === "speakers") {
     go.textContent = "Name the speakers";
-    go.onclick = () => void nameSpeakers(pairing, choice.value, context);
+    go.onclick = () => {
+      keep();
+      const scope = $<HTMLSelectElement>("#ai-scope").value;
+      void nameSpeakers(pairing, choice.value, context, quotesIn(context, scope));
+    };
   } else {
     go.textContent = "Cast it and count the cost";
-    go.onclick = () =>
+    go.onclick = () => {
+      keep();
       void audiobook(pairing, choice.value, "estimate", context, sounds.checked, found);
+    };
   }
 }
 
+/**
+ * The quotes to ask about, by number: all of them (undefined), this chapter's (from the heading
+ * of the story's top level before the cursor to the next), or the selection's.
+ */
+function quotesIn(context: AiContext, scope: string): number[] | undefined {
+  if (scope === "story") return undefined;
+  const story = context.story();
+  const { from, to } = context.selection();
+  let start = from;
+  let end = to;
+  if (scope === "chapter") {
+    const levels = story.blocks.flatMap((block) => (block.kind === "heading" ? [block.level] : []));
+    const top = Math.min(...levels);
+    const tops = story.blocks.filter((block) => block.kind === "heading" && block.level === top);
+    start = [...tops].reverse().find((heading) => heading.range.from <= from)?.range.from ?? 0;
+    end = tops.find((heading) => heading.range.from > from)?.range.from ?? story.source.length;
+  }
+  return quotesOf(story)
+    .filter((quote) => quote.from >= start && quote.from < end)
+    .map((quote) => quote.number);
+}
+
 /** Names the speakers with the AI chosen, and gives them, one step to undo. */
-async function nameSpeakers(pairing: Pairing, ai: string, context: AiContext): Promise<void> {
+async function nameSpeakers(
+  pairing: Pairing,
+  ai: string,
+  context: AiContext,
+  only?: number[],
+): Promise<void> {
   const progress = $("#ai-progress");
   const result = $("#ai-result");
   const go = $<HTMLButtonElement>("#ai-go");
+  const second = $<HTMLButtonElement>("#ai-second");
   const sent = context.text();
   running?.abort();
   running = new AbortController();
-  go.disabled = true;
+  behind = false;
   result.replaceChildren();
+  if (only?.length === 0) {
+    progress.textContent = "No quote there waits for a speaker.";
+    return;
+  }
+  go.disabled = true;
   progress.textContent = "Asking…";
+  // Writing on while it works: the dialog goes, the work goes on, and says when it's done.
+  second.hidden = false;
+  second.textContent = "Keep writing";
+  second.onclick = () => {
+    behind = true;
+    $<HTMLDialogElement>("#ai").close();
+    context.notice("Naming the speakers while you write: it says here when it's done.");
+  };
   try {
     let done: Record<string, unknown> | undefined;
     await work(
       pairing,
       "/v1/tag",
-      { text: sent, with: ai },
+      { text: sent, with: ai, ...(only ? { only } : {}) },
       (event) => {
         if (event.type === "start") progress.textContent = `Asking ${String(event.ai)}…`;
         else if (event.type === "passage" && event.named !== undefined)
@@ -153,11 +216,13 @@ async function nameSpeakers(pairing: Pairing, ai: string, context: AiContext): P
       running.signal,
     );
     if (!done) throw new HelperError("The helper stopped before it was done.");
-    const changes = (done.changes ?? []) as TextChange[];
+    let changes = (done.changes ?? []) as TextChange[];
     const proposals = (done.proposals ?? []) as Array<{
+      quote: number;
       line: number;
       words: string;
       speaker: string;
+      fullName?: string;
       confidence: string;
       outcome: string;
       why?: string;
@@ -166,10 +231,26 @@ async function nameSpeakers(pairing: Pairing, ai: string, context: AiContext): P
     const held = proposals.filter((proposal) => proposal.outcome !== "given");
     const unknown = (done.unknown as number[] | undefined)?.length ?? 0;
     const joined = (done.joined as string[] | undefined) ?? [];
-    if (context.text() !== sent) {
-      progress.textContent =
-        "The story changed while the AI worked, so nothing was given: run it again when you're ready.";
-      return;
+    // Written on meanwhile: given by number to the story as it is now, if its words are the same.
+    if (context.text() !== sent && changes.length) {
+      const now = context.story();
+      if (bookText(parse(sent)) !== bookText(now)) {
+        const said =
+          "The story's words changed while the AI worked, so nothing was given: run it again when you're ready.";
+        progress.textContent = said;
+        if (behind) context.notice(said);
+        return;
+      }
+      changes = giveQuotes(
+        now,
+        proposals
+          .filter((proposal) => proposal.outcome === "given")
+          .map((proposal) => ({
+            quote: proposal.quote,
+            speaker: proposal.speaker,
+            ...(proposal.fullName ? { fullName: proposal.fullName } : {}),
+          })),
+      ).changes;
     }
     if (changes.length && !context.apply(changes)) {
       progress.textContent = "The speakers couldn't be given here.";
@@ -209,11 +290,19 @@ async function nameSpeakers(pairing: Pairing, ai: string, context: AiContext): P
       result.append(list);
     }
     if (changes.length)
-      context.notice(`${plural(given, "speaker")} given by AI: Ctrl+Z takes them back.`);
+      context.notice(
+        `${plural(given, "speaker")} given by AI${held.length ? `, ${held.length} held back` : ""}: Ctrl+Z takes them back.`,
+      );
+    else if (behind) context.notice(progress.textContent ?? "");
   } catch (error) {
-    if ((error as Error).name !== "AbortError") progress.textContent = (error as Error).message;
+    if ((error as Error).name !== "AbortError") {
+      progress.textContent = (error as Error).message;
+      if (behind) context.notice((error as Error).message);
+    }
   } finally {
     go.disabled = false;
+    second.hidden = true;
+    behind = false;
   }
 }
 

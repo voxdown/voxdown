@@ -286,13 +286,23 @@ function unclosedBrackets(story: Story): EditorMark[] {
     }
     // Marks that read as words: `@ Rupert`, a direction never closed, one closed after its quote.
     const at = (i: number) => offset + i;
-    // A direction without its `@` is read aloud: `(whispering) line`, `Rupert (softly) “…”`.
-    const bare = /^([ \t]*)\(([^()\n]{1,60})\)[ \t]+(?=[\p{L}\p{N}“"‘])/u.exec(line);
-    if (bare && !inNote(at(bare.index)))
+    // A direction without its `@` is read aloud: `(whispering) line`, `Rupert (softly) “…”`. Only
+    // what reads as one: a few words with no sentence in them, before a quote, or before words
+    // when it starts in lower case. `(An aside.) Then more.` and `(Later that day) they met.` are
+    // prose: a one-key fix there would take words out of the book and the audio.
+    const bare = /^([ \t]*)\(([^()\n]{1,40})\)[ \t]+([“"‘«„「]|[\p{L}\p{N}])/u.exec(line);
+    const inside = (bare?.[2] ?? "").trim();
+    if (
+      bare &&
+      !/[.!?…;:]/.test(inside) &&
+      inside.split(/\s+/).length <= 5 &&
+      (/^[“"‘«„「]/.test(bare[3] ?? "") || /^\p{Ll}/u.test(inside)) &&
+      !inNote(at(bare.index))
+    )
       out.push({
         kind: "warning",
         from: at((bare[1] ?? "").length),
-        to: at(bare[0].trimEnd().length),
+        to: at((bare[1] ?? "").length + inside.length + 2),
         message: `Did you mean @(${bare[2]})? Without @ it's read aloud.`,
         code: "bare-direction",
         fix: {

@@ -182,7 +182,13 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
   const decoder = new TextDecoder();
   const document = files.get("word/document.xml");
   if (!document) throw new Error("This isn’t a Word document (no word/document.xml).");
-  const xml = decoder.decode(document);
+  // Text boxes (and the older copy Word keeps of them) hold paragraphs within a paragraph: they're
+  // left out, and said, rather than read twice or swallow the text after them.
+  const raw = decoder.decode(document);
+  const boxes = /<w:txbxContent\b/.test(raw);
+  const xml = raw
+    .replace(/<mc:Fallback\b[\s\S]*?<\/mc:Fallback>/g, "")
+    .replace(/<w:txbxContent\b[\s\S]*?<\/w:txbxContent>/g, "");
   const stylesFile = files.get("word/styles.xml");
   const styles = stylesOf(stylesFile ? decoder.decode(stylesFile) : "");
   const paragraphs: Paragraph[] = [];
@@ -204,9 +210,11 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
       const bold = emphasis("b", "bold");
       // Text, tabs and breaks, in their order.
       for (const [piece, text] of r.matchAll(
-        /<w:t\b[^>]*>([\s\S]*?)<\/w:t>|<w:t\b[^>]*\/>|<w:tab\/>|<w:br\b[^>]*\/>|<w:cr\/>/g,
+        /<w:t\b[^>]*>([\s\S]*?)<\/w:t>|<w:t\b[^>]*\/>|<w:tab\b[^>]*\/>|<w:br\b[^>]*\/>|<w:cr\b[^>]*\/>|<w:noBreakHyphen\b[^>]*\/>|<w:softHyphen\b[^>]*\/>/g,
       )) {
         if (piece.startsWith("<w:tab")) runs.push({ text: " ", italic, bold });
+        else if (piece.startsWith("<w:noBreakHyphen")) runs.push({ text: "-", italic, bold });
+        else if (piece.startsWith("<w:softHyphen")) continue;
         else if (piece.startsWith("<w:t")) runs.push({ text: fromXml(text ?? ""), italic, bold });
         else runs.push({ lineBreak: true });
       }
@@ -217,7 +225,7 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
       .trim();
     if (!words) continue;
     const level = headingLevel(styles, style, value(pPr, "w:outlineLvl"));
-    if (/^([*#~·•—–-]\s*){3,}$/.test(words)) paragraphs.push({ kind: "break" });
+    if (/^([*#~·•—–-]\s*){3,}$|^[#*]$/.test(words)) paragraphs.push({ kind: "break" });
     else if (level) paragraphs.push({ kind: "heading", level: Math.min(level, 6), runs });
     else paragraphs.push({ kind: "text", runs });
   }
@@ -237,6 +245,6 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
       ...(author ? { author } : {}),
       ...(language ? { language } : {}),
     }),
-    left: leftOut(xml),
+    left: [...leftOut(xml), ...(boxes ? ["text boxes"] : [])],
   };
 }

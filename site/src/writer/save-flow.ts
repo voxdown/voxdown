@@ -204,7 +204,18 @@ export class SaveFlow {
     } catch (error) {
       host.showState("error", "Not saved");
       host.announce(`${file.name} wasn't saved`);
-      await host.tell(`${file.name} couldn't be saved: ${(error as Error).message}`);
+      // What can be done there and then: save it somewhere else, or download it; the draft is
+      // kept in this browser whatever is chosen.
+      const answer = await host.ask(
+        `${file.name} couldn't be saved: ${(error as Error).message}. The story is kept in this browser; save it somewhere else, or download a copy?`,
+        [
+          { label: "Not now", value: "cancel" },
+          { label: "Download a copy", value: "download" },
+          { label: "Save as…", value: "save-as", main: true },
+        ],
+      );
+      if (answer === "download") host.files.download(content, host.suggestedName());
+      else if (answer === "save-as") return this.saveAs();
       return false;
     }
   }

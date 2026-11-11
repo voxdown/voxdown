@@ -199,10 +199,14 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
     if (!backend)
       throw new Failure(named ? `${named} isn't here` : "no AI was found on this computer");
     const minimum = text(body.min);
+    const only = Array.isArray(body.only)
+      ? new Set(body.only.filter((value): value is number => Number.isInteger(value)))
+      : undefined;
     send({ type: "start", ai: backend === "tags" ? "Dialogue tags" : backend.label });
     const tagged = await tagStory(parse(source), {
       backend,
       ...(minimum === "high" || minimum === "medium" || minimum === "low" ? { minimum } : {}),
+      ...(only ? { only } : {}),
       signal,
       onProgress: ({ passage, index, of, reading }) =>
         send({

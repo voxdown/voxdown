@@ -189,9 +189,17 @@ describe("saving to the story's file", () => {
     expect(refused.said[0]).toContain("didn’t allow");
     const failed = page({ disk: { "tale.vxd": { text: "Saved.", modified: 1 } }, failWrite: true });
     expect(await failed.flow.save()).toBe(false);
-    expect(failed.said[0]).toContain("the disk is full");
+    expect(failed.asked[0]).toContain("the disk is full");
     expect(failed.state).toMatchObject({ shown: "error", words: "Not saved" });
     expect(failed.file.saved).toBe("Saved.");
+    // What can be done there and then: a copy downloaded.
+    const copied = page({
+      disk: { "tale.vxd": { text: "Saved.", modified: 1 } },
+      failWrite: true,
+      answers: ["download"],
+    });
+    expect(await copied.flow.save()).toBe(false);
+    expect(copied.said.some((line) => line.startsWith("downloaded"))).toBe(true);
   });
 
   it("Save as onto the story's own file asks as Save does", async () => {

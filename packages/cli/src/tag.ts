@@ -26,6 +26,8 @@ export type Proposal = {
   /** Its first words. */
   words: string;
   speaker: string;
+  /** A new character's full name, as the AI gave it. */
+  fullName?: string;
   confidence: Confidence;
   cue: string;
   /** Given, held back as less sure than asked for, or refused by the core (with why). */
@@ -70,6 +72,8 @@ export async function tagStory(
     backend: Backend | "tags";
     /** Speakers less sure than this are held back. */
     minimum?: Confidence;
+    /** Only these quotes (by number): a chapter's, or the selection's. */
+    only?: ReadonlySet<number>;
     words?: number;
     onProgress?: (progress: Progress) => void;
     signal?: AbortSignal;
@@ -104,7 +108,7 @@ export async function tagStory(
     return given;
   };
   if (options.backend === "tags") {
-    const gifts = tagGifts(story);
+    const gifts = tagGifts(story, options.only);
     const given = give(gifts);
     const refused = new Map(given.refused.map((refusal) => [refusal.quote, refusal.why]));
     for (const gift of gifts)
@@ -112,6 +116,7 @@ export async function tagStory(
         quote: gift.quote,
         ...describe(gift.quote),
         speaker: gift.speaker,
+        ...(gift.fullName ? { fullName: gift.fullName } : {}),
         confidence: "high",
         cue: "dialogue tag",
         outcome: refused.has(gift.quote) ? "refused" : "given",
@@ -122,7 +127,11 @@ export async function tagStory(
     return result;
   }
   const backend = options.backend;
-  const pending = new Set(first.filter((quote) => quote.narrated).map((quote) => quote.number));
+  const pending = new Set(
+    first
+      .filter((quote) => quote.narrated && (!options.only || options.only.has(quote.number)))
+      .map((quote) => quote.number),
+  );
   const newcomers = new Map<string, string>();
   while (pending.size > 0) {
     if (options.signal?.aborted) {
@@ -175,6 +184,7 @@ export async function tagStory(
         quote: gift.quote,
         ...describe(gift.quote),
         speaker: gift.speaker,
+        ...(gift.fullName ? { fullName: gift.fullName } : {}),
         confidence: gift.confidence,
         cue: gift.cue,
         outcome: held ? "held" : refused.has(gift.quote) ? "refused" : "given",

@@ -25,8 +25,20 @@ export function crc32(data: Uint8Array): number {
 
 export type ZipEntry = { name: string; data: Uint8Array | string };
 
-/** The files as one zip, in the order given, each stored as it is. */
-export function zip(entries: readonly ZipEntry[]): Uint8Array {
+/** A date and time as zip files keep them (MS-DOS's: two seconds at a time, from 1980). */
+function dosTime(when: Date): { time: number; date: number } {
+  return {
+    time: (when.getHours() << 11) | (when.getMinutes() << 5) | Math.floor(when.getSeconds() / 2),
+    date:
+      ((Math.max(1980, when.getFullYear()) - 1980) << 9) |
+      ((when.getMonth() + 1) << 5) |
+      when.getDate(),
+  };
+}
+
+/** The files as one zip, in the order given, each stored as it is, dated `when`. */
+export function zip(entries: readonly ZipEntry[], when = new Date()): Uint8Array {
+  const { time, date } = dosTime(when);
   const parts: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
@@ -40,6 +52,8 @@ export function zip(entries: readonly ZipEntry[]): Uint8Array {
     // UTF-8 names (bit 11), stored (method 0), no date to speak of.
     local.setUint16(6, 0x0800, true);
     local.setUint16(8, 0, true);
+    local.setUint16(10, time, true);
+    local.setUint16(12, date, true);
     local.setUint32(14, crc, true);
     local.setUint32(18, data.length, true);
     local.setUint32(22, data.length, true);
@@ -51,6 +65,8 @@ export function zip(entries: readonly ZipEntry[]): Uint8Array {
     record.setUint16(6, 20, true);
     record.setUint16(8, 0x0800, true);
     record.setUint16(10, 0, true);
+    record.setUint16(12, time, true);
+    record.setUint16(14, date, true);
     record.setUint32(16, crc, true);
     record.setUint32(20, data.length, true);
     record.setUint32(24, data.length, true);

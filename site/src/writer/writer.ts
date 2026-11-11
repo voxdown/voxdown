@@ -88,6 +88,7 @@ import {
 } from "./files";
 import { Hearing, toHear } from "./hear";
 import { keepPairing, pairingIn } from "./helper";
+import { paragraphScope } from "./local";
 import { DraftLock } from "./lock";
 import { keys, menus } from "./menu";
 import { rankScenes } from "./outline";
@@ -536,11 +537,34 @@ const tools: StretchTools = new StretchTools({
     }
     return read && readNow() ? passageIn(read.reply.passages, at) : undefined;
   },
+  // A long book's passage is edited in its paragraph alone, never by reading the book again.
+  scope: (at) =>
+    view.state.doc.length >= LONG ? paragraphScope(view.state.doc.toString(), at) : undefined,
+  notice: (message) => notice(message),
+  directions: () =>
+    view.state.doc.length >= LONG
+      ? [
+          ...new Set(
+            [
+              ...view.state.doc
+                .toString()
+                .matchAll(/@[\p{L}][\p{L}\p{N}_'’-]*\s*\(([^()\n]{1,60})\)|@\(([^()\n]{1,60})\)/gu),
+            ].map((found) => (found[1] ?? found[2] ?? "").trim()),
+          ),
+        ].filter(Boolean)
+      : [
+          ...new Set(
+            lines(current())
+              .map((line) => line.direction ?? "")
+              .filter(Boolean),
+          ),
+        ],
 });
 
 /** Everyone a passage can be given to: the narrator, the cast, and anyone else the story names. */
 function speakers(): Speaker[] {
-  const now = current();
+  // A long story's names and cast as last read: reading it again for a list would hold the page.
+  const now = view.state.doc.length >= LONG ? story : current();
   const narrator = now.meta.narrator;
   const names = [...colors.keys()];
   if (!names.some((name) => name.toLowerCase() === narrator.toLowerCase())) names.unshift(narrator);
@@ -590,7 +614,8 @@ function apply(changes: TextChange[], declined: string): boolean {
     changes: changes.map(({ from, to, insert }) => ({ from, to, insert })),
     userEvent: "input.edit",
   });
-  refresh();
+  // A long story is read again in the worker, as after typing: never on the page for one edit.
+  if (view.state.doc.length < LONG) refresh();
   return true;
 }
 
@@ -740,16 +765,53 @@ function showRest(): void {
 const reader = new Worker(new URL("./render-worker.ts", import.meta.url), { type: "module" });
 let asked = 0;
 const replies = new Map<number, (reply: RenderReply) => void>();
-reader.addEventListener("message", ({ data: reply }: MessageEvent<RenderReply>) => {
-  replies.get(reply.id)?.(reply);
-  replies.delete(reply.id);
-});
+const pending = new Map<number, RenderAsk>();
+/** The worker failed once: long stories are read on the page from then on, more slowly. */
+let workerFailed = false;
+function readOnPage(ask: RenderAsk, why: string): void {
+  if (!workerFailed) {
+    workerFailed = true;
+    notice(
+      `This long story is read on the page now, which may be slower (its reader failed: ${why}).`,
+    );
+  }
+  void import("./story-read").then(({ readFor }) => {
+    replies.get(ask.id)?.(readFor(ask));
+    replies.delete(ask.id);
+    pending.delete(ask.id);
+  });
+}
+reader.addEventListener(
+  "message",
+  ({ data: reply }: MessageEvent<RenderReply | { id: number; error: string }>) => {
+    const ask = pending.get(reply.id);
+    if ("error" in reply) {
+      if (ask) readOnPage(ask, reply.error);
+      return;
+    }
+    replies.get(reply.id)?.(reply);
+    replies.delete(reply.id);
+    pending.delete(reply.id);
+  },
+);
+// A worker that can't start, or a message it can't take: everything waiting is read on the page.
+const workerBroke = (why: string) => {
+  for (const ask of [...pending.values()]) readOnPage(ask, why);
+};
+reader.addEventListener("error", (event) => workerBroke(event.message || "it stopped"));
+reader.addEventListener("messageerror", () => workerBroke("a message it couldn't read"));
 function readInWorker(text: string): Promise<RenderReply> {
   const id = ++asked;
   const tab = prefs.side && (prefs.tab === "script" || prefs.tab === "book") ? prefs.tab : "none";
+  const ask: RenderAsk = { id, text, tab };
   return new Promise((resolve) => {
     replies.set(id, resolve);
-    reader.postMessage({ id, text, tab } satisfies RenderAsk);
+    if (workerFailed) {
+      readOnPage(ask, "");
+      return;
+    }
+    pending.set(id, ask);
+    reader.postMessage(ask);
   });
 }
 
@@ -1233,8 +1295,11 @@ function nextQuote(): boolean {
     selection: EditorSelection.range(quote.from, quote.to),
     effects: EditorView.scrollIntoView(quote.from, { y: "center" }),
   });
+  const line = view.state.doc.lineAt(quote.from).number;
   notice(
-    `Line ${view.state.doc.lineAt(quote.from).number}: the narrator reads this quote. ${keys("Mod+K")} gives it to someone; ${keys("Mod+Shift+K")} goes to the next.`,
+    quote.carried
+      ? `Line ${line}: this quote carries on ${quote.carried.speaker}’s speech, but its tag names ${quote.carried.tag}. ${keys("Mod+K")} gives it to someone; ${keys("Mod+Shift+K")} goes to the next.`
+      : `Line ${line}: the narrator reads this quote. ${keys("Mod+K")} gives it to someone; ${keys("Mod+Shift+K")} goes to the next.`,
     true,
   );
   return true;
@@ -1997,9 +2062,14 @@ const NEW_STORY = [
 async function newStory(): Promise<void> {
   if (!(await mayLeave())) return;
   await load({ name: "Untitled.vxd", text: NEW_STORY }, { saved: "" });
-  // The cursor on the page under the title, ready to write.
-  view.dispatch({ selection: EditorSelection.cursor(view.state.doc.length), scrollIntoView: true });
+  // The title selected, so that what is typed first replaces it; Enter goes on to the page.
+  const title = NEW_STORY.indexOf("# Untitled") + 2;
+  view.dispatch({
+    selection: EditorSelection.range(title, title + "Untitled".length),
+    scrollIntoView: true,
+  });
   view.focus();
+  notice("Type the story’s title, then Enter to write beneath it.");
 }
 
 /** Tidies the story as `format` does, changing only what it changes, as one step to undo. */
@@ -2012,7 +2082,12 @@ function tidy(curly: boolean): void {
     return;
   }
   void snapshot("Before tidying");
-  const changedLines = diffLines(before, after).filter((line) => line.kind === "new").length;
+  const lines = diffLines(before, after);
+  const added = lines.filter((line) => line.kind === "new").length;
+  const gone = lines.filter((line) => line.kind === "gone").length;
+  // Lines changed are a line gone and one in its place; the rest were taken out (blank lines).
+  const changedLines = Math.min(added, gone);
+  const takenOut = gone - changedLines;
   let start = 0;
   while (start < before.length && before[start] === after[start]) start++;
   let endBefore = before.length;
@@ -2023,7 +2098,7 @@ function tidy(curly: boolean): void {
   }
   view.dispatch({ changes: { from: start, to: endBefore, insert: after.slice(start, endAfter) } });
   notice(
-    `Tidied: ${changedLines.toLocaleString()} ${changedLines === 1 ? "line" : "lines"} changed. Undo (${keys("Mod+Z")}) takes it back; Earlier versions has it as it was.`,
+    `Tidied: ${changedLines.toLocaleString()} ${changedLines === 1 ? "line" : "lines"} changed${takenOut ? `, ${takenOut.toLocaleString()} taken out` : ""}. Undo (${keys("Mod+Z")}) takes it back; Earlier versions has it as it was.`,
   );
 }
 
@@ -3155,6 +3230,8 @@ const aiContext: AiContext = {
     view.focus();
   },
   name: () => file.name,
+  story: () => current(),
+  selection: () => ({ from: view.state.selection.main.from, to: view.state.selection.main.to }),
 };
 
 // Opened by `vxd connect`: the key to the helper on this computer, kept, and taken out of the address.

@@ -1841,7 +1841,8 @@ body[data-welcome] .manuscript .editor {
   font-size: 0.88rem;
   margin-bottom: 0.3rem;
 }
-#ai-choice {
+#ai-choice,
+#ai-scope {
   width: 100%;
   font: inherit;
   padding: 0.35rem 0.4rem;

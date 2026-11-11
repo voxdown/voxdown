@@ -817,6 +817,8 @@ if (await follower.isVisible("#ask[open]"))
 await follower.waitForFunction(
   () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
 );
+// A new story's title is selected: the page is beneath it.
+await follower.keyboard.press("Control+End");
 await follower.keyboard.type("She waved.");
 await follower.click("#insert-menu-button");
 await follower.click('[data-command="insert-pause"]');
@@ -1037,8 +1039,35 @@ if (held.length > 3)
   problems.push(
     `writer: writing in a 100,000-word book held the page ${held.length} times (${held.map(Math.round).join(", ")} ms)`,
   );
+// Giving speakers, as a producer does again and again: worked out on the paragraph alone, it
+// never holds the page for a book's reading.
+await longPage.waitForTimeout(2500);
+await longPage.keyboard.press("Control+Home");
+await longPage.evaluate(() => {
+  window.__long = [];
+});
+let gave = 0;
+for (let give = 0; give < 3; give++) {
+  await longPage.keyboard.press("Control+Shift+K");
+  await longPage.waitForTimeout(300);
+  await longPage.evaluate(() => {
+    window.__long = [];
+  });
+  await longPage.keyboard.press("Control+K");
+  if (!(await longPage.waitForSelector(".speaker-list", { timeout: 3000 }).catch(() => null)))
+    break;
+  await longPage.keyboard.press("Enter");
+  await longPage.waitForTimeout(500);
+  const slow = await longPage.evaluate(() => window.__long.filter((duration) => duration > 100));
+  if (slow.length)
+    problems.push(
+      `writer: giving a speaker in a 100,000-word book held the page ${slow.map(Math.round).join(", ")} ms`,
+    );
+  gave++;
+}
+if (gave === 0) problems.push("writer: no speaker could be given in the 100,000-word book");
 await long.close();
-console.log(`writer: a 100,000-word book, slowest key ${slowest} ms: ok`);
+console.log(`writer: a 100,000-word book, slowest key ${slowest} ms, ${gave} speakers given: ok`);
 
 // Offline: opened once, the Writer opens again with no network, its story with it.
 const offline = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -1634,6 +1663,8 @@ watch(maker, "writer insert and export");
 const draftOf = () => draftIn(maker);
 await maker.goto(`${base}/writer/`);
 await maker.click('.welcome [data-command="new"]');
+// A new story's title is selected (checked below): the page is beneath it.
+await maker.keyboard.press("Control+End");
 await maker.keyboard.type("Once upon a time, there was a witch.");
 await maker.click("#insert-menu-button");
 await maker.click('[data-command="insert-sound"]');
@@ -2190,6 +2221,18 @@ console.log("writer: two tabs, a file changed on disk: ok");
   watch(alone, "writer without vxd connect");
   await alone.goto(`${base}/writer/`);
   await alone.click('.welcome [data-command="new"]');
+  // A new story's title is selected, so the first thing typed names it.
+  await alone
+    .waitForFunction(
+      () => document.querySelector("#notice")?.textContent?.includes("title"),
+      undefined,
+      { timeout: 5000 },
+    )
+    .catch(() => {});
+  await alone.keyboard.type("The Witch");
+  await alone.waitForTimeout(900);
+  if (!(await draftIn(alone)).includes("# The Witch\n"))
+    problems.push("writer: a new story's title isn't selected to be typed over");
   await alone.click("#edit-menu-button");
   await alone.click('[data-command="ai-speakers"]');
   await alone.waitForSelector("#ai-connect:not([hidden])", { timeout: 5000 }).catch(() => {});

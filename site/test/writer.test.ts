@@ -3,7 +3,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
 import { describe, expect, it, vi } from "vitest";
-import { applyChanges, bookText, lines, parse } from "voxdown";
+import { applyChanges, bookText, lines, parse, setSpeaker } from "voxdown";
 import { countsOf } from "../src/writer/counts";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, plainText, toggleEmphasis } from "../src/writer/emphasis";
@@ -17,6 +17,7 @@ import { Rescue, tabStory } from "../src/writer/rescue";
 import { SaveQueue, autosaveCheck, checkDisk, sameText } from "../src/writer/saving";
 import { moveSection } from "../src/writer/sections";
 import { sidesHtml, sidesOf, sidesText } from "../src/writer/sides";
+import { withoutSpareMarks } from "../src/writer/spare-marks";
 import { thinVersions } from "../src/writer/store";
 import {
   composed,
@@ -824,5 +825,32 @@ describe("the counts", () => {
     const heard = `{audio only} ${"word ".repeat(1000)}\n\n{pause 120s}`;
     expect(Math.round(countsOf(parse(heard)).heard)).toBe(400 + 120);
     expect(countsOf(parse(heard)).words).toBe(0);
+  });
+});
+
+describe("an edit's marks, no more than needed", () => {
+  const give = (text: string, nth: number, name: string) => {
+    const story = parse(text);
+    const speeches = story.blocks
+      .flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+      .flatMap((line) => line.items)
+      .filter((item) => item.kind === "speech");
+    const target = speeches[nth];
+    if (target?.kind !== "speech") throw new Error("no speech");
+    return applyChanges(text, withoutSpareMarks(story, setSpeaker(story, target, name)));
+  };
+
+  it("leaves out a mark that says again who already speaks", () => {
+    expect(give("@Wanda “Fine!” @Bob “Hm.”", 1, "Wanda")).toBe("@Wanda “Fine!” “Hm.”");
+  });
+
+  it("keeps every mark that changes who or how", () => {
+    expect(give("@Wanda “Fine!” said Bob. “Hm.”", 2, "Bob")).toBe(
+      "@Wanda “Fine!” said Bob. @Bob “Hm.”",
+    );
+    const text = "@Wanda (softly) “Fine!” @Wanda “Hm.”";
+    expect(
+      applyChanges(text, withoutSpareMarks(parse(text), [{ from: 0, to: 0, insert: "" }])),
+    ).toBe(text);
   });
 });

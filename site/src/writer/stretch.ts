@@ -4,7 +4,7 @@
  * `setDirection`), which change exactly what they say or nothing: where a change would reach
  * other lines, the writer is told and nothing changes.
  */
-import { ChangeSet, EditorSelection } from "@codemirror/state";
+import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
   type Speech,
@@ -18,6 +18,8 @@ import {
   setFullName,
   setSpeaker,
 } from "voxdown";
+import { composed, mapped } from "./changes";
+import { withoutSpareMarks } from "./spare-marks";
 import type { Passage } from "./story-data";
 
 export type Speaker = { handle: string; name: string; color?: string };
@@ -42,40 +44,6 @@ export type StretchContext = {
 };
 
 const hasWords = (text: string) => /[\p{L}\p{N}]/u.test(text);
-
-/**
- * Two sets of changes made one after the other, as one set on the text before both: the second's
- * places are in the text the first makes.
- */
-export function composed(
-  source: string,
-  first: readonly TextChange[],
-  second: readonly TextChange[],
-): TextChange[] {
-  const a = ChangeSet.of(
-    first.map(({ from, to, insert }) => ({ from, to, insert })),
-    source.length,
-  );
-  const b = ChangeSet.of(
-    second.map(({ from, to, insert }) => ({ from, to, insert })),
-    a.newLength,
-  );
-  const out: TextChange[] = [];
-  a.compose(b).iterChanges((from, to, _fromB, _toB, inserted) => {
-    out.push({ from, to, insert: inserted.toString() });
-  });
-  return out;
-}
-
-/** Where `at` is once the changes are made: moved by those before it. */
-export function mapped(changes: readonly TextChange[], at: number): number {
-  let shift = 0;
-  for (const change of [...changes].sort((a, b) => a.from - b.from)) {
-    if (change.to <= at) shift += change.insert.length - (change.to - change.from);
-    else if (change.from < at) return change.from + shift + change.insert.length;
-  }
-  return at + shift;
-}
 
 /** The passage at `at` in a paragraph: a speech with words, the narrator's included. */
 export function speechAt(story: Story, at: number): Speech | undefined {
@@ -556,7 +524,7 @@ export class StretchTools {
       }
       let changes: TextChange[];
       try {
-        changes = setDirection(fresh, target, direction);
+        changes = withoutSpareMarks(fresh, setDirection(fresh, target, direction));
       } catch (error) {
         this.context.apply([], error instanceof Error ? error.message : "That can’t be set here.");
         return;
@@ -603,7 +571,7 @@ export class StretchTools {
     }
     let changes: TextChange[];
     try {
-      changes = setSpeaker(fresh, target, name);
+      changes = withoutSpareMarks(fresh, setSpeaker(fresh, target, name));
       // Someone new, in a story with a cast: added to it in the same step, so the name raises
       // no warning.
       const known = fresh.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
@@ -744,3 +712,5 @@ export class StretchTools {
     return this.bar.querySelector(selector) as HTMLElement;
   }
 }
+
+export { composed, mapped } from "./changes";

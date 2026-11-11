@@ -54,9 +54,12 @@ import {
 } from "@voxdown/render";
 import {
   SPEC_VERSION,
+  type Shape,
   type Story,
   type TextChange,
   bookText,
+  diffChanges,
+  findShape,
   format,
   insertLine,
   insertSound,
@@ -68,6 +71,7 @@ import {
   setAbout,
   setFullName,
   setMeta,
+  shapeStory,
   textByCharacter,
 } from "voxdown";
 import { examples } from "../examples";
@@ -108,6 +112,7 @@ import { DraftLock } from "./lock";
 import { keys, menus } from "./menu";
 import { rankScenes } from "./outline";
 import { afterParagraph, moveParagraph } from "./paragraphs";
+import { pastedStory } from "./paste";
 import { type Problem, problems } from "./problems";
 import { SceneRail, numbered, railScenes } from "./rail";
 import type { RenderAsk, RenderReply } from "./render-worker";
@@ -374,6 +379,8 @@ function editorState(source: string, cursor: number): EditorState {
         focus: () => {
           requestAnimationFrame(markPlace);
         },
+        // From a web page, Word or Google Docs: its paragraphs, headings and emphasis kept.
+        paste: (event, editor) => pasteShaped(event, editor),
       }),
       EditorView.contentAttributes.of(() => ({
         spellcheck: "true",
@@ -466,6 +473,12 @@ function editorState(source: string, cursor: number): EditorState {
         }
         if (update.docChanged || update.selectionSet) cursorMoved();
         if (update.transactions.length) showUndoState(update.state);
+        // A whole book pasted: its chapters, contents and notices offered to set out.
+        if (
+          update.transactions.some((tr) => tr.isUserEvent("input.paste")) &&
+          update.changes.newLength - update.changes.length >= 20_000
+        )
+          setTimeout(() => offerShape(), 300);
         if (update.docChanged || update.selectionSet) showEmphasisState(update.state);
         if (update.heightChanged) tools.moved();
         if (update.selectionSet && !update.docChanged) keepPlaceSoon();
@@ -655,15 +668,35 @@ let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 /** A word to the writer at the foot of the manuscript, for a few seconds. */
 /** Whether the notice up is about a place in the text, gone once the text changes. */
 let noticeOfPlace = false;
-function notice(message: string, ofPlace = false): void {
+function notice(
+  message: string,
+  ofPlace = false,
+  /** A button that does what the notice offers (`Find the chapters…`). */
+  action?: { label: string; run: () => void },
+): void {
   const box = $("#notice");
   noticeOfPlace = ofPlace;
   box.textContent = message;
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button notice-action";
+    button.textContent = action.label;
+    button.addEventListener("click", () => {
+      box.hidden = true;
+      action.run();
+    });
+    box.append(button);
+  }
   box.hidden = false;
   clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => {
-    box.hidden = true;
-  }, 6000);
+  // Longer with something to do in it: time to read it and reach its button.
+  noticeTimer = setTimeout(
+    () => {
+      box.hidden = true;
+    },
+    action ? 16_000 : 6000,
+  );
 }
 
 /** Puts a story in the editor, with a fresh undo history, the cursor where the story starts. */
@@ -1936,10 +1969,11 @@ async function openStory(opened: Opened): Promise<void> {
   }
   await load(opened, kept ? { id: kept.id } : {});
   if (!opened.imported) void snapshot("Opened", opened.text);
-  else if (opened.document)
-    notice(
+  if (opened.imported && opened.document)
+    offerShape(
       `${opened.document === "docx" ? "That Word document" : "That ebook"} was opened as a new story, its headings, paragraphs, italics and bold kept as it marks them${opened.left?.length ? `; not brought in: ${opened.left.join(", ")}` : ""}. Ctrl+Shift+K finds the quotes to give their speakers, and Save writes it as VoxDown to a file of its own.`,
     );
+  else if (/\.txt$/i.test(opened.name)) offerShape();
   else if (opened.encoding)
     // Its letters read as what they were, never written back over the original by themselves.
     notice(
@@ -2143,6 +2177,160 @@ async function newStory(): Promise<void> {
   );
   notice("Type the story’s title, then Enter to write beneath it.");
   await opening;
+}
+
+/** A paste from a web page, Word or Google Docs, its paragraphs, headings and emphasis kept. */
+function pasteShaped(event: ClipboardEvent, editor: EditorView): boolean {
+  const html = event.clipboardData?.getData("text/html");
+  if (!html || lockedOut || editor.state.readOnly) return false;
+  const { from, to } = editor.state.selection.main;
+  // In the front matter, the words alone.
+  if (from < (current().frontMatter?.range.to ?? 0)) return false;
+  const text = pastedStory(html);
+  if (text === undefined) return false;
+  event.preventDefault();
+  editor.dispatch({
+    changes: { from, to, insert: text },
+    selection: EditorSelection.cursor(from + text.length),
+    userEvent: "input.paste",
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/** What the story's text holds of a book's shape, said in a few words; "" for nothing. */
+function shapeSaid(shape: Shape): string {
+  const said = [
+    shape.chapters.length >= 2 ? `${shape.chapters.length.toLocaleString()} chapters` : "",
+    shape.contents.length ? "a list of contents" : "",
+    shape.notices.length ? "Project Gutenberg's notices" : "",
+    shape.lines.length ? `${shape.lines.length} lines set out as a play` : "",
+  ].filter(Boolean);
+  return said.length > 1 ? `${said.slice(0, -1).join(", ")} and ${said.at(-1)}` : (said[0] ?? "");
+}
+
+/** After a book comes in (pasted, a text file, an ebook): what can be set out, offered. */
+function offerShape(before = ""): void {
+  if (lockedOut) {
+    if (before) notice(before);
+    return;
+  }
+  const said = shapeSaid(findShape(current()));
+  if (!said) {
+    if (before) notice(before);
+    return;
+  }
+  notice(`${before ? `${before} ` : ""}It reads as a book: ${said}.`, false, {
+    label: "Find the chapters…",
+    run: showShape,
+  });
+}
+
+/** Edit › Find the chapters…: what the story's text holds of a book's shape, each a choice. */
+function showShape(): void {
+  if (lockedOut) return;
+  if (storyVersion !== version) refresh();
+  const story = current();
+  const shape = findShape(story);
+  const dialog = $<HTMLDialogElement>("#shape");
+  const choices = $("#shape-choices");
+  const sample = (texts: string[]) =>
+    texts.length > 3 ? `${texts.slice(0, 3).join(" · ")} · …` : texts.join(" · ");
+  const speakers = [...new Set(shape.lines.map((line) => line.handle))];
+  const offered: Array<{
+    key: keyof Parameters<typeof shapeStory>[2];
+    label: string;
+    detail: string;
+  }> = [
+    ...(shape.chapters.length
+      ? [
+          {
+            key: "chapters" as const,
+            label: `Make ${shape.chapters.length.toLocaleString()} chapter titles headings`,
+            detail: sample(shape.chapters.map((chapter) => chapter.text)),
+          },
+        ]
+      : []),
+    ...(shape.contents.length
+      ? [
+          {
+            key: "contents" as const,
+            label: `Keep the list of contents (${shape.contents.length} lines) in the book only, not read aloud`,
+            detail: "Each line printed, as {book only}: the audiobook goes straight to the story.",
+          },
+        ]
+      : []),
+    ...(shape.notices.length
+      ? [
+          {
+            key: "notices" as const,
+            label: "Take out Project Gutenberg's notices, at the start and the end",
+            detail: "Its licence and its header, which aren't the book's, nor to be read aloud.",
+          },
+        ]
+      : []),
+    ...(shape.title || shape.author
+      ? [
+          {
+            key: "details" as const,
+            label: `Make ${[shape.title ? `“${shape.title}” the title` : "", shape.author ? `${shape.author} the author` : ""].filter(Boolean).join(" and ")}`,
+            detail: shape.titlePage.length
+              ? "From its title page, which is then taken out of the text."
+              : "From Project Gutenberg's header.",
+          },
+        ]
+      : []),
+    ...(shape.lines.length
+      ? [
+          {
+            key: "lines" as const,
+            label: `Give ${shape.lines.length} lines set out as a play to their ${speakers.length} speakers`,
+            detail: `${(shape.lines[0] as Shape["lines"][number]).name}. … → @${(shape.lines[0] as Shape["lines"][number]).handle} …; the new ones join the cast: ${sample(speakers)}`,
+          },
+        ]
+      : []),
+  ];
+  choices.replaceChildren(
+    ...offered.map((offer) => {
+      const label = document.createElement("label");
+      label.className = "shape-choice";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = true;
+      box.name = offer.key;
+      const text = document.createElement("span");
+      text.textContent = offer.label;
+      const small = document.createElement("small");
+      small.textContent = offer.detail;
+      label.append(box, text, small);
+      return label;
+    }),
+  );
+  if (!offered.length) {
+    const none = document.createElement("p");
+    none.textContent =
+      "Nothing here to set out: no chapter titles alone on their lines, no list of contents, no Project Gutenberg notices, no lines set out as a play.";
+    choices.append(none);
+  }
+  $<HTMLButtonElement>("#shape-make").hidden = !offered.length;
+  dialog.onclose = () => {
+    if (dialog.returnValue !== "make") return view.focus();
+    const chosen = Object.fromEntries(
+      [...choices.querySelectorAll<HTMLInputElement>("input")].map((box) => [
+        box.name,
+        box.checked,
+      ]),
+    );
+    const before = view.state.doc.toString();
+    const made = shapeStory(story, shape, chosen);
+    if (apply(diffChanges(before, made), "Nothing chosen to change.")) {
+      notice("Set out as a book: Ctrl+Z takes it all back.");
+      if (prefs.side) showSide();
+    }
+    view.focus();
+  };
+  dialog.returnValue = "";
+  dialog.showModal();
 }
 
 /** Tidies the story as `format` does, changing only what it changes, as one step to undo. */
@@ -2748,6 +2936,7 @@ const COMMANDS: Record<string, () => unknown> = {
   "save-as": () => saveAs(),
   download: () => download(text(), suggestedName()),
   format: () => tidy(false),
+  shape: () => showShape(),
   "format-curly": () => tidy(true),
   undo: () => {
     undo(view);

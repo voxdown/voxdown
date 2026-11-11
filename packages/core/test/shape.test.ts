@@ -156,6 +156,18 @@ describe("chapters found in other books", () => {
     expect(shape.chapters.map((chapter) => chapter.text)).toEqual(["CHAPTER 2."]);
   });
 
+  it("read a title page set out as headings, as a web page's is pasted", () => {
+    const story = parse(
+      "# Untitled\n\n*** START OF THE PROJECT GUTENBERG EBOOK 2701 ***\n\n# MOBY-DICK; or, THE WHALE.\n\n## By Herman Melville\n\nCONTENTS\n\nCHAPTER 1. Loomings.\n\nCHAPTER 2. The Carpet-Bag.\n\n## CHAPTER 1. Loomings.\n\nCall me Ishmael.\n",
+    );
+    const shape = findShape(story);
+    expect([shape.title, shape.author]).toEqual(["Moby-Dick; or, The Whale", "Herman Melville"]);
+    const made = shapeStory(story, shape, { details: true, notices: true });
+    expect(made).toContain("title: Moby-Dick; or, The Whale");
+    expect(made).toContain("# Moby-Dick; or, The Whale\n\nCONTENTS");
+    expect(made).not.toContain("By Herman Melville");
+  });
+
   it("write a title in capitals as a reader would", () => {
     expect(titleCased("MOBY-DICK; or, THE WHALE")).toBe("Moby-Dick; or, The Whale");
     expect(titleCased("THE WIND IN THE WILLOWS")).toBe("The Wind in the Willows");

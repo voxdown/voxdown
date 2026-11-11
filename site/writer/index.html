@@ -63,6 +63,7 @@
         <hr>
         <button role="menuitem" type="button" data-command="format">Tidy the story</button>
         <button role="menuitem" type="button" data-command="format-curly">Tidy, with curly quotes</button>
+        <button role="menuitem" type="button" data-command="shape">Find the chapters…</button>
       </div>
     </div>
     <div class="menu">
@@ -380,6 +381,18 @@
     </div>
     <div class="ask-buttons">
       <button class="button" value="close">Close</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="shape-dialog" id="shape" aria-labelledby="shape-title" aria-describedby="shape-about">
+  <form method="dialog">
+    <h2 id="shape-title">Find the chapters</h2>
+    <p class="sheet-note" id="shape-about">What the Writer found in the story's text, set out as a book: choose what to change. The words themselves stay as they are, and Ctrl+Z takes it all back.</p>
+    <div id="shape-choices"></div>
+    <div class="ask-buttons">
+      <button class="button" value="cancel">Cancel</button>
+      <button class="button primary" value="make" id="shape-make">Make these changes</button>
     </div>
   </form>
 </dialog>

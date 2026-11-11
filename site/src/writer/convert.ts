@@ -16,6 +16,9 @@ export type Paragraph =
 /** Elements that make blocks of their own; anything else is part of the text around it. */
 const BLOCK =
   /^(address|article|aside|blockquote|body|center|dd|details|dialog|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hgroup|hr|li|main|menu|nav|ol|p|pre|section|summary|table|tbody|td|tfoot|th|thead|tr|ul)$/;
+/** The same, as a selector. */
+const BLOCKS =
+  "address,article,aside,blockquote,center,dd,details,dialog,div,dl,dt,fieldset,figcaption,figure,footer,form,h1,h2,h3,h4,h5,h6,header,hgroup,hr,li,main,menu,nav,ol,p,pre,section,summary,table,tbody,td,tfoot,th,thead,tr,ul";
 
 /**
  * A book's HTML (an element holding it) as paragraphs. Paragraphs, list items and headings are
@@ -90,7 +93,13 @@ export function paragraphsOf(root: Element, styleOf?: StyleOf): Paragraph[] {
       inline = [];
     };
     for (const child of element.childNodes) {
-      if (child.nodeType === 1 && BLOCK.test((child as Element).tagName.toLowerCase())) {
+      // A block, or an inline element that holds blocks (Google Docs wraps a whole paste in a
+      // `<b style="font-weight:normal">`): read as the blocks it holds.
+      if (
+        child.nodeType === 1 &&
+        (BLOCK.test((child as Element).tagName.toLowerCase()) ||
+          (child as Element).querySelector(BLOCKS) !== null)
+      ) {
         flush();
         visit(child as Element, here);
       } else inline.push(child);
@@ -231,6 +240,11 @@ export function writeStory(
   if (details.author) front.push(`author: ${quoted(details.author)}`);
   if (details.language) front.push(`language: ${quoted(details.language)}`);
   front.push("cast:", "---", "");
+  return `${front.join("\n")}\n${writeBody(paragraphs)}\n`;
+}
+
+/** Paragraphs as a story's text: headings, scene breaks and paragraphs, a blank line between. */
+export function writeBody(paragraphs: readonly Paragraph[]): string {
   // A paragraph that is only a scene break's signs (`#`, `* * *`, `~~~`) is one.
   const isBreak = (paragraph: Paragraph) =>
     paragraph.kind === "text" &&
@@ -240,16 +254,17 @@ export function writeStory(
         .join("")
         .trim(),
     );
-  const body = paragraphs.map((paragraph) =>
-    paragraph.kind === "break" || isBreak(paragraph)
-      ? "* * *"
-      : paragraph.kind === "heading"
-        ? `${"#".repeat(Math.min(6, paragraph.level))} ${writeRuns(paragraph.runs)
-            .replace(/\s*\n\s*/g, " ")
-            .trim()}`
-        : writeRuns(paragraph.runs),
-  );
-  return `${front.join("\n")}\n${body.join("\n\n")}\n`;
+  return paragraphs
+    .map((paragraph) =>
+      paragraph.kind === "break" || isBreak(paragraph)
+        ? "* * *"
+        : paragraph.kind === "heading"
+          ? `${"#".repeat(Math.min(6, paragraph.level))} ${writeRuns(paragraph.runs)
+              .replace(/\s*\n\s*/g, " ")
+              .trim()}`
+          : writeRuns(paragraph.runs),
+    )
+    .join("\n\n");
 }
 
 /** Text for XML: its five signs escaped, and characters XML can't hold left out. */

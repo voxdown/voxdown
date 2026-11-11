@@ -2126,6 +2126,29 @@ body[data-welcome] .manuscript .editor {
   margin: 0.15rem 0;
 }
 
+/* Find the chapters: what was found, each a choice. */
+.shape-dialog {
+  width: min(36rem, calc(100vw - 2rem));
+}
+.shape-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.55rem;
+  margin: 0.7rem 0;
+}
+.shape-choice input {
+  margin-top: 0.25rem;
+}
+.shape-choice small {
+  grid-column: 2;
+  color: var(--quiet);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.notice-action {
+  margin-left: 0.6rem;
+}
+
 /* The toolbar: what a writer reaches for most, one click away (View › Toolbar). */
 .toolbar {
   display: flex;

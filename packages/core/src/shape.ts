@@ -282,17 +282,18 @@ export function findShape(story: Story): Shape {
     until,
   );
   const opening = inside.filter((paragraph) => paragraph.to <= firstTitle).slice(0, 8);
-  const by = opening.findIndex((paragraph) => /^by\s+\S.{1,60}$/i.test(paragraph.text.trim()));
+  // As written, or as headings (a web page's title page, pasted with its headings).
+  const lineOf = (paragraph: { text: string }) =>
+    plainOf(paragraph.text)
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/\s*\n\s*/g, " ")
+      .trim();
+  const by = opening.findIndex((paragraph) => /^by\s+\S.{1,60}$/i.test(lineOf(paragraph)));
   if (by > 0) {
-    const named = opening.slice(0, by).filter((paragraph) => paragraph.text.trim().length <= 80);
+    const named = opening.slice(0, by).filter((paragraph) => lineOf(paragraph).length <= 80);
     if (named.length && named.length === by) {
-      shape.title ??= titleCased(
-        named
-          .map((paragraph) => paragraph.text.trim().replace(/\s*\n\s*/g, " "))
-          .join(" ")
-          .replace(/\.$/, ""),
-      );
-      shape.author ??= (opening[by] as (typeof opening)[number]).text.trim().replace(/^by\s+/i, "");
+      shape.title ??= titleCased(named.map(lineOf).join(" ").replace(/\.$/, ""));
+      shape.author ??= lineOf(opening[by] as (typeof opening)[number]).replace(/^by\s+/i, "");
       for (const paragraph of opening.slice(0, by + 1))
         shape.titlePage.push({ from: paragraph.from, to: paragraph.to });
     }

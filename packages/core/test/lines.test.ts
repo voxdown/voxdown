@@ -315,11 +315,48 @@ describe("links, as Markdown reads them (§8.3)", () => {
     );
   });
 
+  it("ends what a mark does at a line break inside a note, CRLF too (§5.3, §10)", () => {
+    for (const end of ["\n", "\r\n"]) {
+      const script = (text: string) => spokenScript(parse(text.replace(/\n/g, end)));
+      // A closed speech, a mark without a quote, and a direction: each ends with its line.
+      expect(script("@Alice “Hello.” %% producer\nnote %% “Goodbye.”")).toBe(
+        "Alice: Hello.\n%% producer note %%\nNarrator: “Goodbye.”",
+      );
+      expect(script("@Bob Hello %% a\nnote %% world.")).toBe(
+        "Bob: Hello\n%% a note %%\nNarrator: world.",
+      );
+      expect(script("@(quietly) Hello %% a\nnote %% world.")).toBe(
+        "Narrator (quietly): Hello\n%% a note %%\nNarrator: world.",
+      );
+      // A quote left open carries on over it, as over any line break, and is warned about.
+      const open = parse(`@Alice “Hello %% a${end}note %% there.”`);
+      expect(spokenScript(open)).toBe("Alice: Hello\n%% a note %%\nAlice: there.");
+      expect(open.warnings.map((w) => w.code)).toEqual(["quote-over-line-break"]);
+      // A note on one line changes nothing.
+      expect(script("@Alice “Hello.” %% a note %% “Goodbye.”")).toBe(
+        "Alice: Hello.\n%% a note %%\nAlice: Goodbye.",
+      );
+    }
+  });
+
+  it("reads an image's description with images and links nested in it, at any depth", () => {
+    expect(spokenScript(parse("A ![x ![y](b) z](a) and [![m](i) n](l)."))).toBe(
+      "Narrator: A\n![x y z](a)\nNarrator: and n.",
+    );
+    const deep = parse(`${"![".repeat(20_000)}bird${"](a)".repeat(20_000)}`);
+    const image = deep.blocks[0]?.kind === "paragraph" ? deep.blocks[0].lines[0]?.items[0] : null;
+    expect(image?.kind === "image" && image.alt).toBe("bird");
+  });
+
   it("reads brackets nested deep, and lines of many links, in linear time", () => {
     for (const text of [
       `${"[".repeat(150_000)}x${"]".repeat(150_000)}(y)`,
       "[a](".repeat(40_000),
       "[x](y) ".repeat(25_000),
+      // Images and links nested in one another, each in the description or text of the one
+      // around it: they once ran out of stack, and took time with the square of their depth.
+      `Hi ${"![".repeat(50_000)}bird${"](a)".repeat(50_000)} end.`,
+      `Hi ${"[![".repeat(30_000)}bird${"](a)](b)".repeat(30_000)} end.`,
     ]) {
       const start = performance.now();
       const story = parse(text);

@@ -4,15 +4,22 @@ The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
 ## Unreleased
 
-- **Character references** (§11): `&amp;`, `&quot;`, `&#8217;` and the HTML Standard's other names stand for their characters, as in Markdown, heard and printed as them. This gives meaning to text a 1.0 file would rarely hold, so by §16 it belongs to the next minor version, 1.1: SPEC.md marks the paragraph "new in 1.1 (draft)", and `conformance.json` gives its example `"since": "1.1"`, for 1.0 readers to skip.
+New in 1.1 (draft). Each gives meaning to something a 1.0 file would rarely hold, so by §16 it belongs to the next minor version: SPEC.md marks it "new in 1.1 (draft)", and `conformance.json` gives its example `"since": "1.1"`, for 1.0 readers to skip.
+
+- **Character references** (§11): `&amp;`, `&quot;`, `&#8217;` and the HTML Standard's other names stand for their characters, as in Markdown, heard and printed as them.
+- **Scene breaks with spaces** (§4.4): a scene break's signs may have spaces between them, as in Markdown: `* * *` and `- - -` are scene breaks. In 1.0 they were a line of the paragraph around them.
+- **Names whatever their apostrophe** (§5.2): names ignore the kind of apostrophe, as they ignore case: `@O'Brien` and `@O’Brien` are one character. In 1.0 they were two.
+
+Corrections: the spec already said this, and the reference parser now reads it so.
+
+- §10: a note that runs over a line break leaves the lines two lines, so what a mark does ends with its line (§5.3), with a new example. The reference parser read the lines as one: in `@Alice “Hello.” %% a note for the` ⏎ `producer. %% “Goodbye.”`, it gave “Goodbye.” to Alice.
+- §4.2: a value the format reads as text is that text as written, even where YAML would read a number: `title: 1.10` is `1.10`. The reference parser read `1.1`.
 
 Clarifications: no file reads differently.
 
 - §13, rule 3: a direction of its own for a paragraph that carries a speech on goes just inside its opening mark, and a mark between two characters with no space between them goes without its space, so the book doesn't change.
 - §13, rule 3 also says that a direction a speech takes from its mark is set in the mark, for the whole speech, and a stretch's own `@(…)` is replaced where it is.
 - §13, rule 4: a speech over paragraphs is given away whole, from any of its paragraphs.
-- §5.2: names ignore the kind of apostrophe, as they ignore case: `@O'Brien` and `@O’Brien` are one character.
-- §4.4: a scene break's signs may have spaces between them, as in Markdown: `* * *` and `- - -` are scene breaks.
 - §8.3: a link is written on one line, as marks are; one that runs onto the next line is read as a sound and text, and warned about. An image may be a link's text, as in Markdown, with a new example; §12.1 gives its line in the spoken script.
 
 ## 1.0 (9 November 2026)

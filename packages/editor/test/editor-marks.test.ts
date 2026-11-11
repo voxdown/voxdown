@@ -6,6 +6,18 @@ const text = (source: string, mark: EditorMark) => source.slice(mark.from, mark.
 const kinds = (source: string) => editorMarks(source).map((m) => `${m.kind}:${text(source, m)}`);
 
 describe("editor marks", () => {
+  it("works out the marks of images and links nested thousands deep, in good time", () => {
+    for (const text of [
+      `Hi ${"![".repeat(50_000)}bird${"](a)".repeat(50_000)} end.`,
+      `Hi ${"[![".repeat(30_000)}bird${"](a)](b)".repeat(30_000)} end.`,
+    ]) {
+      const start = performance.now();
+      const marks = editorMarks(text);
+      expect(marks.every((m) => m.from >= 0 && m.to <= text.length)).toBe(true);
+      expect(performance.now() - start).toBeLessThan(3000);
+    }
+  });
+
   it("draws a name, its direction and a character's speech", () => {
     const source = "@Gerald (yawning) “I’m tired,” said the dragon.";
     expect(kinds(source)).toEqual([

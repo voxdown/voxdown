@@ -367,12 +367,20 @@ function pairRuns(nodes: readonly Node[]): void {
   }
 }
 
-function render(chars: Piece[]): string {
-  return renderPieces(chars).join("");
+function render(chars: Piece[], depth = 0): string {
+  return renderPieces(chars, depth).join("");
 }
 
+/**
+ * How deep links and images are drawn inside one another: past this, a link or image is drawn as
+ * the text it is written with, as Markdown renderers stop nesting (markdown-it's `maxNesting`).
+ * Each level is drawn again inside the one around it, so no limit would be drawn in time that
+ * grows with the line, and thousands of levels would run out of stack.
+ */
+const MAX_NESTING = 16;
+
 /** The HTML of each piece of `chars`, the pieces being split at their edges. */
-function renderPieces(chars: Piece[]): string[] {
+function renderPieces(chars: Piece[], depth = 0): string[] {
   const nodes: Node[] = [];
   const isChar = (at: number, text: string) => chars[at]?.text === text && !chars[at]?.literal;
   const closers = closersOf(chars);
@@ -398,7 +406,11 @@ function renderPieces(chars: Piece[]): string[] {
     if (!piece.literal) {
       // Images and links.
       const bang = piece.text === "!" && isChar(i + 1, "[");
-      if ((piece.text === "[" || bang) && !closers.nesting.has(bang ? i + 1 : i)) {
+      if (
+        (piece.text === "[" || bang) &&
+        depth < MAX_NESTING &&
+        !closers.nesting.has(bang ? i + 1 : i)
+      ) {
         const open = bang ? i + 1 : i;
         // The text runs to the `]` that balances it, as the parser reads a link (§8.3).
         const balanced = closers.squares.get(open) ?? -1;
@@ -425,14 +437,14 @@ function renderPieces(chars: Piece[]): string[] {
             flush();
             // An image's description as text: emphasis, links and images in it as their words.
             const alt = () =>
-              render(label)
+              render(label, depth + 1)
                 .replace(/<img [^>]*alt="([^"]*)"[^>]*>/g, "$1")
                 .replace(/<[^>]+>/g, "");
             nodes.push({
               kind: "html",
               html: bang
                 ? `<img src="${escapeHtml(url)}" alt="${alt()}"${title}>`
-                : `<a href="${escapeHtml(url)}"${title}>${render(label)}</a>`,
+                : `<a href="${escapeHtml(url)}"${title}>${render(label, depth + 1)}</a>`,
             });
             i = end + 1;
             continue;

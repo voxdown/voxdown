@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { lines, parse } from "voxdown";
+import { lines, parse, spokenScript } from "voxdown";
 import { scriptEditor } from "../src";
 import { smartQuotes } from "../src/quotes";
 
@@ -42,6 +42,19 @@ describe("pasted text", () => {
     EditorState.create({ doc: "", extensions: smartQuotes() })
       .update({ changes: { from: 0, insert: text }, userEvent: "input.paste" })
       .state.doc.toString();
+
+  it("keeps the marks pasted when curling them would change who says what in the story", () => {
+    // Pasted into a quote opened with a straight mark: a curly ” would close nothing.
+    const state = EditorState.create({ doc: `@Ann "Hello`, extensions: smartQuotes() });
+    const pasted = state.update({
+      changes: { from: 11, insert: ` world," she said. "Bye."` },
+      userEvent: "input.paste",
+    }).state;
+    expect(pasted.doc.toString()).toBe(`@Ann "Hello world," she said. "Bye."`);
+    expect(spokenScript(parse(pasted.doc.toString()))).toBe(
+      "Ann: Hello world,\nNarrator: she said.\nAnn: Bye.",
+    );
+  });
 
   it("curls quotes only where the parser hears the line the same, and never touches front matter, addresses or instructions", () => {
     // A `"` after a dash closes the quote the line has open.

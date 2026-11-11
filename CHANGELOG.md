@@ -10,6 +10,10 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - `curlQuotes` makes a text's quotes curly as `format` does, and changes nothing else; `quotationMarks(language)` gives the marks it writes. Both run in time that grows with the text, with thousands of quotes whose edge is an apostrophe too.
 - Scene breaks may have spaces between their signs, as in Markdown: `* * *` and `- - -` (§4.4). Names match whatever their apostrophe, as whatever their capitals: `@O’Brien` is the cast's `O'Brien` (§5.2), without a warning. A page after `{page iv}` is `v`, and one after `{page Map}` then `Map +1`, `Map +2`.
 - `setSpeaker` and `setDirection` change nothing for a stretch with no words, which isn't heard.
+- A note that runs over a line break no longer carries a mark's speaker or direction on to the next line: what a mark does ends with its line (§5.3, §10). A quote left open still carries on over it, and is warned about as at any line break.
+- A front matter value read as text keeps the text it is written with, where YAML would read a number or `true`: `title: 1.10` is `1.10`, and a cast member `R2: 1.50` is named `1.50`.
+- Images and links nested inside one another are read at any depth, in time that grows with the line: 50,000 images, each in the one around it, ran out of stack, and 8,000 took over a second.
+- `insertSound` and `insertLine` check the sounds heard too: no other sound may come or go. A sound put in before an indented group line made the line text, and a sound written on it was heard.
 - `setDirection` writes a direction with a backslash, `%` or a line break so it reads back as given.
 - No `stray-quote` warning for a measurement: `12"`, like `12'`, is no quote (§5.5).
 - `setDirection` sets a quote to its closing mark (over the paragraphs that carry it on), or to a direction of its own inside it, and narration to the end of its line; a paragraph that carries a speech on keeps its own direction just inside its opening mark (`“@()Will you…`, and `“@(soft)Two.”` for a speech nobody has marked), so it still carries the speech on. It no longer changes the stretches after it on its line that took their direction from the same mark: they keep theirs, with `@()` or `@(…)`. On the second line of a quote, it no longer writes the direction into the mark on the line before and takes it back with `@()`.
@@ -43,15 +47,19 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - The script view shows a stretch's words without the marks, directions and instructions inside it: narration that runs on over a mark to its quote once showed `@Waiter (softly)` as words.
 - In the script view, emphasis around a quote (`@Ann *“Hello.”* said Ann.`) is drawn as in the book: pieces that follow each other in the source are read together, not as if a space came between them.
 - An image that is a link's text is wrapped in its link in both views, an image's description is its text (`alt`), and character references show as their characters.
+- Links and images nested inside one another are drawn sixteen deep, and those deeper as they are written, as Markdown renderers stop nesting: thousands deep ran out of stack, and took time with the square of their depth.
 - The script view finds each speaker's full name and color by key: a cast of 8,000 renders in a tenth of the time, and `characterColors` grows with the cast, not its square.
 
 **@voxdown/editor**
 - Pasted text gets its curly quotes as the formatter gives them, checked against the parser: where they would make anyone say anything differently they stay straight, and front matter, link addresses and titles, instructions, sounds and notes keep their marks, as does a measurement (`6'2"`). A `"` typed after a dash closes the quote the line has open.
+- Enter inside a quote splits it with the quote's own marks, in any language (`„Hallo.“` ⏎ `@Anna „…“`) and straight ones, for the speaker and direction the parser gives it; elsewhere it is Enter. In German it took a closing `“` for an opening one, and added a stray `”` and a new line's mark after the quote was over. Backspace joins a split back whatever its marks.
+- A quote opened with a straight mark closes with one, typed or pasted, and a paragraph that carries on a speech opened straight starts with one (§5.7): a curly mark closed nothing, and the rest of the line was said. A quote opened with another language's marks (`“` in a German story) closes with its own, and a straight `"` the narration holds open closes straight. A paste is checked against the whole story as it will be, not just what was pasted.
 - Typed quotes follow the same rules as pasted ones: as typed in the front matter (finished or still being written), a link's address, an instruction, a note, a mark or a group line; in the story's language otherwise (`„…“` in German, `«…»` in French).
 - `<voxdown-editor>` keeps a story's CRLF line endings: its `value` comes back as it was set. The playground saves a story with the line endings it was opened with.
 
 **VS Code extension**
 - A scene break with spaces between its signs (`* * *`) is highlighted as one, and ends the paragraph before it.
+- A note that runs on past its line's end ends a character mark's colour before it, as the parser ends what the mark does.
 
 **The playground**
 - The pages fill the window between the shelf and the line at its foot, and no longer cover that line; on a short window the page scrolls. The Sun in *The North Wind and the Sun* is read by a new voice.
@@ -72,6 +80,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Fuzz runs in chunks, so the deep runs (`FUZZ_RUNS=20000`) finish cleanly, with timeouts that grow with them; the long corpus tests give the event loop a turn between their steps, so a loaded machine's test worker never loses its runner.
 - The parse-time ratio test tries up to three times, so a loaded machine can't fail it, while a quadratic step still fails every try; the playground check waits for the script view to settle. Pasting each book, as written and made straight, keeps who says what. A speech over paragraphs passes over one of notes alone (§5.7). The editor's marks give the parser's speakers after every keystroke.
 - The script view must show every word heard and no mark or direction as a word, on stories made at random, every book and every spec example. Typing is tested through the editor's input handlers. A group's labels are tested for their escaping. The last CC0 book has an epilogue after `* * *`, with narration around a mark and a quote in emphasis.
+- Quotes are typed and pasted at random into stories made at random, straight-quoted ones included, and must never change who says what; the editor's own marks, after each edit, are checked against the parser's. Enter and Backspace are tested in English, German, French and straight quotes. Images and links nested tens of thousands deep are parsed, drawn and marked in good time.
 - Prose made at random has Markdown with its dialogue (emphasis around and inside quotes, links in quotes and in narration), and the script view must emphasize and link the same words as the book view.
 - Every fuzz generator makes character references, those only JavaScript objects have included, and sounds are put in with descriptions holding `&`, brackets and backslashes, and must read back as asked.
 - Examples for every fix above, including each change review showed the tests would have missed.

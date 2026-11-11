@@ -146,6 +146,8 @@ Any other key is allowed and must be kept by tools that rewrite the file. A tool
 
 Front matter is YAML, and a reader understands at least this part of it: maps nested by indentation; plain, single-quoted and double-quoted values, including ones continued on more indented lines; block values (`|`, `>` and their `-` and `+` forms); lists written as `- item` or `[a, b]`; and comments. A tool that writes front matter keeps to that part. Anything else (anchors, aliases, tags, `{…}` maps) may be read as plain text, with a warning.
 
+A value the format reads as text (a title, an author, a language, a name) is that text as written, even where YAML would read a number or `true`: `title: 1.10` is the title `1.10`, not `1.1`.
+
 ```example
 ---
 title: The Tale of Peter Rabbit
@@ -189,7 +191,7 @@ After the front matter comes the story, made of:
 
 - **paragraphs**: one or more lines, ended by a blank line;
 - **headings**: `#` to `######` followed by a space;
-- **scene breaks**: a line of three or more `-`, `*` or `_`, all the same, with or without spaces between them (`***`, `* * *`, `---`);
+- **scene breaks**: a line of three or more `-`, `*` or `_`, all the same (`***`, `---`), or, new in 1.1, with spaces between them (`* * *`);
 - **groups**: `:::` … `:::` (§7).
 
 Notes (§10) can sit anywhere, even across blank lines.
@@ -221,6 +223,28 @@ and Peter.
 Spaces at the start of a line are ignored.
 
 A file that starts with a `---` line has front matter only if a second `---` line closes it. To start a story with a scene break, use `***`.
+
+*New in 1.1 (draft).* A scene break's signs may have spaces between them, as in Markdown: `* * *` and `- - -` are scene breaks.
+
+```example 1.1
+The door closed.
+
+* * *
+
+Morning came.
+.
+Narrator: The door closed.
+
+---
+
+Narrator: Morning came.
+.
+The door closed.
+
+* * *
+
+Morning came.
+```
 
 Headings are part of the story: they are read aloud by the narrator unless marked `{book only}` or `{hidden}` (§9.3). By convention `#` is the title, or a chapter in a longer book, and `##` names a scene. The spec gives the levels no other meaning.
 
@@ -308,7 +332,7 @@ A character with a longer name gets a short one in the cast (`Clown: The Silly C
 SillyClown: Honk!
 ```
 
-Names ignore case: `@clown`, `@Clown` and `@CLOWN` are the same character. They ignore the kind of apostrophe too: `@O'Brien` and `@O’Brien` are one character. The spoken script uses the cast's spelling, or else the spelling the file uses first. The narrator is written as the cast or the `narrator:` key spells it, or else `Narrator`.
+Names ignore case: `@clown`, `@Clown` and `@CLOWN` are the same character. The spoken script uses the cast's spelling, or else the spelling the file uses first. The narrator is written as the cast or the `narrator:` key spells it, or else `Narrator`.
 
 ```example
 ---
@@ -327,6 +351,15 @@ Clown: Honk honk!
 .
 clown: Honk!
 clown: Honk honk!
+```
+
+*New in 1.1 (draft).* Names ignore the kind of apostrophe too: `@O'Brien` and `@O’Brien` are one character.
+
+```example 1.1
+@O'Brien “Hello.” @O’Brien “Goodbye.”
+.
+O'Brien: Hello.
+O'Brien: Goodbye.
 ```
 
 ```example
@@ -1423,6 +1456,19 @@ The knight’s cry is the only loud line.
 %%
 .
 %% Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line. %%
+```
+
+A note that runs over a line break leaves the lines two lines: what a mark does still ends with its line (§5.3), so the words after the note are the next line's. A quote left open carries on over it, as over any line break.
+
+```example
+@Alice “Hello.” %% A note for the
+producer. %% “Goodbye.”
+.
+Alice: Hello.
+%% A note for the producer. %%
+Narrator: “Goodbye.”
+.
+“Hello.” “Goodbye.”
 ```
 
 Write `\%` for a literal percent sign where it would otherwise start a note.

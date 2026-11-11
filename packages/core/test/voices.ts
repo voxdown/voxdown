@@ -45,9 +45,11 @@ export type Spoken = {
   strict: boolean;
 };
 
-/** Names are the same name whatever their case (§5.2): `@gerald` is Gerald. */
-export const sameName = (a: string, b: string) =>
-  a.normalize("NFC").toLowerCase() === b.normalize("NFC").toLowerCase();
+/** A name as §5.2 compares it: whatever its case and kind of apostrophe (`@o’brien` is O'Brien). */
+const asName = (name: string) => name.normalize("NFC").toLowerCase().replace(/’/g, "'");
+
+/** Names are the same name whatever their case and apostrophes (§5.2): `@gerald` is Gerald. */
+export const sameName = (a: string, b: string) => asName(a) === asName(b);
 
 /**
  * The stretches of one quote, and the sounds made inside it with no mark of their own: a quote runs
@@ -335,7 +337,7 @@ export function spareMark(story: Story, changes: readonly TextChange[]): string 
     });
   const heard = (of: Story) =>
     spokenChars(of)
-      .map((c) => `${c.char}${c.speaker.toLowerCase()}${c.direction}${c.audible}`)
+      .map((c) => `${c.char}${asName(c.speaker)}${c.direction}${c.audible}`)
       .join("|");
   const goal = heard(after);
   const book = bookText(after);

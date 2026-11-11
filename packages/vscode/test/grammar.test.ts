@@ -148,6 +148,16 @@ describe("the grammar agrees with the core's tokens", () => {
     expect(await disagreements(text)).toEqual([]);
   });
 
+  it("ends what a mark does at a line break inside a note, as the core does (§5.3, §10)", async () => {
+    for (const text of [
+      "@Alice “Hello.” %% a\nnote %% “Goodbye.”",
+      "@Bob Hello %% a\nnote %% world.",
+      "@Alice “Hello %% a\nnote %% there.” And then.",
+    ]) {
+      expect(await disagreements(text), text).toEqual([]);
+    }
+  });
+
   it("has an example story to check", () => {
     expect(stories.length).toBeGreaterThan(0);
   });

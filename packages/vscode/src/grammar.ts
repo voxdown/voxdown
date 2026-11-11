@@ -309,6 +309,9 @@ function quote(open: string, close: string, style: string, multiLine: boolean): 
   };
 }
 
+/** A note that doesn't close on its line. */
+const NOTE_OVER_LINE = "(?=%%(?!.*%%))";
+
 /** From a character mark to the end of its line, or to the next character mark. */
 function speech(multiLine: boolean): Rule {
   const { source, captures } = compile(characterMark);
@@ -316,8 +319,10 @@ function speech(multiLine: boolean): Rule {
   return {
     begin: source,
     beginCaptures: captures,
-    // `(?=^)`: a quote that ran to the end of its paragraph ends the line it was on.
-    end: multiLine ? `$|(?=^)|${nextMark}` : `$|${nextMark}`,
+    // `(?=^)`: a quote that ran to the end of its paragraph ends the line it was on. A note that
+    // runs on past the line's end ends what the mark does before it: the words after the note
+    // are the next line's (§5.3, §10), though a quote open in it carries on.
+    end: multiLine ? `$|(?=^)|${nextMark}|${NOTE_OVER_LINE}` : `$|${nextMark}|${NOTE_OVER_LINE}`,
     patterns: [
       include("escape"),
       include("note"),

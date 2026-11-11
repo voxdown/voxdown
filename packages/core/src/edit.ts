@@ -1526,7 +1526,36 @@ function insertSoundNow(story: Story, offset: number, description: string): Text
         ),
       ),
   );
-  return added && sameHearing(story, after) && bookOf(after) === bookOf(story) ? changes : [];
+  return added &&
+    sameHearing(story, after) &&
+    sameSounds(story, after, { from: at, to: at + insert.length }) &&
+    bookOf(after) === bookOf(story)
+    ? changes
+    : [];
+}
+
+/**
+ * The sounds heard in `a` are those heard in `b`, in order, but for those `b` has where it was
+ * changed: a sound put in is the only one added, and none other comes or goes (a group line it
+ * would make text holds sounds of its own).
+ */
+function sameSounds(a: Story, b: Story, changed: Range): boolean {
+  const sounds = (story: Story, skip: Range | null) => {
+    const out: string[] = [];
+    for (const block of story.blocks) {
+      if (block.kind === "break") continue;
+      if (block.visibility !== "both" && block.visibility !== "audio") continue;
+      for (const line of block.kind === "heading" ? [block.line] : block.lines) {
+        for (const item of line.items) {
+          if (item.kind !== "sound") continue;
+          if (skip && item.range.from >= skip.from && item.range.to <= skip.to) continue;
+          out.push(item.description);
+        }
+      }
+    }
+    return out.join("\u0000");
+  };
+  return sounds(a, null) === sounds(b, changed);
 }
 
 /**
@@ -1581,7 +1610,10 @@ function insertLineNow(story: Story, offset: number, text: string): TextChange[]
   const alone = heard(parsed(text))
     .map((char) => char.char)
     .join("");
-  const same = sameHeard(heard(story), rest) && own.map((char) => char.char).join("") === alone;
+  const same =
+    sameHeard(heard(story), rest) &&
+    own.map((char) => char.char).join("") === alone &&
+    sameSounds(story, after, { from: at, to: at + insert.length });
   // Like every edit, it prints the book as it was and brings no new warning (a note or quote
   // left open, a stray `:::`).
   return same && bookOf(after) === bookOf(story) && noNewWarnings(story, changes) ? changes : [];

@@ -1150,3 +1150,16 @@ describe("review, round eight", () => {
     expect(write(story)).toBe("Hi [x \\&amp; y] there %% a \\&lt; b %%");
   });
 });
+
+describe("review, round ten", () => {
+  it("puts in a sound only where no other sound comes or goes", () => {
+    // Before an indented group line, the sound made the line text, and the group line's own
+    // `[@Gerald]` a sound that was heard.
+    const source = "---\ntitle: T\n---\n ::: @Gerald (whispering){audio only}[@Gerald]";
+    const story = parse(source);
+    const changes = insertSound(story, 0, "clatter");
+    const script = spokenScript(parse(applyChanges(source, changes)));
+    expect(script).not.toContain("@Gerald");
+    if (changes.length > 0) expect(script).toBe("[clatter]");
+  });
+});

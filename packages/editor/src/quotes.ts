@@ -1,6 +1,6 @@
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, type Extension, type Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { curlQuotes, parse, quotationMarks } from "voxdown";
+import { type Speech, type Story, curlQuotes, parse, quotationMarks } from "voxdown";
 
 /**
  * Typographer's quotes as you type: `"` opens with “ after a space, a line's start or an opening
@@ -30,6 +30,17 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
     specs.push({ from: fromA, to: toA, insert });
   });
   if (!found) return tr;
+  // Only what was pasted takes its curly marks, so the story is checked as it will be: a quote
+  // opened before the paste with a straight mark must still close in it (`"Hello` + ` world," she
+  // said.`), or the paste keeps the marks it came with.
+  const pieces: string[] = [];
+  let at = 0;
+  tr.changes.iterChanges((_fromA, _toA, fromB, toB) => {
+    pieces.push(after.slice(at, fromB), curled.slice(fromB, toB));
+    at = toB;
+  });
+  pieces.push(after.slice(at));
+  if (voices(parse(pieces.join(""))) !== voices(parse(after))) return tr;
   return {
     changes: specs,
     selection: tr.selection,
@@ -37,6 +48,142 @@ const pastedApostrophes = EditorState.transactionFilter.of((tr) => {
     userEvent: "input.paste",
   };
 });
+
+/** Who says what, and how: every stretch and character's sound, with its quotation marks as one. */
+function voices(story: Story): string {
+  const heard: string[] = [];
+  for (const block of story.blocks) {
+    if (block.kind === "break") continue;
+    for (const line of block.kind === "heading" ? [block.line] : block.lines) {
+      for (const item of line.items) {
+        if (item.kind === "speech") {
+          const words = item.text.replace(/["'“”‘’„‚«»‹›「」『』]/gu, "'");
+          heard.push(`${item.speaker}\u0000${item.direction}\u0000${item.quoted}\u0000${words}`);
+        } else if (item.kind === "vocal") {
+          heard.push(`${item.speaker}\u0000${item.direction}\u0000[${item.description}]`);
+        }
+      }
+    }
+  }
+  return heard.join("\n");
+}
+
+/** The mark that closes each opening one, as the parser pairs them (§5.5); the language's first. */
+const CLOSING: Record<string, string> = {
+  "“": "”",
+  "‘": "’",
+  '"': '"',
+  "'": "'",
+  "„": "“",
+  "‚": "‘",
+  "«": "»",
+  "»": "«",
+  "‹": "›",
+  "「": "」",
+  "『": "』",
+};
+
+/** Opening marks of the double kind, which a typed `"` closes. */
+const DOUBLE = new Set(['"', "“", "„", "«", "»", "「"]);
+
+function closerFor(opener: string, language: string | undefined): string {
+  const marks = quotationMarks(language);
+  if (opener === marks.open) return marks.close;
+  if (opener === marks.innerOpen) return marks.innerClose;
+  return CLOSING[opener] ?? marks.close;
+}
+
+/** The quote open at `at`, as the parser reads it: its speech, and the mark that opened it. */
+function openQuoteAt(story: Story, at: number): { speech: Speech; opener: string } | undefined {
+  for (const block of story.blocks) {
+    if (block.kind === "break" || at < block.range.from || at > block.range.to) continue;
+    for (const line of block.kind === "heading" ? [block.line] : block.lines) {
+      if (at < line.range.from || at > line.range.to) continue;
+      for (const item of line.items) {
+        if (item.kind !== "speech" || !item.openQuote) continue;
+        // A quote nothing closes runs to the end of its line, spaces typed after it included.
+        const end = item.closeQuote ? item.closeQuote.from : line.range.to;
+        if (item.openQuote.to <= at && at <= end) {
+          return {
+            speech: item,
+            opener: story.source.slice(item.openQuote.from, item.openQuote.to),
+          };
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The mark that opened the quote the paragraphs before `at` leave open, if any: the last quote of
+ * the last paragraph before it that has one, as §5.7 skips paragraphs of notes.
+ */
+function unclosedBefore(story: Story, at: number): string | undefined {
+  let last: Speech | undefined;
+  for (const block of story.blocks) {
+    if (block.range.from >= at) break;
+    if (block.kind !== "paragraph" || block.range.to > at) {
+      if (block.kind !== "paragraph") last = undefined;
+      continue;
+    }
+    for (const line of block.lines) {
+      for (const item of line.items) if (item.kind === "speech" && item.openQuote) last = item;
+    }
+  }
+  if (!last?.openQuote || last.closeQuote) return undefined;
+  return story.source.slice(last.openQuote.from, last.openQuote.to);
+}
+
+/**
+ * Whether the paragraph up to `at` leaves a straight `"` open: an odd number of them, not escaped
+ * and not after a digit (`6'2"`).
+ */
+function straightOpen(doc: Text, at: number): boolean {
+  let start = doc.lineAt(at).from;
+  for (let n = doc.lineAt(at).number - 1; n >= 1; n--) {
+    const line = doc.line(n);
+    if (!line.text.trim()) break;
+    start = line.from;
+  }
+  const text = doc.sliceString(start, at);
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "\\") i++;
+    else if (text[i] === '"' && !/\d/u.test(text[i - 1] ?? "")) count++;
+  }
+  return count % 2 === 1;
+}
+
+/** The last mark for `speaker` between `from` and `to`, its name as written. */
+function nameBefore(story: Story, from: number, to: number, speaker: string): string | undefined {
+  let name: string | undefined;
+  for (const block of story.blocks) {
+    if (block.kind === "break" || block.range.to < from || block.range.from > to) continue;
+    for (const line of block.kind === "heading" ? [block.line] : block.lines) {
+      for (const item of line.items) {
+        if (item.kind !== "mark" || item.speaker !== speaker) continue;
+        if (item.range.from >= from && item.range.to <= to) {
+          name = story.source.slice(item.nameRange.from, item.nameRange.to);
+        }
+      }
+    }
+  }
+  return name;
+}
+
+/** The speech that holds the character just before `at`. */
+function speechBefore(story: Story, at: number): Speech | undefined {
+  for (const block of story.blocks) {
+    if (block.kind === "break" || at <= block.range.from || at > block.range.to) continue;
+    for (const line of block.kind === "heading" ? [block.line] : block.lines) {
+      for (const item of line.items) {
+        if (item.kind === "speech" && item.range.from < at && at <= item.range.to) return item;
+      }
+    }
+  }
+  return undefined;
+}
 
 /** Whether a line's text up to here leaves a sound's `[` open. */
 function inLabel(head: string): boolean {
@@ -102,8 +249,10 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
       return false;
     }
   }
+  // A group line, to its end: what is typed there is still the group's.
+  const onLine = (range: { from: number; to: number }) => range.from < from && from <= range.to;
   for (const group of story.groups) {
-    if (within(group.range) || (group.closeRange && within(group.closeRange))) return false;
+    if (onLine(group.range) || (group.closeRange && onLine(group.closeRange))) return false;
   }
   for (const block of story.blocks) {
     if (block.kind === "break") continue;
@@ -129,6 +278,36 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
     if (notes % 2 === 1) return false;
   }
   const marks = quotationMarks(story.meta.language);
+  // A quote opened with a straight mark closes with one, as typed: `"Hello world,"`. A curly `”`
+  // would close nothing, and the rest of the line would be said.
+  const outer = openQuoteAt(story, from);
+  if (outer && outer.opener === text) return false;
+  // A straight `"` the narration holds open is no one's speech, so the parser lists it nowhere:
+  // with an odd number of them in the paragraph so far, the `"` typed closes one, straight.
+  if (text === '"' && !outer && straightOpen(view.state.doc, from)) return false;
+  // A paragraph that opens with the mark the speech before it opened with carries it on (§5.7):
+  // typed straight after a speech opened straight, the mark stays straight and carries it on.
+  if (!outer && !view.state.sliceDoc(view.state.doc.lineAt(from).from, from).trim()) {
+    const before = unclosedBefore(story, from);
+    if (before === text) return false;
+  }
+  // A `'` is no quote until something closes it (§5.5), so the parser is asked with the mark typed
+  // straight: if it closes a quote opened with `'`, it stays straight.
+  if (text === "'" && !outer) {
+    const lineStart = view.state.doc.lineAt(from).from;
+    if (view.state.sliceDoc(lineStart, from).includes("'")) {
+      const doc = view.state.doc;
+      const tried = parse(doc.sliceString(0, from) + text + doc.sliceString(to));
+      const closed = speechBefore(tried, from + 1);
+      if (
+        closed?.closeQuote?.from === from &&
+        closed.openQuote &&
+        tried.source.slice(closed.openQuote.from, closed.openQuote.to) === "'"
+      ) {
+        return false;
+      }
+    }
+  }
   // A quote inside the other kind opens (“‘…’”); straight after its own opener, it closes it.
   const nested =
     (text === '"' && before === marks.innerOpen) || (text === "'" && before === marks.open);
@@ -140,16 +319,21 @@ const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
     /(^|[^\p{L}\p{N}\\])@(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*)?\s*(\([^()]*\))?\s*$/u.test(head);
   // A `"` after a dash closes a quote the line has open (`“Wait—”`) rather than open another.
   const count = (mark: string) => head.split(mark).length - 1;
-  const open =
+  let open =
     marks.open === marks.close
       ? count(marks.open) % 2 === 1
       : count(marks.open) > count(marks.close);
+  // A quote opened with another language's marks (“ in a German story) closes with its own.
+  let closer = marks.close;
+  if (!open && outer && DOUBLE.has(outer.opener)) {
+    open = true;
+    closer = closerFor(outer.opener, story.meta.language);
+  }
   const closes = text === '"' && open && !nested && !afterMark;
   const opening =
     !closes && (from === 0 || before === "" || OPENS_AFTER.test(before) || nested || afterMark);
   // In the story's language (front matter's `language`): „…“ in German, «…» in French.
-  const insert =
-    text === '"' ? (opening ? marks.open : marks.close) : opening ? marks.innerOpen : "’";
+  const insert = text === '"' ? (opening ? marks.open : closer) : opening ? marks.innerOpen : "’";
   view.dispatch({
     changes: { from, to, insert },
     selection: { anchor: from + insert.length },
@@ -272,10 +456,16 @@ export const noteEnter = keymap.of([
   },
 ]);
 
+/** A split's new line: a name, its direction, and the quote's opening mark, nothing after. */
+const OPENED = /^@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]*(\([^()]*\))?[ \t]*([“‘"'„‚«»‹「『])$/u;
+
 /**
  * Enter inside a quote splits it: the quote closes, and the next line opens it again for the same
  * speaker and direction (`@Rupert “No toast.” ⏎ @Rupert “No bread either.”`). What a mark does
- * ends with its line, so a quote never runs on into the next one.
+ * ends with its line, so a quote never runs on into the next one. The quote is the one the parser
+ * has open at the cursor, closed with its own mark (`„…“` in German, `"…"` when opened straight),
+ * and the split must give both halves to the same speaker, with the same direction; anywhere else
+ * Enter is Enter.
  */
 export const quoteEnter = keymap.of([
   {
@@ -289,7 +479,7 @@ export const quoteEnter = keymap.of([
       // Enter on a split's empty new line (`@Rupert “` and nothing yet) ends the speech there,
       // as Enter on an empty list item ends a list: a new paragraph follows, so two
       // Enters after a quote make one, as they do anywhere else.
-      if (!tail.trim() && /^@\p{L}[\p{L}\p{M}\p{N}_'’-]*[ \t]*(\([^()]*\))?[ \t]*“$/u.test(head)) {
+      if (!tail.trim() && OPENED.test(head)) {
         view.dispatch({
           changes: { from: line.from, to: line.to, insert: "\n" },
           selection: { anchor: line.from + 1 },
@@ -297,20 +487,18 @@ export const quoteEnter = keymap.of([
         });
         return true;
       }
-      const open = head.lastIndexOf("“");
-      if (open < 0 || head.indexOf("”", open) >= 0 || head[open - 1] === "\\") return false;
-      if (!/[\p{L}\p{N}]/u.test(head.slice(open + 1))) return false;
-      const marks = [
-        ...head
-          .slice(0, open)
-          .matchAll(/(?:^|[^\p{L}\p{N}\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]*(\([^()]*\))?/gu),
-      ];
-      const mark = marks[marks.length - 1];
-      if (!mark) return false;
+      const source = view.state.doc.toString();
+      const story = parse(source);
+      const open = openQuoteAt(story, from);
+      if (!open?.speech.openQuote) return false;
+      const { speech, opener } = open;
+      const start = speech.openQuote?.to ?? from;
+      if (start < line.from || !/[\p{L}\p{N}]/u.test(source.slice(start, from))) return false;
       const rest = tail.replace(/^[ \t]+/u, "");
+      const restFrom = from + (tail.length - rest.length);
       // Right before the closing mark the quote is finished: the new line goes after the whole
       // line, whatever follows the quote (a sound, "he said").
-      if (rest.startsWith("”")) {
+      if (speech.closeQuote?.from === restFrom) {
         view.dispatch({
           changes: { from: line.to, insert: "\n" },
           selection: { anchor: line.to + 1 },
@@ -318,9 +506,23 @@ export const quoteEnter = keymap.of([
         });
         return true;
       }
-      const insert = `”\n@${mark[1]} ${mark[2] ? `${mark[2]} ` : ""}“`;
+      // The speaker's mark as written, the last on the line before the quote (a quote that
+      // carries on a speech has none of its own), and the direction the quote is said with.
+      const name = nameBefore(story, line.from, start, speech.speaker);
+      const direction = speech.ownDirection;
+      const mark = name ? `@${name} ${direction ? `(${direction}) ` : ""}` : "";
+      const closer = closerFor(opener, story.meta.language);
+      const insert = `${closer}\n${mark}${opener}`;
+      const after = source.slice(0, from) + insert + source.slice(restFrom);
+      // Both halves are the speaker's, said the same way, or the split isn't made.
+      const split = parse(after);
+      const first = speechBefore(split, from);
+      const second = openQuoteAt(split, from + insert.length)?.speech;
+      const same = (other: Speech | undefined) =>
+        other?.speaker === speech.speaker && other.direction === speech.direction;
+      if (!same(first) || first?.closeQuote?.from !== from || !same(second)) return false;
       view.dispatch({
-        changes: { from, to: from + (tail.length - rest.length), insert },
+        changes: { from, to: restFrom, insert },
         selection: { anchor: from + insert.length },
         userEvent: "input",
       });
@@ -331,7 +533,7 @@ export const quoteEnter = keymap.of([
 
 /**
  * Backspace straight after a split quote's new `@Name “` joins the two lines back into one quote,
- * in one step (Enter's split undone by the key that undoes typing).
+ * in one step (Enter's split undone by the key that undoes typing), whatever the quote's marks.
  */
 export const quoteBackspace = keymap.of([
   {
@@ -342,10 +544,11 @@ export const quoteBackspace = keymap.of([
       const line = view.state.doc.lineAt(from);
       if (line.number < 2) return false;
       const head = line.text.slice(0, from - line.from);
-      const opened = /^@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]*(\([^()]*\))?[ \t]*“$/u.exec(head);
+      const opened = OPENED.exec(head);
       if (!opened) return false;
       const prev = view.state.doc.line(line.number - 1);
-      if (!prev.text.endsWith("”") || !prev.text.includes(`@${opened[1]}`)) return false;
+      const closers = new Set([CLOSING[opened[3] ?? ""], opened[3] === "„" ? "”" : undefined]);
+      if (!closers.has(prev.text.slice(-1)) || !prev.text.includes(`@${opened[1]}`)) return false;
       const before = prev.text.slice(-2, -1);
       const after = line.text.slice(from - line.from, from - line.from + 1);
       const space = /\s/u.test(before) || !after || /\s/u.test(after) ? "" : " ";

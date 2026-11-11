@@ -46,7 +46,8 @@ export type InstructionToken = {
   raw: string;
   range: Range;
 };
-export type NoteToken = { type: "note"; text: string; range: Range };
+/** `breaks` when the note runs over a line break: what a mark does ends there (§5.3). */
+export type NoteToken = { type: "note"; text: string; range: Range; breaks?: true };
 export type ImageToken = { type: "image"; alt: string; src: string; link?: string; range: Range };
 export type OpenToken = { type: "open"; char: string; range: Range };
 export type CloseToken = { type: "close"; char: string; range: Range };
@@ -110,7 +111,13 @@ function lexAtoms(source: string, line: Range, notes: readonly NoteSpan[], warn:
   let at = line.from;
   for (const note of notesWithin(notes, line)) {
     lexSegment(source, at, note.from, atoms, warn);
-    atoms.push({ type: "note", text: note.text, range: { from: note.from, to: note.to } });
+    const breaks = /[\n\r]/.test(source.slice(note.from, note.to));
+    atoms.push({
+      type: "note",
+      text: note.text,
+      range: { from: note.from, to: note.to },
+      ...(breaks ? { breaks: true as const } : {}),
+    });
     at = note.to;
   }
   lexSegment(source, at, line.to, atoms, warn);
@@ -344,14 +351,23 @@ export function linkEnds(
   return ends;
 }
 
+/**
+ * The segment being lexed, for a search inside it: up to its end, or up to a mark inside it (a
+ * link's text, an image's description). What it found past the search's end is not found.
+ */
 function inSegment(source: string, from: number, to: number): Segment | null {
   return segment !== null &&
     segment.source === source &&
-    segment.to === to &&
+    to <= segment.to &&
     from >= segment.from &&
     from <= to
     ? segment
     : null;
+}
+
+/** A position found in the segment, if it comes before the search's end; -1 otherwise. */
+function before(found: number | undefined, to: number): number {
+  return found === undefined || found < 0 || found >= to ? -1 : found;
 }
 
 function lexAtom(source: string, i: number, to: number, warn: Warn): Atom | null {
@@ -472,27 +488,63 @@ function lexImage(source: string, at: number, to: number): Atom | null {
 
 /**
  * A link's text or an image's description as text: a link in it as its text, and an image in it
- * as its description in a description (`alt`), or as nothing in what is heard.
+ * as its description in a description (`alt`), or as nothing in what is heard. Links and images
+ * nested inside one another are read with a stack of their own, not the call stack, so no depth
+ * of them runs out of it.
  */
 function label(source: string, from: number, to: number, alt: boolean): string {
   if (!source.slice(from, to).includes("](")) return source.slice(from, to);
-  let out = "";
-  for (let i = from; i < to; i++) {
-    const image = source[i] === "!" && source[i + 1] === "[" ? lexImage(source, i, to) : null;
-    if (image?.type === "image") {
-      if (alt) out += image.alt;
-      i = image.range.to - 1;
+  type Frame = { at: number; to: number; alt: boolean; out: string; image: boolean; next: number };
+  const stack: Frame[] = [{ at: from, to, alt, out: "", image: false, next: to }];
+  for (;;) {
+    const frame = stack[stack.length - 1] as Frame;
+    if (frame.at >= frame.to) {
+      stack.pop();
+      const outer = stack[stack.length - 1];
+      if (!outer) return frame.out;
+      // An image's description is read as its own (`alt`), escapes and all, as `lexImage` reads it.
+      if (!frame.image) outer.out += frame.out;
+      else if (outer.alt) outer.out += removeEscapes(frame.out);
+      outer.at = frame.next;
       continue;
     }
-    const link = source[i] === "[" ? linkAt(source, i, to) : null;
-    if (link) {
-      out += label(source, i + 1, link.close, alt);
-      i = link.end;
-      continue;
+    const i = frame.at;
+    if (source[i] === "!" && source[i + 1] === "[") {
+      const link = linkAt(source, i + 1, frame.to);
+      if (link) {
+        // In what is heard an image is nothing: its description needn't be read at all.
+        if (frame.alt) {
+          stack.push({
+            at: i + 2,
+            to: link.close,
+            alt: true,
+            out: "",
+            image: true,
+            next: link.end + 1,
+          });
+        } else {
+          frame.at = link.end + 1;
+        }
+        continue;
+      }
     }
-    out += source[i];
+    if (source[i] === "[") {
+      const link = linkAt(source, i, frame.to);
+      if (link) {
+        stack.push({
+          at: i + 1,
+          to: link.close,
+          alt: frame.alt,
+          out: "",
+          image: false,
+          next: link.end + 1,
+        });
+        continue;
+      }
+    }
+    frame.out += source[i];
+    frame.at = i + 1;
   }
-  return out;
 }
 
 /**
@@ -533,7 +585,7 @@ export function destination(target: string): { url: string; title: string | null
 /** The index of the `]` that balances the `[` at `open`, or -1. Escaped brackets don't count. */
 function matchSquare(source: string, open: number, to: number): number {
   const known = inSegment(source, open, to);
-  if (known) return known.squares.get(open) ?? -1;
+  if (known) return before(known.squares.get(open), to);
   let depth = 0;
   for (let i = open; i < to; i++) {
     const char = source[i];
@@ -651,7 +703,7 @@ function matchLink(source: string, open: number, to: number): number {
   const known = inSegment(source, open, to);
   if (known) {
     const end = known.links[open - known.from] ?? -1;
-    return end < 0 ? -1 : end + known.from;
+    return end < 0 ? -1 : before(end + known.from, to);
   }
   const plain = new Uint8Array(to - open);
   for (let i = open; i < to; i++) {
@@ -670,7 +722,7 @@ function matchLink(source: string, open: number, to: number): number {
 /** The index of the `)` that closes the `(` at `open`, or -1. Escaped parentheses don't count. */
 function matchParen(source: string, open: number, to: number): number {
   const known = inSegment(source, open, to);
-  if (known) return known.parens.get(open) ?? -1;
+  if (known) return before(known.parens.get(open), to);
   let depth = 0;
   for (let i = open; i < to; i++) {
     const char = source[i];
@@ -683,7 +735,7 @@ function matchParen(source: string, open: number, to: number): number {
 
 function findUnescaped(source: string, from: number, to: number, target: "]" | "}" | "["): number {
   const known = inSegment(source, from, to);
-  if (known) return known.next[target][from - known.from] ?? -1;
+  if (known) return before(known.next[target][from - known.from], to);
   for (let i = from; i < to; i++) {
     if (source[i] === "\\" && isEscapable(source[i + 1])) i++;
     else if (source[i] === target) return i;

@@ -312,3 +312,34 @@ describe("the front matter YAML subset", () => {
     }
   });
 });
+
+describe("the story's details", () => {
+  it("are their text as written, where YAML would read a number or true or false", () => {
+    const story = parse(
+      [
+        "---",
+        "title: 1.10",
+        "subtitle: 1e3",
+        "author: true # a pen name",
+        "cast:",
+        "  R2: 1.50",
+        "  C3:",
+        "    name: 007",
+        "    about: 3.0",
+        "---",
+        '@R2 "Beep." @C3 "Hello."',
+      ].join("\n"),
+    );
+    expect(story.meta.title).toBe("1.10");
+    expect(story.meta.subtitle).toBe("1e3");
+    expect(story.meta.author).toBe("true");
+    expect(story.cast.map(({ handle, name, about }) => [handle, name, about])).toEqual([
+      ["R2", "1.50", undefined],
+      ["C3", "007", "3.0"],
+    ]);
+    // The data keeps what YAML reads.
+    expect(story.frontMatter?.data.title).toBe(1.1);
+    // Quoted, it was always text.
+    expect(parse('---\ntitle: "1.10"\n---\nHi.').meta.title).toBe("1.10");
+  });
+});

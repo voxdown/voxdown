@@ -90,7 +90,10 @@ export type Group = {
   notes: Note[];
 };
 
-/** A line of a paragraph. A note that runs over several lines makes them one line. */
+/**
+ * A line of a paragraph. A note that runs over several lines keeps them in one `Line`, but what a
+ * mark does still ends at each line break, the note's own included (§5.3).
+ */
 export type Line = { range: Range; items: Item[] };
 
 /**

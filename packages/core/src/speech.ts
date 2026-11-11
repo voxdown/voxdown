@@ -87,14 +87,7 @@ class ParagraphReader {
   read(lines: readonly LexedLine[], carried: Voice | null) {
     const read = lines.map((line, index) => {
       const result = this.readLine(line, index === 0 ? carried : null);
-      if (this.quote && !this.quote.warned && index < lines.length - 1) {
-        this.context.warn(
-          "quote-over-line-break",
-          "This quote runs over a line break. That is fine for verse, but a closing mark may be missing.",
-          this.quote.range,
-        );
-        this.quote.warned = true;
-      }
+      if (index < lines.length - 1) this.warnOverLine();
       return result;
     });
     const open = this.quote && {
@@ -108,11 +101,7 @@ class ParagraphReader {
   private readLine(line: LexedLine, carried: Voice | null): Line {
     this.items = [];
     this.stretch = { pieces: [] };
-    this.speech = this.quote?.voice ?? null;
-    this.narration = { own: null };
-    this.pending = null;
-    this.pendingDirection = null;
-    this.lastEnded = null;
+    this.newLine();
     const { tokens } = line;
     const first = tokens.findIndex((token) => !isBlankText(token));
     for (let index = 0; index < tokens.length; index++) {
@@ -163,6 +152,12 @@ class ParagraphReader {
         case "note":
           this.flush();
           this.items.push({ kind: "note", text: token.text, range: token.range });
+          // A note that runs over a line break keeps its lines one line, but what a mark does
+          // still ends with the line it is on (§5.3): after the note, the next line's words.
+          if (token.breaks) {
+            this.warnOverLine();
+            this.newLine();
+          }
           break;
         case "image":
           this.flush();
@@ -180,6 +175,26 @@ class ParagraphReader {
     if (this.quote?.voice && this.speech) this.quote.voice = this.speech;
     const items = this.items.sort((a, b) => a.range.from - b.range.from);
     return { range: line.range, items };
+  }
+
+  /** A line starts: only a quote still open carries its speaker over to it. */
+  private newLine(): void {
+    this.speech = this.quote?.voice ?? null;
+    this.narration = { own: null };
+    this.pending = null;
+    this.pendingDirection = null;
+    this.lastEnded = null;
+  }
+
+  /** A quote still open at a line break may be missing its closing mark. */
+  private warnOverLine(): void {
+    if (!this.quote || this.quote.warned) return;
+    this.context.warn(
+      "quote-over-line-break",
+      "This quote runs over a line break. That is fine for verse, but a closing mark may be missing.",
+      this.quote.range,
+    );
+    this.quote.warned = true;
   }
 
   /** An opening quotation mark: a claimed or carried-on speech, or a quote in the narration. */

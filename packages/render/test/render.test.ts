@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { bookText, lines, parse } from "voxdown";
 import {
   characterColors,
+  inlineHtml,
   render,
   renderBook,
   renderDocument,
@@ -189,11 +190,28 @@ describe("the book view", () => {
     }
   });
 
+  it("draws links and images nested sixteen deep, and those deeper as written", () => {
+    const html = (text: string) => inlineHtml(text);
+    expect(html("A [![m](i)](l) and ![x ![y](b) z](a).")).toBe(
+      'A <a href="l"><img src="i" alt="m"></a> and <img src="a" alt="x y z">.',
+    );
+    const nested = (depth: number) => `${"[".repeat(depth)}w${"](a)".repeat(depth)}`;
+    // A link in a link's text is the link (Markdown): the innermost, at any depth to sixteen.
+    expect(html(nested(16))).toBe(`${"[".repeat(15)}<a href="a">w</a>${"](a)".repeat(15)}`);
+    const images = (depth: number) => `${"![".repeat(depth)}w${"](a)".repeat(depth)}`;
+    expect(html(images(16))).toBe('<img src="a" alt="w">');
+    // Past sixteen, the deepest are drawn as they are written.
+    expect(html(images(17))).toBe(`<img src="a" alt="${"![".repeat(1)}w](a)">`);
+  });
+
   it("renders a very long line, and brackets nested deep, in good time", () => {
     for (const text of [
       "word ".repeat(60_000),
       "@Tom “a” [b] {page} %% n %% ".repeat(5_000),
       `${"[".repeat(100_000)}x${"]".repeat(100_000)}(y)`,
+      // Images and links nested thousands deep once ran out of stack (from about a thousand).
+      `Hi ${"![".repeat(5_000)}bird${"](a)".repeat(5_000)} end.`,
+      `Hi ${"[![".repeat(3_000)}bird${"](a)](b)".repeat(3_000)} end.`,
     ]) {
       const story = parse(text);
       const start = performance.now();

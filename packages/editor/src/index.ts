@@ -86,6 +86,7 @@ export function scriptEditor(options: ScriptEditorOptions): Extension {
   ];
 }
 
+export { blankShare, gapHeight } from "./heights";
 export { scriptTheme } from "./theme";
 export {
   FRESH_BELOW,

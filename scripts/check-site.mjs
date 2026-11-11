@@ -1011,6 +1011,26 @@ await longPage.waitForFunction(
   () => document.querySelector("#file-name")?.textContent === "long.vxd",
 );
 await longPage.waitForTimeout(800);
+// The scrollbar is laid out by the height the editor guesses for what it hasn't drawn: dragging
+// its thumb from top to foot must stay with the pointer, the height hardly changing on the way
+// (with every blank line guessed a whole line, a book's height fell by a fifth as it was drawn).
+const heights = await longPage.evaluate(async () => {
+  const scroller = document.querySelector(".cm-scroller");
+  const seen = [];
+  for (let step = 0; step <= 10; step++) {
+    scroller.scrollTop = (step / 10) * (scroller.scrollHeight - scroller.clientHeight);
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+    await new Promise((done) => setTimeout(done, 40));
+    seen.push(scroller.scrollHeight);
+  }
+  scroller.scrollTop = 0;
+  return seen;
+});
+const drift = (Math.max(...heights) - Math.min(...heights)) / Math.max(...heights);
+if (drift > 0.04)
+  problems.push(
+    `writer: a long book's height changed ${Math.round(drift * 100)}% as it was scrolled through (${heights.join(", ")}): the scrollbar's thumb leaves the pointer`,
+  );
 await longPage.click(".cm-content");
 await longPage.keyboard.press("Control+End");
 await longPage.waitForTimeout(800);

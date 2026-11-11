@@ -14,6 +14,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
+import { storyHeights } from "./heights";
 import { LabelWidget, stackLabels } from "./labels";
 import { type EditorMark, editorMarks, readStory } from "./marks";
 import { nameReadAt, readNamesField, spokenName } from "./scene-names";
@@ -861,6 +862,8 @@ const frontMatterField = StateField.define<DecorationSet>({
 
 export function livePreview(options: PreviewOptions): Extension {
   return [
+    // Heights guessed for what isn't drawn yet, as it will be drawn (heights.ts).
+    storyHeights,
     showMarksField.init(() => options.showMarks ?? false),
     viewField.init(() => ({ ...ALL_ON, ...options.view })),
     marksField,

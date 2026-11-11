@@ -103,6 +103,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings, emphasis, inserts, comparing and keeping versions, words, saving decisions and the save queue), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
 
 **@voxdown/editor**
+- A long story's scrollbar follows the pointer: the height guessed for what isn't drawn yet counts the story's blank lines at the height they're drawn (a paragraph's gap, not a whole line) and its rows as long as its own prose wraps them. Moby-Dick was guessed a fifth too tall, so dragging the scrollbar's thumb to the bottom of its track reached three quarters of the book; it is now within 1% from the start.
 - In a story longer than 30,000 characters, the marks move along with each change and are worked out afresh once typing pauses (`settleMarks`, `marksPending`, `FRESH_BELOW`): reading the whole story on every key took 110 ms at 100,000 words.
 - `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
 - Lines printed but not read aloud are easier to read, and a page turn's label is 11 px.

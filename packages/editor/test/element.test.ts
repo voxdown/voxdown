@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { redo, undo } from "@codemirror/commands";
 import { describe, expect, it } from "vitest";
 import { VoxdownEditorElement, charactersOf, defineVoxdownEditor } from "../src/element";
 
@@ -64,6 +65,25 @@ describe("<voxdown-editor>", () => {
     editor.value = "Early.";
     document.body.replaceChildren(editor);
     expect(editor.view?.state.doc.toString()).toBe("Early.");
+  });
+
+  it("undoes and redoes, as any text box does", async () => {
+    const element = document.createElement("voxdown-editor") as VoxdownEditorElement;
+    element.value = "@Gerald “Hi.”";
+    document.body.append(element);
+    const view = element.view;
+    if (!view) throw new Error("no view");
+    view.dispatch({ changes: { from: view.state.doc.length, insert: " [snores]" } });
+    expect(element.value).toBe("@Gerald “Hi.” [snores]");
+    expect(undo(view)).toBe(true);
+    expect(element.value).toBe("@Gerald “Hi.”");
+    expect(redo(view)).toBe(true);
+    expect(element.value).toBe("@Gerald “Hi.” [snores]");
+    // A new value is a new story: undo doesn't go back into the old one.
+    element.value = "@Wanda “Hello.”";
+    expect(undo(view)).toBe(false);
+    expect(element.value).toBe("@Wanda “Hello.”");
+    element.remove();
   });
 
   it("follows readonly", async () => {

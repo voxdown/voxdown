@@ -72,6 +72,16 @@ for (const name of names) {
   console.log(`${name}: editor, ${Object.keys(TABS).join(", ")}: ok`);
 }
 
+// Undo takes typing back.
+await page.click(`.example[data-name="${names[0]}"]`);
+await page.click(".cm-content");
+await page.keyboard.press("Control+End");
+await page.keyboard.type(" Zebra.");
+await page.keyboard.press("Control+z");
+await page.waitForTimeout(200);
+if ((await page.locator(".cm-content").innerText()).includes("Zebra."))
+  problems.push("playground: Ctrl+Z doesn't undo typing");
+
 // Typing updates the right page.
 await page.click(`.example[data-name="${names[0]}"]`);
 await page.click('.tab[data-tab="script"]');
@@ -352,6 +362,84 @@ const fits = await writer.evaluate(
 if (!fits) problems.push("writer: at 900×760, the page doesn't fill the window");
 await writerContext.close();
 console.log("writer: welcome, rail, save, draft, open, warnings, view: ok");
+
+// Writing in the Writer: who says a passage and how, from the bar over it; undo; search; moving
+// a paragraph; renaming in the cast; and a warning's fix. Each change is read back from the
+// draft the Writer keeps.
+const authoring = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const author = await authoring.newPage();
+watch(author, "writer authoring");
+const kept = () =>
+  author.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const request = indexedDB.open("voxdown-writer");
+        request.onsuccess = () => {
+          const get = request.result.transaction("drafts").objectStore("drafts").get("current");
+          get.onsuccess = () => resolve(get.result?.text ?? "");
+        };
+      }),
+  );
+const settled = () => author.waitForTimeout(900);
+await author.goto(`${base}/writer/`);
+await author.click(`.welcome-example[data-name="${dragonName}"]`);
+await author.waitForSelector("#welcome", { state: "hidden" });
+const passage = author.locator(".cm-line", { hasText: "He had polished his armor" }).first();
+await passage.hover({ position: { x: 60, y: 8 } });
+await author.waitForSelector(".stretch-tools:not([hidden])");
+await author.click(".stretch-tools .who");
+await author.click('.speaker-choice:has-text("Gerald")');
+await settled();
+if (!/@Gerald[^\n]*He had polished his armor/.test(await kept()))
+  problems.push("writer: the speaker picker didn't give the passage to Gerald");
+await author.keyboard.press("Control+z");
+await settled();
+if (/@Gerald[^\n]*He had polished his armor/.test(await kept()))
+  problems.push("writer: undo didn't take the new speaker back");
+await passage.hover({ position: { x: 60, y: 8 } });
+await author.waitForSelector(".stretch-tools:not([hidden])");
+await author.click(".stretch-tools .how");
+await author.keyboard.type("proudly");
+await author.keyboard.press("Enter");
+await settled();
+if (!/@\(proudly\) He had polished/.test(await kept()))
+  problems.push("writer: the direction picker didn't set “proudly”");
+await author.keyboard.press("Control+f");
+if (!(await author.isVisible(".cm-search")))
+  problems.push("writer: Ctrl+F doesn't open search and replace");
+await author.keyboard.press("Escape");
+await author.click(".cm-line >> text=He had polished his armor");
+const order = (text) => text.indexOf("He had polished") < text.indexOf("“Whoever brings back");
+const wasFirst = order(await kept());
+await author.keyboard.press("Alt+ArrowDown");
+await settled();
+if (order(await kept()) === wasFirst) problems.push("writer: Alt+↓ didn't move the paragraph");
+await author.click('.side-tab[data-tab="cast"]');
+const king = author.locator('.cast-handle input[value="King"]');
+await king.fill("Monarch");
+await king.press("Enter");
+await settled();
+const renamed = await kept();
+if (!renamed.includes("@Monarch") || renamed.includes("@King"))
+  problems.push("writer: renaming King in the cast didn't rename every mark");
+await author.click("#file-menu-button");
+await author.click('[data-command="new"]');
+await author.click('#ask-buttons button[value="discard"]');
+await author.click(".cm-content");
+await author.keyboard.press("Control+End");
+await author.keyboard.type("\n@ Wanda “Hi there.”\n");
+await settled();
+await author.click('.side-tab[data-tab="warnings"]');
+const mend = author.locator("#side-sheet .fix").first();
+if ((await mend.count()) === 0) problems.push("writer: no fix offered for “@ Wanda”");
+else {
+  await mend.click();
+  await settled();
+  if (!(await kept()).includes("@Wanda “Hi there.”"))
+    problems.push("writer: the fix didn't close the gap in “@ Wanda”");
+}
+await authoring.close();
+console.log("writer: speaker, direction, undo, search, move, cast, fix: ok");
 
 const element = await browser.newPage();
 watch(element, "element.html");

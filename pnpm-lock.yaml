@@ -106,6 +106,12 @@ importers:
 
   site:
     dependencies:
+      '@codemirror/commands':
+        specifier: ^6.11.1
+        version: 6.11.1
+      '@codemirror/search':
+        specifier: ^6.7.2
+        version: 6.7.2
       '@codemirror/state':
         specifier: ^6.7.6
         version: 6.7.6

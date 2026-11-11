@@ -31,6 +31,20 @@
       </div>
     </div>
     <div class="menu">
+      <button class="menu-button" type="button" id="edit-menu-button" aria-haspopup="menu" aria-controls="edit-menu" aria-expanded="false">Edit</button>
+      <div class="menu-list" role="menu" id="edit-menu" aria-labelledby="edit-menu-button" hidden>
+        <button role="menuitem" type="button" data-command="undo">Undo<kbd data-keys="Mod+Z"></kbd></button>
+        <button role="menuitem" type="button" data-command="redo">Redo<kbd data-keys="Mod+Shift+Z"></kbd></button>
+        <button role="menuitem" type="button" data-command="find">Find and replace…<kbd data-keys="Mod+F"></kbd></button>
+        <hr>
+        <button role="menuitem" type="button" data-command="who">Who says this…</button>
+        <button role="menuitem" type="button" data-command="how">How it’s said…</button>
+        <hr>
+        <button role="menuitem" type="button" data-command="paragraph-up">Move paragraph up<kbd data-keys="Alt+↑"></kbd></button>
+        <button role="menuitem" type="button" data-command="paragraph-down">Move paragraph down<kbd data-keys="Alt+↓"></kbd></button>
+      </div>
+    </div>
+    <div class="menu">
       <button class="menu-button" type="button" id="view-menu-button" aria-haspopup="menu" aria-controls="view-menu" aria-expanded="false">View</button>
       <div class="menu-list" role="menu" id="view-menu" aria-labelledby="view-menu-button" hidden>
         <button role="menuitemcheckbox" type="button" data-view="marks" aria-checked="false">Every mark raw<kbd data-keys="Mod+Shift+M"></kbd></button>
@@ -83,6 +97,7 @@
 
   <section class="manuscript" aria-label="Story">
     <div class="editor" id="editor"></div>
+    <p class="notice" id="notice" role="status" hidden></p>
     <div class="welcome" id="welcome" hidden>
       <h1>Write a story to be read aloud.</h1>
       <p>Mark who says each line, how, and the sounds around it. Open a <code>.vxd</code> file from your computer, or start one here. Everything stays in this browser until you save it.</p>
@@ -99,6 +114,7 @@
     <div class="side-tabs" role="tablist" aria-label="Show">
       <button class="side-tab" role="tab" type="button" data-tab="script" aria-controls="side-sheet">Script</button>
       <button class="side-tab" role="tab" type="button" data-tab="book" aria-controls="side-sheet">Book</button>
+      <button class="side-tab" role="tab" type="button" data-tab="cast" aria-controls="side-sheet">Cast</button>
       <button class="side-tab" role="tab" type="button" data-tab="warnings" aria-controls="side-sheet">Warnings <span class="count" id="warning-count">0</span></button>
     </div>
     <div class="side-sheet sheet" id="side-sheet" role="tabpanel" tabindex="0"></div>

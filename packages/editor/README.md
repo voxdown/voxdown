@@ -20,6 +20,7 @@ npm install @voxdown/editor
 
 - The story is the element’s **`value`**. It starts from a `value` attribute, a `<script type="text/voxdown">` inside it (which keeps `<` and `&` as written), or its text, without the page’s indentation.
 - It fires **`input`** on every change, and **`change`** when it loses focus after one.
+- It undoes and redoes (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) and finds and replaces (Ctrl/Cmd+F). Setting `value` starts a new undo history.
 - Attributes: **`show-marks`**, **`readonly`**, and `smart-quotes="off"`.
 - Characters and their colors come from the story itself: its cast, then every name it marks.
 - **`view`** is the CodeMirror view, for adding your own extensions or commands.

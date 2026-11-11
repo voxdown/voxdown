@@ -2,8 +2,10 @@
  * The playground: write on the left page, see what it becomes on the right. Everything runs in the
  * browser; the story is kept in this browser's local storage and in links you choose to copy.
  */
+import { defaultKeymap, history as editHistory, historyKeymap } from "@codemirror/commands";
+import { search, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { type Character, scriptEditor, setShowMarks } from "@voxdown/editor";
 import {
   characterColors,
@@ -64,10 +66,16 @@ const lineBreaks = (text: string) =>
     ? EditorState.lineSeparator.of("\r\n")
     : [];
 
+/** Undo and redo, fresh for each story opened: undo never goes back into the one before. */
+const undoHistory = new Compartment();
+
 const view = new EditorView({
   parent: editorHost,
   extensions: [
     lineEnding.of([]),
+    undoHistory.of(editHistory()),
+    search({ top: true }),
+    keymap.of([...searchKeymap, ...historyKeymap, ...defaultKeymap]),
     scriptEditor({ characters }),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) schedule();
@@ -105,6 +113,8 @@ function load(text: string, name: string): void {
     scrollIntoView: true,
   });
   view.scrollDOM.scrollTop = 0;
+  view.dispatch({ effects: undoHistory.reconfigure([]) });
+  view.dispatch({ effects: undoHistory.reconfigure(editHistory()) });
   for (const button of document.querySelectorAll<HTMLButtonElement>(".example")) {
     button.setAttribute("aria-current", String(button.dataset.name === name));
   }

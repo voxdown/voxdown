@@ -503,6 +503,17 @@ body.writer {
   flex-direction: column;
   gap: 0.35rem;
 }
+.warning-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.warning-list .fix {
+  align-self: flex-start;
+  margin-left: 0.85rem;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+}
 .warning-list .warning {
   width: 100%;
   text-align: left;
@@ -531,6 +542,247 @@ body.writer {
   grid-column: 2;
   font-size: 0.75rem;
   color: var(--quiet);
+}
+
+/* The bar over a passage: who says it, and how. */
+.stretch-tools {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--paper);
+  border: 1px solid var(--desk-edge);
+  border-radius: 999px;
+  box-shadow: 0 4px 14px -6px rgb(20 30 50 / 0.35);
+  font-size: 0.76rem;
+}
+.stretch-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  cursor: pointer;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.stretch-tools button:hover,
+.stretch-tools button:focus-visible {
+  background: var(--tab);
+}
+.stretch-tools .how {
+  color: var(--mark-direction);
+}
+.stretch-tools .how.set {
+  font-style: italic;
+}
+.stretch-tools .caret {
+  font-size: 0.6rem;
+  color: var(--quiet);
+}
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--c, var(--quiet));
+}
+
+/* The pickers. */
+.popover {
+  position: absolute;
+  z-index: 6;
+  width: 17rem;
+  max-height: 22rem;
+  overflow: auto;
+  padding: 0.55rem;
+  background: var(--paper);
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  box-shadow: 0 14px 40px -14px rgb(20 30 50 / 0.45);
+  font-size: 0.86rem;
+}
+.popover-title {
+  margin: 0.1rem 0.3rem 0.45rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--quiet);
+}
+.speaker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.speaker-choice {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.35rem 0.45rem;
+  cursor: pointer;
+}
+.speaker-choice:hover,
+.speaker-choice:focus-visible {
+  background: var(--tab);
+  outline: none;
+}
+.speaker-choice[aria-current="true"] {
+  font-weight: 600;
+}
+.speaker-choice small {
+  color: var(--quiet);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.new-speaker,
+.direction-form {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+  flex-wrap: wrap;
+}
+.new-speaker input,
+.direction-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  background: var(--paper);
+}
+.direction-form input {
+  flex-basis: 100%;
+  font-style: italic;
+}
+.popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+/* A word to the writer, at the foot of the manuscript. */
+.notice {
+  position: absolute;
+  left: 50%;
+  bottom: 1.2rem;
+  transform: translateX(-50%);
+  z-index: 6;
+  max-width: min(36rem, 90%);
+  margin: 0;
+  padding: 0.6rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 8px;
+  font-size: 0.86rem;
+  box-shadow: 0 10px 30px -10px rgb(20 30 50 / 0.5);
+}
+
+/* A warning's tip in the text, with its fix. */
+.cm-tooltip.cm-tooltip-hover:has(.warning-tip) {
+  border: 1px solid var(--desk-edge);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 10px 30px -14px rgb(20 30 50 / 0.45);
+}
+.warning-tip {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  max-width: 26rem;
+  padding: 0.45rem 0.6rem;
+  font: 0.82rem / 1.4 var(--ui);
+  color: var(--ink);
+}
+.warning-tip .button {
+  white-space: nowrap;
+}
+
+/* The cast on the side. */
+.cast-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.cast-member {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.3rem 0.55rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+}
+.cast-member[data-provisional] {
+  border-style: dashed;
+}
+.cast-handle {
+  display: inline-flex;
+  align-items: baseline;
+  color: var(--quiet);
+  font-family: var(--mono);
+  font-variation-settings: "MONO" 1;
+  font-size: 0.85rem;
+}
+.cast-handle input,
+.cast-name {
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  padding: 0.2rem 0.3rem;
+}
+.cast-handle input {
+  font: inherit;
+  color: var(--ink);
+}
+.cast-name {
+  font: 400 0.95rem / 1.3 var(--story);
+  min-width: 0;
+}
+.cast-handle input:hover,
+.cast-name:hover {
+  border-color: var(--rule);
+}
+.cast-handle input:focus,
+.cast-name:focus {
+  border-color: var(--pencil);
+  outline: none;
+  background: var(--paper);
+}
+.cast-lines {
+  font-size: 0.75rem;
+  color: var(--quiet);
+  white-space: nowrap;
+}
+.cast-find {
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 0.1rem 0.4rem;
+  cursor: pointer;
+  color: var(--pencil);
+}
+.cast-find:hover {
+  background: var(--tab);
+}
+.cast-add {
+  grid-column: 2 / -1;
+  justify-self: start;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.8rem;
 }
 
 /* The status line. */

@@ -3,22 +3,35 @@
  * and what it becomes on the right. Everything runs in the browser. The story is kept in this
  * browser as it is typed, so a closed tab loses nothing, and goes to a file only when it is saved.
  */
-import { EditorSelection, EditorState, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { defaultKeymap, history, historyKeymap, redo, undo } from "@codemirror/commands";
+import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
+import { EditorSelection, EditorState, type Extension, Prec } from "@codemirror/state";
+import { EditorView, hoverTooltip, keymap } from "@codemirror/view";
 import {
   type Character,
   type ViewSwitches,
+  marksField,
   scriptEditor,
   setShowMarks,
   setView,
   showMarksField,
 } from "@voxdown/editor";
 import { characterColors, escapeHtml, renderBook, renderScript, stylesheet } from "@voxdown/render";
-import { type Story, bookText, format, lines, parse } from "voxdown";
+import {
+  type Story,
+  type TextChange,
+  bookText,
+  format,
+  lines,
+  parse,
+  renameCharacter,
+  setFullName,
+} from "voxdown";
 import { examples } from "../examples";
 import "../style.css";
 import "./writer.css";
 import "../theme";
+import { castPanel } from "./cast";
 import {
   type Opened,
   asStory,
@@ -30,8 +43,10 @@ import {
   writeFile,
 } from "./files";
 import { menus } from "./menu";
+import { moveParagraph } from "./paragraphs";
 import { SceneRail } from "./rail";
 import { forgetFile, keepDraft, loadDraft, recentFiles, rememberFile } from "./store";
+import { type Speaker, StretchTools, speechAt, speechOfMark } from "./stretch";
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector(selector) as T;
@@ -42,7 +57,7 @@ document.head.append(rendererStyle);
 
 // What the writer chose to see, kept on this computer.
 
-type Tab = "script" | "book" | "warnings";
+type Tab = "script" | "book" | "cast" | "warnings";
 type Prefs = ViewSwitches & { marks: boolean; side: boolean; tab: Tab };
 const PREFS_KEY = "vxd-writer-view";
 const prefs: Prefs = {
@@ -89,6 +104,15 @@ const file = {
 };
 let story: Story = parse("");
 let colors = new Map<string, string>();
+/** Each change to the text counts up; the story is current when it was read at the latest. */
+let version = 0;
+let storyVersion = 0;
+
+/** The story as the editor has it now: read again if the text changed since. */
+function current(): Story {
+  if (storyVersion !== version) refresh();
+  return story;
+}
 
 const characters = (): readonly Character[] =>
   [...colors].map(([handle, color]) => ({
@@ -113,8 +137,22 @@ function editorState(source: string, cursor: number): EditorState {
     selection: EditorSelection.cursor(cursor),
     extensions: [
       lineBreaks(source),
+      history(),
+      search({ top: true }),
+      Prec.high(
+        keymap.of([
+          { key: "Alt-ArrowUp", run: (v) => moveParagraph(v, -1, frontMatterEnd()) },
+          { key: "Alt-ArrowDown", run: (v) => moveParagraph(v, 1, frontMatterEnd()) },
+        ]),
+      ),
+      keymap.of([...searchKeymap, ...historyKeymap, ...defaultKeymap]),
+      warningTips,
       scriptEditor({
         characters,
+        onNameClick: (_view, at) => {
+          const speech = speechOfMark(current(), at.from);
+          if (speech) tools.openSpeaker(speech.range.from);
+        },
         showMarks: prefs.marks,
         view: {
           color: prefs.color,
@@ -127,7 +165,11 @@ function editorState(source: string, cursor: number): EditorState {
         },
       }),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) changed();
+        if (update.docChanged) {
+          version++;
+          tools.hide();
+          changed();
+        }
         if (update.docChanged || update.selectionSet) cursorMoved();
         const raw = update.state.field(showMarksField);
         if (raw !== prefs.marks) {
@@ -141,8 +183,101 @@ function editorState(source: string, cursor: number): EditorState {
   });
 }
 
+/** Where the front matter ends, which a paragraph never moves above. */
+const frontMatterEnd = () => current().frontMatter?.range.to ?? null;
+
+/** A warning's message, and its fix as one click, over the words it underlines. */
+const warningTips = hoverTooltip((tipView, at) => {
+  const mark = tipView.state
+    .field(marksField)
+    .find((m) => m.kind === "warning" && m.from <= at && at <= m.to);
+  if (!mark || mark.kind !== "warning") return null;
+  return {
+    pos: mark.from,
+    end: mark.to,
+    above: true,
+    create: () => {
+      const dom = document.createElement("div");
+      dom.className = "warning-tip";
+      const message = document.createElement("span");
+      message.textContent = mark.message;
+      dom.append(message);
+      const fix = mark.fix;
+      if (fix) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "button";
+        button.textContent = fix.label ?? "Fix it";
+        button.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          tipView.dispatch({ changes: fix, userEvent: "input.fix" });
+          tipView.focus();
+        });
+        dom.append(button);
+      }
+      return { dom };
+    },
+  };
+});
+
 const view = new EditorView({ parent: $("#editor"), state: editorState("", 0) });
 const rail = new SceneRail($("#scene-rail"), view);
+// The editor's listeners use it only once the story changes, after it is made.
+const tools: StretchTools = new StretchTools({
+  view,
+  host: $(".manuscript"),
+  story: current,
+  speakers,
+  apply,
+});
+
+/** Everyone a passage can be given to: the narrator, the cast, and anyone else the story names. */
+function speakers(): Speaker[] {
+  const now = current();
+  const narrator = now.meta.narrator;
+  const names = [...colors.keys()];
+  if (!names.some((name) => name.toLowerCase() === narrator.toLowerCase())) names.unshift(narrator);
+  const rank = (name: string) =>
+    name.toLowerCase() === narrator.toLowerCase()
+      ? -1
+      : (() => {
+          const at = now.cast.findIndex((m) => m.handle.toLowerCase() === name.toLowerCase());
+          return at < 0 ? now.cast.length : at;
+        })();
+  return names
+    .sort((a, b) => rank(a) - rank(b))
+    .map((handle) => ({
+      handle,
+      name: now.cast.find((m) => m.handle === handle)?.name ?? handle,
+      ...(colors.get(handle) ? { color: colors.get(handle) as string } : {}),
+    }));
+}
+
+/** Makes one of the core's edits, as one step to undo; with none, says why. */
+function apply(changes: TextChange[], declined: string): boolean {
+  if (changes.length === 0) {
+    notice(declined);
+    return false;
+  }
+  view.dispatch({
+    changes: changes.map(({ from, to, insert }) => ({ from, to, insert })),
+    userEvent: "input.edit",
+  });
+  refresh();
+  return true;
+}
+
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+/** A word to the writer at the foot of the manuscript, for a few seconds. */
+function notice(message: string): void {
+  const box = $("#notice");
+  box.textContent = message;
+  box.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    box.hidden = true;
+  }, 6000);
+}
 
 /** Puts a story in the editor, with a fresh undo history, the cursor where the story starts. */
 function load(
@@ -186,6 +321,7 @@ function changed(): void {
 function refresh(): void {
   clearTimeout(refreshTimer);
   story = parse(view.state.doc.toString());
+  storyVersion = version;
   colors = characterColors(story);
   rail.update(story);
   showCounts();
@@ -258,7 +394,7 @@ function cursorMoved(): void {
 }
 
 function showWarningCount(): void {
-  const count = story.warnings.filter((warning) => warning.severity === "warning").length;
+  const count = problems().filter((problem) => problem.severity === "warning").length;
   $("#warning-count").textContent = String(count);
   const button = $<HTMLButtonElement>("#status-warnings");
   button.hidden = count === 0;
@@ -274,15 +410,101 @@ function showSide(): void {
     tab.setAttribute("aria-selected", String(selected));
     tab.tabIndex = selected ? 0 : -1;
   }
+  // A name being typed on the side isn't redrawn under the writer's fingers.
+  if (sheet.contains(document.activeElement) && document.activeElement?.matches("input")) return;
   if (prefs.tab === "script") sheet.innerHTML = renderScript(story, { positions: true });
   else if (prefs.tab === "book")
     sheet.innerHTML = renderBook(story, { pages: true, positions: true });
+  else if (prefs.tab === "cast")
+    sheet.replaceChildren(
+      castPanel(story, colors, {
+        rename: (from, to) =>
+          apply(
+            renameCharacter(current(), from, to),
+            `${from} can’t be renamed ${to} here: another character may have that name.`,
+          ),
+        fullName: (handle, name) =>
+          apply(
+            setFullName(current(), handle, name),
+            `The cast can’t give ${handle} that name as written.`,
+          ),
+        find: (handle) => {
+          const line = lines(current()).find(
+            (row) => row.speaker?.toLowerCase() === handle.toLowerCase(),
+          );
+          if (!line) return notice(`${handle} has no lines yet.`);
+          const doc = view.state.doc;
+          const at = Math.min(doc.line(line.line).from + line.column - 1, doc.length);
+          view.dispatch({
+            selection: EditorSelection.cursor(at),
+            effects: EditorView.scrollIntoView(at, { y: "center" }),
+          });
+          view.focus();
+        },
+        notice,
+      }),
+    );
   else sheet.replaceChildren(warningList());
   markPlace();
 }
 
+type Problem = {
+  from: number;
+  to: number;
+  line: number;
+  message: string;
+  code: string;
+  severity: string;
+  fix?: { from: number; to: number; insert: string; label?: string };
+};
+
+/**
+ * What to put right: the parser's warnings, in the editor's words where it has some, with its fix;
+ * and the slips only the editor sees as you type (`@ Wanda`, a direction left open), with theirs.
+ */
+function problems(): Problem[] {
+  const doc = view.state.doc;
+  const drawn = view.state
+    .field(marksField)
+    .flatMap((mark) => (mark.kind === "warning" ? [mark] : []));
+  const used = new Set<(typeof drawn)[number]>();
+  const found: Problem[] = story.warnings.map((warning) => {
+    const mine = drawn.find(
+      (mark) =>
+        !used.has(mark) &&
+        mark.code === warning.code &&
+        mark.from <= warning.range.to &&
+        warning.range.from <= mark.to,
+    );
+    if (mine) used.add(mine);
+    return {
+      from: warning.range.from,
+      to: warning.range.to,
+      line: warning.line,
+      message: mine?.message ?? warning.message,
+      code: warning.code,
+      severity: warning.severity,
+      ...(mine?.fix ? { fix: mine.fix } : {}),
+    };
+  });
+  for (const mark of drawn) {
+    if (used.has(mark) || mark.from > doc.length) continue;
+    found.push({
+      from: mark.from,
+      to: mark.to,
+      line: doc.lineAt(mark.from).number,
+      message: mark.message,
+      code: mark.code,
+      severity: "warning",
+      ...(mark.fix ? { fix: mark.fix } : {}),
+    });
+  }
+  return found.sort((a, b) => a.from - b.from);
+}
+
 function warningList(): HTMLElement {
-  if (story.warnings.length === 0) {
+  const all = problems();
+  if (all.length === 0) {
     const none = document.createElement("p");
     none.className = "sheet-note";
     none.textContent = "Nothing to warn about: every mark reads as written.";
@@ -290,21 +512,34 @@ function warningList(): HTMLElement {
   }
   const list = document.createElement("ol");
   list.className = "warning-list";
-  for (const warning of story.warnings) {
+  for (const problem of all) {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
     button.className = "warning";
-    button.dataset.severity = warning.severity;
-    button.innerHTML = `<span class="where">Line ${warning.line}</span><span class="message">${escapeHtml(warning.message)}</span><code>${escapeHtml(warning.code)}</code>`;
+    button.dataset.severity = problem.severity;
+    button.innerHTML = `<span class="where">Line ${problem.line}</span><span class="message">${escapeHtml(problem.message)}</span><code>${escapeHtml(problem.code)}</code>`;
     button.addEventListener("click", () => {
       view.dispatch({
-        selection: EditorSelection.range(warning.range.from, warning.range.to),
+        selection: EditorSelection.range(problem.from, problem.to),
         scrollIntoView: true,
       });
       view.focus();
     });
     item.append(button);
+    const fix = problem.fix;
+    if (fix) {
+      const mend = document.createElement("button");
+      mend.type = "button";
+      mend.className = "button fix";
+      mend.textContent = fix.label ?? "Fix it";
+      mend.addEventListener("click", () => {
+        view.dispatch({ changes: fix, userEvent: "input.fix" });
+        refresh();
+        view.focus();
+      });
+      item.append(mend);
+    }
     list.append(item);
   }
   return list;
@@ -317,7 +552,7 @@ function selectTab(tab: Tab, focus = false): void {
   if (focus) document.querySelector<HTMLElement>(`.side-tab[data-tab="${tab}"]`)?.focus();
 }
 
-const TABS: readonly Tab[] = ["script", "book", "warnings"];
+const TABS: readonly Tab[] = ["script", "book", "cast", "warnings"];
 for (const tab of document.querySelectorAll<HTMLButtonElement>(".side-tab")) {
   tab.addEventListener("click", () => selectTab(tab.dataset.tab as Tab));
   tab.addEventListener("keydown", (event) => {
@@ -553,7 +788,32 @@ const COMMANDS: Record<string, () => unknown> = {
   download: () => download(text(), file.name),
   format: () => tidy(false),
   "format-curly": () => tidy(true),
+  undo: () => {
+    undo(view);
+    view.focus();
+  },
+  redo: () => {
+    redo(view);
+    view.focus();
+  },
+  find: () => openSearchPanel(view),
+  who: () => tools.openSpeaker(passageAtCursor()),
+  how: () => tools.openDirection(passageAtCursor()),
+  "paragraph-up": () => {
+    moveParagraph(view, -1, frontMatterEnd());
+    view.focus();
+  },
+  "paragraph-down": () => {
+    moveParagraph(view, 1, frontMatterEnd());
+    view.focus();
+  },
 };
+
+/** Where the passage the cursor is in starts, or the cursor, for the pickers to find it. */
+function passageAtCursor(): number {
+  const head = view.state.selection.main.head;
+  return speechAt(current(), head)?.range.from ?? head;
+}
 
 const SWITCHES = ["color", "names", "directions", "sounds", "vocal", "pages", "notes"] as const;
 

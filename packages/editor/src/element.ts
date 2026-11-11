@@ -8,8 +8,10 @@
  * after one. Characters and their colors come from the story itself: its cast, then every name it
  * marks. Style it with the `--vxd-*` variables (see the editor's theme); they reach inside.
  */
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { search, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { characterColors, parse } from "voxdown";
 import type { Character } from "./decorations";
 import { setShowMarks } from "./decorations";
@@ -60,6 +62,7 @@ export class VoxdownEditorElement extends HTMLElement {
   #changed = false;
   readonly #editable = new Compartment();
   readonly #lineEnding = new Compartment();
+  readonly #history = new Compartment();
 
   /** The story as written. */
   get value(): string {
@@ -75,6 +78,9 @@ export class VoxdownEditorElement extends HTMLElement {
     if (text === this.value) return;
     this.#view.dispatch({ effects: this.#lineEnding.reconfigure(lineEnding(text)) });
     this.#view.dispatch({ changes: { from: 0, to: this.#view.state.doc.length, insert: text } });
+    // A new story: undo starts again from it, never going back into the one before.
+    this.#view.dispatch({ effects: this.#history.reconfigure([]) });
+    this.#view.dispatch({ effects: this.#history.reconfigure(history()) });
   }
 
   /** The CodeMirror view, for hosts that want to add their own extensions or commands. */
@@ -107,6 +113,10 @@ export class VoxdownEditorElement extends HTMLElement {
       parent: root,
       doc: text,
       extensions: [
+        // Undo and redo, search and replace, and the usual keys, as any text box has them.
+        this.#history.of(history()),
+        search({ top: true }),
+        keymap.of([...searchKeymap, ...historyKeymap, ...defaultKeymap]),
         scriptEditor({
           characters: () => this.#characters,
           showMarks: this.hasAttribute("show-marks"),

@@ -11,6 +11,16 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - The script, the book and the warnings on the right, each part linked to its place in the story; the warnings each take the cursor to theirs.
 - **View** switches what the editor draws (names, directions, sounds, character sounds, page turns, notes, colors by speaker, or every mark raw), remembered on this computer. **File** also tidies the story, with curly quotes or not.
 - A status line counts words, lines said, voices and scenes, and says where the cursor is and whether the draft is kept.
+- Resting the pointer on a passage brings a small bar over it: who says it, and how. Each opens a picker: a speaker from the cast (or someone new), and a direction, with those the story already uses. A click on a name in the text opens the speaker picker too, as do **Edit › Who says this…** and **How it's said…** for the passage at the cursor. The changes are the core's own `setSpeaker` and `setDirection`: where one would change other lines, the Writer says so and changes nothing.
+- **Cast**, on the side: rename a character everywhere by their short name, set their full name, or add a name the story uses to the cast; → goes to their first line.
+- Warnings with a fix offer it in one click, in the list and in a tip over the words in the text. The list also has the slips the editor sees as you type, such as `@ Wanda`.
+- Undo and redo, find and replace (Ctrl+F), and Alt+↑/↓ to move a paragraph past the one before or after it, never above the front matter; all in the **Edit** menu too.
+
+**@voxdown/editor**
+- `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
+
+**The playground**
+- Undo and redo, and find and replace: Ctrl+Z did nothing. Opening another story starts a new undo history.
 
  `@voxdown/render` 1.2.0, `@voxdown/editor` 1.1.0, `@voxdown/cli` 1.0.1, the VS Code extension 1.1.0, and the playground (10 November 2026)
 

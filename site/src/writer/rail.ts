@@ -125,7 +125,6 @@ export class SceneRail {
     this.root.toggleAttribute("data-labels", names);
     const toggle = this.part("#rail-toggle");
     const label = names ? "Hide scene names" : "Show scene names";
-    toggle.setAttribute("aria-pressed", String(names));
     toggle.title = label;
     toggle.querySelector(".sr-only")?.replaceChildren(label);
     toggle.querySelector("path")?.setAttribute("d", names ? "M10 3 5 8l5 5" : "M6 3l5 5-5 5");

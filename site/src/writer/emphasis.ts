@@ -99,10 +99,25 @@ export function emphasis(): Extension {
  * Italics (`*`) or bold (`**`) put around the selection, or the word at the cursor, or taken away
  * where they are already; with no word at the cursor, the signs go in with the cursor between.
  */
-export function toggleEmphasis(strongly: boolean) {
+export function toggleEmphasis(
+  strongly: boolean,
+  /** Why the signs can't go around `from`–`to` (inside a mark), if they can't. */
+  refuse?: (state: EditorState, from: number, to: number) => string | undefined,
+  /** Says why nothing was done. */
+  tell?: (message: string) => void,
+) {
   return (view: EditorView): boolean => {
     const { state } = view;
     if (state.readOnly) return true;
+    // Each range as it would be wrapped: a cursor stands for its word.
+    for (const range of state.selection.ranges) {
+      const word = range.empty ? state.wordAt(range.from) : null;
+      const why = refuse?.(state, word?.from ?? range.from, word?.to ?? range.to);
+      if (why) {
+        tell?.(why);
+        return true;
+      }
+    }
     const width = strongly ? 2 : 1;
     const signs = strongly ? ["**", "__"] : ["*", "_"];
     // How many of a sign's characters run right before `at` (back) or right after it.

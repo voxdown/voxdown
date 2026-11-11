@@ -82,6 +82,7 @@ import {
 } from "./files";
 import { DraftLock } from "./lock";
 import { keys, menus } from "./menu";
+import { rankScenes } from "./outline";
 import { afterParagraph, moveParagraph } from "./paragraphs";
 import { type Problem, problems } from "./problems";
 import { SceneRail, railScenes } from "./rail";
@@ -106,7 +107,7 @@ import {
   versionsOf,
 } from "./store";
 import { type Speaker, StretchTools, passageNear, speechOfMark } from "./stretch";
-import { glimpse, listening, wordCount } from "./words";
+import { fileNameFor, glimpse, listening, wordCount } from "./words";
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector(selector) as T;
@@ -363,8 +364,8 @@ function editorState(source: string, cursor: number): EditorState {
           },
           { key: "F8", run: () => nextProblem(1), shift: () => nextProblem(-1) },
           { key: "Mod-.", run: fixHere },
-          { key: "Mod-i", run: toggleEmphasis(false) },
-          { key: "Mod-b", run: toggleEmphasis(true) },
+          { key: "Mod-i", run: (v) => italics(v) },
+          { key: "Mod-b", run: (v) => bold(v) },
           { key: "Alt-Shift-ArrowUp", run: () => moveSectionHere(false, -1) },
           { key: "Alt-Shift-ArrowDown", run: () => moveSectionHere(false, 1) },
           { key: "Alt-ArrowUp", run: (v) => moveParagraph(v, -1, frontMatterEnd()) },
@@ -422,6 +423,13 @@ const warningTips = hoverTooltip(
       .field(marksField)
       .find((m) => m.kind === "warning" && m.from <= at && at <= m.to);
     if (!mark || mark.kind !== "warning") return null;
+    // The warning as the list has it, with the same fixes: read here, before the tip is drawn.
+    if (storyVersion !== version) refresh();
+    const problem = currentProblems().find(
+      (found) => found.code === mark.code && found.from <= at && at <= found.to,
+    );
+    const fix = problem?.fix ?? mark.fix;
+    const cast = problem?.cast;
     return {
       pos: mark.from,
       end: mark.to,
@@ -430,28 +438,38 @@ const warningTips = hoverTooltip(
         const dom = document.createElement("div");
         dom.className = "warning-tip";
         const message = document.createElement("span");
-        message.textContent = mark.message;
+        message.textContent = problem?.message ?? mark.message;
         dom.append(message);
-        const fix = mark.fix;
-        if (fix) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "button";
-          button.textContent = fix.label ?? "Fix it";
-          // Pressed, the text keeps the focus; clicked (or Enter, Space, a screen reader), it fixes.
-          button.addEventListener("mousedown", (event) => event.preventDefault());
-          button.addEventListener("click", () => {
+        const button = (label: string, run: () => void) => {
+          const made = document.createElement("button");
+          made.type = "button";
+          made.className = "button";
+          made.textContent = label;
+          // Pressed, the text keeps the focus; clicked (or Enter, Space, a screen reader), it acts.
+          made.addEventListener("mousedown", (event) => event.preventDefault());
+          made.addEventListener("click", () => {
             if (tipView.state.readOnly) return;
-            tipView.dispatch({ changes: fix, userEvent: "input.fix" });
+            run();
             tipView.focus();
           });
-          dom.append(button);
-        }
+          dom.append(made);
+        };
+        if (fix)
+          button(fix.label ?? "Fix it", () =>
+            tipView.dispatch({ changes: fix, userEvent: "input.fix" }),
+          );
+        if (cast)
+          button(`Add ${cast} to the cast`, () =>
+            attempt(
+              () => setFullName(current(), cast, cast),
+              `${cast} can’t be added to the cast.`,
+            ),
+          );
         return { dom };
       },
     };
-    // The text changed: the tip, and the places its fix knows, go.
   },
+  // The text changed: the tip, and the places its fixes know, go.
   { hideOnChange: true },
 );
 
@@ -575,10 +593,12 @@ async function load(
   view.scrollDOM.scrollTop = 0;
   $("#welcome").hidden = true;
   document.body.removeAttribute("data-welcome");
+  storyCommands(true);
   for (const behind of ["#editor", "#scene-rail", "#side"]) $(behind).inert = false;
   overlaid();
   $("#file-name").textContent = file.name;
   refresh();
+  cursorMoved();
   // Ready to type, except on a touch screen, where that would bring up its keyboard unasked.
   if (!lockedOut && !matchMedia("(pointer: coarse)").matches) view.focus();
   // The lock in hand before the draft is kept under it.
@@ -1073,6 +1093,45 @@ function fixHere(): boolean {
 }
 
 /**
+ * Italics and bold, never inside a mark: `@*Ann*` is no name, and `(*softly*)` keeps its signs.
+ * Around a whole mark, or beside one, they go.
+ */
+function insideMark(state: EditorState, from: number, to: number): string | undefined {
+  const mark = state
+    .field(marksField)
+    .find(
+      (found) =>
+        (found.kind === "name" ||
+          found.kind === "direction" ||
+          found.kind === "sound" ||
+          found.kind === "vocal" ||
+          found.kind === "instruction" ||
+          found.kind === "pause" ||
+          found.kind === "page" ||
+          found.kind === "note" ||
+          found.kind === "frontmatter") &&
+        found.from < to &&
+        from < found.to &&
+        !(from <= found.from && found.to <= to),
+    );
+  if (!mark) return undefined;
+  const what: Record<string, string> = {
+    name: "a name",
+    direction: "a direction",
+    sound: "a sound",
+    vocal: "a character's sound",
+    instruction: "an instruction",
+    pause: "a pause",
+    page: "a page turn",
+    note: "a note",
+    frontmatter: "the front matter",
+  };
+  return `Italics and bold can’t go inside ${what[mark.kind] ?? "a mark"}: only on the words around it.`;
+}
+const italics = toggleEmphasis(false, insideMark, (message) => notice(message));
+const bold = toggleEmphasis(true, insideMark, (message) => notice(message));
+
+/**
  * The scene the cursor is in (from its heading or break to the next), or its chapter (from its
  * `#` heading to the next), moved past the one before or after; one step to undo.
  */
@@ -1302,7 +1361,8 @@ const narrow = window.matchMedia("(max-width: 1099px)");
 function overlaid(): void {
   const over = narrow.matches && prefs.side;
   const toggle = $("#preview-toggle");
-  toggle.setAttribute("aria-pressed", String(over));
+  // Its words say what it does; the side showing is marked for the eye alone.
+  toggle.toggleAttribute("data-on", over);
   toggle.textContent = over ? "Write" : "Preview";
   if (document.body.hasAttribute("data-welcome")) return;
   $(".manuscript").inert = over;
@@ -1475,11 +1535,11 @@ async function saveAs(): Promise<boolean> {
   if (!keepsFiles) {
     // Where a page can't keep a file, saving is a download.
     const content = text();
-    download(content, file.name);
+    download(content, suggestedName());
     saved(content);
     return true;
   }
-  const handle = await pickSaveTarget(file.name);
+  const handle = await pickSaveTarget(suggestedName());
   if (!handle) return false;
   // The new file is the story's from here: its name and handle go with what is kept, and back to
   // the old ones if it can't be written.
@@ -1580,6 +1640,8 @@ async function write(handle: FileSystemFileHandle): Promise<boolean> {
  * version first.
  */
 async function readAgain(disk: { text: string; modified: number }): Promise<void> {
+  // The file and the story agree again: saving by itself can go on.
+  autosaveStopped = false;
   await snapshot("Before the file was read again", text());
   file.saved = disk.text;
   file.savedAt = Date.now();
@@ -1610,7 +1672,10 @@ async function checkDisk(): Promise<void> {
       `${file.name} changed outside the Writer, so it was read again. Undo (Ctrl+Z) takes it back.`,
     );
   } else {
-    notice(`${file.name} changed outside the Writer. Saving will ask which to keep.`);
+    stopped(
+      `${file.name} changed outside the Writer. Save will ask which to keep.`,
+      "Not saved: changed on disk",
+    );
   }
 }
 window.addEventListener("focus", () => void checkDisk());
@@ -1623,6 +1688,10 @@ function saved(content: string, automatic = false): void {
   file.saved = content;
   file.savedAt = Date.now();
   autosaveStopped = false;
+  // A word about saving that no longer holds goes with it.
+  const box = $("#notice");
+  if (/changed outside|couldn’t be read|go-ahead|couldn’t be saved/.test(box.textContent ?? ""))
+    box.hidden = true;
   showSaveState();
   void keep();
   if (!automatic || Date.now() - versionAt > SNAPSHOT_EVERY) void snapshot("Saved", content);
@@ -1637,9 +1706,6 @@ function scheduleAutosave(): void {
   if (!prefs.autosave || !keepsFiles || !file.handle) return;
   autosaveTimer = setTimeout(() => void autosave(), 2000);
 }
-
-/** The change on disk last told about, so that it is told once. */
-let toldDisk = "";
 
 async function autosave(): Promise<void> {
   const handle = file.handle;
@@ -1666,16 +1732,14 @@ async function autosave(): Promise<void> {
     return;
   }
   if (check.kind === "stop") {
-    // Said once for each change on disk, not at every pause in typing.
-    const what = check.check;
-    const seen = `${file.id}:${what.kind === "changed" ? what.disk.modified : "unread"}`;
-    if (toldDisk !== seen)
-      notice(
-        what.kind === "changed"
-          ? `${file.name} changed outside the Writer, so it wasn’t saved automatically. Save will ask which to keep.`
-          : `${file.name} couldn’t be read, so it wasn’t saved automatically. Save will ask what to do.`,
-      );
-    toldDisk = seen;
+    // Shown beside the name for as long as it lasts; said once.
+    const changed = check.check.kind === "changed";
+    stopped(
+      changed
+        ? `${file.name} changed outside the Writer, so it isn’t saved automatically. Save will ask which to keep.`
+        : `${file.name} couldn’t be read, so it isn’t saved automatically. Save will ask what to do.`,
+      changed ? "Not saved: changed on disk" : "Not saved: can’t read the file",
+    );
     return;
   }
   if (check.kind !== "write" || handle !== file.handle) return;
@@ -1697,10 +1761,10 @@ async function autosave(): Promise<void> {
 
 /** Saving automatically stopped: said once, and shown beside the file's name until it saves. */
 let autosaveStopped = false;
-function stopped(message: string): void {
+function stopped(message: string, short = "Not saved: press Save"): void {
   const state = $("#save-state");
   state.dataset.state = "error";
-  state.textContent = "Not saved: press Save";
+  state.textContent = short;
   state.title = message;
   if (autosaveStopped) return;
   autosaveStopped = true;
@@ -1740,7 +1804,18 @@ const lock = new DraftLock(
   },
   () => keep(),
   () => void follow(),
+  () => void gained(),
 );
+
+/** The tab that wrote this story closed it: this one writes it now, from its last words. */
+async function gained(): Promise<void> {
+  lockedOut = false;
+  $("#elsewhere").hidden = true;
+  const draft = await draftById(file.id);
+  if (draft) await restore(draft);
+  else view.dispatch({ effects: editable.reconfigure(editability()) });
+  notice("The tab that was writing this story has closed it: it is written here now.");
+}
 
 /** A tab that only reads follows the one that writes: its words, a moment after it keeps them. */
 let following = Promise.resolve();
@@ -1906,7 +1981,14 @@ function insertAfterParagraph(line: string, select?: string): void {
 
 // Export: what the story becomes, as files.
 
-const baseName = () => file.name.replace(/\.(?:vxd|md|txt)$/i, "") || "story";
+/** The name to save under: the file's own, or for a new story never saved, its title's. */
+function suggestedName(): string {
+  const title = current().meta.title;
+  return /^untitled\.vxd$/i.test(file.name) && !file.handle && title && title !== "Untitled"
+    ? `${fileNameFor(title)}.vxd`
+    : file.name;
+}
+const baseName = () => suggestedName().replace(/\.(?:vxd|md|txt)$/i, "") || "story";
 
 /** Prints the book from a frame of its own, as a reader would see it. */
 function printBook(): void {
@@ -1990,7 +2072,7 @@ async function showDrafts(): Promise<void> {
   const drafts = await listDrafts();
   showList(
     "Recover a draft",
-    "Every story written here is kept in this browser as it was typed, saved or not, until you let it go.",
+    "Every story written here is kept in this browser as it was typed. One with changes never saved stays until you let it go; past a hundred, those saved and untouched for a month go, with their versions.",
     drafts.map((draft) => {
       const open = draft.id === file.id;
       const unsaved = !sameText(draft.text, draft.saved);
@@ -2063,6 +2145,25 @@ function goBack(kept: Version): void {
   view.focus();
 }
 
+/** The first `# heading` after the front matter, if it says `was`, says `now`. */
+function retitleHeading(was: string, now: string): void {
+  const doc = view.state.doc;
+  const start = doc.lineAt(Math.min(frontMatterEnd() ?? 0, doc.length)).number;
+  for (let number = start; number <= Math.min(doc.lines, start + 40); number++) {
+    const line = doc.line(number);
+    const heading = /^#[ \t]+(.*?)[ \t]*$/.exec(line.text);
+    if (!heading) continue;
+    if (heading[1] !== was) return;
+    const from = line.from + line.text.indexOf(was, 1);
+    view.dispatch({
+      changes: { from, to: from + was.length, insert: now },
+      userEvent: "input.edit",
+    });
+    refresh();
+    return;
+  }
+}
+
 /** The story's details, from its front matter, changed in a form rather than in YAML. */
 function showDetails(): void {
   const dialog = $<HTMLDialogElement>("#details");
@@ -2084,10 +2185,13 @@ function showDetails(): void {
         notice(`“${value}” isn’t a name: one word of letters, digits, - and _.`);
         continue;
       }
-      attempt(
+      const was = written(key);
+      const done = attempt(
         () => setMeta(current(), key, value || null),
         `The ${key} can’t be set to that as written.`,
       );
+      // A title heading the story as it was titled goes with the title.
+      if (done && key === "title" && was && value) retitleHeading(was, value);
     }
     view.focus();
   };
@@ -2194,13 +2298,10 @@ function showOutline(): void {
     scenes.reduce((last, scene, index) => (scene.from <= here ? index : last), -1),
   );
   const draw = () => {
-    const typed = filter.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const shown = scenes
-      .map((scene, index) => ({ scene, index }))
-      .filter(({ scene, index }) => {
-        const words = `${scene.name} ${within[index]}`.toLowerCase();
-        return typed.every((word) => words.includes(word));
-      });
+    const shown = rankScenes(scenes, within, filter.value).map((index) => ({
+      scene: scenes[index] as (typeof scenes)[number],
+      index,
+    }));
     if (!shown.some(({ index }) => index === active)) active = shown[0]?.index ?? -1;
     list.replaceChildren(
       ...shown.map(({ scene, index }) => {
@@ -2318,7 +2419,7 @@ const COMMANDS: Record<string, () => unknown> = {
   open,
   save,
   "save-as": saveAs,
-  download: () => download(text(), file.name),
+  download: () => download(text(), suggestedName()),
   format: () => tidy(false),
   "format-curly": () => tidy(true),
   undo: () => {
@@ -2359,11 +2460,11 @@ const COMMANDS: Record<string, () => unknown> = {
     view.focus();
   },
   italic: () => {
-    toggleEmphasis(false)(view);
+    italics(view);
     view.focus();
   },
   bold: () => {
-    toggleEmphasis(true)(view);
+    bold(view);
     view.focus();
   },
   who: () => tools.openSpeaker(passageAtCursor()),
@@ -2495,6 +2596,11 @@ document.addEventListener(
   (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
+    // With no story open, only what opens one.
+    if (onWelcome() && (key === "s" || key === "p" || event.shiftKey)) {
+      if (key === "s" || key === "p") event.preventDefault();
+      return;
+    }
     // The outline, focus, and every mark raw, wherever the keyboard is.
     if (key === "o" && event.shiftKey) {
       event.preventDefault();
@@ -2601,9 +2707,25 @@ $("#side-close").addEventListener("click", () => {
 
 // The welcome, for a first visit: open a file, start one, or begin from an example.
 
+/** What can be done on the welcome, with no story open: the rest waits for one. */
+const ON_WELCOME = new Set(["new", "open", "recover", "shortcuts"]);
+const onWelcome = () => document.body.hasAttribute("data-welcome");
+
+/** The commands that need a story: unavailable while the welcome shows, and available after. */
+function storyCommands(available: boolean): void {
+  for (const item of document.querySelectorAll<HTMLElement>(".menus [data-command]")) {
+    const command = item.dataset.command ?? "";
+    if (ON_WELCOME.has(command) || command.startsWith("recent:")) continue;
+    if (available) item.removeAttribute("aria-disabled");
+    else item.setAttribute("aria-disabled", "true");
+  }
+  $<HTMLButtonElement>("#save-button").disabled = !available;
+}
+
 function showWelcome(): void {
   $("#welcome").hidden = false;
   document.body.setAttribute("data-welcome", "");
+  storyCommands(false);
   for (const behind of ["#editor", "#scene-rail", "#side"]) $(behind).inert = true;
   $("#welcome-examples").replaceChildren(
     ...examples.map((example) => {

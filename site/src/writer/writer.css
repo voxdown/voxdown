@@ -179,6 +179,13 @@ body.writer {
   background: var(--tab);
   outline: none;
 }
+.menu-list [aria-disabled="true"] {
+  color: var(--quiet);
+  cursor: default;
+}
+.menu-list [aria-disabled="true"]:hover {
+  background: none;
+}
 .menu-list [role="menuitemcheckbox"][aria-checked="true"]::before {
   content: "✓";
   position: absolute;
@@ -274,14 +281,16 @@ body.writer {
   border-radius: 1px;
   background: var(--desk-edge);
 }
+/* The stretch on screen: a band with an edge on its left, never a line through a name. */
 .scene-rail-window {
   position: absolute;
   left: 6px;
   right: 6px;
   z-index: 1;
-  border: 1.5px solid color-mix(in srgb, var(--pencil) 55%, var(--desk-edge));
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--pencil) 8%, transparent);
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--pencil) 60%, var(--desk-edge));
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--pencil) 11%, transparent);
   cursor: grab;
 }
 .scene-rail-window:active {
@@ -368,7 +377,6 @@ body.writer {
   background: var(--pencil);
 }
 .scene-rail-window[data-thin] {
-  border: 0;
   background: color-mix(in srgb, var(--pencil) 24%, transparent);
 }
 .scene-rail-name {
@@ -486,11 +494,15 @@ body.writer {
 .workspace[data-side] .side {
   display: grid;
 }
+.side-head {
+  display: flex;
+  padding: 0 0.8rem;
+  border-bottom: 1px solid var(--rule);
+}
 .side-tabs {
   display: flex;
   gap: 0.2rem;
-  padding: 0 0.8rem;
-  border-bottom: 1px solid var(--rule);
+  min-width: 0;
 }
 .side-tab {
   background: none;
@@ -646,7 +658,7 @@ body.writer {
 /* Another tab writes the story: this one reads it. */
 /* The banner of a tab that only reads: the story's first line moves down from under it. */
 .manuscript:has(#elsewhere:not([hidden])) .cm-content {
-  padding-top: 4.6rem;
+  padding-top: 5.6rem;
 }
 .elsewhere button {
   flex: none;
@@ -974,7 +986,8 @@ body[data-welcome] #draft-state {
   transition: opacity 0.2s ease;
 }
 @media (prefers-reduced-motion: reduce) {
-  .writer[data-focus] .manuscript .cm-line:not(.in-focus) {
+  .writer[data-focus] .manuscript .cm-line:not(.in-focus),
+  .scene-rail {
     transition: none;
   }
 }
@@ -1457,7 +1470,7 @@ body[data-welcome] #draft-state {
 .preview-toggle {
   display: none;
 }
-.preview-toggle[aria-pressed="true"] {
+.preview-toggle[data-on] {
   background: var(--tab);
 }
 
@@ -1559,7 +1572,7 @@ body[data-welcome] #draft-state {
    than a box around each of its lines. */
 .side-sheet .linked {
   outline: none;
-  background: color-mix(in srgb, var(--pencil) 13%, transparent);
+  background: color-mix(in srgb, var(--pencil) 9%, transparent);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   border-radius: 3px;

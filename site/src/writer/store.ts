@@ -47,7 +47,7 @@ const RECENT = "recent";
 const CURRENT = "current";
 /** How many files Open recent lists, how many stories' drafts are kept, versions of each. */
 const KEEP = 8;
-const KEEP_DRAFTS = 30;
+const KEEP_DRAFTS = 100;
 /** All the versions of a story together, in characters (a 600 KB book kept 80 times). */
 const KEEP_TEXT = 50_000_000;
 const HOUR = 3_600_000;
@@ -176,8 +176,9 @@ export async function markSaved(id: string, content: string, modified: number): 
 }
 
 /**
- * Every story's draft, the latest change first. Beyond the limit, the oldest are let go, but only
- * those saved to their file: a draft with changes never saved stays until the writer lets it go.
+ * Every story's draft, the latest change first. Beyond a hundred, the oldest are let go, with their
+ * versions, but only those saved to their file and untouched for a month: a draft with changes
+ * never saved stays until the writer lets it go.
  */
 export async function listDrafts(): Promise<Draft[]> {
   try {
@@ -187,7 +188,9 @@ export async function listDrafts(): Promise<Draft[]> {
       draft.text.replace(/\r\n?/g, "\n") !== draft.saved.replace(/\r\n?/g, "\n");
     const kept: Draft[] = [];
     for (const draft of all) {
-      if (kept.length < KEEP_DRAFTS || unsaved(draft)) kept.push(draft);
+      // Let go only when many and long untouched: its versions go with it.
+      if (kept.length < KEEP_DRAFTS || unsaved(draft) || Date.now() - draft.changedAt < 30 * DAY)
+        kept.push(draft);
       else await forgetDraft(draft.id);
     }
     return kept;

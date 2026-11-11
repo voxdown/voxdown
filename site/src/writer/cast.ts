@@ -43,6 +43,8 @@ export function castPanel(
   const narrator = story.meta.narrator;
   const inCast = new Map(story.cast.map((member) => [member.handle.toLowerCase(), member]));
   const names = [...colors.keys()];
+  // The narrator first, whom the colours leave out: they read the rest, and the cast may say how.
+  if (!names.some((name) => name.toLowerCase() === narrator.toLowerCase())) names.unshift(narrator);
   // The narrator first, then the cast in its order, then everyone else the story names.
   names.sort((a, b) => rank(a) - rank(b));
   function rank(name: string): number {

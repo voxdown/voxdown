@@ -19,6 +19,8 @@ export class DraftLock {
   story: string | undefined;
   /** Lets go of the lock held, if any. */
   private release: (() => void) | undefined;
+  /** Stops waiting for a story another tab writes. */
+  private waiting: AbortController | undefined;
   private readonly channel =
     "BroadcastChannel" in window ? new BroadcastChannel("voxdown-writer") : null;
 
@@ -29,6 +31,8 @@ export class DraftLock {
     private readonly flush: () => Promise<void>,
     /** The tab that writes this tab's story kept it: this one can follow. */
     private readonly onKept: () => void = () => {},
+    /** The tab that wrote this tab's story closed it: this one writes it now. */
+    private readonly onGained: () => void = () => {},
   ) {
     this.channel?.addEventListener("message", (event: MessageEvent<Message>) => {
       const message = event.data;
@@ -65,7 +69,10 @@ export class DraftLock {
         .request(`${LOCK}:${id}`, take ? { steal: true } : { ifAvailable: true }, (lock) => {
           // Not to be had, or this tab opened another story meanwhile.
           if (!lock || this.story !== id) {
-            if (this.story === id) this.owner = false;
+            if (this.story === id) {
+              this.owner = false;
+              this.waitFor(id);
+            }
             resolve(false);
             return undefined;
           }
@@ -77,17 +84,50 @@ export class DraftLock {
           });
         })
         .catch(() => {
-          // Taken by another tab: this one reads it from now on.
+          // Taken by another tab: this one reads it from now on, and writes it again when that
+          // tab lets it go.
           if (this.story !== id || !this.owner) return;
           this.owner = false;
           this.release = undefined;
           this.onLost();
+          this.waitFor(id);
         });
     });
   }
 
-  /** No story open here any more: its lock goes. */
+  /**
+   * Waits in line for a story another tab writes: when that tab closes it (or the tab itself),
+   * this one writes it, without being asked.
+   */
+  private waitFor(id: string): void {
+    this.waiting?.abort();
+    const waiting = new AbortController();
+    this.waiting = waiting;
+    navigator.locks
+      .request(`${LOCK}:${id}`, { signal: waiting.signal }, (lock) => {
+        if (!lock || this.story !== id || this.owner) return undefined;
+        this.waiting = undefined;
+        this.owner = true;
+        this.onGained();
+        return new Promise<void>((done) => {
+          this.release = done;
+        });
+      })
+      .catch(() => {
+        // Stopped waiting (another story opened here), or taken again by another tab.
+        if (this.story === id && this.owner && !this.waiting) {
+          this.owner = false;
+          this.release = undefined;
+          this.onLost();
+          this.waitFor(id);
+        }
+      });
+  }
+
+  /** No story open here any more: its lock goes, and so does waiting for one. */
   private letGo(): void {
+    this.waiting?.abort();
+    this.waiting = undefined;
     this.release?.();
     this.release = undefined;
     this.owner = false;

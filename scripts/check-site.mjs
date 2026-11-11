@@ -322,6 +322,9 @@ const writer = await writerContext.newPage();
 watch(writer, "writer");
 await writer.goto(`${base}/writer/`);
 await writer.waitForSelector("#welcome:not([hidden])");
+// With no story open, what needs one waits for it.
+if ((await writer.getAttribute('.menus [data-command="save"]', "aria-disabled")) !== "true")
+  problems.push("writer: Save can be chosen on the welcome, with no story open");
 const dragonName = "the-dragon-who-would-not-roar.vxd";
 const dragon = readFileSync(join(site, "..", "examples", dragonName), "utf8");
 await writer.click(`.welcome-example[data-name="${dragonName}"]`);
@@ -548,7 +551,7 @@ await manyPage.evaluate(
       request.onsuccess = () => {
         const transaction = request.result.transaction("documents", "readwrite");
         const documents = transaction.objectStore("documents");
-        for (let i = 0; i < 36; i++)
+        for (let i = 0; i < 106; i++)
           documents.put({
             id: `old-${i}`,
             name: `story-${i}.vxd`,
@@ -573,12 +576,12 @@ const keptIds = await manyPage.evaluate(
       };
     }),
 );
-const lostUnsaved = Array.from({ length: 36 }, (_, i) => i).filter(
+const lostUnsaved = Array.from({ length: 106 }, (_, i) => i).filter(
   (i) => i % 2 && !keptIds.includes(`old-${i}`),
 );
 if (lostUnsaved.length)
   problems.push(`writer: ${lostUnsaved.length} drafts with unsaved changes were let go`);
-if (keptIds.length >= 36) problems.push("writer: saved drafts beyond the limit are never let go");
+if (keptIds.length >= 106) problems.push("writer: saved drafts beyond the limit are never let go");
 await many.close();
 console.log("writer: recovering a draft, going back to a version: ok");
 
@@ -1170,6 +1173,16 @@ await sync.keyboard.press("Control+z");
 await sync.waitForTimeout(900);
 if ((await draftIn(sync)).includes("on Windows."))
   problems.push("writer: Undo doesn't take back a file read again with other line endings");
+// Saving by itself stops when the file changed on disk, and says so beside the name until saved.
+await sync.keyboard.press("Control+End");
+await sync.keyboard.type(" More here.");
+await sync.evaluate(() => {
+  window.__disk.text += "\nAdded on the laptop.\n";
+  window.__disk.at += 5;
+});
+await sync.waitForTimeout(2800);
+if (!(await sync.textContent("#save-state"))?.includes("changed on disk"))
+  problems.push("writer: saving by itself stopped for a change on disk without saying so for long");
 await synced.close();
 console.log("writer: a file changed elsewhere, read again, compared: ok");
 
@@ -1211,6 +1224,21 @@ await author.keyboard.press("Control+k");
 if (!(await author.isVisible(".speaker-choice")))
   problems.push("writer: Ctrl+K at the start of a line with a mark finds no passage");
 await author.keyboard.press("Escape");
+// Italics never go inside a direction: the word found and selected, Ctrl+I says why not.
+const beforeItalics = await kept();
+await author.click(".cm-content");
+await author.keyboard.press("Control+f");
+await author.keyboard.type("proudly");
+await author.keyboard.press("Enter");
+await author.keyboard.press("Escape");
+await author.keyboard.press("Control+i");
+await settled();
+if (
+  (await kept()) !== beforeItalics ||
+  !(await author.textContent("#notice"))?.includes("can’t go inside")
+)
+  problems.push("writer: Ctrl+I put italics inside a direction");
+await author.keyboard.press("Control+Home");
 await author.keyboard.press("Control+f");
 if (!(await author.isVisible(".cm-search")))
   problems.push("writer: Ctrl+F doesn't open search and replace");
@@ -1512,6 +1540,16 @@ await first.click('#ask-buttons button[value="cancel"]');
 await first.waitForTimeout(300);
 if ((await first.evaluate(() => localStorage.getItem("__disk"))) !== diskBefore)
   problems.push("writer: a tab that only reads saved over the file");
+// The tab that writes closes: the one that reads writes the story from then on, its last words.
+await second.keyboard.type(" Written in the second tab before it closed.");
+await second.waitForTimeout(900);
+await second.close();
+await first
+  .waitForSelector("#elsewhere", { state: "hidden", timeout: 5000 })
+  .catch(() => problems.push("writer: the tab that reads doesn't write when the other closes"));
+await first.waitForTimeout(300);
+if (!(await first.locator(".cm-content").innerText()).includes("before it closed."))
+  problems.push("writer: taking over from a closed tab lost its last words");
 await tabs.close();
 console.log("writer: two tabs, a file changed on disk: ok");
 

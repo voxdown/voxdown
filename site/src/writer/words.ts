@@ -34,3 +34,19 @@ export function glimpse(source: string): { title?: string; words: string } {
   const words = body.length > 90 ? `${body.slice(0, 90).replace(/\s\S*$/, "")}…` : body;
   return { ...(title ? { title } : {}), words };
 }
+
+/**
+ * A file name from a story's title, as the writer would type it: its words and capitals kept, the
+ * signs a computer won't have in a file name left out.
+ */
+export function fileNameFor(title: string): string {
+  const name = title
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it takes out
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[.\s]+|[.\s]+$/g, "")
+    .slice(0, 80)
+    .trim();
+  return name || "Untitled";
+}

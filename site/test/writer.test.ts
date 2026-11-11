@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "voxdown";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, toggleEmphasis } from "../src/writer/emphasis";
+import { rankScenes } from "../src/writer/outline";
 import { afterParagraph, moveParagraph } from "../src/writer/paragraphs";
 import { nearestName, problems } from "../src/writer/problems";
 import { railAt, railPoints, railScenes, railY } from "../src/writer/rail";
@@ -13,7 +14,7 @@ import { SaveQueue, autosaveCheck, checkDisk, sameText } from "../src/writer/sav
 import { moveSection } from "../src/writer/sections";
 import { thinVersions } from "../src/writer/store";
 import { speechAt, speechOfMark } from "../src/writer/stretch";
-import { glimpse, listening, wordCount } from "../src/writer/words";
+import { fileNameFor, glimpse, listening, wordCount } from "../src/writer/words";
 
 describe("the scene rail's layout", () => {
   it("places scenes in proportion to the text, apart where there is room", () => {
@@ -382,6 +383,12 @@ describe("words", () => {
     expect(wordCount("It’s a well-known fact, n'est-ce pas? Ünïcode 42 ok")).toBe(9);
   });
 
+  it("makes a file name from a title, as written, without the signs a file can't have", () => {
+    expect(fileNameFor("The Night Ferry")).toBe("The Night Ferry");
+    expect(fileNameFor("What? A/B: “Yes” *now*")).toBe("What A B “Yes” now");
+    expect(fileNameFor("...")).toBe("Untitled");
+  });
+
   it("says how long they take to hear, never 60 minutes past an hour", () => {
     expect(listening(10)).toBe("4 s to hear");
     expect(listening(1500)).toBe("10 min to hear");
@@ -490,5 +497,30 @@ describe("moving a scene or a chapter", () => {
     expect(move(story, story.indexOf("Third"), at, 1)).toBeNull();
     const titled = `Title.\n\n${story}`;
     expect(move(titled, 2, starts(titled, ["# One", "# Two"]), 1)).toBeNull();
+  });
+});
+
+describe("going to a chapter or scene", () => {
+  const scenes = [
+    { name: "Chapter 3" },
+    { name: "Scene 30" },
+    { name: "Chapter 30" },
+    { name: "A visit" },
+    { name: "Chapter 31" },
+    { name: "A visit" },
+  ];
+  const within = ["", "Chapter 3", "", "Chapter 30", "", "Chapter 31"];
+  const names = (typed: string) => rankScenes(scenes, within, typed);
+
+  it("puts the name typed first, numbers matching whole", () => {
+    expect(names("Chapter 30")[0]).toBe(2);
+    expect(names("chapter 3")).toEqual([0, 1]);
+    expect(names("30")).toEqual([1, 2, 3]);
+  });
+
+  it("tells scenes of one name apart by their chapter", () => {
+    expect(names("visit")).toEqual([3, 5]);
+    expect(names("visit 31")).toEqual([5]);
+    expect(names("")).toEqual([0, 1, 2, 3, 4, 5]);
   });
 });

@@ -525,3 +525,12 @@ describe("pages and the stylesheet", () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe("a long direction", () => {
+  it("goes in the line, where it wraps, rather than over the first word", () => {
+    const long = "slowly, as if remembering something from long ago that still hurts";
+    const html = renderScript(parse(`@Ann (${long}) “I remember.” @Bob (dryly) “Do you.”`));
+    expect(html).toContain('class="vxd-direction vxd-direction-long"');
+    expect(html.match(/vxd-direction-long/g)?.length).toBe(1);
+  });
+});

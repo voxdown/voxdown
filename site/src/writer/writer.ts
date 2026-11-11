@@ -87,6 +87,7 @@ import { type Problem, problems } from "./problems";
 import { SceneRail, railScenes } from "./rail";
 import type { RenderAsk, RenderReply } from "./render-worker";
 import { SaveQueue, autosaveCheck, checkDisk as diskCheck, sameText } from "./saving";
+import { moveSection } from "./sections";
 import {
   type Draft,
   type Version,
@@ -364,6 +365,8 @@ function editorState(source: string, cursor: number): EditorState {
           { key: "Mod-.", run: fixHere },
           { key: "Mod-i", run: toggleEmphasis(false) },
           { key: "Mod-b", run: toggleEmphasis(true) },
+          { key: "Alt-Shift-ArrowUp", run: () => moveSectionHere(false, -1) },
+          { key: "Alt-Shift-ArrowDown", run: () => moveSectionHere(false, 1) },
           { key: "Alt-ArrowUp", run: (v) => moveParagraph(v, -1, frontMatterEnd()) },
           { key: "Alt-ArrowDown", run: (v) => moveParagraph(v, 1, frontMatterEnd()) },
         ]),
@@ -755,6 +758,7 @@ function place(): { cursor: number; top: number } {
 const RESCUE = "vxd-writer-rescue";
 
 function rescue(): void {
+  commitPending();
   if (!lock.owner || keptVersion === version) return;
   try {
     localStorage.setItem(
@@ -1068,6 +1072,31 @@ function fixHere(): boolean {
   return true;
 }
 
+/**
+ * The scene the cursor is in (from its heading or break to the next), or its chapter (from its
+ * `#` heading to the next), moved past the one before or after; one step to undo.
+ */
+function moveSectionHere(chapters: boolean, by: 1 | -1): boolean {
+  if (lockedOut) return true;
+  if (storyVersion !== version) refresh();
+  const starts = railScenes(current(), sceneNumbers(view.state))
+    .filter((scene) => !chapters || scene.chapter)
+    .map((scene) => scene.from);
+  const spec = moveSection(view.state, starts, by);
+  if (!spec) {
+    const what = chapters ? "chapter" : "scene";
+    notice(
+      starts.some((start) => start <= view.state.selection.main.head)
+        ? `No ${what} ${by < 0 ? "before" : "after"} this one to move it past.`
+        : `Put the cursor in a ${what} first: one starts at a ${chapters ? "# heading" : "heading or a scene break"}.`,
+    );
+    return true;
+  }
+  view.dispatch({ ...spec, scrollIntoView: true, userEvent: "move.section" });
+  refresh();
+  return true;
+}
+
 /** A warning's fix as the story is now: the same warning, over the same words, nearest `near`. */
 function fixNow(code: string, words: string, near: number): Problem["fix"] {
   if (storyVersion !== version) refresh();
@@ -1314,7 +1343,12 @@ function ask(message: string, buttons: Array<{ label: string; value: string; mai
 }
 
 /** A question answered in a few words ("" if the writer changes their mind). */
-async function askText(message: string, placeholder: string, action: string): Promise<string> {
+/** A question with a box to type in: what was typed, or null if the writer changed their mind. */
+async function askText(
+  message: string,
+  placeholder: string,
+  action: string,
+): Promise<string | null> {
   const input = $<HTMLInputElement>("#ask-input");
   const answered = ask(message, [
     { label: "Cancel", value: "cancel" },
@@ -1333,7 +1367,7 @@ async function askText(message: string, placeholder: string, action: string): Pr
   input.addEventListener("keydown", enter);
   const answer = await answered;
   input.removeEventListener("keydown", enter);
-  return answer === "ok" ? input.value.trim() : "";
+  return answer === "ok" ? input.value.trim() : null;
 }
 
 /** Whether the story may be put aside: saved, or the writer says so. */
@@ -1413,7 +1447,22 @@ async function openStory(opened: Opened): Promise<void> {
 }
 
 /** Saves to the story's file, or asks where. True once it is saved. */
+/**
+ * A field on the side changed but not yet left (a name in the cast, what it says about someone):
+ * made now, so that Save and leaving the page take it with them.
+ */
+function commitPending(): void {
+  const field = document.activeElement;
+  if (
+    (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) &&
+    field.closest("#side-sheet") &&
+    field.value !== field.defaultValue
+  )
+    field.blur();
+}
+
 async function save(): Promise<boolean> {
+  commitPending();
   // Only the tab that writes the story saves it: another would save what it last saw.
   if (!(await mayWrite())) return false;
   if (!file.handle) return saveAs();
@@ -1421,6 +1470,7 @@ async function save(): Promise<boolean> {
 }
 
 async function saveAs(): Promise<boolean> {
+  commitPending();
   if (!(await mayWrite())) return false;
   if (!keepsFiles) {
     // Where a page can't keep a file, saving is a download.
@@ -2230,6 +2280,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Mod+Shift+O", "Go to a chapter or scene"],
   ["F8", "Next warning (Shift+F8: the one before)"],
   ["Mod+.", "Fix the warning at the cursor"],
+  ["Alt+Shift+↑", "Move the scene up (Alt+Shift+↓: down)"],
   ["Mod+I", "Italics"],
   ["Mod+B", "Bold"],
   ["Mod+K", "Who says this passage"],
@@ -2279,12 +2330,18 @@ const COMMANDS: Record<string, () => unknown> = {
     view.focus();
   },
   find: () => openSearchPanel(view),
+  "scene-up": () => moveSectionHere(false, -1),
+  "scene-down": () => moveSectionHere(false, 1),
+  "chapter-up": () => moveSectionHere(true, -1),
+  "chapter-down": () => moveSectionHere(true, 1),
   goal: async () => {
     const answer = await askText(
       `Words to write in this sitting${prefs.goal ? ` (now ${prefs.goal.toLocaleString()})` : ""}. Empty or 0 for none.`,
       "500",
       "Set the goal",
     );
+    // Cancel or Escape leave the goal as it was; an empty answer takes it away.
+    if (answer === null) return;
     const wanted = Number.parseInt(answer.replace(/[^\d]/g, ""), 10);
     prefs.goal = Number.isFinite(wanted) && wanted > 0 ? wanted : 0;
     keepPrefs();

@@ -107,6 +107,10 @@ export const stylesheet = `
 }
 :where(.vxd) .vxd-name:has(+ .vxd-narration) { color: var(--vxd-muted); }
 :where(.vxd) .vxd-direction { display: inline-block; position: relative; width: 0; height: 1em; vertical-align: baseline; }
+:where(.vxd) .vxd-direction.vxd-direction-long { display: inline; position: static; width: auto; height: auto; }
+:where(.vxd) .vxd-direction.vxd-direction-long > span { position: static; white-space: normal; font-size: 0.8em; line-height: inherit; margin-right: 0.35em; }
+:where(.vxd) .vxd-direction.vxd-direction-long > span::before { content: "("; }
+:where(.vxd) .vxd-direction.vxd-direction-long > span::after { content: ")"; }
 :where(.vxd) .vxd-direction > span {
   position: absolute;
   left: 0;

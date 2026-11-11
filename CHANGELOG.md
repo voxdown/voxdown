@@ -47,6 +47,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - A warning's fix clicked after typing elsewhere is made where the warning is now; a pause or a note goes after the word it would split; the line being written stays clear of the window's foot and of the notices.
 - **Earlier versions** keeps the last twenty of the last ten minutes, then one every five minutes for the hour, and older ones however often the story is saved, within 50 million characters in all; **Compare** shows the words changed within a line, and a name changed all through a book line by line. **Go to** shows each scene's chapter; a crowded rail draws its scenes as ticks.
 - Typewriter scrolling, and a writing goal for the sitting. The status line says when the browser hasn't promised to keep the drafts, and a story only ever kept in the browser is reminded to be saved; where saving is a download, it says Downloaded.
+- Move a whole scene (Alt+Shift+↑/↓) or chapter (**Edit** menu) past the one before or after, as one step to undo. What is typed in the cast is saved by Save and kept on leaving the page, even before the field is left. Cancel leaves the writing goal as it was.
 - The site deploys only once the browser check passes; `pnpm check:all` runs every check.
 - The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings, emphasis, inserts, comparing and keeping versions, words, saving decisions and the save queue), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
 
@@ -54,6 +55,9 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - In a story longer than 30,000 characters, the marks move along with each change and are worked out afresh once typing pauses (`settleMarks`, `marksPending`, `FRESH_BELOW`): reading the whole story on every key took 110 ms at 100,000 words.
 - `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
 - Lines printed but not read aloud are easier to read, and a page turn's label is 11 px.
+
+**@voxdown/render**
+- A direction longer than 36 characters is written in the line, in brackets, where it wraps, rather than over the first word, where it ran off the page.
 
 **voxdown**
 - `setAbout(story, handle, about)` sets what the cast says about a character, or takes it out; a character not in the cast is added, and one written as a full name alone becomes a map that keeps it.

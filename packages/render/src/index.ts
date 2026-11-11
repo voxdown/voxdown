@@ -17,6 +17,8 @@ import {
 import { escapeHtml, inlineHtml, inlineHtmlPieces, safeUrl } from "./inline";
 import { stylesheet } from "./stylesheet";
 
+/** Directions longer than this many characters go in the line, not over its first word. */
+const LONG_DIRECTION = 36;
 export { stylesheet };
 export { PALETTE, characterColors } from "voxdown";
 export { escapeHtml, inlineHtml, safeUrl } from "./inline";
@@ -480,7 +482,9 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean, li
   // A direction its group's label already says isn't written again over each line.
   const direction =
     speech.direction && spoken && speech.direction !== groupSays(context.groups).direction
-      ? `<span class="vxd-direction" aria-label="${escapeHtml(`(${speech.direction})`)}"><span>${escapeHtml(speech.direction)}</span></span>`
+      ? // A long one is written in the line, in brackets, where it can wrap: over the words it
+        // would run off the page.
+        `<span class="vxd-direction${speech.direction.length > LONG_DIRECTION ? " vxd-direction-long" : ""}" aria-label="${escapeHtml(`(${speech.direction})`)}"><span>${escapeHtml(speech.direction)}</span></span>`
       : "";
   const words = ownPieces(speech, line)
     .map(([from, to]) => inlineOf(context, from, to))

@@ -10,6 +10,7 @@ import { afterParagraph, moveParagraph } from "../src/writer/paragraphs";
 import { nearestName, problems } from "../src/writer/problems";
 import { railAt, railPoints, railScenes, railY } from "../src/writer/rail";
 import { SaveQueue, autosaveCheck, checkDisk, sameText } from "../src/writer/saving";
+import { moveSection } from "../src/writer/sections";
 import { thinVersions } from "../src/writer/store";
 import { speechAt, speechOfMark } from "../src/writer/stretch";
 import { glimpse, listening, wordCount } from "../src/writer/words";
@@ -457,5 +458,37 @@ describe("saving", () => {
     await expect(second).rejects.toThrow("second");
     await expect(third).resolves.toBe("third");
     expect(done).toEqual(["first", "second", "third"]);
+  });
+});
+
+describe("moving a scene or a chapter", () => {
+  const story = "# One\n\nFirst.\n\n* * *\n\nSecond.\n\n# Two\n\nThird.";
+  const move = (doc: string, cursor: number, starts: number[], by: 1 | -1) => {
+    const state = EditorState.create({ doc, selection: EditorSelection.cursor(cursor) });
+    const spec = moveSection(state, starts, by);
+    if (!spec) return null;
+    const next = state.update(spec).state;
+    return { text: next.doc.toString(), at: next.selection.main.head };
+  };
+  const starts = (doc: string, signs: string[]) => signs.map((sign) => doc.indexOf(sign));
+
+  it("moves the scene the cursor is in past the next, the blank lines kept, the cursor with it", () => {
+    const done = move(story, story.indexOf("First"), starts(story, ["# One", "* * *", "# Two"]), 1);
+    expect(done?.text).toBe("* * *\n\nSecond.\n\n# One\n\nFirst.\n\n# Two\n\nThird.");
+    expect(done?.text.slice(done.at, done.at + 6)).toBe("First.");
+  });
+
+  it("moves the last chapter up, and gives the end of the story to the one now last", () => {
+    const done = move(story, story.indexOf("Third"), starts(story, ["# One", "# Two"]), -1);
+    expect(done?.text).toBe("# Two\n\nThird.\n\n# One\n\nFirst.\n\n* * *\n\nSecond.");
+    expect(done?.text.slice(done.at, done.at + 6)).toBe("Third.");
+  });
+
+  it("has nothing to move past at either end, nor before the first", () => {
+    const at = starts(story, ["# One", "# Two"]);
+    expect(move(story, story.indexOf("First"), at, -1)).toBeNull();
+    expect(move(story, story.indexOf("Third"), at, 1)).toBeNull();
+    const titled = `Title.\n\n${story}`;
+    expect(move(titled, 2, starts(titled, ["# One", "# Two"]), 1)).toBeNull();
   });
 });

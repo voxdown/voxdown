@@ -1013,6 +1013,27 @@ if (
   !(await autoPage.isHidden("#notice"))
 )
   problems.push("writer: switching Save automatically off shows it failing");
+// What the cast says, typed and saved without leaving the field, is in the file; typed and the
+// page reloaded at once, it is in the draft.
+await autoPage.click(".cm-content");
+await autoPage.keyboard.press("Control+End");
+await autoPage.keyboard.type("\n\n@Ann “Hello.”");
+await autoPage.waitForTimeout(600);
+await autoPage.click('.side-tab[data-tab="cast"]');
+const firstAbout = autoPage.locator(".cast-about").first();
+await firstAbout.fill("Reads it all, warmly.");
+await autoPage.keyboard.press("Control+s");
+await autoPage.waitForTimeout(600);
+if (!(await autoPage.evaluate(() => window.__files["auto.vxd"].includes("Reads it all, warmly."))))
+  problems.push("writer: Save left out what was typed in the cast without leaving the field");
+await autoPage.locator(".cast-about").first().fill("Reads it all, gently.");
+await autoPage.reload();
+await autoPage.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "auto.vxd",
+);
+await autoPage.waitForTimeout(400);
+if (!(await draftIn(autoPage)).includes("Reads it all, gently."))
+  problems.push("writer: a reload lost what was typed in the cast without leaving the field");
 await auto.close();
 console.log("writer: saving automatically: ok");
 
@@ -1200,6 +1221,18 @@ const wasFirst = order(await kept());
 await author.keyboard.press("Alt+ArrowDown");
 await settled();
 if (order(await kept()) === wasFirst) problems.push("writer: Alt+↓ didn't move the paragraph");
+// A whole scene moved past the next with Alt+Shift+↓, and back with Undo.
+const sceneOrder = (text) => text.indexOf("## The mountain") < text.indexOf("## The battle");
+await author.locator(".cm-line", { hasText: "The mountain" }).first().click();
+const sceneBefore = sceneOrder(await kept());
+await author.keyboard.press("Alt+Shift+ArrowDown");
+await settled();
+if (sceneOrder(await kept()) === sceneBefore)
+  problems.push("writer: Alt+Shift+↓ didn't move the scene");
+await author.keyboard.press("Control+z");
+await settled();
+if (sceneOrder(await kept()) !== sceneBefore)
+  problems.push("writer: Undo didn't move the scene back");
 await author.click('.side-tab[data-tab="cast"]');
 const king = author.locator('.cast-handle input[value="King"]');
 await king.fill("Monarch");
@@ -1348,6 +1381,13 @@ if (!(await maker.textContent("#counts"))?.includes("of 3)"))
   problems.push("writer: the writing goal isn't shown with the words written");
 if (!(await maker.textContent("#notice"))?.includes("goal is reached"))
   problems.push("writer: reaching the writing goal says nothing");
+// Cancel leaves the goal as it was.
+await maker.click("#view-menu-button");
+await maker.click('[data-command="goal"]');
+await maker.click('#ask-buttons button[value="cancel"]');
+await maker.waitForTimeout(300);
+if (!(await maker.textContent("#counts"))?.includes("of 3)"))
+  problems.push("writer: Cancel took the writing goal away");
 // Sides give each line with its cue, the end of the line before.
 await maker.click(".cm-content");
 await maker.keyboard.press("Control+End");

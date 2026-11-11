@@ -211,6 +211,9 @@ describe("dashes", () => {
     expect(done).toContain("(softly--slowly)");
     expect(done).toContain("“Wait—now.”");
     expect(done).toContain("[door--slam]");
+    expect(format("See http://a.b/x--y and www.c.d/e--f, then--go.\n", { dashes: true })).toBe(
+      "See http://a.b/x--y and www.c.d/e--f, then–go.\n",
+    );
     expect(format(done, { dashes: true })).toBe(done);
     // Not asked for, left alone.
     expect(format(text)).toContain("1990--1995");

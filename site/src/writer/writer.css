@@ -431,6 +431,50 @@ body.writer > .statusbar {
 }
 .manuscript .editor .cm-scroller {
   padding: 2.4rem clamp(1rem, 5vw, 4rem) 40vh;
+  /* The story's own scrollbar instead (scrollbar.ts): the browser's can't keep to the pointer. */
+  scrollbar-width: none;
+}
+.manuscript .editor .cm-scroller::-webkit-scrollbar {
+  display: none;
+}
+.manuscript .editor {
+  position: relative;
+}
+.story-scrollbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  z-index: 2;
+  touch-action: none;
+}
+.story-scrollbar[hidden] {
+  display: none;
+}
+.story-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  width: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--quiet) 45%, transparent);
+  transition: width 0.12s, background-color 0.12s;
+}
+.story-scrollbar:hover .story-scrollbar-thumb,
+.story-scrollbar[data-held] .story-scrollbar-thumb {
+  width: 9px;
+  background: color-mix(in srgb, var(--quiet) 75%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-scrollbar-thumb {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .story-scrollbar-thumb {
+    background: ButtonText;
+  }
 }
 
 /* The welcome, for a first visit. */
@@ -2047,7 +2091,8 @@ body[data-welcome] .manuscript .editor {
 }
 
 /* Export: what to export, by what it is for. */
-.export-dialog {
+.export-dialog,
+.shape-dialog {
   border: 1px solid var(--desk-edge);
   border-radius: 10px;
   padding: 1rem 1.2rem;
@@ -2057,10 +2102,12 @@ body[data-welcome] .manuscript .editor {
   max-height: 88vh;
   box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
 }
-.export-dialog::backdrop {
+.export-dialog::backdrop,
+.shape-dialog::backdrop {
   background: rgb(20 25 35 / 0.2);
 }
-.export-dialog h2 {
+.export-dialog h2,
+.shape-dialog h2 {
   margin: 0 0 0.8rem;
   font: 600 1.05rem / 1.3 var(--story);
 }
@@ -2131,7 +2178,7 @@ body[data-welcome] .manuscript .editor {
   margin: 0.15rem 0;
 }
 
-/* Find the chapters: what was found, each a choice. */
+/* Find the chapters: what was found, each a choice, in the export dialog's dress. */
 .shape-dialog {
   width: min(36rem, calc(100vw - 2rem));
 }
@@ -2150,8 +2197,21 @@ body[data-welcome] .manuscript .editor {
   font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
-.notice-action {
+/* A button in a notice, the notice's colours turned about: readable on its dark ground. */
+.notice .notice-action {
   margin-left: 0.6rem;
+  padding: 0.15rem 0.6rem;
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--paper);
+  font-size: 0.82rem;
+}
+.notice .notice-action:hover {
+  filter: brightness(0.94);
+}
+.notice .notice-action:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 2px;
 }
 
 /* The toolbar: what a writer reaches for most, one click away (View › Toolbar). */

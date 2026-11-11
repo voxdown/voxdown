@@ -142,7 +142,8 @@ export function wordsIn(
   // Cut where one passage ends and the next begins, a quote's own mark can be left at an edge:
   // a closing one first (`” said Alice`), an opening one last. It stays outside the signs.
   leading.push(/^[”»](?=\s|$)/u, /^’(?=\s)/u);
-  trailing.push(/[“«„]$/u);
+  // And the next speaker's name and direction, where the narration before them was cut.
+  trailing.push(/[“«„]$/u, /@[\p{L}\p{N}_'’-]*\s*(?:\([^()\n]*\)\s*)?$/u);
   while (leading.some((pattern) => cut(pattern, true)));
   while (trailing.some((pattern) => cut(pattern, false)));
   // A quote's words up to where its passage was cut: its opening mark outside the signs too.
@@ -217,14 +218,18 @@ export function toggleEmphasis(
       }
       return undefined;
     };
-    /** Emphasis of this kind in the line holding `at`, in the document's places. */
-    const kindAround = (at: number) => {
+    /** Emphasis in the line holding `at`, in the document's places: of this kind, or any. */
+    const emphasisAround = (at: number) => {
       const line = state.doc.lineAt(at);
       if (!/[*_]/.test(line.text)) return [];
-      return emphasisIn(line.text)
-        .filter((found) => found.strong === strongly)
-        .map((found) => ({ from: line.from + found.from, to: line.from + found.to }));
+      return emphasisIn(line.text).map((found) => ({
+        from: line.from + found.from,
+        to: line.from + found.to,
+        strong: found.strong,
+      }));
     };
+    const kindAround = (at: number) =>
+      emphasisAround(at).filter((found) => found.strong === strongly);
     /** A stretch of one line, cut where a passage ends, each part narrowed to its words. */
     const words = (from: number, to: number, exact: boolean) => {
       const cuts = (edges?.(state, from, to) ?? []).filter((cut) => cut > from && cut < to);
@@ -273,10 +278,17 @@ export function toggleEmphasis(
       const written = signs[0] as string;
       let from = piece.from;
       let to = piece.to;
+      // A stretch of the other kind that the piece starts or ends inside is taken in whole: signs
+      // never cross (`**bold *start** more*`); one inside, or around it, nests as it should.
+      for (const other of emphasisAround(piece.from)) {
+        if (other.strong === strongly) continue;
+        if (other.from < from && from < other.to && other.to < to) from = other.from;
+        if (from < other.from && other.from < to && to < other.to) to = other.to;
+      }
       const inner: ChangeSpec[] = [];
       for (const found of kindAround(piece.from)) {
-        if (found.to <= piece.from || found.from >= piece.to) continue;
-        if (found.from <= piece.from && piece.to <= found.to)
+        if (found.to <= from || found.from >= to) continue;
+        if (found.from <= from && to <= found.to)
           return [
             { from: found.from, to: found.from + width },
             { from: found.to - width, to: found.to },

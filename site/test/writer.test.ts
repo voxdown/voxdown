@@ -334,6 +334,27 @@ describe("emphasis", () => {
     }
   });
 
+  it("leaves the next speaker's name outside the signs, never inside the narration's", () => {
+    const line = "@Alice “I dreamt of you,” said Alice softly. @Bob “Did you?” said Bob.";
+    const view = editor(line, 0, line.length);
+    // The passages as the editor reads them: Alice's quote, the narration, Bob's quote, the
+    // narration after it (Bob's name read with his quote, or with the narration before it).
+    const cuts = [line.indexOf("”") + 1, line.indexOf("“Did"), line.lastIndexOf("”") + 1];
+    toggleEmphasis(false, undefined, undefined, () => cuts)(view);
+    expect(view.state.doc.toString()).toBe(
+      "@Alice “*I dreamt of you,*” *said Alice softly.* @Bob “*Did you?*” *said Bob.*",
+    );
+    view.destroy();
+  });
+
+  it("takes in a stretch of bold that the selection starts inside, so signs never cross", () => {
+    const text = "**bold start** and more.";
+    const view = editor(text, text.indexOf("start"), text.length);
+    toggleEmphasis(false)(view);
+    expect(view.state.doc.toString()).toBe("***bold start** and more.*");
+    view.destroy();
+  });
+
   it("over several lines, adds signs only where they are missing, and says why where nothing can", () => {
     const view = editor("*One.*\n\nTwo.", 0, 12);
     toggleEmphasis(false)(view);

@@ -168,6 +168,25 @@ describe("chapters found in other books", () => {
     expect(made).not.toContain("By Herman Melville");
   });
 
+  it("leave the front matter whole, an ebook's Project Gutenberg header straight after it", () => {
+    // As the Writer reads Project Gutenberg's EPUB in: its front matter, then the header.
+    const story = parse(
+      '---\nvoxdown: 1.1\ntitle: "Moby Dick; Or, The Whale"\nauthor: Herman Melville\nlanguage: en\ncast:\n---\n## The Project Gutenberg eBook of Moby Dick; Or, The Whale\n\nThis eBook is for the use of anyone anywhere.\n\n\\*\\*\\* START OF THE PROJECT GUTENBERG EBOOK MOBY DICK; OR, THE WHALE \\*\\*\\*\n\n# MOBY-DICK; or, THE WHALE.\n\n## CHAPTER 1. Loomings.\n\nCall me Ishmael.\n\n\\*\\*\\* END OF THE PROJECT GUTENBERG EBOOK MOBY DICK; OR, THE WHALE \\*\\*\\*\n\nThe licence.\n',
+    );
+    const shape = findShape(story);
+    for (const choice of [{ notices: true }, { notices: true, details: true, chapters: true }]) {
+      const made = shapeStory(story, shape, choice);
+      const read = parse(made);
+      expect(read.meta.language).toBe("en");
+      expect(read.frontMatter?.range.from).toBe(0);
+      // The front matter's last line still its own, and nothing of it in the story's text.
+      expect(made).toMatch(/\ncast:\n---\n/);
+      expect(made.indexOf("voxdown: 1.1")).toBe(made.lastIndexOf("voxdown: 1.1"));
+      expect(made).not.toContain("Project Gutenberg");
+      expect(made).toContain("Call me Ishmael.");
+    }
+  });
+
   it("write a title in capitals as a reader would", () => {
     expect(titleCased("MOBY-DICK; or, THE WHALE")).toBe("Moby-Dick; or, The Whale");
     expect(titleCased("THE WIND IN THE WILLOWS")).toBe("The Wind in the Willows");

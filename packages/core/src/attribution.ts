@@ -149,7 +149,7 @@ export function taggedName(story: Story, quote: Quote): string | undefined {
   const after = source.slice(quote.to, lineEnd < 0 ? source.length : lineEnd);
   // A name, one or two words, a title before it kept with it: `Mara`, `Old Tom`, `Mr. Fox`.
   const name =
-    "((?:(?:Mr|Mrs|Ms|Mx|Dr|St)\\.?\\s+)?\\p{Lu}[\\p{L}’'-]*(?:\\s+\\p{Lu}[\\p{L}’'-]*)?)";
+    "((?:(?:Old|Young|Little)\\s+)?(?:(?:Mr|Mrs|Ms|Mx|Dr|St)\\.?\\s+)?\\p{Lu}[\\p{L}’'-]*(?:\\s+\\p{Lu}[\\p{L}’'-]*)?)";
   // `said Tom`, `said the March Hare`, `Tom said`, `the March Hare said`.
   const behind = new RegExp(
     `^[\\s,.!?—–-]*(?:(?:${SAYING})\\s+(?:the\\s+)?${name}|(?:[Tt]he\\s+)?${name}\\s+(?:${SAYING})\\b)`,

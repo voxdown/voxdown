@@ -114,6 +114,11 @@ describe("the quotes of a story", () => {
       "March Hare",
     ]);
     expect(castMemberNamed(story, "March Hare")).toBe("Hare");
+    // A title after an "Old": the whole name, title and all.
+    const old = parse("“What,” whispered Old Mr. Brown.\n");
+    expect(taggedName(old, quotesOf(old)[0] as ReturnType<typeof quotesOf>[number])).toBe(
+      "Old Mr. Brown",
+    );
   });
 });
 

@@ -1040,6 +1040,41 @@ if (drift > 0.04)
   problems.push(
     `writer: a long book's height changed ${Math.round(drift * 100)}% as it was scrolled through (${heights.join(", ")}): the scrollbar's thumb leaves the pointer`,
   );
+// And the story's own scrollbar, dragged as a writer drags it, at a writer's pace: the thumb
+// under the pointer all the way, and the foot of the track the end of the book (the browser's
+// own reached half of it).
+{
+  const thumb = await longPage.locator(".story-scrollbar-thumb").boundingBox();
+  const track = await longPage.locator(".story-scrollbar").boundingBox();
+  const x = thumb.x + thumb.width / 2;
+  const from = thumb.y + thumb.height / 2;
+  const to = track.y + track.height - thumb.height / 2;
+  let worst = 0;
+  await longPage.mouse.move(x, from);
+  await longPage.mouse.down();
+  for (let step = 1; step <= 40; step++) {
+    const y = from + ((to - from) * step) / 40;
+    await longPage.mouse.move(x, y);
+    await longPage.waitForTimeout(16);
+    if (step % 8 === 0) {
+      const now = await longPage.locator(".story-scrollbar-thumb").boundingBox();
+      worst = Math.max(worst, Math.abs(now.y + now.height / 2 - y));
+    }
+  }
+  await longPage.mouse.up();
+  await longPage.waitForTimeout(400);
+  const reached = await longPage.evaluate(() => {
+    const scroller = document.querySelector(".cm-scroller");
+    return scroller.scrollTop / (scroller.scrollHeight - scroller.clientHeight);
+  });
+  if (worst > 4 || reached < 0.99)
+    problems.push(
+      `writer: dragging a long book's scrollbar, the thumb was ${Math.round(worst)} px from the pointer and the foot of the track reached ${Math.round(reached * 100)}%`,
+    );
+  await longPage.evaluate(() => {
+    document.querySelector(".cm-scroller").scrollTop = 0;
+  });
+}
 await longPage.click(".cm-content");
 await longPage.keyboard.press("Control+End");
 await longPage.waitForTimeout(800);

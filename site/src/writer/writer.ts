@@ -120,6 +120,7 @@ import type { RenderAsk, RenderReply } from "./render-worker";
 import { Rescue, tabStory as tabStoryIn } from "./rescue";
 import { SaveFlow } from "./save-flow";
 import { sameText } from "./saving";
+import { StoryScrollbar } from "./scrollbar";
 import { searchCount } from "./search-count";
 import { moveSection } from "./sections";
 import { sidesHtml, sidesText } from "./sides";
@@ -485,6 +486,7 @@ function editorState(source: string, cursor: number): EditorState {
           setTimeout(() => offerShape(), 300);
         if (update.docChanged || update.selectionSet) showEmphasisState(update.state);
         if (update.heightChanged) tools.moved();
+        if (update.heightChanged || update.geometryChanged) scrollbar.show();
         if (update.selectionSet && !update.docChanged) keepPlaceSoon();
         const raw = update.state.field(showMarksField);
         if (raw !== prefs.marks) {
@@ -563,6 +565,9 @@ const warningTips = hoverTooltip(
 
 const view = new EditorView({ parent: $("#editor"), state: editorState("", 0) });
 const rail = new SceneRail($("#scene-rail"), view);
+/** The story's own scrollbar, held to the pointer (scrollbar.ts). */
+const scrollbar = new StoryScrollbar($("#editor"), () => view);
+scrollbar.attach();
 // The editor's listeners use it only once the story changes, after it is made.
 const tools: StretchTools = new StretchTools({
   view,
@@ -2214,8 +2219,10 @@ function pasteShaped(event: ClipboardEvent, editor: EditorView): boolean {
     if (to <= front) return false;
     from = Math.min(front + 1, to);
   }
-  const text = pastedStory(html);
-  if (text === undefined) return false;
+  const plain = event.clipboardData?.getData("text/plain") ?? "";
+  const pasted = pastedStory(html, plain);
+  if (pasted === undefined) return false;
+  const { text } = pasted;
   // A heading's words selected (a new story's title, as it opens): what is pasted takes the
   // heading's whole line where it brings headings or paragraphs of its own, never `# # The Book`.
   const line = editor.state.doc.lineAt(from);
@@ -2236,6 +2243,21 @@ function pasteShaped(event: ClipboardEvent, editor: EditorView): boolean {
     userEvent: "input.paste",
     scrollIntoView: true,
   });
+  // Signs written as text (`\@`, `\[`, `\{`): the page's own, or VoxDown the writer meant as
+  // marks. The other way, one click away.
+  if (pasted.escaped && plain)
+    notice("Pasted as a page's text: its @, [ and { are words, not marks.", false, {
+      label: "Paste as VoxDown",
+      run: () => {
+        if (editor.state.sliceDoc(from, from + insert.length) !== insert) return;
+        editor.dispatch({
+          changes: { from, to: from + insert.length, insert: plain },
+          selection: EditorSelection.cursor(from + plain.length),
+          userEvent: "input.paste",
+        });
+        editor.focus();
+      },
+    });
   return true;
 }
 
@@ -2938,6 +2960,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Alt+Shift+↑", "Move the scene up (Alt+Shift+↓: down)"],
   ["Mod+I", "Italics"],
   ["Mod+B", "Bold"],
+  ["Mod+Shift+V", "Paste the text alone: VoxDown as written, a page without its formatting"],
   ["F9", "Hear it read aloud, to the end of the scene"],
   ["Mod+K", "Who says this passage"],
   ["Mod+Shift+K", "The next quote with no speaker"],

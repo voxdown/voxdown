@@ -10,6 +10,9 @@ import { type TextChange, applyChanges, setFullName, setMeta } from "./edit";
 import type { Story } from "./model";
 import { parse } from "./parse";
 
+/** A front matter at the top of a file, with the line break after it. */
+const FRONT = /^\uFEFF?---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/;
+
 /** A stretch of the source. */
 export type Span = { from: number; to: number };
 
@@ -40,7 +43,8 @@ const START =
   /\\?\*\\?\*\\?\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG E(?:BOOK|TEXT)\b[^\n]*?\\?\*\\?\*\\?\*/i;
 const END =
   /\\?\*\\?\*\\?\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG E(?:BOOK|TEXT)\b|^End of (?:the )?Project Gutenberg(?:'s)? /im;
-const HEADER = /^[#\s]*The Project Gutenberg e(?:Book|Text)\b/im;
+/** Its header's first line: spaces or a heading's `#` before it, never a line break (the front matter's own). */
+const HEADER = /^[ \t#]*The Project Gutenberg e(?:Book|Text)\b/im;
 
 const NUMBER = "(?:[0-9]{1,3}|[IVXLCDM]{1,8}|[A-Za-z]+(?:[- ][A-Za-z]+)?)";
 /** A chapter's title, alone on its line. */
@@ -388,16 +392,24 @@ export function shapeStory(story: Story, shape: Shape, choice: ShapeChoice): str
     kept.push(change);
   }
   let text = applyChanges(story.source, kept);
+  // The title, author and cast are the front matter's: worked out on it alone, put back on top.
+  // Reading the whole book again for each (a voice for every sailor) held the page for seconds.
+  const inFront = (edit: (front: Story) => TextChange[]) => {
+    const head = FRONT.exec(text)?.[0] ?? "";
+    const front = parse(head);
+    const changes = edit(front);
+    if (changes.length) text = applyChanges(head, changes) + text.slice(head.length);
+  };
   if (choice.details) {
     for (const [key, value] of [
       ["title", shape.title],
       ["author", shape.author],
     ] as const) {
       if (!value) continue;
-      const now = parse(text);
-      const was = now.meta[key];
-      if (was && was !== "Untitled") continue;
-      text = applyChanges(text, setMeta(now, key, value));
+      inFront((front) => {
+        const was = front.meta[key];
+        return was && was !== "Untitled" ? [] : setMeta(front, key, value);
+      });
     }
     // A new story's `# Untitled` heading: the book's title now.
     if (shape.title) text = text.replace(/^# Untitled[ \t]*$/m, `# ${shape.title}`);
@@ -405,11 +417,13 @@ export function shapeStory(story: Story, shape: Shape, choice: ShapeChoice): str
   if (choice.lines) {
     const added = new Set<string>();
     for (const line of shape.lines) {
-      const now = parse(text);
-      if (added.has(line.handle) || now.cast.some((member) => member.handle === line.handle))
-        continue;
+      if (added.has(line.handle)) continue;
       added.add(line.handle);
-      text = applyChanges(text, setFullName(now, line.handle, line.fullName));
+      inFront((front) =>
+        front.cast.some((member) => member.handle === line.handle)
+          ? []
+          : setFullName(front, line.handle, line.fullName),
+      );
     }
   }
   return text;

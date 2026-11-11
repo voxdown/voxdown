@@ -633,6 +633,11 @@ function dashChanges(story: Story): TextChange[] {
       .filter((token) => token.type === "text" && !token.plain)
       .map((token) => token.range),
     ...(story.frontMatter ? [story.frontMatter.range] : []),
+    // A web address written bare: its hyphens are its own (`http://a.b/x--y`).
+    ...[...source.matchAll(/\S*(?::\/\/|www\.)\S*/g)].map((found) => ({
+      from: found.index,
+      to: found.index + found[0].length,
+    })),
   ])
     skip.fill(1, range.from, range.to);
   const changes: TextChange[] = [];

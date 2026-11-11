@@ -22,6 +22,8 @@ export type FormatOptions = {
   quotes?: "keep" | "curly";
   /** The language for curly quotes, such as `en`, `de` or `fr`. Defaults to the front matter's. */
   language?: string;
+  /** `true` writes `--` as an en dash (–) and `---` as an em dash (—), as typographers do. */
+  dashes?: boolean;
 };
 
 /** Formats a file. An already formatted file comes back unchanged. */
@@ -40,6 +42,10 @@ function formatNow(source: string, options: FormatOptions): string {
     if (options.quotes === "curly") {
       const story = parse(text);
       text = guarded(text, story, byLine(text, quoteChanges(story, options.language)));
+    }
+    if (options.dashes) {
+      const story = parse(text);
+      text = guarded(text, story, byLine(text, dashChanges(story)));
     }
     if (options.spacing !== false) {
       // Line by line. Tidying can turn a line into a heading or a scene break, which then wants
@@ -80,7 +86,12 @@ function shapeOf(story: Story): string {
 
 /** Every character but spaces, with quotation marks and apostrophes as one: what may never change. */
 function wordsOf(text: string): string {
-  return text.replace(/["'“”‘’„‚«»‹›「」『』]/g, "'").replace(/\s+/g, "");
+  // Quotation marks straight or curly, and dashes as hyphens or as dashes, are the same words.
+  return text
+    .replace(/["'“”‘’„‚«»‹›「」『』]/g, "'")
+    .replace(/---/g, "—")
+    .replace(/--/g, "–")
+    .replace(/\s+/g, "");
 }
 
 /** Changes in runs, one per line: a quote's marks are decided together. */
@@ -608,6 +619,35 @@ const CUT_SHORT =
   /^(?:tis|twas|twere|twill|twould|em|cause|cos|til|till|bout|round|cept|fore|neath|gainst|mongst|ere)(?![\p{L}\p{N}])/iu;
 
 /** Where marks, directions, sounds, notes, instructions and images are: never reworded. */
+/**
+ * Two hyphens an en dash, three an em dash, in the story's words: never in the front matter, a
+ * mark, a sound, a note, an instruction, a group's line or a link, nor a line of hyphens alone (a
+ * scene break), nor four hyphens or more.
+ */
+function dashChanges(story: Story): TextChange[] {
+  const source = story.source;
+  const skip = new Uint8Array(source.length);
+  for (const range of [
+    ...markRanges(story),
+    ...lexedTokens(source)
+      .filter((token) => token.type === "text" && !token.plain)
+      .map((token) => token.range),
+    ...(story.frontMatter ? [story.frontMatter.range] : []),
+  ])
+    skip.fill(1, range.from, range.to);
+  const changes: TextChange[] = [];
+  for (const found of source.matchAll(/(?<![-\\])-{2,3}(?!-)/g)) {
+    const at = found.index;
+    if (skip[at]) continue;
+    const lineFrom = source.lastIndexOf("\n", at - 1) + 1;
+    const lineEnd = source.indexOf("\n", at);
+    const line = source.slice(lineFrom, lineEnd < 0 ? source.length : lineEnd);
+    if (/^[\s\-–—*_]*$/u.test(line)) continue;
+    changes.push({ from: at, to: at + found[0].length, insert: found[0].length === 2 ? "–" : "—" });
+  }
+  return changes;
+}
+
 function markRanges(story: Story): Array<{ from: number; to: number }> {
   const ranges = allItems(story)
     .filter((item) => item.kind !== "speech")

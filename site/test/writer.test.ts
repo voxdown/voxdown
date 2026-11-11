@@ -290,6 +290,50 @@ describe("emphasis", () => {
     one.destroy();
   });
 
+  it("takes away what it put in, whatever space or mark the selection picked up with the words", () => {
+    for (const [start, end] of [
+      [11, 19], // "for him " with the space a drag takes
+      [10, 31], // " for him to come home"
+    ] as const) {
+      const view = editor("She waited for him to come home.", start, end);
+      toggleEmphasis(false)(view);
+      expect(view.state.doc.toString()).toMatch(/\*for him[^*]*\*/);
+      toggleEmphasis(false)(view);
+      expect(view.state.doc.toString()).toBe("She waited for him to come home.");
+      view.destroy();
+    }
+    const marked = editor("[door slams] He left.", 0, 21);
+    toggleEmphasis(false)(marked);
+    expect(marked.state.doc.toString()).toBe("[door slams] *He left.*");
+    toggleEmphasis(false)(marked);
+    expect(marked.state.doc.toString()).toBe("[door slams] He left.");
+    marked.destroy();
+  });
+
+  it("makes one stretch of italics over italics it runs into, and takes away those it is inside", () => {
+    const view = editor("Already *partly* emphasised", 0, 12);
+    toggleEmphasis(false)(view);
+    expect(view.state.doc.toString()).toBe("*Already partly* emphasised");
+    view.destroy();
+    const inside = editor("A *very quiet* word", 4, 8);
+    toggleEmphasis(false)(inside);
+    expect(inside.state.doc.toString()).toBe("A very quiet word");
+    inside.destroy();
+  });
+
+  it("gives each passage its own signs, where a selection runs from one speaker into another", () => {
+    const line = "@Alice “I dreamt of you,” said Alice softly.";
+    // The editor's passages: Alice's quote, then the narrator's words; cut after the closing
+    // mark, or before it, as the editor may read the quote's end.
+    for (const cut of [line.indexOf("”") + 1, line.indexOf("”")]) {
+      const view = editor(line, 0, line.length);
+      toggleEmphasis(false, undefined, undefined, () => [cut])(view);
+      expect(view.state.doc.toString()).toBe("@Alice “*I dreamt of you,*” *said Alice softly.*");
+      toggleEmphasis(false, undefined, undefined, () => [cut + 1])(view);
+      view.destroy();
+    }
+  });
+
   it("over several lines, adds signs only where they are missing, and says why where nothing can", () => {
     const view = editor("*One.*\n\nTwo.", 0, 12);
     toggleEmphasis(false)(view);

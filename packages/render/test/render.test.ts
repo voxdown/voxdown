@@ -42,6 +42,19 @@ const plain = (text: string) =>
     .replace(/[*_]/g, "")
     .replace(/\s+/g, "");
 
+describe("the script's labels", () => {
+  it("are inline, so that a line never breaks between a label and its words", () => {
+    // An inline block is a place to break a line: a label was left at one line's end, its words
+    // at the next's start. Nothing between the label and the words is a space either.
+    expect(stylesheet).toMatch(/\.vxd-name \{\n {2}display: inline;/);
+    expect(stylesheet).toMatch(/\.vxd-direction \{ display: inline;/);
+    const html = renderScript(parse("@Ann (gently) “Hush now.”"), { header: false });
+    expect(html).toMatch(
+      />Ann<\/span><span[^>]*><span class="vxd-direction"[^>]*><span>gently<\/span><\/span>“Hush/,
+    );
+  });
+});
+
 describe("the book's title, subtitle and author", () => {
   it("follow a title the story opens with as its heading, rather than going", () => {
     const front = "---\ntitle: The Review\nsubtitle: A Story\nauthor: A. Teller\n---\n\n";

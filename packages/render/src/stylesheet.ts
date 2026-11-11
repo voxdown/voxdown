@@ -100,8 +100,10 @@ export const stylesheet = `
     var(--vxd-direction-line) 0 100% / 0.36em 0.09em repeat-x,
     var(--vxd-tint) content-box;
 }
+/* Labels are inline, not inline blocks: a line breaks around an inline block, which left a label
+   at the end of one line and its words at the start of the next. */
 :where(.vxd) .vxd-name {
-  display: inline-block;
+  display: inline;
   font: 600 0.62em/1 var(--vxd-ui-font);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -110,7 +112,7 @@ export const stylesheet = `
   vertical-align: 0.18em;
 }
 :where(.vxd) .vxd-name:has(+ .vxd-narration) { color: var(--vxd-muted); }
-:where(.vxd) .vxd-direction { display: inline-block; position: relative; width: 0; height: 1em; vertical-align: baseline; }
+:where(.vxd) .vxd-direction { display: inline; position: relative; vertical-align: baseline; }
 :where(.vxd) .vxd-direction.vxd-direction-long { display: inline; position: static; width: auto; height: auto; }
 :where(.vxd) .vxd-direction.vxd-direction-long > span { position: static; white-space: normal; font-size: 0.8em; line-height: inherit; margin-right: 0.35em; }
 :where(.vxd) .vxd-direction.vxd-direction-long > span::before { content: "("; }
@@ -118,7 +120,9 @@ export const stylesheet = `
 :where(.vxd) .vxd-direction > span {
   position: absolute;
   left: 0;
-  bottom: 1.05em;
+  /* Just over the line's capitals, from the top of the inline's box (whatever the typeface's
+     height), and inside the line's own room: a paragraph's first line clips what rises above it. */
+  bottom: calc(100% - 0.15em);
   font: italic 0.66em/1 var(--vxd-ui-font);
   color: var(--vxd-direction);
   white-space: nowrap;

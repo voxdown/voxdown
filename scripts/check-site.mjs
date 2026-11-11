@@ -131,6 +131,16 @@ await settle();
 if (await page.locator("#output .linked").count())
   problems.push("linking: a story just opened already has a marked place");
 const speech = page.locator("#output .vxd-speech:not(.vxd-narration)").nth(3);
+/** A click on a passage's words, as a writer clicks: on its first line, not the middle of the box
+ * a passage wrapped over two lines makes, which can fall between them. */
+const clickWords = async (passage) => {
+  await passage.scrollIntoViewIfNeeded();
+  const at = await passage.evaluate((element) => {
+    const rect = element.getClientRects()[0];
+    return { x: rect.left + Math.min(rect.width / 2, 30), y: rect.top + rect.height / 2 };
+  });
+  await page.mouse.click(at.x, at.y);
+};
 // The words alone, without the direction label drawn above them; tried again should the view
 // be drawn anew meanwhile.
 let said = "";
@@ -148,7 +158,7 @@ for (let tries = 0; ; tries++) {
     await settle();
   }
 }
-await speech.click();
+await clickWords(speech);
 const active = await cursorLine();
 if (!active.includes(said))
   problems.push(`linking: a click on “${said}” put the cursor on “${active}”`);
@@ -170,8 +180,7 @@ if (!(await row.evaluate((element) => element.classList.contains("linked"))))
 // A click far down the right page glides the editor to that place, and it ends up in view.
 await page.click('.tab[data-tab="script"]');
 const far = page.locator("#output .vxd-speech:not(.vxd-narration)").last();
-await far.scrollIntoViewIfNeeded();
-await far.click();
+await clickWords(far);
 await page.waitForTimeout(1200);
 const inView = await page.evaluate(() => {
   const node = window.getSelection()?.anchorNode;

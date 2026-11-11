@@ -1,6 +1,7 @@
 import { EditorState, type Extension, type Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { type Speech, type Story, curlQuotes, parse, quotationMarks } from "voxdown";
+import { smartPunctuation } from "./dashes";
 import { FRESH_BELOW } from "./decorations";
 
 /**
@@ -245,7 +246,7 @@ export function smartQuotes(): Extension {
 const ELIDED = /(^|[\s([{—–-])‘((?:twas|tis|em|n|cause|til|round|bout|ere)|\d+s?)$/iu;
 
 const smartQuoteInput = EditorView.inputHandler.of((view, from, to, text) => {
-  if (view.state.readOnly) return false;
+  if (view.state.readOnly || !smartPunctuation(view.state)) return false;
   // Typed, the ‘ came before the word was known: once the word ends it becomes ’.
   if (/^[\s,.;:!?'’]$/u.test(text) && from === to) {
     const line = view.state.doc.lineAt(from);

@@ -51,6 +51,8 @@ const $ = <T extends HTMLElement>(selector: string) => document.querySelector(se
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 let running: AbortController | undefined;
+/** What the last naming said, and the quotes it held back: there again when the dialog opens. */
+let lastNaming: { said: string; held: Node[] } | undefined;
 /** A run the writer went back to writing beside: closing the dialog doesn't stop it. */
 let behind = false;
 
@@ -119,6 +121,11 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   $("#ai-connect-how").hidden = false;
   progress.textContent = "";
   result.replaceChildren();
+  // The last naming's result, finished while the writer wrote on: still to be read.
+  if (mode === "speakers" && lastNaming) {
+    progress.textContent = lastNaming.said;
+    result.replaceChildren(...lastNaming.held);
+  }
   second.hidden = true;
   go.disabled = false;
   connect.hidden = true;
@@ -236,6 +243,7 @@ async function nameSpeakers(
   running?.abort();
   running = new AbortController();
   behind = false;
+  lastNaming = undefined;
   result.replaceChildren();
   if (only?.length === 0) {
     progress.textContent = "No quote there waits for a speaker.";
@@ -348,9 +356,19 @@ async function nameSpeakers(
       }
       result.append(list);
     }
+    lastNaming = { said: progress.textContent ?? "", held: [...result.childNodes] };
+    // Written on while it worked: what it did, as the dialog says it, the dialog there to open.
     if (changes.length)
       context.notice(
-        `${plural(given - keptOwn, "speaker")} given ${ai === "tags" ? "by their dialogue tags" : "by AI"}${keptOwn ? `, ${keptOwn} of yours kept` : ""}${held.length ? `, ${held.length} held back` : ""}: Ctrl+Z takes them back.`,
+        [
+          `${plural(givenNow, "speaker")} given ${ai === "tags" ? "by their dialogue tags" : "by AI"}${joined.length ? `, ${joined.join(", ")} joining the cast` : ""}.`,
+          keptOwn ? `${plural(keptOwn, "quote")} you gave meanwhile kept.` : "",
+          moved ? `${plural(moved, "quote")} on lines you changed left as they are.` : "",
+          held.length ? `${plural(held.length, "quote")} held back.` : "",
+          "Ctrl+Z takes them back; Edit › Name the speakers with AI… lists them.",
+        ]
+          .filter(Boolean)
+          .join(" "),
       );
     else if (behind) context.notice(progress.textContent ?? "");
   } catch (error) {

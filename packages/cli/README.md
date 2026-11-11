@@ -61,6 +61,7 @@ Formats each file in place and prints the names of the files it changed. It trim
 - `--check` writes nothing. It lists the files that would change and exits 1 if there are any, which suits a CI step.
 - `--stdout` prints the result instead of writing it.
 - `--quotes curly` turns straight quotation marks into curly ones, in the story's language, or in the one you give with `--language de`.
+- `--dashes` writes `--` as an en dash (–) and `---` as an em dash (—). A scene break's `---`, the front matter, marks, sounds and links keep their hyphens.
 - `--no-names` leaves names as written. `--no-spacing` leaves spaces and blank lines as written.
 
 ### `vxd render`: HTML

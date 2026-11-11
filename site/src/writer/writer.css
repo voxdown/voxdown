@@ -21,6 +21,7 @@ body.writer {
 }
 /* Until a story is open, there is no file to name or save, and nothing to show beside it. */
 .writer[data-welcome] .document,
+.writer[data-welcome] .preview-toggle,
 .writer[data-welcome] .save-button {
   visibility: hidden;
 }
@@ -439,7 +440,8 @@ body.writer > .statusbar {
   z-index: 3;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* Centred where it fits; from the top where it doesn't (a phone), so all of it can be scrolled to. */
+  justify-content: safe center;
   gap: 0.6rem;
   padding: 2rem clamp(1.2rem, 8vw, 6rem);
   background: var(--desk);
@@ -634,6 +636,9 @@ body.writer > .statusbar {
 .side-sheet .vxd > :not(header) {
   content-visibility: auto;
   contain-intrinsic-size: auto 2.6em;
+  /* What such a part paints is clipped to it: a direction's label over its first line rises a
+     little above it. */
+  overflow-clip-margin: 0.75em;
 }
 .sheet-note {
   color: var(--quiet);

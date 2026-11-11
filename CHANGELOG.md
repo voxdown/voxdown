@@ -59,6 +59,10 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Word and EPUB exports keep the subtitle (Word's Subtitle style, an ebook's `title-type` subtitle), read back as the story's.
 - **Pasting from a web page, Word or Google Docs** keeps its paragraphs, headings, italics and bold, written as the story writes them (`*`, `**`, `#`); a paste with Ctrl+Shift+V brings the text alone, as before.
 - **Edit › Find the chapters…** sets out a book come in as plain text (pasted, a `.txt`, an ebook): its chapter titles as headings (a title alone, or heading its first paragraph), its list of contents kept in the book only, Project Gutenberg's notices taken out, its title and author from its title page, and lines set out as a play (`STUBB. Avast!`) given to their speakers, who join the cast. Each is a choice, and all of it one step to undo. After a whole book is pasted, or an ebook or a text file opened, the Writer offers it. Moby-Dick pasted from Project Gutenberg's page: 139 chapters, its contents, the notices, its title and author, and the 42 lines of its play-like chapter given to 25 voices.
+- **Dashes as you type**: two hyphens make an en dash (–), three an em dash (—), and Backspace straight after gives the hyphens back. A line of hyphens alone (a scene break, the front matter's edge), the front matter, a sound's label, an instruction and a link keep them. **View › Curly quotes and dashes as I type** turns both off. **Edit › Tidy, with curly quotes and dashes** writes the story's existing ones so.
+- Italics and bold over a selection that runs from one speaker into another give each passage its own signs (`@Alice “*I dreamt of you,*” *said Alice softly.*`), where they were refused; the same keys again always take away what they put in, whatever space or mark the selection picked up; and italics running into italics make one stretch, never signs within signs.
+- After **Keep writing**, the notice says exactly what was given, what was left because its line changed, and who joined the cast; the dialog shows it again when it opens. Giving the first half of a speech broken by its tag a direction says that the half after the tag is said as it was, with **Both quotes** to say it so too.
+- The welcome scrolls on a phone (its headline was under the bar), Preview waits for a story, "for now" is said only of a story with no file of its own, the keyboard is back in the story after an export, and a notice about a place goes once the cursor goes elsewhere.
 - The tests' time budgets scale with how fast the computer is at the moment, and are tried again before failing, so a busy machine passes and a quadratic step still fails; asynchronous tests wait for what they expect rather than a fixed time. The menus are walked from the keyboard in the site check.
 - A long story's script, book and counts are drawn in a worker, and the Writer reads the story the editor read rather than reading it again; Enter and a typed quote read only the paragraphs near them. The side follows the cursor in a long story and after a jump from the rail.
 - On a narrow window, **Preview** and **Write** switch between the side and the manuscript, and what is covered can't be reached until it shows. A long file name never pushes the bar past the window.
@@ -105,6 +109,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - The Writer has unit tests (the rail's layout, moving paragraphs, the passage under the pointer, the warnings, emphasis, inserts, comparing and keeping versions, words, saving decisions and the save queue), and the site check drives two tabs, a reload straight after typing, a file changed on disk, slow saves, a dropped file, recovering drafts and versions, working offline, narrow windows and long file names, and typing and Enter in a 100,000-word book (150 ms a key at most).
 
 **@voxdown/editor**
+- `smartDashes()`: two hyphens an en dash, three an em dash, as typed, with Backspace to give them back; `setSmartPunctuation` turns them and the curly quotes off and on.
 - A long story's scrollbar follows the pointer: the height guessed for what isn't drawn yet counts the story's blank lines at the height they're drawn (a paragraph's gap, not a whole line) and its rows as long as its own prose wraps them. Moby-Dick was guessed a fifth too tall, so dragging the scrollbar's thumb to the bottom of its track reached three quarters of the book; it is now within 1% from the start.
 - In a story longer than 30,000 characters, the marks move along with each change and are worked out afresh once typing pauses (`settleMarks`, `marksPending`, `FRESH_BELOW`): reading the whole story on every key took 110 ms at 100,000 words.
 - `<voxdown-editor>` undoes and redoes, and finds and replaces (Ctrl/Cmd+F). Setting its `value` starts a new undo history.
@@ -116,11 +121,13 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - A group that keeps its lines from being heard or printed (`::: {book only}`, `{audio only}`, `{hidden}`) says so on its line, and its lines not heard look it, as a paragraph's own do.
 
 **@voxdown/render**
+- The script's speaker and direction labels are inline, so a line never breaks between a label and its words (a direction was left at the end of one line, its quote at the start of the next).
 - A book that opens with its title as a heading keeps its subtitle and author, under that heading; they were left out.
 - The script view reads closer: the room above a line for a direction's label is kept only in paragraphs that have one.
 - A direction longer than 20 characters is written in the line, in brackets, where it wraps, rather than over the first word, where it ran past the line.
 
 **voxdown**
+- `format(source, { dashes: true })` (and `vxd fmt --dashes`): `--` an en dash, `---` an em dash, in the story's words only.
 - `quotesOf` says whether each quote closes on its line (`closed`); `giveQuotes` changes the name in a quote's own mark instead of adding another.
 - `linesToCsv(rows, columns)` writes the columns given, such as `line` for where each part is.
 - `setAbout(story, handle, about)` sets what the cast says about a character, or takes it out; a character not in the cast is added, and one written as a full name alone becomes a map that keeps it.

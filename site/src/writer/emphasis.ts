@@ -139,8 +139,17 @@ export function wordsIn(
     /^%%.*?%%/u,
   ];
   const trailing = [/\s+$/u, /\[[^\]\n]*\]$/u, /\{[^}\n]*\}$/u, /%%.*?%%$/u];
+  // Cut where one passage ends and the next begins, a quote's own mark can be left at an edge:
+  // a closing one first (`” said Alice`), an opening one last. It stays outside the signs.
+  leading.push(/^[”»](?=\s|$)/u, /^’(?=\s)/u);
+  trailing.push(/[“«„]$/u);
   while (leading.some((pattern) => cut(pattern, true)));
   while (trailing.some((pattern) => cut(pattern, false)));
+  // A quote's words up to where its passage was cut: its opening mark outside the signs too.
+  const opener = PAIRS[text[0] ?? ""];
+  if (opener && !text.slice(1).includes(opener) && /\p{L}/u.test(text.slice(1))) cut(/^./u, true);
+  const last = text.at(-1) ?? "";
+  if (/[”»]/.test(last) && !/[“«„]/.test(text)) cut(/.$/u, false);
   // A whole quote: its words, inside its marks. Not two quotes with words between them.
   const close = PAIRS[text[0] ?? ""];
   if (close && text.length > 2 && text.endsWith(close)) {
@@ -167,6 +176,8 @@ export function toggleEmphasis(
   refuse?: (state: EditorState, from: number, to: number) => string | undefined,
   /** Says why nothing was done. */
   tell?: (message: string) => void,
+  /** Where one passage ends and the next begins within `from`–`to`: each gets its own signs. */
+  edges?: (state: EditorState, from: number, to: number) => number[],
 ) {
   return (view: EditorView): boolean => {
     const { state } = view;
@@ -185,26 +196,45 @@ export function toggleEmphasis(
     };
     // Bold has two signs or more on each side, italics one or three.
     const has = (count: number) => (strongly ? count >= 2 : count % 2 === 1);
-    /** The signs already around `from`–`to`, just outside the words or selected with them. */
+    /**
+     * The signs already around `from`–`to`: just outside the words, selected with them, or
+     * selected on one side only (`for him* `, as a drag picks it up). Their changes to take
+     * them away.
+     */
     const signsAround = (from: number, to: number): ChangeSpec[] | undefined => {
+      let a = from;
+      let b = to;
+      while (a < b && /[*_]/.test(state.sliceDoc(a, a + 1))) a++;
+      while (b > a && /[*_]/.test(state.sliceDoc(b - 1, b))) b--;
+      if (a === b) return undefined;
       for (const written of signs) {
         const char = written[0] as string;
-        if (has(run(from, true, char)) && has(run(to, false, char)))
+        if (has(run(a, true, char)) && has(run(b, false, char)))
           return [
-            { from: from - width, to: from },
-            { from: to, to: to + width },
-          ];
-        if (
-          to - from > 2 * width &&
-          state.sliceDoc(from, from + width) === written &&
-          state.sliceDoc(to - width, to) === written
-        )
-          return [
-            { from, to: from + width },
-            { from: to - width, to },
+            { from: a - width, to: a },
+            { from: b, to: b + width },
           ];
       }
       return undefined;
+    };
+    /** Emphasis of this kind in the line holding `at`, in the document's places. */
+    const kindAround = (at: number) => {
+      const line = state.doc.lineAt(at);
+      if (!/[*_]/.test(line.text)) return [];
+      return emphasisIn(line.text)
+        .filter((found) => found.strong === strongly)
+        .map((found) => ({ from: line.from + found.from, to: line.from + found.to }));
+    };
+    /** A stretch of one line, cut where a passage ends, each part narrowed to its words. */
+    const words = (from: number, to: number, exact: boolean) => {
+      const cuts = (edges?.(state, from, to) ?? []).filter((cut) => cut > from && cut < to);
+      const stops = [from, ...cuts.sort((x, y) => x - y), to];
+      const out: { from: number; to: number }[] = [];
+      for (let at = 0; at + 1 < stops.length; at++) {
+        const found = wordsIn(state, stops[at] as number, stops[at + 1] as number);
+        if (found) out.push(found);
+      }
+      return out.length || !exact ? out : [{ from, to }];
     };
     /** Where the signs go for a range: its word, its words, or each of its lines' words. */
     const piecesOf = (range: SelectionRange): { from: number; to: number }[] => {
@@ -214,13 +244,11 @@ export function toggleEmphasis(
       }
       const first = state.doc.lineAt(range.from);
       const last = state.doc.lineAt(range.to);
-      if (first.number === last.number)
-        return [wordsIn(state, range.from, range.to) ?? { from: range.from, to: range.to }];
+      if (first.number === last.number) return words(range.from, range.to, true);
       const pieces = [];
       for (let number = first.number; number <= last.number; number++) {
         const line = state.doc.line(number);
-        const words = wordsIn(state, Math.max(line.from, range.from), Math.min(line.to, range.to));
-        if (words) pieces.push(words);
+        pieces.push(...words(Math.max(line.from, range.from), Math.min(line.to, range.to), false));
       }
       return pieces;
     };
@@ -236,6 +264,43 @@ export function toggleEmphasis(
       tell?.("There are no words here for italics or bold.");
       return true;
     }
+    /**
+     * The signs put around a piece: over emphasis of the same kind that it runs into, one pair
+     * around the whole (`*Already partly* emphasised`, never signs within signs); inside one,
+     * that emphasis taken away.
+     */
+    const wrap = (piece: { from: number; to: number }): ChangeSpec[] => {
+      const written = signs[0] as string;
+      let from = piece.from;
+      let to = piece.to;
+      const inner: ChangeSpec[] = [];
+      for (const found of kindAround(piece.from)) {
+        if (found.to <= piece.from || found.from >= piece.to) continue;
+        if (found.from <= piece.from && piece.to <= found.to)
+          return [
+            { from: found.from, to: found.from + width },
+            { from: found.to - width, to: found.to },
+          ];
+        from = Math.min(from, found.from);
+        to = Math.max(to, found.to);
+        inner.push(
+          { from: found.from, to: found.from + width },
+          { from: found.to - width, to: found.to },
+        );
+      }
+      // Signs already at the new ends stay; those within go.
+      const kept = inner.filter(
+        (change) =>
+          (change as { from: number }).from !== from && (change as { to: number }).to !== to,
+      );
+      const opens = inner.some((change) => (change as { from: number }).from === from);
+      const closes = inner.some((change) => (change as { to: number }).to === to);
+      return [
+        ...(opens ? [] : [{ from, insert: written }]),
+        ...kept,
+        ...(closes ? [] : [{ from: to, insert: written }]),
+      ];
+    };
     let index = 0;
     view.dispatch(
       state.changeByRange((range) => {
@@ -250,13 +315,7 @@ export function toggleEmphasis(
               changes: { from, insert: written + written },
               range: EditorSelection.cursor(from + width),
             };
-          const set = ChangeSet.of(
-            there ?? [
-              { from, insert: written },
-              { from: to, insert: written },
-            ],
-            state.doc.length,
-          );
+          const set = ChangeSet.of(there ?? wrap({ from, to }), state.doc.length);
           return {
             changes: set,
             range: EditorSelection.cursor(set.mapPos(range.head, range.head <= from ? 1 : -1)),
@@ -264,29 +323,32 @@ export function toggleEmphasis(
         }
         // Taken away if every piece has them, else put around those that don't.
         const found = mine.map((piece) => signsAround(piece.from, piece.to));
-        const changes: ChangeSpec[] = found.every(Boolean)
+        const removing = found.every(Boolean);
+        const changes: ChangeSpec[] = removing
           ? found.flatMap((there) => there ?? [])
-          : mine.flatMap((piece, at) =>
-              found[at]
-                ? []
-                : [
-                    { from: piece.from, insert: signs[0] as string },
-                    { from: piece.to, insert: signs[0] as string },
-                  ],
-            );
+          : mine.flatMap((piece, at) => (found[at] ? [] : wrap(piece)));
         const set = ChangeSet.of(changes, state.doc.length);
-        // The words stay selected: on one line without the signs put in, as for a word; over
-        // several, with them, so that the same keys take them away again.
-        const inward =
-          mine.length === 1 &&
-          state.doc.lineAt(range.from).number === state.doc.lineAt(range.to).number;
+        // The words stay selected: on one line exactly the words the signs went around (so the
+        // same keys take them away again), over several the whole, signs and all.
+        const only = mine.length === 1 ? mine[0] : undefined;
+        const oneLine = state.doc.lineAt(range.from).number === state.doc.lineAt(range.to).number;
+        if (only && oneLine) {
+          const from = set.mapPos(only.from, 1);
+          const to = set.mapPos(only.to, -1);
+          return {
+            changes: set,
+            range:
+              range.anchor <= range.head
+                ? EditorSelection.range(from, to)
+                : EditorSelection.range(to, from),
+          };
+        }
         const forward = range.anchor <= range.head;
-        const lower = inward ? 1 : -1;
         return {
           changes: set,
           range: EditorSelection.range(
-            set.mapPos(range.anchor, forward ? lower : -lower),
-            set.mapPos(range.head, forward ? -lower : lower),
+            set.mapPos(range.anchor, forward ? -1 : 1),
+            set.mapPos(range.head, forward ? 1 : -1),
           ),
         };
       }),

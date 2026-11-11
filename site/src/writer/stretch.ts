@@ -51,7 +51,7 @@ export type StretchContext = {
    */
   scope?: (at: number) => Scope | undefined;
   /** A word to the writer: a quote that went along with the one given, say. */
-  notice?: (message: string) => void;
+  notice?: (message: string, action?: { label: string; run: () => void }) => void;
   /** Said to a screen reader: what an edit did, which a sighted writer sees in the text. */
   announce?: (message: string) => void;
   /** The directions the story uses, for the picker's list. */
@@ -551,6 +551,27 @@ export class StretchTools {
         this.context.announce?.(
           direction ? `Said ${direction} now.` : "The direction is taken out.",
         );
+      // A speech broken by its tag: the quote after the tag carries the direction on (§5.6), so
+      // the core kept it as it was with `@()`. Said, with the other way one click away.
+      const kept = changes.filter((change) => /@\(\)\s?/.test(change.insert));
+      if (done && direction && kept.length && this.context.notice) {
+        const { view } = this.context;
+        this.context.notice(
+          `“${direction}” is this quote’s alone: the one after its tag is said as it was (@()).`,
+          {
+            label: "Both quotes",
+            run: () => {
+              const line = view.state.doc.lineAt(view.state.selection.main.head);
+              const at = line.text.indexOf("@() ");
+              if (at < 0) return;
+              this.context.apply(
+                [{ from: line.from + at, to: line.from + at + 4, insert: "" }],
+                "The quote after the tag can’t be said so too here.",
+              );
+            },
+          },
+        );
+      }
       if (done || changes.length === 0) this.closePopover(true);
     };
     form.addEventListener("submit", (event) => {

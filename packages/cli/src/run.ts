@@ -402,6 +402,7 @@ async function fmt({ io, values, files }: Context): Promise<number> {
   if (flag(values, "no-spacing")) options.spacing = false;
   const quotes = stringValue(values, "quotes");
   if (quotes === "curly" || quotes === "keep") options.quotes = quotes;
+  if (flag(values, "dashes")) options.dashes = true;
   const language = stringValue(values, "language");
   if (language !== undefined) options.language = language;
 
@@ -822,7 +823,8 @@ const COMMANDS: Record<string, Command> = {
     action: check,
   },
   fmt: {
-    usage: "vxd fmt <files…> [--check] [--stdout] [--quotes curly] [--language xx] [--no-names]",
+    usage:
+      "vxd fmt <files…> [--check] [--stdout] [--quotes curly] [--dashes] [--language xx] [--no-names]",
     summary: "Tidy files, without changing who says what",
     about: [
       "Formats each file in place and lists the files it changed. Spaces are trimmed and collapsed,",
@@ -833,6 +835,7 @@ const COMMANDS: Record<string, Command> = {
       "vxd fmt story.vxd",
       "vxd fmt --check chapters/*.vxd",
       "vxd fmt story.vxd --quotes curly --stdout",
+      "vxd fmt book.vxd --quotes curly --dashes",
     ],
     fails: "--check found files to format",
     files: "many",
@@ -846,6 +849,10 @@ const COMMANDS: Record<string, Command> = {
         type: "string",
         values: ["curly", "keep"],
         help: "curly turns straight quotation marks into curly ones. Default keep.",
+      },
+      dashes: {
+        type: "boolean",
+        help: "Write -- as an en dash (–) and --- as an em dash (—), never a scene break's ---.",
       },
       language: {
         type: "string",

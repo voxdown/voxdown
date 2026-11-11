@@ -1,6 +1,7 @@
 import { EditorState, type Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { completions } from "./complete";
+import { smartDashes, smartPunctuationField } from "./dashes";
 import { type PreviewOptions, livePreview, setShowMarks, showMarksField } from "./decorations";
 import { lineJoin, markEnter, noteEnter, quoteBackspace, quoteEnter, smartQuotes } from "./quotes";
 import { scriptTheme } from "./theme";
@@ -65,7 +66,9 @@ export function scriptEditor(options: ScriptEditorOptions): Extension {
     ...(options.smartQuotes === false
       ? []
       : [
+          smartPunctuationField,
           smartQuotes(),
+          Prec.high(smartDashes()),
           Prec.high(noteEnter),
           Prec.high(markEnter),
           Prec.high(quoteEnter),
@@ -118,5 +121,6 @@ export {
   spokenName,
 } from "./scene-names";
 export { smartQuotes } from "./quotes";
+export { dashFor, setSmartPunctuation, smartDashes, smartPunctuation } from "./dashes";
 export { type EditorMark, editDistance, editorMarks, readStory } from "./marks";
 export { startCompletion } from "@codemirror/autocomplete";

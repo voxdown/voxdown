@@ -41,6 +41,7 @@ import {
   sceneNumbers,
   scriptEditor,
   setShowMarks,
+  setSmartPunctuation,
   setView,
   showMarksField,
 } from "@voxdown/editor";
@@ -186,6 +187,8 @@ type Prefs = ViewSwitches & {
   hoverBar: boolean;
   /** The toolbar under the menus. */
   toolbar: boolean;
+  /** Quotes made curly and hyphens dashes (`--` –, `---` —) as they are typed. */
+  smart: boolean;
   /** The manuscript's font, its size in pixels, and its line length in rem. */
   font: "story" | "ui" | "mono";
   size: number;
@@ -211,6 +214,7 @@ const prefs: Prefs = {
   goal: 0,
   hoverBar: true,
   toolbar: true,
+  smart: true,
   font: "story",
   size: 17,
   measure: 52,
@@ -577,7 +581,7 @@ const tools: StretchTools = new StretchTools({
   // A long book's passage is edited in its paragraph alone, never by reading the book again.
   scope: (at) =>
     view.state.doc.length >= LONG ? paragraphScope(view.state.doc.toString(), at) : undefined,
-  notice: (message) => notice(message),
+  notice: (message, action) => notice(message, false, action),
   announce: (message) => announce(message),
   directions: () =>
     view.state.doc.length >= LONG
@@ -668,6 +672,8 @@ let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 /** A word to the writer at the foot of the manuscript, for a few seconds. */
 /** Whether the notice up is about a place in the text, gone once the text changes. */
 let noticeOfPlace = false;
+/** The line a notice about a place is about: it goes once the cursor goes elsewhere. */
+let noticeLine = 0;
 function notice(
   message: string,
   ofPlace = false,
@@ -676,6 +682,7 @@ function notice(
 ): void {
   const box = $("#notice");
   noticeOfPlace = ofPlace;
+  if (ofPlace) noticeLine = view.state.doc.lineAt(view.state.selection.main.head).number;
   box.textContent = message;
   if (action) {
     const button = document.createElement("button");
@@ -739,6 +746,7 @@ async function load(
   const front = story.frontMatter;
   const start = front ? Math.min(front.range.to + 2, lf.length) : 0;
   view.setState(editorState(opened.text, start));
+  view.dispatch({ effects: setSmartPunctuation.of(prefs.smart) });
   view.scrollDOM.scrollTop = 0;
   if (selected)
     view.dispatch({
@@ -1092,8 +1100,9 @@ function announce(message: string): void {
 
 function showDraftState(): void {
   const state = $("#draft-state");
-  // A story never saved to a file, in a browser that may clear what pages keep: said, once.
-  const unprotected = protectedDrafts === false;
+  // A story never saved to a file, in a browser that may clear what pages keep: said, once. A
+  // story with its file is safe there, whatever the browser keeps.
+  const unprotected = protectedDrafts === false && !file.handle && file.saved === "";
   state.textContent = !lock.owner
     ? "Not kept: another tab writes the story"
     : file.kept
@@ -1157,6 +1166,11 @@ function showCounts({ words, said, voices, heard }: Counts): void {
 function cursorMoved(): void {
   const { head, from, to } = view.state.selection.main;
   const line = view.state.doc.lineAt(head);
+  // A notice about a place, gone once the cursor is a few lines from it (a jump to a chapter).
+  if (noticeOfPlace && Math.abs(line.number - noticeLine) > 3) {
+    noticeOfPlace = false;
+    $("#notice").hidden = true;
+  }
   // A selection says how many words it holds, and how long they take to hear.
   const chosen = from === to ? "" : view.state.sliceDoc(from, to);
   const words = chosen ? (chosen.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0) : 0;
@@ -1536,8 +1550,17 @@ function insideMark(state: EditorState, from: number, to: number): string | unde
   };
   return `Italics and bold can’t go inside ${what[mark.kind] ?? "a mark"}: only on the words around it.`;
 }
-const italics = toggleEmphasis(false, insideMark, (message) => notice(message));
-const bold = toggleEmphasis(true, insideMark, (message) => notice(message));
+/** Where one passage ends and another begins between `from` and `to`, as the editor reads them. */
+function passageEdges(state: EditorState, from: number, to: number): number[] {
+  const edges: number[] = [];
+  for (const mark of state.field(marksField)) {
+    if (mark.kind !== "speech" || mark.to <= from || mark.from >= to) continue;
+    edges.push(mark.from, mark.to);
+  }
+  return edges;
+}
+const italics = toggleEmphasis(false, insideMark, (message) => notice(message), passageEdges);
+const bold = toggleEmphasis(true, insideMark, (message) => notice(message), passageEdges);
 
 /**
  * The scene the cursor is in (from its heading or break to the next), or its chapter (from its
@@ -2337,7 +2360,7 @@ function showShape(): void {
 function tidy(curly: boolean): void {
   if (lockedOut) return;
   const before = view.state.doc.toString();
-  const after = format(before, curly ? { quotes: "curly" } : {});
+  const after = format(before, curly ? { quotes: "curly", dashes: true } : {});
   if (after === before) {
     notice("Already tidy: nothing to change.");
     return;
@@ -3079,6 +3102,10 @@ const SWITCHES = ["color", "names", "directions", "sounds", "vocal", "pages", "n
 function viewCommand(name: string, on: boolean): void {
   if (name === "focus") {
     focusMode(on);
+  } else if (name === "smart") {
+    prefs.smart = on;
+    keepPrefs();
+    view.dispatch({ effects: setSmartPunctuation.of(on) });
   } else if (name === "toolbar") {
     prefs.toolbar = on;
     keepPrefs();
@@ -3194,11 +3221,13 @@ $("#side").addEventListener("keydown", (event) => {
   view.focus();
 });
 
-// Export: each choice closes the dialog and does what the menu used to.
+// Export: each choice closes the dialog and does what the menu used to, then the keyboard is
+// back in the story (not on the File menu the dialog was opened from).
 for (const button of document.querySelectorAll<HTMLElement>("#export [data-command]")) {
   button.addEventListener("click", () => {
     $<HTMLDialogElement>("#export").close();
     void COMMANDS[button.dataset.command ?? ""]?.();
+    backToText(".menus");
   });
 }
 
@@ -3509,6 +3538,8 @@ async function start(): Promise<void> {
     checkMenu(name, prefs[name]);
   checkMenu("hover-bar", prefs.hoverBar);
   checkMenu("toolbar", prefs.toolbar);
+  checkMenu("smart", prefs.smart);
+  view.dispatch({ effects: setSmartPunctuation.of(prefs.smart) });
   $("#toolbar").hidden = !prefs.toolbar;
   showUndoState(view.state);
   showEmphasisState(view.state);

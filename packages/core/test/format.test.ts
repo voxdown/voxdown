@@ -198,3 +198,21 @@ describe("the formatter (§13, rule 8)", () => {
     expect(curly("sv")).toBe("@Ann “He said ‘no’ and left,” she said.");
   });
 });
+
+describe("dashes", () => {
+  it("are written as typographers write them: two hyphens an en dash, three an em dash", () => {
+    const text =
+      "---\ntitle: One--Two\n---\n\nIt was 1990--1995. I--I mean---no.\n\n---\n\n@Ann (softly--slowly) “Wait---now.” [door--slam]\n";
+    const done = format(text, { dashes: true });
+    expect(done).toContain("title: One--Two");
+    expect(done).toContain("It was 1990–1995. I–I mean—no.");
+    // A scene break, and what marks and sounds hold, as written.
+    expect(done).toContain("\n---\n");
+    expect(done).toContain("(softly--slowly)");
+    expect(done).toContain("“Wait—now.”");
+    expect(done).toContain("[door--slam]");
+    expect(format(done, { dashes: true })).toBe(done);
+    // Not asked for, left alone.
+    expect(format(text)).toContain("1990--1995");
+  });
+});

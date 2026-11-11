@@ -97,6 +97,23 @@ describe("the quotes of a story", () => {
     // Two full names end so: it could be either.
     expect(castMemberNamed(tea, "Bennet")).toBeUndefined();
     expect(castMemberNamed(tea, "Mrs. Bennet")).toBe("Mrs");
+    // A title before a name the cast has, and a name spelled with a hyphen or without.
+    const ship = parse("---\ncast:\n  Peleg:\n  Guernseyman:\n---\nHi.");
+    expect(castMemberNamed(ship, "Captain Peleg")).toBe("Peleg");
+    expect(castMemberNamed(ship, "Guernsey-man")).toBe("Guernseyman");
+    expect(castMemberNamed(ship, "Captain Ahab")).toBeUndefined();
+  });
+
+  it("read the name a tag gives whether it comes before the verb or after, with its article", () => {
+    const story = parse(
+      "---\ncast:\n  Hare: The March Hare\n---\n“Have some wine,” the March Hare said.\n\n“I don’t see any wine,” Alice remarked.\n\nThe March Hare said, “There isn’t any.”\n",
+    );
+    expect(quotesOf(story).map((quote) => taggedName(story, quote))).toEqual([
+      "March Hare",
+      "Alice",
+      "March Hare",
+    ]);
+    expect(castMemberNamed(story, "March Hare")).toBe("Hare");
   });
 });
 

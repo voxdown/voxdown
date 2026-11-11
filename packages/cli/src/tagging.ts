@@ -328,7 +328,9 @@ export function shortName(name: string): string {
     .filter(
       (word, index, all) =>
         all.length === 1 ||
-        !/^(the|a|an|mr|mrs|ms|miss|dr|sir|lady|lord)$/i.test(word) ||
+        !/^(the|a|an|mr|mrs|ms|miss|dr|sir|lady|lord|captain|capt|mate|father|mother|uncle|aunt|king|queen|prince|princess|professor|colonel|major|general|sergeant|lieutenant|commander|admiral|reverend|madam|madame|monsieur)$/i.test(
+          word,
+        ) ||
         index === all.length - 1,
     );
   return joined(words.join(" "));
@@ -365,6 +367,8 @@ export function jsonIn(text: string): unknown {
 export function tagGifts(story: Story, only?: ReadonlySet<number>): Gift[] {
   const gifts: Gift[] = [];
   const known = speakersOf(story);
+  /** Someone new, by their name with no hyphen or space in it: `Guernsey-man` and `Guernseyman` are one. */
+  const newcomers = new Map<string, string>();
   for (const quote of quotesOf(story)) {
     if (!quote.narrated || (only && !only.has(quote.number))) continue;
     const tag = taggedName(story, quote);
@@ -376,8 +380,11 @@ export function tagGifts(story: Story, only?: ReadonlySet<number>): Gift[] {
       if (member !== story.meta.narrator) gifts.push({ quote: quote.number, speaker: member });
       continue;
     }
-    // Someone the cast doesn't have yet: they join it, by a one-word name.
-    const short = isName(tag) ? tag : shortName(tag);
+    // Someone the cast doesn't have yet: they join it, by a one-word name, the same one each time.
+    const named = isName(tag) ? tag : shortName(tag);
+    const key = named.toLowerCase().replace(/[-'’]/g, "");
+    const short = newcomers.get(key) ?? named;
+    if (named) newcomers.set(key, short);
     if (short)
       gifts.push({
         quote: quote.number,

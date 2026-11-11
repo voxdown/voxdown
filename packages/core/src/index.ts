@@ -69,3 +69,11 @@ export type {
   Warning,
   WarningCode,
 } from "./model";
+export {
+  type Shape,
+  type ShapeChoice,
+  type Span,
+  findShape,
+  shapeStory,
+  titleCased,
+} from "./shape";

@@ -141,6 +141,8 @@ describe("a model's answer", () => {
     expect(shortName("the Queen")).toBe("Queen");
     expect(shortName("Mrs. Rabbit")).toBe("Rabbit");
     expect(shortName("Zoë")).toBe("Zoë");
+    expect(shortName("Captain Peleg")).toBe("Peleg");
+    expect(shortName("the Captain")).toBe("Captain");
   });
 });
 
@@ -159,6 +161,16 @@ describe("dialogue tags alone", () => {
       { quote: 1, speaker: "Tom" },
       { quote: 2, speaker: "OldNan", fullName: "Old Nan" },
       { quote: 3, speaker: "Fox", fullName: "Mr. Fox" },
+    ]);
+    // One person however the tags write them: a title before their name, a hyphen or none.
+    const ship = parse(
+      "“Go,” said Peleg.\n\n“Now,” cried Captain Peleg.\n\n“Here,” said the Guernsey-man.\n\n“There,” said the Guernseyman.\n",
+    );
+    expect(tagGifts(ship).map((gift) => gift.speaker)).toEqual([
+      "Peleg",
+      "Peleg",
+      "Guernsey-man",
+      "Guernsey-man",
     ]);
   });
 });

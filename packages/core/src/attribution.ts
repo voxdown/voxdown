@@ -132,7 +132,7 @@ function lineNumber(starts: readonly number[], at: number): number {
 
 /** Words that tag a quote with who says it, in English. */
 const SAYING =
-  "said|says|asked|asks|replied|replies|whispered|whispers|shouted|shouts|cried|cries|called|calls|answered|answers|muttered|mutters|murmured|murmurs|added|adds|sighed|sighs|laughed|laughs|snapped|snaps|exclaimed|exclaims|yelled|yells|demanded|demands|began|begins|continued|continues|went on|goes on|told|tells|repeated|repeats|insisted|insists|admitted|admits|agreed|agrees|declared|declares|explained|explains|growled|growls|hissed|hisses|protested|protests|retorted|retorts|roared|roars|screamed|screams|sobbed|sobs|stammered|stammers|suggested|suggests|thought|thinks|wondered|wonders";
+  "said|says|asked|asks|replied|replies|whispered|whispers|shouted|shouts|cried|cries|called|calls|answered|answers|muttered|mutters|murmured|murmurs|added|adds|sighed|sighs|laughed|laughs|snapped|snaps|exclaimed|exclaims|yelled|yells|demanded|demands|began|begins|continued|continues|went on|goes on|told|tells|repeated|repeats|insisted|insists|admitted|admits|agreed|agrees|declared|declares|explained|explains|growled|growls|hissed|hisses|protested|protests|retorted|retorts|roared|roars|screamed|screams|sobbed|sobs|stammered|stammers|suggested|suggests|thought|thinks|wondered|wonders|remarked|remarks|observed|observes|inquired|inquires|enquired|enquires|interrupted|interrupts|rejoined|rejoins|returned|returns|responded|responds|bellowed|bellows|thundered|thunders|groaned|groans|moaned|moans|gasped|gasps|panted|pants|faltered|falters|sneered|sneers|urged|urges|warned|warns|pleaded|pleads|begged|begs|ordered|orders|commanded|commands|announced|announces|observed|chimed in|broke in|put in";
 
 const PRONOUNS = /^(?:He|She|They|It|I|We|You|The|His|Her|Their|Then|But|And|So)$/u;
 
@@ -150,11 +150,12 @@ export function taggedName(story: Story, quote: Quote): string | undefined {
   // A name, one or two words, a title before it kept with it: `Mara`, `Old Tom`, `Mr. Fox`.
   const name =
     "((?:(?:Mr|Mrs|Ms|Mx|Dr|St)\\.?\\s+)?\\p{Lu}[\\p{L}’'-]*(?:\\s+\\p{Lu}[\\p{L}’'-]*)?)";
+  // `said Tom`, `said the March Hare`, `Tom said`, `the March Hare said`.
   const behind = new RegExp(
-    `^[\\s,.!?—–-]*(?:(?:${SAYING})\\s+(?:the\\s+)?${name}|${name}\\s+(?:${SAYING})\\b)`,
+    `^[\\s,.!?—–-]*(?:(?:${SAYING})\\s+(?:the\\s+)?${name}|(?:[Tt]he\\s+)?${name}\\s+(?:${SAYING})\\b)`,
     "u",
   ).exec(after);
-  const ahead = new RegExp(`${name}\\s+(?:${SAYING})[\\s,:]*$`, "u").exec(before);
+  const ahead = new RegExp(`(?:[Tt]he\\s+)?${name}\\s+(?:${SAYING})[\\s,:]*$`, "u").exec(before);
   const found = behind?.[1] ?? behind?.[2] ?? ahead?.[1];
   if (!found || PRONOUNS.test(found.split(/\s+/)[0] ?? "")) return undefined;
   // A title alone (`said Mr.`) names no one.
@@ -178,13 +179,26 @@ export function castMemberNamed(story: Story, name: string): string | undefined 
   const key = bareName(name);
   if (!key) return undefined;
   if (key === bareName(story.meta.narrator)) return story.meta.narrator;
-  for (const member of story.cast) {
-    if (bareName(member.handle) === key || bareName(member.name) === key) return member.handle;
-  }
+  // As written, then with no hyphen or space inside it (`Guernsey-man` is `Guernseyman`).
+  const joined = (text: string) => text.replace(/[\s'’-]/gu, "");
+  for (const same of [
+    (a: string, b: string) => a === b,
+    (a: string, b: string) => joined(a) === joined(b),
+  ])
+    for (const member of story.cast)
+      if (same(bareName(member.handle), key) || same(bareName(member.name), key))
+        return member.handle;
+  // With a title before it, the name after the title (`Captain Peleg` is `Peleg`).
+  const untitled = key.replace(TITLE, "");
+  if (untitled !== key && untitled) return castMemberNamed(story, untitled);
   if (key.includes(" ")) return undefined;
   const last = story.cast.filter((member) => bareName(member.name).split(" ").at(-1) === key);
   return last.length === 1 ? last[0]?.handle : undefined;
 }
+
+/** A title before a name, which the name is still itself without. */
+const TITLE =
+  /^(?:mr|mrs|ms|mx|miss|mister|missus|dr|doctor|sir|dame|lady|lord|captain|capt|cap'n|mate|first mate|second mate|father|mother|uncle|aunt|aunty|king|queen|prince|princess|professor|prof|colonel|col|major|general|sergeant|sgt|lieutenant|lt|commander|admiral|reverend|rev|madam|madame|monsieur|old|young|little)\.?\s+/u;
 
 /** A quote to give: its number, and the speaker's name, with their full name if they're new. */
 export type Gift = { quote: number; speaker: string; fullName?: string };

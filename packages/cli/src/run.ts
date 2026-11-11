@@ -16,10 +16,21 @@ import {
   lines,
   linesToCsv,
   parse,
+  quotesOf,
   spokenScript,
   textByCharacter,
 } from "voxdown";
 import { version } from "../package.json";
+import {
+  type Backend,
+  KNOWN_BACKENDS,
+  type Machine,
+  backendNamed,
+  findBackends,
+  thisMachine,
+} from "./ai";
+import { type Tagged, scoreAgainst, tagStory, withoutSpeakers } from "./tag";
+import { passagesOf } from "./tagging";
 
 export const VERSION: string = version;
 
@@ -38,6 +49,16 @@ export type Io = {
   /** Writes a file as UTF-8, creating the folders it is in. */
   writeFile: (path: string, text: string) => Promise<void>;
   isDirectory: (path: string) => Promise<boolean>;
+  /** The AIs `vxd tag` can ask, and the computer they run on; tests give a stand-in. */
+  machine?: Machine;
+  /** Whether someone is at the terminal to answer a question. */
+  interactive?: boolean;
+  /** Asks the person at the terminal; their answer. */
+  question?: (text: string) => Promise<string>;
+  /** Where the AI chosen last time is kept, as JSON; none, and nothing is kept. */
+  configFile?: string;
+  /** Serves MCP over standard input and output (`vxd mcp`). */
+  serveMcp?: () => Promise<void>;
 };
 
 /** Exit codes: done, problems found, and the command couldn't run. */
@@ -84,7 +105,11 @@ async function dispatch(argv: string[], io: Io): Promise<number> {
     io.stdout(commandHelp(command));
     return OK;
   }
-  if (command.files === "one") {
+  if (command.noFileWith && values[command.noFileWith] === true && files.length === 0) {
+    // Nothing to read: the option says what to do.
+  } else if (command.files === "none") {
+    if (files.length > 0) throw usage(`${first} takes no files`, first);
+  } else if (command.files === "one") {
     if (files.length === 0) throw usage(`${first} needs a file`, first);
     if (files.length > 1) throw usage(`${first} takes one file, not ${files.length}`, first);
   } else if (files.length === 0) {
@@ -163,7 +188,9 @@ type Command = {
   examples: string[];
   /** When it exits 1, for commands that can. */
   fails?: string;
-  files: "one" | "many";
+  files: "one" | "many" | "none";
+  /** An option that makes the command need no file, such as `--list`. */
+  noFileWith?: string;
   options: Record<string, Option>;
   action: (context: Context) => Promise<number>;
 };
@@ -510,6 +537,213 @@ async function importCommand({ io, values, files }: Context): Promise<number> {
   return OK;
 }
 
+// tag
+
+/** The AI to ask: named with --with, chosen before, the only one there is, or chosen now. */
+async function chooseBackend(io: Io, values: Values, machine: Machine): Promise<Backend | "tags"> {
+  const model = stringValue(values, "model");
+  const named = stringValue(values, "with") ?? machine.env.VXD_AI;
+  if (named?.toLowerCase() === "tags") return "tags";
+  const found = await findBackends(machine, model ? { model } : {});
+  if (named) {
+    const backend = backendNamed(found, named);
+    if (backend) return backend;
+    throw new Failure(
+      found.length
+        ? `${named} isn't here. Found: ${found.map((other) => other.id).join(", ")} (or --with tags)`
+        : `${named} isn't here, nor any other AI: ${NO_AI}`,
+    );
+  }
+  if (found.length === 0) throw new Failure(`no AI found: ${NO_AI}`);
+  const remembered = await rememberedBackend(io);
+  const before = remembered ? backendNamed(found, remembered) : undefined;
+  if (before) {
+    io.stderr(`Using ${before.label}, as last time (--with to choose another).\n`);
+    return before;
+  }
+  if (found.length === 1) return found[0] as Backend;
+  if (!io.interactive || !io.question)
+    throw new Failure(
+      `several AIs are here: choose one with --with ${found.map((backend) => backend.id).join("|")}`,
+    );
+  io.stderr("Which AI should name the speakers?\n");
+  found.forEach((backend, index) => {
+    io.stderr(
+      `  ${index + 1}. ${backend.label}${index === 0 ? " (recommended)" : ""}${backend.note ? `: ${backend.note}` : ""}\n`,
+    );
+  });
+  for (;;) {
+    const answer = (await io.question(`Choose 1–${found.length} [1]: `)).trim();
+    const choice = answer === "" ? 1 : Number(answer);
+    const backend = found[choice - 1];
+    if (Number.isInteger(choice) && backend) {
+      await remember(io, backend.id);
+      return backend;
+    }
+  }
+}
+
+const NO_AI = [
+  "sign in to Claude Code (claude) or Codex (codex), run a local model with Ollama or LM Studio,",
+  "or set ANTHROPIC_API_KEY, OPENAI_API_KEY or OPENROUTER_API_KEY. --with tags uses the dialogue",
+  "tags alone, with no AI.",
+].join(" ");
+
+async function rememberedBackend(io: Io): Promise<string | undefined> {
+  if (!io.configFile) return undefined;
+  try {
+    const kept = JSON.parse(await io.readFile(io.configFile)) as { ai?: unknown };
+    return typeof kept.ai === "string" ? kept.ai : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function remember(io: Io, id: string): Promise<void> {
+  if (!io.configFile) return;
+  try {
+    await io.writeFile(io.configFile, `${JSON.stringify({ ai: id }, null, 2)}\n`);
+  } catch {}
+}
+
+async function tagCommand({ io, values, files }: Context): Promise<number> {
+  const machine = io.machine ?? thisMachine();
+  if (flag(values, "list")) {
+    const model = stringValue(values, "model");
+    const found = await findBackends(machine, model ? { model } : {});
+    if (found.length === 0) io.stdout(`No AI found: ${NO_AI}\n`);
+    for (const backend of found)
+      io.stdout(
+        `${backend.id.padEnd(24)} ${backend.label}${backend.note ? ` (${backend.note})` : ""}\n`,
+      );
+    return OK;
+  }
+  const [input] = await readInputs(io, files);
+  if (!input) return ERROR;
+  const minimum = (stringValue(values, "min") ?? "medium") as "high" | "medium" | "low";
+  const evaluating = flag(values, "eval");
+  const marked = parse(input.text);
+  const story = evaluating ? parse(withoutSpeakers(marked)) : marked;
+  const waiting = quotesOf(story).filter((quote) => quote.narrated).length;
+  if (waiting === 0) {
+    io.stdout(`Every quote in ${input.name} has a speaker.\n`);
+    return OK;
+  }
+  const backend = await chooseBackend(io, values, machine);
+  const passages = passagesOf(story).length;
+  io.stderr(
+    backend === "tags"
+      ? `Giving ${input.name}'s quotes to the names their dialogue tags give…\n`
+      : `Asking ${backend.label} who says ${waiting} quote${waiting === 1 ? "" : "s"} in ${input.name}, ${passages} passage${passages === 1 ? "" : "s"}…\n`,
+  );
+  const tagged = await tagStory(story, {
+    backend,
+    minimum,
+    onProgress: ({ passage, index, of, reading }) => {
+      if (!reading) return;
+      io.stderr(
+        `  ${index}/${of}${passage.heading ? ` ${passage.heading}` : ""}: ${reading.gifts.length} of ${passage.numbers.length} named\n`,
+      );
+    },
+  });
+  if (evaluating) {
+    const score = scoreAgainst(marked, parse(tagged.source), story);
+    const share = score.of ? Math.round((score.right / score.of) * 1000) / 10 : 100;
+    io.stdout(
+      `${score.right} of ${score.of} speakers put back as ${input.name} has them (${share}%).\n`,
+    );
+    for (const miss of score.wrong.slice(0, 30))
+      io.stdout(`  line ${miss.line}: ${miss.expected}, not ${miss.got}\n`);
+    if (score.wrong.length > 30) io.stdout(`  … and ${score.wrong.length - 30} more\n`);
+    if (tagged.stopped) io.stdout(`Stopped early: ${tagged.stopped}\n`);
+    return OK;
+  }
+  if (flag(values, "json")) io.stdout(`${JSON.stringify(tagReport(tagged), null, 2)}\n`);
+  else io.stdout(tagSummary(tagged, input.name));
+  if (tagged.source === input.text) return tagged.stopped ? ERROR : OK;
+  if (flag(values, "dry-run")) {
+    io.stderr("Nothing written (--dry-run).\n");
+    return OK;
+  }
+  const out = stringValue(values, "out");
+  const target = out ?? (input.path ? input.name : undefined);
+  if (!target) {
+    io.stdout(tagged.source);
+    return OK;
+  }
+  if (io.interactive && io.question && !flag(values, "yes")) {
+    const answer = (await io.question(`Write them to ${target}? [Y/n] `)).trim().toLowerCase();
+    if (answer.startsWith("n")) {
+      io.stderr("Nothing written.\n");
+      return OK;
+    }
+  }
+  const path = out ? resolve(io.cwd, out) : (input.path as string);
+  await writeOutput(io, path, target, tagged.source);
+  io.stderr(`Written to ${target}.\n`);
+  return tagged.stopped ? ERROR : OK;
+}
+
+function tagReport(tagged: Tagged) {
+  return {
+    proposals: tagged.proposals,
+    unknown: tagged.unknown,
+    carried: tagged.carried,
+    joined: tagged.joined,
+    problems: tagged.problems,
+    ...(tagged.stopped ? { stopped: tagged.stopped } : {}),
+  };
+}
+
+/** What a tagging did, for the writer: what was given, and the quotes worth a look. */
+function tagSummary(tagged: Tagged, name: string): string {
+  const given = tagged.proposals.filter((proposal) => proposal.outcome === "given");
+  const held = tagged.proposals.filter((proposal) => proposal.outcome === "held");
+  const refused = tagged.proposals.filter((proposal) => proposal.outcome === "refused");
+  const out: string[] = [];
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  out.push(
+    `${name}: ${plural(given.length, "speaker")} given${tagged.carried.length ? `, ${tagged.carried.length} more carried on from a quote before them` : ""}.`,
+  );
+  if (tagged.joined.length) out.push(`New in the cast: ${tagged.joined.join(", ")}.`);
+  const unsure = given.filter((proposal) => proposal.confidence !== "high");
+  const look = [
+    ...held.map((proposal) => ({
+      ...proposal,
+      said: `${proposal.speaker}? held back (${proposal.confidence})`,
+    })),
+    ...refused.map((proposal) => ({
+      ...proposal,
+      said: `${proposal.speaker}: not given, ${proposal.why}`,
+    })),
+  ].sort((a, b) => a.line - b.line);
+  if (look.length) {
+    out.push("", "Not given, worth a look:");
+    for (const proposal of look.slice(0, 40))
+      out.push(`  line ${proposal.line}  “${proposal.words}”  ${proposal.said}`);
+    if (look.length > 40) out.push(`  … and ${look.length - 40} more (--json lists them all)`);
+  }
+  if (tagged.unknown.length)
+    out.push(
+      "",
+      `${plural(tagged.unknown.length, "quote")} the AI couldn't tell: Ctrl+Shift+K in the Writer finds them.`,
+    );
+  if (unsure.length)
+    out.push(
+      `${plural(unsure.length, "speaker")} given were likely rather than certain: --json lists them with the AI's clue.`,
+    );
+  if (tagged.stopped) out.push("", `Stopped early: ${tagged.stopped}`);
+  return `${out.join("\n")}\n`;
+}
+
+// mcp
+
+async function mcpCommand({ io }: Context): Promise<number> {
+  if (!io.serveMcp) throw new Failure("vxd mcp needs a terminal of its own");
+  await io.serveMcp();
+  return OK;
+}
+
 // The commands
 
 const OUT: Option = {
@@ -661,6 +895,72 @@ const COMMANDS: Record<string, Command> = {
     },
     action: importCommand,
   },
+  tag: {
+    usage:
+      "vxd tag <file> [--with <ai>] [--model <name>] [--min high|medium|low] [--dry-run] [--yes]",
+    summary: "Name who says each quote, with an AI you already have",
+    about: [
+      "Asks an AI who says each quote that no mark gives to anyone, a passage at a time, and marks",
+      "it: `“Hello,” said Tom.` becomes `@Tom “Hello,” said Tom.` The words never change: each mark",
+      "is read back, and refused if anything heard or printed would change. Someone new joins the",
+      "cast. The AI is one you already have: Claude Code or Codex signed in to your plan, a model",
+      "running in Ollama or LM Studio, or an API key; --list shows those found. With several, vxd",
+      "asks which, and remembers. --with tags uses the dialogue tags alone, with no AI.",
+      "Speakers the AI is unsure of are held back and listed, with their lines, for you to check.",
+    ].join("\n"),
+    examples: [
+      "vxd tag story.vxd",
+      "vxd tag story.vxd --with ollama:qwen3:14b --dry-run",
+      "vxd tag story.vxd --eval --with codex",
+    ],
+    files: "one",
+    noFileWith: "list",
+    options: {
+      with: {
+        type: "string",
+        value: "<ai>",
+        help: `Which AI: ${KNOWN_BACKENDS.join(", ")}. Default: the one chosen last time.`,
+      },
+      model: {
+        type: "string",
+        value: "<name>",
+        help: "The model to ask, where the AI offers several.",
+      },
+      min: {
+        type: "string",
+        values: ["high", "medium", "low"],
+        help: "Give speakers only this sure or surer; the rest are listed. Default medium.",
+      },
+      "dry-run": { type: "boolean", help: "Show what would be given, and write nothing." },
+      yes: { type: "boolean", short: "y", help: "Write without asking first." },
+      out: { ...OUT, help: "Write the tagged story to another file, leaving this one as it is." },
+      json: {
+        type: "boolean",
+        help: "Print every proposal, with the AI's clue and confidence, as JSON.",
+      },
+      list: { type: "boolean", help: "List the AIs found on this computer, and do nothing else." },
+      eval: {
+        type: "boolean",
+        help: "Measure an AI: take out the story's own speaker marks, have it put them back, and score it.",
+      },
+    },
+    action: tagCommand,
+  },
+  mcp: {
+    usage: "vxd mcp",
+    summary: "Serve VoxDown's tools to an AI app over MCP",
+    about: [
+      "Runs an MCP server on standard input and output, for Claude, ChatGPT, Codex, Cursor, VS Code",
+      "and other apps that take local MCP servers: they can then read the format's cheat sheet, list",
+      "a story's quotes that no one is marked to say, give them to speakers (each read back, so no",
+      "word changes), add characters to the cast, and check a story. Add it to an app with",
+      "`npx -y @voxdown/cli mcp` as the command; docs/ai.md has the line for each.",
+    ].join("\n"),
+    examples: ["claude mcp add --scope user voxdown -- npx -y @voxdown/cli mcp"],
+    files: "none",
+    options: {},
+    action: mcpCommand,
+  },
 };
 
 function commandNamed(name: string): Command {
@@ -673,8 +973,8 @@ function commandNamed(name: string): Command {
 
 function generalHelp(): string {
   const commands = Object.entries(COMMANDS).map(([name, command]) => {
-    const files = command.files === "one" ? "<file>" : "<files…>";
-    return [`${name} ${files}`, command.summary] as const;
+    const files = command.files === "one" ? " <file>" : command.files === "many" ? " <files…>" : "";
+    return [`${name}${files}`, command.summary] as const;
   });
   return [
     `vxd ${VERSION}: tools for VoxDown, a plain-text format for stories read aloud.`,

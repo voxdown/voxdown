@@ -62,7 +62,7 @@ function checkName(name: string): void {
 }
 
 /** The cast's spelling of a name, else the name as given (§13.3). */
-function spelled(story: Story, name: string): string {
+export function spelled(story: Story, name: string): string {
   if (nameKey(name) === nameKey(story.meta.narrator)) return story.meta.narrator;
   return story.cast.find((member) => nameKey(member.handle) === nameKey(name))?.handle ?? name;
 }
@@ -313,7 +313,7 @@ function carriedOn(line: Line, speech: Speech): Speech | undefined {
  * (`”@AnnHe`), the edit reads it back, hears it differently and declines, as it would have to
  * with the space.
  */
-function markAt(source: string, at: number, mark: string): string {
+export function markAt(source: string, at: number, mark: string): string {
   const before = source[at - 1];
   const next = source[at];
   const spaced = before === undefined || next === undefined || /\s/.test(before + next);

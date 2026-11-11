@@ -1,11 +1,11 @@
 {
   "name": "@voxdown/cli",
   "version": "1.0.1",
-  "description": "The vxd command: check, format, render and export VoxDown stories, and import Fountain screenplays.",
+  "description": "The vxd command: check, format, render and export VoxDown stories, import Fountain screenplays, and name who says each quote with an AI you already have (also as an MCP server).",
   "license": "MIT",
   "author": "Etienne Ackermann",
   "type": "module",
-  "keywords": ["voxdown", "vxd", "audiobook", "script", "cli", "markdown", "fountain"],
+  "keywords": ["voxdown", "vxd", "audiobook", "script", "cli", "markdown", "fountain", "mcp", "speaker attribution"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/voxdown/voxdown.git",
@@ -23,8 +23,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@voxdown/render": "workspace:^",
-    "voxdown": "workspace:^"
+    "voxdown": "workspace:^",
+    "zod": "^4.2.0"
   },
   "engines": {
     "node": ">=20"

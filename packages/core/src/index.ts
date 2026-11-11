@@ -23,6 +23,15 @@ export {
   setMeta,
   setSpeaker,
 } from "./edit";
+export {
+  type Gift,
+  type Given,
+  type Quote,
+  castMemberNamed,
+  giveQuotes,
+  quotesOf,
+  taggedName,
+} from "./attribution";
 export { type FormatOptions, curlQuotes, format, quotationMarks } from "./format";
 export {
   type LinesOptions,

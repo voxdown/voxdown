@@ -1,6 +1,6 @@
 # @voxdown/cli
 
-The `vxd` command for [VoxDown](https://voxdown.github.io/), a plain-text format for stories read aloud. It checks stories for problems, tidies them, renders them as HTML, exports the spoken script for speech tools and performers, and imports Fountain screenplays.
+The `vxd` command for [VoxDown](https://voxdown.github.io/), a plain-text format for stories read aloud. It checks stories for problems, tidies them, renders them as HTML, exports the spoken script for speech tools and performers, imports Fountain screenplays, and names who says each quote with an AI you already have.
 
 ## Install
 
@@ -147,13 +147,39 @@ vxd import screenplay.fountain --out story.vxd
 
 Turns a [Fountain](https://fountain.io) screenplay into a VoxDown story. Character cues become marks, parentheticals become directions, action becomes narration, and the cast is gathered from the cues. Scene headings become hidden headings, which aren't read aloud; `--read-scene-headings` has them read.
 
+### `vxd tag`: name who says each quote, with an AI you already have
+
+```sh
+vxd tag story.vxd
+```
+
+Asks an AI who says each quote that no mark gives to anyone, a passage at a time, and marks it: `“Hello,” said Tom.` becomes `@Tom “Hello,” said Tom.` The words never change: each mark is read back, and refused if anything heard or printed would change. Someone new joins the cast.
+
+The AI is one you already have, found on your computer:
+
+- **Claude Code** or **Codex**, signed in to your Claude or ChatGPT plan (also Antigravity, Cursor, GitHub Copilot CLI and Gemini CLI);
+- a model running in **Ollama**, **LM Studio**, llama.cpp, Jan or vLLM;
+- an API key in `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `OPENROUTER_API_KEY`.
+
+`vxd tag --list` shows what it finds. With several, it asks which and remembers; `--with codex` chooses one (`--with ollama:qwen3:14b` a model). Speakers the AI is unsure of are held back and listed with their lines; `--min low` gives them too. `--dry-run` writes nothing, `--yes` doesn't ask before writing, and `--out` writes another file. `--with tags` uses the dialogue tags alone (`“…” asked Mara`), with no AI.
+
+`--eval` measures an AI on a story that's already marked: it takes the speaker marks out, has the AI put them back, and scores it.
+
+### `vxd mcp`: VoxDown's tools for AI apps
+
+```sh
+claude mcp add --scope user voxdown -- npx -y @voxdown/cli mcp
+```
+
+Serves VoxDown's tools over [MCP](https://modelcontextprotocol.io), so the AI app you use (Claude, ChatGPT and Codex, Cursor, VS Code, Zed…) can read the format's cheat sheet, list a story's quotes that no one is marked to say, and give them to speakers, with the same checks as `vxd tag`. [docs/ai.md](https://github.com/voxdown/voxdown/blob/main/docs/ai.md) has the line for each app.
+
 ## Exit codes
 
 | Code | Meaning |
 | --- | --- |
 | 0 | Done. |
 | 1 | Problems found: `check` found a warning (or, with `--strict`, an info), or `fmt --check` found files to format. |
-| 2 | The command couldn't run: a usage error, or a file that can't be read or written. |
+| 2 | The command couldn't run: a usage error, a file that can't be read or written, or (`tag`) an AI that couldn't be asked. |
 
 An error is one line on standard error, such as `vxd: no such file: story.vxd`.
 

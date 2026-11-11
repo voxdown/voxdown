@@ -4,6 +4,11 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
+**Naming who speaks, with an AI you already have** ([docs/ai.md](docs/ai.md)).
+- `vxd tag story.vxd` asks an AI who says each quote that no mark gives to anyone, a passage at a time, and marks it; the words never change. It finds the AIs on the computer: Claude Code or Codex signed in to the writer's own plan (Antigravity, Cursor, Copilot CLI and Gemini CLI too), a model in Ollama, LM Studio, llama.cpp, Jan or vLLM, or an API key; it asks which when there are several, and remembers. Unsure speakers are held back and listed; `--dry-run`, `--yes`, `--json`, `--with tags` (dialogue tags alone, no AI) and `--eval` (score an AI against a story's own marks).
+- `vxd mcp` serves VoxDown's tools over MCP (both the 2025 and the 2026 protocol), for Claude, ChatGPT and Codex, Cursor, VS Code, Zed and other apps: the cheat sheet, a story's cast, its waiting quotes a passage at a time, giving them to speakers, adding characters, and its warnings.
+- `voxdown`: `quotesOf(story)` numbers every quote in reading order with who says it now; `giveQuotes(story, gifts)` gives many at once, each read back (refusing any that would change a word or take another quote with it); `taggedName` and `castMemberNamed` help name speakers.
+
 **VoxDown Writer**, a new page beside the playground (`/writer/`), for writing a story in its own file. Everything runs in the browser, with no account.
 - Open a `.vxd`, `.md`, `.txt` or Fountain file, by the menu, Ctrl+O or dropping it on the page. Where the browser lets a page keep a file (Chrome, Edge), Save writes back to it, and **Open recent** lists the last eight; elsewhere Save downloads it. A screenplay opens as a new story, saved as `.vxd`.
 - The story is kept in this browser as it is typed, and brought back on the next visit with any changes not yet saved. Putting a story aside with changes to save asks first.

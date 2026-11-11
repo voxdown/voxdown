@@ -52,6 +52,8 @@ export type StretchContext = {
   scope?: (at: number) => Scope | undefined;
   /** A word to the writer: a quote that went along with the one given, say. */
   notice?: (message: string) => void;
+  /** Said to a screen reader: what an edit did, which a sighted writer sees in the text. */
+  announce?: (message: string) => void;
   /** The directions the story uses, for the picker's list. */
   directions?: () => string[];
 };
@@ -545,6 +547,10 @@ export class StretchTools {
           ? `“${direction}” can’t be set here without changing how other lines are said, so nothing changed.`
           : "This direction can’t be taken out without changing other lines, so nothing changed.",
       );
+      if (done)
+        this.context.announce?.(
+          direction ? `Said ${direction} now.` : "The direction is taken out.",
+        );
       if (done || changes.length === 0) this.closePopover(true);
     };
     form.addEventListener("submit", (event) => {
@@ -620,7 +626,10 @@ export class StretchTools {
         scope.back(changes),
         `This quote can’t be given to ${name} without changing who says other lines, so nothing changed.`,
       );
-      if (done) this.sayCarried(fresh, changes, scoped.from + 1, name);
+      if (done) {
+        this.context.announce?.(`${name} says this quote now.`);
+        this.sayCarried(fresh, changes, scoped.from + 1, name);
+      }
       this.closePopover(true);
       return;
     }
@@ -655,6 +664,7 @@ export class StretchTools {
       `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,
     );
     if (done) {
+      this.context.announce?.(`${name} says this now.`);
       // The quote given: the first in the passage, when it is narration that holds quotes.
       const first = quotesOf(fresh).find((found) => found.from >= target.range.from);
       this.sayCarried(fresh, changes, (first?.from ?? target.range.from) + 1, name);

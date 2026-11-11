@@ -1,6 +1,14 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { menus } from "../src/writer/menu";
+
+// Each test's bar closed before the next: the page has one, which listens on the document.
+const bars: { close: () => void }[] = [];
+afterEach(() => {
+  for (const bar of bars.splice(0)) bar.close();
+});
 
 function bar() {
   document.body.innerHTML = `
@@ -21,7 +29,7 @@ function bar() {
       </div>
     </div>`;
   const ran: string[] = [];
-  menus(document.querySelector(".menus") as HTMLElement, (command) => ran.push(command));
+  bars.push(menus(document.querySelector(".menus") as HTMLElement, (command) => ran.push(command)));
   const $ = (selector: string) => document.querySelector(selector) as HTMLElement;
   const key = (target: HTMLElement, name: string) =>
     target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true }));
@@ -61,5 +69,64 @@ describe("a menu inside a menu", () => {
     expect(ran).toEqual(["recent:1"]);
     expect($("#file").hidden).toBe(true);
     expect($("#recent").hidden).toBe(true);
+  });
+});
+
+/** The Writer's own menu bar, as the page has it. */
+function realBar() {
+  const page = readFileSync(join(__dirname, "..", "writer", "index.html"), "utf8");
+  const bar = /<div class="menus"[\s\S]*?<\/div>\n {2}<div class="document">/.exec(page)?.[0] ?? "";
+  document.body.innerHTML = bar.replace(/\n {2}<div class="document">$/, "");
+  const ran: string[] = [];
+  bars.push(menus(document.querySelector(".menus") as HTMLElement, (command) => ran.push(command)));
+  return ran;
+}
+
+describe("the Writer's menu bar, from the keyboard", () => {
+  it.each(["file", "edit", "insert", "view", "help"])(
+    "reaches every item of %s once, in order, with the down arrow",
+    (name) => {
+      realBar();
+      const button = document.getElementById(`${name}-menu-button`) as HTMLElement;
+      const list = document.getElementById(`${name}-menu`) as HTMLElement;
+      button.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      // Its own items, shown: not those of the menu inside it, nor Open recent with none.
+      const expected = [...list.querySelectorAll<HTMLElement>('[role^="menuitem"]')].filter(
+        (item) =>
+          !item.closest("[hidden]") && item.parentElement?.closest('[role="menu"]') === list,
+      );
+      expect(expected.length).toBeGreaterThan(3);
+      const reached = [document.activeElement];
+      for (let step = 1; step < expected.length + 1; step++) {
+        document.activeElement?.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+        reached.push(document.activeElement);
+      }
+      // Each once, in order, and round to the first.
+      expect(reached).toEqual([...expected, expected[0]]);
+      expect(document.querySelectorAll(".menu-list:not([hidden])").length).toBe(1);
+    },
+  );
+
+  it("opens no menu when the pointer only passes over the bar", () => {
+    realBar();
+    for (const button of document.querySelectorAll<HTMLElement>(".menu-button"))
+      button.dispatchEvent(new PointerEvent("pointerenter"));
+    expect(document.querySelectorAll(".menu-list:not([hidden])").length).toBe(0);
+    expect(document.querySelectorAll('.menu-button[aria-expanded="true"]').length).toBe(0);
+  });
+
+  it("closes with Escape, back on its button", () => {
+    realBar();
+    const button = document.getElementById("view-menu-button") as HTMLElement;
+    button.click();
+    expect((document.getElementById("view-menu") as HTMLElement).hidden).toBe(false);
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    expect((document.getElementById("view-menu") as HTMLElement).hidden).toBe(true);
+    expect(document.activeElement).toBe(button);
   });
 });

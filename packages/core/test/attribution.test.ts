@@ -86,6 +86,17 @@ describe("the quotes of a story", () => {
     expect(castMemberNamed(story, "Peter")).toBe("Peter");
     expect(castMemberNamed(story, "teller")).toBe("Teller");
     expect(castMemberNamed(story, "Flopsy")).toBeUndefined();
+    // A full name's last word, and an article set aside.
+    expect(castMemberNamed(story, "Rabbit")).toBe("Mother");
+    const tea = parse(
+      "---\ncast:\n  Hare: The March Hare\n  Mr: Mr. Bennet\n  Mrs: Mrs. Bennet\n---\nHi.",
+    );
+    expect(castMemberNamed(tea, "March Hare")).toBe("Hare");
+    expect(castMemberNamed(tea, "the March Hare")).toBe("Hare");
+    expect(castMemberNamed(tea, "Hare")).toBe("Hare");
+    // Two full names end so: it could be either.
+    expect(castMemberNamed(tea, "Bennet")).toBeUndefined();
+    expect(castMemberNamed(tea, "Mrs. Bennet")).toBe("Mrs");
   });
 });
 

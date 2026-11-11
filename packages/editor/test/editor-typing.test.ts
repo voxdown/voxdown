@@ -2,7 +2,7 @@
 import { insertNewline } from "@codemirror/commands";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parse, spokenScript } from "voxdown";
 import {
   FRESH_BELOW,
@@ -224,9 +224,8 @@ describe("a long story's marks", () => {
     const moved = view.state.field(marksField);
     expect(moved.every((mark) => mark.to <= view.state.doc.length)).toBe(true);
     expect(moved.some((mark) => mark.kind === "name" && mark.from >= at)).toBe(false);
-    // Once typing pauses, they are what the text gives.
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    expect(marksPending(view.state)).toBe(false);
+    // Once typing pauses, they are what the text gives: waited for, however busy the computer.
+    await vi.waitFor(() => expect(marksPending(view.state)).toBe(false), { timeout: 10_000 });
     expect(view.state.field(marksField)).toEqual(editorMarks(view.state.doc.toString()));
     // A fix whose words were changed in the meantime is dropped until then, never misplaced.
     view.dispatch({ changes: { from: at, to: at + 1, insert: "@ " } });
@@ -297,7 +296,7 @@ describe("a long story's marks worked out elsewhere", () => {
     });
     view.dispatch({ changes: { from: 0, insert: "New. " } });
     expect(marksPending(view.state)).toBe(true);
-    await new Promise((done) => setTimeout(done, 450));
+    await vi.waitFor(() => expect(marksPending(view.state)).toBe(false), { timeout: 10_000 });
     expect(asked).toHaveLength(1);
     expect(asked[0]?.startsWith("New. ")).toBe(true);
     expect(marksPending(view.state)).toBe(false);

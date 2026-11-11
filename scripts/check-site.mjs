@@ -1962,6 +1962,43 @@ if (await maker.isVisible("#toolbar"))
 await maker.click("#view-menu-button");
 await maker.click('#view-menu [data-view="toolbar"]');
 if (!(await maker.isVisible("#toolbar"))) problems.push("writer: View › Toolbar doesn't show it");
+// The menus from the keyboard alone: every item reached once with the down arrow, in order.
+await maker.click(".cm-content");
+await maker.keyboard.press("F10");
+for (const name of ["file", "edit", "insert", "view", "help"]) {
+  if (name !== "file") await maker.keyboard.press("ArrowRight");
+  else await maker.keyboard.press("ArrowDown");
+  const expected = await maker.evaluate(
+    (id) =>
+      [...document.querySelectorAll(`#${id} [role^="menuitem"]`)]
+        .filter(
+          (item) =>
+            !item.closest("[hidden]") &&
+            item.parentElement?.closest('[role="menu"]') === document.getElementById(id),
+        )
+        .map((item) => item.textContent?.trim()),
+    `${name}-menu`,
+  );
+  const reached = [];
+  for (let step = 0; step < expected.length; step++) {
+    reached.push(await maker.evaluate(() => document.activeElement?.textContent?.trim()));
+    await maker.keyboard.press("ArrowDown");
+  }
+  if (JSON.stringify(reached) !== JSON.stringify(expected))
+    problems.push(
+      `writer: the down arrow in ${name} reaches ${reached.length} items out of order or skips: ${reached.join(" | ")}`,
+    );
+  // Back to the menu's first item for the right arrow to go on from.
+  await maker.keyboard.press("Home");
+}
+await maker.keyboard.press("Escape");
+await maker.keyboard.press("Escape");
+// The pointer only passing over the bar opens nothing.
+await maker.mouse.move(5, 300);
+await maker.hover("#edit-menu-button");
+await maker.waitForTimeout(400);
+if ((await maker.getAttribute("#edit-menu-button", "aria-expanded")) === "true")
+  problems.push("writer: the Edit menu opens with the pointer only passing over it");
 await making.close();
 console.log("writer: insert, export, shortcuts, toolbar: ok");
 

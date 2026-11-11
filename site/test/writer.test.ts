@@ -2,6 +2,7 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { editorMarks } from "@voxdown/editor";
+import { renderDocument } from "@voxdown/render";
 import { describe, expect, it, vi } from "vitest";
 import { applyChanges, bookText, lines, parse, setSpeaker } from "voxdown";
 import { countsOf } from "../src/writer/counts";
@@ -235,6 +236,61 @@ describe("emphasis", () => {
     expect(empty.state.selection.main.head).toBe(6);
     view.destroy();
     empty.destroy();
+  });
+
+  // Emphasis is read a line at a time (§11): one pair of signs around two paragraphs is text.
+  const emphasized = (doc: string) => {
+    const book = renderDocument(parse(doc), "book");
+    const script = lines(parse(doc))
+      .map((line) => line.text ?? "")
+      .join("\n");
+    return { book, script };
+  };
+
+  it("over several paragraphs, gives each its own signs, and takes them all away again", () => {
+    const doc = "First paragraph.\n\n* * *\n\nSecond paragraph.";
+    const view = editor(doc, 0, doc.length);
+    toggleEmphasis(false)(view);
+    const done = view.state.doc.toString();
+    expect(done).toBe("*First paragraph.*\n\n* * *\n\n*Second paragraph.*");
+    const { book, script } = emphasized(done);
+    expect(book).toContain("<em>First paragraph.</em>");
+    expect(book).toContain("<em>Second paragraph.</em>");
+    expect(book).not.toMatch(/>[^<]*\*[^<]*paragraph/);
+    expect(script).toBe("*First paragraph.*\n*Second paragraph.*");
+    // The words still selected; again, and the signs are gone.
+    toggleEmphasis(false)(view);
+    expect(view.state.doc.toString()).toBe(doc);
+    view.destroy();
+  });
+
+  it("puts a line's signs around its words: after a heading's # and inside a quote's marks", () => {
+    const doc = "# One\n\n@Ann (softly) “Hi there.”\n\nShe left. [door slams]";
+    const view = editor(doc, 0, doc.length);
+    toggleEmphasis(false)(view);
+    const done = view.state.doc.toString();
+    expect(done).toBe("# *One*\n\n@Ann (softly) “*Hi there.*”\n\n*She left.* [door slams]");
+    expect(parse(done).blocks[0]?.kind).toBe("heading");
+    expect(emphasized(done).script).toContain("*Hi there.*");
+    view.destroy();
+    // On one line too: the whole quote line, selected, is emphasized where it is kept.
+    const one = editor("@Ann “Hi.”", 0, 10);
+    toggleEmphasis(true)(one);
+    expect(one.state.doc.toString()).toBe("@Ann “**Hi.**”");
+    one.destroy();
+  });
+
+  it("over several lines, adds signs only where they are missing, and says why where nothing can", () => {
+    const view = editor("*One.*\n\nTwo.", 0, 12);
+    toggleEmphasis(false)(view);
+    expect(view.state.doc.toString()).toBe("*One.*\n\n*Two.*");
+    view.destroy();
+    const told: string[] = [];
+    const bare = editor("* * *\n\n{page}", 0, 13);
+    toggleEmphasis(false, undefined, (message) => told.push(message))(bare);
+    expect(bare.state.doc.toString()).toBe("* * *\n\n{page}");
+    expect(told).toEqual(["There are no words here for italics or bold."]);
+    bare.destroy();
   });
 });
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { inGoodTime } from "../../../test-support/timing";
 import { parse, spokenScript } from "../src/index";
 import { readYaml } from "../src/yaml";
 
@@ -238,9 +239,10 @@ describe("the front matter YAML subset", () => {
 
   it("reads a long quoted value over many lines in linear time", () => {
     const lines = Array.from({ length: 30_000 }, () => "  continuation").join("\n");
-    const start = performance.now();
-    const title = readYaml(`title: "start\n${lines}\n  end"`).data.title as string;
-    expect(performance.now() - start).toBeLessThan(1000);
+    let title = "";
+    inGoodTime(1000, () => {
+      title = readYaml(`title: "start\n${lines}\n  end"`).data.title as string;
+    });
     expect(title.startsWith("start continuation")).toBe(true);
   });
 

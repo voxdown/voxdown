@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
 import { bookText, lines, parse } from "voxdown";
+import { inGoodTime } from "../../../test-support/timing";
 import {
   characterColors,
   inlineHtml,
@@ -215,10 +216,14 @@ describe("the book view", () => {
       `Hi ${"[![".repeat(1_500)}bird${"](a)](b)".repeat(1_500)} end.`,
     ]) {
       const story = parse(text);
-      const start = performance.now();
-      renderBook(story, { positions: true });
-      renderScript(story, { positions: true });
-      expect(performance.now() - start, text.slice(0, 6)).toBeLessThan(3000);
+      inGoodTime(
+        3000,
+        () => {
+          renderBook(story, { positions: true });
+          renderScript(story, { positions: true });
+        },
+        text.slice(0, 6),
+      );
     }
   });
 
@@ -230,17 +235,19 @@ describe("the book view", () => {
     const story = parse(
       `---\ncast:\n${cast}\n---\n\n${names.map((n) => `@${n} “Hi.”`).join("\n\n")}\n`,
     );
-    const start = performance.now();
-    const html = renderScript(story);
-    expect(performance.now() - start).toBeLessThan(1500);
+    let html = "";
+    inGoodTime(1500, () => {
+      html = renderScript(story);
+    });
     expect(html).toContain("Name C7999");
   });
 
   it("renders groups nested thousands deep in good time", () => {
     const story = parse("::: softly\nHello.\n\n".repeat(8_000));
-    const start = performance.now();
-    const html = renderScript(story) + renderBook(story);
-    expect(performance.now() - start).toBeLessThan(5000);
+    let html = "";
+    inGoodTime(5000, () => {
+      html = renderScript(story) + renderBook(story);
+    });
     expect(html).toContain("Hello.");
   });
 
@@ -263,10 +270,14 @@ describe("the book view", () => {
       "[a](b      ",
     ]) {
       const story = parse(piece.repeat(Math.ceil(60_000 / piece.length)));
-      const start = performance.now();
-      renderBook(story);
-      renderScript(story);
-      expect(performance.now() - start, piece).toBeLessThan(2000);
+      inGoodTime(
+        2000,
+        () => {
+          renderBook(story);
+          renderScript(story);
+        },
+        piece,
+      );
     }
   });
 

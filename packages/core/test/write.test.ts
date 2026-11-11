@@ -3,6 +3,7 @@ import { join } from "node:path";
 import v8 from "node:v8";
 import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { inGoodTime } from "../../../test-support/timing";
 import {
   type Item,
   type Speech,
@@ -520,9 +521,11 @@ describe("what fuzzing, real books and review found", () => {
       "@Zed “Hello,” said Alice. @Alice “Hello,” said Alice. “Hello,” said Alice. ",
     );
     const crowded = parse(`@Alice ${"“Hello,” said Alice. ".repeat(1000)}`);
-    const start = performance.now();
-    expect(setSpeaker(crowded, stretch(crowded, "Hello,"), "Zed").length).toBe(2);
-    expect(performance.now() - start).toBeLessThan(2000);
+    let given: unknown[] = [];
+    inGoodTime(2000, () => {
+      given = setSpeaker(crowded, stretch(crowded, "Hello,"), "Zed");
+    });
+    expect(given.length).toBe(2);
   });
 
   it("edits a speech over paragraphs as one, by its mark, with no new warnings (§5.7)", () => {
@@ -656,9 +659,10 @@ describe("review, round three", () => {
     const after = base
       .replace(/@Alice/g, "@Alicia")
       .replace("Line 15000,", "Line 15000,\nAnother line,");
-    const start = performance.now();
-    const changes = diffChanges(base, after);
-    expect(performance.now() - start).toBeLessThan(2000);
+    let changes: ReturnType<typeof diffChanges> = [];
+    inGoodTime(2000, () => {
+      changes = diffChanges(base, after);
+    });
     expect(applyChanges(base, changes)).toBe(after);
     expect(changes.length).toBeGreaterThan(29_000);
   });
@@ -758,9 +762,11 @@ describe("the writer, asked for what it can't do", () => {
       `---\ncast:\n  Alice: Alice\n---\n${"@Alice “Hello,” she said. “How are you?”\n\n".repeat(3000)}`,
     );
     (long.cast[0] as (typeof long.cast)[number]).handle = "Alicia";
-    const start = performance.now();
-    expect(write(long)).toContain("@Alicia “Hello,”");
-    expect(performance.now() - start).toBeLessThan(3000);
+    let written = "";
+    inGoodTime(3000, () => {
+      written = write(long);
+    });
+    expect(written).toContain("@Alicia “Hello,”");
   });
 });
 
@@ -831,9 +837,10 @@ describe("review, round five", () => {
       [lines.join(""), lines.map((_, at) => lines[(at * 7919) % n]).join("")],
     ];
     for (const [a, b] of texts) {
-      const start = performance.now();
-      const changes = diffChanges(a, b);
-      expect(performance.now() - start).toBeLessThan(2000);
+      let changes: ReturnType<typeof diffChanges> = [];
+      inGoodTime(2000, () => {
+        changes = diffChanges(a, b);
+      });
       // Compared as a boolean: a failure would print two texts of 100,000 lines.
       expect(applyChanges(a, changes) === b).toBe(true);
     }
@@ -843,13 +850,13 @@ describe("review, round five", () => {
     const source = `@Tom “Hi.” ${"[tap] ".repeat(40_000)}he said.`;
     const story = parse(source);
     const said = speeches(story).filter((speech) => /\p{L}/u.test(speech.text));
-    const start = performance.now();
-    expect(give(source, 0, "Ann").startsWith("@Ann “Hi.”")).toBe(true);
     const last = said[said.length - 1] as Speech;
-    expect(setSpeaker(story, last, "Ann")).toHaveLength(1);
-    expect(setDirection(story, last, "soft")).toHaveLength(1);
-    expect(insertSound(story, source.length - 3, "bang")).toHaveLength(1);
-    expect(performance.now() - start).toBeLessThan(3000);
+    inGoodTime(3000, () => {
+      expect(give(source, 0, "Ann").startsWith("@Ann “Hi.”")).toBe(true);
+      expect(setSpeaker(story, last, "Ann")).toHaveLength(1);
+      expect(setDirection(story, last, "soft")).toHaveLength(1);
+      expect(insertSound(story, source.length - 3, "bang")).toHaveLength(1);
+    });
   });
 
   it("escapes a parenthesis after a new name, and glues a name only where no space can go", () => {

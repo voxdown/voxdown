@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
 import { bookText, parse } from "voxdown";
+import { inGoodTime } from "../../../test-support/timing";
 import { examples } from "../../core/test/examples";
 import { renderBook, renderScript } from "../src/index";
 import { heardWords, shownWords } from "./words";
@@ -59,13 +60,8 @@ describe("the views, on real books", () => {
       .join("\n\n");
     const times = Math.ceil(100_000 / bodies.split(/\s+/).length);
     const story = parse(Array.from({ length: times }, () => bodies).join("\n\n"));
-    const time = (work: () => unknown) => {
-      const start = performance.now();
-      work();
-      return performance.now() - start;
-    };
     // About 100,000 words. Generous limits, for slow machines.
-    expect(time(() => renderScript(story, { positions: true }))).toBeLessThan(5000);
-    expect(time(() => renderBook(story, { positions: true, pages: true }))).toBeLessThan(5000);
+    inGoodTime(5000, () => renderScript(story, { positions: true }), "the script");
+    inGoodTime(5000, () => renderBook(story, { positions: true, pages: true }), "the book");
   }, 60_000);
 });

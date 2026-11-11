@@ -162,17 +162,28 @@ export function taggedName(story: Story, quote: Quote): string | undefined {
   return found;
 }
 
+/** A name as it is compared: its key (§5.2), without an article before it (`the March Hare`). */
+const bareName = (name: string) =>
+  nameKey(name.trim())
+    .replace(/^(?:the|a|an)\s+/u, "")
+    .replace(/\s+/gu, " ");
+
 /**
- * The cast member a name means: their short name, their full name, or a full name's last word
- * (`Mrs. Rabbit` for `Mother: Mrs. Rabbit`); undefined if it means no one in the cast.
+ * The cast member a name means: their short name, or their full name (an article before either
+ * set aside: `the March Hare` for `Hare: The March Hare`), or the last word of one full name
+ * alone (`Rabbit` for `Mother: Mrs. Rabbit`, but not where two full names end so); undefined if
+ * it means no one in the cast.
  */
 export function castMemberNamed(story: Story, name: string): string | undefined {
-  const key = nameKey(name.trim());
-  if (key === nameKey(story.meta.narrator)) return story.meta.narrator;
+  const key = bareName(name);
+  if (!key) return undefined;
+  if (key === bareName(story.meta.narrator)) return story.meta.narrator;
   for (const member of story.cast) {
-    if (nameKey(member.handle) === key || nameKey(member.name) === key) return member.handle;
+    if (bareName(member.handle) === key || bareName(member.name) === key) return member.handle;
   }
-  return undefined;
+  if (key.includes(" ")) return undefined;
+  const last = story.cast.filter((member) => bareName(member.name).split(" ").at(-1) === key);
+  return last.length === 1 ? last[0]?.handle : undefined;
 }
 
 /** A quote to give: its number, and the speaker's name, with their full name if they're new. */

@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import v8 from "node:v8";
 import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { inGoodTime, slowness } from "../../../test-support/timing";
 import { heardIndex, heardItem } from "../src/edit";
 import {
   type TextChange,
@@ -215,30 +216,26 @@ describe("real books", () => {
     expect(words).toBeGreaterThan(100_000);
     expect(words).toBeLessThan(120_000);
     // Each step after the event loop has had a turn, so the test worker never goes quiet long.
-    const time = async (work: () => unknown) => {
+    const within = async (budget: number, work: () => unknown, what: string) => {
       await turn();
-      const start = performance.now();
-      work();
-      return performance.now() - start;
+      inGoodTime(budget, work, what);
     };
     const story = parse(long);
     // About ten times what a laptop takes (parse 50 ms, format 300 ms, an edit 250 ms), for slow
     // machines: a step that turns quadratic still fails.
-    expect(await time(() => parse(long))).toBeLessThan(750);
-    expect(await time(() => lines(story))).toBeLessThan(500);
-    expect(await time(() => tokens(story))).toBeLessThan(500);
-    expect(await time(() => write(story))).toBeLessThan(750);
-    expect(await time(() => format(long, { quotes: "curly" }))).toBeLessThan(4000);
+    await within(750, () => parse(long), "parse");
+    await within(500, () => lines(story), "lines");
+    await within(500, () => tokens(story), "tokens");
+    await within(750, () => write(story), "write");
+    await within(4000, () => format(long, { quotes: "curly" }), "format");
     // Each edit about two readings of the whole story (on a laptop, 100 to 150 ms).
     const said = speeches(story);
     const middle = said[Math.floor(said.length / 2)] as (typeof said)[number];
-    expect(await time(() => setSpeaker(story, middle, "Zed"))).toBeLessThan(1500);
-    expect(await time(() => setDirection(story, middle, "brightly"))).toBeLessThan(1500);
-    expect(await time(() => insertSound(story, middle.range.from + 2, "clatter"))).toBeLessThan(
-      1500,
-    );
+    await within(1500, () => setSpeaker(story, middle, "Zed"), "setSpeaker");
+    await within(1500, () => setDirection(story, middle, "brightly"), "setDirection");
+    await within(1500, () => insertSound(story, middle.range.from + 2, "clatter"), "insertSound");
     // A book detail touches only the front matter: it reads only that again.
-    expect(await time(() => setMeta(story, "title", "A New Title"))).toBeLessThan(100);
+    await within(100, () => setMeta(story, "title", "A New Title"), "setMeta");
   }, 60_000);
 
   it("parses, formats and edits in time that grows with the story, not with its square", async () => {
@@ -304,30 +301,32 @@ describe("real books", () => {
     const bad = '@Tom "I\'m here,” he said. "Come in."';
     for (let at = 0; at < paragraphs.length; at += 20) paragraphs.splice(at, 0, bad);
     const manuscript = paragraphs.join("\n\n");
-    let start = performance.now();
-    const once = format(manuscript, { quotes: "curly" });
-    expect(performance.now() - start).toBeLessThan(15_000);
+    let once = "";
+    inGoodTime(15_000, () => {
+      once = format(manuscript, { quotes: "curly" });
+    });
     expect(once.split("\n").filter((line) => line === bad).length).toBeGreaterThan(40);
     await turn();
-    start = performance.now();
-    expect(format(once, { quotes: "curly" })).toBe(once);
-    expect(performance.now() - start).toBeLessThan(10_000);
+    let again = "";
+    inGoodTime(10_000, () => {
+      again = format(once, { quotes: "curly" });
+    });
+    expect(again).toBe(once);
     // And short lines, every other one left as it is.
     const good = '@Ann "Hello," she said. "It\'s late."';
     await turn();
     const lines = Array.from({ length: 4000 }, (_, at) => (at % 2 ? bad : good)).join("\n\n");
-    start = performance.now();
-    const alternate = format(lines, { quotes: "curly" });
-    expect(performance.now() - start).toBeLessThan(10_000);
+    let alternate = "";
+    inGoodTime(10_000, () => {
+      alternate = format(lines, { quotes: "curly" });
+    });
     expect(alternate.split("\n").filter((line) => line.startsWith("@Ann “")).length).toBe(2000);
   }, 120_000);
 
   it("formats many short paragraphs in good time", () => {
     // Each change's paragraph is found by halves, not by a search from the start.
     const text = Array.from({ length: 64_000 }, () => "The rain fell.  Nobody moved.").join("\n\n");
-    const start = performance.now();
-    format(text);
-    expect(performance.now() - start).toBeLessThan(15_000);
+    inGoodTime(15_000, () => format(text));
   }, 60_000);
 
   it("reads groups nested thousands deep in memory that grows with the file, not its square", () => {
@@ -340,7 +339,8 @@ describe("real books", () => {
     const before = process.memoryUsage().heapUsed;
     const start = performance.now();
     const story = parse(text);
-    expect(performance.now() - start).toBeLessThan(3000);
+    // Measured once, here: the memory is what this test is about.
+    expect(performance.now() - start).toBeLessThan(3000 * slowness());
     gc();
     expect((process.memoryUsage().heapUsed - before) / 1e6).toBeLessThan(60);
     const last = story.blocks.at(-1);
@@ -357,10 +357,15 @@ describe("real books", () => {
     for (const piece of ['"Hi," he said. ', "'Hi,' she said. "]) {
       await turn();
       const line = piece.repeat(40_000);
-      const start = performance.now();
-      const curly = format(line, { quotes: "curly" });
+      let curly = "";
+      inGoodTime(
+        6000,
+        () => {
+          curly = format(line, { quotes: "curly" });
+        },
+        piece,
+      );
       expect(curly.slice(0, 5)).toBe(piece.startsWith('"') ? "“Hi,”" : "‘Hi,’");
-      expect(performance.now() - start, piece).toBeLessThan(6000);
     }
   }, 60_000);
 
@@ -369,9 +374,11 @@ describe("real books", () => {
     // them took seven seconds.
     await turn();
     const text = "@Tom 'Tis cold,' he said.\n\n".repeat(16_000);
-    const start = performance.now();
-    expect(curlQuotes(text).length).toBe(text.length);
-    expect(performance.now() - start).toBeLessThan(3000);
+    let curled = "";
+    inGoodTime(3000, () => {
+      curled = curlQuotes(text);
+    });
+    expect(curled.length).toBe(text.length);
   }, 60_000);
 
   it("reads lines built to be slow in good time", async () => {

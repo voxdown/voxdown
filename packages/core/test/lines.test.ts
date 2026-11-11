@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { inGoodTime } from "../../../test-support/timing";
 import {
   bookText,
   fromFountain,
@@ -362,11 +363,15 @@ describe("links, as Markdown reads them (§8.3)", () => {
       `Hi ${"![".repeat(50_000)}bird${"](a)".repeat(50_000)} end.`,
       `Hi ${"[![".repeat(30_000)}bird${"](a)](b)".repeat(30_000)} end.`,
     ]) {
-      const start = performance.now();
-      const story = parse(text);
-      spokenScript(story);
-      lines(story);
-      expect(performance.now() - start, text.slice(0, 6)).toBeLessThan(2000);
+      inGoodTime(
+        2000,
+        () => {
+          const story = parse(text);
+          spokenScript(story);
+          lines(story);
+        },
+        text.slice(0, 6),
+      );
     }
   });
 });

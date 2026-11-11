@@ -556,6 +556,7 @@ const tools: StretchTools = new StretchTools({
   scope: (at) =>
     view.state.doc.length >= LONG ? paragraphScope(view.state.doc.toString(), at) : undefined,
   notice: (message) => notice(message),
+  announce: (message) => announce(message),
   directions: () =>
     view.state.doc.length >= LONG
       ? [
@@ -3361,7 +3362,7 @@ const aiContext: AiContext = {
     setTimeout(
       () =>
         notice(
-          "Connected to this computer: Edit › Name the speakers with AI…, and File › Make an audiobook….",
+          "Connected to this computer: Edit › Name the speakers with AI…, and File › Make an audiobook…",
         ),
       1200,
     );

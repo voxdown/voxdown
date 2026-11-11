@@ -21,6 +21,14 @@ It needs [Node.js](https://nodejs.org) 20 or later, and [ffmpeg](https://ffmpeg.
 
 With several, `vxd produce` asks which; `--with elevenlabs` chooses. Sound effects and directions a service can't take are left out, and counted, so you know.
 
+## Where your story goes
+
+Only to the voice service you choose, and only when you make an audiobook: VoxDown itself sends nothing anywhere.
+
+- **A voice engine on your computer** (Kokoro, or another OpenAI-compatible server you run) keeps everything there.
+- **A voice service online** (ElevenLabs, Azure, OpenAI) is sent the lines to be read, from your computer, with your own key. What it does with them is up to its terms, as when you use it yourself.
+- **VoxDown has no server and no account.** In the Writer, the story goes from the page to `vxd connect` on your own computer, and from there only to the service you choose. Your keys stay in your computer's settings, and VoxDown never sees them, or your story.
+
 ## Casting
 
 The first run writes `casting.json` in the output folder: a voice for each character, chosen from the service's voices (the narrator a storyteller's where there is one, each character a voice of their own, of the gender the cast's words suggest). Change any voice there, by its name or its id, and run again. `--dry-run` shows the casting and what the book would cost, and makes nothing.

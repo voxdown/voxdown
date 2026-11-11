@@ -1752,12 +1752,10 @@ body[data-welcome] #draft-state {
   accent-color: var(--brand);
 }
 
-/* Placeholders read as such: the muted colour, never the ink of what is written. */
-.cast-name::placeholder,
-.cast-about::placeholder,
-.details-fields input::placeholder,
-#outline-filter::placeholder,
-#ask-input::placeholder {
+/* Placeholders read as such, in every field of the Writer, the pickers' too: the muted colour,
+   never the ink of what is written, nor the browser's own grey, too faint on the dark page. */
+.writer input::placeholder,
+.writer textarea::placeholder {
   color: var(--quiet);
   opacity: 1;
 }

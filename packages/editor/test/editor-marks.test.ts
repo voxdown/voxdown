@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { inGoodTime } from "../../../test-support/timing";
 import { type EditorMark, editorMarks } from "../src/marks";
 
 /** What the editor draws for each mark (src/editor/marks.ts), checked against the text it covers. */
@@ -11,10 +12,11 @@ describe("editor marks", () => {
       `Hi ${"![".repeat(50_000)}bird${"](a)".repeat(50_000)} end.`,
       `Hi ${"[![".repeat(30_000)}bird${"](a)](b)".repeat(30_000)} end.`,
     ]) {
-      const start = performance.now();
-      const marks = editorMarks(text);
+      let marks: ReturnType<typeof editorMarks> = [];
+      inGoodTime(3000, () => {
+        marks = editorMarks(text);
+      });
       expect(marks.every((m) => m.from >= 0 && m.to <= text.length)).toBe(true);
-      expect(performance.now() - start).toBeLessThan(3000);
     }
   });
 

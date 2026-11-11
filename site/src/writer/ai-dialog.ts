@@ -5,7 +5,15 @@
  * choice remembered, and shows the work as it goes. Speakers come back as changes to the story,
  * one step to undo; an audiobook is made in a folder on the computer.
  */
-import { type Story, type TextChange, bookText, giveQuotes, parse, quotesOf } from "voxdown";
+import {
+  type Gift,
+  type Story,
+  type TextChange,
+  diffChanges,
+  giveQuotes,
+  parse,
+  quotesOf,
+} from "voxdown";
 import {
   type Found,
   type Hello,
@@ -65,6 +73,13 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
     mode === "speakers"
       ? "Your story goes only to the AI you choose, through the helper on your computer. VoxDown never sees it, nor your keys."
       : "Your story goes only to the voice service you choose, through the helper on your computer; the audiobook is made there. VoxDown never sees it, nor your keys.";
+  // Before the helper is found too: where the story goes, said for what the dialog does.
+  $("#ai-private-text").textContent =
+    mode === "speakers"
+      ? "VoxDown has no server and no account: your story goes from this page to the helper on your own computer, and from there only to the AI you choose. Your keys and sign-ins stay on your computer, and VoxDown never sees them."
+      : "VoxDown has no server and no account: your story goes from this page to the helper on your own computer, and from there only to the voice service you choose, or to none if the voices are on your computer too. Your keys stay on your computer, and VoxDown never sees them.";
+  $<HTMLAnchorElement>("#ai-private-link").href =
+    `https://github.com/voxdown/voxdown/blob/main/docs/${mode === "speakers" ? "ai.md#where-your-words-go" : "produce.md#where-your-story-goes"}`;
   bookOptions.hidden = mode !== "audiobook";
   $("#ai-scope-options").hidden = mode !== "speakers";
   const selected = context.selection();
@@ -237,34 +252,29 @@ async function nameSpeakers(
     const held = proposals.filter((proposal) => proposal.outcome !== "given");
     const unknown = (done.unknown as number[] | undefined)?.length ?? 0;
     const joined = (done.joined as string[] | undefined) ?? [];
-    // Written on meanwhile: given by number to the story as it is now, if its words are the same.
+    /** Quotes whose lines the writer changed while the AI worked: left for the writer. */
+    let moved = 0;
+    let givenNow = given;
+    // Written on meanwhile: each quote found again in the story as it is now, and given there if
+    // its line is as it was. A word typed elsewhere loses nothing.
     if (context.text() !== sent && changes.length) {
-      const now = context.story();
-      if (bookText(parse(sent)) !== bookText(now)) {
-        const said =
-          "The story's words changed while the AI worked, so nothing was given: run it again when you're ready.";
-        progress.textContent = said;
-        if (behind) context.notice(said);
-        return;
-      }
-      // A quote the writer gave someone meanwhile keeps the writer's choice.
-      const waiting = quotesOf(now);
-      const theirs = proposals.filter(
-        (proposal) => proposal.outcome === "given" && !waiting[proposal.quote - 1]?.narrated,
-      ).length;
-      keptOwn = theirs;
-      changes = giveQuotes(
-        now,
-        proposals
-          .filter(
-            (proposal) => proposal.outcome === "given" && waiting[proposal.quote - 1]?.narrated,
-          )
-          .map((proposal) => ({
-            quote: proposal.quote,
+      const placed = placedNow(sent, context.text(), context.story());
+      const gifts: Gift[] = [];
+      for (const proposal of proposals) {
+        if (proposal.outcome !== "given") continue;
+        const now = placed(proposal.quote);
+        if (now === "theirs") keptOwn++;
+        else if (now === undefined) moved++;
+        else
+          gifts.push({
+            quote: now,
             speaker: proposal.speaker,
             ...(proposal.fullName ? { fullName: proposal.fullName } : {}),
-          })),
-      ).changes;
+          });
+      }
+      const regiven = giveQuotes(context.story(), gifts);
+      changes = regiven.changes;
+      givenNow = regiven.given.length;
     }
     if (changes.length && !context.apply(changes)) {
       progress.textContent = "The speakers couldn't be given here.";
@@ -272,11 +282,14 @@ async function nameSpeakers(
     }
     progress.textContent = [
       changes.length
-        ? `${plural(given - keptOwn, "speaker")} given${joined.length ? `, and ${joined.join(", ")} joined the cast` : ""}: Ctrl+Z takes them back.`
+        ? `${plural(givenNow, "speaker")} given${joined.length ? `, and ${joined.join(", ")} joined the cast` : ""}: Ctrl+Z takes them back.`
         : ai === "tags"
           ? "Nothing to give: no quote waiting for a speaker has a dialogue tag naming someone (“…” asked Mara)."
           : "Nothing to give: every quote the AI was asked about stayed as it was.",
       keptOwn ? `${plural(keptOwn, "quote")} you gave meanwhile kept as you gave them.` : "",
+      moved
+        ? `${plural(moved, "quote")} on lines you changed meanwhile left as they are: Ctrl+Shift+K finds them.`
+        : "",
       held.length ? `${plural(held.length, "quote")} held back, below.` : "",
       unknown ? `${plural(unknown, "quote")} the AI couldn't tell: Ctrl+Shift+K finds them.` : "",
       done.stopped ? `It stopped early: ${String(done.stopped)}` : "",
@@ -412,4 +425,50 @@ async function audiobook(
   } finally {
     go.disabled = false;
   }
+}
+
+/**
+ * Where each quote of the story as sent is now, by its number: the number it has now; "theirs"
+ * if the writer gave it to someone meanwhile; undefined if its line changed, or it is gone.
+ */
+export function placedNow(
+  sent: string,
+  text: string,
+  now: Story,
+): (quote: number) => number | "theirs" | undefined {
+  const before = quotesOf(parse(sent));
+  const edits = diffChanges(sent, text);
+  const there = new Map(quotesOf(now).map((quote) => [quote.from, quote]));
+  /** A place in the text as sent, in the text now: moved by every change wholly before it. */
+  const mapped = (at: number) => {
+    let by = 0;
+    for (const edit of edits) {
+      if (edit.to > at) break;
+      by += edit.insert.length - (edit.to - edit.from);
+    }
+    return at + by;
+  };
+  return (number) => {
+    const quote = before[number - 1];
+    if (!quote) return undefined;
+    const found = there.get(mapped(quote.from));
+    if (!found || found.text !== quote.text) return undefined;
+    if (!found.narrated) return "theirs";
+    // Its line as it was: a tag changed nearby could mean someone else.
+    const lineFrom = sent.lastIndexOf("\n", quote.from - 1) + 1;
+    const end = sent.indexOf("\n", quote.to);
+    const lineTo = end < 0 ? sent.length : end;
+    const touches = (edit: TextChange) => {
+      if (edit.to < lineFrom || edit.from > lineTo) return false;
+      // Lines put in or taken out before it, or after it, leave it as it was.
+      if (edit.to === lineFrom)
+        return !(edit.insert
+          ? edit.insert.endsWith("\n")
+          : edit.from === edit.to || sent[edit.to - 1] === "\n");
+      if (edit.from === lineTo) return !edit.insert.startsWith("\n");
+      return true;
+    };
+    if (edits.some(touches)) return undefined;
+    return found.number;
+  };
 }

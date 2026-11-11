@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
+import { inGoodTime } from "../../../test-support/timing";
 import { editorMarks, marksField, scriptEditor } from "../src/index";
 
 const corpus = resolve(dirname(fileURLToPath(import.meta.url)), "../../../corpus");
@@ -40,13 +41,16 @@ describe("the editor, on real books", () => {
     let state = EditorState.create({ doc, extensions: [scriptEditor({ characters })] });
     const middle = Math.floor(doc.length / 2);
     // Ten keystrokes in the middle of about 100,000 words: each one works the marks out again.
-    const start = performance.now();
-    for (let key = 0; key < 10; key++) {
-      state = state.update({ changes: { from: middle + key, insert: "a" } }).state;
-      state.field(marksField);
-    }
-    const perKey = (performance.now() - start) / 10;
-    // A generous limit for slow machines; the playground's laptop budget is far lower.
-    expect(perKey).toBeLessThan(1500);
+    // A generous limit, 1.5 s a key; the playground's laptop budget is far lower.
+    inGoodTime(
+      15_000,
+      () => {
+        for (let key = 0; key < 10; key++) {
+          state = state.update({ changes: { from: middle + key, insert: "a" } }).state;
+          state.field(marksField);
+        }
+      },
+      "ten keys",
+    );
   }, 60_000);
 });

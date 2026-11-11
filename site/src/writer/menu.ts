@@ -69,7 +69,10 @@ export function menus(
     }
     if (focusFirst) items(sub)[0]?.focus();
   };
-  for (const item of bar.querySelectorAll<HTMLElement>('[aria-haspopup="menu"][role="menuitem"]')) {
+  // Items with a menu of their own, inside the menus: not the bar's own buttons, which open theirs.
+  for (const item of bar.querySelectorAll<HTMLElement>(
+    '.menu-list [aria-haspopup="menu"][role="menuitem"]',
+  )) {
     const sub = subOf(item);
     if (!sub) continue;
     // The pointer crossing the gap between the item and its menu doesn't close it.

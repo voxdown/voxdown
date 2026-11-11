@@ -320,6 +320,12 @@ await writer.waitForFunction(
 const savedText = await writer.evaluate(() => Object.values(window.__files)[0] ?? "");
 if (!savedText.includes("New words."))
   problems.push("writer: Save didn't write the story to its file");
+// Saving automatically is for later: here the draft alone must bring the words back.
+await writer.click("#file-menu-button");
+await writer.click('[data-view="autosave"]');
+await writer.keyboard.press("Escape");
+await writer.click(".cm-content");
+await writer.keyboard.press("Control+End");
 await writer.keyboard.type("Not saved yet. ");
 await writer.waitForTimeout(1200);
 await writer.reload();
@@ -362,6 +368,51 @@ const fits = await writer.evaluate(
 if (!fits) problems.push("writer: at 900×760, the page doesn't fill the window");
 await writerContext.close();
 console.log("writer: welcome, rail, save, draft, open, warnings, view: ok");
+
+// Saving automatically: a file opened, typed in, and two seconds later it is on disk.
+const auto = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await auto.addInitScript(() => {
+  const files = { "auto.vxd": "# Auto\n\nThe start.\n" };
+  window.__files = files;
+  const handle = (name) => ({
+    kind: "file",
+    name,
+    getFile: async () => new File([files[name] ?? ""], name, { lastModified: 1 }),
+    createWritable: async () => {
+      let written = "";
+      return {
+        write: async (text) => {
+          written += text;
+        },
+        close: async () => {
+          files[name] = written;
+        },
+      };
+    },
+    isSameEntry: async (other) => other.name === name,
+    queryPermission: async () => "granted",
+    requestPermission: async () => "granted",
+  });
+  window.showOpenFilePicker = async () => [handle("auto.vxd")];
+  window.showSaveFilePicker = async ({ suggestedName }) => handle(suggestedName);
+});
+const autoPage = await auto.newPage();
+watch(autoPage, "writer autosave");
+await autoPage.goto(`${base}/writer/`);
+await autoPage.click('.welcome [data-command="open"]');
+await autoPage.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "auto.vxd",
+);
+await autoPage.click(".cm-content");
+await autoPage.keyboard.press("Control+End");
+await autoPage.keyboard.type("Saved by itself.");
+await autoPage.waitForTimeout(2800);
+if (!(await autoPage.evaluate(() => window.__files["auto.vxd"].includes("Saved by itself."))))
+  problems.push("writer: Save automatically didn't save the file");
+if ((await autoPage.getAttribute("#save-state", "data-state")) !== "saved")
+  problems.push("writer: after saving automatically, it still shows changes to save");
+await auto.close();
+console.log("writer: saving automatically: ok");
 
 // Writing in the Writer: who says a passage and how, from the bar over it; undo; search; moving
 // a paragraph; renaming in the cast; and a warning's fix. Each change is read back from the

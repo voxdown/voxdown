@@ -48,6 +48,7 @@ import {
   asStory,
   download,
   keepsFiles,
+  mayWriteNow,
   onDisk,
   pickFile,
   pickSaveTarget,
@@ -71,7 +72,7 @@ document.head.append(rendererStyle);
 // What the writer chose to see, kept on this computer.
 
 type Tab = "script" | "book" | "cast" | "warnings";
-type Prefs = ViewSwitches & { marks: boolean; side: boolean; tab: Tab };
+type Prefs = ViewSwitches & { marks: boolean; side: boolean; tab: Tab; autosave: boolean };
 const PREFS_KEY = "vxd-writer-view";
 const prefs: Prefs = {
   color: true,
@@ -84,6 +85,7 @@ const prefs: Prefs = {
   marks: false,
   side: window.matchMedia("(min-width: 1100px)").matches,
   tab: "script",
+  autosave: true,
   ...savedPrefs(),
 };
 
@@ -353,6 +355,7 @@ function changed(): void {
   refreshTimer = setTimeout(refresh, view.state.doc.length < LONG ? 150 : 450);
   clearTimeout(keepTimer);
   keepTimer = setTimeout(() => void keep(), 700);
+  scheduleAutosave();
 }
 
 /**
@@ -928,6 +931,39 @@ function saved(content: string): void {
   void keep();
 }
 
+// Saving automatically: to the story's own file, two seconds after typing stops, where the browser
+// already lets the page write it. Never asks: a file changed on disk waits for Save.
+
+let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleAutosave(): void {
+  clearTimeout(autosaveTimer);
+  if (!prefs.autosave || !keepsFiles || !file.handle) return;
+  autosaveTimer = setTimeout(() => void autosave(), 2000);
+}
+
+async function autosave(): Promise<void> {
+  const handle = file.handle;
+  if (!handle || !lock.owner || lockedOut || text() === file.saved) return;
+  if (!(await mayWriteNow(handle))) return;
+  if (file.modified !== undefined) {
+    const disk = await onDisk(handle);
+    if (disk && disk.modified !== file.modified && disk.text !== file.saved) {
+      notice(
+        `${file.name} changed outside the Writer, so it wasn’t saved automatically. Save will ask which to keep.`,
+      );
+      return;
+    }
+  }
+  if (handle !== file.handle) return;
+  const content = text();
+  try {
+    file.modified = await writeFile(handle, content);
+    saved(content);
+  } catch {
+    // Save shows what went wrong.
+  }
+}
+
 // One tab writes the story at a time.
 
 const lock = new DraftLock(
@@ -1188,7 +1224,11 @@ function passageAtCursor(): number {
 const SWITCHES = ["color", "names", "directions", "sounds", "vocal", "pages", "notes"] as const;
 
 function viewCommand(name: string, on: boolean): void {
-  if (name === "marks") {
+  if (name === "autosave") {
+    prefs.autosave = on;
+    keepPrefs();
+    if (on) scheduleAutosave();
+  } else if (name === "marks") {
     view.dispatch({ effects: setShowMarks.of(on) });
   } else if (name === "side") {
     showSidePanel(on);
@@ -1325,7 +1365,9 @@ function showWelcome(): void {
 // Start: the draft from last time, or the welcome.
 
 async function start(): Promise<void> {
-  for (const name of [...SWITCHES, "marks"] as const) checkMenu(name, prefs[name]);
+  for (const name of [...SWITCHES, "marks", "autosave"] as const) checkMenu(name, prefs[name]);
+  // Where the browser can't keep files, there's no file to save to automatically.
+  $("#autosave-item").hidden = !keepsFiles;
   showSidePanel(prefs.side);
   checkMenu("rail-names", rail.names);
   void showRecent();

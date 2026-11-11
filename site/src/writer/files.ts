@@ -160,6 +160,17 @@ export function download(text: string, name: string, type = "text/markdown"): vo
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Whether the page may write the file now without asking (the browser asks only on a click). */
+export async function mayWriteNow(handle: FileSystemFileHandle): Promise<boolean> {
+  try {
+    return (
+      !handle.queryPermission || (await handle.queryPermission({ mode: "readwrite" })) === "granted"
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function allowed(handle: FileSystemFileHandle, mode: "read" | "readwrite") {
   if (!handle.queryPermission || !handle.requestPermission) return true;
   if ((await handle.queryPermission({ mode })) === "granted") return true;

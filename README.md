@@ -25,7 +25,7 @@ The one rule to remember: **on each line, the quotes after a name belong to it, 
 - **Try it** in the [playground](https://voxdown.github.io/): write on the left, see the script, the book and the lines on the right.
 - **Hear it**: [two stories read aloud](https://voxdown.github.io/voxdown/listen.html), every character in their own voice and every line as its marks direct.
 - **Learn it** from the [cheat sheet](spec/CHEATSHEET.md), every mark on one page.
-- **Write it** in VS Code: install [VoxDown from the Marketplace](https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown) for colors, warnings as you type and a live preview.
+- **Write it** in the [Writer](https://voxdown.github.io/voxdown/writer/): open a `.vxd` file from your computer, write with its scenes beside you and the book or script on the other side, and save it back. Nothing leaves your browser. Or in VS Code: install [VoxDown from the Marketplace](https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown) for colors, warnings as you type and a live preview.
 - **Read the spec**: [SPEC.md](spec/SPEC.md), version 1.1, with a worked example for every rule.
 
 ## In 30 seconds

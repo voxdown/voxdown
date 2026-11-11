@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoxDown Writer</title>
+<meta name="description" content="Write and mark up a story to be read aloud. Open a .vxd file, edit it, save it back. Runs in your browser; your story stays on your computer.">
+<link rel="icon" href="../icon.svg">
+<script>try{var t=localStorage.getItem("vxd-theme");if(t==="light"||t==="dark")document.documentElement.dataset.vxdTheme=t}catch(e){}</script>
+</head>
+<body class="writer">
+<header class="appbar">
+  <a class="wordmark" href="../"><img class="logo" src="../icon.svg" alt="" width="26" height="26">VoxDown <span class="product">Writer</span></a>
+  <div class="menus" role="menubar" aria-label="Writer">
+    <div class="menu">
+      <button class="menu-button" type="button" id="file-menu-button" aria-haspopup="menu" aria-controls="file-menu" aria-expanded="false">File</button>
+      <div class="menu-list" role="menu" id="file-menu" aria-labelledby="file-menu-button" hidden>
+        <button role="menuitem" type="button" data-command="new">New story</button>
+        <button role="menuitem" type="button" data-command="open">Open…<kbd data-keys="Mod+O"></kbd></button>
+        <div class="menu-group" id="recent-group" hidden>
+          <span class="menu-label" id="recent-label">Open recent</span>
+          <div role="group" aria-labelledby="recent-label" id="recent-list"></div>
+        </div>
+        <hr>
+        <button role="menuitem" type="button" data-command="save">Save<kbd data-keys="Mod+S"></kbd></button>
+        <button role="menuitem" type="button" data-command="save-as">Save as…<kbd data-keys="Mod+Shift+S"></kbd></button>
+        <button role="menuitem" type="button" data-command="download">Download a copy</button>
+        <hr>
+        <button role="menuitem" type="button" data-command="format">Tidy the story</button>
+        <button role="menuitem" type="button" data-command="format-curly">Tidy, with curly quotes</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-button" type="button" id="view-menu-button" aria-haspopup="menu" aria-controls="view-menu" aria-expanded="false">View</button>
+      <div class="menu-list" role="menu" id="view-menu" aria-labelledby="view-menu-button" hidden>
+        <button role="menuitemcheckbox" type="button" data-view="marks" aria-checked="false">Every mark raw<kbd data-keys="Mod+Shift+M"></kbd></button>
+        <hr>
+        <span class="menu-label">Draw</span>
+        <button role="menuitemcheckbox" type="button" data-view="color" aria-checked="true">Color by speaker</button>
+        <button role="menuitemcheckbox" type="button" data-view="names" aria-checked="true">Names</button>
+        <button role="menuitemcheckbox" type="button" data-view="directions" aria-checked="true">Directions</button>
+        <button role="menuitemcheckbox" type="button" data-view="sounds" aria-checked="true">Sounds</button>
+        <button role="menuitemcheckbox" type="button" data-view="vocal" aria-checked="true">Character sounds</button>
+        <button role="menuitemcheckbox" type="button" data-view="pages" aria-checked="true">Page turns</button>
+        <button role="menuitemcheckbox" type="button" data-view="notes" aria-checked="true">Notes</button>
+        <hr>
+        <button role="menuitemcheckbox" type="button" data-view="rail-names" aria-checked="true">Scene names</button>
+        <button role="menuitemcheckbox" type="button" data-view="side" aria-checked="true">Book and script</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-button" type="button" id="help-menu-button" aria-haspopup="menu" aria-controls="help-menu" aria-expanded="false">Help</button>
+      <div class="menu-list" role="menu" id="help-menu" aria-labelledby="help-menu-button" hidden>
+        <a role="menuitem" href="../cheatsheet.html" target="_blank" rel="noopener">Every mark on one page</a>
+        <a role="menuitem" href="../spec.html" target="_blank" rel="noopener">The VoxDown spec</a>
+        <hr>
+        <a role="menuitem" href="../">The playground</a>
+        <a role="menuitem" href="https://github.com/voxdown/voxdown" target="_blank" rel="noopener">VoxDown on GitHub</a>
+      </div>
+    </div>
+  </div>
+  <div class="document" aria-live="polite">
+    <span class="file-name" id="file-name">Untitled.vxd</span>
+    <span class="save-state" id="save-state" data-state="saved">Saved</span>
+  </div>
+  <span class="spacer"></span>
+  <button class="button save-button" type="button" id="save-button" data-command="save" title="Save (Ctrl+S)">Save</button>
+  <button class="theme-switch" type="button" id="theme" hidden>Auto</button>
+</header>
+
+<main class="workspace" id="workspace">
+  <nav class="scene-rail" id="scene-rail" aria-label="Scenes" data-labels>
+    <button type="button" class="scene-rail-toggle" id="rail-toggle" aria-pressed="true" title="Hide scene names">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
+      <span class="sr-only">Hide scene names</span>
+    </button>
+    <div class="scene-rail-track" id="rail-track">
+      <div class="scene-rail-line" id="rail-line"></div>
+      <div class="scene-rail-window" id="rail-window" data-rail-window></div>
+      <ol class="scene-rail-scenes" id="rail-scenes"></ol>
+    </div>
+  </nav>
+
+  <section class="manuscript" aria-label="Story">
+    <div class="editor" id="editor"></div>
+    <div class="welcome" id="welcome" hidden>
+      <h1>Write a story to be read aloud.</h1>
+      <p>Mark who says each line, how, and the sounds around it. Open a <code>.vxd</code> file from your computer, or start one here. Everything stays in this browser until you save it.</p>
+      <div class="welcome-actions">
+        <button class="button primary" type="button" data-command="open">Open a file…</button>
+        <button class="button" type="button" data-command="new">Start a new story</button>
+      </div>
+      <p class="welcome-examples-title">Or begin from an example:</p>
+      <ul class="welcome-examples" id="welcome-examples"></ul>
+    </div>
+  </section>
+
+  <aside class="side" id="side" aria-label="What the story becomes">
+    <div class="side-tabs" role="tablist" aria-label="Show">
+      <button class="side-tab" role="tab" type="button" data-tab="script" aria-controls="side-sheet">Script</button>
+      <button class="side-tab" role="tab" type="button" data-tab="book" aria-controls="side-sheet">Book</button>
+      <button class="side-tab" role="tab" type="button" data-tab="warnings" aria-controls="side-sheet">Warnings <span class="count" id="warning-count">0</span></button>
+    </div>
+    <div class="side-sheet sheet" id="side-sheet" role="tabpanel" tabindex="0"></div>
+  </aside>
+</main>
+
+<footer class="statusbar">
+  <span id="counts"></span>
+  <span class="spacer"></span>
+  <button type="button" class="status-warnings" id="status-warnings" hidden></button>
+  <span id="cursor-place"></span>
+  <span id="draft-state" class="draft-state"></span>
+</footer>
+
+<input type="file" id="file-input" accept=".vxd,.md,.txt,.fountain" hidden>
+
+<dialog class="ask" id="ask">
+  <form method="dialog">
+    <p id="ask-message"></p>
+    <div class="ask-buttons" id="ask-buttons"></div>
+  </form>
+</dialog>
+
+<script type="module" src="../src/writer/writer.ts"></script>
+</body>
+</html>

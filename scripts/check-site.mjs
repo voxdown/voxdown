@@ -246,6 +246,113 @@ for (const story of await listen.$$eval(".story", (buttons) =>
   console.log(`listen.html: ${story}: recorded, ${placed} parts placed`);
 }
 
+// The Writer: the welcome, an example with its scenes on the rail, a jump to a scene, typing,
+// saving to a file (a stand-in for the one Chrome gives pages), the draft brought back after a
+// reload, asking before putting changes aside, and the warnings.
+const writerContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+await writerContext.addInitScript(() => {
+  const files = {};
+  window.__files = files;
+  const handle = (name) => ({
+    kind: "file",
+    name,
+    getFile: async () => new File([files[name] ?? ""], name),
+    createWritable: async () => {
+      let written = "";
+      return {
+        write: async (text) => {
+          written += text;
+        },
+        close: async () => {
+          files[name] = written;
+        },
+      };
+    },
+    isSameEntry: async (other) => other.name === name,
+    queryPermission: async () => "granted",
+    requestPermission: async () => "granted",
+  });
+  window.showSaveFilePicker = async ({ suggestedName }) => handle(suggestedName);
+  window.showOpenFilePicker = async () => {
+    files["opened.vxd"] ??= "# Opened\n\n@Ann “Hi.” @Bob\n\n* * *\n\nThe end.\n";
+    return [handle("opened.vxd")];
+  };
+});
+const writer = await writerContext.newPage();
+watch(writer, "writer");
+await writer.goto(`${base}/writer/`);
+await writer.waitForSelector("#welcome:not([hidden])");
+const dragonName = "the-dragon-who-would-not-roar.vxd";
+const dragon = readFileSync(join(site, "..", "examples", dragonName), "utf8");
+await writer.click(`.welcome-example[data-name="${dragonName}"]`);
+await writer.waitForSelector("#welcome", { state: "hidden" });
+const railNames = await writer.$$eval("#rail-scenes .scene-rail-name", (names) =>
+  names.map((name) => name.textContent),
+);
+const headings = dragon.match(/^#{1,6} .+$|^\* \* \*$|^\*\*\*$/gm) ?? [];
+if (railNames.length !== headings.length)
+  problems.push(`writer: ${railNames.length} scenes on the rail, ${headings.length} in the story`);
+await writer.click("#rail-scenes li:nth-child(4) button");
+await writer.waitForTimeout(300);
+const current = await writer
+  .$eval("#rail-scenes button[aria-current=true] .scene-rail-name", (name) => name.textContent)
+  .catch(() => null);
+if (current !== railNames[3])
+  problems.push(`writer: after a jump to “${railNames[3]}”, the rail marks “${current}”`);
+await writer.keyboard.type("New words. ");
+await writer.waitForTimeout(250);
+if ((await writer.getAttribute("#save-state", "data-state")) !== "unsaved")
+  problems.push("writer: typing doesn't show changes to save");
+await writer.keyboard.press("Control+s");
+await writer.waitForFunction(
+  () => document.querySelector("#save-state")?.getAttribute("data-state") === "saved",
+);
+const savedText = await writer.evaluate(() => Object.values(window.__files)[0] ?? "");
+if (!savedText.includes("New words."))
+  problems.push("writer: Save didn't write the story to its file");
+await writer.keyboard.type("Not saved yet. ");
+await writer.waitForTimeout(1200);
+await writer.reload();
+await writer.waitForSelector(".cm-content");
+await writer.waitForTimeout(300);
+const restored = await writer.evaluate(
+  () =>
+    new Promise((resolve) => {
+      const request = indexedDB.open("voxdown-writer");
+      request.onsuccess = () => {
+        const get = request.result.transaction("drafts").objectStore("drafts").get("current");
+        get.onsuccess = () => resolve(get.result?.text ?? "");
+      };
+    }),
+);
+if (!restored.includes("Not saved yet."))
+  problems.push("writer: the draft wasn't kept in the browser");
+if (!(await writer.textContent("#draft-state"))?.startsWith("Brought back"))
+  problems.push("writer: after a reload, it doesn't say it brought back the unsaved changes");
+await writer.keyboard.press("Control+o");
+await writer.waitForSelector("#ask[open]");
+await writer.click('#ask-buttons button[value="discard"]');
+await writer.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "opened.vxd",
+);
+await writer.click('.side-tab[data-tab="warnings"]');
+if ((await writer.locator("#side-sheet .warning").count()) === 0)
+  problems.push("writer: the warnings tab lists nothing for a story with an idle mark");
+await writer.click("#side-sheet .warning");
+await writer.waitForTimeout(100);
+await writer.click("#view-menu-button");
+await writer.click('[data-view="names"]');
+if ((await writer.getAttribute('[data-view="names"]', "aria-checked")) !== "false")
+  problems.push("writer: View › Names doesn't switch off");
+await writer.setViewportSize({ width: 900, height: 760 });
+await writer.waitForTimeout(200);
+const fits = await writer.evaluate(
+  () => document.body.getBoundingClientRect().height === window.innerHeight,
+);
+if (!fits) problems.push("writer: at 900×760, the page doesn't fill the window");
+await writerContext.close();
+console.log("writer: welcome, rail, save, draft, open, warnings, view: ok");
+
 const element = await browser.newPage();
 watch(element, "element.html");
 await element.goto(`${base}/element.html`);

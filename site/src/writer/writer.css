@@ -1,0 +1,620 @@
+/*
+ * VoxDown Writer: the playground's paper and ink, laid out as a writing app. A bar of menus and the
+ * file on top, the scenes down the left, the manuscript as a sheet in the middle, what it becomes
+ * on the right, and a status line along the foot.
+ */
+
+body.writer {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* The window's height at every width: the playground's narrow pages grow instead. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Whatever is hidden stays hidden, whatever its display. */
+.writer [hidden] {
+  display: none !important;
+}
+/* Until a story is open, there is no file to name or save, and nothing to show beside it. */
+.writer[data-welcome] .document,
+.writer[data-welcome] .save-button {
+  visibility: hidden;
+}
+.writer[data-welcome] .workspace[data-side] {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.writer[data-welcome] .side,
+.writer[data-welcome] .scene-rail-window {
+  display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The bar along the top. */
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  padding: 0.4rem clamp(0.6rem, 1.6vw, 1.2rem);
+  background: var(--paper);
+  border-bottom: 1px solid var(--desk-edge);
+  position: relative;
+  z-index: 5;
+}
+.appbar .wordmark {
+  font-size: 1.22rem;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+.appbar .wordmark .logo {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.appbar .product {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--brand);
+}
+.appbar .spacer {
+  flex: 1;
+}
+.document {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.file-name {
+  font-family: var(--mono);
+  font-variation-settings: "MONO" 1;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22rem;
+}
+.save-state {
+  font-size: 0.78rem;
+  color: var(--quiet);
+  white-space: nowrap;
+}
+.save-state::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  background: #2f9e66;
+  vertical-align: 0.06em;
+}
+.save-state[data-state="unsaved"]::before {
+  background: #d97706;
+}
+.save-state[data-state="saving"]::before {
+  background: var(--pencil);
+}
+.save-state[data-state="error"] {
+  color: #c2410c;
+}
+.save-state[data-state="error"]::before {
+  background: #c2410c;
+}
+.save-button.needed,
+.button.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+.save-button.needed:hover,
+.button.primary:hover {
+  filter: brightness(1.08);
+}
+
+/* Menus. */
+.menus {
+  display: flex;
+  gap: 0.1rem;
+}
+.menu {
+  position: relative;
+}
+.menu-button {
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.menu-button:hover,
+.menu-button[aria-expanded="true"] {
+  background: var(--tab);
+}
+.menu-list {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  min-width: 16rem;
+  padding: 0.3rem;
+  background: var(--paper);
+  border: 1px solid var(--desk-edge);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px -10px rgb(20 30 50 / 0.35);
+  display: flex;
+  flex-direction: column;
+}
+.menu-list a[role="menuitem"] {
+  color: inherit;
+  text-decoration: none;
+}
+.menu-list [role^="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 0.32rem 0.6rem 0.32rem 1.7rem;
+  font-size: 0.86rem;
+  cursor: pointer;
+  position: relative;
+}
+.menu-list [role^="menuitem"]:hover,
+.menu-list [role^="menuitem"]:focus-visible {
+  background: var(--tab);
+  outline: none;
+}
+.menu-list [role="menuitemcheckbox"][aria-checked="true"]::before {
+  content: "✓";
+  position: absolute;
+  left: 0.55rem;
+  color: var(--brand);
+}
+.menu-list kbd {
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--quiet);
+}
+.menu-list hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 0.3rem 0.4rem;
+}
+.menu-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--quiet);
+  padding: 0.35rem 0.6rem 0.15rem 1.7rem;
+}
+.menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The workspace: rail, manuscript, and the side when shown. */
+.workspace {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 0;
+  position: relative;
+}
+.workspace[data-side] {
+  grid-template-columns: auto minmax(0, 1fr) minmax(22rem, 36%);
+}
+
+/* The scene rail. */
+.scene-rail {
+  display: flex;
+  flex-direction: column;
+  width: 2.4rem;
+  padding: 0.35rem 0 0.4rem;
+  background: var(--paper);
+  border-right: 1px solid var(--desk-edge);
+  user-select: none;
+  transition: width 0.15s ease;
+  min-height: 0;
+}
+.scene-rail[data-labels] {
+  width: 12rem;
+}
+.scene-rail-toggle {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  margin-left: 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--quiet);
+  cursor: pointer;
+}
+.scene-rail-toggle:hover {
+  background: var(--tab);
+  color: var(--ink);
+}
+.scene-rail-toggle svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.scene-rail-track {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  cursor: pointer;
+  touch-action: none;
+}
+.scene-rail-line {
+  position: absolute;
+  left: 19px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--desk-edge);
+}
+.scene-rail-window {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  z-index: 1;
+  border: 1.5px solid color-mix(in srgb, var(--pencil) 55%, var(--desk-edge));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--pencil) 8%, transparent);
+  cursor: grab;
+}
+.scene-rail-window:active {
+  cursor: grabbing;
+}
+.scene-rail-scenes {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+.scene-rail-scenes > li {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+}
+.scene-rail-scenes button {
+  position: absolute;
+  top: -10px;
+  left: 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: calc(100% - 12px);
+  height: 20px;
+  padding: 0 7px 0 5px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.scene-rail-scenes button:hover {
+  background: var(--tab);
+}
+.scene-rail-node {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--quiet);
+  border-radius: 50%;
+  background: var(--paper);
+}
+.scene-rail-scenes [data-chapter] .scene-rail-node {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+.scene-rail-scenes [data-chapter] .scene-rail-name {
+  font-weight: 600;
+}
+.scene-rail-scenes button[aria-current="true"] .scene-rail-node {
+  border-color: var(--pencil);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pencil) 25%, transparent);
+}
+.scene-rail-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: none;
+}
+.scene-rail[data-labels] .scene-rail-name {
+  display: inline;
+}
+
+/* The manuscript: a sheet of paper on the desk. */
+.manuscript {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+  padding: 1.1rem clamp(0.4rem, 2vw, 1.6rem) 0;
+}
+.manuscript .editor {
+  width: min(100%, 52rem);
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  background: var(--paper);
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 1px 2px rgb(30 40 60 / 0.08), 0 8px 30px -12px rgb(30 40 60 / 0.25);
+}
+.manuscript .editor .cm-scroller {
+  padding: 2.4rem clamp(1rem, 5vw, 4rem) 40vh;
+}
+
+/* The welcome, for a first visit. */
+.welcome {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2rem clamp(1.2rem, 8vw, 6rem);
+  background: var(--desk);
+  overflow: auto;
+}
+.welcome[hidden] {
+  display: none;
+}
+.welcome h1 {
+  font: 600 clamp(1.6rem, 3vw, 2.3rem) / 1.15 var(--story);
+  margin: 0;
+  max-width: 34rem;
+}
+.welcome p {
+  max-width: 36rem;
+  color: var(--quiet);
+  margin: 0;
+}
+.welcome-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0.8rem 0 0.6rem;
+}
+.welcome-actions .button {
+  font-size: 0.95rem;
+  padding: 0.5rem 1rem;
+}
+.welcome-examples-title {
+  font-size: 0.85rem;
+}
+.welcome-examples {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.5rem;
+  max-width: 48rem;
+}
+.welcome-example {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--paper);
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.welcome-example:hover {
+  border-color: var(--quiet);
+}
+.welcome-example .title {
+  font: 600 1rem / 1.25 var(--story);
+}
+.welcome-example .by {
+  font-size: 0.8rem;
+  color: var(--quiet);
+}
+
+/* The side: what the story becomes, and its warnings. */
+.side {
+  display: none;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  background: var(--paper);
+  border-left: 1px solid var(--desk-edge);
+}
+.workspace[data-side] .side {
+  display: grid;
+}
+.side-tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0 0.8rem;
+  border-bottom: 1px solid var(--rule);
+}
+.side-tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.55rem 0.7rem 0.45rem;
+  font-size: 0.85rem;
+  color: var(--quiet);
+  cursor: pointer;
+}
+.side-tab:hover {
+  color: var(--ink);
+}
+.side-tab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--brand);
+  font-weight: 600;
+}
+.side-tab .count {
+  display: inline-block;
+  min-width: 1.3rem;
+  margin-left: 0.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--tab);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+}
+.side-sheet {
+  padding: 1.4rem clamp(1rem, 2.5vw, 2rem) 3rem;
+  max-height: none;
+}
+.side-sheet .vxd {
+  --vxd-size: 15.5px;
+}
+.sheet-note {
+  color: var(--quiet);
+  font-size: 0.88rem;
+}
+.warning-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.warning-list .warning {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.7rem;
+  padding: 0.55rem 0.7rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-left: 3px solid #d97706;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+.warning-list .warning[data-severity="info"] {
+  border-left-color: var(--pencil);
+}
+.warning-list .warning:hover {
+  border-color: var(--quiet);
+}
+.warning-list .where {
+  color: var(--quiet);
+  white-space: nowrap;
+}
+.warning-list code {
+  grid-column: 2;
+  font-size: 0.75rem;
+  color: var(--quiet);
+}
+
+/* The status line. */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem 1.2rem;
+  padding: 0.3rem clamp(0.6rem, 1.6vw, 1.2rem);
+  background: var(--paper);
+  border-top: 1px solid var(--desk-edge);
+  font-size: 0.78rem;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.statusbar .spacer {
+  flex: 1;
+}
+.status-warnings {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #b45309;
+  cursor: pointer;
+  font-size: inherit;
+}
+.status-warnings:hover {
+  text-decoration: underline;
+}
+.draft-state[data-kept="false"] {
+  color: #c2410c;
+}
+
+/* Questions. */
+.ask {
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 1.2rem 1.3rem 1rem;
+  background: var(--paper);
+  color: var(--ink);
+  max-width: 28rem;
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+}
+.ask::backdrop {
+  background: rgb(20 25 35 / 0.35);
+}
+.ask p {
+  margin: 0 0 1rem;
+}
+.ask-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* A narrower window: the side lies over the manuscript, from the right. */
+@media (max-width: 1099px) {
+  .workspace[data-side] {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .workspace[data-side] .side {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(28rem, 92vw);
+    z-index: 4;
+    box-shadow: -12px 0 30px -16px rgb(20 30 50 / 0.45);
+  }
+}
+@media (max-width: 760px) {
+  .appbar {
+    flex-wrap: wrap;
+  }
+  .appbar .spacer {
+    display: none;
+  }
+  .scene-rail[data-labels] {
+    width: 2.4rem;
+  }
+  .scene-rail[data-labels] .scene-rail-name {
+    display: none;
+  }
+  #counts {
+    display: none;
+  }
+}

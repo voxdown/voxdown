@@ -2,7 +2,17 @@
 
 Changes to the packages, newest first. Changes to the format itself are in [spec/CHANGELOG.md](spec/CHANGELOG.md). How versions work: [VERSIONING.md](VERSIONING.md).
 
-## Spec 1.1, `voxdown` 1.1.0, `@voxdown/render` 1.2.0, `@voxdown/editor` 1.1.0, `@voxdown/cli` 1.0.1, the VS Code extension 1.1.0, and the playground (10 November 2026)
+## Unreleased
+
+**VoxDown Writer**, a new page beside the playground (`/writer/`), for writing a story in its own file. Everything runs in the browser, with no account.
+- Open a `.vxd`, `.md`, `.txt` or Fountain file, by the menu, Ctrl+O or dropping it on the page. Where the browser lets a page keep a file (Chrome, Edge), Save writes back to it, and **Open recent** lists the last eight; elsewhere Save downloads it. A screenplay opens as a new story, saved as `.vxd`.
+- The story is kept in this browser as it is typed, and brought back on the next visit with any changes not yet saved. Putting a story aside with changes to save asks first.
+- The scenes down the left: a node for every chapter, heading and scene break, spaced by where they come in the story, with a window over the stretch on screen. A node takes the cursor to its scene; dragging the window scrolls the story.
+- The script, the book and the warnings on the right, each part linked to its place in the story; the warnings each take the cursor to theirs.
+- **View** switches what the editor draws (names, directions, sounds, character sounds, page turns, notes, colors by speaker, or every mark raw), remembered on this computer. **File** also tidies the story, with curly quotes or not.
+- A status line counts words, lines said, voices and scenes, and says where the cursor is and whether the draft is kept.
+
+ `@voxdown/render` 1.2.0, `@voxdown/editor` 1.1.0, `@voxdown/cli` 1.0.1, the VS Code extension 1.1.0, and the playground (10 November 2026)
 
 **Spec 1.1**: character references, scene breaks with spaces between their signs, and names whatever their apostrophe; what changed is in [spec/CHANGELOG.md](spec/CHANGELOG.md).
 

@@ -1,0 +1,295 @@
+/**
+ * The scene rail down the left: the story from start to finish, top to bottom, with a node for each
+ * chapter, heading and scene break, and a window over the stretch on screen. A node takes the
+ * cursor to its scene; dragging the window, or a click on the rail, scrolls the story. Scenes are
+ * spaced by where they come in the text, and never closer than a node and its name need.
+ */
+import { EditorSelection } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import { sceneNumbers } from "@voxdown/editor";
+import type { Story } from "voxdown";
+
+/** Room above the story's start and below its end, for a node's ring. */
+const PAD = 12;
+/** Scenes never sit closer than this, so every node and name stays readable. */
+const GAP = 22;
+
+type Point = { at: number; y: number };
+
+/** A node: where it starts in the text, its name, and whether it opens a chapter. */
+export type RailScene = { from: number; name: string; chapter: boolean };
+
+/**
+ * Where each place in the text sits on the rail: in proportion to the text, except that scene
+ * starts keep GAP apart. The start, every scene and the end are points; between them the text is
+ * spread evenly, so the window lines up with the nodes.
+ */
+export function railPoints(starts: readonly number[], length: number, height: number): Point[] {
+  const top = PAD;
+  const bottom = Math.max(top + 1, height - PAD);
+  const span = bottom - top;
+  const total = Math.max(1, length);
+  const gap = Math.min(GAP, span / Math.max(1, starts.length));
+  const at = starts.map((offset) => Math.min(Math.max(0, offset), total));
+  const ys = at.map((offset) => top + (offset / total) * span);
+  for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i] ?? 0, (ys[i - 1] ?? top) + gap);
+  for (let i = ys.length - 1; i >= 0; i--)
+    ys[i] = Math.min(ys[i] ?? 0, i === ys.length - 1 ? bottom : (ys[i + 1] ?? bottom) - gap);
+  return [
+    { at: 0, y: top },
+    ...at.map((offset, i) => ({ at: offset, y: Math.max(top, ys[i] ?? top) })),
+    { at: total, y: bottom },
+  ];
+}
+
+/** The height a place in the text sits at. */
+export function railY(points: readonly Point[], at: number): number {
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i] as Point;
+    const b = points[i + 1] as Point;
+    if (at <= b.at) return b.at === a.at ? a.y : a.y + ((at - a.at) / (b.at - a.at)) * (b.y - a.y);
+  }
+  return points.at(-1)?.y ?? 0;
+}
+
+/** The place in the text at a height. */
+export function railAt(points: readonly Point[], y: number): number {
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i] as Point;
+    const b = points[i + 1] as Point;
+    if (y <= b.y) return b.y === a.y ? a.at : a.at + ((y - a.y) / (b.y - a.y)) * (b.at - a.at);
+  }
+  return points.at(-1)?.at ?? 0;
+}
+
+/** The story's chapters, headings and scene breaks, in order. */
+export function railScenes(story: Story, numbers: ReadonlyMap<number, number>): RailScene[] {
+  const scenes: RailScene[] = [];
+  for (const block of story.blocks) {
+    if (block.kind === "heading") {
+      const said = block.line.items
+        .flatMap((item) => (item.kind === "speech" ? [item.text] : []))
+        .join(" ")
+        .trim();
+      const written = story.source.slice(block.line.range.from, block.line.range.to).trim();
+      scenes.push({
+        from: block.range.from,
+        name: said || written || `Heading ${scenes.length + 1}`,
+        chapter: block.level === 1,
+      });
+    } else if (block.kind === "break") {
+      const number = numbers.get(block.range.from);
+      scenes.push({
+        from: block.range.from,
+        name: number ? `Scene ${number}` : "Scene",
+        chapter: false,
+      });
+    }
+  }
+  return scenes;
+}
+
+const LABELS_KEY = "vxd-writer-rail";
+
+export class SceneRail {
+  private scenes: RailScene[] = [];
+  private points: Point[] = [];
+  private height = 0;
+  private frame = 0;
+  private shown = { from: 0, to: 0 };
+
+  constructor(
+    private readonly root: HTMLElement,
+    private readonly view: EditorView,
+  ) {
+    const track = this.part("#rail-track");
+    new ResizeObserver(() => {
+      this.height = track.clientHeight;
+      this.layout();
+    }).observe(track);
+    this.height = track.clientHeight;
+    view.scrollDOM.addEventListener("scroll", () => this.soon(), { passive: true });
+    track.addEventListener("pointerdown", (event) => this.drag(event));
+    this.part("#rail-toggle").addEventListener("click", () => this.showNames(!this.names));
+    this.showNames(this.savedNames());
+  }
+
+  /** Whether the rail shows the scenes' names, or only their nodes. */
+  get names(): boolean {
+    return this.root.hasAttribute("data-labels");
+  }
+
+  showNames(names: boolean): void {
+    this.root.toggleAttribute("data-labels", names);
+    const toggle = this.part("#rail-toggle");
+    const label = names ? "Hide scene names" : "Show scene names";
+    toggle.setAttribute("aria-pressed", String(names));
+    toggle.title = label;
+    toggle.querySelector(".sr-only")?.replaceChildren(label);
+    toggle.querySelector("path")?.setAttribute("d", names ? "M10 3 5 8l5 5" : "M6 3l5 5-5 5");
+    try {
+      localStorage.setItem(LABELS_KEY, names ? "names" : "nodes");
+    } catch {
+      // Remembered for this visit only.
+    }
+    this.root.dispatchEvent(new CustomEvent("rail-names", { detail: names, bubbles: true }));
+  }
+
+  /** The story's scenes, read again after a change. */
+  update(story: Story): void {
+    const next = railScenes(story, sceneNumbers(this.view.state));
+    const same =
+      next.length === this.scenes.length &&
+      next.every((scene, i) => {
+        const was = this.scenes[i];
+        return was && was.from === scene.from && was.name === scene.name;
+      });
+    this.scenes = next;
+    if (!same) this.draw();
+    this.layout();
+  }
+
+  private savedNames(): boolean {
+    try {
+      const saved = localStorage.getItem(LABELS_KEY);
+      if (saved) return saved === "names";
+    } catch {
+      // Nothing kept.
+    }
+    return window.matchMedia("(min-width: 900px)").matches;
+  }
+
+  private part<T extends HTMLElement = HTMLElement>(selector: string): T {
+    return this.root.querySelector(selector) as T;
+  }
+
+  private draw(): void {
+    const list = this.part("#rail-scenes");
+    list.replaceChildren(
+      ...this.scenes.map((scene, index) => {
+        const item = document.createElement("li");
+        if (scene.chapter) item.dataset.chapter = "";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.title = scene.name;
+        button.setAttribute("aria-label", `Go to ${scene.name}`);
+        button.innerHTML =
+          '<span class="scene-rail-node" aria-hidden="true"></span><span class="scene-rail-name" aria-hidden="true"></span>';
+        (button.lastElementChild as HTMLElement).textContent = scene.name;
+        button.addEventListener("click", () => this.go(index));
+        item.append(button);
+        return item;
+      }),
+    );
+  }
+
+  /** Places the nodes, and then the window. */
+  private layout(): void {
+    const length = this.view.state.doc.length;
+    this.points = railPoints(
+      this.scenes.map((scene) => scene.from),
+      length,
+      this.height,
+    );
+    const line = this.part("#rail-line");
+    line.style.top = `${this.points[0]?.y ?? PAD}px`;
+    line.style.height = `${(this.points.at(-1)?.y ?? 0) - (this.points[0]?.y ?? 0)}px`;
+    const items = this.part("#rail-scenes").children;
+    for (const [index] of this.scenes.entries()) {
+      const item = items[index] as HTMLElement | undefined;
+      if (item) item.style.top = `${this.points[index + 1]?.y ?? 0}px`;
+    }
+    this.place();
+  }
+
+  private soon(): void {
+    if (this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      this.place();
+    });
+  }
+
+  /** The window over the stretch on screen, and the scene it is in. */
+  private place(): void {
+    const scroller = this.view.scrollDOM;
+    const top = scroller.scrollTop;
+    const contentTop = this.view.contentDOM.offsetTop;
+    const first = this.view.lineBlockAtHeight(Math.max(0, top - contentTop));
+    const last = this.view.lineBlockAtHeight(
+      Math.max(0, top + scroller.clientHeight - contentTop - 1),
+    );
+    this.shown = { from: first.from, to: last.to };
+    const shownBox = this.part("#rail-window");
+    const y = railY(this.points, first.from);
+    shownBox.style.top = `${y}px`;
+    shownBox.style.height = `${Math.max(8, railY(this.points, last.to) - y)}px`;
+    // The scene being read: the one a quarter of the way down, not a line just scrolled past.
+    const reading = this.view.lineBlockAtHeight(
+      Math.max(0, top + Math.min(80, scroller.clientHeight / 4) - contentTop),
+    ).from;
+    let current = -1;
+    for (const [index, scene] of this.scenes.entries()) if (scene.from <= reading) current = index;
+    for (const [index, item] of [...this.part("#rail-scenes").children].entries()) {
+      const button = item.querySelector("button");
+      if (index === current) button?.setAttribute("aria-current", "true");
+      else button?.removeAttribute("aria-current");
+    }
+  }
+
+  /** Takes the cursor to a scene's start, with the scene at the top of the page. */
+  private go(index: number): void {
+    const scene = this.scenes[index];
+    if (!scene) return;
+    this.view.dispatch({
+      selection: EditorSelection.cursor(scene.from),
+      effects: EditorView.scrollIntoView(scene.from, { y: "start", yMargin: 24 }),
+    });
+    this.view.focus();
+  }
+
+  /** Scrolls the story so a place in the text is at the top. */
+  private scrollTo(at: number): void {
+    const place = Math.max(0, Math.min(this.view.state.doc.length, Math.round(at)));
+    this.view.dispatch({ effects: EditorView.scrollIntoView(place, { y: "start" }) });
+  }
+
+  /**
+   * Dragging the window scrolls the story with it; a click on the rail beside the window brings
+   * that stretch to the middle of the window.
+   */
+  private drag(event: PointerEvent): void {
+    if ((event.target as HTMLElement).closest("button")) return;
+    event.preventDefault();
+    const track = event.currentTarget as HTMLElement;
+    const box = track.getBoundingClientRect();
+    const onWindow = (event.target as HTMLElement).closest("[data-rail-window]");
+    const shownHeight = railY(this.points, this.shown.to) - railY(this.points, this.shown.from);
+    const topAt = onWindow
+      ? railY(this.points, this.shown.from)
+      : event.clientY - box.top - shownHeight / 2;
+    const go = (y: number) => this.scrollTo(railAt(this.points, y));
+    if (!onWindow) go(topAt);
+    track.setPointerCapture(event.pointerId);
+    const from = event.clientY;
+    let pending = 0;
+    let latest = from;
+    const move = (next: PointerEvent) => {
+      latest = next.clientY;
+      if (pending) return;
+      pending = requestAnimationFrame(() => {
+        pending = 0;
+        go(topAt + (latest - from));
+      });
+    };
+    const up = () => {
+      cancelAnimationFrame(pending);
+      track.removeEventListener("pointermove", move);
+      track.removeEventListener("pointerup", up);
+      track.removeEventListener("pointercancel", up);
+    };
+    track.addEventListener("pointermove", move);
+    track.addEventListener("pointerup", up);
+    track.addEventListener("pointercancel", up);
+  }
+}

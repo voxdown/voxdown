@@ -38,6 +38,7 @@ export default defineConfig({
         spec: resolve(here, "spec.html"),
         cheatsheet: resolve(here, "cheatsheet.html"),
         listen: resolve(here, "listen.html"),
+        writer: resolve(here, "writer/index.html"),
       },
     },
   },

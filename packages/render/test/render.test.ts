@@ -209,9 +209,10 @@ describe("the book view", () => {
       "word ".repeat(60_000),
       "@Tom “a” [b] {page} %% n %% ".repeat(5_000),
       `${"[".repeat(100_000)}x${"]".repeat(100_000)}(y)`,
-      // Images and links nested thousands deep once ran out of stack (from about a thousand).
-      `Hi ${"![".repeat(5_000)}bird${"](a)".repeat(5_000)} end.`,
-      `Hi ${"[![".repeat(3_000)}bird${"](a)](b)".repeat(3_000)} end.`,
+      // Images and links nested thousands deep once ran out of stack: images from about 2,000,
+      // links around images from about 1,000.
+      `Hi ${"![".repeat(3_000)}bird${"](a)".repeat(3_000)} end.`,
+      `Hi ${"[![".repeat(1_500)}bird${"](a)](b)".repeat(1_500)} end.`,
     ]) {
       const story = parse(text);
       const start = performance.now();

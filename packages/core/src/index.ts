@@ -3,8 +3,7 @@
  * This package has no dependencies and runs in browsers and Node alike.
  */
 
-/** The version of the spec this package follows (spec/SPEC.md §16). */
-export const SPEC_VERSION = "1.0";
+export { SPEC_VERSION } from "./version";
 
 export { parse } from "./parse";
 export { bookText, spokenScript } from "./readings";

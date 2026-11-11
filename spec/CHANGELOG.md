@@ -2,9 +2,9 @@
 
 The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
-## Unreleased
+## 1.1 (10 November 2026)
 
-New in 1.1 (draft). Each gives meaning to something a 1.0 file would rarely hold, so by §16 it belongs to the next minor version: SPEC.md marks it "new in 1.1 (draft)", and `conformance.json` gives its example `"since": "1.1"`, for 1.0 readers to skip.
+New in 1.1. Each gives meaning to something a 1.0 file would rarely hold, so by §16 it belongs to a minor version: SPEC.md marks it "new in 1.1", and `conformance.json` gives its example `"since": "1.1"`, for 1.0 readers to skip.
 
 - **Character references** (§11): `&amp;`, `&quot;`, `&#8217;` and the HTML Standard's other names stand for their characters, as in Markdown, heard and printed as them.
 - **Scene breaks with spaces** (§4.4): a scene break's signs may have spaces between them, as in Markdown: `* * *` and `- - -` are scene breaks. In 1.0 they were a line of the paragraph around them.

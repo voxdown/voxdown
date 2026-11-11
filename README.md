@@ -26,7 +26,7 @@ The one rule to remember: **on each line, the quotes after a name belong to it, 
 - **Hear it**: [two stories read aloud](https://voxdown.github.io/voxdown/listen.html), every character in their own voice and every line as its marks direct.
 - **Learn it** from the [cheat sheet](spec/CHEATSHEET.md), every mark on one page.
 - **Write it** in VS Code: install [VoxDown from the Marketplace](https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown) for colors, warnings as you type and a live preview.
-- **Read the spec**: [SPEC.md](spec/SPEC.md), version 1.0, with a worked example for every rule.
+- **Read the spec**: [SPEC.md](spec/SPEC.md), version 1.1, with a worked example for every rule.
 
 ## In 30 seconds
 
@@ -98,7 +98,7 @@ The spec’s examples are its tests. [`spec/conformance.json`](spec/conformance.
 
 ## Versions
 
-The spec and the packages are versioned separately: the spec is 1.0, and each package follows semantic versioning. See [VERSIONING.md](VERSIONING.md).
+The spec and the packages are versioned separately: the spec is 1.1, and each package follows semantic versioning. See [VERSIONING.md](VERSIONING.md).
 
 ## Contributing
 

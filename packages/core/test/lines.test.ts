@@ -403,7 +403,7 @@ describe("the Fountain import", () => {
     expect(vxd).toBe(
       [
         "---",
-        "voxdown: 1.0",
+        "voxdown: 1.1",
         "title: The Dragon Who Wouldn't Roar",
         "author: A. Writer",
         "cast:",

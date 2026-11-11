@@ -1,6 +1,6 @@
 # VoxDown
 
-**Version 1.0, 9 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
+**Version 1.1, 10 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
 
 VoxDown is a plain-text format for stories that are read aloud. It records:
 
@@ -120,7 +120,7 @@ Front matter is YAML between two `---` lines at the very top of the file. It is 
 
 ```yaml
 ---
-voxdown: 1.0
+voxdown: 1.1
 title: The Tale of Peter Rabbit
 author: Beatrix Potter
 language: en-GB
@@ -136,7 +136,7 @@ cast:
 
 | Key | Meaning |
 | --- | --- |
-| `voxdown` | The version of this spec the file follows, such as `1.0` (§16). Recommended. |
+| `voxdown` | The version of this spec the file follows, such as `1.1` (§16). Recommended. |
 | `title`, `subtitle`, `author` | The book's details. |
 | `language` | The story's main language, as a [BCP 47](https://www.rfc-editor.org/info/bcp47) tag such as `en-GB` or `de`. |
 | `narrator` | Which cast member reads everything not marked otherwise. Defaults to `Narrator` (§5.1). |
@@ -224,7 +224,7 @@ Spaces at the start of a line are ignored.
 
 A file that starts with a `---` line has front matter only if a second `---` line closes it. To start a story with a scene break, use `***`.
 
-*New in 1.1 (draft).* A scene break's signs may have spaces between them, as in Markdown: `* * *` and `- - -` are scene breaks.
+*New in 1.1.* A scene break's signs may have spaces between them, as in Markdown: `* * *` and `- - -` are scene breaks.
 
 ```example 1.1
 The door closed.
@@ -353,7 +353,7 @@ clown: Honk!
 clown: Honk honk!
 ```
 
-*New in 1.1 (draft).* Names ignore the kind of apostrophe too: `@O'Brien` and `@O’Brien` are one character.
+*New in 1.1.* Names ignore the kind of apostrophe too: `@O'Brien` and `@O’Brien` are one character.
 
 ```example 1.1
 @O'Brien “Hello.” @O’Brien “Goodbye.”
@@ -1497,7 +1497,7 @@ She wrote \[sic\] and \{page\} on the board.
 Narrator: She wrote [sic] and {page} on the board.
 ```
 
-*New in 1.1 (draft).* A character reference stands for its character, as in Markdown: `&amp;`, `&quot;`, `&#8217;`, `&#x2019;` and every name the HTML Standard gives one. It is heard and printed as that character, and a character written this way is never a mark: `&quot;` opens no quote. A name the HTML Standard doesn't know, or one without its `;`, is ordinary text.
+*New in 1.1.* A character reference stands for its character, as in Markdown: `&amp;`, `&quot;`, `&#8217;`, `&#x2019;` and every name the HTML Standard gives one. It is heard and printed as that character, and a character written this way is never a mark: `&quot;` opens no quote. A name the HTML Standard doesn't know, or one without its `;`, is ordinary text.
 
 ```example 1.1
 Tom &amp; Jerry said &quot;hello&quot;.

@@ -435,7 +435,7 @@ $<HTMLButtonElement>("#new-story").addEventListener("click", () => {
   load(
     [
       "---",
-      "voxdown: 1.0",
+      "voxdown: 1.1",
       "title: A new story",
       "language: en-US",
       "cast:",

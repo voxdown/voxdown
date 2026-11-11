@@ -53,7 +53,7 @@ Every mark on one page. VoxDown 1.0; the full rules are in [SPEC.md](SPEC.md).
 
 ```yaml
 ---
-voxdown: 1.0
+voxdown: 1.1
 title: The Tale of Peter Rabbit
 author: Beatrix Potter
 language: en-GB

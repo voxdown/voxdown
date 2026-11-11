@@ -17,8 +17,10 @@ describe.each(stories)("examples/%s", (name) => {
     expect(story.warnings).toEqual([]);
   });
 
-  it("declares the spec version, a title and a language", () => {
-    expect(story.meta.version).toBe(SPEC_VERSION);
+  it("declares a spec version this package reads, a title and a language", () => {
+    // A 1.0 file means the same under every 1.x (§16): the recorded stories were written to 1.0,
+    // and the listening page's recordings are of those files as they are.
+    expect(["1.0", SPEC_VERSION]).toContain(story.meta.version);
     expect(story.meta.title).toBeTruthy();
     expect(story.meta.language).toBeTruthy();
   });

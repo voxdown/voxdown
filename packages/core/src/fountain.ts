@@ -4,6 +4,7 @@
  * page breaks `{page}`, notes `%% %%` and transitions notes. The cast is gathered from the cues.
  */
 import { yamlScalar } from "./edit";
+import { SPEC_VERSION } from "./version";
 
 export type FountainOptions = {
   /** Read scene headings aloud instead of keeping them as hidden labels. Default false. */
@@ -94,7 +95,7 @@ export function fromFountain(fountain: string, options: FountainOptions = {}): s
     out.push({ kind: "action", text: action.join("\n") });
   }
 
-  const front = ["---", "voxdown: 1.0"];
+  const front = ["---", `voxdown: ${SPEC_VERSION}`];
   if (meta.title) front.push(`title: ${yamlScalar(meta.title)}`);
   if (meta.author) front.push(`author: ${yamlScalar(meta.author)}`);
   if (cast.size) {

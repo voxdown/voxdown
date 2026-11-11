@@ -47,7 +47,7 @@ export function markdownToHtml(markdown: string): string {
         const cell = (label: string, body: string) =>
           `<div class="example-part"><div class="example-label">${label}</div><pre><code>${escapeHtml(body)}</code></pre></div>`;
         const caption = since
-          ? `<figcaption class="example-since">New in ${escapeHtml(since)} (draft)</figcaption>`
+          ? `<figcaption class="example-since">New in ${escapeHtml(since)}</figcaption>`
           : "";
         return `<figure class="example">${caption}${cell("You write", input)}${cell("A listener hears", script)}${book === undefined ? "" : cell("A reader sees", book)}</figure>\n`;
       },

@@ -2,9 +2,12 @@
 
 Changes to the packages, newest first. Changes to the format itself are in [spec/CHANGELOG.md](spec/CHANGELOG.md). How versions work: [VERSIONING.md](VERSIONING.md).
 
-## Unreleased
+## Spec 1.1, `voxdown` 1.1.0, `@voxdown/render` 1.2.0, `@voxdown/editor` 1.1.0, `@voxdown/cli` 1.0.1, the VS Code extension 1.1.0, and the playground (10 November 2026)
+
+**Spec 1.1**: character references, scene breaks with spaces between their signs, and names whatever their apostrophe; what changed is in [spec/CHANGELOG.md](spec/CHANGELOG.md).
 
 **voxdown**
+- Follows spec 1.1: `SPEC_VERSION` is `"1.1"`, and `fromFountain` writes `voxdown: 1.1`.
 - Every edit does exactly what it says, or returns no changes. Each one checks its result against everything a listener hears (every word and every sound a character makes, who says it and how, and whether it is heard at all or only printed), against the printed book, which never changes, and against the warnings, of which it adds none. Where its change would reach further (a mark's words run to the end of the line, a direction to the next speech, a quote over lines and paragraphs), it adds the marks that keep the rest as it was, then takes out any it no longer needs. A mark between two characters with no space between them goes without one, so the book reads the same: `„Guten Morgen“@(leise), sagte Anna.`
 - `setSpeaker` gives a whole quote, to its closing mark, over sounds, page turns, notes, directions, lines and the paragraphs that carry it on (§5.7), with the sounds made inside it; it keeps the stretch's direction (`@Wanda (yawning) “…”`), and leaves a character's sounds with their owner (`@Fox [gasps] @Wanda “Oh!”`). Narration that holds a quote gives its first quote, found as the parser reads quotes and from the stretch's first character, with the mark directly before it (`The fox ran. @Fox “Wait!”`); the narrator's own words stay theirs, and an unmarked speech over several paragraphs goes whole, from whichever of its paragraphs is given, with the mark where it starts. Narration between a mark and the quote it gives (`@Gerald Gerald put on his spectacles. “I thought…”`, §5.4), or that runs on over a mark to its quote (`He turned. @Waiter (softly) He bowed low, “Bonjour.”`), is given by making the new speaker's mark start it and writing the old one before its quote: `@Zed Gerald put on his spectacles. @Gerald “I thought…”`; every stretch of every example in the spec now takes both edits but one glued to Japanese text. Anything else goes whole: a group character's words keep the quote inside them (`@Wanda They charge, shouting, @Wanda ‘PREPARE…’`), and a dialogue tag between two quotes can be given to their speaker (`@Baker said the baker. @Baker “Gently.”`). A sound for whoever is speaking keeps its owner by taking a name: `@Narrator [giggles]`, without a direction its group gives anyway. A group's direction given away goes into the new mark, the one way §13 rule 3 writes it: `@Zed (sighing)`. It no longer gives the rest of the line to the new speaker; words that open with `(` are escaped, so they don't become a direction; and a name that replaces `@()` keeps a space after it.
 - `curlQuotes` makes a text's quotes curly as `format` does, and changes nothing else; `quotationMarks(language)` gives the marks it writes. Both run in time that grows with the text, with thousands of quotes whose edge is an apostrophe too.
@@ -57,11 +60,17 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Typed quotes follow the same rules as pasted ones: as typed in the front matter (finished or still being written), a link's address, an instruction, a note, a mark or a group line; in the story's language otherwise (`„…“` in German, `«…»` in French).
 - `<voxdown-editor>` keeps a story's CRLF line endings: its `value` comes back as it was set. The playground saves a story with the line endings it was opened with.
 
+**@voxdown/cli**
+- Reads with `voxdown` 1.1, and `vxd --version` names spec 1.1.
+- `vxd check` lists any number of problems: a file with hundreds of thousands of them ran out of stack.
+
 **VS Code extension**
+- Reads with `voxdown` 1.1: its warnings and preview follow spec 1.1, and the new-story snippet declares it.
 - A scene break with spaces between its signs (`* * *`) is highlighted as one, and ends the paragraph before it.
 - A note that runs on past its line's end ends a character mark's colour before it, as the parser ends what the mark does.
 
 **The playground**
+- A new story declares spec 1.1.
 - The pages fill the window between the shelf and the line at its foot, and no longer cover that line; on a short window the page scrolls. The Sun in *The North Wind and the Sun* is read by a new voice.
 - The listening page's recordings are levelled as `scripts/speak.mjs` means them to be: every voice as loud as the others, sounds and page turns quieter behind them. Its measurement of each clip's loudness had always failed, so no clip was ever levelled.
 

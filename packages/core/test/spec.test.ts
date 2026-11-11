@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { SPEC_VERSION } from "../src/index";
 import { examples, root, spec } from "./examples";
 
 /**
@@ -56,6 +57,6 @@ describe("SPEC.md examples", () => {
 describe("examples folder", () => {
   it("Peter Rabbit declares the spec version it follows", () => {
     const peter = readFileSync(join(root, "examples", "peter-rabbit.vxd"), "utf8");
-    expect(peter.startsWith("---\nvoxdown: 1.0\n")).toBe(true);
+    expect(peter.startsWith(`---\nvoxdown: ${SPEC_VERSION}\n`)).toBe(true);
   });
 });

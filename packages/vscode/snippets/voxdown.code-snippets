@@ -63,7 +63,7 @@
     "prefix": ["---", "front matter"],
     "body": [
       "---",
-      "voxdown: 1.0",
+      "voxdown: 1.1",
       "title: ${1:The Title}",
       "author: ${2:The Author}",
       "language: ${3:en-US}",

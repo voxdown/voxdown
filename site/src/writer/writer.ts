@@ -5,7 +5,7 @@
  */
 import { defaultKeymap, history, historyKeymap, redo, undo } from "@codemirror/commands";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
-import { EditorSelection, EditorState, type Extension, Prec } from "@codemirror/state";
+import { Compartment, EditorSelection, EditorState, type Extension, Prec } from "@codemirror/state";
 import { EditorView, hoverTooltip, keymap } from "@codemirror/view";
 import {
   type Character,
@@ -16,16 +16,27 @@ import {
   setView,
   showMarksField,
 } from "@voxdown/editor";
-import { characterColors, escapeHtml, renderBook, renderScript, stylesheet } from "@voxdown/render";
+import {
+  characterColors,
+  escapeHtml,
+  renderBook,
+  renderDocument,
+  renderScript,
+  stylesheet,
+} from "@voxdown/render";
 import {
   type Story,
   type TextChange,
   bookText,
   format,
+  insertLine,
+  insertSound,
   lines,
+  linesToCsv,
   parse,
   renameCharacter,
   setFullName,
+  textByCharacter,
 } from "voxdown";
 import { examples } from "../examples";
 import "../style.css";
@@ -37,15 +48,17 @@ import {
   asStory,
   download,
   keepsFiles,
+  onDisk,
   pickFile,
   pickSaveTarget,
   reopen,
   writeFile,
 } from "./files";
-import { menus } from "./menu";
+import { DraftLock } from "./lock";
+import { keys, menus } from "./menu";
 import { moveParagraph } from "./paragraphs";
 import { SceneRail } from "./rail";
-import { forgetFile, keepDraft, loadDraft, recentFiles, rememberFile } from "./store";
+import { type Draft, forgetFile, keepDraft, loadDraft, recentFiles, rememberFile } from "./store";
 import { type Speaker, StretchTools, speechAt, speechOfMark } from "./stretch";
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
@@ -98,6 +111,8 @@ const file = {
   /** The text as last opened or saved: the story has changes to save while it differs. */
   saved: "",
   savedAt: undefined as number | undefined,
+  /** When the file was last changed on disk, as the Writer last read or wrote it. */
+  modified: undefined as number | undefined,
   changedAt: Date.now(),
   /** Whether the browser kept the last draft. */
   kept: true,
@@ -131,12 +146,25 @@ const lineBreaks = (source: string): Extension =>
     ? EditorState.lineSeparator.of("\r\n")
     : [];
 
+/** Read only while another tab writes the story. */
+const editable = new Compartment();
+let lockedOut = false;
+const editability = () =>
+  lockedOut ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [];
+
 function editorState(source: string, cursor: number): EditorState {
   return EditorState.create({
     doc: source,
     selection: EditorSelection.cursor(cursor),
     extensions: [
       lineBreaks(source),
+      editable.of(editability()),
+      // The browser's spelling check, in the story's own language.
+      EditorView.contentAttributes.of(() => ({
+        spellcheck: "true",
+        autocapitalize: "sentences",
+        lang: story.meta.language ?? "en",
+      })),
       history(),
       search({ top: true }),
       Prec.high(
@@ -210,6 +238,7 @@ const warningTips = hoverTooltip((tipView, at) => {
         button.textContent = fix.label ?? "Fix it";
         button.addEventListener("mousedown", (event) => {
           event.preventDefault();
+          if (tipView.state.readOnly) return;
           tipView.dispatch({ changes: fix, userEvent: "input.fix" });
           tipView.focus();
         });
@@ -255,6 +284,10 @@ function speakers(): Speaker[] {
 
 /** Makes one of the core's edits, as one step to undo; with none, says why. */
 function apply(changes: TextChange[], declined: string): boolean {
+  if (lockedOut) {
+    notice("This story is being written in another tab: choose Write here instead first.");
+    return false;
+  }
   if (changes.length === 0) {
     notice(declined);
     return false;
@@ -282,10 +315,11 @@ function notice(message: string): void {
 /** Puts a story in the editor, with a fresh undo history, the cursor where the story starts. */
 function load(
   opened: Opened,
-  kept: { saved?: string; savedAt?: number; changedAt?: number } = {},
+  kept: { saved?: string; savedAt?: number; changedAt?: number; modified?: number } = {},
 ): Promise<void> {
   file.name = opened.name;
   file.handle = opened.handle;
+  file.modified = opened.modified ?? kept.modified;
   // A file read from disk is saved as it is; a screenplay made a story, an example or a new story
   // has yet to be.
   file.saved = kept.saved ?? (opened.imported ? "" : opened.text);
@@ -299,7 +333,6 @@ function load(
   $("#welcome").hidden = true;
   document.body.removeAttribute("data-welcome");
   $("#file-name").textContent = file.name;
-  document.title = `${file.name} · VoxDown Writer`;
   refresh();
   return keep();
 }
@@ -309,29 +342,62 @@ function load(
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 let keepTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** Above this length, a story is long: what isn't needed at once waits for a longer pause. */
+const LONG = 30_000;
+
 function changed(): void {
   file.changedAt = Date.now();
   showSaveState(true);
   clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(refresh, 150);
+  cancelIdle();
+  refreshTimer = setTimeout(refresh, view.state.doc.length < LONG ? 150 : 450);
   clearTimeout(keepTimer);
   keepTimer = setTimeout(() => void keep(), 700);
 }
 
+/**
+ * The story read again, and what shows it: the rail and the save state at once; the counts, the
+ * warnings and the side for a short story too, and for a long one when the browser is idle, so a
+ * pause in typing never holds the next key.
+ */
 function refresh(): void {
   clearTimeout(refreshTimer);
   story = parse(view.state.doc.toString());
   storyVersion = version;
   colors = characterColors(story);
   rail.update(story);
+  showSaveState();
+  cancelIdle();
+  if (view.state.doc.length < LONG) showRest();
+  else whenIdle(showRest);
+}
+
+function showRest(): void {
+  if (storyVersion !== version) return;
   showCounts();
   showWarningCount();
-  showSaveState();
   if (prefs.side) showSide();
+}
+
+let idle: number | undefined;
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+function whenIdle(run: () => void): void {
+  // A moment of quiet first, then the browser's own idle time where it has one.
+  idleTimer = setTimeout(() => {
+    if ("requestIdleCallback" in window) idle = window.requestIdleCallback(run, { timeout: 2000 });
+    else run();
+  }, 400);
+}
+function cancelIdle(): void {
+  clearTimeout(idleTimer);
+  if (idle !== undefined && "cancelIdleCallback" in window) window.cancelIdleCallback(idle);
+  idle = undefined;
 }
 
 async function keep(): Promise<void> {
   clearTimeout(keepTimer);
+  // Another tab writes the story: this one keeps nothing over it.
+  if (!lock.owner) return;
   file.kept = await keepDraft({
     name: file.name,
     text: text(),
@@ -339,6 +405,7 @@ async function keep(): Promise<void> {
     changedAt: file.changedAt,
     ...(file.handle ? { handle: file.handle } : {}),
     ...(file.savedAt ? { savedAt: file.savedAt } : {}),
+    ...(file.modified !== undefined ? { modified: file.modified } : {}),
   });
   showDraftState();
 }
@@ -352,15 +419,28 @@ const time = (at: number) =>
 function showSaveState(edited = false): void {
   const unsaved = edited || text() !== file.saved;
   const state = $("#save-state");
-  state.dataset.state = unsaved ? "unsaved" : "saved";
-  state.textContent = unsaved
+  const words = unsaved
     ? file.saved === "" && !file.handle
       ? "Not saved yet"
       : "Edited"
     : file.savedAt
       ? `Saved ${time(file.savedAt)}`
       : "Saved";
+  if (state.textContent !== words) state.textContent = words;
+  state.dataset.state = unsaved ? "unsaved" : "saved";
   $("#save-button").classList.toggle("needed", unsaved);
+  // The tab says so too: a dot before the name while there are changes to save.
+  const title = `${unsaved ? "• " : ""}${file.name} · VoxDown Writer`;
+  if (document.title !== title) document.title = title;
+}
+
+/** Said to a screen reader: saves, failures and what came back, never each keystroke. */
+function announce(message: string): void {
+  const live = $("#announce");
+  live.textContent = "";
+  requestAnimationFrame(() => {
+    live.textContent = message;
+  });
 }
 
 function showDraftState(): void {
@@ -445,6 +525,7 @@ function showSide(): void {
       }),
     );
   else sheet.replaceChildren(warningList());
+  indexSheet();
   markPlace();
 }
 
@@ -534,6 +615,7 @@ function warningList(): HTMLElement {
       mend.className = "button fix";
       mend.textContent = fix.label ?? "Fix it";
       mend.addEventListener("click", () => {
+        if (lockedOut) return;
         view.dispatch({ changes: fix, userEvent: "input.fix" });
         refresh();
         view.focus();
@@ -582,26 +664,50 @@ $("#side-sheet").addEventListener("click", (event) => {
   view.focus();
 });
 
-/** Marks the smallest part of the script or book that holds the cursor, and keeps it in view. */
+/** The script's or book's parts by where they start in the story, read once each time it is drawn. */
+let placed: Array<{ from: number; to: number; element: HTMLElement }> = [];
+let marked: HTMLElement | undefined;
+
+function indexSheet(): void {
+  placed = [...$("#side-sheet").querySelectorAll<HTMLElement>("[data-from]")]
+    .map((element) => ({
+      from: Number(element.dataset.from),
+      to: Number(element.dataset.to),
+      element,
+    }))
+    .sort((a, b) => a.from - b.from);
+  marked = undefined;
+}
+
+/**
+ * Marks the smallest part of the script or book that holds the cursor, and keeps it in view: found
+ * by halves among the parts, not by reading every one on each key.
+ */
 function markPlace(): void {
-  if (!prefs.side || prefs.tab === "warnings") return;
-  const sheet = $("#side-sheet");
+  if (!prefs.side || prefs.tab === "warnings" || prefs.tab === "cast") return;
   const cursor = view.state.selection.main.head;
-  let best: HTMLElement | undefined;
-  let size = Number.POSITIVE_INFINITY;
-  for (const element of sheet.querySelectorAll<HTMLElement>("[data-from]")) {
-    const from = Number(element.dataset.from);
-    const to = Number(element.dataset.to);
-    if (from <= cursor && cursor <= to && to - from < size) {
-      best = element;
-      size = to - from;
-    }
+  let low = 0;
+  let high = placed.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if ((placed[middle]?.from ?? 0) <= cursor) low = middle + 1;
+    else high = middle;
   }
-  for (const old of sheet.querySelectorAll(".linked"))
-    if (old !== best) old.classList.remove("linked");
-  if (!best || !view.hasFocus) return;
-  best.classList.add("linked");
-  const box = best.getBoundingClientRect();
+  // Parts hold the parts inside them, so the one holding the cursor starts a little before it.
+  let best: (typeof placed)[number] | undefined;
+  for (let i = low - 1, looked = 0; i >= 0 && looked < 64; i--, looked++) {
+    const part = placed[i];
+    if (part && part.to >= cursor && (!best || part.to - part.from < best.to - best.from))
+      best = part;
+  }
+  const element = view.hasFocus ? best?.element : undefined;
+  if (element === marked) return;
+  marked?.classList.remove("linked");
+  marked = element;
+  if (!element) return;
+  element.classList.add("linked");
+  const sheet = $("#side-sheet");
+  const box = element.getBoundingClientRect();
   const frame = sheet.getBoundingClientRect();
   if (box.top < frame.top || box.bottom > frame.bottom) {
     sheet.scrollTo({
@@ -627,6 +733,7 @@ const input = $<HTMLInputElement>("#file-input");
 function ask(message: string, buttons: Array<{ label: string; value: string; main?: boolean }>) {
   const dialog = $<HTMLDialogElement>("#ask");
   $("#ask-message").textContent = message;
+  $<HTMLInputElement>("#ask-input").hidden = true;
   $("#ask-buttons").replaceChildren(
     ...buttons.map(({ label, value, main }) => {
       const button = document.createElement("button");
@@ -644,8 +751,32 @@ function ask(message: string, buttons: Array<{ label: string; value: string; mai
   );
 }
 
+/** A question answered in a few words ("" if the writer changes their mind). */
+async function askText(message: string, placeholder: string, action: string): Promise<string> {
+  const input = $<HTMLInputElement>("#ask-input");
+  const answered = ask(message, [
+    { label: "Cancel", value: "cancel" },
+    { label: action, value: "ok", main: true },
+  ]);
+  input.hidden = false;
+  input.value = "";
+  input.placeholder = placeholder;
+  input.setAttribute("aria-label", message);
+  input.focus();
+  const enter = (event: KeyboardEvent) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    $<HTMLDialogElement>("#ask").close("ok");
+  };
+  input.addEventListener("keydown", enter);
+  const answer = await answered;
+  input.removeEventListener("keydown", enter);
+  return answer === "ok" ? input.value.trim() : "";
+}
+
 /** Whether the story may be put aside: saved, or the writer says so. */
 async function mayLeave(): Promise<boolean> {
+  if (!(await mayWrite())) return false;
   if (text() === file.saved) return true;
   const answer = await ask(`Save the changes to ${file.name} first?`, [
     { label: "Cancel", value: "cancel" },
@@ -704,7 +835,7 @@ async function saveAs(): Promise<boolean> {
     file.handle = handle;
     file.name = handle.name;
     $("#file-name").textContent = file.name;
-    document.title = `${file.name} · VoxDown Writer`;
+    showSaveState();
     await rememberFile(handle.name, handle);
     void showRecent();
   }
@@ -712,27 +843,127 @@ async function saveAs(): Promise<boolean> {
 }
 
 async function write(handle: FileSystemFileHandle): Promise<boolean> {
+  // Changed on disk since the Writer read it (another app, another computer syncing it): asked
+  // first, never overwritten unseen.
+  if (handle === file.handle && file.modified !== undefined) {
+    const disk = await onDisk(handle);
+    if (disk && disk.modified !== file.modified && disk.text !== file.saved) {
+      const answer = await ask(
+        `${file.name} was changed outside the Writer since it was opened here. Save over those changes, or open the file as it is now?`,
+        [
+          { label: "Cancel", value: "cancel" },
+          { label: "Open it as it is now", value: "theirs" },
+          { label: "Save over it", value: "mine", main: true },
+        ],
+      );
+      if (answer === "theirs") {
+        if (await confirmDiscard())
+          await load({ name: file.name, text: disk.text, handle, modified: disk.modified });
+        return false;
+      }
+      if (answer !== "mine") return false;
+    }
+  }
   const content = text();
   const state = $("#save-state");
   state.dataset.state = "saving";
   state.textContent = "Saving…";
   try {
-    await writeFile(handle, content);
+    file.modified = await writeFile(handle, content);
     saved(content);
+    announce(`Saved ${file.name}`);
     return true;
   } catch (error) {
     state.dataset.state = "error";
     state.textContent = "Not saved";
+    announce(`${file.name} wasn't saved`);
     await tell(`${file.name} couldn't be saved: ${(error as Error).message}`);
     return false;
   }
 }
+
+/** Whether the changes here may be put aside for the file as it is on disk. */
+async function confirmDiscard(): Promise<boolean> {
+  if (text() === file.saved) return true;
+  const answer = await ask(
+    "Open the file as it is on disk? The changes you made here since you last saved will be lost.",
+    [
+      { label: "Cancel", value: "cancel" },
+      { label: "Open it, losing mine", value: "discard", main: true },
+    ],
+  );
+  return answer === "discard";
+}
+
+/**
+ * Coming back to the Writer: if the file changed on disk meanwhile, a story with nothing unsaved
+ * here is read again; one with changes here is left as it is, and Save will ask.
+ */
+async function checkDisk(): Promise<void> {
+  const handle = file.handle;
+  if (!handle || file.modified === undefined || !lock.owner) return;
+  const disk = await onDisk(handle);
+  if (!disk || disk.modified === file.modified || handle !== file.handle) return;
+  if (disk.text === file.saved) {
+    file.modified = disk.modified;
+    void keep();
+    return;
+  }
+  if (text() === file.saved) {
+    await load({ name: file.name, text: disk.text, handle, modified: disk.modified });
+    notice(`${file.name} changed outside the Writer, so it was read again.`);
+  } else {
+    notice(`${file.name} changed outside the Writer. Saving will ask which to keep.`);
+  }
+}
+window.addEventListener("focus", () => void checkDisk());
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void checkDisk();
+});
 
 function saved(content: string): void {
   file.saved = content;
   file.savedAt = Date.now();
   showSaveState();
   void keep();
+}
+
+// One tab writes the story at a time.
+
+const lock = new DraftLock(
+  () => {
+    lockedOut = true;
+    view.dispatch({ effects: editable.reconfigure(editability()) });
+    $("#elsewhere").hidden = false;
+    tools.hide();
+  },
+  () => keep(),
+);
+
+/** Takes the story from the tab that writes it, and reads the draft it kept. */
+async function writeHere(): Promise<boolean> {
+  if (!(await lock.claim(true))) return false;
+  lockedOut = false;
+  $("#elsewhere").hidden = true;
+  const draft = await loadDraft();
+  if (draft) await restore(draft);
+  else view.dispatch({ effects: editable.reconfigure(editability()) });
+  view.focus();
+  return true;
+}
+$("#edit-here").addEventListener("click", () => void writeHere());
+
+/** Whether this tab may change the story: it writes it, or the writer says it should. */
+async function mayWrite(): Promise<boolean> {
+  if (lock.owner) return true;
+  const answer = await ask(
+    "This story is being written in another tab. Write here instead? The other tab will only read it.",
+    [
+      { label: "Cancel", value: "cancel" },
+      { label: "Write here", value: "here", main: true },
+    ],
+  );
+  return answer === "here" && (await writeHere());
 }
 
 function tell(message: string): Promise<string> {
@@ -764,6 +995,7 @@ async function newStory(): Promise<void> {
 
 /** Tidies the story as `format` does, changing only what it changes, as one step to undo. */
 function tidy(curly: boolean): void {
+  if (lockedOut) return;
   const before = view.state.doc.toString();
   const after = format(before, curly ? { quotes: "curly" } : {});
   if (after === before) return;
@@ -776,6 +1008,113 @@ function tidy(curly: boolean): void {
     endAfter--;
   }
   view.dispatch({ changes: { from: start, to: endBefore, insert: after.slice(start, endAfter) } });
+}
+
+// Insert: marks put in where the cursor is, each as one step to undo.
+
+async function insertSoundHere(): Promise<void> {
+  if (!(await mayWrite())) return;
+  const at = view.state.selection.main.head;
+  const description = await askText("What does the listener hear?", "a door creaks", "Put it in");
+  if (description)
+    apply(
+      insertSound(current(), at, description),
+      "A sound can’t go there without changing what is heard: put the cursor after a word.",
+    );
+  view.focus();
+}
+
+/** Puts `text` in at the cursor, the part `select` selected, with a space before it if needed. */
+function insertAtCursor(text: string, select?: string): void {
+  if (lockedOut) return;
+  const { from, to } = view.state.selection.main;
+  const before = view.state.sliceDoc(Math.max(0, from - 1), from);
+  const insert = before && !/\s/.test(before) ? ` ${text}` : text;
+  const at = select ? insert.indexOf(select) : -1;
+  view.dispatch({
+    changes: { from, to, insert },
+    selection:
+      at >= 0
+        ? EditorSelection.range(from + at, from + at + (select?.length ?? 0))
+        : EditorSelection.cursor(from + insert.length),
+    scrollIntoView: true,
+    userEvent: "input.insert",
+  });
+  view.focus();
+}
+
+/** Puts a line of its own after the paragraph the cursor is in, a blank line around it. */
+function insertAfterParagraph(line: string, select?: string): void {
+  if (lockedOut) return;
+  const doc = view.state.doc;
+  let number = doc.lineAt(view.state.selection.main.head).number;
+  while (number < doc.lines && doc.line(number).text.trim() !== "") number++;
+  const blank = doc.line(number).text.trim() === "";
+  const end = blank ? doc.line(number).from : doc.line(number).to;
+  const insert = `${blank ? "\n" : "\n\n"}${line}\n\n`;
+  const at = select ? insert.indexOf(select) : insert.length;
+  view.dispatch({
+    changes: { from: end, insert },
+    selection: select
+      ? EditorSelection.range(end + at, end + at + select.length)
+      : EditorSelection.cursor(end + insert.length),
+    scrollIntoView: true,
+    userEvent: "input.insert",
+  });
+  view.focus();
+}
+
+// Export: what the story becomes, as files.
+
+const baseName = () => file.name.replace(/\.(?:vxd|md|txt)$/i, "") || "story";
+
+/** Prints the book from a frame of its own, as a reader would see it. */
+function printBook(): void {
+  const frame = document.createElement("iframe");
+  frame.className = "print-frame";
+  frame.setAttribute("aria-hidden", "true");
+  frame.srcdoc = renderDocument(current(), "book", { pages: true });
+  frame.addEventListener("load", () => {
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+    setTimeout(() => frame.remove(), 1000);
+  });
+  document.body.append(frame);
+}
+
+// Keyboard shortcuts, as this computer writes them.
+
+const SHORTCUTS: Array<[string, string]> = [
+  ["Mod+S", "Save"],
+  ["Mod+Shift+S", "Save as…"],
+  ["Mod+O", "Open a file"],
+  ["Mod+P", "Print the book"],
+  ["Mod+Z", "Undo"],
+  ["Mod+Shift+Z", "Redo"],
+  ["Mod+F", "Find and replace"],
+  ["Alt+↑ / Alt+↓", "Move the paragraph up or down"],
+  ["Enter", "In a quote: close it, and open it again on a new line for the same speaker"],
+  ["Mod+Shift+M", "Every mark raw, or drawn"],
+  ["Ctrl+Space", "Suggest names, directions, sounds and instructions"],
+  ["Mod+/", "These shortcuts"],
+];
+
+function showShortcuts(): void {
+  $("#shortcut-list").replaceChildren(
+    ...SHORTCUTS.flatMap(([combo, what]) => {
+      const term = document.createElement("dt");
+      const kbd = document.createElement("kbd");
+      kbd.textContent = combo
+        .split(" / ")
+        .map((part) => keys(part))
+        .join(" / ");
+      term.append(kbd);
+      const detail = document.createElement("dd");
+      detail.textContent = what;
+      return [term, detail];
+    }),
+  );
+  $<HTMLDialogElement>("#shortcuts").showModal();
 }
 
 // Commands, from the menus, the buttons and the keys.
@@ -803,6 +1142,37 @@ const COMMANDS: Record<string, () => unknown> = {
     moveParagraph(view, -1, frontMatterEnd());
     view.focus();
   },
+  "insert-sound": insertSoundHere,
+  "insert-pause": () => insertAtCursor("{pause 1s}", "1s"),
+  "insert-page": () =>
+    apply(
+      insertLine(current(), view.state.selection.main.head, "{page}"),
+      "A page turn can’t go before this line.",
+    ),
+  "insert-note": () => insertAtCursor("%% note %%", "note"),
+  "insert-break": () => insertAfterParagraph("* * *"),
+  "insert-chapter": () => insertAfterParagraph("# A new chapter", "A new chapter"),
+  "insert-scene": () => insertAfterParagraph("## A new scene", "A new scene"),
+  "export-book": () =>
+    download(renderDocument(current(), "book", { pages: true }), `${baseName()}.html`, "text/html"),
+  "export-script": () =>
+    download(renderDocument(current(), "script"), `${baseName()}-script.html`, "text/html"),
+  "export-csv": () =>
+    download(linesToCsv(lines(current(), { speechOnly: true })), `${baseName()}.csv`, "text/csv"),
+  "export-json": () =>
+    download(
+      `${JSON.stringify(lines(current()), null, 2)}\n`,
+      `${baseName()}.json`,
+      "application/json",
+    ),
+  "export-sides": () =>
+    download(
+      [...textByCharacter(current())].map(([name, said]) => `== ${name} ==\n${said}`).join("\n"),
+      `${baseName()}-sides.txt`,
+      "text/plain",
+    ),
+  print: printBook,
+  shortcuts: showShortcuts,
   "paragraph-down": () => {
     moveParagraph(view, 1, frontMatterEnd());
     view.focus();
@@ -867,7 +1237,11 @@ document.addEventListener(
           : "save"
         : key === "o" && !event.shiftKey
           ? "open"
-          : "";
+          : key === "p" && !event.shiftKey
+            ? "print"
+            : key === "/"
+              ? "shortcuts"
+              : "";
     if (!command) return;
     event.preventDefault();
     event.stopPropagation();
@@ -957,23 +1331,37 @@ async function start(): Promise<void> {
   void showRecent();
   const draft = await loadDraft();
   if (!draft) {
+    await lock.claim();
     showWelcome();
     refresh();
     showDraftState();
     return;
   }
-  await load(
+  // Another tab writes the story: this one shows it, read only, until asked to write here.
+  if (!(await lock.claim())) {
+    lockedOut = true;
+    $("#elsewhere").hidden = false;
+  }
+  await restore(draft);
+  if (draft.text !== draft.saved && lock.owner) {
+    const back = `Brought back the changes you hadn't saved, from ${time(draft.changedAt)}`;
+    $("#draft-state").textContent = back;
+    announce(back);
+  }
+  void checkDisk();
+}
+
+/** Puts the kept draft in the editor. */
+function restore(draft: Draft): Promise<void> {
+  return load(
     { name: draft.name, text: draft.text, ...(draft.handle ? { handle: draft.handle } : {}) },
     {
       saved: draft.saved,
       changedAt: draft.changedAt,
       ...(draft.savedAt ? { savedAt: draft.savedAt } : {}),
+      ...(draft.modified !== undefined ? { modified: draft.modified } : {}),
     },
   );
-  if (draft.text !== draft.saved) {
-    $("#draft-state").textContent =
-      `Brought back the changes you hadn't saved, from ${time(draft.changedAt)}`;
-  }
 }
 
 void start();

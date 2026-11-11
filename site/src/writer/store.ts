@@ -15,6 +15,8 @@ export type Draft = {
   /** When the text last changed, and when it was last saved or opened. */
   changedAt: number;
   savedAt?: number;
+  /** When the file was last changed on disk, as the Writer last read or wrote it. */
+  modified?: number;
 };
 
 export type Recent = { name: string; handle: FileSystemFileHandle; openedAt: number };

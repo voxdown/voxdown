@@ -36,6 +36,7 @@ export function moveParagraph(
   frontMatterEnd: number | null,
 ): boolean {
   const { state } = view;
+  if (state.readOnly) return true;
   const doc = state.doc;
   const { from, to, head, anchor } = state.selection.main;
   const top = paragraphAt(doc, doc.lineAt(from).number);

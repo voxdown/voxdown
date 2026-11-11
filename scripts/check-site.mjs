@@ -441,6 +441,141 @@ else {
 await authoring.close();
 console.log("writer: speaker, direction, undo, search, move, cast, fix: ok");
 
+// Insert and export: a sound, a page turn and a scene break put in where the cursor is; the book,
+// the script and the lines downloaded; the shortcuts listed.
+const making = await browser.newContext({
+  viewport: { width: 1440, height: 900 },
+  acceptDownloads: true,
+});
+const maker = await making.newPage();
+watch(maker, "writer insert and export");
+const draftOf = () =>
+  maker.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const request = indexedDB.open("voxdown-writer");
+        request.onsuccess = () => {
+          const get = request.result.transaction("drafts").objectStore("drafts").get("current");
+          get.onsuccess = () => resolve(get.result?.text ?? "");
+        };
+      }),
+  );
+await maker.goto(`${base}/writer/`);
+await maker.click('.welcome [data-command="new"]');
+await maker.click(".cm-line >> text=Once upon a time");
+await maker.keyboard.press("End");
+await maker.click("#insert-menu-button");
+await maker.click('[data-command="insert-sound"]');
+await maker.fill("#ask-input", "an owl hoots");
+await maker.keyboard.press("Enter");
+await maker.click("#insert-menu-button");
+await maker.click('[data-command="insert-break"]');
+await maker.click("#insert-menu-button");
+await maker.click('[data-command="insert-page"]');
+await maker.waitForTimeout(900);
+const made = await draftOf();
+if (!made.includes("[an owl hoots]")) problems.push("writer: Insert › A sound… put nothing in");
+if (!/\n\* \* \*\n/.test(made)) problems.push("writer: Insert › A scene break put nothing in");
+if (!made.includes("{page}")) problems.push("writer: Insert › A page turn put nothing in");
+for (const [command, name] of [
+  ["export-book", "Untitled.html"],
+  ["export-script", "Untitled-script.html"],
+  ["export-csv", "Untitled.csv"],
+]) {
+  await maker.click("#file-menu-button");
+  const [download] = await Promise.all([
+    maker.waitForEvent("download"),
+    maker.click(`[data-command="${command}"]`),
+  ]);
+  if (download.suggestedFilename() !== name)
+    problems.push(`writer: ${command} downloaded ${download.suggestedFilename()}, not ${name}`);
+}
+await maker.keyboard.press("Control+/");
+if ((await maker.locator("#shortcut-list dt").count()) < 8)
+  problems.push("writer: Ctrl+/ doesn't list the shortcuts");
+await making.close();
+console.log("writer: insert, export, shortcuts: ok");
+
+// Two tabs: the second reads only, until it takes the story, with the first tab's last words;
+// the first then reads only. A file changed on disk since it was opened isn't saved over unasked.
+const tabs = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await tabs.addInitScript(() => {
+  const files = (window.__disk ??= JSON.parse(localStorage.getItem("__disk") ?? "{}"));
+  const handle = (name) => ({
+    kind: "file",
+    name,
+    getFile: async () => {
+      const disk = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+      return new File([disk[name]?.text ?? ""], name, { lastModified: disk[name]?.at ?? 1 });
+    },
+    createWritable: async () => {
+      let written = "";
+      return {
+        write: async (text) => {
+          written += text;
+        },
+        close: async () => {
+          const disk = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+          disk[name] = { text: written, at: (disk[name]?.at ?? 1) + 1 };
+          localStorage.setItem("__disk", JSON.stringify(disk));
+        },
+      };
+    },
+    isSameEntry: async (other) => other.name === name,
+    queryPermission: async () => "granted",
+    requestPermission: async () => "granted",
+  });
+  window.showOpenFilePicker = async () => {
+    const disk = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+    disk["tale.vxd"] ??= { text: "# A tale\n\n@Ann “Hi.”\n", at: 1 };
+    localStorage.setItem("__disk", JSON.stringify(disk));
+    return [handle("tale.vxd")];
+  };
+  window.showSaveFilePicker = async ({ suggestedName }) => handle(suggestedName);
+});
+const first = await tabs.newPage();
+watch(first, "writer tab 1");
+await first.goto(`${base}/writer/`);
+await first.click('.welcome [data-command="open"]');
+await first.waitForFunction(() => document.querySelector("#file-name")?.textContent === "tale.vxd");
+await first.click(".cm-content");
+await first.keyboard.press("Control+End");
+// The file changes on disk; saving asks first, and Cancel leaves it as it is.
+await first.evaluate(() => {
+  const disk = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+  disk["tale.vxd"] = { text: "# Changed elsewhere\n", at: (disk["tale.vxd"]?.at ?? 1) + 5 };
+  localStorage.setItem("__disk", JSON.stringify(disk));
+});
+await first.keyboard.type("Typed in the first tab.");
+await first.keyboard.press("Control+s");
+await first.waitForSelector("#ask[open]");
+if (!(await first.textContent("#ask-message"))?.includes("changed outside"))
+  problems.push("writer: saving over a file changed on disk didn't ask first");
+await first.click('#ask-buttons button[value="cancel"]');
+const onDiskNow = await first.evaluate(
+  () => JSON.parse(localStorage.getItem("__disk") ?? "{}")["tale.vxd"]?.text,
+);
+if (onDiskNow !== "# Changed elsewhere\n")
+  problems.push("writer: a file changed on disk was saved over after Cancel");
+await first.waitForTimeout(900);
+const second = await tabs.newPage();
+watch(second, "writer tab 2");
+await second.goto(`${base}/writer/`);
+await second.waitForSelector("#elsewhere:not([hidden])");
+if (
+  !(await second.evaluate(() => document.querySelector(".cm-content")?.contentEditable === "false"))
+)
+  problems.push("writer: a second tab can write over the first tab's story");
+await first.keyboard.type(" Last words.");
+await second.click("#edit-here");
+await second.waitForSelector("#elsewhere", { state: "hidden" });
+await second.waitForTimeout(300);
+if (!(await second.locator(".cm-content").innerText()).includes("Last words."))
+  problems.push("writer: taking the story to a second tab lost the first tab's last words");
+await first.waitForSelector("#elsewhere:not([hidden])");
+await tabs.close();
+console.log("writer: two tabs, a file changed on disk: ok");
+
 const element = await browser.newPage();
 watch(element, "element.html");
 await element.goto(`${base}/element.html`);

@@ -4,6 +4,14 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 import { parse, spokenScript } from "voxdown";
+import {
+  FRESH_BELOW,
+  editorMarks,
+  marksField,
+  marksPending,
+  scriptEditor,
+  settleMarks,
+} from "../src/index";
 import { quoteBackspace, quoteEnter, smartQuotes } from "../src/quotes";
 
 /**
@@ -171,5 +179,49 @@ describe("Backspace after a split", () => {
       const back = press("Backspace", press("Enter", text));
       expect(back.replace("|", "")).toBe(text.replace("|", ""));
     }
+  });
+});
+
+describe("a long story's marks", () => {
+  it("move with typing, and are worked out afresh once it pauses", async () => {
+    const paragraph = "@Gerald “I’ve only just got to sleep,” said the dragon. [snores]\n\n";
+    const long = paragraph.repeat(Math.ceil(FRESH_BELOW / paragraph.length) + 10);
+    const view = new EditorView({
+      state: EditorState.create({ doc: long, extensions: scriptEditor({ characters: () => [] }) }),
+      parent: document.body,
+    });
+    const at = view.state.doc.length;
+    view.dispatch({ changes: { from: at, insert: "@Wanda “Hello.”" } });
+    // Moved along, not yet read: the old marks keep their places, the new words have none yet.
+    expect(marksPending(view.state)).toBe(true);
+    const moved = view.state.field(marksField);
+    expect(moved.every((mark) => mark.to <= view.state.doc.length)).toBe(true);
+    expect(moved.some((mark) => mark.kind === "name" && mark.from >= at)).toBe(false);
+    // Once typing pauses, they are what the text gives.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(marksPending(view.state)).toBe(false);
+    expect(view.state.field(marksField)).toEqual(editorMarks(view.state.doc.toString()));
+    // A fix whose words were changed in the meantime is dropped until then, never misplaced.
+    view.dispatch({ changes: { from: at, to: at + 1, insert: "@ " } });
+    for (const mark of view.state.field(marksField)) {
+      if (mark.kind === "warning" && mark.fix) {
+        expect(mark.fix.from).toBeGreaterThanOrEqual(0);
+        expect(mark.fix.to).toBeLessThanOrEqual(view.state.doc.length);
+      }
+    }
+    settleMarks(view);
+    expect(view.state.field(marksField)).toEqual(editorMarks(view.state.doc.toString()));
+    view.destroy();
+  });
+
+  it("are worked out on every change in a short story", () => {
+    const view = new EditorView({
+      state: EditorState.create({ doc: "Hi.", extensions: scriptEditor({ characters: () => [] }) }),
+      parent: document.body,
+    });
+    view.dispatch({ changes: { from: 3, insert: " @Wanda “Hello.”" } });
+    expect(marksPending(view.state)).toBe(false);
+    expect(view.state.field(marksField)).toEqual(editorMarks(view.state.doc.toString()));
+    view.destroy();
   });
 });

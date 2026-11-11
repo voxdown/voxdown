@@ -48,14 +48,26 @@ export type Opened = {
   handle?: FileSystemFileHandle;
   /** A screenplay turned into a story: it has never been saved as one. */
   imported?: boolean;
+  /** When the file was last changed on disk, to tell if something else changes it. */
+  modified?: number;
 };
 
 /** A file's text as a story: a Fountain screenplay is imported, and saved as a new `.vxd`. */
-export function asStory(name: string, text: string, handle?: FileSystemFileHandle): Opened {
+export function asStory(
+  name: string,
+  text: string,
+  handle?: FileSystemFileHandle,
+  modified?: number,
+): Opened {
   if (/\.fountain$/i.test(name)) {
     return { name: name.replace(/\.fountain$/i, ".vxd"), text: fromFountain(text), imported: true };
   }
-  return { name, text, ...(handle ? { handle } : {}) };
+  return {
+    name,
+    text,
+    ...(handle ? { handle } : {}),
+    ...(handle && modified !== undefined ? { modified } : {}),
+  };
 }
 
 /** Asks for a file to open; undefined if the writer changes their mind. */
@@ -65,7 +77,7 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
       const [handle] = await window.showOpenFilePicker({ types: TYPES });
       if (!handle) return undefined;
       const file = await handle.getFile();
-      return asStory(file.name, await file.text(), handle);
+      return asStory(file.name, await file.text(), handle, file.lastModified);
     } catch (error) {
       if (cancelled(error)) return undefined;
       throw error;
@@ -92,7 +104,21 @@ export async function pickFile(input: HTMLInputElement): Promise<Opened | undefi
 export async function reopen(handle: FileSystemFileHandle): Promise<Opened> {
   if (!(await allowed(handle, "read"))) throw new Error(`${handle.name} can't be read.`);
   const file = await handle.getFile();
-  return asStory(file.name, await file.text(), handle);
+  return asStory(file.name, await file.text(), handle, file.lastModified);
+}
+
+/** The file as it is on disk now, if the browser lets the page read it without asking. */
+export async function onDisk(
+  handle: FileSystemFileHandle,
+): Promise<{ text: string; modified: number } | undefined> {
+  try {
+    if (handle.queryPermission && (await handle.queryPermission({ mode: "read" })) !== "granted")
+      return undefined;
+    const file = await handle.getFile();
+    return { text: await file.text(), modified: file.lastModified };
+  } catch {
+    return undefined;
+  }
 }
 
 /** Asks where to save; undefined if the writer changes their mind. */
@@ -106,19 +132,27 @@ export async function pickSaveTarget(name: string): Promise<FileSystemFileHandle
   }
 }
 
-/** Writes the story to its file, asking for permission first if the browser wants that. */
-export async function writeFile(handle: FileSystemFileHandle, text: string): Promise<void> {
+/**
+ * Writes the story to its file, asking for permission first if the browser wants that. Returns when
+ * the file was last changed, now.
+ */
+export async function writeFile(handle: FileSystemFileHandle, text: string): Promise<number> {
   if (!(await allowed(handle, "readwrite"))) {
     throw new Error(`The browser didn't allow saving to ${handle.name}.`);
   }
   const writable = await handle.createWritable();
   await writable.write(text);
   await writable.close();
+  try {
+    return (await handle.getFile()).lastModified;
+  } catch {
+    return Date.now();
+  }
 }
 
 /** Saves a copy as a download. */
-export function download(text: string, name: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/markdown" }));
+export function download(text: string, name: string, type = "text/markdown"): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement("a");
   link.href = url;
   link.download = name;

@@ -88,16 +88,20 @@ export function scriptEditor(options: ScriptEditorOptions): Extension {
 
 export { scriptTheme } from "./theme";
 export {
+  FRESH_BELOW,
   type Character,
   type PreviewOptions,
   type ViewSwitches,
   holdOpen,
   livePreview,
   marksField,
+  marksPending,
   openField,
   sceneNumbers,
+  setMarks,
   setShowMarks,
   setView,
+  settleMarks,
   showMarksField,
   viewField,
 } from "./decorations";

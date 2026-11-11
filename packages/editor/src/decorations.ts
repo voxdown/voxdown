@@ -1,4 +1,10 @@
-import { type EditorState, type Extension, StateEffect, StateField } from "@codemirror/state";
+import {
+  type ChangeDesc,
+  type EditorState,
+  type Extension,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -120,13 +126,95 @@ export const showMarksField = StateField.define<boolean>({
   },
 });
 
-/** The marks of the current text, worked out again only when the text changes. */
+/**
+ * Below this length, the marks are worked out afresh on every change. A longer story's are moved
+ * along with each change, and worked out afresh once typing pauses (`SETTLE_MS`): reading a whole
+ * book again on every key made typing lag (110 ms a key at 100,000 words). The line being typed
+ * shows its marks raw meanwhile, so little that is drawn waits.
+ */
+export const FRESH_BELOW = 30_000;
+const SETTLE_MS = 300;
+
+/** The marks worked out afresh, for a story too long to work them out on every change. */
+export const setMarks = StateEffect.define<EditorMark[]>();
+
+/**
+ * Marks moved along with a change: each keeps its place in the text, a mark the change removes
+ * goes, and a fix whose words the change touched is dropped until the marks are worked out again,
+ * so a fix is never made in the wrong place.
+ */
+function mapMarks(marks: readonly EditorMark[], changes: ChangeDesc): EditorMark[] {
+  const out: EditorMark[] = [];
+  for (const mark of marks) {
+    const from = changes.mapPos(mark.from, 1);
+    const to = Math.max(from, changes.mapPos(mark.to, -1));
+    if (mark.to > mark.from && to === from) continue;
+    if (mark.kind === "warning" && mark.fix) {
+      const { fix, ...rest } = mark;
+      const touched = changes.touchesRange(fix.from, fix.to);
+      out.push(
+        touched
+          ? { ...rest, from, to }
+          : {
+              ...rest,
+              from,
+              to,
+              fix: { ...fix, from: changes.mapPos(fix.from, 1), to: changes.mapPos(fix.to, -1) },
+            },
+      );
+    } else {
+      out.push({ ...mark, from, to });
+    }
+  }
+  return out;
+}
+
+/** The marks of the current text: worked out afresh when it changes, or soon after (above). */
 export const marksField = StateField.define<EditorMark[]>({
   create: (state) => editorMarks(state.doc.toString()),
   update(marks, tr) {
-    return tr.docChanged ? editorMarks(tr.state.doc.toString()) : marks;
+    for (const effect of tr.effects) if (effect.is(setMarks)) return effect.value;
+    if (!tr.docChanged) return marks;
+    if (tr.state.doc.length < FRESH_BELOW) return editorMarks(tr.state.doc.toString());
+    return mapMarks(marks, tr.changes);
   },
 });
+
+/** Whether the marks wait to be worked out afresh, after a change to a long story. */
+export function marksPending(state: EditorState): boolean {
+  return state.field(settledField, false) === false;
+}
+
+const settledField = StateField.define<boolean>({
+  create: () => true,
+  update(settled, tr) {
+    if (tr.effects.some((effect) => effect.is(setMarks))) return true;
+    if (tr.docChanged) return tr.state.doc.length < FRESH_BELOW;
+    return settled;
+  },
+});
+
+/** Works a long story's marks out afresh once typing pauses, or at once with `settleMarks`. */
+const settleMarksPlugin = ViewPlugin.fromClass(
+  class {
+    timer: ReturnType<typeof setTimeout> | undefined;
+    constructor(readonly view: EditorView) {}
+    update(update: ViewUpdate) {
+      if (!update.docChanged || !marksPending(update.state)) return;
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => settleMarks(this.view), SETTLE_MS);
+    }
+    destroy() {
+      clearTimeout(this.timer);
+    }
+  },
+);
+
+/** Works the marks out afresh now, if they wait to be. */
+export function settleMarks(view: EditorView): void {
+  if (!marksPending(view.state)) return;
+  view.dispatch({ effects: setMarks.of(editorMarks(view.state.doc.toString())) });
+}
 
 /**
  * Each scene break's and heading's scene, numbered in text order, by where its
@@ -740,6 +828,8 @@ export function livePreview(options: PreviewOptions): Extension {
     showMarksField.init(() => options.showMarks ?? false),
     viewField.init(() => ({ ...ALL_ON, ...options.view })),
     marksField,
+    settledField,
+    settleMarksPlugin,
     readNamesField,
     openField,
     pointerHold,

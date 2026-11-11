@@ -26,6 +26,14 @@
         <button role="menuitem" type="button" data-command="save-as">Save as…<kbd data-keys="Mod+Shift+S"></kbd></button>
         <button role="menuitem" type="button" data-command="download">Download a copy</button>
         <hr>
+        <span class="menu-label">Export</span>
+        <button role="menuitem" type="button" data-command="export-book">The book, as a web page</button>
+        <button role="menuitem" type="button" data-command="export-script">The script, as a web page</button>
+        <button role="menuitem" type="button" data-command="export-csv">The lines, as a spreadsheet (CSV)</button>
+        <button role="menuitem" type="button" data-command="export-json">The lines, as data (JSON)</button>
+        <button role="menuitem" type="button" data-command="export-sides">Each character’s lines (sides)</button>
+        <button role="menuitem" type="button" data-command="print">Print the book…<kbd data-keys="Mod+P"></kbd></button>
+        <hr>
         <button role="menuitem" type="button" data-command="format">Tidy the story</button>
         <button role="menuitem" type="button" data-command="format-curly">Tidy, with curly quotes</button>
       </div>
@@ -42,6 +50,19 @@
         <hr>
         <button role="menuitem" type="button" data-command="paragraph-up">Move paragraph up<kbd data-keys="Alt+↑"></kbd></button>
         <button role="menuitem" type="button" data-command="paragraph-down">Move paragraph down<kbd data-keys="Alt+↓"></kbd></button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-button" type="button" id="insert-menu-button" aria-haspopup="menu" aria-controls="insert-menu" aria-expanded="false">Insert</button>
+      <div class="menu-list" role="menu" id="insert-menu" aria-labelledby="insert-menu-button" hidden>
+        <button role="menuitem" type="button" data-command="insert-sound">A sound…</button>
+        <button role="menuitem" type="button" data-command="insert-pause">A pause</button>
+        <button role="menuitem" type="button" data-command="insert-page">A page turn</button>
+        <button role="menuitem" type="button" data-command="insert-note">A note for the performer</button>
+        <hr>
+        <button role="menuitem" type="button" data-command="insert-break">A scene break</button>
+        <button role="menuitem" type="button" data-command="insert-chapter">A chapter heading</button>
+        <button role="menuitem" type="button" data-command="insert-scene">A scene heading</button>
       </div>
     </div>
     <div class="menu">
@@ -65,6 +86,7 @@
     <div class="menu">
       <button class="menu-button" type="button" id="help-menu-button" aria-haspopup="menu" aria-controls="help-menu" aria-expanded="false">Help</button>
       <div class="menu-list" role="menu" id="help-menu" aria-labelledby="help-menu-button" hidden>
+        <button role="menuitem" type="button" data-command="shortcuts">Keyboard shortcuts<kbd data-keys="Mod+/"></kbd></button>
         <a role="menuitem" href="../cheatsheet.html" target="_blank" rel="noopener">Every mark on one page</a>
         <a role="menuitem" href="../spec.html" target="_blank" rel="noopener">The VoxDown spec</a>
         <hr>
@@ -73,7 +95,7 @@
       </div>
     </div>
   </div>
-  <div class="document" aria-live="polite">
+  <div class="document">
     <span class="file-name" id="file-name">Untitled.vxd</span>
     <span class="save-state" id="save-state" data-state="saved">Saved</span>
   </div>
@@ -96,6 +118,10 @@
   </nav>
 
   <section class="manuscript" aria-label="Story">
+    <div class="elsewhere" id="elsewhere" hidden>
+      <span>This story is being written in another tab. Here it is only to read.</span>
+      <button class="button" type="button" id="edit-here">Write here instead</button>
+    </div>
     <div class="editor" id="editor"></div>
     <p class="notice" id="notice" role="status" hidden></p>
     <div class="welcome" id="welcome" hidden>
@@ -129,11 +155,22 @@
   <span id="draft-state" class="draft-state"></span>
 </footer>
 
+<p class="sr-only" id="announce" aria-live="polite"></p>
+
 <input type="file" id="file-input" accept=".vxd,.md,.txt,.fountain" hidden>
+
+<dialog class="shortcuts" id="shortcuts" aria-labelledby="shortcuts-title">
+  <form method="dialog">
+    <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+    <dl id="shortcut-list"></dl>
+    <div class="ask-buttons"><button class="button primary" value="close">Close</button></div>
+  </form>
+</dialog>
 
 <dialog class="ask" id="ask">
   <form method="dialog">
     <p id="ask-message"></p>
+    <input type="text" id="ask-input" autocomplete="off" hidden>
     <div class="ask-buttons" id="ask-buttons"></div>
   </form>
 </dialog>

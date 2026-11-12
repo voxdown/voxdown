@@ -14,12 +14,37 @@ import { styleSheets } from "./epub";
 const VOXDOWN =
   /(?:^|\s)@[\p{L}\p{N}_'’-]*\s*(?:\([^()\n]*\)\s*)?[“"‘'«(]|\{(?:pause|page|book only|hidden|audio only|heard only|printed only)\b[^}\n]*\}|%%[^\n]*%%|(?:^|\n)(?::::|---[ \t]*\r?\n)/u;
 
+/** A typewriter face, as code editors set their text. */
+const MONOSPACE =
+  /monospace|Consolas|Menlo|Monaco|Courier|Cascadia|Fira Code|JetBrains Mono|SF Mono/i;
+
 /**
- * Source, not a page: what a code editor copies (VS Code's lines in `white-space: pre`, a
- * typewriter face), or a page's `<pre>` and `<code>`. Pasted as its text.
+ * Source, not a page: most of what is pasted set as code is (VS Code wraps all it copies in
+ * `white-space: pre` and a typewriter face; a `<pre>` or `<code>`). A page with a few such blocks
+ * in it (Project Gutenberg's, its licence's tables) is a page, and Google Docs' `pre-wrap` is how
+ * it keeps spaces, not code.
  */
-const SOURCE =
-  /white-space\s*:\s*pre|font-family\s*:[^;"]*(?:monospace|Consolas|Menlo|Monaco|Courier|Cascadia|Fira Code|JetBrains Mono)|<pre[\s>]|<code[\s>]/i;
+function isSource(page: Document): boolean {
+  const all = page.body.textContent?.replace(/\s+/g, "").length ?? 0;
+  if (all === 0) return false;
+  let code = 0;
+  const walk = (element: Element) => {
+    const tag = element.tagName.toLowerCase();
+    const style = (element as HTMLElement).style;
+    if (
+      tag === "pre" ||
+      tag === "code" ||
+      style?.whiteSpace === "pre" ||
+      MONOSPACE.test(style?.fontFamily ?? "")
+    ) {
+      code += element.textContent?.replace(/\s+/g, "").length ?? 0;
+      return;
+    }
+    for (const child of element.children) walk(child);
+  };
+  walk(page.body);
+  return code / all > 0.8;
+}
 
 /**
  * The story's text for pasted HTML, and whether it escaped any of VoxDown's signs; undefined
@@ -28,9 +53,10 @@ const SOURCE =
 export function pastedStory(
   html: string,
   plain = "",
-): { text: string; escaped: boolean } | undefined {
-  if (VOXDOWN.test(plain) || SOURCE.test(html)) return undefined;
+): { text: string; escaped: boolean; marks: string } | undefined {
+  if (VOXDOWN.test(plain)) return undefined;
   const page = new DOMParser().parseFromString(html, "text/html");
+  if (isSource(page)) return undefined;
   const css = [...page.querySelectorAll("style")].map((style) => style.textContent ?? "");
   const paragraphs: Paragraph[] = paragraphsOf(page.body, styleSheets(css));
   if (paragraphs.length === 0) return undefined;
@@ -46,5 +72,7 @@ export function pastedStory(
   // A sign written as text (`\@`, `\[`): the page meant it as text, or the writer meant it as a
   // mark; asked after, with the other way one click away.
   const escaped = (text.match(/\\/g)?.length ?? 0) > (plain.match(/\\/g)?.length ?? 0);
-  return { text, escaped };
+  // The same shape with its signs as marks: what Paste as VoxDown puts in instead.
+  const marks = text.replace(/\\([\\@[{*_#:%-])/g, "$1");
+  return { text, escaped, marks };
 }

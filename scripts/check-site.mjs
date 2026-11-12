@@ -1040,41 +1040,62 @@ if (drift > 0.04)
   problems.push(
     `writer: a long book's height changed ${Math.round(drift * 100)}% as it was scrolled through (${heights.join(", ")}): the scrollbar's thumb leaves the pointer`,
   );
-// And the story's own scrollbar, dragged as a writer drags it, at a writer's pace: the thumb
-// under the pointer all the way, and the foot of the track the end of the book (the browser's
-// own reached half of it).
-{
-  const thumb = await longPage.locator(".story-scrollbar-thumb").boundingBox();
-  const track = await longPage.locator(".story-scrollbar").boundingBox();
+// The page's own scrollbars, on the story and on its script beside it, dragged as a writer drags
+// them, at a writer's pace: the thumb under the pointer all the way, and the foot of the track the
+// end of the book (the browser's own reached half of it).
+const dragThumb = async (page, track, scroller, what) => {
+  await page.waitForSelector(`${track}:not([hidden])`);
+  const thumb = await page.locator(`${track} .story-scrollbar-thumb`).boundingBox();
+  const box = await page.locator(track).boundingBox();
   const x = thumb.x + thumb.width / 2;
   const from = thumb.y + thumb.height / 2;
-  const to = track.y + track.height - thumb.height / 2;
+  const to = box.y + box.height - thumb.height / 2;
   let worst = 0;
-  await longPage.mouse.move(x, from);
-  await longPage.mouse.down();
+  await page.mouse.move(x, from);
+  await page.mouse.down();
   for (let step = 1; step <= 40; step++) {
     const y = from + ((to - from) * step) / 40;
-    await longPage.mouse.move(x, y);
-    await longPage.waitForTimeout(16);
+    await page.mouse.move(x, y);
+    await page.waitForTimeout(16);
     if (step % 8 === 0) {
-      const now = await longPage.locator(".story-scrollbar-thumb").boundingBox();
+      const now = await page.locator(`${track} .story-scrollbar-thumb`).boundingBox();
       worst = Math.max(worst, Math.abs(now.y + now.height / 2 - y));
     }
   }
-  await longPage.mouse.up();
-  await longPage.waitForTimeout(400);
-  const reached = await longPage.evaluate(() => {
-    const scroller = document.querySelector(".cm-scroller");
-    return scroller.scrollTop / (scroller.scrollHeight - scroller.clientHeight);
-  });
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+  const reached = await page.evaluate((selector) => {
+    const element = document.querySelector(selector);
+    return element.scrollTop / (element.scrollHeight - element.clientHeight);
+  }, scroller);
   if (worst > 4 || reached < 0.99)
     problems.push(
-      `writer: dragging a long book's scrollbar, the thumb was ${Math.round(worst)} px from the pointer and the foot of the track reached ${Math.round(reached * 100)}%`,
+      `writer: dragging the scrollbar of ${what} in a long book, the thumb was ${Math.round(worst)} px from the pointer and the foot of the track reached ${Math.round(reached * 100)}%`,
     );
-  await longPage.evaluate(() => {
-    document.querySelector(".cm-scroller").scrollTop = 0;
-  });
-}
+  await page.evaluate((selector) => {
+    document.querySelector(selector).scrollTop = 0;
+  }, scroller);
+};
+await dragThumb(longPage, "#editor .story-scrollbar", ".cm-scroller", "the story");
+await longPage.waitForTimeout(1500);
+await dragThumb(longPage, "#side .story-scrollbar", "#side-sheet", "the script beside it");
+// The script beside a long book in chunks: the browser checks every box laid out only in view on
+// every frame, typing included, and a book's thousands of parts each one held every key.
+const watched = await longPage.evaluate(() => {
+  const sheet = document.querySelector("#side-sheet");
+  const auto = (elements) =>
+    [...elements].filter((element) => getComputedStyle(element).contentVisibility === "auto")
+      .length;
+  return {
+    boxes: auto(sheet.querySelectorAll(".vxd > *")),
+    inChunks: auto(sheet.querySelectorAll(".side-chunk > :nth-child(-n + 3)")),
+    parts: sheet.querySelectorAll("[data-from]").length,
+  };
+});
+if (watched.inChunks || watched.boxes > watched.parts / 20)
+  problems.push(
+    `writer: the script beside a long book has ${watched.boxes + watched.inChunks} boxes laid out only in view, for ${watched.parts} parts`,
+  );
 // A rail crowded with chapters: each node's centre its own to click, none another's.
 {
   const crowded = await longPage.evaluate(() => {
@@ -2251,8 +2272,9 @@ if ((await first.evaluate(() => localStorage.getItem("__disk"))) !== diskBefore)
 await second.keyboard.type(" Written in the second tab before it closed.");
 await second.waitForTimeout(900);
 await second.close();
+// Eight seconds after: a reload on a slow computer comes back within them, to take its story back.
 await first
-  .waitForSelector("#elsewhere", { state: "hidden", timeout: 8000 })
+  .waitForSelector("#elsewhere", { state: "hidden", timeout: 15000 })
   .catch(() => problems.push("writer: the tab that reads doesn't write when the other closes"));
 await first.waitForTimeout(300);
 if (!(await first.locator(".cm-content").innerText()).includes("before it closed."))

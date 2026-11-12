@@ -17,6 +17,24 @@ describe("a paste from a web page, Word or Google Docs", () => {
     );
   });
 
+  it("reads Google Docs as Google Docs copies it: every run in pre-wrap, which isn't code", () => {
+    expect(
+      pastedText(
+        '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-2"><h1 dir="ltr"><span style="font-size:20pt;white-space:pre;white-space:pre-wrap;">Chapter One</span></h1><p dir="ltr"><span style="font-style:italic;white-space:pre;white-space:pre-wrap;">Softly</span><span style="white-space:pre;white-space:pre-wrap;"> now, she said.</span></p><p dir="ltr"><span style="white-space:pre;white-space:pre-wrap;">The second paragraph.</span></p></b>',
+        "Chapter One\nSoftly now, she said.\nThe second paragraph.",
+      ),
+    ).toBe("# Chapter One\n\n*Softly* now, she said.\n\nThe second paragraph.");
+  });
+
+  it("reads a page with a few blocks of code in it as a page", () => {
+    expect(
+      pastedText(
+        "<h2>CHAPTER 1. Loomings.</h2><p>Call me <i>Ishmael</i>. Some years ago, never mind how long precisely, I thought I would sail about a little and see the watery part of the world.</p><pre>table</pre>",
+        "CHAPTER 1. Loomings.\nCall me Ishmael.",
+      ),
+    ).toContain("Call me *Ishmael*.");
+  });
+
   it("reads Google Docs' and Word's own styling, not their wrapping", () => {
     // Google Docs wraps everything in a bold that says it isn't.
     expect(
@@ -61,7 +79,15 @@ describe("a paste from a web page, Word or Google Docs", () => {
     ).toEqual({
       text: "Write to me \\@home.\n\nBye.",
       escaped: true,
+      marks: "Write to me @home.\n\nBye.",
     });
     expect(pastedStory("<p>One <i>two</i>.</p>", "One two.")?.escaped).toBe(false);
+    // As VoxDown: the page's shape kept, its signs marks.
+    expect(
+      pastedStory(
+        "<h1>The Inn</h1><p>Write to me @home, she said [quietly].</p><p>Then <i>left</i>.</p>",
+        "The Inn\nWrite to me @home, she said [quietly].\nThen left.",
+      )?.marks,
+    ).toBe("# The Inn\n\nWrite to me @home, she said [quietly].\n\nThen *left*.");
   });
 });

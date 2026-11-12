@@ -248,12 +248,17 @@ export function settleMarks(view: EditorView): void {
   view.dispatch({ effects: setMarks.of(editorMarks(view.state.doc.toString())) });
 }
 
+/** The scenes numbered for each set of marks (a new set with each change to the text). */
+const numbered = new WeakMap<readonly EditorMark[], Map<number, number>>();
+
 /**
  * Each scene break's and heading's scene, numbered in text order, by where its
  * mark starts: the story's first scene has no mark before it, unless the text opens with one.
  */
 export function sceneNumbers(state: EditorState): Map<number, number> {
   const marks = state.field(marksField);
+  const known = numbered.get(marks);
+  if (known) return known;
   const starts = marks
     .filter((m) => m.kind === "break" || m.kind === "heading")
     .sort((a, b) => a.from - b.from);
@@ -261,15 +266,34 @@ export function sceneNumbers(state: EditorState): Map<number, number> {
   const quiet = marks
     .filter((m) => ["note", "page", "pause", "instruction"].includes(m.kind))
     .sort((a, b) => a.from - b.from);
+  /** Whether there are words between two places: read only as far as the first. */
+  const words = (from: number, to: number) => {
+    if (to <= from) return false;
+    for (const part = state.doc.iterRange(from, to); !part.next().done; )
+      if (/\S/u.test(part.value)) return true;
+    return false;
+  };
+  // How far the quiet marks up to each reach (one may hold another, a pause in a note).
+  const reach: number[] = [];
+  for (const m of quiet) reach.push(Math.max(m.to, reach.at(-1) ?? 0));
   const blank = (from: number, to: number) => {
-    let text = "";
     let at = from;
-    for (const m of quiet) {
-      if (m.to <= at || m.from >= to) continue;
-      text += state.sliceDoc(at, Math.max(at, m.from));
+    // From the first quiet mark that could end after `from`: all before it end before.
+    let low = 0;
+    let high = quiet.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if ((reach[middle] as number) <= from) low = middle + 1;
+      else high = middle;
+    }
+    for (let i = low; i < quiet.length; i++) {
+      const m = quiet[i] as EditorMark;
+      if (m.from >= to) break;
+      if (m.to <= at) continue;
+      if (words(at, Math.max(at, m.from))) return false;
       at = Math.max(at, Math.min(to, m.to));
     }
-    return !(text + state.sliceDoc(at, to)).trim();
+    return !words(at, to);
   };
   // A mark with nothing after it before the next (or the end) opens no scene: `---` twice, or
   // `---` straight before a heading, is one scene.
@@ -283,7 +307,9 @@ export function sceneNumbers(state: EditorState): Map<number, number> {
     if (!blank(at, m.from)) opens = false;
     at = m.to;
   }
-  return new Map(opening.map((m, index) => [m.from, index + (opens ? 1 : 2)]));
+  const scenes = new Map(opening.map((m, index) => [m.from, index + (opens ? 1 : 2)]));
+  numbered.set(marks, scenes);
+  return scenes;
 }
 
 /** Lines short enough to show raw while you type in them; long paragraphs show only the mark you're in. */
@@ -379,8 +405,18 @@ const shortSound = (text: string) => {
 
 function build(view: EditorView, options: PreviewOptions): DecorationSet {
   const { state } = view;
-  const marks = state.field(marksField);
-  const scenes = sceneNumbers(state);
+  // Only what the editor draws: a book has tens of thousands of marks, and those far from the
+  // screen are drawn again when it comes to them (a scroll changes the viewport).
+  const { from: top, to: foot } = view.viewport;
+  const marks = state.field(marksField).filter((m) => m.to >= top && m.from <= foot);
+  // The scenes' numbers, worked out only when a scene's mark is on screen.
+  let numbers: Map<number, number> | undefined;
+  const scenes = {
+    get(at: number) {
+      if (!numbers) numbers = sceneNumbers(state);
+      return numbers.get(at);
+    },
+  };
   /** The speaker on a scene's mark, when the host has it. */
   const readAloud = (mark: { from: number; to: number }, name: string): ReadAloud | undefined => {
     if (!options.readSceneAloud) return undefined;
@@ -733,7 +769,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 undefined,
                 false,
                 undefined,
-                scenes.has(mark.from) ? readAloud(mark, mark.text) : undefined,
+                scenes.get(mark.from) !== undefined ? readAloud(mark, mark.text) : undefined,
                 mark.level,
                 mark.tag,
               ),

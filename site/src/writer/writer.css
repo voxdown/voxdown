@@ -450,7 +450,6 @@ body.writer > .statusbar {
   position: absolute;
   top: 0;
   right: 0;
-  bottom: 0;
   width: 14px;
   z-index: 2;
   touch-action: none;
@@ -644,6 +643,14 @@ body.writer > .statusbar {
 .side-sheet {
   padding: 1.4rem clamp(1rem, 2.5vw, 2rem) 3rem;
   max-height: none;
+  /* The side's own scrollbar instead (scrollbar.ts), as the story's. */
+  scrollbar-width: none;
+}
+.side-sheet::-webkit-scrollbar {
+  display: none;
+}
+.side {
+  position: relative;
 }
 .side-sheet .vxd {
   --vxd-size: 15.5px;
@@ -682,13 +689,23 @@ body.writer > .statusbar {
   color: color-mix(in oklab, var(--ink) 80%, var(--paper));
 }
 
-/* A long book's parts off screen are laid out only when they come into view. */
-.side-sheet .vxd > :not(header) {
+/* A long book's parts off screen are laid out only when they come into view: a long one's in
+   chunks of about forty (chunks.ts). */
+.side-sheet .vxd > :not(header, .side-chunk),
+.side-sheet .side-chunk {
   content-visibility: auto;
   contain-intrinsic-size: auto 2.6em;
   /* What such a part paints is clipped to it: a direction's label over its first line rises a
      little above it. */
   overflow-clip-margin: 0.75em;
+}
+.side-sheet .side-chunk {
+  contain-intrinsic-size: auto calc(var(--parts, 40) * 2.6em);
+}
+/* A chunk is cut between two paragraphs: in the book, the second is indented as it would be. */
+.side-sheet .vxd-book .side-chunk:has(> .vxd-p:last-child) + .side-chunk > .vxd-p:first-child {
+  text-indent: 1.4em;
+  margin-top: -0.6em;
 }
 .sheet-note {
   color: var(--quiet);

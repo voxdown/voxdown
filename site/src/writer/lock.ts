@@ -13,8 +13,12 @@ type Message =
   | { type: "kept"; id: string }
   | { type: "leaving"; id: string };
 
-/** How long a tab that reads waits, after the one that writes leaves, before writing itself. */
-const RELOAD = 3000;
+/**
+ * How long a tab that reads waits, after the one that writes leaves, before writing itself: long
+ * enough for a reload of a long book on a slow computer (three seconds wasn't, and the tab that
+ * read took the story from the one reloading), short for a tab truly closed.
+ */
+const RELOAD = 8000;
 
 export class DraftLock {
   /** Whether this tab writes its story. */

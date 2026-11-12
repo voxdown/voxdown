@@ -81,6 +81,7 @@ import "./writer.css";
 import "../theme";
 import { type AiContext, openAi } from "./ai-dialog";
 import { castPanel } from "./cast";
+import { chunks } from "./chunks";
 import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
 import { changesOnly, diffLines, withWords } from "./diff";
@@ -565,9 +566,11 @@ const warningTips = hoverTooltip(
 
 const view = new EditorView({ parent: $("#editor"), state: editorState("", 0) });
 const rail = new SceneRail($("#scene-rail"), view);
-/** The story's own scrollbar, held to the pointer (scrollbar.ts). */
-const scrollbar = new StoryScrollbar($("#editor"), () => view);
+/** The story's own scrollbar, held to the pointer (scrollbar.ts); and the side's. */
+const scrollbar = new StoryScrollbar($("#editor"), () => view.scrollDOM);
 scrollbar.attach();
+const sideScrollbar = new StoryScrollbar($("#side"), () => $("#side-sheet"));
+sideScrollbar.attach();
 // The editor's listeners use it only once the story changes, after it is made.
 const tools: StretchTools = new StretchTools({
   view,
@@ -725,6 +728,11 @@ async function load(
   selected?: { from: number; to: number },
 ): Promise<void> {
   const id = kept.id ?? newId();
+  // A notice about the story put aside (its title, a place in it) is no longer about anything.
+  if (noticeOfPlace) {
+    noticeOfPlace = false;
+    $("#notice").hidden = true;
+  }
   // The story open before is kept as it is (what keep() writes is read at once), and its lock
   // let go of; this one is written here, unless another tab writes it, when it is only read. A
   // new story's key is new: no other tab can be writing it, and it opens at once.
@@ -1199,14 +1207,9 @@ function showWarningCount(): void {
 /** Each drawing of the side; one drawn in parts stops when a newer one starts. */
 let drawing = 0;
 
-/** Blocks that hold others: a part never ends inside one. */
-const OPENS = /<(?:div|section|blockquote|aside|ul|ol|figure|header|details|table)\b/g;
-const CLOSES = /<\/(?:div|section|blockquote|aside|ul|ol|figure|header|details|table)>/g;
-
 /**
- * A long story's script or book, drawn a part at a time: the first at once, the rest while the
- * browser is idle, so that the page never stops for a whole book at once. The renderer writes a
- * block to a line; parts end only between whole blocks.
+ * A long story's script or book, drawn a few chunks at a time (chunks.ts): the first at once, the
+ * rest while the browser is idle, so that the page never stops for a whole book at once.
  */
 function drawInParts(sheet: HTMLElement, html: string): void {
   const run = drawing;
@@ -1217,19 +1220,9 @@ function drawInParts(sheet: HTMLElement, html: string): void {
     sheet.innerHTML = html;
     return;
   }
+  const pieces = chunks(lines.slice(1, -1));
   const parts: string[] = [];
-  let part: string[] = [];
-  let depth = 0;
-  for (const line of lines.slice(1, -1)) {
-    part.push(line);
-    depth += (line.match(OPENS)?.length ?? 0) - (line.match(CLOSES)?.length ?? 0);
-    if (depth <= 0 && part.length >= 200) {
-      parts.push(part.join("\n"));
-      part = [];
-      depth = 0;
-    }
-  }
-  if (part.length) parts.push(part.join("\n"));
+  for (let i = 0; i < pieces.length; i += 5) parts.push(pieces.slice(i, i + 5).join("\n"));
   sheet.innerHTML = `${head}\n${parts.shift() ?? ""}\n${tail}`;
   const article = sheet.firstElementChild;
   const next = () => {
@@ -1264,9 +1257,11 @@ function showSide(drawn?: string): void {
   if (sheet.contains(document.activeElement) && document.activeElement?.matches("input, textarea"))
     return;
   const long = view.state.doc.length >= LONG;
+  // Any drawing in parts still going stops: a book drawn into a tab no longer shown is work for
+  // nothing (and grew a page no one sees to thousands of parts).
+  drawing++;
   if (prefs.tab === "script" || prefs.tab === "book") {
     // A long story's comes from the worker: until it does, the page shows what it showed.
-    drawing++;
     if (drawn !== undefined) {
       if (long) drawInParts(sheet, drawn);
       else sheet.innerHTML = drawn;
@@ -1917,6 +1912,8 @@ async function mayLeave(): Promise<boolean> {
   if (lockedOut) return true;
   if (!(await mayWrite())) return false;
   if (sameText(text(), file.saved)) return true;
+  // A new story no one has written in yet: nothing to save.
+  if (!file.handle && file.saved === "" && sameText(text(), NEW_STORY)) return true;
   const answer = await ask(
     `Save the changes to ${file.name} first? If you don't, they stay in this browser: File › Recover a draft brings them back.`,
     [
@@ -2203,14 +2200,16 @@ async function newStory(): Promise<void> {
     { saved: "" },
     { from: title, to: title + "Untitled".length },
   );
-  notice("Type the story’s title, then Enter to write beneath it.");
+  // About the title: gone once the title changes, or the cursor or the story goes elsewhere.
+  notice("Type the story’s title, then Enter to write beneath it.", true);
   await opening;
 }
 
 /** A paste from a web page, Word or Google Docs, its paragraphs, headings and emphasis kept. */
 function pasteShaped(event: ClipboardEvent, editor: EditorView): boolean {
+  if (lockedOut || editor.state.readOnly) return false;
   const html = event.clipboardData?.getData("text/html");
-  if (!html || lockedOut || editor.state.readOnly) return false;
+  if (!html) return pastePlainOverAll(event, editor);
   let { from, to } = editor.state.selection.main;
   // The front matter selected with the story (Ctrl+A): the front matter kept, the story replaced.
   // Inside the front matter alone, the words alone.
@@ -2221,7 +2220,7 @@ function pasteShaped(event: ClipboardEvent, editor: EditorView): boolean {
   }
   const plain = event.clipboardData?.getData("text/plain") ?? "";
   const pasted = pastedStory(html, plain);
-  if (pasted === undefined) return false;
+  if (pasted === undefined) return pastePlainOverAll(event, editor);
   const { text } = pasted;
   // A heading's words selected (a new story's title, as it opens): what is pasted takes the
   // heading's whole line where it brings headings or paragraphs of its own, never `# # The Book`.
@@ -2250,14 +2249,37 @@ function pasteShaped(event: ClipboardEvent, editor: EditorView): boolean {
       label: "Paste as VoxDown",
       run: () => {
         if (editor.state.sliceDoc(from, from + insert.length) !== insert) return;
+        // The page's headings, paragraphs and emphasis kept; its signs marks.
+        const marks = insert.slice(0, insert.length - text.length) + pasted.marks;
         editor.dispatch({
-          changes: { from, to: from + insert.length, insert: plain },
-          selection: EditorSelection.cursor(from + plain.length),
+          changes: { from, to: from + insert.length, insert: marks },
+          selection: EditorSelection.cursor(from + marks.length),
           userEvent: "input.paste",
         });
         editor.focus();
       },
     });
+  return true;
+}
+
+/**
+ * Text alone pasted over the front matter and the story (Ctrl+A): the front matter kept, the story
+ * replaced, as a page's paste does; unless what is pasted brings a front matter of its own.
+ */
+function pastePlainOverAll(event: ClipboardEvent, editor: EditorView): boolean {
+  const plain = event.clipboardData?.getData("text/plain") ?? "";
+  const front = current().frontMatter?.range.to ?? 0;
+  const { from, to } = editor.state.selection.main;
+  if (!plain || front === 0 || from >= front || to <= front) return false;
+  if (/^\uFEFF?---[ \t]*\r?\n/.test(plain)) return false;
+  event.preventDefault();
+  const insert = `\n${plain}`;
+  editor.dispatch({
+    changes: { from: front + 1, to, insert },
+    selection: EditorSelection.cursor(front + 1 + insert.length),
+    userEvent: "input.paste",
+    scrollIntoView: true,
+  });
   return true;
 }
 

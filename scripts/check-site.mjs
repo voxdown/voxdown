@@ -1223,6 +1223,32 @@ else if (sideLowest < sideTop * 0.9 || Math.abs((sideKept.tops.at(-1) ?? 0) - si
   problems.push(
     `writer: the side drawn again lost the reader's place (from ${sideTop} to ${sideKept.tops.at(-1)}, at ${sideLowest} on the way)`,
   );
+// The arrows move from the caret wherever the page was scrolled to: with the caret far off the
+// page, they moved from what was in view (and typing went back to the caret).
+await longPage.click(".cm-content");
+await longPage.keyboard.press("Control+Home");
+for (let step = 0; step < 6; step++) await longPage.keyboard.press("ArrowDown");
+await longPage.waitForTimeout(300);
+const lineNow = async () =>
+  Number(
+    /Line ([\d,]+)/
+      .exec((await longPage.textContent("#cursor-place")) ?? "")?.[1]
+      ?.replace(/,/g, ""),
+  );
+const caretLine = await lineNow();
+await longPage.mouse.move(500, 400);
+for (let turn = 0; turn < 15; turn++) {
+  await longPage.mouse.wheel(0, 1500);
+  await longPage.waitForTimeout(30);
+}
+await longPage.waitForTimeout(400);
+await longPage.keyboard.press("ArrowDown");
+await longPage.waitForTimeout(400);
+const movedTo = await lineNow();
+if (!(movedTo >= caretLine && movedTo <= caretLine + 1))
+  problems.push(
+    `writer: ↓ after scrolling away went from line ${caretLine} to line ${movedTo}, not from the caret`,
+  );
 await long.close();
 console.log(`writer: a 100,000-word book, slowest key ${slowest} ms, ${gave} speakers given: ok`);
 

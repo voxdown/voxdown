@@ -4,6 +4,9 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
+**@voxdown/editor**
+- The up and down arrows move from the caret wherever the page was scrolled to: with the caret scrolled far off the page, they moved from what was in view, while typing went back to the caret. Off the page, the caret is brought back into view and moved from there.
+
 ## `@voxdown/cli` 1.1.1, VoxDown Writer, and the playground (11 November 2026)
 
 **@voxdown/cli**

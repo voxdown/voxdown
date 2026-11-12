@@ -1,5 +1,6 @@
 import { EditorState, type Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import { caretFirst } from "./caret";
 import { completions } from "./complete";
 import { smartDashes, smartPunctuationField } from "./dashes";
 import { type PreviewOptions, livePreview, setShowMarks, showMarksField } from "./decorations";
@@ -61,6 +62,7 @@ export function scriptEditor(options: ScriptEditorOptions): Extension {
     EditorView.lineWrapping,
     typeOverSelection,
     tidyCut,
+    caretFirst,
     livePreview(options),
     completions(options.characters),
     ...(options.smartQuotes === false

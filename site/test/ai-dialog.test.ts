@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { parse } from "voxdown";
-import { copyCommand, placedNow } from "../src/writer/ai-dialog";
+import { chapterAt, copyCommand, placedNow } from "../src/writer/ai-dialog";
 
 const sent = "“Hi,” said Tom.\n\n“Bye,” said Ann.\n\n“Wait,” said Tom.\n";
 const placed = (text: string) => {
@@ -59,5 +59,19 @@ describe("the helper's command", () => {
     await new Promise((done) => setTimeout(done, 0));
     expect(getSelection()?.toString()).toBe("npx -y @voxdown/cli connect");
     expect(button.textContent).toMatch(/C to copy$/);
+  });
+});
+
+describe("this chapter, for naming the speakers", () => {
+  it("is between the headings of the shallowest level that comes more than once", () => {
+    const source =
+      "# Book\n\n## Chapter One\n\n“Hi,” said Ann.\n\n## Chapter Two\n\n“Bye,” said Bob.\n";
+    const story = parse(source);
+    const chapter = chapterAt(story, source.indexOf("Hi"));
+    expect(chapter.name).toBe("Chapter One");
+    expect(source.slice(chapter.from, chapter.to)).not.toContain("Bye");
+    // One heading alone: the whole story.
+    const one = parse("# Book\n\n“Hi,” said Ann.\n");
+    expect(chapterAt(one, 10)).toMatchObject({ name: "Book", from: 0 });
   });
 });

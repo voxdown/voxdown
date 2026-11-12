@@ -28,6 +28,8 @@ import {
 import { keys } from "./menu";
 
 export type AiContext = {
+  /** Which story is open: work asked for one is never given to another. */
+  storyId(): string;
   /** The story as the editor has it now. */
   text(): string;
   /** Makes the changes as one step to undo; false if they can't be made. */
@@ -237,6 +239,7 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   const selected = context.selection();
   ($("#ai-scope").querySelector('option[value="selection"]') as HTMLOptionElement).disabled =
     selected.from === selected.to;
+  if (mode === "speakers") sayScopes(context);
   $("#ai-connect-how").hidden = false;
   progress.textContent = "";
   result.replaceChildren();
@@ -352,15 +355,59 @@ function quotesIn(context: AiContext, scope: string): number[] | undefined {
   let start = from;
   let end = to;
   if (scope === "chapter") {
-    const levels = story.blocks.flatMap((block) => (block.kind === "heading" ? [block.level] : []));
-    const top = Math.min(...levels);
-    const tops = story.blocks.filter((block) => block.kind === "heading" && block.level === top);
-    start = [...tops].reverse().find((heading) => heading.range.from <= from)?.range.from ?? 0;
-    end = tops.find((heading) => heading.range.from > from)?.range.from ?? story.source.length;
+    const chapter = chapterAt(story, from);
+    start = chapter.from;
+    end = chapter.to;
   }
   return quotesOf(story)
     .filter((quote) => quote.from >= start && quote.from < end)
     .map((quote) => quote.number);
+}
+
+/**
+ * The chapter around `at`: between headings of the shallowest level that comes more than once
+ * (a book's title alone at the top is no chapter), its name and where it runs.
+ */
+export function chapterAt(story: Story, at: number): { name: string; from: number; to: number } {
+  const headings = story.blocks.flatMap((block) => (block.kind === "heading" ? [block] : []));
+  const levels = [...new Set(headings.map((heading) => heading.level))].sort((a, b) => a - b);
+  const top =
+    levels.find((level) => headings.filter((heading) => heading.level === level).length > 1) ??
+    levels[0];
+  const tops = headings.filter((heading) => heading.level === top);
+  const opening = [...tops].reverse().find((heading) => heading.range.from <= at);
+  return {
+    name: opening
+      ? story.source
+          .slice(opening.range.from, opening.range.to)
+          .replace(/^[ \t]*#+[ \t]*/, "")
+          .replace(/[ \t]*\{[^}]*\}[ \t]*$/, "")
+          .trim()
+      : "",
+    from: opening?.range.from ?? 0,
+    to: tops.find((heading) => heading.range.from > at)?.range.from ?? story.source.length,
+  };
+}
+
+/** Each scope's reach, said in the list before anything is asked: the chapter's name, and how many quotes wait for a speaker there. */
+function sayScopes(context: AiContext): void {
+  const story = context.story();
+  const waiting = quotesOf(story).filter((quote) => quote.narrated);
+  const count = (from: number, to: number) =>
+    waiting.filter((quote) => quote.from >= from && quote.from < to).length;
+  const waits = (n: number) => `${n} ${n === 1 ? "quote waits" : "quotes wait"}`;
+  const { from, to } = context.selection();
+  const chapter = chapterAt(story, from);
+  const options = $("#ai-scope").querySelectorAll<HTMLOptionElement>("option");
+  for (const option of options) {
+    if (option.value === "story")
+      option.textContent = `In the whole story (${waits(count(0, story.source.length))})`;
+    else if (option.value === "chapter")
+      option.textContent = `In this chapter${chapter.name ? `, “${chapter.name}”` : ""} (${waits(count(chapter.from, chapter.to))})`;
+    else if (option.value === "selection")
+      option.textContent =
+        from === to ? "In the selection" : `In the selection (${waits(count(from, to))})`;
+  }
 }
 
 /** Names the speakers with the AI chosen, and gives them, one step to undo. */
@@ -375,6 +422,8 @@ async function nameSpeakers(
   const go = $<HTMLButtonElement>("#ai-go");
   const second = $<HTMLButtonElement>("#ai-second");
   const sent = context.text();
+  // The story it is for: never given to another opened meanwhile.
+  const storyId = context.storyId();
   running?.abort();
   running = new AbortController();
   behind = false;
@@ -407,6 +456,13 @@ async function nameSpeakers(
       running.signal,
     );
     if (!done) throw new HelperError("The helper stopped before it was done.");
+    if (context.storyId() !== storyId) {
+      const said =
+        "The speakers named weren’t given: another story is open now. Open the story they were named for and name them again.";
+      progress.textContent = said;
+      if (behind) context.notice(said);
+      return;
+    }
     let changes = (done.changes ?? []) as TextChange[];
     /** Quotes the writer gave someone while the AI worked: their choice kept. */
     let keptOwn = 0;

@@ -1015,9 +1015,15 @@ function cancelIdle(): void {
 let versionAt = Date.now();
 /** While writing, and saving by itself, a version is kept at most this often. */
 const SNAPSHOT_EVERY = 10 * 60_000;
-function snapshot(why: string, content = text()): Promise<void> {
+function snapshot(why: string, content = text(), pinned = false): Promise<void> {
   versionAt = Date.now();
-  return keepVersion({ doc: file.id, at: Date.now(), text: content, why });
+  return keepVersion({
+    doc: file.id,
+    at: Date.now(),
+    text: content,
+    why,
+    ...(pinned ? { pinned: true } : {}),
+  });
 }
 
 /** Asks the browser, once, not to clear what the Writer keeps when space runs short. */
@@ -2698,10 +2704,13 @@ function showList(
     current?: boolean;
     actions: Array<{ label: string; main?: boolean; run: () => unknown }>;
   }>,
+  /** Something to do above the list (Earlier versions: keep this one under a name). */
+  top?: HTMLElement,
 ): void {
   const dialog = $<HTMLDialogElement>("#list-dialog");
   $("#list-title").textContent = title;
   $("#list-note").textContent = note;
+  $("#list-top").replaceChildren(...(top ? [top] : []));
   $("#list-items").replaceChildren(
     ...rows.map((row) => {
       const item = document.createElement("li");
@@ -2791,14 +2800,40 @@ async function showDrafts(): Promise<void> {
 
 async function showVersions(): Promise<void> {
   const versions = await versionsOf(file.id);
+  // The story as it is now, kept under a name of the writer's: never thinned out.
+  const keep = document.createElement("div");
+  keep.className = "keep-version";
+  const name = document.createElement("input");
+  name.type = "text";
+  name.placeholder = "Before the narration's revisions";
+  name.setAttribute("aria-label", "A name for the version kept now");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "button";
+  button.textContent = "Keep this version";
+  const named = async () => {
+    const called = name.value.trim();
+    if (!called) return name.focus();
+    await snapshot(called, text(), true);
+    announce(`Kept as “${called}”`);
+    void showVersions();
+  };
+  button.addEventListener("click", () => void named());
+  name.addEventListener("keydown", (event) => {
+    // Not the list's own form: Enter keeps it, the dialog stays.
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void named();
+  });
+  keep.append(name, button);
   showList(
     `Earlier versions of ${file.name}`,
     versions.length
-      ? "Kept when the story was opened, each time it was saved, every ten minutes of writing and before tidying. Going back to one is a change like any other: Undo takes it back."
-      : "None yet: a version is kept when the story is opened or saved, and every ten minutes of writing.",
+      ? "Kept when the story was opened, each time it was saved, every ten minutes of writing and before tidying, and those kept under a name, which are never let go. Going back to one is a change like any other: Undo takes it back."
+      : "None yet: a version is kept when the story is opened or saved, and every ten minutes of writing. Keep one now under a name of your own.",
     versions.map((kept) => ({
-      title: `${when(kept.at)} · ${kept.why}`,
-      detail: `${wordsSaid(proseWords(kept.text))}${sameText(kept.text, text()) ? " · the same as now" : ""}`,
+      title: kept.pinned ? `“${kept.why}” · ${when(kept.at)}` : `${when(kept.at)} · ${kept.why}`,
+      detail: `${wordsSaid(proseWords(kept.text))}${kept.pinned ? " · kept under its name" : ""}${sameText(kept.text, text()) ? " · the same as now" : ""}`,
       actions: sameText(kept.text, text())
         ? []
         : [
@@ -2806,7 +2841,9 @@ async function showVersions(): Promise<void> {
             { label: "Go back to it", main: true, run: () => goBack(kept) },
           ],
     })),
+    keep,
   );
+  if (versions.length === 0) name.focus();
 }
 
 function goBack(kept: Version): void {
@@ -3754,6 +3791,7 @@ function showAbout(): void {
 
 /** What the AI dialog needs of the Writer. */
 const aiContext: AiContext = {
+  storyId: () => file.id,
   text: () => view.state.doc.toString(),
   apply: (changes) => apply(changes, "Nothing to give."),
   notice: (message, action) => notice(message, false, action),

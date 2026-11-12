@@ -33,8 +33,10 @@ export type Version = {
   doc: string;
   at: number;
   text: string;
-  /** Why it was kept: "Opened", "Saved", "While writing", "Before tidying" … */
+  /** Why it was kept: "Opened", "Saved", "While writing", "Before tidying" … or its name. */
   why: string;
+  /** Kept by the writer under a name of their own: never thinned out. */
+  pinned?: boolean;
 };
 
 export type Recent = { name: string; handle: FileSystemFileHandle; openedAt: number };
@@ -233,16 +235,17 @@ export async function draftForFile(handle: FileSystemFileHandle): Promise<Draft 
  * the days and weeks with the rest. However often a story is saved, older versions stay, until
  * all of them together pass `KEEP_TEXT` characters, the oldest let go first.
  */
-export function thinVersions<V extends Pick<Version, "at" | "why"> & { text?: string }>(
-  versions: readonly V[],
-  now: number,
-): V[] {
+export function thinVersions<
+  V extends Pick<Version, "at" | "why"> & { text?: string; pinned?: boolean },
+>(versions: readonly V[], now: number): V[] {
   const seen = new Set<string>();
-  const kept: V[] = [];
+  // Those the writer named are kept whatever else is let go, and weigh nothing against the rest.
+  const kept: V[] = versions.filter((version) => version.pinned);
   let special = 0;
   let recent = 0;
   let size = 0;
   for (const version of [...versions].sort((a, b) => b.at - a.at)) {
+    if (version.pinned) continue;
     const age = now - version.at;
     const routine = ROUTINE.has(version.why);
     let bucket: string | undefined;
@@ -257,20 +260,32 @@ export function thinVersions<V extends Pick<Version, "at" | "why"> & { text?: st
       seen.add(bucket);
     }
     size += version.text?.length ?? 0;
-    if (kept.length > 0 && size > KEEP_TEXT) break;
+    if (kept.some((other) => !other.pinned) && size > KEEP_TEXT) break;
     kept.push(version);
   }
-  return kept;
+  return kept.sort((a, b) => b.at - a.at);
 }
 
 /** Keeps a version of a story, unless it is the same as the last one kept; fewer older ones. */
 export async function keepVersion(version: Version): Promise<void> {
   try {
     const earlier = await versionsOf(version.doc);
-    if (earlier[0]?.text === version.text) return;
+    const last = earlier[0];
+    if (last?.text === version.text) {
+      // Named as the last one kept: that one takes the name, and is kept for good.
+      if (version.pinned && last.key !== undefined)
+        (await store(VERSIONS, "readwrite")).put({ ...last, why: version.why, pinned: true });
+      return;
+    }
     const kept = new Set(thinVersions([version, ...earlier], Date.now()));
     const writer = await store(VERSIONS, "readwrite");
-    writer.add({ doc: version.doc, at: version.at, text: version.text, why: version.why });
+    writer.add({
+      doc: version.doc,
+      at: version.at,
+      text: version.text,
+      why: version.why,
+      ...(version.pinned ? { pinned: true } : {}),
+    });
     for (const old of earlier) if (!kept.has(old) && old.key !== undefined) writer.delete(old.key);
   } catch {
     // Without IndexedDB there are no versions; the draft is all there is.

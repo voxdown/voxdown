@@ -642,6 +642,19 @@ else {
   if (!(await draftIn(keeper)).includes("Written after saving."))
     problems.push("writer: Undo doesn't take back going back to a version");
 }
+// A version kept under a name of the writer's: in the list by its name, the dialog still open.
+await keeper.click("#file-menu-button");
+await keeper.click('[data-command="versions"]');
+await keeper.waitForSelector("#list-dialog[open]");
+await keeper.fill(".keep-version input", "Approved recording script");
+await keeper.keyboard.press("Enter");
+await keeper.waitForTimeout(600);
+if (
+  !(await keeper.locator("#list-dialog[open]").count()) ||
+  !(await keeper.locator("#list-items li", { hasText: "“Approved recording script”" }).count())
+)
+  problems.push("writer: a version kept under a name isn't in Earlier versions by its name");
+await keeper.keyboard.press("Escape");
 await keeping.close();
 
 // Many stories: beyond the drafts kept, saved ones are let go, never one with unsaved changes.
@@ -2715,6 +2728,22 @@ console.log("writer: two tabs, a file changed on disk: ok");
   await writer.waitForTimeout(2200);
   if ((await writer.locator(".cm-content").innerText()).includes("@Tom"))
     problems.push("writer: Stop while naming the speakers didn't stop it");
+  // Named in the background for one story, finished with another open: that one is left as it
+  // is, and the writer told (it gave the first story's speakers to the second).
+  await nameSlowly();
+  await writer.click("#ai-second");
+  await writer.click("#file-menu-button");
+  await writer.click('#file-menu [data-command="new"]');
+  // The story put aside unsaved: not saved, its draft kept.
+  if (await writer.waitForSelector("#ask[open]", { timeout: 1500 }).catch(() => null))
+    await writer.click('#ask-buttons button:has-text("Don\'t save")');
+  await writer.waitForTimeout(400);
+  await writer.keyboard.insertText("“Who’s there?” asked Tom. Slowly.");
+  await writer.waitForTimeout(2600);
+  if ((await writer.locator(".cm-content").innerText()).includes("@Tom"))
+    problems.push("writer: speakers named in the background for one story were given to another");
+  if (!(await writer.textContent("#notice"))?.includes("another story is open now"))
+    problems.push("writer: speakers named for a story no longer open went without a word");
   await writer.click("#file-menu-button");
   await writer.click('[data-command="audiobook"]');
   await writer.waitForSelector("#ai-ready:not([hidden])", { timeout: 5000 }).catch(() => {});

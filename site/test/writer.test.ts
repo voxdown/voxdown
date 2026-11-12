@@ -501,6 +501,26 @@ describe("the versions kept", () => {
     expect(ages).toEqual([...ages].sort((a, b) => a - b));
   });
 
+  it("keeps every version named by the writer, however old or many the others", () => {
+    const versions: Array<{ at: number; why: string; text?: string; pinned?: boolean }> = [
+      ...Array.from({ length: 300 }, (_, i) => ({
+        at: now - i * 10 * 60_000,
+        why: "While writing",
+        text: "x".repeat(50_000),
+      })),
+      { at: now - 400 * 24 * HOUR, why: "Before the narration's revisions", pinned: true },
+      { at: now - 2 * HOUR, why: "Approved recording script", pinned: true },
+    ];
+    const kept = thinVersions(versions, now);
+    expect(kept.filter((version) => version.pinned).map((version) => version.why)).toEqual([
+      "Approved recording script",
+      "Before the narration's revisions",
+    ]);
+    expect(kept.length).toBeLessThan(versions.length);
+    const ages = kept.map((version) => now - version.at);
+    expect(ages).toEqual([...ages].sort((a, b) => a - b));
+  });
+
   it("never lets saving often push out older versions, or those kept before a change", () => {
     const versions = [
       // Saved every 25 seconds for 55 minutes.

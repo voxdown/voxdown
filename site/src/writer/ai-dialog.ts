@@ -510,6 +510,8 @@ async function nameSpeakers(
       progress.textContent = "The speakers couldn't be given here.";
       return;
     }
+    // What each scope covers now: the quotes given no longer wait.
+    sayScopes(context);
     progress.textContent = [
       changes.length
         ? `${plural(givenNow, "speaker")} given${joined.length ? `, and ${joined.join(", ")} joined the cast` : ""}: Ctrl+Z takes them back.`

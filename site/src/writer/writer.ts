@@ -163,6 +163,7 @@ import {
   glimpse,
   listening,
   proseWords,
+  spokenOf,
   timeToHear,
   wordCount,
   words as wordsSaid,
@@ -1256,8 +1257,9 @@ function cursorMoved(): void {
     noticeOfPlace = false;
     $("#notice").hidden = true;
   }
-  // A selection says how many words it holds, and how long they take to hear.
-  const chosen = from === to ? "" : view.state.sliceDoc(from, to);
+  // A selection says how many words it holds, and how long they take to hear: its words, not its
+  // marks (names, directions, sounds, notes and instructions), read without reading the story.
+  const chosen = from === to ? "" : spokenOf(view.state.sliceDoc(from, to));
   const words = chosen ? (chosen.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0) : 0;
   $("#cursor-place").textContent = words
     ? `${words.toLocaleString()} ${words === 1 ? "word" : "words"} selected · ${listening(words)}`

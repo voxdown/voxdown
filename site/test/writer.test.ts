@@ -19,7 +19,7 @@ import { SaveQueue, autosaveCheck, checkDisk, sameText } from "../src/writer/sav
 import { moveSection } from "../src/writer/sections";
 import { sidesHtml, sidesOf, sidesText } from "../src/writer/sides";
 import { withoutSpareMarks } from "../src/writer/spare-marks";
-import { thinVersions } from "../src/writer/store";
+import { draftsToLetGo, thinVersions } from "../src/writer/store";
 import {
   composed,
   dialogueTag,
@@ -29,7 +29,14 @@ import {
   speechAt,
   speechOfMark,
 } from "../src/writer/stretch";
-import { fileNameFor, glimpse, listening, proseWords, wordCount } from "../src/writer/words";
+import {
+  fileNameFor,
+  glimpse,
+  listening,
+  proseWords,
+  spokenOf,
+  wordCount,
+} from "../src/writer/words";
 
 describe("the scene rail's layout", () => {
   it("places scenes in proportion to the text, apart where there is room", () => {
@@ -1024,5 +1031,40 @@ describe("an edit's marks, no more than needed", () => {
     expect(
       applyChanges(text, withoutSpareMarks(parse(text), [{ from: 0, to: 0, insert: "" }])),
     ).toBe(text);
+  });
+});
+
+describe("drafts let go when there are many", () => {
+  const now = Date.UTC(2026, 10, 12);
+  const DAY = 24 * 60 * 60 * 1000;
+  const draft = (id: string, daysAgo: number, unsaved = false) => ({
+    id,
+    text: unsaved ? "Changed." : "Saved.",
+    saved: "Saved.",
+    changedAt: now - daysAgo * DAY,
+  });
+  it("never lets go a story with a version kept under a name, however old and many", () => {
+    const drafts = [
+      ...Array.from({ length: 100 }, (_, i) => draft(`new-${i}`, 1)),
+      draft("old-named", 400),
+      draft("old-plain", 400),
+      draft("old-unsaved", 400, true),
+    ];
+    expect(draftsToLetGo(drafts, new Set(["old-named"]), now)).toEqual(["old-plain"]);
+  });
+});
+
+describe("the words selected, counted", () => {
+  it("leave out the marks: names, directions, sounds, notes and instructions", () => {
+    const count = (text: string) =>
+      spokenOf(text).match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
+    expect(count("@Alice (whispering) Hello world.")).toBe(2);
+    expect(
+      count(
+        "Whenever I find @Gerald myself pausing @/ before. [door creaks] {pause 2s} %% a note %%",
+      ),
+    ).toBe(6);
+    // An address's @ is no mark: its words stay (counted as two, as before).
+    expect(count("Write to mail@home now.")).toBe(5);
   });
 });

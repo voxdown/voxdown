@@ -185,20 +185,44 @@ export async function markSaved(id: string, content: string, modified: number): 
 export async function listDrafts(): Promise<Draft[]> {
   try {
     const all = (await done((await store(DOCUMENTS, "readonly")).getAll())) as Draft[];
-    all.sort((a, b) => b.changedAt - a.changedAt);
-    const unsaved = (draft: Draft) =>
-      draft.text.replace(/\r\n?/g, "\n") !== draft.saved.replace(/\r\n?/g, "\n");
-    const kept: Draft[] = [];
-    for (const draft of all) {
-      // Let go only when many and long untouched: its versions go with it.
-      if (kept.length < KEEP_DRAFTS || unsaved(draft) || Date.now() - draft.changedAt < 30 * DAY)
-        kept.push(draft);
-      else await forgetDraft(draft.id);
-    }
-    return kept;
+    // Of those that would go, the ones with a version kept under a name stay: their versions alone
+    // are read, not every story's.
+    const named = new Set<string>();
+    for (const id of draftsToLetGo(all, named, Date.now()))
+      if ((await versionsOf(id)).some((version) => version.pinned)) named.add(id);
+    const going = new Set(draftsToLetGo(all, named, Date.now()));
+    for (const id of going) await forgetDraft(id);
+    return all.filter((draft) => !going.has(draft.id)).sort((a, b) => b.changedAt - a.changedAt);
   } catch {
     return [];
   }
+}
+
+/**
+ * The drafts let go, by their keys: beyond a hundred, the oldest saved to their file and untouched
+ * for a month, their versions with them; never one with changes not saved, nor one with a version
+ * kept under a name (Earlier versions promises those are never let go).
+ */
+export function draftsToLetGo(
+  drafts: readonly Pick<Draft, "id" | "text" | "saved" | "changedAt">[],
+  named: ReadonlySet<string>,
+  now: number,
+): string[] {
+  const unsaved = (draft: (typeof drafts)[number]) =>
+    draft.text.replace(/\r\n?/g, "\n") !== draft.saved.replace(/\r\n?/g, "\n");
+  let kept = 0;
+  const going: string[] = [];
+  for (const draft of [...drafts].sort((a, b) => b.changedAt - a.changedAt)) {
+    if (
+      kept < KEEP_DRAFTS ||
+      unsaved(draft) ||
+      named.has(draft.id) ||
+      now - draft.changedAt < 30 * DAY
+    )
+      kept++;
+    else going.push(draft.id);
+  }
+  return going;
 }
 
 /** Lets a story's draft and its versions go. */

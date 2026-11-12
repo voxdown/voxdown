@@ -98,3 +98,14 @@ export function fileNameFor(title: string): string {
     .trim();
   return name || "Untitled";
 }
+
+/** Text with its marks taken out: what is heard or printed of it, for counting its words. */
+export function spokenOf(text: string): string {
+  return text
+    .replace(/^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, "")
+    .replace(/%%[\s\S]*?%%/g, " ")
+    .replace(/\{[^}\n]*\}/g, " ")
+    .replace(/@\/(?![\p{L}\p{N}/])/gu, " ")
+    .replace(/(^|[^\p{L}\p{N}])@(?:\p{L}[\p{L}\p{N}_'’-]*)?(?:[ \t]*\([^)\n]*\))?/gu, "$1 ")
+    .replace(/\[[^\]\n]*\](?!\()/g, " ");
+}

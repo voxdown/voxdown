@@ -670,6 +670,111 @@ export function setDirection(story: Story, speech: Speech, direction: string | n
   return session(() => setDirectionNow(story, speech, direction));
 }
 
+/** The voice a line has of its own at `at`: the innermost character group's, else the narrator (§7.2). */
+function baseVoiceAt(story: Story, at: number): string {
+  let base = story.meta.narrator;
+  let innermost = -1;
+  for (const group of story.groups) {
+    // A group runs from its opening line to its closing one, or to the end (§7).
+    const end = group.closeRange?.from ?? story.source.length;
+    if (!group.character || group.range.from > at || at > end) continue;
+    if (group.range.from > innermost) {
+      innermost = group.range.from;
+      base = group.character;
+    }
+  }
+  return base;
+}
+
+/**
+ * The words between `from` and `to`, within one line, widened to whole words and the marks that
+ * close them (`circulation.`, `*softly*`), for an edit of those words alone. Undefined across a
+ * line break, or with no letter or digit in it.
+ */
+function wordsWithin(source: string, from: number, to: number): Range | undefined {
+  const word = /[\p{L}\p{N}\p{M}_'’-]/u;
+  let start = Math.max(0, Math.min(from, to));
+  let end = Math.max(from, to);
+  if (/[\r\n]/.test(source.slice(start, end))) return undefined;
+  while (start < end && /\s/.test(source[start] ?? "")) start++;
+  while (end > start && /\s/.test(source[end - 1] ?? "")) end--;
+  while (start > 0 && word.test(source[start - 1] ?? "") && word.test(source[start] ?? "")) start--;
+  while (word.test(source[end] ?? "") && word.test(source[end - 1] ?? "")) end++;
+  while (/[\p{Pe}\p{Pf}.,;:!?…*_]/u.test(source[end] ?? "")) end++;
+  return /[\p{L}\p{N}]/u.test(source.slice(start, end)) ? { from: start, to: end } : undefined;
+}
+
+/**
+ * Gives the words between `from` and `to`, within one line, to `name`, and nothing else: a mark
+ * before them, and after them whatever gives the rest of the line back as it was, `@/` for the
+ * line's own voice, the narrator or a group's character (§5.9). A quote is said by one voice: part of one can't be given to someone else
+ * without new quotation marks, and gets no changes; nor does a stretch across lines.
+ */
+export function setSpeakerWithin(
+  story: Story,
+  from: number,
+  to: number,
+  name: string,
+): TextChange[] {
+  return session(() => {
+    const span = wordsWithin(story.source, from, to);
+    if (!span) return [];
+    const within = (char: Heard) => char.at >= span.from && char.at < span.to;
+    const chars = heard(story).filter(within);
+    if (chars.length === 0) return [];
+    if (chars.some((char) => char.item.kind !== "speech" || char.item.quoted)) return [];
+    const speaker = spelled(story, name);
+    const source = story.source;
+    const at = span.from;
+    const mark = { from: at, to: at, insert: markAt(source, at, `@${speaker}`) };
+    const promise = {
+      inside: (_was: Heard, now: Heard) => sameName(now.speaker, speaker),
+      wanted: () => ({ speaker, direction: null }),
+    };
+    // The mark alone, the voices after the words given back where they changed.
+    const alone = settled(story, within, [mark], promise);
+    if (alone.length) return alone;
+    // A quote further on the line took the mark (§5.4): `@/` straight after the words keeps it
+    // from it, where the line's own voice speaks next (§5.9).
+    const lineEnd = source.indexOf("\n", span.to);
+    const end = lineEnd < 0 ? source.length : lineEnd;
+    let next = span.to;
+    while (next < end && /\s/.test(source[next] ?? "")) next++;
+    const after = heard(story).find((char) => char.at >= next && char.at < end);
+    if (!after || !sameName(after.speaker, baseVoiceAt(story, next))) return [];
+    const back = { from: next, to: next, insert: markAt(source, next, "@/") };
+    return settled(story, within, [mark, back], promise);
+  });
+}
+
+/**
+ * Says the words between `from` and `to`, within one line, as `direction` (or with no direction
+ * of their own, `null`), and nothing else: `@(…)` before them, and after them whatever gives the
+ * rest back as it was said, `@()` or the direction it had (§6.2, §6.3). Inside a quote too.
+ */
+export function setDirectionWithin(
+  story: Story,
+  from: number,
+  to: number,
+  direction: string | null,
+): TextChange[] {
+  return session(() => {
+    const span = wordsWithin(story.source, from, to);
+    if (!span) return [];
+    const within = (char: Heard) => char.at >= span.from && char.at < span.to;
+    if (!heard(story).some(within)) return [];
+    const value = direction?.replace(/\s+/g, " ").trim() || null;
+    const at = span.from;
+    const mark = value ? `@(${directionText(value)})` : "@()";
+    const changes = [{ from: at, to: at, insert: markAt(story.source, at, mark) }];
+    return settled(story, within, changes, {
+      inside: (was, now) =>
+        sameName(now.speaker, was.speaker) && (value === null || now.direction === value),
+      wanted: (was, now) => ({ speaker: was.speaker, direction: value ?? now.direction }),
+    });
+  });
+}
+
 function setDirectionNow(story: Story, speech: Speech, direction: string | null): TextChange[] {
   // A stretch with no letter or digit in it isn't heard (§12.1): nothing to say differently.
   if (!hasLetterOrDigit(speech.text)) return [];
@@ -872,12 +977,15 @@ type Promise = {
  */
 function settled(
   story: Story,
-  target: readonly Item[],
+  target: readonly Item[] | ((char: Heard) => boolean),
   changes: TextChange[],
   promise: Promise,
 ): TextChange[] {
   if (changes.length === 0) return changes;
-  const before = heard(story, target);
+  const before =
+    typeof target === "function"
+      ? heard(story).map((char) => ({ ...char, target: target(char) }))
+      : heard(story, target);
   let current = changes;
   let last = -1;
   for (let round = 0; round < 16; round++) {
@@ -1116,10 +1224,19 @@ function giveBack(story: Story, char: Heard, voice: Voice): { at: number; insert
   }
   // Words that open with `(` would read as a new name's direction: they are escaped.
   const escaped = !sameSpeaker && source[at] === "(";
+  // The line's own voice back, plainly, in words without quotes: `@/` (§5.9).
+  const narratorBack =
+    item.kind === "speech" &&
+    !item.quoted &&
+    !sameSpeaker &&
+    voice.direction === null &&
+    sameName(voice.speaker, baseVoiceAt(story, at));
   const mark =
     item.kind === "speech" && sameSpeaker
       ? direction
-      : markText(spelled(story, voice.speaker), voice.direction);
+      : narratorBack
+        ? "@/"
+        : markText(spelled(story, voice.speaker), voice.direction);
   const insert = markAt(source, at, mark) + (escaped ? "\\" : "");
   return { at, insert };
 }

@@ -19,9 +19,11 @@ export {
   renameCharacter,
   setAbout,
   setDirection,
+  setDirectionWithin,
   setFullName,
   setMeta,
   setSpeaker,
+  setSpeakerWithin,
 } from "./edit";
 export {
   type Gift,

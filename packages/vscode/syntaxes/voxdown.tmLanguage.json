@@ -195,6 +195,9 @@
           "include": "#speech"
         },
         {
+          "include": "#end-mark"
+        },
+        {
           "include": "#direction-mark"
         },
         {
@@ -227,6 +230,9 @@
         },
         {
           "include": "#speech-heading"
+        },
+        {
+          "include": "#end-mark"
         },
         {
           "include": "#direction-mark"
@@ -455,6 +461,15 @@
         }
       ]
     },
+    "end-mark": {
+      "name": "meta.mark.end.voxdown",
+      "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@/)(?![\\p{L}\\p{N}/])",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.voxdown"
+        }
+      }
+    },
     "direction-mark": {
       "name": "meta.mark.direction.voxdown",
       "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\)))",
@@ -570,7 +585,7 @@
           "name": "punctuation.definition.sound.end.voxdown"
         }
       },
-      "end": "$|(?=^)|(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(?=@\\p{L})|(?=%%(?!.*%%))",
+      "end": "$|(?=^)|(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(?=@\\p{L}|@/(?![\\p{L}\\p{N}/]))|(?=%%(?!.*%%))",
       "patterns": [
         {
           "include": "#escape"
@@ -592,6 +607,9 @@
         },
         {
           "include": "#quote"
+        },
+        {
+          "include": "#end-mark"
         },
         {
           "include": "#direction-mark"
@@ -639,7 +657,7 @@
           "name": "punctuation.definition.sound.end.voxdown"
         }
       },
-      "end": "$|(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(?=@\\p{L})|(?=%%(?!.*%%))",
+      "end": "$|(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(?=@\\p{L}|@/(?![\\p{L}\\p{N}/]))|(?=%%(?!.*%%))",
       "patterns": [
         {
           "include": "#escape"
@@ -661,6 +679,9 @@
         },
         {
           "include": "#quote-line"
+        },
+        {
+          "include": "#end-mark"
         },
         {
           "include": "#direction-mark"
@@ -1142,6 +1163,9 @@
           "include": "#instruction"
         },
         {
+          "include": "#end-mark"
+        },
+        {
           "include": "#direction-mark"
         },
         {
@@ -1254,6 +1278,9 @@
         },
         {
           "include": "#instruction"
+        },
+        {
+          "include": "#end-mark"
         },
         {
           "include": "#direction-mark"

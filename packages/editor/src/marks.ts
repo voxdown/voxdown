@@ -13,6 +13,8 @@ export type EditorMark =
   /** `speaker`: whose words it directs (the name it sits with, else the next speech on its line). */
   | { kind: "direction"; from: number; to: number; text: string; speaker?: string }
   | { kind: "cleared"; from: number; to: number }
+  /** `@/`: a speech without quotes ends, and the line's own voice speaks again. */
+  | { kind: "ended"; from: number; to: number }
   | { kind: "sound"; from: number; to: number; text: string }
   | { kind: "vocal"; from: number; to: number; speaker: string; text: string }
   | { kind: "page"; from: number; to: number; label?: string; ownLine: boolean }
@@ -66,6 +68,7 @@ const WARNED = new Set([
   "quote-over-line-break",
   "stray-quote",
   "idle-mark",
+  "idle-end",
   "unknown-instruction",
   "pause-value",
   "sound-looks-like-link",
@@ -655,6 +658,9 @@ export function marksOf(story: Story): EditorMark[] {
           else out.push({ kind: "cleared", ...item.range });
           break;
         }
+        case "end":
+          out.push({ kind: "ended", ...item.range });
+          break;
         case "vocal":
           out.push({
             kind: "vocal",

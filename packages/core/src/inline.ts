@@ -37,6 +37,8 @@ export type MarkToken = {
   directionRange?: Range;
 };
 export type DirectionToken = { type: "direction"; direction: string | null; range: Range };
+/** `@/`: the speech a mark began without quotes ends, and the line's own voice speaks (§5.9). */
+export type EndToken = { type: "end"; range: Range };
 export type VocalToken = { type: "vocal"; description: string; range: Range };
 export type SoundToken = { type: "sound"; description: string; range: Range };
 export type InstructionToken = {
@@ -57,6 +59,7 @@ export type Token =
   | TextToken
   | MarkToken
   | DirectionToken
+  | EndToken
   | VocalToken
   | SoundToken
   | InstructionToken
@@ -407,11 +410,17 @@ function lexAtom(source: string, i: number, to: number, warn: Warn): Atom | null
 /**
  * `@` is a mark when it is not preceded by a letter or digit (a letter of a script written without
  * spaces doesn't count) and is followed by a name, `(` or `[` (§5.2): a character mark, a
- * direction (§6.2) or a sound for whoever is speaking (§8.2).
+ * direction (§6.2) or a sound for whoever is speaking (§8.2); or by `/` and no letter, digit or
+ * second `/` (a path such as `@/lib` is text): the end of a speech without quotes (§5.9).
  */
 function lexAt(source: string, at: number, to: number): Atom | null {
   if (holdsAt(codePointBefore(source, at))) return null;
   const next = source[at + 1];
+  if (next === "/") {
+    const after = at + 2 < to ? source[at + 2] : undefined;
+    if (after !== undefined && (after === "/" || /[\p{L}\p{N}]/u.test(after))) return null;
+    return { type: "end", range: { from: at, to: at + 2 } };
+  }
   if (next === "(") {
     const close = matchParen(source, at + 1, to);
     if (close < 0) return null;

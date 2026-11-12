@@ -566,6 +566,13 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           add(mark.from, mark.to + 1, Decoration.replace({}));
         else add(mark.from, mark.to, Decoration.replace({}));
         break;
+      case "ended":
+        // Where a character's words stop being theirs: their color stops there.
+        if (showRaw) add(mark.from, mark.to, tinted("vxd-name vxd-raw"));
+        else if (mark.to < state.doc.length && state.sliceDoc(mark.to, mark.to + 1) === " ")
+          add(mark.from, mark.to + 1, Decoration.replace({}));
+        else add(mark.from, mark.to, Decoration.replace({}));
+        break;
       case "cleared":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-direction vxd-raw" }));
         // The dashes under a direction's words already show where it ends.

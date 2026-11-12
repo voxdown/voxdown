@@ -4,7 +4,7 @@
  */
 export const CHEATSHEET = `# VoxDown cheat sheet
 
-Every mark on one page. VoxDown 1.0; the full rules are in [SPEC.md](SPEC.md).
+Every mark on one page. VoxDown 1.2; the full rules are in [SPEC.md](SPEC.md).
 
 **The one rule:** on each line, the quotes after a name belong to it, and everything else belongs to the narrator.
 
@@ -28,6 +28,7 @@ Every mark on one page. VoxDown 1.0; the full rules are in [SPEC.md](SPEC.md).
 | \`@(warmly) Once upon a time…\` | A direction for whoever is speaking: here, the narrator, to the end of the line. |
 | \`@Gerald “I know. @(yawning) I’m tired.”\` | A new direction partway through. |
 | \`@(nervously) He looked around, @() and relaxed.\` | \`@()\` ends a direction early. |
+| \`When I find @Gerald myself pausing @/ before the door.\` | \`@/\` ends a speech without quotes: the narrator again (new in 1.2). |
 | \`::: whispering\` … \`:::\` | A direction for every line between the colons. |
 | \`::: @Wanda reading the letter\` … \`:::\` | Several lines and paragraphs for one character. |
 
@@ -57,7 +58,7 @@ Every mark on one page. VoxDown 1.0; the full rules are in [SPEC.md](SPEC.md).
 
 \`\`\`yaml
 ---
-voxdown: 1.1
+voxdown: 1.2
 title: The Tale of Peter Rabbit
 author: Beatrix Potter
 language: en-GB

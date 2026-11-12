@@ -100,7 +100,16 @@ export type Line = { range: Range; items: Item[] };
  * What a line holds, in source order. Speech, vocal sounds, sounds, instructions, notes and images
  * are what the spoken script lists; marks and directions are kept so an editor can find them.
  */
-export type Item = Speech | Vocal | Sound | Instruction | Note | Image | Mark | DirectionMark;
+export type Item =
+  | Speech
+  | Vocal
+  | Sound
+  | Instruction
+  | Note
+  | Image
+  | Mark
+  | DirectionMark
+  | EndMark;
 
 /** One stretch of speech or narration (§12.1). Narration is speech by the narrator. */
 export type Speech = {
@@ -172,12 +181,16 @@ export type Mark = {
 /** `@(…)`, a direction for whoever is speaking (§6.2), or `@()`, back to none (§6.3). */
 export type DirectionMark = { kind: "direction"; direction: string | null; range: Range };
 
+/** `@/`: a speech without quotes ends here, and the line's own voice speaks again (§5.9). */
+export type EndMark = { kind: "end"; range: Range };
+
 export type WarningCode =
   | "unclosed-quote"
   | "quote-over-line-break"
   | "unclosed-group"
   | "stray-group-close"
   | "idle-mark"
+  | "idle-end"
   | "stray-quote"
   | "unknown-character"
   | "name-case"

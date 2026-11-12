@@ -1859,6 +1859,50 @@ await author.keyboard.press("Delete");
 const stale = author.locator("#side-sheet .warning").first();
 if (await stale.count()) await stale.click();
 await author.waitForTimeout(300);
+// Who and How on a few words selected in a line: those words alone, the rest of the line as it
+// was (`@(…)` … `@()`, `@Name` … `@/`), as italics are the selection's alone.
+await author.click(".cm-content");
+await author.keyboard.press("Control+a");
+await author.keyboard.insertText(
+  "It is a way I have of driving off the spleen and regulating the circulation. Whenever I find myself pausing before warehouses, I go to sea.",
+);
+await settled();
+const selectWords = (words) =>
+  author.evaluate((words) => {
+    for (const node of document.querySelectorAll(".cm-line")) {
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+        const at = text.textContent.indexOf(words);
+        if (at >= 0) {
+          document.getSelection().setBaseAndExtent(text, at, text, at + words.length);
+          return true;
+        }
+      }
+    }
+    return false;
+  }, words);
+await selectWords("spleen and regulating the circulation");
+await author.waitForTimeout(200);
+await author.keyboard.press("Control+j");
+await author.waitForSelector(".direction-form input");
+await author.keyboard.type("localized");
+await author.keyboard.press("Enter");
+await author.waitForTimeout(400);
+await selectWords("myself pausing before");
+await author.waitForTimeout(200);
+await author.keyboard.press("Control+k");
+await author.waitForSelector(".speaker-list");
+await author.keyboard.type("Gerald");
+await author.keyboard.press("Enter");
+await settled();
+if (
+  !(await kept()).includes(
+    "driving off the @(localized) spleen and regulating the circulation. @() Whenever I find @Gerald myself pausing before @/ warehouses, I go to sea.",
+  )
+)
+  problems.push(
+    `writer: Who and How on a few words selected changed more than those words: ${JSON.stringify((await kept()).slice(-180))}`,
+  );
 await authoring.close();
 console.log("writer: speaker, direction, undo, search, move, cast, fix: ok");
 

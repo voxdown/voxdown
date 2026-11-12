@@ -48,6 +48,9 @@ export function tokens(story: Story): SyntaxToken[] {
         add("mark", at);
         add("direction", rest);
         break;
+      case "end":
+        add("mark", item.range);
+        break;
       case "vocal":
         if (!item.mark) add("mark", at, item.speaker);
         add("vocal", item.mark ? item.range : rest, item.speaker);

@@ -4,6 +4,18 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
+**Spec 1.2**: `@/` ends a speech without quotes, so a few words in the middle of a line can be given to a character with no quotation marks added (§5.9): `Whenever I find @Gerald myself pausing @/ before the door.` It is to who speaks what `@()` is to how. What changed is in [spec/CHANGELOG.md](spec/CHANGELOG.md).
+
+**voxdown**
+- Follows spec 1.2: `SPEC_VERSION` is `"1.2"`; `@/` is read (an `end` item), never printed, and warned of where it ends nothing (`idle-end`).
+- `setSpeakerWithin(story, from, to, name)` and `setDirectionWithin(story, from, to, direction)` give a few words of a line to a character, or say them a way, and nothing else, each checked against everything a listener hears. Edits that give the narrator back in words without quotes write `@/`, not the narrator's name.
+
+**VoxDown Writer**
+- **Who** and **How** on a few words selected in a line change those words alone, as italics do: `@Gerald` … `@/`, `@(softly)` … `@()`. With the cursor alone, they change the whole quote or passage as before. Part of a quote can be said another way, not given to someone else, and the Writer says why.
+
+**@voxdown/render**, **@voxdown/editor**, **VS Code extension**
+- `@/` is left out of the book and the script, hidden in the editor where the marks are (the character's words show whose they are), and highlighted as a mark.
+
 **@voxdown/editor**
 - The up and down arrows move from the caret wherever the page was scrolled to: with the caret scrolled far off the page, they moved from what was in view, while typing went back to the caret. Off the page, the caret is brought back into view and moved from there.
 

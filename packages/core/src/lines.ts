@@ -121,6 +121,7 @@ export function lines(story: Story, options: LinesOptions = {}): ScriptLine[] {
           break;
         case "mark":
         case "direction":
+        case "end":
           break;
       }
     }

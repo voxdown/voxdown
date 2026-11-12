@@ -17,8 +17,10 @@ import {
   parse,
   quotesOf,
   setDirection,
+  setDirectionWithin,
   setFullName,
   setSpeaker,
+  setSpeakerWithin,
   taggedName,
 } from "voxdown";
 import { composed, mapped } from "./changes";
@@ -525,7 +527,10 @@ export class StretchTools {
       }),
     );
     const remove = form.querySelector(".remove") as HTMLButtonElement;
-    remove.hidden = !speech.ownDirection;
+    // A few words selected: their own direction, from nothing.
+    const selected = this.selectedPart(scope, speech);
+    if (selected) input.value = "";
+    remove.hidden = !speech.ownDirection || selected !== undefined;
     const set = (direction: string | null) => {
       const now = this.scopeAt(passageFrom);
       const fresh = now.story;
@@ -534,9 +539,17 @@ export class StretchTools {
         this.closePopover(true);
         return;
       }
+      const part = this.selectedPart(now, target);
       let changes: TextChange[];
       try {
-        changes = now.back(withoutSpareMarks(fresh, setDirection(fresh, target, direction)));
+        changes = now.back(
+          withoutSpareMarks(
+            fresh,
+            part
+              ? setDirectionWithin(fresh, part.from, part.to, direction)
+              : setDirection(fresh, target, direction),
+          ),
+        );
       } catch (error) {
         this.context.apply([], error instanceof Error ? error.message : "That can’t be set here.");
         return;
@@ -554,7 +567,7 @@ export class StretchTools {
       // A speech broken by its tag: the quote after the tag carries the direction on (§5.6), so
       // the core kept it as it was with `@()`. Said, with the other way one click away.
       const kept = changes.filter((change) => /@\(\)\s?/.test(change.insert));
-      if (done && direction && kept.length && this.context.notice) {
+      if (done && direction && kept.length && !part && this.context.notice) {
         const { view } = this.context;
         this.context.notice(
           `“${direction}” is this quote’s alone: the one after its tag is said as it was (@()).`,
@@ -589,6 +602,31 @@ export class StretchTools {
   /** The story an edit at `at` is worked out on: its paragraph alone in a long book, else all of it. */
   private scopeAt(at: number): Scope {
     return this.context.scope?.(at) ?? wholeScope(this.context.story());
+  }
+
+  /**
+   * The words selected inside `target`, on one line, when they are not all of its words: an edit
+   * of those words alone, as italics would be. Undefined with no selection, or one elsewhere.
+   */
+  private selectedPart(scope: Scope, target: Speech): { from: number; to: number } | undefined {
+    const { from, to } = this.context.view.state.selection.main;
+    if (from === to) return undefined;
+    if (
+      this.context.view.state.doc.lineAt(from).number !==
+      this.context.view.state.doc.lineAt(to).number
+    )
+      return undefined;
+    const start = scope.at(from);
+    const end = scope.at(to);
+    if (start < target.range.from || end > target.range.to) return undefined;
+    // All of its words: the whole stretch, as with no selection.
+    const words = scope.story.source.slice(target.textRange.from, target.textRange.to);
+    const chosen = scope.story.source.slice(
+      Math.max(start, target.textRange.from),
+      Math.min(end, target.textRange.to),
+    );
+    if (chosen.trim() === words.trim()) return undefined;
+    return { from: start, to: end };
   }
 
   /**
@@ -654,13 +692,24 @@ export class StretchTools {
       this.closePopover(true);
       return;
     }
-    if (target.speaker.toLowerCase() === name.toLowerCase()) {
+    const part = this.selectedPart(scope, target);
+    if (part && target.quoted) {
+      this.context.notice?.(
+        `A quote is said by one voice: to give ${name} part of it, close the quote where that part begins and open another.`,
+      );
+      this.closePopover(true);
+      return;
+    }
+    if (!part && target.speaker.toLowerCase() === name.toLowerCase()) {
       this.closePopover(true);
       return;
     }
     let changes: TextChange[];
     try {
-      changes = withoutSpareMarks(fresh, setSpeaker(fresh, target, name));
+      changes = withoutSpareMarks(
+        fresh,
+        part ? setSpeakerWithin(fresh, part.from, part.to, name) : setSpeaker(fresh, target, name),
+      );
       // Someone new, in a story with a cast: added to it in the same step, so the name raises
       // no warning.
       const known = fresh.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { inGoodTime } from "../../../test-support/timing";
 import {
+  SPEC_VERSION,
   bookText,
   fromFountain,
   lines,
@@ -412,7 +413,7 @@ describe("the Fountain import", () => {
     expect(vxd).toBe(
       [
         "---",
-        "voxdown: 1.1",
+        `voxdown: ${SPEC_VERSION}`,
         "title: The Dragon Who Wouldn't Roar",
         "author: A. Writer",
         "cast:",

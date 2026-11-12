@@ -2,6 +2,12 @@
 
 The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
+## 1.2 (11 November 2026)
+
+New in 1.2, for something a 1.1 file would rarely hold (§16): SPEC.md marks it "new in 1.2", and `conformance.json` gives its examples `"since": "1.2"`.
+
+- **Back to the narrator** (§5.9): `@/` ends a speech without quotes, so a few words in the middle of a line can be given to a character with no quotation marks added: `Whenever I find @Gerald myself pausing @/ before the door.` It is to who speaks what `@()` is to how, claims no quote, and leaves no direction of its own; inside a group, the group's character speaks again. In 1.1, `@/` was text. A new warning, `idle-end`, says when a `@/` ends nothing.
+
 ## 1.1 (10 November 2026)
 
 New in 1.1. Each gives meaning to something a 1.0 file would rarely hold, so by §16 it belongs to a minor version: SPEC.md marks it "new in 1.1", and `conformance.json` gives its example `"since": "1.1"`, for 1.0 readers to skip.

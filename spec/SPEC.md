@@ -1,6 +1,6 @@
 # VoxDown
 
-**Version 1.1, 10 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
+**Version 1.2, 11 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
 
 VoxDown is a plain-text format for stories that are read aloud. It records:
 
@@ -68,6 +68,7 @@ Sir Percival stopped.
 | A direction for the narrator | `@(warmly) Once upon a time…` |
 | A change of direction mid-line | `@Gerald “I know. @(yawning) I’m tired.”` |
 | Back to no direction | `@(nervously) The fox looked around, @() and then relaxed.` |
+| A few words by a character, then the narrator again | `Whenever I find @Gerald myself pausing @/ before the door.` |
 | A direction over several lines | `::: whispering` … `:::` |
 | Several lines by one character | `::: @Wanda reading the letter` … `:::` |
 | A sound | `The broom fell over. [wooden clatter]` |
@@ -785,6 +786,56 @@ Narrator: said the cat.
 @(warmly) Once upon a time, “Hello,” said the cat.
 .
 Narrator (warmly): Once upon a time, “Hello,” said the cat.
+```
+
+### 5.9 Back to the narrator
+
+New in 1.2. `@/` ends a speech without quotes (§5.8): from there to the end of the line, the narrator speaks again, or the group's character inside a group (§7.2). It is to who speaks what `@()` is to how (§6.3), and it never changes a word: a few words in the middle of a line can be given to a character with no quotation marks added.
+
+```example 1.2
+Whenever I find @Gerald myself pausing before @/ coffin warehouses.
+.
+Narrator: Whenever I find
+Gerald: myself pausing before
+Narrator: coffin warehouses.
+```
+
+It claims no quote. A mark with a quote after it on its line claims the quote (§5.4); with `@/` before the quote, the mark says its own words and the quote is read as if they had no mark.
+
+```example 1.2
+@Gerald Myself pausing, @/ he thought. “Stop!” she cried.
+.
+Gerald: Myself pausing,
+Narrator: he thought. “Stop!” she cried.
+```
+
+What comes after it has no direction of its own (§6.4), and inside a group it is the group's character who speaks again.
+
+```example 1.2
+@(warmly) It was late. @Gerald Could you not? @/ he said.
+.
+Narrator (warmly): It was late.
+Gerald: Could you not?
+Narrator: he said.
+```
+
+```example 1.2
+::: @Wanda
+I read it twice. @Gerald Read what? @/ The letter.
+:::
+.
+Wanda: I read it twice.
+Gerald: Read what?
+Wanda: The letter.
+```
+
+A quote ends only at its closing mark: inside one, `@/` changes nothing, and a parser warns of it (`idle-end`, §12.3), as it does of a `@/` where the narrator already speaks. `@/` is the mark only where `@` would begin one (not straight after a letter or digit), and only when no letter, digit or second `/` follows: `@/lib` and `name@/path` are text.
+
+```example 1.2
+@Gerald “I know. @/ I’m tired.” See @/lib.
+.
+Gerald: I know. I’m tired.
+Narrator: See @/lib.
 ```
 
 ## 6. How it is said
@@ -1604,6 +1655,7 @@ A parser never rejects a file. It should report these warnings, each with its li
 | `unclosed-group` | A group is never closed. | warning |
 | `stray-group-close` | A line of colons closes no group. | warning |
 | `idle-mark` | A character mark gives its character nothing to say or do. | warning |
+| `idle-end` | A `@/` ends nothing: it is inside a quote, or the line's own voice already speaks (new in 1.2). | warning |
 | `stray-quote` | A quotation mark has nothing after it on its line. | warning |
 | `unknown-character` | A name is not in the cast, when the file has a cast. | warning |
 | `name-case` | A name is written with different capitals in different places. | warning |

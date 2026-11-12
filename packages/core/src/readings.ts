@@ -84,6 +84,7 @@ function scriptLine(item: Item): string | null {
         : `[![${item.alt}](${item.src})](${item.link})`;
     case "mark":
     case "direction":
+    case "end":
       return null;
   }
 }
@@ -99,6 +100,7 @@ function label(visibility: Visibility): string {
 const NOT_PRINTED: ReadonlySet<Item["kind"]> = new Set([
   "mark",
   "direction",
+  "end",
   "sound",
   "vocal",
   "instruction",

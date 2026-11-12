@@ -7,6 +7,7 @@
  *   comes first (§5.4); a mark with no quote makes the character say the rest of the line, up to
  *   the next mark, unless a sound follows the mark (§5.8, §8.2);
  * - an unmarked quote after a speech that ended on the same line carries that speech on (§5.6);
+ * - `@/` ends a speech without quotes: the rest of the line is the base voice's again (§5.9);
  * - everything else belongs to the line's base voice: the narrator, or a group's character (§7.2).
  *
  * Two things run longer than a line: a quote runs to its closing mark (§5.7), and a group to its
@@ -16,6 +17,7 @@ import { baseSpeaker, groupDirection, visibilityOf } from "./groups";
 import {
   type CloseToken,
   type DirectionToken,
+  type EndToken,
   type LexedLine,
   type MarkToken,
   type OpenToken,
@@ -121,6 +123,9 @@ class ParagraphReader {
           break;
         case "direction":
           this.direction(token, tokens, index);
+          break;
+        case "end":
+          this.end(token);
           break;
         case "vocal": {
           this.flush();
@@ -305,6 +310,35 @@ class ParagraphReader {
     return next;
   }
 
+  /**
+   * `@/` ends a speech without quotes, or a mark's wait for its quote: from here the line's base
+   * voice speaks, with no direction of its own (§5.9). A quote ends only at its closing mark.
+   */
+  private end(token: EndToken): void {
+    this.items.push({ kind: "end", range: token.range });
+    if (this.speech?.quoted) {
+      this.context.warn(
+        "idle-end",
+        "@/ ends a speech without quotes; a quote ends at its closing mark.",
+        token.range,
+      );
+      return;
+    }
+    if (!this.speech && !this.pending) {
+      this.context.warn(
+        "idle-end",
+        "@/ ends nothing here: the line's own voice is already speaking.",
+        token.range,
+      );
+      return;
+    }
+    this.flush();
+    this.speech = null;
+    this.narration = { own: null };
+    this.pending = null;
+    this.pendingDirection = null;
+  }
+
   /** `@(…)` changes the direction of whoever is speaking, from here (§6.2, §6.3). */
   private direction(token: DirectionToken, tokens: readonly Token[], index: number) {
     this.flush();
@@ -385,7 +419,8 @@ function continuation(voice: Voice): Voice {
 function quoteAhead(tokens: readonly Token[], index: number): boolean {
   for (let next = index + 1; next < tokens.length; next++) {
     const type = tokens[next]?.type;
-    if (type === "mark") return false;
+    // Another mark, or `@/`, comes first: the quote isn't this mark's.
+    if (type === "mark" || type === "end") return false;
     if (type === "open") return true;
   }
   return false;

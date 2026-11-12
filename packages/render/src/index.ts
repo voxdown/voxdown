@@ -144,6 +144,7 @@ export function renderBook(story: Story, options: RenderOptions = {}): string {
 const NOT_PRINTED: ReadonlySet<Item["kind"]> = new Set([
   "mark",
   "direction",
+  "end",
   "sound",
   "vocal",
   "instruction",
@@ -341,6 +342,7 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
       }
       case "mark":
       case "direction":
+      case "end":
         // Shown as the speech's name and direction label, not as written.
         gap(item.range.from);
         at = item.range.to;
@@ -451,7 +453,11 @@ function ownPieces(speech: Speech, line: Line): Array<[number, number]> {
   if (!hidden) {
     hidden = line.items
       .filter(
-        (item) => item.kind === "mark" || item.kind === "direction" || item.kind === "instruction",
+        (item) =>
+          item.kind === "mark" ||
+          item.kind === "direction" ||
+          item.kind === "end" ||
+          item.kind === "instruction",
       )
       .map((item) => item.range)
       .sort((a, b) => a.from - b.from);

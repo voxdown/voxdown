@@ -55,6 +55,8 @@ Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) tha
 | --- | --- |
 | `setSpeaker(story, speech, name)` | Gives a stretch, or the whole quote it is part of (over lines and paragraphs), to another character; narration that holds quotes gives its first quote. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. |
 | `setDirection(story, speech, direction \| null)` | Adds, replaces or removes a stretch’s own direction, where §13 says to write it: to the quote's end, or to a direction of its own inside it. |
+| `setSpeakerWithin(story, from, to, name)` | Gives a few words of one line to a character, and nothing else: `@Name` before them, and after them what gives the rest back as it was (`@/` for the narrator, §5.9). Part of a quote can't be given away (a quote has one voice). |
+| `setDirectionWithin(story, from, to, direction \| null)` | Says a few words of one line so, and nothing else: `@(…)` before them, and `@()` or the direction the rest had after them. Inside a quote too. |
 | `renameCharacter(story, from, to)` | Renames a short name in the cast, the `narrator:` key and every mark. |
 | `setFullName(story, handle, name)` | Sets a character’s full name in the cast, adding the cast or the character if needed. |
 | `setMeta(story, key, value \| null)` | Sets or removes a front matter detail, such as `title`; a key whose value is a map or a list, such as `cast`, is left alone. |

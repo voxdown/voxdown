@@ -259,6 +259,13 @@ const characterMark = seq(
 );
 
 const directionMark = match("meta.mark.direction.voxdown", AT_START, AT, direction(PARENS));
+/** `@/`, the end of a speech without quotes (§5.9); `@/lib` is text. */
+const endMark = match(
+  "meta.mark.end.voxdown",
+  AT_START,
+  cap(vd(S.mark), "@/"),
+  String.raw`(?![\p{L}\p{N}/])`,
+);
 /** `@[sneezes]`; but `@[text](address)` is an `@` and a link (§8.3). */
 const vocalMark = match(
   "meta.mark.vocal.voxdown",
@@ -315,7 +322,8 @@ const NOTE_OVER_LINE = "(?=%%(?!.*%%))";
 /** From a character mark to the end of its line, or to the next character mark. */
 function speech(multiLine: boolean): Rule {
   const { source, captures } = compile(characterMark);
-  const nextMark = `${AT_START}(?=@\\p{L})`;
+  // Another name, or `@/` (§5.9), ends what the mark claims.
+  const nextMark = `${AT_START}(?=@\\p{L}|@/(?![\\p{L}\\p{N}/]))`;
   return {
     begin: source,
     beginCaptures: captures,
@@ -331,6 +339,7 @@ function speech(multiLine: boolean): Rule {
       include("sound"),
       include("instruction"),
       include(multiLine ? "quote" : "quote-line"),
+      include("end-mark"),
       include("direction-mark"),
       include("vocal-mark"),
       include("emphasis"),
@@ -501,6 +510,7 @@ export const grammar = {
       patterns: [
         ...markText,
         include("speech"),
+        include("end-mark"),
         include("direction-mark"),
         include("vocal-mark"),
         include("emphasis"),
@@ -510,6 +520,7 @@ export const grammar = {
       patterns: [
         ...markText,
         include("speech-heading"),
+        include("end-mark"),
         include("direction-mark"),
         include("vocal-mark"),
         include("emphasis"),
@@ -521,6 +532,7 @@ export const grammar = {
     link,
     sound,
     instruction,
+    "end-mark": endMark,
     "direction-mark": directionMark,
     "vocal-mark": vocalMark,
     "character-mark": match("meta.mark.character.voxdown", characterMark),
@@ -531,6 +543,7 @@ export const grammar = {
     "speech-text": {
       patterns: [
         ...markText,
+        include("end-mark"),
         include("direction-mark"),
         include("vocal-mark"),
         include("character-mark"),
@@ -541,6 +554,7 @@ export const grammar = {
     "emphasis-text": {
       patterns: [
         ...markText,
+        include("end-mark"),
         include("direction-mark"),
         include("vocal-mark"),
         include("character-mark"),

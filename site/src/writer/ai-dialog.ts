@@ -32,7 +32,7 @@ export type AiContext = {
   text(): string;
   /** Makes the changes as one step to undo; false if they can't be made. */
   apply(changes: TextChange[]): boolean;
-  notice(message: string): void;
+  notice(message: string, action?: { label: string; run: () => void }): void;
   /** Takes the cursor to a line of the story. */
   goToLine(line: number): void;
   /** The story's file name. */
@@ -56,6 +56,29 @@ let running: AbortController | undefined;
 let lastNaming: { said: string; held: Node[] } | undefined;
 /** A run the writer went back to writing beside: closing the dialog doesn't stop it. */
 let behind = false;
+/** Naming the speakers under way: only Stop stops it; the dialog put away lets it go on. */
+let naming = false;
+
+/** The dialog's Close: Stop while work it would end goes on, which only it ends. */
+function closeSays(working: boolean): void {
+  const close = $<HTMLButtonElement>("#ai-close");
+  close.textContent = working ? "Stop" : "Close";
+  close.value = working ? "stop" : "close";
+}
+
+/** The naming goes on behind, while the writer writes: said, with Stop one click away. */
+function goBehind(context: AiContext): void {
+  behind = true;
+  context.notice("Naming the speakers while you write: it says here when it's done.", {
+    label: "Stop",
+    run: () => {
+      behind = false;
+      running?.abort();
+      running = undefined;
+      context.notice("Naming the speakers stopped. Nothing was changed.");
+    },
+  });
+}
 
 /** The voices the writer chose in the casting, by service and character: sent with each request. */
 const chosen = new Map<string, Record<string, string>>();
@@ -226,11 +249,21 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   go.disabled = false;
   connect.hidden = true;
   ready.hidden = true;
-  if (!dialog.open) dialog.showModal();
+  // Opened again while the naming goes on behind: it is watched here again, Stop here to stop it.
+  if (naming) behind = false;
+  if (!dialog.open) {
+    dialog.returnValue = "";
+    dialog.showModal();
+  }
   dialog.onclose = () => {
     // A voice being heard stops with the dialog.
     stopHearing();
     if (behind) return;
+    // Naming under way, the dialog put away (Escape, its ×, Keep writing): it goes on.
+    if (naming && dialog.returnValue !== "stop") {
+      goBehind(context);
+      return;
+    }
     running?.abort();
     running = undefined;
   };
@@ -352,11 +385,9 @@ async function nameSpeakers(
   // Writing on while it works: the dialog goes, the work goes on, and says when it's done.
   second.hidden = false;
   second.textContent = "Keep writing";
-  second.onclick = () => {
-    behind = true;
-    $<HTMLDialogElement>("#ai").close();
-    context.notice("Naming the speakers while you write: it says here when it's done.");
-  };
+  second.onclick = () => $<HTMLDialogElement>("#ai").close("behind");
+  naming = true;
+  closeSays(true);
   try {
     let done: Record<string, unknown> | undefined;
     await work(
@@ -475,6 +506,8 @@ async function nameSpeakers(
       if (behind) context.notice((error as Error).message);
     }
   } finally {
+    naming = false;
+    closeSays(false);
     go.disabled = false;
     second.hidden = true;
     behind = false;
@@ -497,6 +530,7 @@ async function audiobook(
   running?.abort();
   running = new AbortController();
   go.disabled = true;
+  closeSays(true);
   second.hidden = true;
   if (mode === "estimate") result.replaceChildren();
   progress.textContent =
@@ -564,6 +598,7 @@ async function audiobook(
   } catch (error) {
     if ((error as Error).name !== "AbortError") progress.textContent = (error as Error).message;
   } finally {
+    closeSays(false);
     go.disabled = false;
   }
 }

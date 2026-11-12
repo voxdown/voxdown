@@ -13,6 +13,8 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **VoxDown Writer**
 - **Who** and **How** on words selected change those words alone, as italics do: `@Gerald` … `@/`, `@(softly)` … `@()`, across voices (the marks inside the words go, and whoever spoke after them is given back) and over several lines, line by line, every line or none. With the cursor alone, they change the whole quote or passage as before. Part of a quote can be said another way, not given to someone else, and the Writer says why; a selection is never widened to a whole passage.
 
+- While the speakers are being named, the dialog's Close says **Stop**, and only it stops the naming: Escape, the dialog's × and **Keep writing** put the dialog away and let it go on, with Stop in the notice that says so. Close stopped it, which its name didn't say. While an audiobook is cast or made, Close says Stop too.
+
 **@voxdown/render**, **@voxdown/editor**, **VS Code extension**
 - `@/` is left out of the book and the script, hidden in the editor where the marks are (the character's words show whose they are), and highlighted as a mark.
 

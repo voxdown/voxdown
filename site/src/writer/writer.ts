@@ -3756,7 +3756,7 @@ function showAbout(): void {
 const aiContext: AiContext = {
   text: () => view.state.doc.toString(),
   apply: (changes) => apply(changes, "Nothing to give."),
-  notice: (message) => notice(message),
+  notice: (message, action) => notice(message, false, action),
   goToLine: (number) => {
     const line = view.state.doc.line(Math.max(1, Math.min(number, view.state.doc.lines)));
     view.dispatch({
@@ -3776,13 +3776,13 @@ const aiContext: AiContext = {
   if (pairing) {
     keepPairing(pairing);
     window.history.replaceState(null, "", location.href.split("#")[0]);
-    setTimeout(
-      () =>
+    // Once the page has settled, unless something else is being said by then.
+    setTimeout(() => {
+      if ($("#notice").hidden)
         notice(
           "Connected to this computer: Edit › Name the speakers with AI…, and File › Make an audiobook…",
-        ),
-      1200,
-    );
+        );
+    }, 1200);
   }
 }
 

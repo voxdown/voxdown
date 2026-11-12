@@ -2540,6 +2540,16 @@ console.log("writer: two tabs, a file changed on disk: ok");
     response.writeHead(200, { "content-type": "application/x-ndjson" });
     const say = (event) => response.write(`${JSON.stringify(event)}\n`);
     if (path === "/v1/tag") {
+      // A slow AI, for a story that says so: the Writer is used meanwhile.
+      if (asked.text.includes("Slowly")) {
+        say({ type: "start", ai: "Claude Code" });
+        let gone = false;
+        response.on("close", () => {
+          gone = !response.writableFinished;
+        });
+        await new Promise((done) => setTimeout(done, 1500));
+        if (gone) return;
+      }
       const at = asked.text.indexOf("“Who");
       say({ type: "start", ai: "Claude Code" });
       say({ type: "passage", index: 1, of: 1, heading: null, asked: 2, named: 2 });
@@ -2664,6 +2674,30 @@ console.log("writer: two tabs, a file changed on disk: ok");
   await writer.keyboard.press("Control+z");
   if ((await writer.locator(".cm-content").innerText()).includes("@Tom"))
     problems.push("writer: the AI's speakers aren't one step to undo");
+  // While it works: Escape puts the dialog away and the naming goes on; Stop stops it.
+  await writer.keyboard.press("Control+End");
+  await writer.keyboard.type(" Slowly.");
+  const nameSlowly = async () => {
+    await writer.click("#edit-menu-button");
+    await writer.click('[data-command="ai-speakers"]');
+    await writer.waitForSelector("#ai-ready:not([hidden])", { timeout: 5000 }).catch(() => {});
+    await writer.click("#ai-go");
+    await writer.waitForTimeout(300);
+  };
+  await nameSlowly();
+  if ((await writer.textContent("#ai-close")) !== "Stop")
+    problems.push("writer: while the speakers are named, the dialog's Close doesn't say Stop");
+  await writer.keyboard.press("Escape");
+  await writer.waitForTimeout(2200);
+  if (!(await writer.locator(".cm-content").innerText()).includes("@Tom"))
+    problems.push("writer: Escape while naming the speakers stopped it");
+  await writer.click(".cm-content");
+  await writer.keyboard.press("Control+z");
+  await nameSlowly();
+  await writer.click("#ai-close");
+  await writer.waitForTimeout(2200);
+  if ((await writer.locator(".cm-content").innerText()).includes("@Tom"))
+    problems.push("writer: Stop while naming the speakers didn't stop it");
   await writer.click("#file-menu-button");
   await writer.click('[data-command="audiobook"]');
   await writer.waitForSelector("#ai-ready:not([hidden])", { timeout: 5000 }).catch(() => {});

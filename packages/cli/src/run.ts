@@ -773,9 +773,11 @@ async function connectCommand({ io, values }: Context): Promise<number> {
       "",
     ].join("\n"),
   );
-  const opened = !flag(values, "no-open") && (await openInBrowser(url, machine));
+  const opened = !flag(values, "no-open") && (await openInBrowser(helper.openUrl(writer), machine));
+  // The address itself, always: where the browser opens without it (or doesn't open at all), it
+  // can be opened by hand.
   io.stdout(
-    `${opened ? "Opened the Writer, connected." : "Open this address to connect the Writer:"}\n  ${opened ? writer : url}\nLeave this running while you use it; Ctrl+C stops it.\n`,
+    `${opened ? "Opened the Writer, connected. If it opened without connecting, open this address (Ctrl+click it):" : "Open this address to connect the Writer (Ctrl+click it):"}\n  ${url}\nLeave this running while you use it; Ctrl+C stops it.\n`,
   );
   // Until the process is stopped.
   await new Promise<void>((done) => {

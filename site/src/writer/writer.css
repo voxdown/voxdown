@@ -2399,3 +2399,32 @@ body[data-welcome] .manuscript .editor {
     border: 1px solid CanvasText;
   }
 }
+
+/* Every dialog's × at the top right (dialogs.ts); its title keeps clear of it. */
+dialog .dialog-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--quiet);
+  font: 1.35rem / 1 var(--ui);
+  cursor: pointer;
+}
+dialog .dialog-close:hover {
+  background: var(--tab);
+  color: var(--ink);
+}
+dialog .dialog-close:focus-visible {
+  outline: 2px solid var(--pencil);
+  outline-offset: -2px;
+}
+dialog:has(> .dialog-close) h2:first-of-type {
+  padding-right: 2.2rem;
+}

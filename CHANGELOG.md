@@ -4,6 +4,19 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
+## `@voxdown/cli` 1.1.1, VoxDown Writer, and the playground (11 November 2026)
+
+**@voxdown/cli**
+- `vxd connect` opens the Writer on Windows and in WSL: it hands the computer a plain address on 127.0.0.1, which sends the browser on to the Writer with its key, once, and can't be shown inside another site's page. Windows' `explorer.exe` cut the Writer's address at its `=` and opened only the key, so the Writer opened unconnected, or not at all ("Get an app to open this '127.0.0.1' link"). It also prints the address with the key every time, to open by hand.
+
+**VoxDown Writer**
+- Every dialog has a × at the top right, and Go to, Keyboard shortcuts, the lists, Compare, Export, About and Find the chapters close with a click outside them, as does the AI dialog while nothing runs; Story details and Page settings keep what is being typed. Go to had no way out but Escape.
+- The script or book beside a long story keeps the reader's place when it is drawn again after a pause in typing, or with words from another tab: it showed the book's first page for a moment, and a tab that only reads stayed there.
+- A manuscript set in Courier pastes from Google Docs or Word with its headings and italics (a typewriter face alone was taken for code), and a blank line in a pasted block of code starts a paragraph.
+- A new story no one has typed in keeps no draft: each left one marked "changes not saved", opened again on the next visit.
+- In a long book, moving a paragraph (Alt+↑/↓) and opening Go to no longer read the whole book again; the names drawn in the editor follow the cast as soon as it changes; at 768 px the counts are cut short, never whether the draft is kept.
+- The AI dialog says to open the address `vxd connect` prints if the page still says it isn't connected.
+
 ## `voxdown` 1.2.0, `@voxdown/render` 1.3.0, `@voxdown/editor` 1.2.0, `@voxdown/cli` 1.1.0, `@voxdown/produce` 0.1.0, VoxDown Writer, and the playground (11 November 2026)
 
 `@voxdown/cli` 1.1.0 brings `vxd tag`, `vxd mcp`, `vxd produce` and `vxd connect` (below), and `vxd fmt --dashes`. `@voxdown/produce` 0.1.0 is its first release.

@@ -230,6 +230,41 @@ describe("vxd connect", () => {
     expect(JSON.parse(wrong.text).error).toContain("am_nobody");
   });
 
+  it("opens the Writer from a plain address, once, for computers that cut an address at its =", async () => {
+    const opening = new URL(helper.openUrl("https://voxdown.github.io/writer/"));
+    expect(opening.href).not.toMatch(/[#=,]/);
+    // As the computer's browser asks for it: no key, no Origin.
+    const visit = (path: string) =>
+      new Promise<{ status: number; headers: Record<string, unknown>; text: string }>((done) => {
+        const sent = httpRequest(
+          {
+            host: "127.0.0.1",
+            port: helper.port,
+            path,
+            headers: { host: `127.0.0.1:${helper.port}` },
+          },
+          (response) => {
+            let text = "";
+            response.on("data", (chunk) => {
+              text += chunk;
+            });
+            response.on("end", () =>
+              done({ status: response.statusCode ?? 0, headers: response.headers, text }),
+            );
+          },
+        );
+        sent.end();
+      });
+    const page = await visit(opening.pathname);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain(
+      `location.replace("https://voxdown.github.io/writer/#pair=127.0.0.1:${helper.port}:${helper.token}")`,
+    );
+    expect(page.headers["x-frame-options"]).toBe("DENY");
+    expect((await visit(opening.pathname)).status).toBe(410);
+    expect((await visit("/open/guessed")).status).toBe(401);
+  });
+
   it("says plainly what went wrong", async () => {
     const missing = await ask("/v1/tag", { body: { with: "claude" } });
     expect(missing.status).toBe(400);

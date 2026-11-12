@@ -43,6 +43,12 @@ export type Helper = {
   token: string;
   /** The Writer's address, with what it needs to connect in its fragment. */
   pairUrl(writer?: string): string;
+  /**
+   * An address on this computer that sends the browser on to `pairUrl(writer)`, once: plain, for
+   * the computer to open (Windows' `explorer.exe` cuts an address at its `=`, and so lost all of
+   * the Writer's but the key).
+   */
+  openUrl(writer?: string): string;
   close(): Promise<void>;
 };
 
@@ -84,6 +90,9 @@ function recast(value: unknown): Record<string, string> | undefined {
 
 export async function startHelper(options: HelperOptions): Promise<Helper> {
   const token = options.token ?? randomBytes(24).toString("base64url");
+  // The opening page's own key, good once: where it sends the browser, set by `openUrl`.
+  const opening = randomBytes(18).toString("base64url");
+  let openTo: string | undefined;
   const allowed = (origin: string) =>
     options.origins.includes(origin) ||
     Boolean(options.dev && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
@@ -95,6 +104,32 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
     const host = request.headers.host ?? "";
     if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) {
       response.writeHead(421).end();
+      return;
+    }
+    // The page the computer's browser is opened at: on to the Writer, with the key in the
+    // fragment (never sent to a server). Once, and never inside another site's page.
+    if (request.method === "GET" && request.url === `/open/${opening}`) {
+      const to = openTo;
+      openTo = undefined;
+      if (!to) {
+        response.writeHead(410, { "content-type": "text/plain; charset=utf-8" });
+        response.end(
+          "This address opened the Writer once already. To connect again, open the address vxd connect printed.\n",
+        );
+        return;
+      }
+      const target = JSON.stringify(to).replace(/</g, "\\u003c");
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "x-frame-options": "DENY",
+        "content-security-policy":
+          "default-src 'none'; script-src 'unsafe-inline'; frame-ancestors 'none'",
+      });
+      response.end(
+        `<!doctype html><html lang="en"><meta charset="utf-8"><title>VoxDown Writer</title><p>Opening the Writer…</p><script>if (window.top === window.self) location.replace(${target});</script></html>\n`,
+      );
       return;
     }
     if (origin !== undefined && !allowed(origin)) {
@@ -327,6 +362,10 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
     port,
     token,
     pairUrl: (writer = WRITER) => `${writer.replace(/#.*$/, "")}#pair=127.0.0.1:${port}:${token}`,
+    openUrl: (writer = WRITER) => {
+      openTo = `${writer.replace(/#.*$/, "")}#pair=127.0.0.1:${port}:${token}`;
+      return `http://127.0.0.1:${port}/open/${opening}`;
+    },
     close: () => new Promise((done) => server.close(() => done())),
   };
 }

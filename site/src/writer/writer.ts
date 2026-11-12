@@ -85,6 +85,7 @@ import { type AiContext, openAi } from "./ai-dialog";
 import { castPanel } from "./cast";
 import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
+import { addCloseButton, closeOnClickOutside } from "./dialogs";
 import { changesOnly, diffLines, withWords } from "./diff";
 import {
   emphasis,
@@ -3784,6 +3785,15 @@ const aiContext: AiContext = {
     );
   }
 }
+
+// Every dialog closes by Escape, its ×, and, where that loses nothing, a click outside it. A
+// question waits for its answer; Story details and Page settings keep what is being typed; naming
+// the speakers isn't stopped by a click beside it.
+for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog:not(#ask)"))
+  addCloseButton(dialog);
+for (const id of ["shortcuts", "outline", "list-dialog", "compare", "export", "about", "shape"])
+  closeOnClickOutside($<HTMLDialogElement>(`#${id}`));
+closeOnClickOutside($<HTMLDialogElement>("#ai"), () => !$<HTMLButtonElement>("#ai-go").disabled);
 
 void start();
 

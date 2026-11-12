@@ -3255,7 +3255,15 @@ const COMMANDS: Record<string, () => unknown> = {
 
 /** Where the passage the cursor is in starts, or the cursor, for the pickers to find it. */
 function passageAtCursor(): number {
-  const head = view.state.selection.main.head;
+  // With words selected, the passage they end in: a triple-click or a drag to the next line's
+  // start leaves the cursor on the blank line after them.
+  const { from, to } = view.state.selection.main;
+  let head = view.state.selection.main.head;
+  if (from !== to) {
+    let last = to;
+    while (last > from && /\s/.test(view.state.sliceDoc(last - 1, last))) last--;
+    head = Math.max(from, last - 1);
+  }
   // A long book's from its paragraph alone, or as the worker last read it: reading the whole
   // book again here, just after a give, held the page a fifth of a second on a slow computer.
   if (view.state.doc.length >= LONG && storyVersion !== version) {
@@ -3824,11 +3832,10 @@ const aiContext: AiContext = {
   }
 }
 
-// Every dialog closes by Escape, its ×, and, where that loses nothing, a click outside it. A
-// question waits for its answer; Story details and Page settings keep what is being typed; naming
-// the speakers isn't stopped by a click beside it.
-for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog:not(#ask)"))
-  addCloseButton(dialog);
+// Every dialog closes by Escape and its × (a question's as Cancel), and, where that loses nothing,
+// a click outside it: a question waits for its answer; Story details and Page settings keep what
+// is being typed; naming the speakers isn't stopped by a click beside it.
+for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog")) addCloseButton(dialog);
 for (const id of ["shortcuts", "outline", "list-dialog", "compare", "export", "about", "shape"])
   closeOnClickOutside($<HTMLDialogElement>(`#${id}`));
 closeOnClickOutside($<HTMLDialogElement>("#ai"), () => !$<HTMLButtonElement>("#ai-go").disabled);

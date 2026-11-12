@@ -43,7 +43,7 @@ export function withoutSpareMarks(story: Story, changes: readonly TextChange[]):
   const to = lineEnd < 0 ? source.length : lineEnd;
   // The marks there (names, directions, `@/`), the last first, so that taking one out moves
   // none still to try.
-  const marks = after.blocks
+  const items = after.blocks
     .flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
     .flatMap((line) => line.items)
     .filter(
@@ -51,19 +51,33 @@ export function withoutSpareMarks(story: Story, changes: readonly TextChange[]):
         (item.kind === "mark" || item.kind === "direction" || item.kind === "end") &&
         item.range.from >= from &&
         item.range.to <= to,
-    )
-    .map((item) => item.range)
-    .sort((a, b) => b.from - a.from);
+    );
+  // Each mark whole, and a name's own direction alone (`@Gerald (softly) @(sadly)`: the softly
+  // says nothing), each with the space after it, never the words.
+  const marks = [
+    ...items.map((item) => {
+      const end = source[item.range.to] === " " ? item.range.to + 1 : item.range.to;
+      return { from: item.range.from, to: end };
+    }),
+    ...items.flatMap((item) =>
+      item.kind === "mark" && item.directionRange
+        ? [{ from: item.nameRange.to, to: item.directionRange.to }]
+        : [],
+    ),
+  ].sort((a, b) => b.from - a.from || a.to - b.to);
   const spare: TextChange[] = [];
+  let reach = Number.POSITIVE_INFINITY;
   for (const mark of marks) {
-    // The mark and the space after it, never the words.
-    const end = source[mark.to] === " " ? mark.to + 1 : mark.to;
+    // A place already changed by a mark taken out after it is left as it is.
+    if (mark.to > reach) continue;
+    const end = mark.to;
     const without = applyChanges(source, [{ from: mark.from, to: end, insert: "" }]);
     const read = parse(without);
     if (heard(read) !== wanted) continue;
     spare.push({ from: mark.from, to: end, insert: "" });
     source = without;
     after = read;
+    reach = mark.from;
   }
   return spare.length ? composed(story.source, changes, spare) : [...changes];
 }

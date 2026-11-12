@@ -441,6 +441,8 @@ async function nameSpeakers(
   second.onclick = () => $<HTMLDialogElement>("#ai").close("behind");
   naming = true;
   closeSays(true);
+  // The button pressed is put out of use: the keys go to Stop, not lost to the page.
+  $<HTMLButtonElement>("#ai-close").focus();
   try {
     let done: Record<string, unknown> | undefined;
     await work(
@@ -591,6 +593,7 @@ async function audiobook(
   running = new AbortController();
   go.disabled = true;
   closeSays(true);
+  $<HTMLButtonElement>("#ai-close").focus();
   second.hidden = true;
   if (mode === "estimate") result.replaceChildren();
   progress.textContent =

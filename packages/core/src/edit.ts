@@ -697,6 +697,10 @@ function wordsWithin(source: string, from: number, to: number): Range | undefine
   while (start < end && /\s/.test(source[start] ?? "")) start++;
   while (end > start && /\s/.test(source[end - 1] ?? "")) end--;
   while (start > 0 && word.test(source[start - 1] ?? "") && word.test(source[start] ?? "")) start--;
+  // Words in *italics* or **bold** take their signs, so a mark goes outside them; words chosen
+  // from within a name take its `@`.
+  while (start > 0 && /[*_]/.test(source[start - 1] ?? "")) start--;
+  if (start > 0 && source[start - 1] === "@") start--;
   while (word.test(source[end] ?? "") && word.test(source[end - 1] ?? "")) end++;
   while (/[\p{Pe}\p{Pf}.,;:!?…*_]/u.test(source[end] ?? "")) end++;
   return /[\p{L}\p{N}]/u.test(source.slice(start, end)) ? { from: start, to: end } : undefined;
@@ -786,7 +790,7 @@ function byLines(
 
 /**
  * What the words between `from` and `to` are, for a host to say why an edit of them alone did
- * nothing: who says them now; whether some are in a quote (which has one voice); and whether
+ * nothing: who says them now, and how; whether some are in a quote (which has one voice); and whether
  * they touch the words beside them with no space between (an unspaced dash), where no mark can
  * go without changing the book. Undefined with no words selected.
  */
@@ -794,11 +798,19 @@ export function wordsSelected(
   story: Story,
   from: number,
   to: number,
-): { speakers: string[]; quoted: boolean; glued: boolean } | undefined {
+):
+  | {
+      speakers: string[];
+      directions: Array<string | null>;
+      quoted: boolean;
+      glued: boolean;
+    }
+  | undefined {
   const source = story.source;
   const start = Math.min(from, to);
   const end = Math.max(from, to);
   const speakers: string[] = [];
+  const directions: Array<string | null> = [];
   let quoted = false;
   let glued = false;
   let any = false;
@@ -812,6 +824,7 @@ export function wordsSelected(
     for (const char of heard(story)) {
       if (char.at < words.from || char.at >= words.to) continue;
       if (!speakers.some((name) => sameName(name, char.speaker))) speakers.push(char.speaker);
+      if (!directions.includes(char.direction)) directions.push(char.direction);
       if (char.item.kind === "speech" && char.item.quoted) quoted = true;
     }
     const before = source[words.from - 1];
@@ -819,7 +832,7 @@ export function wordsSelected(
     if ((before !== undefined && !/\s/.test(before)) || (after !== undefined && !/\s/.test(after)))
       glued = true;
   }
-  return any ? { speakers, quoted, glued } : undefined;
+  return any ? { speakers, directions, quoted, glued } : undefined;
 }
 
 /** Who says a few words of one line: see `setSpeakerWithin`. */
@@ -926,20 +939,51 @@ function directionInLine(
   const chars = heard(story).filter(within);
   if (chars.length === 0) return [];
   const value = direction?.replace(/\s+/g, " ").trim() || null;
-  if (value !== null && chars.every((char) => char.direction === value)) return [];
-  const at = span.from;
-  const mark = value ? `@(${directionText(value)})` : "@()";
-  const changes = settled(
-    story,
-    within,
-    [{ from: at, to: at, insert: markAt(story.source, at, mark) }],
-    {
-      inside: (was, now) =>
-        sameName(now.speaker, was.speaker) && (value === null || now.direction === value),
-      wanted: (was, now) => ({ speaker: was.speaker, direction: value ?? now.direction }),
-    },
-  );
-  return changes.length ? changes : value === null ? [] : null;
+  // No direction: each word as its voice is with none of its own, the groups' or none.
+  const plain = (char: Heard, speaker: string) => groupDirection(groupsAt(story, char.at), speaker);
+  const wanted = (char: Heard, speaker: string) => (value === null ? plain(char, speaker) : value);
+  if (chars.every((char) => char.direction === wanted(char, char.speaker))) return [];
+  const source = story.source;
+  const line = place(story, (chars[0] as Heard).item).line;
+  // The directions straight before the words are theirs, and those inside them go too: one
+  // says how all of them are said now, or none does.
+  let start = span.from;
+  for (;;) {
+    let at = start;
+    while (at > line.range.from && /[ \t]/.test(source[at - 1] ?? "")) at--;
+    const before = line.items.find((item) => item.kind === "direction" && item.range.to === at);
+    if (!before) break;
+    start = before.range.from;
+  }
+  const removed: TextChange[] = line.items
+    .filter(
+      (item) => item.kind === "direction" && item.range.from >= start && item.range.to <= span.to,
+    )
+    .map((item) => ({
+      from: item.range.from,
+      to: item.range.to + (source[item.range.to] === " " ? 1 : 0),
+      insert: "",
+    }));
+  const withMark = (mark: string): TextChange[] => {
+    const insert = markAt(source, start, mark);
+    const first = removed[0];
+    return first && first.from === start
+      ? [{ ...first, insert }, ...removed.slice(1)]
+      : [{ from: start, to: start, insert }, ...removed];
+  };
+  const promise = {
+    inside: (was: Heard, now: Heard) =>
+      sameName(now.speaker, was.speaker) && now.direction === wanted(was, now.speaker),
+    wanted: (was: Heard) => ({ speaker: was.speaker, direction: wanted(was, was.speaker) }),
+  };
+  // No direction: the marks taken out may be all it takes; else `@()` before the words.
+  const tries =
+    value === null ? [removed, withMark("@()")] : [withMark(`@(${directionText(value)})`)];
+  for (const changes of tries) {
+    const done = changes.length ? settled(story, within, changes, promise) : [];
+    if (done.length) return done;
+  }
+  return null;
 }
 
 function setDirectionNow(story: Story, speech: Speech, direction: string | null): TextChange[] {

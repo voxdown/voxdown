@@ -786,8 +786,11 @@ describe("attributing quotes", () => {
     const story = parse("“One,” said Ann. @Bob “Two.”\n\nThe end. “Three?” asked Cy.");
     const first = nextNarratedQuote(story, -1);
     expect(first?.text).toBe("One,");
-    expect(nextNarratedQuote(story, first?.from ?? 0)?.text).toBe("Three?");
+    // Selected, the quote ends where the cursor is: the next press goes on past it.
+    expect(nextNarratedQuote(story, first?.to ?? 0)?.text).toBe("Three?");
     expect(nextNarratedQuote(story, story.source.length)?.text).toBe("One,");
+    // The cursor at a quote's start (Ctrl+Home on a story that opens with one): that quote.
+    expect(nextNarratedQuote(story, 0)?.text).toBe("One,");
   });
 });
 
@@ -963,7 +966,7 @@ describe("two quotes in the narrator's words", () => {
   it("are both found by the next quote with no speaker", () => {
     const story = parse(text);
     const first = nextNarratedQuote(story, -1);
-    const second = nextNarratedQuote(story, first?.from ?? 0);
+    const second = nextNarratedQuote(story, first?.to ?? 0);
     expect([first?.text, second?.text]).toEqual(["Hello,", "Goodbye,"]);
   });
 });
@@ -1003,6 +1006,14 @@ describe("an edit's marks, no more than needed", () => {
       "@Wanda (softly) myself pausing @/ before the door.",
     );
     expect(spare("She said @Wanda hello @/ @Bob to me.")).toBe("She said @Wanda hello @Bob to me.");
+    // A name's own direction that a direction straight after it overrides.
+    expect(spare("@Bob (softly) @(sadly) Could you not? I am tired.")).toBe(
+      "@Bob @(sadly) Could you not? I am tired.",
+    );
+    // A direction already in force.
+    expect(spare("I @(softly) knock twice @(softly) and wait.")).toBe(
+      "I @(softly) knock twice and wait.",
+    );
   });
 
   it("keeps every mark that changes who or how", () => {

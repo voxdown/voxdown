@@ -145,5 +145,7 @@ export function wantingQuotes(story: Story): Wanting[] {
 
 /** The next of them after `after`, round to the first. */
 export function nextWanting(wanting: readonly Wanting[], after: number): Wanting | undefined {
-  return wanting.find((quote) => quote.from > after) ?? wanting[0];
+  // A quote the cursor stands at the start of is the next (the story's first, after Ctrl+Home);
+  // one just selected ends where the cursor is, so the next press goes on past it.
+  return wanting.find((quote) => quote.from >= after) ?? wanting[0];
 }

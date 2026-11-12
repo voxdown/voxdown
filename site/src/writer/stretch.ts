@@ -542,8 +542,15 @@ export class StretchTools {
       this.tooFar();
       return;
     }
-    if (selected) input.value = "";
-    remove.hidden = !speech.ownDirection || selected !== undefined;
+    if (selected) {
+      // The words selected said with none of their own: every direction in them taken out.
+      input.value = "";
+      remove.textContent = "No direction";
+      remove.hidden = false;
+    } else {
+      remove.textContent = "Take it out";
+      remove.hidden = !speech.ownDirection;
+    }
     const set = (direction: string | null) => {
       const now = this.scopeAt(passageFrom);
       const fresh = now.story;
@@ -574,7 +581,7 @@ export class StretchTools {
       const done = this.context.apply(
         changes,
         part
-          ? this.whyNot(fresh, part)
+          ? this.whyNot(fresh, part, undefined, direction)
           : direction
             ? `“${direction}” can’t be set here without changing how other lines are said, so nothing changed.`
             : "This direction can’t be taken out without changing other lines, so nothing changed.",
@@ -623,7 +630,6 @@ export class StretchTools {
     input.select();
   }
 
-  /** The story an edit at `at` is worked out on: its paragraph alone in a long book, else all of it. */
   /**
    * Whether the tools were opened for the selection (the keys, the toolbar, the menu) rather
    * than for a passage under the pointer (its bar): then words selected are what is changed,
@@ -631,8 +637,18 @@ export class StretchTools {
    */
   private bySelection = false;
 
+  /** The story an edit at `at` is worked out on: its paragraph alone in a long book, else all of it. */
   private scopeAt(at: number): Scope {
-    return this.context.scope?.(at) ?? wholeScope(this.context.story());
+    const near = this.context.scope?.(at);
+    if (!near) return wholeScope(this.context.story());
+    // Words selected beyond the paragraphs read around `at` (a long book reads only those): the
+    // whole story, read once for this change.
+    if (this.bySelection) {
+      const { from, to } = this.context.view.state.selection.main;
+      if (from !== to && (near.at(from) < 0 || near.at(to) > near.story.source.length))
+        return wholeScope(this.context.story());
+    }
+    return near;
   }
 
   /**
@@ -654,6 +670,22 @@ export class StretchTools {
       return undefined;
     const source = scope.story.source;
     if (start < 0 || end > source.length) return "outside";
+    // One quote, chosen whole (Next quote selects it), with its marks or without: given as a
+    // quote, as with the cursor in it, so a quote after it on its line carries on its speech.
+    let first = start;
+    let last = end;
+    while (first < last && /\s/.test(source[first] ?? "")) first++;
+    while (last > first && /\s/.test(source[last - 1] ?? "")) last--;
+    const lineStart = source.lastIndexOf("\n", first - 1) + 1;
+    const lineEnd = source.indexOf("\n", last);
+    if (
+      quotesIn(source, lineStart, lineEnd < 0 ? source.length : lineEnd).some(
+        (quote) =>
+          (quote.from === first && quote.to === last) ||
+          (quote.from + 1 === first && quote.to - 1 === last),
+      )
+    )
+      return undefined;
     // All of a quote's words: the quote, as with no selection.
     if (target.quoted && start >= target.range.from && end <= target.range.to) {
       const words = source.slice(target.textRange.from, target.textRange.to).trim();
@@ -666,9 +698,23 @@ export class StretchTools {
   }
 
   /** Why words selected couldn't be given to `name`, or said another way, alone. */
-  private whyNot(story: Story, part: { from: number; to: number }, name?: string): string {
+  private whyNot(
+    story: Story,
+    part: { from: number; to: number },
+    name?: string,
+    /** For How: the direction asked for, or null for none. */
+    direction?: string | null,
+  ): string {
     const words = wordsSelected(story, part.from, part.to);
     if (!words) return "No words are selected there, so nothing changed.";
+    if (words.speakers.length === 0)
+      return "Nothing selected is read aloud (a note, a sound or an instruction), so nothing changed.";
+    if (direction !== undefined && words.directions.length === 1) {
+      const now = words.directions[0] ?? null;
+      if (direction === null && now === null) return "Those words have no direction already.";
+      if (direction !== null && now?.toLowerCase() === direction.toLowerCase())
+        return `Those words are said “${direction}” already.`;
+    }
     if (
       name &&
       words.speakers.length > 0 &&
@@ -711,8 +757,9 @@ export class StretchTools {
       return (
         now !== undefined &&
         !(quote.from <= given && given < quote.to) &&
-        (now.speaker.toLowerCase() !== quote.speaker.toLowerCase() ||
-          now.narrated !== quote.narrated)
+        // Gone to them: not a quote kept as it was with a mark of its own (`@Narrator`).
+        now.speaker.toLowerCase() === name.toLowerCase() &&
+        quote.speaker.toLowerCase() !== name.toLowerCase()
       );
     });
     const [first] = went;
@@ -783,7 +830,10 @@ export class StretchTools {
       changes = withoutSpareMarks(fresh, given);
       // Someone new, in a story with a cast: added to it in the same step, so the name raises
       // no warning.
-      const known = fresh.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
+      // The narrator is no one new: never added to the cast for words given back to them.
+      const known =
+        name.toLowerCase() === fresh.meta.narrator.toLowerCase() ||
+        fresh.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
       // A cast, even one with no one in it yet (a new story's `cast:`).
       const hasCast = fresh.cast.length > 0 || "cast" in (fresh.frontMatter?.data ?? {});
       if (changes.length && !known && hasCast) {

@@ -1933,6 +1933,27 @@ if (!(await kept()).includes("Whenever I find myself pausing before warehouses")
   problems.push(
     `writer: words given back to the narrator kept marks: ${JSON.stringify((await kept()).slice(-120))}`,
   );
+if (/^\s+Narrator:/m.test(await kept()))
+  problems.push("writer: giving words back to the narrator put the narrator in the cast");
+// The tagging loop: Next quote selects a quote, Who gives it as a quote, and the quote after it on
+// its line carries its speech on (it was given to the narrator with a mark, and then never found
+// again as waiting).
+await author.click(".cm-content");
+await author.keyboard.press("Control+a");
+await author.keyboard.insertText("“Hi,” Ann said. “How are you today?”");
+await settled();
+await author.keyboard.press("Control+Home");
+await author.keyboard.press("Control+Shift+K");
+await author.waitForTimeout(300);
+await author.keyboard.press("Control+k");
+await author.waitForSelector(".speaker-list");
+await author.keyboard.press("Enter");
+await settled();
+const tagged = await kept();
+if (!tagged.endsWith("@Ann “Hi,” Ann said. “How are you today?”"))
+  problems.push(
+    `writer: Next quote then Who gave the line as ${JSON.stringify(tagged.slice(-60))}`,
+  );
 // Words selected across voices, with every mark showing: given alone, the marks inside them
 // gone and the voice after them back; and Undo puts it all as it was. (A selection beyond a
 // passage changed the whole passage.)

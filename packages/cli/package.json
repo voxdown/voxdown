@@ -1,6 +1,6 @@
 {
   "name": "@voxdown/cli",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "The vxd command: check, format, render and export VoxDown stories, import Fountain screenplays, and name who says each quote with an AI you already have (also as an MCP server).",
   "license": "MIT",
   "author": "Etienne Ackermann",

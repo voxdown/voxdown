@@ -1,6 +1,6 @@
 {
   "name": "@voxdown/editor",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A CodeMirror 6 editor for VoxDown stories: marks drawn as chips, raw only where you type.",
   "license": "MIT",
   "author": "Etienne Ackermann",

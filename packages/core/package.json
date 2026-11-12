@@ -1,6 +1,6 @@
 {
   "name": "voxdown",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "VoxDown: a plain-text format for stories read aloud. Parser, readings, writer, formatter and exports, with no dependencies.",
   "license": "MIT",
   "author": "Etienne Ackermann",

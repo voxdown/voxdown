@@ -4,6 +4,10 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
+## `voxdown` 1.2.0, `@voxdown/render` 1.3.0, `@voxdown/editor` 1.2.0, `@voxdown/cli` 1.1.0, `@voxdown/produce` 0.1.0, VoxDown Writer, and the playground (11 November 2026)
+
+`@voxdown/cli` 1.1.0 brings `vxd tag`, `vxd mcp`, `vxd produce` and `vxd connect` (below), and `vxd fmt --dashes`. `@voxdown/produce` 0.1.0 is its first release.
+
 **Naming who speaks, with an AI you already have** ([docs/ai.md](docs/ai.md)).
 - `vxd tag story.vxd` asks an AI who says each quote that no mark gives to anyone, a passage at a time, and marks it; the words never change. It finds the AIs on the computer: Claude Code or Codex signed in to the writer's own plan (Antigravity, Cursor, Copilot CLI and Gemini CLI too), a model in Ollama, LM Studio, llama.cpp, Jan or vLLM, or an API key; it asks which when there are several, and remembers. Unsure speakers are held back and listed; `--dry-run`, `--yes`, `--json`, `--with tags` (dialogue tags alone, no AI) and `--eval` (score an AI against a story's own marks).
 - `vxd mcp` serves VoxDown's tools over MCP (both the 2025 and the 2026 protocol), for Claude, ChatGPT and Codex, Cursor, VS Code, Zed and other apps: the cheat sheet, a story's cast, its waiting quotes a passage at a time, giving them to speakers, adding characters, and its warnings.
@@ -146,7 +150,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **The playground**
 - Undo and redo, and find and replace: Ctrl+Z did nothing. Opening another story starts a new undo history.
 
- `@voxdown/render` 1.2.0, `@voxdown/editor` 1.1.0, `@voxdown/cli` 1.0.1, the VS Code extension 1.1.0, and the playground (10 November 2026)
+## Spec 1.1, `voxdown` 1.1.0, `@voxdown/render` 1.2.0, `@voxdown/editor` 1.1.0, `@voxdown/cli` 1.0.1, the VS Code extension 1.1.0, and the playground (10 November 2026)
 
 **Spec 1.1**: character references, scene breaks with spaces between their signs, and names whatever their apostrophe; what changed is in [spec/CHANGELOG.md](spec/CHANGELOG.md).
 

@@ -2,6 +2,12 @@
 
 Changes to the packages, newest first. Changes to the format itself are in [spec/CHANGELOG.md](spec/CHANGELOG.md). How versions work: [VERSIONING.md](VERSIONING.md).
 
+## Unreleased
+
+**VoxDown Writer**
+- **File › Open an example** opens any of the stories the welcome offers, at any time: the welcome shows only while the browser keeps no story, so after the first visit they were out of reach. Each opens as a new story not yet saved, after asking about unsaved changes to the one open.
+- A menu inside a menu (Open recent, Open an example) stays open when clicked: the pointer opened it on the way in, and the click closed it again.
+
 ## Spec 1.2, `voxdown` 1.3.0, `@voxdown/render` 1.4.0, `@voxdown/editor` 1.3.0, `@voxdown/cli` 1.2.0, the VS Code extension 1.2.0, VoxDown Writer, and the playground (11 November 2026)
 
 **Spec 1.2**: `@/` ends a speech without quotes, so a few words in the middle of a line can be given to a character with no quotation marks added (§5.9): `Whenever I find @Gerald myself pausing @/ before the door.` It is to who speaks what `@()` is to how. What changed is in [spec/CHANGELOG.md](spec/CHANGELOG.md).

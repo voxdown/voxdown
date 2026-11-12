@@ -163,7 +163,9 @@ export function menus(
       if (!item || item.getAttribute("aria-disabled") === "true") return;
       // An item with a menu of its own opens it.
       if (item.getAttribute("aria-haspopup") === "menu") {
-        if (opened === item) closeSub();
+        // A click of the pointer, which opened it on the way in, keeps it open (it closed it
+        // again); from the keys, it opens and closes.
+        if (opened === item && event.detail === 0) closeSub();
         else showSub(item, event.detail === 0);
         return;
       }

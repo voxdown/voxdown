@@ -45,21 +45,65 @@ await new Promise((ready) => server.listen(0, "127.0.0.1", ready));
 const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch();
 
-// The animation: a line typed with its marks, then the script, the book and the lines it becomes.
+// The animation, in VoxDown Writer: a line typed with its marks beside the script it becomes, a
+// quote given to the speaker its tag names, and the book with no marks at all.
 
 const work = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), "voxdown-demo-"));
 const frames = [];
-const page = await browser.newPage({
+const context = await browser.newContext({
   viewport: { width: 1280, height: 720 },
   colorScheme: "light",
 });
+const nightVisitor = `---
+voxdown: 1.2
+title: The Night Visitor
+language: en-GB
+cast:
+  Wanda: Wanda, a witch
+  Tom: Tom, her cat
+---
+
+# The Night Visitor
+
+@(warmly) Once upon a time, there was a witch called Wanda, who lived at the edge of the wood with Tom, her cat.
+
+One night, something knocked at the door. “Who’s there?” asked Tom, his fur on end.
+
+`;
+// The story opened from a file, as a writer opens theirs, and saved back to it as it is written.
+await context.addInitScript((text) => {
+  let content = text;
+  let modified = Date.now();
+  const handle = {
+    kind: "file",
+    name: "the-night-visitor.vxd",
+    getFile: async () => new File([content], "the-night-visitor.vxd", { lastModified: modified }),
+    queryPermission: async () => "granted",
+    requestPermission: async () => "granted",
+    isSameEntry: async (other) => other === handle,
+    createWritable: async () => {
+      let written = "";
+      return {
+        write: async (data) => {
+          written += typeof data === "string" ? data : await new Response(data).text();
+        },
+        close: async () => {
+          content = written;
+          modified = Date.now();
+        },
+      };
+    },
+  };
+  window.showOpenFilePicker = async () => [handle];
+}, nightVisitor);
+const page = await context.newPage();
 const frame = async (seconds) => {
   const file = join(work, `${String(frames.length).padStart(4, "0")}.png`);
   await page.screenshot({ path: file });
   frames.push({ file, seconds });
 };
 const hold = async (seconds) => {
-  // A few frames across a pause, so the right page can catch up while it is shown.
+  // A few frames across a pause, so the script beside the text can catch up while it is shown.
   const steps = Math.max(1, Math.round(seconds / 0.25));
   for (let step = 0; step < steps; step++) {
     await page.waitForTimeout(250);
@@ -73,29 +117,34 @@ const type = async (text) => {
   }
 };
 
-await page.addInitScript(() => localStorage.clear());
-await page.goto(`${base}/index.html`);
-await page.waitForSelector(".cm-content");
-await page.click("#new-story");
-await page.waitForTimeout(500);
-await hold(1.2);
+await page.goto(`${base}/writer/`);
+await page.click('.welcome [data-command="open"]');
+await page.waitForFunction(
+  () => document.querySelector("#file-name")?.textContent === "the-night-visitor.vxd",
+);
+await page.click(".cm-content");
+// The pointer out of the way: over a passage, it shows the passage's bar.
+await page.mouse.move(1270, 140);
 await page.keyboard.press("Control+End");
+await page.waitForTimeout(1500);
+await hold(1.2);
+// A line with its marks: who, how, and a sound. The marks become chips, the script shows it.
 await type("@Wanda");
 await page.keyboard.press("Escape");
-await type(" (whispering) ");
-await type('"Is anyone there?"');
-await hold(0.8);
-await type(" [a door creaks]");
-await hold(0.8);
-// Up to Wanda's first line: the editor draws the new line's marks as chips, and the right page
-// marks where the cursor is, in each view.
-await page.keyboard.press("ArrowUp");
+await type(" (whispering) “It’s only the wind.” [a door creaks]");
+await hold(1.4);
+// The quote no one is named for: Next quote finds it, Who offers the name its tag gives.
+await page.keyboard.press("Control+Home");
+await page.keyboard.press("Control+Shift+K");
+await hold(1.2);
+await page.keyboard.press("Control+k");
 await hold(1.6);
-await page.click('.tab[data-tab="book"]');
-await hold(2);
-await page.click('.tab[data-tab="lines"]');
-await hold(2.2);
-await page.close();
+await page.keyboard.press("Enter");
+await hold(1.8);
+// The book: the same story, the marks gone.
+await page.click('.side-tab[data-tab="book"]');
+await hold(2.4);
+await context.close();
 
 mkdirSync(assets, { recursive: true });
 const list = join(work, "frames.txt");

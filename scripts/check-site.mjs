@@ -2150,6 +2150,26 @@ await author.keyboard.press("Control+End");
 await author.waitForTimeout(300);
 if (!(await author.locator(".cm-content .vxd-chip-warning", { hasText: "@/" }).count()))
   problems.push("writer: a hidden @/ with a warning shows nothing where it is");
+// File › Open an example, with a story open: the welcome's stories after the first visit too,
+// asked about the story left first.
+const wasNamed = await author.textContent("#file-name");
+await author.click("#file-menu-button");
+await author.click("#examples-button");
+const exampleItems = author.locator("#examples-list [role=menuitem]");
+const exampleCount = await exampleItems.count();
+const exampleTitle = ((await exampleItems.last().textContent()) ?? "").trim();
+await exampleItems.last().click();
+if (await author.waitForSelector("#ask[open]", { timeout: 1500 }).catch(() => null))
+  await author.click('#ask-buttons button:has-text("Don\'t save")');
+await author.waitForTimeout(600);
+if (
+  exampleCount < 2 ||
+  (await author.textContent("#file-name")) === wasNamed ||
+  !(await author.locator(".cm-content").innerText()).includes(exampleTitle)
+)
+  problems.push(
+    `writer: File › Open an example didn't open “${exampleTitle}” (${exampleCount} examples listed)`,
+  );
 await authoring.close();
 console.log("writer: speaker, direction, undo, search, move, cast, fix: ok");
 

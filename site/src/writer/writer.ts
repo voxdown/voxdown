@@ -3432,6 +3432,9 @@ menus(
     else if (command.startsWith("recent:")) {
       const handle = recentHandles[Number(command.slice(7))];
       if (handle) void openRecent(handle);
+    } else if (command.startsWith("example:")) {
+      const example = examples[Number(command.slice(8))];
+      if (example) void openExample(example);
     } else void COMMANDS[command]?.();
     backToText(".menus");
   },
@@ -3677,7 +3680,8 @@ const onWelcome = () => document.body.hasAttribute("data-welcome");
 function storyCommands(available: boolean): void {
   for (const item of document.querySelectorAll<HTMLElement>(".menus [data-command]")) {
     const command = item.dataset.command ?? "";
-    if (ON_WELCOME.has(command) || command.startsWith("recent:")) continue;
+    if (ON_WELCOME.has(command) || command.startsWith("recent:") || command.startsWith("example:"))
+      continue;
     if (available) item.removeAttribute("aria-disabled");
     else item.setAttribute("aria-disabled", "true");
   }
@@ -3699,12 +3703,33 @@ function showWelcome(): void {
       button.innerHTML = `<span class="title"></span><span class="by"></span>`;
       (button.firstElementChild as HTMLElement).textContent = example.title;
       (button.lastElementChild as HTMLElement).textContent = example.byline;
-      button.addEventListener("click", async () => {
-        if (!(await mayLeave())) return;
-        await load({ name: example.name, text: example.text }, { saved: "" });
-        view.focus();
-      });
+      button.addEventListener("click", () => void openExample(example));
       item.append(button);
+      return item;
+    }),
+  );
+}
+
+/**
+ * An example, as a new story not yet saved: from the welcome, and from File › Open an example
+ * at any time after (the welcome shows only while the browser keeps no story).
+ */
+async function openExample(example: (typeof examples)[number]): Promise<void> {
+  if (!(await mayLeave())) return;
+  await load({ name: example.name, text: example.text }, { saved: "" });
+  view.focus();
+}
+
+/** File › Open an example: the stories the welcome offers, each by its title. */
+function showExamples(): void {
+  $("#examples-list").replaceChildren(
+    ...examples.map((example, index) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.setAttribute("role", "menuitem");
+      item.dataset.command = `example:${index}`;
+      item.textContent = example.title;
+      if (example.byline) item.title = example.byline;
       return item;
     }),
   );
@@ -3830,6 +3855,7 @@ async function start(): Promise<void> {
   showSidePanel(prefs.side);
   checkMenu("rail-names", rail.names);
   void showRecent();
+  showExamples();
   // This tab's own story after a reload; in a new tab, the one written last.
   const mine = tabStory();
   const draft = (mine ? await draftById(mine) : undefined) ?? (await loadDraft());

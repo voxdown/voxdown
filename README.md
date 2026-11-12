@@ -6,7 +6,7 @@
 
 VoxDown is a plain-text format for stories that are performed: by a narrator, a cast, or a speech engine. A file is a Markdown story with light marks in it: who says each line, how they say it, the sounds a listener hears, where the pages turn, and notes for the performer. Take the marks out and you have the printed book. Leave them in and you have the script.
 
-[![In the playground, a line typed with VoxDown marks becomes a script, a book and the lines a listener hears.](assets/demo.gif)](https://voxdown.github.io/)
+[![In VoxDown Writer, a line typed with its marks becomes a script beside it, a quote is given to the speaker its tag names, and the book shows the story without the marks.](assets/demo.gif)](https://voxdown.github.io/voxdown/writer/)
 
 ```
 ## The cave {hidden}
@@ -26,7 +26,7 @@ The one rule to remember: **on each line, the quotes after a name belong to it, 
 - **Hear it**: [two stories read aloud](https://voxdown.github.io/voxdown/listen.html), every character in their own voice and every line as its marks direct.
 - **Learn it** from the [cheat sheet](spec/CHEATSHEET.md), every mark on one page.
 - **Write it** in the [Writer](https://voxdown.github.io/voxdown/writer/): open a `.vxd` file from your computer, write with its scenes beside you and the book or script on the other side, and save it back. Nothing leaves your browser. Or in VS Code: install [VoxDown from the Marketplace](https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown) for colors, warnings as you type and a live preview.
-- **Read the spec**: [SPEC.md](spec/SPEC.md), version 1.1, with a worked example for every rule.
+- **Read the spec**: [SPEC.md](spec/SPEC.md), version 1.2, with a worked example for every rule.
 
 ## In 30 seconds
 
@@ -98,7 +98,7 @@ The spec’s examples are its tests. [`spec/conformance.json`](spec/conformance.
 
 ## Versions
 
-The spec and the packages are versioned separately: the spec is 1.1, and each package follows semantic versioning. See [VERSIONING.md](VERSIONING.md).
+The spec and the packages are versioned separately: the spec is 1.2, and each package follows semantic versioning. See [VERSIONING.md](VERSIONING.md).
 
 ## Contributing
 

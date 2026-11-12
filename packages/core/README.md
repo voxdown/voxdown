@@ -82,7 +82,7 @@ Everything reads in time that grows with the story. An edit reads the whole stor
 - **`tokens(story)`**: syntax ranges for highlighting (`mark`, `name`, `direction`, `sound`, `vocal`, `instruction`, `note`, `group`, `heading`, `break`, `frontmatter`, `escape`, `quote`).
 - **`characterColors(story, overrides?)`**: a color for each character, in cast order, from `PALETTE` unless the cast gives one (`color: "#2563eb"`).
 - **`characterReference(text, at)`**: the character a reference such as `&amp;` or `&#8217;` at `at` stands for, and its length, or `null` (SPEC.md §11). The parser decodes them already; this is for tools that render the text themselves.
-- **`SPEC_VERSION`**: the spec version this package follows, `"1.1"`.
+- **`SPEC_VERSION`**: the spec version this package follows, `"1.2"`.
 
 ## License
 

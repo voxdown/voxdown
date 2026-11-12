@@ -60,6 +60,19 @@ describe("a menu inside a menu", () => {
     expect($("#file").hidden).toBe(false);
   });
 
+  it("stays open when the pointer, which opened it on the way in, clicks its item", () => {
+    const { $, key } = bar();
+    key($("#file-button"), "ArrowDown");
+    $("#recent-button").dispatchEvent(new Event("pointerenter"));
+    expect($("#recent").hidden).toBe(false);
+    // A click of the pointer (detail 1): it closed the menu the pointer had just opened.
+    $("#recent-button").dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    expect($("#recent").hidden).toBe(false);
+    // From the keys (detail 0), it opens and closes.
+    $("#recent-button").dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    expect($("#recent").hidden).toBe(true);
+  });
+
   it("runs a choice in it, and closes every menu", () => {
     const { $, key, ran } = bar();
     key($("#file-button"), "ArrowDown");

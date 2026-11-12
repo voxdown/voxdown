@@ -4,17 +4,19 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
-**Chapters, the same everywhere** (spec 1.2, clarified in §4.4): a book's chapters are its headings of the highest level used at least twice, so `#` chapters with the title in the front matter, and `##` chapters under a single `# Title`, both divide the same way in the audiobook, the ebook and the Writer. The ebook made a book written `# Title`, `## Chapter 1` one chapter, and the Writer listed its chapters as scenes.
-
-**voxdown**
-- `chapterLevel(story)` says where a story divides into chapters, and `chapterLevelOf(levels)` the same from its headings' levels: the highest level used at least twice, or none.
-- `findShape` finds a book's title alone on its line above the first chapter (`The Ghost of Galilee`, with no `By …` line), and a title heading at its top, the Writer's `# Untitled` among them; `shapeStory` makes such a title the heading at the top and the book's title, and puts the chapters a level under it, `##`. A new story's `# Untitled` was taken into a title page's title (`Untitled The Ghost`).
-
 **@voxdown/produce**
 - The production script's chapters come from `voxdown`'s `chapterLevel`, the rule they already followed.
 
 **@voxdown/cli**
 - The cheat sheet a model reads to tag a story says how its chapters are found.
+
+## `voxdown` 1.4.0, VoxDown Writer (12 November 2026)
+
+**Chapters, the same everywhere** (spec 1.2, clarified in §4.4): a book's chapters are its headings of the highest level used at least twice, so `#` chapters with the title in the front matter, and `##` chapters under a single `# Title`, both divide the same way in the audiobook, the ebook and the Writer. The ebook made a book written `# Title`, `## Chapter 1` one chapter, and the Writer listed its chapters as scenes.
+
+**voxdown**
+- `chapterLevel(story)` says where a story divides into chapters, and `chapterLevelOf(levels)` the same from its headings' levels: the highest level used at least twice, or none.
+- `findShape` finds a book's title alone on its line above the first chapter (`The Ghost of Galilee`, with no `By …` line), and a title heading at its top, the Writer's `# Untitled` among them; `shapeStory` makes such a title the heading at the top and the book's title, and puts the chapters a level under it, `##`. A new story's `# Untitled` was taken into a title page's title (`Untitled The Ghost`).
 
 **VoxDown Writer**
 - **Find the chapters…** makes a pasted book's first line its title when it stands alone above the first chapter, as the heading at the top with the chapters `##` under it; it left the title as a line of the story. The rail, the outline, **Move chapter** and **Move scene** take the chapters where the story divides, so a `# Title` stays above them and is moved with none; **A chapter heading** and **A scene heading** are written at the story's own levels (`##` under a title alone at the top). The ebook takes its chapters the same way, and leaves out a first heading that is the book's title, which its title page shows.

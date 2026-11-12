@@ -48,6 +48,7 @@ Every mark on one page. VoxDown 1.2; the full rules are in [SPEC.md](SPEC.md).
 | --- | --- |
 | \`{page}\`, \`{page 12}\` | A page turn, optionally naming the page that begins. |
 | \`# Title\`, \`## The cave\` | Headings, read aloud by the narrator. |
+| \`# Title\`, then \`## Chapter 1\` … | Chapters: the headings of the highest level used twice or more, so \`#\` ones too, with the title in the front matter. |
 | \`## The cave {hidden}\` | A heading that is a label only: not read, not printed. |
 | \`---\` | A scene break. Use \`***\` to start a file with one. |
 | \`{book only} First published 1902.\` | Printed, not read aloud. |

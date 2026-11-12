@@ -72,6 +72,7 @@ export type {
   Warning,
   WarningCode,
 } from "./model";
+export { chapterLevel, chapterLevelOf } from "./chapters";
 export {
   type Shape,
   type ShapeChoice,

@@ -2,6 +2,12 @@
 
 The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
+## Unreleased
+
+Clarifications: no file reads differently, and the version stays 1.2 (§16).
+
+- §4.4: a book's chapters are its headings of the highest level used at least twice, so every tool that divides a story into chapters divides it the same: `#` chapters with the title in the front matter, or `##` chapters under a single `#` title, which is no chapter itself. It said that `#` is the title or a chapter and `##` a scene, and the tools disagreed: the ebook made a book written `# Title`, `## Chapter 1` one chapter, and the Writer listed its chapters as scenes.
+
 ## 1.2 (11 November 2026)
 
 New in 1.2, for something a 1.1 file would rarely hold (§16): SPEC.md marks it "new in 1.2", and `conformance.json` gives its examples `"since": "1.2"`.

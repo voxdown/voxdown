@@ -78,7 +78,7 @@ Sir Percival stopped.
 | Printed, not read aloud | `{book only} First published 1902.` |
 | Read aloud, not printed | `{audio only} Turn the page when you hear the bell.` |
 | A note for the performer | `%% Leave a clear pause after this line. %%` |
-| Title, chapter, scene | `# Title`, `## Scene` |
+| Title, chapter, scene | `# Title`, `## Chapter 1`, `### A scene` (§4.4) |
 | A scene break | `---` |
 | The cast | Front matter: `cast:` (§4.3) |
 
@@ -247,7 +247,10 @@ The door closed.
 Morning came.
 ```
 
-Headings are part of the story: they are read aloud by the narrator unless marked `{book only}` or `{hidden}` (§9.3). By convention `#` is the title, or a chapter in a longer book, and `##` names a scene. The spec gives the levels no other meaning.
+Headings are part of the story: they are read aloud by the narrator unless marked `{book only}` or `{hidden}` (§9.3). The spec gives the levels no other meaning, but a book's chapters are found from them in one way, so that a story divides the same in every tool that divides it (an audiobook, an ebook, an outline): its chapters are its headings of the highest level used at least twice.
+
+- A book can write its chapters as `#` headings, its title in the front matter (§4.2), or as `##` headings under a single `#` title, which is then no chapter itself. A level below the chapters names a scene, as a scene break does.
+- A story with no level used twice is one chapter. A short story's `#` is its title, and its `##` headings, if it has two or more, are its chapters.
 
 ```example
 # The Tale of Peter Rabbit

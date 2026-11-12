@@ -6,7 +6,7 @@
  *
  * It is plain data: a tool that knows nothing of VoxDown can make an audiobook from it.
  */
-import type { Item, Story } from "voxdown";
+import { type Item, type Story, chapterLevel } from "voxdown";
 
 const hasLetterOrDigit = (text: string) => /[\p{L}\p{N}]/u.test(text);
 
@@ -99,20 +99,6 @@ export function pauseMs(value: string | null): number {
   if (!match) return 1000;
   const amount = Number(match[1]);
   return Math.round(match[2] === "ms" ? amount : amount * 1000);
-}
-
-/**
- * The level a story divides into chapters at: the highest heading level used at least twice, or
- * none (one chapter).
- */
-function chapterLevel(story: Story): number | undefined {
-  const counts = new Map<number, number>();
-  for (const block of story.blocks)
-    if (block.kind === "heading") counts.set(block.level, (counts.get(block.level) ?? 0) + 1);
-  return [...counts.entries()]
-    .filter(([, count]) => count >= 2)
-    .map(([level]) => level)
-    .sort((a, b) => a - b)[0];
 }
 
 function lineStarts(source: string): number[] {

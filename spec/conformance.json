@@ -234,7 +234,7 @@
   {
     "example": 7,
     "section": "4.4",
-    "line": 252,
+    "line": 255,
     "input": "# The Tale of Peter Rabbit\n\nOnce upon a time there were four little Rabbits.",
     "script": "# Narrator: The Tale of Peter Rabbit\n\nNarrator: Once upon a time there were four little Rabbits.",
     "lines": [
@@ -270,7 +270,7 @@
   {
     "example": 8,
     "section": "4.4",
-    "line": 262,
+    "line": 265,
     "input": "Until Tuesday.\n\n---\n\nOn Tuesday morning, the king summoned him.",
     "script": "Narrator: Until Tuesday.\n\n---\n\nNarrator: On Tuesday morning, the king summoned him.",
     "lines": [
@@ -306,7 +306,7 @@
   {
     "example": 9,
     "section": "4.4",
-    "line": 278,
+    "line": 281,
     "input": "Until Tuesday.\n---\nOn Tuesday morning, the king summoned him.",
     "script": "Narrator: Until Tuesday.\n\n---\n\nNarrator: On Tuesday morning, the king summoned him.",
     "lines": [
@@ -342,7 +342,7 @@
   {
     "example": 10,
     "section": "4.4",
-    "line": 290,
+    "line": 293,
     "input": "Mount Mumble was very tall.\n## The cave\nThen he heard a deep rumble.",
     "script": "Narrator: Mount Mumble was very tall.\n\n## Narrator: The cave\n\nNarrator: Then he heard a deep rumble.",
     "lines": [
@@ -391,7 +391,7 @@
   {
     "example": 11,
     "section": "5.1",
-    "line": 308,
+    "line": 311,
     "input": "“Stop thief!” cried Mr. McGregor.",
     "script": "Narrator: “Stop thief!” cried Mr. McGregor.",
     "lines": [
@@ -414,7 +414,7 @@
   {
     "example": 12,
     "section": "5.1",
-    "line": 314,
+    "line": 317,
     "input": "---\nnarrator: Peter\n---\nI ran. @Mother “Peter!”",
     "script": "Peter: I ran.\nMother: Peter!",
     "lines": [
@@ -450,7 +450,7 @@
   {
     "example": 13,
     "section": "5.2",
-    "line": 330,
+    "line": 333,
     "input": "@SillyClown “Honk!”",
     "script": "SillyClown: Honk!",
     "lines": [
@@ -473,7 +473,7 @@
   {
     "example": 14,
     "section": "5.2",
-    "line": 338,
+    "line": 341,
     "input": "---\ncast:\n  Clown: The Silly Clown\n---\n@clown “Honk!” @CLOWN “Honk honk!”",
     "script": "Clown: Honk!\nClown: Honk honk!",
     "lines": [
@@ -520,7 +520,7 @@
   {
     "example": 15,
     "section": "5.2",
-    "line": 349,
+    "line": 352,
     "input": "@clown “Honk!”\n@Clown “Honk honk!”",
     "script": "clown: Honk!\nclown: Honk honk!",
     "lines": [
@@ -563,7 +563,7 @@
     "example": 16,
     "section": "5.2",
     "since": "1.1",
-    "line": 359,
+    "line": 362,
     "input": "@O'Brien “Hello.” @O’Brien “Goodbye.”",
     "script": "O'Brien: Hello.\nO'Brien: Goodbye.",
     "lines": [
@@ -599,7 +599,7 @@
   {
     "example": 17,
     "section": "5.2",
-    "line": 366,
+    "line": 369,
     "input": "@narrator (warmly) Once upon a time.",
     "script": "Narrator (warmly): Once upon a time.",
     "lines": [
@@ -622,7 +622,7 @@
   {
     "example": 18,
     "section": "5.2",
-    "line": 374,
+    "line": 377,
     "input": "Write to tom@example.com, or meet me @ noon.",
     "script": "Narrator: Write to tom@example.com, or meet me @ noon.",
     "lines": [
@@ -645,7 +645,7 @@
   {
     "example": 19,
     "section": "5.2",
-    "line": 380,
+    "line": 383,
     "input": "雷公听见了@雷公 [笑]",
     "script": "Narrator: 雷公听见了\n雷公 [笑]",
     "lines": [
@@ -681,7 +681,7 @@
   {
     "example": 20,
     "section": "5.2",
-    "line": 387,
+    "line": 390,
     "input": "\\@Gerald is my username.",
     "script": "Narrator: @Gerald is my username.",
     "lines": [
@@ -704,7 +704,7 @@
   {
     "example": 21,
     "section": "5.4",
-    "line": 408,
+    "line": 411,
     "input": "@Gerald “Could you not?”",
     "script": "Gerald: Could you not?",
     "lines": [
@@ -727,7 +727,7 @@
   {
     "example": 22,
     "section": "5.4",
-    "line": 414,
+    "line": 417,
     "input": "@Gerald “I’ve only just got to sleep,” said the dragon.",
     "script": "Gerald: I’ve only just got to sleep,\nNarrator: said the dragon.",
     "lines": [
@@ -763,7 +763,7 @@
   {
     "example": 23,
     "section": "5.4",
-    "line": 423,
+    "line": 426,
     "input": "Gerald put on his spectacles. @Gerald “I thought perhaps librarian.”",
     "script": "Narrator: Gerald put on his spectacles.\nGerald: I thought perhaps librarian.",
     "lines": [
@@ -799,7 +799,7 @@
   {
     "example": 24,
     "section": "5.4",
-    "line": 430,
+    "line": 433,
     "input": "@Gerald Gerald put on his spectacles. “I thought perhaps librarian.”",
     "script": "Narrator: Gerald put on his spectacles.\nGerald: I thought perhaps librarian.",
     "lines": [
@@ -835,7 +835,7 @@
   {
     "example": 25,
     "section": "5.4",
-    "line": 437,
+    "line": 440,
     "input": "@Baker And out of the blue, “Just a little flame,” said the baker. “Gently.”",
     "script": "Narrator: And out of the blue,\nBaker: Just a little flame,\nNarrator: said the baker.\nBaker: Gently.",
     "lines": [
@@ -897,7 +897,7 @@
   {
     "example": 26,
     "section": "5.4",
-    "line": 448,
+    "line": 451,
     "input": "@Baker (nervously) And out of the blue, “Just a little flame,” said the baker.",
     "script": "Narrator: And out of the blue,\nBaker (nervously): Just a little flame,\nNarrator: said the baker.",
     "lines": [
@@ -946,7 +946,7 @@
   {
     "example": 27,
     "section": "5.4",
-    "line": 458,
+    "line": 461,
     "input": "“Could you not?” said @Gerald.",
     "script": "Narrator: “Could you not?” said",
     "book": "“Could you not?” said .",
@@ -976,7 +976,7 @@
   {
     "example": 28,
     "section": "5.4",
-    "line": 468,
+    "line": 471,
     "input": "@Wanda “Fine!” @Marmalade “Hm.”",
     "script": "Wanda: Fine!\nMarmalade: Hm.",
     "lines": [
@@ -1012,7 +1012,7 @@
   {
     "example": 29,
     "section": "5.4",
-    "line": 477,
+    "line": 480,
     "input": "@Gerald “‘But you are a chicken,’ said the duke.”",
     "script": "Gerald: ‘But you are a chicken,’ said the duke.",
     "lines": [
@@ -1035,7 +1035,7 @@
   {
     "example": 30,
     "section": "5.5",
-    "line": 509,
+    "line": 512,
     "input": "@Mother ‘Now run along, and don’t get into mischief.’",
     "script": "Mother: Now run along, and don’t get into mischief.",
     "lines": [
@@ -1058,7 +1058,7 @@
   {
     "example": 31,
     "section": "5.5",
-    "line": 515,
+    "line": 518,
     "input": "@Gerald \"Could you not?\" said the dragon.",
     "script": "Gerald: Could you not?\nNarrator: said the dragon.",
     "lines": [
@@ -1094,7 +1094,7 @@
   {
     "example": 32,
     "section": "5.5",
-    "line": 522,
+    "line": 525,
     "input": "@Anna „Guten Morgen“, sagte Anna.",
     "script": "Anna: Guten Morgen\nNarrator: , sagte Anna.",
     "lines": [
@@ -1130,7 +1130,7 @@
   {
     "example": 33,
     "section": "5.5",
-    "line": 531,
+    "line": 534,
     "input": "@Mother ‘Mind the rabbits\\’ burrow.’",
     "script": "Mother: Mind the rabbits’ burrow.",
     "lines": [
@@ -1153,7 +1153,7 @@
   {
     "example": 34,
     "section": "5.5",
-    "line": 537,
+    "line": 540,
     "input": "@Gerald \"Fine,\" he said, 'cause he was tired.",
     "script": "Gerald: Fine,\nNarrator: he said, 'cause he was tired.",
     "lines": [
@@ -1189,7 +1189,7 @@
   {
     "example": 35,
     "section": "5.5",
-    "line": 546,
+    "line": 549,
     "input": "@Hanako 花子は「はい」と言った。",
     "script": "Narrator: 花子は\nHanako: はい\nNarrator: と言った。",
     "book": "花子は「はい」と言った。",
@@ -1239,7 +1239,7 @@
   {
     "example": 36,
     "section": "5.6",
-    "line": 560,
+    "line": 563,
     "input": "@Baker “Just a little flame,” said the baker. “Gently.”",
     "script": "Baker: Just a little flame,\nNarrator: said the baker.\nBaker: Gently.",
     "lines": [
@@ -1288,7 +1288,7 @@
   {
     "example": 37,
     "section": "5.6",
-    "line": 568,
+    "line": 571,
     "input": "@Advisor (urgent, formal whisper) “Sire,” whispered his advisor. “This is where you shout ‘Attack!’”",
     "script": "Advisor (urgent, formal whisper): Sire,\nNarrator: whispered his advisor.\nAdvisor (urgent, formal whisper): This is where you shout ‘Attack!’",
     "lines": [
@@ -1337,7 +1337,7 @@
   {
     "example": 38,
     "section": "5.6",
-    "line": 576,
+    "line": 579,
     "input": "@Gerald “I know. @(yawning) I’m tired,” he said. “Very.”",
     "script": "Gerald: I know.\nGerald (yawning): I’m tired,\nNarrator: he said.\nGerald (yawning): Very.",
     "lines": [
@@ -1399,7 +1399,7 @@
   {
     "example": 39,
     "section": "5.6",
-    "line": 587,
+    "line": 590,
     "input": "@Wanda “Fine,” she said. @Marmalade “Good,” said the cat. “Very good.”",
     "script": "Wanda: Fine,\nNarrator: she said.\nMarmalade: Good,\nNarrator: said the cat.\nMarmalade: Very good.",
     "lines": [
@@ -1474,7 +1474,7 @@
   {
     "example": 40,
     "section": "5.6",
-    "line": 599,
+    "line": 602,
     "input": "@Percival “Aren’t you going to roar?”\nThe dragon sighed.\n“Rooooar.”",
     "script": "Percival: Aren’t you going to roar?\nNarrator: The dragon sighed.\nNarrator: “Rooooar.”",
     "lines": [
@@ -1523,7 +1523,7 @@
   {
     "example": 41,
     "section": "5.6",
-    "line": 609,
+    "line": 612,
     "input": "@Percival “Aren’t you going to roar?”\nThe dragon sighed.\n@Gerald “Rooooar.”",
     "script": "Percival: Aren’t you going to roar?\nNarrator: The dragon sighed.\nGerald: Rooooar.",
     "lines": [
@@ -1572,7 +1572,7 @@
   {
     "example": 42,
     "section": "5.6",
-    "line": 619,
+    "line": 622,
     "input": "@Wanda “Fine.”\n\n“Fine,” said someone else.",
     "script": "Wanda: Fine.\n\nNarrator: “Fine,” said someone else.",
     "lines": [
@@ -1608,7 +1608,7 @@
   {
     "example": 43,
     "section": "5.6",
-    "line": 631,
+    "line": 634,
     "input": "@Mother ‘Now my dears,’ said old Mrs. Rabbit one\nmorning, ‘you may go into the fields.’",
     "script": "Mother: Now my dears,\nNarrator: said old Mrs. Rabbit one\nNarrator: morning, ‘you may go into the fields.’",
     "lines": [
@@ -1657,7 +1657,7 @@
   {
     "example": 44,
     "section": "5.6",
-    "line": 642,
+    "line": 645,
     "input": "@Wanda “Fine,” she said, in her \\‘polite’ voice.",
     "script": "Wanda: Fine,\nNarrator: she said, in her ‘polite’ voice.",
     "lines": [
@@ -1693,7 +1693,7 @@
   {
     "example": 45,
     "section": "5.7",
-    "line": 653,
+    "line": 656,
     "input": "@Gerald (softly) “Twinkle, twinkle, little star,\nHow I wonder what you are.”\nHe yawned.",
     "script": "Gerald (softly): Twinkle, twinkle, little star,\nGerald (softly): How I wonder what you are.\nNarrator: He yawned.",
     "lines": [
@@ -1748,7 +1748,7 @@
   {
     "example": 46,
     "section": "5.7",
-    "line": 665,
+    "line": 668,
     "input": "@Gerald “Twinkle, twinkle, little star,\nHow I wonder what you are,” he sang. “Up above the world so high.”",
     "script": "Gerald: Twinkle, twinkle, little star,\nGerald: How I wonder what you are,\nNarrator: he sang.\nGerald: Up above the world so high.",
     "lines": [
@@ -1816,7 +1816,7 @@
   {
     "example": 47,
     "section": "5.7",
-    "line": 677,
+    "line": 680,
     "input": "@Gerald “Oh no, I’m going to",
     "script": "Gerald: Oh no, I’m going to",
     "lines": [
@@ -1845,7 +1845,7 @@
   {
     "example": 48,
     "section": "5.7",
-    "line": 683,
+    "line": 686,
     "input": "@Gerald “Once upon a time there was a chicken.\n\n“He believed he was the king of France.”\n\nTwenty children laughed.",
     "script": "Gerald: Once upon a time there was a chicken.\n\nGerald: He believed he was the king of France.\n\nNarrator: Twenty children laughed.",
     "lines": [
@@ -1894,7 +1894,7 @@
   {
     "example": 49,
     "section": "5.7",
-    "line": 697,
+    "line": 700,
     "input": "@Gerald “Once upon a time there was a chicken.\n\n{page}\n\n“He believed he was the king of France.”",
     "script": "Gerald: Once upon a time there was a chicken.\n\n{page}\n\nGerald: He believed he was the king of France.",
     "lines": [
@@ -1943,7 +1943,7 @@
   {
     "example": 50,
     "section": "5.8",
-    "line": 715,
+    "line": 718,
     "input": "@Gerald Could you not? I’ve only just got to sleep.",
     "script": "Gerald: Could you not? I’ve only just got to sleep.",
     "lines": [
@@ -1966,7 +1966,7 @@
   {
     "example": 51,
     "section": "5.8",
-    "line": 721,
+    "line": 724,
     "input": "@Gerald Could you not? @Percival Sorry.",
     "script": "Gerald: Could you not?\nPercival: Sorry.",
     "lines": [
@@ -2002,7 +2002,7 @@
   {
     "example": 52,
     "section": "5.8",
-    "line": 728,
+    "line": 731,
     "input": "@Gerald Well, @Percival “Sorry.”",
     "script": "Gerald: Well,\nPercival: Sorry.",
     "lines": [
@@ -2038,7 +2038,7 @@
   {
     "example": 53,
     "section": "5.8",
-    "line": 735,
+    "line": 738,
     "input": "@Gerald Could you not? @(yawning) I’m tired.",
     "script": "Gerald: Could you not?\nGerald (yawning): I’m tired.",
     "lines": [
@@ -2074,7 +2074,7 @@
   {
     "example": 54,
     "section": "5.8",
-    "line": 742,
+    "line": 745,
     "input": "@Gerald Could you not? [a distant clang] I’m tired.",
     "script": "Gerald: Could you not?\n[a distant clang]\nGerald: I’m tired.",
     "lines": [
@@ -2123,7 +2123,7 @@
   {
     "example": 55,
     "section": "5.8",
-    "line": 752,
+    "line": 755,
     "input": "@Gerald Could you not?\nI’ve only just got to sleep.",
     "script": "Gerald: Could you not?\nNarrator: I’ve only just got to sleep.",
     "lines": [
@@ -2159,7 +2159,7 @@
   {
     "example": 56,
     "section": "5.8",
-    "line": 762,
+    "line": 765,
     "input": "@Gerald They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
     "script": "Narrator: They charge into my cave shouting,\nGerald: PREPARE TO MEET THY DOOM!",
     "lines": [
@@ -2195,7 +2195,7 @@
   {
     "example": 57,
     "section": "5.8",
-    "line": 769,
+    "line": 772,
     "input": "@Gerald “They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’”",
     "script": "Gerald: They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
     "lines": [
@@ -2218,7 +2218,7 @@
   {
     "example": 58,
     "section": "5.8",
-    "line": 777,
+    "line": 780,
     "input": "@Narrator (warmly) Once upon a time, “Hello,” said the cat.",
     "script": "Narrator: Once upon a time,\nNarrator (warmly): Hello,\nNarrator: said the cat.",
     "lines": [
@@ -2267,7 +2267,7 @@
   {
     "example": 59,
     "section": "5.8",
-    "line": 785,
+    "line": 788,
     "input": "@(warmly) Once upon a time, “Hello,” said the cat.",
     "script": "Narrator (warmly): Once upon a time, “Hello,” said the cat.",
     "lines": [
@@ -2291,7 +2291,7 @@
     "example": 60,
     "section": "5.9",
     "since": "1.2",
-    "line": 795,
+    "line": 798,
     "input": "Whenever I find @Gerald myself pausing before @/ coffin warehouses.",
     "script": "Narrator: Whenever I find\nGerald: myself pausing before\nNarrator: coffin warehouses.",
     "lines": [
@@ -2341,7 +2341,7 @@
     "example": 61,
     "section": "5.9",
     "since": "1.2",
-    "line": 805,
+    "line": 808,
     "input": "@Gerald Myself pausing, @/ he thought. “Stop!” she cried.",
     "script": "Gerald: Myself pausing,\nNarrator: he thought. “Stop!” she cried.",
     "lines": [
@@ -2378,7 +2378,7 @@
     "example": 62,
     "section": "5.9",
     "since": "1.2",
-    "line": 814,
+    "line": 817,
     "input": "@(warmly) It was late. @Gerald Could you not? @/ he said.",
     "script": "Narrator (warmly): It was late.\nGerald: Could you not?\nNarrator: he said.",
     "lines": [
@@ -2428,7 +2428,7 @@
     "example": 63,
     "section": "5.9",
     "since": "1.2",
-    "line": 822,
+    "line": 825,
     "input": "::: @Wanda\nI read it twice. @Gerald Read what? @/ The letter.\n:::",
     "script": "Wanda: I read it twice.\nGerald: Read what?\nWanda: The letter.",
     "lines": [
@@ -2478,7 +2478,7 @@
     "example": 64,
     "section": "5.9",
     "since": "1.2",
-    "line": 834,
+    "line": 837,
     "input": "@Gerald “I know. @/ I’m tired.” See @/lib.",
     "script": "Gerald: I know. I’m tired.\nNarrator: See @/lib.",
     "lines": [
@@ -2520,7 +2520,7 @@
   {
     "example": 65,
     "section": "6.1",
-    "line": 847,
+    "line": 850,
     "input": "@Gerald (deep, polite and utterly unbothered) “Could you not?”",
     "script": "Gerald (deep, polite and utterly unbothered): Could you not?",
     "lines": [
@@ -2543,7 +2543,7 @@
   {
     "example": 66,
     "section": "6.1",
-    "line": 853,
+    "line": 856,
     "input": "@Narrator (warmly) Sir Percival had been training his entire life.",
     "script": "Narrator (warmly): Sir Percival had been training his entire life.",
     "lines": [
@@ -2566,7 +2566,7 @@
   {
     "example": 67,
     "section": "6.1",
-    "line": 861,
+    "line": 864,
     "input": "Her broom (which was old) creaked. @Wanda (sighing) “Come on.”",
     "script": "Narrator: Her broom (which was old) creaked.\nWanda (sighing): Come on.",
     "lines": [
@@ -2602,7 +2602,7 @@
   {
     "example": 68,
     "section": "6.1",
-    "line": 868,
+    "line": 871,
     "input": "@Clown (happily) \"Just you wait!\" said the clown, (sadly) \"I've been waiting for you\".",
     "script": "Clown (happily): Just you wait!\nNarrator: said the clown, (sadly)\nClown (happily): I've been waiting for you",
     "lines": [
@@ -2651,7 +2651,7 @@
   {
     "example": 69,
     "section": "6.1",
-    "line": 878,
+    "line": 881,
     "input": "@Gerald yawning “I’m tired.”",
     "script": "Narrator: yawning\nGerald: I’m tired.",
     "lines": [
@@ -2687,7 +2687,7 @@
   {
     "example": 70,
     "section": "6.1",
-    "line": 887,
+    "line": 890,
     "input": "@Gerald (deep (very deep)) “Hello.”",
     "script": "Gerald (deep (very deep)): Hello.",
     "lines": [
@@ -2710,7 +2710,7 @@
   {
     "example": 71,
     "section": "6.2",
-    "line": 897,
+    "line": 900,
     "input": "@(warmly) Sir Percival had been training his entire life.",
     "script": "Narrator (warmly): Sir Percival had been training his entire life.",
     "lines": [
@@ -2733,7 +2733,7 @@
   {
     "example": 72,
     "section": "6.2",
-    "line": 905,
+    "line": 908,
     "input": "@Gerald “I know. @(yawning) I’m tired.”",
     "script": "Gerald: I know.\nGerald (yawning): I’m tired.",
     "lines": [
@@ -2769,7 +2769,7 @@
   {
     "example": 73,
     "section": "6.2",
-    "line": 914,
+    "line": 917,
     "input": "@King “Those poor children!” cried the king. @(quieter) “Oh dear.”",
     "script": "King: Those poor children!\nNarrator: cried the king.\nKing (quieter): Oh dear.",
     "lines": [
@@ -2818,7 +2818,7 @@
   {
     "example": 74,
     "section": "6.2",
-    "line": 922,
+    "line": 925,
     "input": "@Clown (happily) \"Just you wait!\" said the clown, @(sadly) \"I've been waiting for you\".",
     "script": "Clown (happily): Just you wait!\nNarrator: said the clown,\nClown (sadly): I've been waiting for you",
     "lines": [
@@ -2867,7 +2867,7 @@
   {
     "example": 75,
     "section": "6.2",
-    "line": 932,
+    "line": 935,
     "input": "@(quieter) “Oh dear,” he said.",
     "script": "Narrator (quieter): “Oh dear,” he said.",
     "lines": [
@@ -2890,7 +2890,7 @@
   {
     "example": 76,
     "section": "6.2",
-    "line": 940,
+    "line": 943,
     "input": "@Clown (happily) \"Just you wait!\" @(frostily) said the clown, \"I've been waiting for you\", he smirked.",
     "script": "Clown (happily): Just you wait!\nNarrator (frostily): said the clown,\nClown (happily): I've been waiting for you\nNarrator: , he smirked.",
     "lines": [
@@ -2952,7 +2952,7 @@
   {
     "example": 77,
     "section": "6.2",
-    "line": 951,
+    "line": 954,
     "input": "@Clown (happily) \"Just you wait!\" @(frostily) said the clown, \"I've been waiting for you\", he smirked.\"",
     "script": "Clown (happily): Just you wait!\nNarrator (frostily): said the clown,\nClown (happily): I've been waiting for you\nNarrator: , he smirked.\"",
     "lines": [
@@ -3020,7 +3020,7 @@
   {
     "example": 78,
     "section": "6.2",
-    "line": 960,
+    "line": 963,
     "input": "@Clown \"Just you wait!\" he smirked.\"\nThe children giggled.",
     "script": "Clown: Just you wait!\nNarrator: he smirked.\"\nNarrator: The children giggled.",
     "lines": [
@@ -3075,7 +3075,7 @@
   {
     "example": 79,
     "section": "6.3",
-    "line": 973,
+    "line": 976,
     "input": "@(nervously) The big fox looked around, @() and then relaxed.",
     "script": "Narrator (nervously): The big fox looked around,\nNarrator: and then relaxed.",
     "lines": [
@@ -3111,7 +3111,7 @@
   {
     "example": 80,
     "section": "6.3",
-    "line": 980,
+    "line": 983,
     "input": "@Clown (happily) \"Just you wait! @() I mean it.\"",
     "script": "Clown (happily): Just you wait!\nClown: I mean it.",
     "lines": [
@@ -3147,7 +3147,7 @@
   {
     "example": 81,
     "section": "6.3",
-    "line": 989,
+    "line": 992,
     "input": "::: whispering\n@(nervously) The big fox looked around, @() and then relaxed.\n:::",
     "script": "Narrator (nervously): The big fox looked around,\nNarrator (whispering): and then relaxed.",
     "lines": [
@@ -3183,7 +3183,7 @@
   {
     "example": 82,
     "section": "6.4",
-    "line": 1007,
+    "line": 1010,
     "input": "@(nervously) The big fox looked around.\nHe relaxed.",
     "script": "Narrator (nervously): The big fox looked around.\nNarrator: He relaxed.",
     "lines": [
@@ -3219,7 +3219,7 @@
   {
     "example": 83,
     "section": "7.1",
-    "line": 1041,
+    "line": 1044,
     "input": "::: whispering\nSir Percival crept inside.\n\nClank.\n:::\n\nThe dragon opened one eye.",
     "script": "Narrator (whispering): Sir Percival crept inside.\n\nNarrator (whispering): Clank.\n\nNarrator: The dragon opened one eye.",
     "lines": [
@@ -3268,7 +3268,7 @@
   {
     "example": 84,
     "section": "7.1",
-    "line": 1057,
+    "line": 1060,
     "input": "::: (softly)\nThe knight stopped.\n\n@Knight “Who goes there?”\n\n@Percival (barely a whisper) “He’s only just got to sleep.”\n:::",
     "script": "Narrator (softly): The knight stopped.\n\nKnight (softly): Who goes there?\n\nPercival (barely a whisper): He’s only just got to sleep.",
     "lines": [
@@ -3317,7 +3317,7 @@
   {
     "example": 85,
     "section": "7.1",
-    "line": 1075,
+    "line": 1078,
     "input": "::: whispering\nSir Percival crept inside.\nClank.\n{page}\nThe dragon opened one eye.\n:::\n@Gerald (deep, polite and utterly unbothered) “Could you not?”\nSir Percival stopped.\n@Gerald (yawning) “I’ve only just got to sleep,” said the dragon.\n@Percival “Aren’t you going to roar?”\nThe dragon sighed.",
     "script": "Narrator (whispering): Sir Percival crept inside.\nNarrator (whispering): Clank.\n{page}\nNarrator (whispering): The dragon opened one eye.\n\nGerald (deep, polite and utterly unbothered): Could you not?\nNarrator: Sir Percival stopped.\nGerald (yawning): I’ve only just got to sleep,\nNarrator: said the dragon.\nPercival: Aren’t you going to roar?\nNarrator: The dragon sighed.",
     "lines": [
@@ -3457,7 +3457,7 @@
   {
     "example": 86,
     "section": "7.2",
-    "line": 1105,
+    "line": 1108,
     "input": "::: @Wanda reading the letter\nDear Management,\n\nDue to unacceptable working conditions, I am officially refusing to fly.\n:::",
     "script": "Wanda (reading the letter): Dear Management,\n\nWanda (reading the letter): Due to unacceptable working conditions, I am officially refusing to fly.",
     "lines": [
@@ -3493,7 +3493,7 @@
   {
     "example": 87,
     "section": "7.2",
-    "line": 1119,
+    "line": 1122,
     "input": "::: @Gerald\nThey charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’\n:::",
     "script": "Gerald: They charge into my cave shouting, ‘PREPARE TO MEET THY DOOM!’",
     "lines": [
@@ -3516,7 +3516,7 @@
   {
     "example": 88,
     "section": "7.2",
-    "line": 1129,
+    "line": 1132,
     "input": "::: @Gerald reading aloud\n‘But you are a chicken,’ said the duke. @Wanda “Ha!” ‘I’m aware,’ said the chicken.\n:::",
     "script": "Gerald (reading aloud): ‘But you are a chicken,’ said the duke.\nWanda: Ha!\nWanda: I’m aware,\nGerald (reading aloud): said the chicken.",
     "lines": [
@@ -3578,7 +3578,7 @@
   {
     "example": 89,
     "section": "7.2",
-    "line": 1140,
+    "line": 1143,
     "input": "::: @Gerald reading aloud\n‘But you are a chicken,’ said the duke.\n@Wanda “Ha!”\n‘I’m aware,’ said the chicken.\n:::",
     "script": "Gerald (reading aloud): ‘But you are a chicken,’ said the duke.\nWanda: Ha!\nGerald (reading aloud): ‘I’m aware,’ said the chicken.",
     "lines": [
@@ -3627,7 +3627,7 @@
   {
     "example": 90,
     "section": "7.3",
-    "line": 1156,
+    "line": 1159,
     "input": "::: softly, close to a whisper\nAt midnight, something came up the mountain.\n\n::: @Gerald sleepy\nVery heroic.\n:::\n\nAnd he went back to sleep.\n:::",
     "script": "Narrator (softly, close to a whisper): At midnight, something came up the mountain.\n\nGerald (sleepy): Very heroic.\n\nNarrator (softly, close to a whisper): And he went back to sleep.",
     "lines": [
@@ -3676,7 +3676,7 @@
   {
     "example": 91,
     "section": "7.3",
-    "line": 1176,
+    "line": 1179,
     "input": "::: whispering\n::: @Gerald\nCould you not?\n:::\n:::",
     "script": "Gerald (whispering): Could you not?",
     "lines": [
@@ -3699,7 +3699,7 @@
   {
     "example": 92,
     "section": "8.1",
-    "line": 1192,
+    "line": 1195,
     "input": "The broom fell over. [wooden clatter; one broom handle dropping flat onto flagstones]",
     "script": "Narrator: The broom fell over.\n[wooden clatter; one broom handle dropping flat onto flagstones]",
     "lines": [
@@ -3735,7 +3735,7 @@
   {
     "example": 93,
     "section": "8.1",
-    "line": 1199,
+    "line": 1202,
     "input": "The broom shot sideways into a hedge. [crash through leaves] Only its bristles stuck out.",
     "script": "Narrator: The broom shot sideways into a hedge.\n[crash through leaves]\nNarrator: Only its bristles stuck out.",
     "book": "The broom shot sideways into a hedge. Only its bristles stuck out.",
@@ -3785,7 +3785,7 @@
   {
     "example": 94,
     "section": "8.1",
-    "line": 1209,
+    "line": 1212,
     "input": "On Tuesday morning, the king summoned him.\n\n[royal trumpet fanfare]\n\n@King “Sir Percival!”",
     "script": "Narrator: On Tuesday morning, the king summoned him.\n\n[royal trumpet fanfare]\n\nKing: Sir Percival!",
     "lines": [
@@ -3834,7 +3834,7 @@
   {
     "example": 95,
     "section": "8.1",
-    "line": 1227,
+    "line": 1230,
     "input": "@Wanda “Come in— [door slams] oh.”",
     "script": "Wanda: Come in—\n[door slams]\nWanda: oh.",
     "lines": [
@@ -3883,7 +3883,7 @@
   {
     "example": 96,
     "section": "8.2",
-    "line": 1239,
+    "line": 1242,
     "input": "The dragon was snoring. @Gerald [snores]",
     "script": "Narrator: The dragon was snoring.\nGerald [snores]",
     "lines": [
@@ -3919,7 +3919,7 @@
   {
     "example": 97,
     "section": "8.2",
-    "line": 1246,
+    "line": 1249,
     "input": "@Wanda [gasp] “My broom is on strike!”",
     "script": "Wanda [gasp]\nWanda: My broom is on strike!",
     "lines": [
@@ -3955,7 +3955,7 @@
   {
     "example": 98,
     "section": "8.2",
-    "line": 1253,
+    "line": 1256,
     "input": "@Wanda [gasp] She stared at the broom.",
     "script": "Wanda [gasp]\nNarrator: She stared at the broom.",
     "lines": [
@@ -3991,7 +3991,7 @@
   {
     "example": 99,
     "section": "8.2",
-    "line": 1260,
+    "line": 1263,
     "input": "@Wanda [gasp] She stared at the broom. “On strike?”",
     "script": "Wanda [gasp]\nNarrator: She stared at the broom.\nWanda: On strike?",
     "lines": [
@@ -4040,7 +4040,7 @@
   {
     "example": 100,
     "section": "8.2",
-    "line": 1268,
+    "line": 1271,
     "input": "@Pickle [tiny peep] [a brief tumble] @Pickle [yawn]",
     "script": "Pickle [tiny peep]\n[a brief tumble]\nPickle [yawn]",
     "lines": [
@@ -4089,7 +4089,7 @@
   {
     "example": 101,
     "section": "8.2",
-    "line": 1276,
+    "line": 1279,
     "input": "@Wanda She stared at the broom. [gasp] “On strike?”",
     "script": "Narrator: She stared at the broom.\n[gasp]\nWanda: On strike?",
     "lines": [
@@ -4138,7 +4138,7 @@
   {
     "example": 102,
     "section": "8.2",
-    "line": 1284,
+    "line": 1287,
     "input": "@Gerald (softly) [snores]",
     "script": "Gerald (softly) [snores]",
     "lines": [
@@ -4161,7 +4161,7 @@
   {
     "example": 103,
     "section": "8.2",
-    "line": 1292,
+    "line": 1295,
     "input": "@Gerald “Oh no. I’m going to— @[sneezes]”",
     "script": "Gerald: Oh no. I’m going to—\nGerald [sneezes]",
     "lines": [
@@ -4197,7 +4197,7 @@
   {
     "example": 104,
     "section": "8.2",
-    "line": 1299,
+    "line": 1302,
     "input": "The fox froze. @[gasps]",
     "script": "Narrator: The fox froze.\nNarrator [gasps]",
     "lines": [
@@ -4233,7 +4233,7 @@
   {
     "example": 105,
     "section": "8.3",
-    "line": 1310,
+    "line": 1313,
     "input": "Read more at [our website](https://example.com).",
     "script": "Narrator: Read more at our website.",
     "lines": [
@@ -4256,7 +4256,7 @@
   {
     "example": 106,
     "section": "8.3",
-    "line": 1318,
+    "line": 1321,
     "input": "@Gerald “Read [this](https://example.com) @[now](https://example.com).”",
     "script": "Gerald: Read this @now.",
     "lines": [
@@ -4279,7 +4279,7 @@
   {
     "example": 107,
     "section": "8.3",
-    "line": 1326,
+    "line": 1329,
     "input": "![Peter squeezing under the gate](peter-gate.png)",
     "script": "![Peter squeezing under the gate](peter-gate.png)",
     "lines": [
@@ -4302,7 +4302,7 @@
   {
     "example": 108,
     "section": "8.3",
-    "line": 1334,
+    "line": 1337,
     "input": "[![A map of the garden](garden.png)](garden-large.png)",
     "script": "[![A map of the garden](garden.png)](garden-large.png)",
     "lines": [
@@ -4325,7 +4325,7 @@
   {
     "example": 109,
     "section": "9.1",
-    "line": 1350,
+    "line": 1353,
     "input": "He slipped underneath the gate.\n\n{page}\n\nMr. McGregor hung up the little jacket.",
     "script": "Narrator: He slipped underneath the gate.\n\n{page}\n\nNarrator: Mr. McGregor hung up the little jacket.",
     "lines": [
@@ -4374,7 +4374,7 @@
   {
     "example": 110,
     "section": "9.1",
-    "line": 1364,
+    "line": 1367,
     "input": "He went back to his work. {page} Peter sat down to rest.",
     "script": "Narrator: He went back to his work.\n{page}\nNarrator: Peter sat down to rest.",
     "book": "He went back to his work. Peter sat down to rest.",
@@ -4424,7 +4424,7 @@
   {
     "example": 111,
     "section": "9.1",
-    "line": 1374,
+    "line": 1377,
     "input": "{page 8–9}",
     "script": "{page 8–9}",
     "lines": [
@@ -4447,7 +4447,7 @@
   {
     "example": 112,
     "section": "9.2",
-    "line": 1386,
+    "line": 1389,
     "input": "@Wanda “Could you perhaps be in love somewhat more urgently?”\n\n{pause 2s}\n\nHe went on being in love at exactly the same speed.",
     "script": "Wanda: Could you perhaps be in love somewhat more urgently?\n\n{pause 2s}\n\nNarrator: He went on being in love at exactly the same speed.",
     "lines": [
@@ -4496,7 +4496,7 @@
   {
     "example": 113,
     "section": "9.3",
-    "line": 1404,
+    "line": 1407,
     "input": "{book only} First published 1902.\n\nOnce upon a time…",
     "script": "{book only} First published 1902.\n\nNarrator: Once upon a time…",
     "book": "First published 1902.\n\nOnce upon a time…",
@@ -4520,7 +4520,7 @@
   {
     "example": 114,
     "section": "9.3",
-    "line": 1418,
+    "line": 1421,
     "input": "{book only} First published 1902.\nFrederick Warne & Co.",
     "script": "{book only} First published 1902.\n{book only} Frederick Warne & Co.",
     "lines": [],
@@ -4529,7 +4529,7 @@
   {
     "example": 115,
     "section": "9.3",
-    "line": 1426,
+    "line": 1429,
     "input": "{audio only} Turn the page when you hear the bell.\n\nOnce upon a time…",
     "script": "Narrator: Turn the page when you hear the bell.\n\nNarrator: Once upon a time…",
     "book": "Once upon a time…",
@@ -4566,7 +4566,7 @@
   {
     "example": 116,
     "section": "9.3",
-    "line": 1438,
+    "line": 1441,
     "input": "## The cave {hidden}\n\nMount Mumble was very tall.",
     "script": "## The cave {hidden}\n\nNarrator: Mount Mumble was very tall.",
     "book": "Mount Mumble was very tall.",
@@ -4590,7 +4590,7 @@
   {
     "example": 117,
     "section": "9.4",
-    "line": 1454,
+    "line": 1457,
     "input": "::: {book only}\nFirst published 1902.\n\nPrinted in Great Britain.\n:::",
     "script": "{book only} First published 1902.\n\n{book only} Printed in Great Britain.",
     "lines": [],
@@ -4599,7 +4599,7 @@
   {
     "example": 118,
     "section": "9.5",
-    "line": 1470,
+    "line": 1473,
     "input": "The broom fell over. {recorder:take 3}",
     "script": "Narrator: The broom fell over.\n{recorder:take 3}",
     "lines": [
@@ -4635,7 +4635,7 @@
   {
     "example": 119,
     "section": "10",
-    "line": 1483,
+    "line": 1486,
     "input": "%% Leave a clear pause after this line. %%\n\nHe went on being in love at exactly the same speed.",
     "script": "%% Leave a clear pause after this line. %%\n\nNarrator: He went on being in love at exactly the same speed.",
     "book": "He went on being in love at exactly the same speed.",
@@ -4672,7 +4672,7 @@
   {
     "example": 120,
     "section": "10",
-    "line": 1495,
+    "line": 1498,
     "input": "@Marmalade “Clause five.” %% Clause and claws sound the same. %%",
     "script": "Marmalade: Clause five.\n%% Clause and claws sound the same. %%",
     "lines": [
@@ -4708,7 +4708,7 @@
   {
     "example": 121,
     "section": "10",
-    "line": 1502,
+    "line": 1505,
     "input": "%%\nHushed from here to the end, because Gerald is asleep.\n\nThe knight’s cry is the only loud line.\n%%",
     "script": "%% Hushed from here to the end, because Gerald is asleep. The knight’s cry is the only loud line. %%",
     "lines": [
@@ -4731,7 +4731,7 @@
   {
     "example": 122,
     "section": "10",
-    "line": 1514,
+    "line": 1517,
     "input": "@Alice “Hello.” %% A note for the\nproducer. %% “Goodbye.”",
     "script": "Alice: Hello.\n%% A note for the producer. %%\nNarrator: “Goodbye.”",
     "book": "“Hello.” “Goodbye.”",
@@ -4781,7 +4781,7 @@
   {
     "example": 123,
     "section": "11",
-    "line": 1531,
+    "line": 1534,
     "input": "@Gerald “I don’t *even* like treasure.”",
     "script": "Gerald: I don’t *even* like treasure.",
     "lines": [
@@ -4804,7 +4804,7 @@
   {
     "example": 124,
     "section": "11",
-    "line": 1537,
+    "line": 1540,
     "input": "The page said: **JOBS AVAILABLE**",
     "script": "Narrator: The page said: **JOBS AVAILABLE**",
     "lines": [
@@ -4827,7 +4827,7 @@
   {
     "example": 125,
     "section": "11",
-    "line": 1545,
+    "line": 1548,
     "input": "She wrote \\[sic\\] and \\{page\\} on the board.",
     "script": "Narrator: She wrote [sic] and {page} on the board.",
     "lines": [
@@ -4851,7 +4851,7 @@
     "example": 126,
     "section": "11",
     "since": "1.1",
-    "line": 1553,
+    "line": 1556,
     "input": "Tom &amp; Jerry said &quot;hello&quot;.",
     "script": "Narrator: Tom & Jerry said \"hello\".",
     "book": "Tom & Jerry said \"hello\".",
@@ -4875,7 +4875,7 @@
   {
     "example": 127,
     "section": "12.2",
-    "line": 1615,
+    "line": 1618,
     "input": "@Percival (muffled, echoing) “I meant to do that,” said Sir Percival, from inside the vase. [armor wobbles]",
     "script": "Percival (muffled, echoing): I meant to do that,\nNarrator: said Sir Percival, from inside the vase.\n[armor wobbles]",
     "book": "“I meant to do that,” said Sir Percival, from inside the vase.",
@@ -4925,7 +4925,7 @@
   {
     "example": 128,
     "section": "12.2",
-    "line": 1625,
+    "line": 1628,
     "input": "@Wanda (strained and extremely polite) “Could we perhaps travel somewhat more urgently?”\n\n%% The broom considers this. %%\n\n{pause}\n\nThe broom considered this.",
     "script": "Wanda (strained and extremely polite): Could we perhaps travel somewhat more urgently?\n\n%% The broom considers this. %%\n\n{pause}\n\nNarrator: The broom considered this.",
     "book": "“Could we perhaps travel somewhat more urgently?”\n\nThe broom considered this.",

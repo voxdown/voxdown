@@ -20,8 +20,11 @@ const LABEL = 18;
 
 type Point = { at: number; y: number };
 
-/** A node: where it starts in the text, its name, and whether it opens a chapter. */
-export type RailScene = { from: number; name: string; chapter: boolean };
+/**
+ * A node: where it starts in the text, its name, whether it opens a chapter, and whether it is
+ * above the chapters (a book's title, a part): shown as a chapter, moved as none.
+ */
+export type RailScene = { from: number; name: string; chapter: boolean; title: boolean };
 
 /**
  * Where each place in the text sits on the rail: in proportion to the text, except that scene
@@ -91,6 +94,7 @@ export function numbered(
       from: scene.from,
       name: scene.break ? (number ? `Scene ${number}` : "Scene") : scene.name,
       chapter: scene.chapter,
+      title: scene.title,
     };
   });
 }

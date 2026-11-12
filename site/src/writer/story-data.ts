@@ -4,13 +4,59 @@
  * the page for a short story, in a worker for a long one, so that the page never reads a long book
  * again while it is written.
  */
-import { type Story, castMemberNamed, lines, quotesOf, taggedName } from "voxdown";
+import { type Story, castMemberNamed, chapterLevel, lines, quotesOf, taggedName } from "voxdown";
 
-/** A chapter, heading or scene break: where it starts, its name, whether it opens a chapter. */
-export type SceneData = { from: number; name: string; chapter: boolean; break: boolean };
+/**
+ * A chapter, heading or scene break: where it starts, its name, whether it opens a chapter, and
+ * whether it is above the chapters (a book's title, a part), which no chapter moves past.
+ */
+export type SceneData = {
+  from: number;
+  name: string;
+  chapter: boolean;
+  title: boolean;
+  break: boolean;
+};
+
+/**
+ * The level the story's chapters are headings of: the highest used at least twice, as everywhere
+ * (voxdown's `chapterLevel`), or with none used twice its highest heading's, the one chapter.
+ */
+export function chapterLevelIn(story: Story): number {
+  let highest: number | undefined;
+  for (const block of story.blocks)
+    if (block.kind === "heading" && (highest === undefined || block.level < highest))
+      highest = block.level;
+  return chapterLevel(story) ?? highest ?? 1;
+}
+
+/**
+ * The level a new chapter's heading is: the chapters' own, or, while there are none, one under a
+ * single heading at the top that is the title (a new story's, or one the story's details name),
+ * so that the title stays the title as chapters come.
+ */
+export function newChapterLevel(story: Story): number {
+  const known = chapterLevel(story);
+  if (known !== undefined) return known;
+  const headings = story.blocks.flatMap((block) => (block.kind === "heading" ? [block] : []));
+  const first = headings[0];
+  if (!first) return 1;
+  if (headings.some((heading) => heading.level <= first.level && heading !== first))
+    return chapterLevelIn(story);
+  const named = story.source
+    .slice(first.range.from, first.range.to)
+    .replace(/^[ \t]*#+[ \t]*/, "")
+    .replace(/[ \t]*\{[^}]*\}[ \t]*$/, "")
+    .trim();
+  const title = story.meta.title;
+  return title === undefined || title === "Untitled" || title === named
+    ? first.level + 1
+    : first.level;
+}
 
 export function scenesOf(story: Story): SceneData[] {
   const scenes: SceneData[] = [];
+  const level = chapterLevelIn(story);
   for (const block of story.blocks) {
     if (block.kind === "heading") {
       const said = block.line.items
@@ -21,11 +67,18 @@ export function scenesOf(story: Story): SceneData[] {
       scenes.push({
         from: block.range.from,
         name: said || written || `Heading ${scenes.length + 1}`,
-        chapter: block.level === 1,
+        chapter: block.level <= level,
+        title: block.level < level,
         break: false,
       });
     } else if (block.kind === "break") {
-      scenes.push({ from: block.range.from, name: "Scene", chapter: false, break: true });
+      scenes.push({
+        from: block.range.from,
+        name: "Scene",
+        chapter: false,
+        title: false,
+        break: true,
+      });
     }
   }
   return scenes;

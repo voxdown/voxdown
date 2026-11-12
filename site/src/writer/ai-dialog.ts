@@ -26,6 +26,7 @@ import {
   work,
 } from "./helper";
 import { keys } from "./menu";
+import { chapterLevelIn } from "./story-data";
 
 export type AiContext = {
   /** Which story is open: work asked for one is never given to another. */
@@ -397,15 +398,12 @@ function quotesIn(context: AiContext, scope: string): number[] | undefined {
 }
 
 /**
- * The chapter around `at`: between headings of the shallowest level that comes more than once
- * (a book's title alone at the top is no chapter), its name and where it runs.
+ * The chapter around `at`: between headings of the level the story divides at (a book's title
+ * alone at the top is no chapter), its name and where it runs.
  */
 export function chapterAt(story: Story, at: number): { name: string; from: number; to: number } {
   const headings = story.blocks.flatMap((block) => (block.kind === "heading" ? [block] : []));
-  const levels = [...new Set(headings.map((heading) => heading.level))].sort((a, b) => a - b);
-  const top =
-    levels.find((level) => headings.filter((heading) => heading.level === level).length > 1) ??
-    levels[0];
+  const top = chapterLevelIn(story);
   const tops = headings.filter((heading) => heading.level === top);
   const opening = [...tops].reverse().find((heading) => heading.range.from <= at);
   return {

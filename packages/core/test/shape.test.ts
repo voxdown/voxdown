@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findShape, parse, quotesOf, shapeStory, titleCased } from "../src";
+import { chapterLevel, findShape, parse, quotesOf, shapeStory, titleCased } from "../src";
 
 /** A book as a web page's text pastes it: Project Gutenberg's lines, a title page, contents. */
 const PASTED = `---
@@ -92,7 +92,9 @@ describe("a book pasted as plain text", () => {
     expect(made).toContain("author: Herman Melville");
     expect(made).toContain("# Moby-Dick; or, The Whale");
     expect(made).toContain("{book only} CHAPTER 1. Loomings.");
-    expect(made).toContain("\n# CHAPTER 1. Loomings.\n");
+    // Under the title's heading, a level down: the title is no chapter.
+    expect(made).toContain("\n## CHAPTER 1. Loomings.\n");
+    expect(chapterLevel(parse(made))).toBe(2);
     expect(made).toContain("@NantucketSailor1 Oh, boys");
     expect(made).toContain("@Starbuck (aside) Not so loud, now.");
     expect(made).toContain('NantucketSailor1: "1st Nantucket Sailor"');
@@ -109,9 +111,102 @@ describe("a book pasted as plain text", () => {
 
   it("makes only what is chosen", () => {
     const made = shapeStory(story, shape, { chapters: true });
-    expect(made).toContain("\n# CHAPTER 2. The Carpet-Bag.\n");
+    expect(made).toContain("\n## CHAPTER 2. The Carpet-Bag.\n");
     expect(made).toContain("*** START OF THE PROJECT GUTENBERG EBOOK 2701 ***");
     expect(made).toContain("STUBB. Avast");
+  });
+});
+
+describe("a book's title", () => {
+  const front = "---\nvoxdown: 1.2\nlanguage: en\ncast:\n---\n\n";
+  const book =
+    "The Ghost of Galilee\n\nChapter 1: The Challenge in the Courtyard\n\nThe late October sun cast long shadows.\n\nChapter 2: The Labyrinth of Parchment\n\nJulian began his search in the vaults of the present.\n";
+  const all = { chapters: true, details: true };
+
+  it("is found alone on its line above the first chapter, and made the heading at the top", () => {
+    for (const text of [book, `${front}${book}`, `${front}# Untitled\n\n${book}`]) {
+      const story = parse(text);
+      const shape = findShape(story);
+      expect(shape.title).toBe("The Ghost of Galilee");
+      const made = shapeStory(story, shape, all);
+      expect(made).toContain("title: The Ghost of Galilee\n");
+      expect(made).toContain(
+        "\n# The Ghost of Galilee\n\n## Chapter 1: The Challenge in the Courtyard\n\nThe late",
+      );
+      expect(made).not.toContain("Untitled");
+      expect(made.match(/^# /gm)).toHaveLength(1);
+      expect(chapterLevel(parse(made))).toBe(2);
+    }
+  });
+
+  it("is the heading at the top, pasted over a new story's title, its chapters under it", () => {
+    const story = parse(`${front}# ${book}`);
+    const shape = findShape(story);
+    expect([shape.title, shape.heading?.text]).toEqual([
+      "The Ghost of Galilee",
+      "The Ghost of Galilee",
+    ]);
+    const made = shapeStory(story, shape, all);
+    expect(made).toContain("title: The Ghost of Galilee\n");
+    expect(made).toContain("# The Ghost of Galilee\n\n## Chapter 1: The Challenge");
+    // Chapters only: the heading stays the title, the chapters under it all the same.
+    expect(shapeStory(story, shape, { chapters: true })).toContain("\n## Chapter 2: The Labyrinth");
+  });
+
+  it("left as a line of the story when not chosen, the chapters then the top headings", () => {
+    const story = parse(book);
+    const made = shapeStory(story, findShape(story), { chapters: true });
+    expect(made).toContain("The Ghost of Galilee\n\n# Chapter 1: The Challenge");
+    expect(chapterLevel(parse(made))).toBe(1);
+  });
+
+  it("is no sentence, nor one of two lines, nor a line of the story already a chapter", () => {
+    for (const opening of [
+      "It was a dark night.",
+      "“Come in,” she said",
+      "For my mother,",
+      "The Ghost of Galilee\n\nA novel in six chapters, as told by Julian to his students.",
+    ]) {
+      const shape = findShape(parse(`${opening}\n\n${book.slice(book.indexOf("Chapter 1"))}`));
+      expect(shape.title).toBeUndefined();
+      expect(shape.titlePage).toEqual([]);
+    }
+  });
+
+  it("leaves a new story's Untitled out of the title on a title page", () => {
+    const story = parse(
+      `${front}# Untitled\n\nThe Ghost\n\nof Galilee\n\nBy J. Doe\n\n${book.slice(book.indexOf("Chapter 1"))}`,
+    );
+    const shape = findShape(story);
+    expect([shape.title, shape.author]).toEqual(["The Ghost of Galilee", "J. Doe"]);
+    const made = shapeStory(story, shape, all);
+    expect(made).toContain("\n# The Ghost of Galilee\n\n## Chapter 1:");
+    expect(made).toContain("author: J. Doe");
+    expect(made).not.toContain("By J. Doe");
+  });
+
+  it("is no `#` heading with the story's words under it: that is a chapter", () => {
+    const story = parse("# One\n\nIt was quiet.\n\nCHAPTER 2.\n\nIt was loud.\n");
+    const shape = findShape(story);
+    expect(shape.heading).toBeUndefined();
+    expect(shapeStory(story, shape, all)).toContain("\n# CHAPTER 2.\n");
+  });
+});
+
+describe("where a story divides into chapters", () => {
+  const levels = (text: string) => chapterLevel(parse(text));
+
+  it("is the highest heading level used at least twice", () => {
+    expect(levels("# One\n\nA.\n\n# Two\n\nB.\n")).toBe(1);
+    expect(levels("# The Book\n\n## One\n\nA.\n\n## Two\n\nB.\n")).toBe(2);
+    expect(levels("# Part One\n\n## One\n\n## Two\n\n# Part Two\n\n## Three\n")).toBe(1);
+    expect(levels("# The Book\n\n## One\n\nA.\n\n### A scene\n\n### Another\n")).toBe(3);
+  });
+
+  it("is nowhere when no level is used twice: the story is one chapter", () => {
+    expect(levels("# The Book\n\nA.\n")).toBeUndefined();
+    expect(levels("# The Book\n\n## One\n\nA.\n")).toBeUndefined();
+    expect(levels("Just words.\n")).toBeUndefined();
   });
 });
 

@@ -23,10 +23,18 @@ export type Shape = {
   contents: Span[];
   /** Project Gutenberg's notices, at the start and the end, to take out. */
   notices: Span[];
-  /** The title and author its title page gives, and that page's paragraphs. */
+  /**
+   * The title and author its title page gives, and that page's paragraphs: a title and its `By …`
+   * line, or a title alone on its line above the first chapter.
+   */
   title?: string;
   author?: string;
   titlePage: Span[];
+  /**
+   * A heading at its top that is its title (the Writer's `# Untitled`, or a title pasted as a
+   * heading): its chapters go a level under it, as the title is no chapter.
+   */
+  heading?: Span & { text: string };
   /** Lines set out as a play, each given to its speaker: the name before them, to replace. */
   lines: Array<Span & { name: string; handle: string; fullName: string; direction?: string }>;
 };
@@ -62,6 +70,9 @@ const PART = new RegExp(
 /** A chapter's title that is only its number, its name on the next line. */
 const NUMBER_ONLY = /^(?:CHAPTER|Chapter|CHAP\.|Chap\.)\s+(?:[0-9]{1,3}|[IVXLCDM]{1,8})\.?$/;
 const CONTENTS = /^(?:TABLE OF )?CONTENTS\.?$|^Contents\.?$/;
+/** A new story's heading in the Writer, there until the writer types the title. */
+const UNTITLED = /^#[ \t]+Untitled[ \t]*$/;
+const UNTITLED_ANYWHERE = /^#[ \t]+Untitled[ \t]*$/m;
 /** A line of a play: `STUBB. Avast!`, `1ST NANTUCKET SAILOR. Oh, boys`, `STARBUCK (aside). No.` */
 const PLAY =
   /^((?:\d+(?:ST|ND|RD|TH|D)\s+)?[A-Z][A-Z'’-]+(?:\s+[A-Z][A-Z'’-]+){0,3})(?:\s*\(([^()\n]{1,60})\))?\s*[.:]\s+(?=\S)/;
@@ -285,7 +296,10 @@ export function findShape(story: Story): Shape {
     ...[...shape.contents, ...shape.chapters].map((span) => span.from),
     until,
   );
-  const opening = inside.filter((paragraph) => paragraph.to <= firstTitle).slice(0, 8);
+  // A new story's `# Untitled` is no part of the title page (`Untitled The Ghost of Galilee`).
+  const opening = inside
+    .filter((paragraph) => paragraph.to <= firstTitle && !UNTITLED.test(paragraph.text))
+    .slice(0, 8);
   // As written, or as headings (a web page's title page, pasted with its headings).
   const lineOf = (paragraph: { text: string }) =>
     plainOf(paragraph.text)
@@ -301,6 +315,64 @@ export function findShape(story: Story): Shape {
       for (const paragraph of opening.slice(0, by + 1))
         shape.titlePage.push({ from: paragraph.from, to: paragraph.to });
     }
+  }
+
+  // A heading at its top that is its title, for the chapters to go under: the only `#` heading
+  // (but a title page's), and before the first chapter nothing after it but the title page and
+  // Project Gutenberg's notices. A `# One` with the story's words under it is a chapter. A new
+  // story's `# Untitled` is the title wherever its words begin.
+  const top = all[0];
+  const covered = (from: number) =>
+    shape.notices.some((span) => span.from <= from && from < span.to) ||
+    shape.titlePage.some((span) => span.from === from);
+  if (
+    shape.chapters.length &&
+    top &&
+    top.to <= firstTitle &&
+    /^#[ \t]+\S/.test(top.text) &&
+    !top.text.includes("\n") &&
+    !covered(top.from) &&
+    !story.blocks.some(
+      (block) =>
+        block.kind === "heading" &&
+        block.level === 1 &&
+        block.range.from !== top.from &&
+        !covered(block.range.from),
+    ) &&
+    (UNTITLED.test(top.text) ||
+      all.every(
+        (paragraph) =>
+          paragraph.from <= top.from || paragraph.from >= firstTitle || covered(paragraph.from),
+      ))
+  )
+    shape.heading = { from: top.from, to: top.to, text: lineOf(top).replace(/\s*\{[^}]*\}$/, "") };
+
+  // Or its title alone on its line above the first chapter (`The Ghost of Galilee`), with no
+  // `By …` line: a short line, no sentence, the only one there. Or the heading at its top, for a
+  // story with no title yet.
+  if (shape.title === undefined && shape.chapters.length) {
+    const before = opening.filter((paragraph) => paragraph.from !== shape.heading?.from);
+    const only = before.length === 1 ? (before[0] as (typeof before)[number]) : undefined;
+    const line = only ? lineOf(only) : "";
+    if (
+      only &&
+      !only.text.includes("\n") &&
+      !only.text.trimStart().startsWith("#") &&
+      line.length <= 80 &&
+      line.split(/\s+/).length <= 12 &&
+      /^[\p{L}\p{N}]/u.test(line) &&
+      !/[“”"«»@{]/u.test(line) &&
+      !/[,;:]$|\p{Ll}\.$/u.test(line)
+    ) {
+      shape.title = titleCased(line);
+      shape.titlePage.push({ from: only.from, to: only.to });
+    } else if (
+      !before.length &&
+      shape.heading &&
+      !UNTITLED.test(source.slice(shape.heading.from, shape.heading.to)) &&
+      (story.meta.title === undefined || story.meta.title === "Untitled")
+    )
+      shape.title = titleCased(shape.heading.text);
   }
 
   // Lines set out as a play, when there are a few of them: a name said twice or more, or among
@@ -359,7 +431,20 @@ export function shapeStory(story: Story, shape: Shape, choice: ShapeChoice): str
     changes.push({ from: span.from, to, insert: "" });
   };
   if (choice.notices) for (const span of shape.notices) cut(span);
-  if (choice.details) for (const span of shape.titlePage) cut(span);
+  // The title page made the heading at the top, when there is none there to name: the title
+  // written as a heading in its place, the rest of the page taken out.
+  const untitled = UNTITLED_ANYWHERE.test(story.source.slice(story.frontMatter?.range.to ?? 0));
+  const madeHeading = Boolean(
+    choice.details && shape.title && shape.titlePage.length && !shape.heading && !untitled,
+  );
+  if (choice.details)
+    shape.titlePage.forEach((span, index) => {
+      if (index === 0 && madeHeading)
+        changes.push({ from: span.from, to: span.to, insert: `# ${shape.title}` });
+      else cut(span);
+    });
+  // Under a title heading, the chapters a level down: the title is no chapter (chapters.ts).
+  const under = shape.heading || madeHeading ? 1 : 0;
   if (choice.contents)
     for (const span of shape.contents)
       changes.push({ from: span.from, to: span.from, insert: "{book only} " });
@@ -369,7 +454,7 @@ export function shapeStory(story: Story, shape: Shape, choice: ShapeChoice): str
         from: chapter.from,
         to: chapter.to,
         // A heading on the line before its chapter's first words: a blank line between them.
-        insert: `${"#".repeat(chapter.level)} ${chapter.text}${chapter.before ? "\n" : ""}`,
+        insert: `${"#".repeat(chapter.level + under)} ${chapter.text}${chapter.before ? "\n" : ""}`,
       });
       if (chapter.joins) cut(chapter.joins);
     }

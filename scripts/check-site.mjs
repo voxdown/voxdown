@@ -2560,6 +2560,68 @@ await maker.keyboard.press("Escape");
     );
   await pasting.close();
 }
+// A book pasted as plain text under a new story's title, its own title alone on its first line:
+// Find the chapters makes that line the title and the heading at the top, its chapters `##`
+// under it, as the audiobook and the ebook divide it; and the rail shows them as chapters.
+{
+  const booking = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    permissions: ["clipboard-read", "clipboard-write"],
+  });
+  const reader = await booking.newPage();
+  watch(reader, "writer book pasted");
+  await reader.goto(`${base}/writer/`);
+  await reader.click('.welcome [data-command="new"]');
+  await reader.waitForFunction(() =>
+    document.querySelector("#notice")?.textContent?.includes("Type the story’s title"),
+  );
+  const words = "Julian sat on a weathered limestone bench, watching the students drift past. ";
+  const chapter = (name) => `${name}\n\n${words.repeat(60).trim()}\n\n${words.repeat(60).trim()}`;
+  const text = [
+    "The Ghost of Galilee",
+    chapter("Chapter 1: The Challenge in the Courtyard"),
+    chapter("Chapter 2: The Labyrinth of Parchment"),
+    chapter("Chapter 3: The Translator’s Trap"),
+  ].join("\n\n");
+  await reader.evaluate(
+    (plain) =>
+      navigator.clipboard.write([
+        new ClipboardItem({ "text/plain": new Blob([plain], { type: "text/plain" }) }),
+      ]),
+    text,
+  );
+  await reader.keyboard.press("Control+End");
+  await reader.keyboard.press("Control+v");
+  const offered = await reader
+    .waitForSelector("#notice .notice-action", { timeout: 4000 })
+    .catch(() => null);
+  if (!offered) problems.push("writer: a book pasted wasn't offered Find the chapters");
+  else {
+    await offered.click();
+    await reader.waitForSelector("#shape[open]");
+    const choices = await reader.locator("#shape-choices").textContent();
+    if (!choices?.includes("Make “The Ghost of Galilee” the title"))
+      problems.push(`writer: Find the chapters missed the title: ${JSON.stringify(choices)}`);
+    await reader.click("#shape-make");
+    await reader.waitForTimeout(900);
+    const made = await draftIn(reader);
+    if (
+      !made.includes("title: The Ghost of Galilee\n") ||
+      !made.includes(
+        "\n# The Ghost of Galilee\n\n## Chapter 1: The Challenge in the Courtyard\n\nJulian",
+      ) ||
+      !made.includes("\n## Chapter 3: The Translator’s Trap\n") ||
+      made.includes("Untitled")
+    )
+      problems.push(
+        `writer: a book set out by Find the chapters: ${JSON.stringify(made.slice(0, 260))}`,
+      );
+    // On the rail, the title and its three chapters, each a chapter's node.
+    const nodes = await reader.$$eval("#rail-scenes [data-chapter]", (items) => items.length);
+    if (nodes !== 4) problems.push(`writer: the rail shows ${nodes} chapters' nodes, not 4`);
+  }
+  await booking.close();
+}
 // The menus from the keyboard alone: every item reached once with the down arrow, in order.
 await maker.click(".cm-content");
 await maker.keyboard.press("F10");

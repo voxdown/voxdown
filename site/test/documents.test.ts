@@ -185,6 +185,30 @@ describe("ebooks", () => {
     expect(story).toContain("*very*");
     expect(story.indexOf("# One")).toBeLessThan(story.indexOf("# Two"));
   });
+
+  it("take their chapters where the audiobook does: `##` ones under a `#` title", async () => {
+    const details = {
+      title: "The Ghost of Galilee",
+      id: "00000000-0000-4000-8000-000000000000",
+      when: new Date("2026-11-12T00:00:00Z"),
+    };
+    const chaptersOf = async (source: string) => {
+      const files = await unzip(epubOf(book(source), details));
+      const nav = decoder.decode(files.get("OEBPS/nav.xhtml"));
+      return [...nav.matchAll(/<a href="chapter-\d+\.xhtml">([^<]*)<\/a>/g)].map((m) => m[1]);
+    };
+    // The title's heading on the title page only, and each `##` a chapter.
+    expect(
+      await chaptersOf(
+        "# The Ghost of Galilee\n\n## Chapter 1\n\nThe sun.\n\n## Chapter 2\n\nThe vaults.\n",
+      ),
+    ).toEqual(["Chapter 1", "Chapter 2"]);
+    // `#` chapters, as before; and a `##` scene in one stays in its chapter.
+    expect(await chaptersOf("# One\n\nA.\n\n## A scene\n\nB.\n\n# Two\n\nC.\n")).toEqual([
+      "One",
+      "Two",
+    ]);
+  });
 });
 
 /** A Word document as another program writes it: its own styles, inherited, and more. */

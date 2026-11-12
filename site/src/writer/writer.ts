@@ -118,7 +118,7 @@ import { rankScenes } from "./outline";
 import { afterParagraph, moveParagraph } from "./paragraphs";
 import { pastedStory } from "./paste";
 import { type Problem, problems } from "./problems";
-import { SceneRail, numbered, railScenes } from "./rail";
+import { type RailScene, SceneRail, numbered, railScenes } from "./rail";
 import type { RenderAsk, RenderReply } from "./render-worker";
 import { Rescue, tabStory as tabStoryIn } from "./rescue";
 import { SaveFlow } from "./save-flow";
@@ -147,7 +147,7 @@ import {
   versionsOf,
 } from "./store";
 import { type Wanting, nextWanting } from "./story-data";
-import { type CastView, castOf, passageIn } from "./story-data";
+import { type CastView, castOf, chapterLevelIn, newChapterLevel, passageIn } from "./story-data";
 import {
   type Speaker,
   StretchTools,
@@ -1652,26 +1652,57 @@ const bold = toggleEmphasis(true, insideMark, (message) => notice(message), pass
 
 /**
  * The scene the cursor is in (from its heading or break to the next), or its chapter (from its
- * `#` heading to the next), moved past the one before or after; one step to undo.
+ * heading to the next), moved past the one before or after; one step to undo. A chapter's heading
+ * is of the level the story divides at (`#`, or `##` under a `#` title), and a heading above the
+ * chapters (the title, a part) stays where it is. A chapter with no scenes moves as its scene.
  */
 function moveSectionHere(chapters: boolean, by: 1 | -1): boolean {
   if (lockedOut) return true;
   if (storyVersion !== version) refresh();
-  const all = railScenes(current(), sceneNumbers(view.state));
-  const heads = all.filter((scene) => scene.chapter).map((scene) => scene.from);
-  const moved = chapters
-    ? moveSection(view.state, heads, by)
+  const story = current();
+  const all = railScenes(story, sceneNumbers(view.state));
+  const starts = (which: (scene: RailScene) => boolean) =>
+    all.filter(which).map((scene) => scene.from);
+  const heads = starts((scene) => scene.chapter && !scene.title);
+  const moveChapter = () =>
+    moveSection(
+      view.state,
+      heads,
+      by,
+      starts((scene) => scene.title),
+    );
+  let asChapter = chapters;
+  let moved = chapters
+    ? moveChapter()
     : moveSection(
         view.state,
-        all.filter((scene) => !scene.chapter).map((scene) => scene.from),
+        starts((scene) => !scene.chapter),
         by,
-        heads,
+        starts((scene) => scene.chapter),
       );
+  // A chapter with no scenes in it is the scene the cursor is in: moved whole, past the chapter
+  // beside it (a short story's `##` sections under its `#` title are its chapters).
+  if (moved === "outside" && !chapters) {
+    const head = view.state.selection.main.head;
+    const from = heads.filter((at) => at <= head).at(-1);
+    const to = all.find((scene) => scene.chapter && from !== undefined && scene.from > from)?.from;
+    if (
+      from !== undefined &&
+      !all.some(
+        (scene) =>
+          !scene.chapter && scene.from > from && scene.from < (to ?? Number.POSITIVE_INFINITY),
+      )
+    ) {
+      asChapter = true;
+      moved = moveChapter();
+    }
+  }
   if (typeof moved === "string") {
+    const level = chapterLevelIn(story);
     notice(
       moved === "outside"
-        ? `Put the cursor in a ${chapters ? "chapter first: one starts at a # heading" : "scene first: one starts at a ## heading or a scene break"}.`
-        : chapters
+        ? `Put the cursor in a ${chapters ? `chapter first: here one starts at a ${"#".repeat(level)} heading` : `scene first: here one starts at a ${"#".repeat(level + 1)} heading or a scene break`}.`
+        : asChapter
           ? `No chapter ${by < 0 ? "before" : "after"} this one to move it past.`
           : `This is the ${by < 0 ? "first" : "last"} scene of its chapter: a scene stays in its chapter.`,
     );
@@ -2449,9 +2480,14 @@ function showShape(): void {
           {
             key: "details" as const,
             label: `Make ${[shape.title ? `“${shape.title}” the title` : "", shape.author ? `${shape.author} the author` : ""].filter(Boolean).join(" and ")}`,
-            detail: shape.titlePage.length
-              ? "From its title page, which is then taken out of the text."
-              : "From Project Gutenberg's header.",
+            detail:
+              shape.titlePage.length > 1
+                ? "From its title page, made one heading at the top, the chapters under it."
+                : shape.titlePage.length
+                  ? "From its first line, made the heading at the top, the chapters under it."
+                  : shape.heading
+                    ? "From the heading at its top."
+                    : "From Project Gutenberg's header.",
           },
         ]
       : []),
@@ -3300,8 +3336,13 @@ const COMMANDS: Record<string, () => unknown> = {
     ),
   "insert-note": () => insertAtCursor("%% note %%", "note"),
   "insert-break": () => insertAfterParagraph("* * *"),
-  "insert-chapter": () => insertAfterParagraph("# A new chapter", "A new chapter"),
-  "insert-scene": () => insertAfterParagraph("## A new scene", "A new scene"),
+  "insert-chapter": () =>
+    insertAfterParagraph(
+      `${"#".repeat(newChapterLevel(current()))} A new chapter`,
+      "A new chapter",
+    ),
+  "insert-scene": () =>
+    insertAfterParagraph(`${"#".repeat(chapterLevelIn(current()) + 1)} A new scene`, "A new scene"),
   "export-book": () =>
     download(renderDocument(current(), "book", { pages: true }), `${baseName()}.html`, "text/html"),
   "export-script": () =>

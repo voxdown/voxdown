@@ -20,6 +20,7 @@ import { moveSection } from "../src/writer/sections";
 import { sidesHtml, sidesOf, sidesText } from "../src/writer/sides";
 import { withoutSpareMarks } from "../src/writer/spare-marks";
 import { draftsToLetGo, thinVersions } from "../src/writer/store";
+import { newChapterLevel } from "../src/writer/story-data";
 import {
   composed,
   dialogueTag,
@@ -81,6 +82,43 @@ describe("the scene rail's layout", () => {
       ["Scene 2", false],
       ["The End", false],
     ]);
+  });
+
+  it("has the chapters where the story divides: `##` ones under a `#` title", () => {
+    const shown = (source: string) =>
+      railScenes(parse(source), new Map()).map(({ name, chapter, title }) => [
+        name,
+        title ? "title" : chapter ? "chapter" : "scene",
+      ]);
+    expect(shown("# The Ghost\n\n## One\n\nA.\n\n### Night\n\nB.\n\n## Two\n\nC.\n")).toEqual([
+      ["The Ghost", "title"],
+      ["One", "chapter"],
+      ["Night", "scene"],
+      ["Two", "chapter"],
+    ]);
+    expect(shown("# One\n\nA.\n\n## Night\n\nB.\n\n# Two\n\nC.\n")).toEqual([
+      ["One", "chapter"],
+      ["Night", "scene"],
+      ["Two", "chapter"],
+    ]);
+    // No level used twice: the highest heading is the one chapter, as before.
+    expect(shown("# The Ghost\n\nA.\n\n## Night\n\nB.\n")).toEqual([
+      ["The Ghost", "chapter"],
+      ["Night", "scene"],
+    ]);
+  });
+
+  it("puts a new chapter under a title alone at the top, and with the chapters there are", () => {
+    const level = (source: string) => newChapterLevel(parse(source));
+    // A new story's title, or one its details name: the chapters go under it.
+    expect(level("# Untitled\n\n")).toBe(2);
+    expect(level("---\ntitle: The Ghost\n---\n\n# The Ghost\n\nA.\n")).toBe(2);
+    expect(level("# The Ghost\n\n## One\n\nA.\n")).toBe(2);
+    // A heading the details call no title is a chapter: the next one beside it.
+    expect(level("---\ntitle: The Ghost\n---\n\n# Chapter 1\n\nA.\n")).toBe(1);
+    expect(level("# One\n\n# Two\n")).toBe(1);
+    expect(level("# The Ghost\n\n## One\n\n## Two\n")).toBe(2);
+    expect(level("Just words.\n")).toBe(1);
   });
 });
 

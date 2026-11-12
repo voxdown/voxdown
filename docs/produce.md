@@ -55,6 +55,8 @@ In `story.audiobook/`, beside the story (or `--out`):
 | `about.json` | Which service, model and voices made it, and a line saying it is narrated by synthetic voices. |
 | `.clips/` | Every line made, kept: making the book again only asks for lines that changed. |
 
+Its chapters are the story's headings of the highest level used at least twice, as the Writer's and the ebook's are ([SPEC.md](../spec/SPEC.md), §4.4): `#` chapters with the title in the front matter, or `##` chapters under a single `# Title`. What comes before the first chapter, the title read aloud with it, is a chapter of its own, named by the title. A story with no level used twice is one chapter.
+
 **ElevenLabs Studio.** `vxd produce story.vxd --with elevenlabs --studio` makes nothing here: it sends the book to [ElevenLabs Studio](https://elevenlabs.io/docs/product-guides/products/studio) as a new project, each chapter a chapter, each paragraph a block and each line in its character's voice (directions as audio tags). You listen, change and convert it there, and nothing is converted, or paid for, until you do. From Studio a book can be published where only books made in ElevenLabs are taken.
 
 `--chapters 1` makes one chapter to listen to first. `--script-only` writes the production script and an SSML file a chapter, with no service, for other tools.

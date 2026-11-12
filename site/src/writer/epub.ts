@@ -1,6 +1,8 @@
+import { chapterLevelOf } from "voxdown";
 /**
- * Ebooks (EPUB 3): a story's book written as one, a chapter to each `#` heading, with its table of
- * contents, title, author and language; and one read in as a new story, its chapters in reading
+ * Ebooks (EPUB 3): a story's book written as one, a chapter to each chapter's heading (`#`, or
+ * `##` under a `#` title, as voxdown's `chapterLevel` finds them), with its table of contents,
+ * title, author and language; and one read in as a new story, its chapters in reading
  * order, ready to be marked up.
  */
 import {
@@ -57,9 +59,20 @@ export function epubOf(
     when: Date;
   },
 ): Uint8Array {
-  const top = paragraphs.some((p) => p.kind === "heading" && p.level === 1) ? 1 : 2;
+  // Its chapters at the level it divides at: the highest used at least twice, as the audiobook's,
+  // else its highest heading's. A heading above them (a part) opens one too.
+  const levels = paragraphs.flatMap((p) => (p.kind === "heading" ? [p.level] : []));
+  const top = chapterLevelOf(levels) ?? levels.reduce((a, b) => Math.min(a, b), 6);
   const chapters: Array<{ title: string; paragraphs: Paragraph[] }> = [];
-  for (const paragraph of paragraphs) {
+  for (const [index, paragraph] of paragraphs.entries()) {
+    // The book's title as its first heading, above its chapters: the title page has it already.
+    if (
+      index === 0 &&
+      paragraph.kind === "heading" &&
+      paragraph.level < top &&
+      words(paragraph.runs) === details.title
+    )
+      continue;
     if (paragraph.kind === "heading" && paragraph.level <= top)
       chapters.push({ title: words(paragraph.runs), paragraphs: [] });
     if (!chapters.length) chapters.push({ title: details.title ?? "Start", paragraphs: [] });

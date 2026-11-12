@@ -654,6 +654,33 @@ if (
   !(await keeper.locator("#list-items li", { hasText: "“Approved recording script”" }).count())
 )
   problems.push("writer: a version kept under a name isn't in Earlier versions by its name");
+// The browser out of room: the version isn't said to be kept, the name stays to try again.
+await keeper.evaluate(() => {
+  window.__add = IDBObjectStore.prototype.add;
+  IDBObjectStore.prototype.add = () => {
+    throw new DOMException("No room", "QuotaExceededError");
+  };
+});
+await keeper.keyboard.press("Escape");
+await keeper.click(".cm-content");
+await keeper.keyboard.press("Control+End");
+await keeper.keyboard.type(" One more line.");
+await keeper.click("#file-menu-button");
+await keeper.click('[data-command="versions"]');
+await keeper.waitForSelector("#list-dialog[open]");
+await keeper.fill(".keep-version input", "Quota test milestone");
+await keeper.keyboard.press("Enter");
+await keeper.waitForTimeout(600);
+if (
+  !(await keeper.isVisible(".keep-failed")) ||
+  (await keeper.inputValue(".keep-version input")) !== "Quota test milestone" ||
+  (await keeper.locator("#list-items li", { hasText: "Quota test milestone" }).count()) ||
+  (await keeper.textContent("#announce"))?.includes("Kept as “Quota test milestone”")
+)
+  problems.push("writer: a version the browser wouldn't store was said to be kept");
+await keeper.evaluate(() => {
+  IDBObjectStore.prototype.add = window.__add;
+});
 await keeper.keyboard.press("Escape");
 await keeping.close();
 
@@ -1262,6 +1289,55 @@ if (!(movedTo >= caretLine && movedTo <= caretLine + 1))
   problems.push(
     `writer: ↓ after scrolling away went from line ${caretLine} to line ${movedTo}, not from the caret`,
   );
+// Thirty versions of the book, half kept before their words were counted: Earlier versions opens
+// without counting them all first (it held the page over half a second).
+await longPage.evaluate(
+  () =>
+    new Promise((resolve) => {
+      const request = indexedDB.open("voxdown-writer");
+      request.onsuccess = () => {
+        const versions = request.result
+          .transaction("versions", "readwrite")
+          .objectStore("versions");
+        const all = versions.getAll();
+        all.onsuccess = () => {
+          const book = all.result.find((version) => version.text.length > 100_000);
+          if (!book) return resolve(undefined);
+          for (let i = 0; i < 30; i++)
+            versions.add({
+              doc: book.doc,
+              at: book.at - (i + 1) * 3_600_000,
+              text: `${book.text}\n\nAnd ${i} more.`,
+              why: "Saved",
+              ...(i % 2 ? { words: 100_000 + i } : {}),
+            });
+          versions.transaction.oncomplete = () => resolve(undefined);
+        };
+      };
+    }),
+);
+await longPage.waitForTimeout(500);
+await longPage.evaluate(() => {
+  window.__long = [];
+});
+await longPage.click("#file-menu-button");
+await longPage.click('[data-command="versions"]');
+await longPage.waitForSelector("#list-dialog[open]");
+await longPage.waitForTimeout(1500);
+const versionsHeld = await longPage.evaluate(() =>
+  window.__long.filter((duration) => duration > 100),
+);
+if (versionsHeld.length)
+  problems.push(
+    `writer: Earlier versions of a 100,000-word book held the page ${versionsHeld.map(Math.round).join(", ")} ms`,
+  );
+const versionRows = await longPage.locator("#list-items li").count();
+const counted = await longPage.locator("#list-items li", { hasText: /\d words/ }).count();
+if (versionRows < 30 || counted !== versionRows)
+  problems.push(
+    `writer: Earlier versions of a long book listed ${versionRows} versions, ${counted} with their words`,
+  );
+await longPage.keyboard.press("Escape");
 await long.close();
 console.log(`writer: a 100,000-word book, slowest key ${slowest} ms, ${gave} speakers given: ok`);
 
@@ -2560,6 +2636,8 @@ console.log("writer: two tabs, a file changed on disk: ok");
 {
   const key = "check-site-key-0123456789";
   const sent = [];
+  // A helper slow to answer, for a moment: what the dialog lets be done meanwhile.
+  let slowHello = false;
   const helperServer = createServer(async (request, response) => {
     const origin = request.headers.origin;
     if (origin !== base) return response.writeHead(403).end();
@@ -2575,6 +2653,7 @@ console.log("writer: two tabs, a file changed on disk: ok");
     if (request.headers.authorization !== `Bearer ${key}`) return response.writeHead(401).end("{}");
     const path = new URL(request.url ?? "/", "http://x").pathname;
     if (path === "/v1/hello") {
+      if (slowHello) await new Promise((done) => setTimeout(done, 1500));
       response.writeHead(200, { "content-type": "application/json" });
       return response.end(
         JSON.stringify({
@@ -2785,9 +2864,20 @@ console.log("writer: two tabs, a file changed on disk: ok");
     problems.push("writer: speakers named in the background for one story were given to another");
   if (!(await writer.textContent("#notice"))?.includes("another story is open now"))
     problems.push("writer: speakers named for a story no longer open went without a word");
+  // The helper slow to answer: the audiobook's dialog does nothing meanwhile (its button, left as
+  // the naming's, named the speakers).
+  slowHello = true;
+  const namingsBefore = sent.filter((request) => request.path === "/v1/tag").length;
   await writer.click("#file-menu-button");
   await writer.click('[data-command="audiobook"]');
+  await writer.waitForTimeout(300);
+  slowHello = false;
+  if (!(await writer.isDisabled("#ai-go")))
+    problems.push("writer: while the helper is found, the dialog's button can be pressed");
+  await writer.evaluate(() => document.querySelector("#ai-go")?.click());
   await writer.waitForSelector("#ai-ready:not([hidden])", { timeout: 5000 }).catch(() => {});
+  if (sent.filter((request) => request.path === "/v1/tag").length !== namingsBefore)
+    problems.push("writer: the audiobook's dialog named the speakers while the helper was found");
   await writer.click("#ai-go");
   await writer
     .waitForSelector(".ai-casting", { timeout: 5000 })

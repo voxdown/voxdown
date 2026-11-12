@@ -60,6 +60,8 @@ let lastNaming: { said: string; held: Node[] } | undefined;
 let behind = false;
 /** Naming the speakers under way: only Stop stops it; the dialog put away lets it go on. */
 let naming = false;
+/** Each opening of the dialog, counted: what a superseded one finds out comes too late to show. */
+let openings = 0;
 
 /** The dialog's Close: Stop while work it would end goes on, which only it ends. */
 function closeSays(working: boolean): void {
@@ -209,6 +211,15 @@ if (copyButton && commandText) copyCommand(copyButton, commandText);
 
 /** Opens the dialog for naming speakers or making an audiobook. */
 export async function openAi(mode: Mode, context: AiContext): Promise<void> {
+  // The speakers still being named: that is what the dialog shows until it's done or stopped.
+  if (naming && mode === "audiobook") {
+    context.notice("The speakers are still being named: make the audiobook once that's done.", {
+      label: "Show",
+      run: () => void openAi("speakers", context),
+    });
+    return;
+  }
+  const opened = ++openings;
   const dialog = $<HTMLDialogElement>("#ai");
   const title = $("#ai-title");
   const connect = $("#ai-connect");
@@ -241,17 +252,23 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
     selected.from === selected.to;
   if (mode === "speakers") sayScopes(context);
   $("#ai-connect-how").hidden = false;
-  progress.textContent = "";
-  result.replaceChildren();
-  // The last naming's result, finished while the writer wrote on: still to be read.
-  if (mode === "speakers" && lastNaming) {
-    progress.textContent = lastNaming.said;
-    result.replaceChildren(...lastNaming.held);
-  }
-  second.hidden = true;
-  go.disabled = false;
+  // Until the helper answers, no button does what it did last time (the audiobook's dialog
+  // named the speakers with the last naming's button).
+  go.disabled = true;
+  go.onclick = null;
+  second.onclick = null;
   connect.hidden = true;
-  ready.hidden = true;
+  if (!naming) {
+    progress.textContent = "";
+    result.replaceChildren();
+    // The last naming's result, finished while the writer wrote on: still to be read.
+    if (mode === "speakers" && lastNaming) {
+      progress.textContent = lastNaming.said;
+      result.replaceChildren(...lastNaming.held);
+    }
+    second.hidden = true;
+    ready.hidden = true;
+  }
   // Opened again while the naming goes on behind: it is watched here again, Stop here to stop it.
   if (naming) behind = false;
   if (!dialog.open) {
@@ -270,19 +287,34 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
     running?.abort();
     running = undefined;
   };
+  if (naming) {
+    // Its progress as it was, Keep writing to put it away again, Stop to stop it.
+    ready.hidden = false;
+    second.hidden = false;
+    second.textContent = "Keep writing";
+    second.onclick = () => dialog.close("behind");
+    closeSays(true);
+    $<HTMLButtonElement>("#ai-close").focus();
+    return;
+  }
 
   const pairing = keptPairing();
   let found: Hello | undefined;
   if (pairing) {
     progress.textContent = "Connecting to this computer…";
+    let why = "";
     try {
       found = await hello(pairing);
     } catch (error) {
       if (error instanceof HelperError && error.unpaired) forgetPairing();
-      $("#ai-connect-why").textContent = (error as Error).message;
+      why = (error as Error).message;
     }
+    // Closed, or opened again for something else, meanwhile: this answer is no longer asked for.
+    if (opened !== openings || !dialog.open) return;
+    $("#ai-connect-why").textContent = why;
     progress.textContent = "";
   }
+  go.disabled = false;
   if (!pairing || !found) {
     connect.hidden = false;
     if (!pairing) $("#ai-connect-why").textContent = "";

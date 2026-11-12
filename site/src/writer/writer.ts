@@ -1019,7 +1019,7 @@ function cancelIdle(): void {
 let versionAt = Date.now();
 /** While writing, and saving by itself, a version is kept at most this often. */
 const SNAPSHOT_EVERY = 10 * 60_000;
-function snapshot(why: string, content = text(), pinned = false): Promise<void> {
+function snapshot(why: string, content = text(), pinned = false): Promise<boolean> {
   versionAt = Date.now();
   return keepVersion({
     doc: file.id,
@@ -1027,7 +1027,16 @@ function snapshot(why: string, content = text(), pinned = false): Promise<void> 
     text: content,
     why,
     ...(pinned ? { pinned: true } : {}),
+    // Counted once, now: Earlier versions then lists a long book's versions without counting.
+    words: proseWords(content),
   });
+}
+
+/** The words of versions kept before their count was, counted once each. */
+const versionWords = new Map<number, number>();
+function wordsOfVersion(version: Version): number | undefined {
+  if (version.words !== undefined) return version.words;
+  return version.key === undefined ? undefined : versionWords.get(version.key);
 }
 
 /** Asks the browser, once, not to clear what the Writer keeps when space runs short. */
@@ -2154,7 +2163,9 @@ const saving = new SaveFlow({
   },
   replaceText: (next) => replaceText(next, "input.disk", allCrlf(next)),
   keep: () => keep(),
-  snapshot: (why, content) => snapshot(why, content),
+  snapshot: async (why, content) => {
+    await snapshot(why, content);
+  },
   versionDue: () => Date.now() - versionAt > SNAPSHOT_EVERY,
   markSaved: (id, content, modified) => markSaved(id, content, modified),
 });
@@ -2711,11 +2722,13 @@ function showList(
   }>,
   /** Something to do above the list (Earlier versions: keep this one under a name). */
   top?: HTMLElement,
-): void {
+): HTMLElement[] {
   const dialog = $<HTMLDialogElement>("#list-dialog");
   $("#list-title").textContent = title;
   $("#list-note").textContent = note;
   $("#list-top").replaceChildren(...(top ? [top] : []));
+  // Each row's line about it, to say more once it is known.
+  const details: HTMLElement[] = [];
   $("#list-items").replaceChildren(
     ...rows.map((row) => {
       const item = document.createElement("li");
@@ -2726,6 +2739,7 @@ function showList(
       heading.textContent = row.title;
       const detail = document.createElement("span");
       detail.textContent = row.detail;
+      details.push(detail);
       words.append(heading, detail);
       if (row.excerpt) {
         const excerpt = document.createElement("span");
@@ -2751,6 +2765,7 @@ function showList(
     }),
   );
   dialog.showModal();
+  return details;
 }
 
 async function showDrafts(): Promise<void> {
@@ -2816,10 +2831,24 @@ async function showVersions(again = false): Promise<void> {
   button.type = "button";
   button.className = "button";
   button.textContent = "Keep this version";
+  // Said where the name was given, and kept there until it is kept.
+  const failed = document.createElement("p");
+  failed.className = "keep-failed";
+  failed.setAttribute("role", "alert");
+  failed.hidden = true;
   const named = async () => {
     const called = name.value.trim();
     if (!called) return name.focus();
-    await snapshot(called, text(), true);
+    button.disabled = true;
+    const stored = await snapshot(called, text(), true);
+    button.disabled = false;
+    if (!stored) {
+      // The name stays to try again; nothing is said to be kept that wasn't.
+      failed.textContent = `“${called}” wasn't kept: the browser wouldn't store it (it may be short of space, or in a private window). Save the story as a file to keep it as it is now.`;
+      failed.hidden = false;
+      name.focus();
+      return;
+    }
     announce(`Kept as “${called}”`);
     void showVersions(true);
   };
@@ -2830,8 +2859,18 @@ async function showVersions(again = false): Promise<void> {
     event.preventDefault();
     void named();
   });
-  keep.append(name, button);
-  showList(
+  keep.append(name, button, failed);
+  // The story now, read once: each version is compared with it.
+  const now = text();
+  const detailOf = (kept: Version) =>
+    [
+      wordsOfVersion(kept) === undefined ? "" : wordsSaid(wordsOfVersion(kept) ?? 0),
+      kept.pinned ? "kept under its name" : "",
+      sameText(kept.text, now) ? "the same as now" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  const details = showList(
     `Earlier versions of ${file.name}`,
     versions.length
       ? "Kept when the story was opened, each time it was saved, every ten minutes of writing and before tidying, and those kept under a name, which are never let go. Going back to one is a change like any other: Undo takes it back."
@@ -2839,8 +2878,8 @@ async function showVersions(again = false): Promise<void> {
     versions
       .map((kept) => ({
         title: kept.pinned ? `“${kept.why}” · ${when(kept.at)}` : `${when(kept.at)} · ${kept.why}`,
-        detail: `${wordsSaid(proseWords(kept.text))}${kept.pinned ? " · kept under its name" : ""}${sameText(kept.text, text()) ? " · the same as now" : ""}`,
-        actions: sameText(kept.text, text())
+        detail: detailOf(kept),
+        actions: sameText(kept.text, now)
           ? []
           : [
               { label: "Compare", run: () => compare(kept) },
@@ -2877,6 +2916,21 @@ async function showVersions(again = false): Promise<void> {
   );
   // Kept under a name just now, or none kept yet: the name's field, for the next.
   if (again || versions.length === 0) name.focus();
+  // Versions kept before their words were counted: counted one at a time once the list shows,
+  // so a long book's list opens at once (counting them all first held the page half a second).
+  const uncounted = versions.flatMap((kept, index) =>
+    wordsOfVersion(kept) === undefined && kept.key !== undefined ? [index] : [],
+  );
+  const countNext = () => {
+    const index = uncounted.shift();
+    const kept = index === undefined ? undefined : versions[index];
+    const detail = index === undefined ? undefined : details[index];
+    if (!kept || kept.key === undefined || !detail?.isConnected) return;
+    versionWords.set(kept.key, proseWords(kept.text));
+    detail.textContent = detailOf(kept);
+    setTimeout(countNext);
+  };
+  setTimeout(countNext);
 }
 
 function goBack(kept: Version): void {

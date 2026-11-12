@@ -6,7 +6,11 @@
 
 /** The same text, whatever its line breaks. */
 export const sameText = (a: string, b: string): boolean =>
-  a === b || a.replace(/\r\n?/g, "\n") === b.replace(/\r\n?/g, "\n");
+  a === b ||
+  // With no carriage return in either, they differ as they are (a long book's versions are
+  // compared with the story in a moment, not rewritten each time).
+  ((a.includes("\r") || b.includes("\r")) &&
+    a.replace(/\r\n?/g, "\n") === b.replace(/\r\n?/g, "\n"));
 
 /**
  * Saves one at a time: a save started while another is under way waits for it, so two never

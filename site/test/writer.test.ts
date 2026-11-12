@@ -616,6 +616,8 @@ describe("saving", () => {
     const sameDate = { text: "Other words.", modified: 10 };
     expect(checkDisk(sameDate, known)).toEqual({ kind: "changed", disk: sameDate });
     expect(sameText("a\r\nb", "a\nb")).toBe(true);
+    expect(sameText("a\nb", "a\nc")).toBe(false);
+    expect(sameText("a\r\nb", "a\nc")).toBe(false);
   });
 
   it("asks before writing over changes made elsewhere, or a file it couldn't read", () => {

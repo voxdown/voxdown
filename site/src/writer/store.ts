@@ -37,6 +37,8 @@ export type Version = {
   why: string;
   /** Kept by the writer under a name of their own: never thinned out. */
   pinned?: boolean;
+  /** Its words, counted when it was kept (versions kept before were counted when listed). */
+  words?: number;
 };
 
 export type Recent = { name: string; handle: FileSystemFileHandle; openedAt: number };
@@ -290,17 +292,23 @@ export function thinVersions<
   return kept.sort((a, b) => b.at - a.at);
 }
 
-/** Keeps a version of a story, unless it is the same as the last one kept; fewer older ones. */
-export async function keepVersion(version: Version): Promise<void> {
+/**
+ * Keeps a version of a story, unless it is the same as the last one kept; fewer older ones.
+ * True once it is stored (or the same was already), false when the browser wouldn't keep it.
+ */
+export async function keepVersion(version: Version): Promise<boolean> {
   try {
     const earlier = await versionsOf(version.doc);
     const last = earlier[0];
     if (last?.text === version.text && !(version.pinned && last.pinned)) {
       // Named as the last one kept: that one takes the name, and is kept for good. (Named again
       // as it is, a version of its own: each name is kept.)
-      if (version.pinned && last.key !== undefined)
-        (await store(VERSIONS, "readwrite")).put({ ...last, why: version.why, pinned: true });
-      return;
+      if (version.pinned && last.key !== undefined) {
+        const writer = await store(VERSIONS, "readwrite");
+        writer.put({ ...last, why: version.why, pinned: true });
+        await finished(writer.transaction);
+      }
+      return true;
     }
     const kept = new Set(thinVersions([version, ...earlier], Date.now()));
     const writer = await store(VERSIONS, "readwrite");
@@ -310,10 +318,15 @@ export async function keepVersion(version: Version): Promise<void> {
       text: version.text,
       why: version.why,
       ...(version.pinned ? { pinned: true } : {}),
+      ...(version.words !== undefined ? { words: version.words } : {}),
     });
     for (const old of earlier) if (!kept.has(old) && old.key !== undefined) writer.delete(old.key);
+    // Stored only once the browser says so: out of space, it says no at the end.
+    await finished(writer.transaction);
+    return true;
   } catch {
-    // Without IndexedDB there are no versions; the draft is all there is.
+    // Without IndexedDB, or without room: there are no versions; the draft is all there is.
+    return false;
   }
 }
 

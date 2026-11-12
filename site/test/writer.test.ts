@@ -28,6 +28,7 @@ import {
   quotesIn,
   speechAt,
   speechOfMark,
+  takenWhole,
 } from "../src/writer/stretch";
 import {
   fileNameFor,
@@ -956,12 +957,27 @@ describe("a reading stopped", () => {
   });
 });
 
+describe("italics, bold or a link taken whole with words selected", () => {
+  it("is said only when words of its own were left out", () => {
+    const text = "She *really did* go [to the shop](http://x.y) home.";
+    const at = (words: string) => [text.indexOf(words), text.indexOf(words) + words.length];
+    const [from, to] = at("did go");
+    expect(takenWhole(text, from as number, to as number)).toBe("*really did*");
+    const [all, end] = at("really did");
+    expect(takenWhole(text, all as number, end as number)).toBeUndefined();
+    const [shop, shopEnd] = at("the shop");
+    expect(takenWhole(text, shop as number, shopEnd as number)).toBe("[to the shop](http://x.y)");
+    const [whole, wholeEnd] = at("to the shop");
+    expect(takenWhole(text, whole as number, wholeEnd as number)).toBeUndefined();
+  });
+});
+
 describe("two quotes in the narrator's words", () => {
   const text = "“Hello,” said Alice. “Goodbye,” said Bob.";
 
   it("gives the second to its speaker and leaves the first as it was", () => {
     const story = parse(text);
-    const [, second] = quotesIn(text, 0, text.length);
+    const [, second] = quotesIn(story, 0, text.length);
     const given = applyChanges(text, giveQuote(story, second as NonNullable<typeof second>, "Bob"));
     expect(given).toBe("“Hello,” said Alice. @Bob “Goodbye,” said Bob.");
     const heard = lines(parse(given)).map((line) => [line.speaker, line.text]);
@@ -969,6 +985,20 @@ describe("two quotes in the narrator's words", () => {
       ["Narrator", "“Hello,” said Alice."],
       ["Bob", "Goodbye,"],
       ["Narrator", "said Bob."],
+    ]);
+  });
+
+  it("are found whole with apostrophes, quotes within quotes, »…« and over two lines", () => {
+    const words = (source: string) =>
+      quotesIn(parse(source), 0, source.length).map((quote) => source.slice(quote.from, quote.to));
+    expect(words("“I don’t know,” said Ann. “It’s late.”")).toEqual([
+      "“I don’t know,”",
+      "“It’s late.”",
+    ]);
+    expect(words("“She said ‘no’ to me,” said Ann.")).toEqual(["“She said ‘no’ to me,”"]);
+    expect(words("»Nun…« fragte der Esel. »Ach«, sagte der Hund.")).toEqual(["»Nun…«", "»Ach«"]);
+    expect(words('"This quote runs\nover two lines," said Bob.')).toEqual([
+      '"This quote runs\nover two lines,"',
     ]);
   });
 

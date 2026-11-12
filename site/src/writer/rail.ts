@@ -285,6 +285,8 @@ export class SceneRail {
     );
     this.shown = { from: first.from, to: last.to };
     const shownBox = this.part("#rail-window");
+    // No scene to place it among: no window over an empty rail.
+    shownBox.hidden = this.scenes.length === 0;
     const y = railY(this.points, first.from);
     shownBox.style.top = `${y}px`;
     const tall = railY(this.points, last.to) - y;

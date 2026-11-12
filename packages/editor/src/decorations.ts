@@ -476,6 +476,29 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
     }
   }
 
+  // A mark hidden while reading that has a warning (a `@/` that ends nothing): shown as a
+  // warning chip, so what the status line counts can be seen where it is.
+  const warnedChip = (mark: EditorMark): boolean => {
+    const wrong = marks.find(
+      (other) => other.kind === "warning" && other.from < mark.to && mark.from < other.to,
+    );
+    if (!wrong || wrong.kind !== "warning") return false;
+    add(
+      mark.from,
+      mark.to,
+      Decoration.replace({
+        widget: new ChipWidget(
+          "warning",
+          state.sliceDoc(mark.from, mark.to),
+          undefined,
+          wrong.message,
+          undefined,
+          mark.from,
+        ),
+      }),
+    );
+    return true;
+  };
   for (const mark of marks) {
     const lineNo = state.doc.lineAt(mark.from).number;
     const showRaw =
@@ -569,12 +592,14 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
       case "ended":
         // Where a character's words stop being theirs: their color stops there.
         if (showRaw) add(mark.from, mark.to, tinted("vxd-name vxd-raw"));
+        else if (warnedChip(mark)) break;
         else if (mark.to < state.doc.length && state.sliceDoc(mark.to, mark.to + 1) === " ")
           add(mark.from, mark.to + 1, Decoration.replace({}));
         else add(mark.from, mark.to, Decoration.replace({}));
         break;
       case "cleared":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-direction vxd-raw" }));
+        else if (warnedChip(mark)) break;
         // The dashes under a direction's words already show where it ends.
         else if (mark.to < state.doc.length && state.sliceDoc(mark.to, mark.to + 1) === " ")
           add(mark.from, mark.to + 1, Decoration.replace({}));

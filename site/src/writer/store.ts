@@ -343,7 +343,19 @@ export async function forgetVersion(key: number): Promise<void> {
 export async function versionsOf(doc: string): Promise<Version[]> {
   try {
     const index = (await store(VERSIONS, "readonly")).index("doc");
-    const all = (await done(index.getAll(doc))) as Version[];
+    // One at a time, each read a moment of its own: a long book's thirty versions read at once
+    // held the page.
+    const all = await new Promise<Version[]>((resolve, reject) => {
+      const found: Version[] = [];
+      const request = index.openCursor(IDBKeyRange.only(doc));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return resolve(found);
+        found.push(cursor.value as Version);
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error);
+    });
     return all.sort((a, b) => b.at - a.at);
   } catch {
     return [];

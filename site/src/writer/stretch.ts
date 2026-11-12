@@ -64,10 +64,18 @@ export type StretchContext = {
 const hasWords = (text: string) => /[\p{L}\p{N}]/u.test(text);
 
 /** The passage at `at` in a paragraph: a speech with words, the narrator's included. */
-export function speechAt(story: Story, at: number): Speech | undefined {
+export function speechAt(story: Story, at: number, headings = false): Speech | undefined {
   for (const block of story.blocks) {
-    if (block.kind !== "paragraph" || at < block.range.from || at > block.range.to) continue;
-    for (const line of block.lines) {
+    if (at < block.range.from || at > block.range.to) continue;
+    // A heading is heard too: Who and How give it a voice or a way of saying it, as they do
+    // words selected in it (it is no passage under the pointer).
+    const lines =
+      block.kind === "paragraph"
+        ? block.lines
+        : block.kind === "heading" && headings
+          ? [block.line]
+          : [];
+    for (const line of lines) {
       if (at < line.range.from || at > line.range.to) continue;
       let found: Speech | undefined;
       for (const item of line.items) {
@@ -130,25 +138,44 @@ export function dialogueTag(before: string, after: string): string | undefined {
   return found;
 }
 
+/**
+ * Italics, bold or a link that words selected from `from` to `to` start or end inside, with words
+ * of its own left out: a mark can't go inside its signs, so all of it is taken (core
+ * `wordsWithin`), and the writer is told.
+ */
+export function takenWhole(source: string, from: number, to: number): string | undefined {
+  for (const at of [from, to]) {
+    const lineStart = source.lastIndexOf("\n", at - 1) + 1;
+    const lineEnd = source.indexOf("\n", at);
+    const line = source.slice(lineStart, lineEnd < 0 ? source.length : lineEnd);
+    for (const span of line.matchAll(
+      /\*\*[^*\n]+?\*\*|\*[^*\n]+?\*|__[^_\n]+?__|\b_[^_\n]+?_\b|!?\[[^\]\n]*\]\([^)\n]*\)/g,
+    )) {
+      const start = lineStart + span.index;
+      const end = start + span[0].length;
+      if (at <= start || at >= end) continue;
+      const left =
+        source.slice(start, Math.max(start, from)) + source.slice(Math.min(end, to), end);
+      // Its words beyond the selection, not only its signs or a link's address.
+      const words = left.replace(/\]\([^)\n]*\)/, "");
+      if (/[\p{L}\p{N}]/u.test(words)) return span[0];
+    }
+  }
+  return undefined;
+}
+
 /** A quote in a stretch of the source: where it opens and closes, and its words. */
 export type Quote = { from: number; to: number; text: string };
 
-/** Every quote with words between `from` and `to`, in the source, in order. */
-export function quotesIn(source: string, from: number, to: number): Quote[] {
-  const quotes: Quote[] = [];
-  for (const found of source.slice(from, to).matchAll(/[“"«„「『‘]([^”"»“」』’\n]+)[”"»“」』’]/gu))
-    if (/[\p{L}\p{N}]/u.test(found[1] ?? ""))
-      quotes.push({
-        from: from + found.index,
-        to: from + found.index + found[0].length,
-        text: found[1] as string,
-      });
-  return quotes;
-}
-
-/** The first quote between `from` and `to`, in the source. */
-export function firstQuote(source: string, from: number, to: number): Quote | undefined {
-  return quotesIn(source, from, to)[0];
+/**
+ * Every quote with words that opens between `from` and `to`, in order, as the format reads them
+ * (§5.6): an apostrophe in a word, a quote within a quote, `»…«` and a quote over two lines too
+ * (a pattern of the Writer's own took `don’t`'s apostrophe for a closing mark).
+ */
+export function quotesIn(story: Story, from: number, to: number): Quote[] {
+  return quotesOf(story)
+    .filter((quote) => quote.from >= from && quote.from < to)
+    .map((quote) => ({ from: quote.from, to: quote.to, text: quote.text }));
 }
 
 /** The next quote after `after` that wants a speaker (story-data.ts), round to the first. */
@@ -373,7 +400,7 @@ export class StretchTools {
     this.bySelection = anchor === undefined;
     const scope = this.scopeAt(at);
     const story = scope.story;
-    const speech = speechAt(story, scope.at(at));
+    const speech = speechAt(story, scope.at(at), true);
     const inScope = cursor === undefined ? undefined : scope.at(cursor);
     if (!speech) {
       this.nothingHere();
@@ -388,7 +415,7 @@ export class StretchTools {
     // The quote the cursor is in, or else the first.
     const quotes =
       speech.speaker.toLowerCase() === story.meta.narrator.toLowerCase() && !speech.quoted
-        ? quotesIn(source, speech.range.from, speech.range.to)
+        ? quotesIn(story, speech.range.from, speech.range.to)
         : [];
     const quote =
       quotes.find(
@@ -515,7 +542,7 @@ export class StretchTools {
     this.bySelection = anchor === undefined;
     const scope = this.scopeAt(at);
     const story = scope.story;
-    const speech = speechAt(story, scope.at(at));
+    const speech = speechAt(story, scope.at(at), true);
     if (!speech) {
       this.nothingHere();
       return;
@@ -560,7 +587,7 @@ export class StretchTools {
     const set = (direction: string | null) => {
       const now = this.scopeAt(passageFrom);
       const fresh = now.story;
-      const target = speechAt(fresh, now.at(passageFrom));
+      const target = speechAt(fresh, now.at(passageFrom), true);
       if (!target) {
         this.closePopover(true);
         return;
@@ -596,6 +623,8 @@ export class StretchTools {
         this.context.announce?.(
           direction ? `Said ${direction} now.` : "The direction is taken out.",
         );
+      const whole = done && part ? takenWhole(fresh.source, part.from, part.to) : undefined;
+      if (whole) this.sayTakenWhole(whole);
       // A speech broken by its tag: the quote after the tag carries the direction on (§5.6), so
       // the core kept it as it was with `@()`. Said, with the other way one click away.
       const kept = changes.filter((change) => /@\(\)\s?/.test(change.insert));
@@ -692,10 +721,8 @@ export class StretchTools {
     let last = end;
     while (first < last && /\s/.test(source[first] ?? "")) first++;
     while (last > first && /\s/.test(source[last - 1] ?? "")) last--;
-    const lineStart = source.lastIndexOf("\n", first - 1) + 1;
-    const lineEnd = source.indexOf("\n", last);
     if (
-      quotesIn(source, lineStart, lineEnd < 0 ? source.length : lineEnd).some(
+      quotesIn(scope.story, 0, last).some(
         (quote) =>
           (quote.from === first && quote.to === last) ||
           (quote.from + 1 === first && quote.to - 1 === last),
@@ -747,10 +774,18 @@ export class StretchTools {
     if (name && words.quoted)
       return `The words selected can’t be given to ${name} alone: words in a quote are said by the quote’s voice. Select words outside quotes, or a whole quote.`;
     if (words.glued)
-      return "The words selected touch the words beside them with no space between (an unspaced dash?), where a mark would change how the book reads. Select up to a space, or put spaces around the dash.";
+      return "The words selected run into what is beside them with no space between (an unspaced dash, a bracket), where a mark would change how the book reads. Select up to a space, or put spaces around a dash.";
     return name
       ? `The words selected can’t be given to ${name} alone without changing who says other words, so nothing changed.`
       : "The words selected can’t be said that way alone without changing how other words are said, so nothing changed.";
+  }
+
+  /** Said when italics, bold or a link went whole with the words selected. */
+  private sayTakenWhole(whole: string): void {
+    const shown = whole.length > 40 ? `${whole.slice(0, 39)}…` : whole;
+    this.context.notice?.(
+      `All of “${shown}” went with the words selected: a mark can’t go inside italics, bold or a link.`,
+    );
   }
 
   /** Said when a selection in a long book runs beyond what can be changed at once. */
@@ -806,7 +841,7 @@ export class StretchTools {
   private giveTo(from: number, name: string, quote?: Quote): void {
     const scope = this.scopeAt(from);
     const fresh = scope.story;
-    const target = speechAt(fresh, scope.at(from));
+    const target = speechAt(fresh, scope.at(from), true);
     if (!target) {
       this.closePopover(true);
       return;
@@ -837,6 +872,17 @@ export class StretchTools {
       this.tooFar();
       return;
     }
+    if (
+      part &&
+      target.quoted &&
+      part.from >= target.range.from &&
+      part.to <= target.range.to &&
+      target.speaker.toLowerCase() === name.toLowerCase()
+    ) {
+      this.context.notice?.(`Those words are ${name}’s already.`);
+      this.closePopover(true);
+      return;
+    }
     if (part && target.quoted && part.from >= target.range.from && part.to <= target.range.to) {
       this.context.notice?.(
         `A quote is said by one voice: to give ${name} part of it, close the quote where that part begins and open another.`,
@@ -859,8 +905,14 @@ export class StretchTools {
         ? setSpeakerWithin(fresh, part.from, part.to, name)
         : setSpeaker(fresh, target, name);
       // Words without quotes given back to the line's own voice (the narrator): their marks
-      // taken out, as for the same words selected.
-      if (!part && given.length === 0 && !target.quoted)
+      // taken out, as for the same words selected. (Not narration holding quotes: Who there is
+      // about its quote, never all of its words.)
+      if (
+        !part &&
+        given.length === 0 &&
+        !target.quoted &&
+        quotesIn(fresh, target.range.from, target.range.to).length === 0
+      )
         given = setSpeakerWithin(fresh, target.textRange.from, target.textRange.to, name);
       changes = withoutSpareMarks(fresh, given);
       // Someone new, in a story with a cast: added to it in the same step, so the name raises
@@ -884,13 +936,25 @@ export class StretchTools {
       this.closePopover(true);
       return;
     }
-    const docChanges = scope.back(changes);
+    let docChanges: TextChange[];
+    try {
+      docChanges = scope.back(changes);
+    } catch (error) {
+      this.context.apply([], (error as Error).message);
+      this.closePopover(true);
+      return;
+    }
+    const lineStart = fresh.source.lastIndexOf("\n", target.range.from - 1) + 1;
     const done = this.context.apply(
       docChanges,
       part
         ? this.whyNot(fresh, part, name)
-        : `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,
+        : /^[ \t]*>/.test(fresh.source.slice(lineStart, target.range.from))
+          ? "This line starts with “>”, which VoxDown reads as text (block quotes aren’t part of it): a mark after it would leave the “>” unheard, so nothing changed. Take the “>” out, or select the words to give."
+          : `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,
     );
+    const whole = done && part ? takenWhole(fresh.source, part.from, part.to) : undefined;
+    if (whole) this.sayTakenWhole(whole);
     if (done) {
       this.context.announce?.(`${name} says this now.`);
       // The quote given: the first in the passage, when it is narration that holds quotes.

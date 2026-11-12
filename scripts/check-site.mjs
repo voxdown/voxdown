@@ -654,6 +654,15 @@ if (
   !(await keeper.locator("#list-items li", { hasText: "“Approved recording script”" }).count())
 )
   problems.push("writer: a version kept under a name isn't in Earlier versions by its name");
+// The same words under the same name again: said so, one row still.
+await keeper.fill(".keep-version input", "Approved recording script");
+await keeper.keyboard.press("Enter");
+await keeper.waitForTimeout(400);
+if (
+  !(await keeper.textContent(".keep-failed"))?.includes("already") ||
+  (await keeper.locator("#list-items li", { hasText: "“Approved recording script”" }).count()) !== 1
+)
+  problems.push("writer: the same version kept twice under one name made two rows");
 // The browser out of room: the version isn't said to be kept, the name stays to try again.
 await keeper.evaluate(() => {
   window.__add = IDBObjectStore.prototype.add;
@@ -1289,6 +1298,27 @@ if (!(movedTo >= caretLine && movedTo <= caretLine + 1))
   problems.push(
     `writer: ↓ after scrolling away went from line ${caretLine} to line ${movedTo}, not from the caret`,
   );
+// Two short paragraphs selected at the end of a long book, said softly: both, not the last alone
+// (a place before the paragraph read was mapped into its front matter).
+await longPage.click(".cm-content");
+await longPage.keyboard.press("Control+End");
+await longPage.keyboard.insertText("\n\nShort one.\n\nShort two.");
+await longPage.waitForTimeout(300);
+await longPage.keyboard.press("Shift+ArrowUp");
+await longPage.keyboard.press("Shift+ArrowUp");
+await longPage.keyboard.press("Shift+Home");
+await longPage.keyboard.press("Control+j");
+await longPage.waitForSelector(".popover:not([hidden]) input", { timeout: 3000 }).catch(() => {});
+await longPage.keyboard.type("softly");
+await longPage.keyboard.press("Enter");
+await longPage.waitForTimeout(500);
+{
+  const end = await longPage.locator(".cm-content").innerText();
+  if (!end.includes("@(softly) Short one.") || !end.includes("@(softly) Short two."))
+    problems.push(
+      `writer: two short paragraphs selected in a long book weren't both said softly: “${end.slice(-80)}”`,
+    );
+}
 // Thirty versions of the book, half kept before their words were counted: Earlier versions opens
 // without counting them all first (it held the page over half a second).
 await longPage.evaluate(
@@ -1316,7 +1346,9 @@ await longPage.evaluate(
       };
     }),
 );
-await longPage.waitForTimeout(500);
+// The side drawn again after the edit above, and the worker's reading, done first: only the
+// list's own work is measured.
+await longPage.waitForTimeout(3000);
 await longPage.evaluate(() => {
   window.__long = [];
 });
@@ -2050,6 +2082,37 @@ if (!both.endsWith("@Ann “Hi,” said Ann. @Bob “Bye,” said Bob."))
   problems.push(
     `writer: the tagged name wasn't offered first for a quote carrying another's speech: ${JSON.stringify(both.slice(-60))}`,
   );
+// Quotes as books write them: an apostrophe in a word, a quote over two lines. Each found whole,
+// its tag's name offered first, given as a quote (the apostrophe was read as the quote's end: no
+// name offered, a later quote given to @Narrator, and the quote over two lines never given).
+for (const [line, given] of [
+  ["“I don’t know,” said Ann. “It’s late.”", "@Ann “I don’t know,” said Ann. “It’s late.”"],
+  [
+    '"This quote runs\nover two lines," said Bob.',
+    '@Bob "This quote runs\nover two lines," said Bob.',
+  ],
+]) {
+  await author.click(".cm-content");
+  await author.keyboard.press("Control+a");
+  await author.keyboard.insertText(line);
+  await settled();
+  await author.keyboard.press("Control+Home");
+  await author.keyboard.press("Control+Shift+K");
+  await author.waitForTimeout(300);
+  await author.keyboard.press("Control+k");
+  await author.waitForSelector(".speaker-list");
+  await author.keyboard.press("Enter");
+  await settled();
+  const loop = await kept();
+  if (!loop.endsWith(given) || loop.includes("@Narrator"))
+    problems.push(
+      `writer: the tagging loop gave ${JSON.stringify(line)} as ${JSON.stringify(loop.slice(-70))}`,
+    );
+  await author.keyboard.press("Control+Shift+K");
+  await author.waitForTimeout(300);
+  if (!(await author.textContent("#notice"))?.includes("Every quote has its speaker"))
+    problems.push(`writer: after the tagging loop on ${JSON.stringify(line)}, a quote still waits`);
+}
 // Words selected across voices, with every mark showing: given alone, the marks inside them
 // gone and the voice after them back; and Undo puts it all as it was. (A selection beyond a
 // passage changed the whole passage.)
@@ -2077,6 +2140,16 @@ await settled();
 if (!(await kept()).includes("One @Gerald two three @/ four five."))
   problems.push("writer: Undo didn't put back words given across voices");
 await author.keyboard.press("Control+Shift+M");
+// A `@/` that ends nothing, hidden while reading: its warning is seen where it is, the cursor
+// elsewhere (the status line counted it, the page showed nothing).
+await author.click(".cm-content");
+await author.keyboard.press("Control+a");
+await author.keyboard.insertText("Hello @/ there.\n\nAnother line.");
+await settled();
+await author.keyboard.press("Control+End");
+await author.waitForTimeout(300);
+if (!(await author.locator(".cm-content .vxd-chip-warning", { hasText: "@/" }).count()))
+  problems.push("writer: a hidden @/ with a warning shows nothing where it is");
 await authoring.close();
 console.log("writer: speaker, direction, undo, search, move, cast, fix: ok");
 

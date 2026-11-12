@@ -217,6 +217,20 @@ describe("a story that declares an older version", () => {
       "---\nvoxdown: 1.2\ncast:\n  Gerald:\n---\nWhenever I find @Gerald myself pausing @/ here.",
     );
   });
+
+  it("over several lines, changes the front matter apart from the words", () => {
+    const source =
+      "---\nvoxdown: 1.1\ncast:\n  Gerald:\n---\n\nA first paragraph.\n\nOne line here.\nAnd a second.";
+    const from = source.indexOf("line here");
+    const to = source.indexOf("And a") + "And a".length;
+    const changes = setSpeakerWithin(parse(source), from, to, "Gerald");
+    const frontEnd = source.indexOf("---\n", 4) + 4;
+    // None runs from the front matter over the paragraph before the words.
+    expect(changes.every((change) => change.to <= frontEnd || change.from >= frontEnd)).toBe(true);
+    expect(applyChanges(source, changes)).toBe(
+      "---\nvoxdown: 1.2\ncast:\n  Gerald:\n---\n\nA first paragraph.\n\nOne @Gerald line here.\n@Gerald And a @/ second.",
+    );
+  });
 });
 
 describe("what words selected are", () => {
@@ -230,5 +244,44 @@ describe("what words selected are", () => {
     expect(at("very")).toMatchObject({ speakers: ["Narrator"], glued: true, quoted: false });
     expect(at("It was")).toMatchObject({ glued: false });
     expect(at("Go")).toMatchObject({ speakers: ["Mara"], quoted: true });
+  });
+});
+
+describe("words selected at a line's own signs", () => {
+  it("puts the mark after a heading's # and a list's marker, before a > (text, §11)", () => {
+    expect(
+      edited("## Ann's lament\n", "Ann's lament", (s, a, b) => setSpeakerWithin(s, a, b, "Mara"))
+        ?.text,
+    ).toBe("## @Mara Ann's lament\n");
+    expect(
+      edited("- Item one here.\n", "Item one", (s, a, b) => setSpeakerWithin(s, a, b, "Mara"))
+        ?.text,
+    ).toBe("- @Mara Item one @/ here.\n");
+    expect(
+      edited("> She said nothing at all.\n", "She", (s, a, b) => setSpeakerWithin(s, a, b, "Mara"))
+        ?.text,
+    ).toBe("@Mara > She @/ said nothing at all.\n");
+    expect(
+      edited("> She said nothing.\n", "She said", (s, a, b) => setDirectionWithin(s, a, b, "dryly"))
+        ?.text,
+    ).toBe("@(dryly) > She said @() nothing.\n");
+  });
+
+  it("takes a whole link when some of its words are chosen", () => {
+    expect(
+      edited("See [the shop](http://x.y) now.\n", "the shop", (s, a, b) =>
+        setSpeakerWithin(s, a, b, "Mara"),
+      )?.text,
+    ).toBe("See @Mara [the shop](http://x.y) @/ now.\n");
+  });
+
+  it("gives back before a quote's opening mark, not inside it", () => {
+    const quoted = "“Hello,” said Ann, “how are you?”\n";
+    expect(
+      edited(quoted, "said Ann", (s, a, b) => setDirectionWithin(s, a, b, "dryly"))?.text,
+    ).toBe("“Hello,” @(dryly) said Ann, @() “how are you?”\n");
+    expect(edited(quoted, "said Ann", (s, a, b) => setSpeakerWithin(s, a, b, "Mara"))?.text).toBe(
+      "“Hello,” @Mara said Ann, @/ “how are you?”\n",
+    );
   });
 });

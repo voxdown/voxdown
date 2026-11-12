@@ -88,13 +88,19 @@ export function paragraphScope(source: string, place: number, until = place): Sc
   const offset = from - start;
   return {
     story: parse(text),
-    at: (at) => at - offset,
+    // Before the paragraph: outside the scope (mapped on, a place a little before it fell in the
+    // front matter, and a selection over the paragraph before was read as this one alone).
+    at: (at) => (at < from ? -1 : at - offset),
     toDoc: (at) => (at < start ? at : at + offset),
     back: (changes) =>
-      changes.map((change) =>
-        change.from < start
+      changes.map((change) => {
+        // From the front matter into the paragraph: what lies between them in the story isn't
+        // here to be put back. Never written wrong: the edit is refused.
+        if (change.from < start && change.to > start)
+          throw new Error("That can’t be changed here at once: change the words in two steps.");
+        return change.from < start
           ? { ...change }
-          : { from: change.from + offset, to: change.to + offset, insert: change.insert },
-      ),
+          : { from: change.from + offset, to: change.to + offset, insert: change.insert };
+      }),
   };
 }

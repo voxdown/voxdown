@@ -705,15 +705,20 @@ function wordsWithin(source: string, from: number, to: number): Range | undefine
   // A heading's `#`, a quotation's `>` or a list's marker belongs to its line, not its words: a
   // mark goes after it, never before (where it made the line a paragraph).
   const lineStart = source.lastIndexOf("\n", start - 1) + 1;
-  const marker = /^[ \t]*(?:#{1,6}[ \t]+|>[ \t]*|[-+*][ \t]+|\d{1,9}[.)][ \t]+)/.exec(
+  const marker = /^[ \t]*(?:#{1,6}[ \t]+|[-+*][ \t]+|\d{1,9}[.)][ \t]+)/.exec(
     source.slice(lineStart, Math.max(start, lineStart + 12)),
   );
   if (marker && start < lineStart + marker[0].length) start = lineStart + marker[0].length;
+  // A `>` before the words is text like any other (§11): taken with them, so the mark goes
+  // before it (after it, the `>` alone before a mark went unheard).
+  const lead = /^([ \t]*)>[> \t]*$/.exec(source.slice(lineStart, start));
+  if (lead) start = lineStart + (lead[1]?.length ?? 0);
   // Words in italics or bold, some of them chosen: all of them, so no mark falls inside the signs.
   const lineEnd = source.indexOf("\n", start);
   const line = source.slice(lineStart, lineEnd < 0 ? source.length : lineEnd);
+  // A link's words, some of them chosen: the whole link, its address too.
   for (const emphasis of line.matchAll(
-    /\*\*[^*\n]+?\*\*|\*[^*\n]+?\*|__[^_\n]+?__|\b_[^_\n]+?_\b/g,
+    /\*\*[^*\n]+?\*\*|\*[^*\n]+?\*|__[^_\n]+?__|\b_[^_\n]+?_\b|!?\[[^\]\n]*\]\([^)\n]*\)/g,
   )) {
     const from = lineStart + (emphasis.index ?? 0);
     const to = from + emphasis[0].length;
@@ -791,9 +796,26 @@ function byLines(
     changed = true;
   }
   if (!changed) return [];
-  // One change, from the first character changed to the last.
-  const before = story.source;
-  const after = current.source;
+  // The front matter's change (the version `@/` needs, a name added to the cast) apart from the
+  // words': as one, a change ran from the front matter over every paragraph before the words,
+  // which a host editing a paragraph alone (a long book) could only put back wrong.
+  const frontBefore = story.frontMatter ? story.frontMatter.range.to : 0;
+  const frontAfter = current.frontMatter ? current.frontMatter.range.to : 0;
+  if (
+    story.frontMatter &&
+    current.frontMatter &&
+    story.source.slice(frontBefore) !== current.source.slice(frontAfter)
+  )
+    return [
+      ...between(story.source.slice(0, frontBefore), current.source.slice(0, frontAfter), 0),
+      ...between(story.source.slice(frontBefore), current.source.slice(frontAfter), frontBefore),
+    ];
+  return between(story.source, current.source, 0);
+}
+
+/** One change, from the first character `before` and `after` differ at to the last; none if the same. */
+function between(before: string, after: string, offset: number): TextChange[] {
+  if (before === after) return [];
   let head = 0;
   while (head < before.length && head < after.length && before[head] === after[head]) head++;
   let tail = 0;
@@ -803,7 +825,13 @@ function byLines(
     before[before.length - 1 - tail] === after[after.length - 1 - tail]
   )
     tail++;
-  return [{ from: head, to: before.length - tail, insert: after.slice(head, after.length - tail) }];
+  return [
+    {
+      from: offset + head,
+      to: offset + before.length - tail,
+      insert: after.slice(head, after.length - tail),
+    },
+  ];
 }
 
 /**
@@ -1504,6 +1532,9 @@ function giveBack(story: Story, char: Heard, voice: Voice): { at: number; insert
   } else {
     // Within a stretch, a mark needs no letter or digit straight before it (§5.2).
     at = char.at;
+    // Just inside an opening quotation mark: before it, so the quote opens as it is said
+    // (`said Ann, @() “how…`, not `“@()how…`).
+    if (/[“‘«„「『]/u.test(source[at - 1] ?? "") && /\s/u.test(source[at - 2] ?? " ")) at--;
     if (/[\p{L}\p{N}]/u.test(source[at - 1] ?? "")) return null;
   }
   // A direction the groups around give anyway comes back with `@()` (§6.3), and follows them.

@@ -1250,7 +1250,8 @@ function showCounts({ words, said, voices, heard }: Counts): void {
     `${plural(words, "word")}${since || goal ? ` (${signed}${goal})` : ""}`,
     plural(said, "line said", "lines said"),
     plural(voices, "voice"),
-    plural(scenes, "scene"),
+    // None yet: nothing said of them (a story without headings showed “0 scenes”).
+    ...(scenes > 0 ? [plural(scenes, "scene")] : []),
     // How long it takes to hear: what is read aloud, and its pauses, not what is printed.
     ...(heard > 0 ? [timeToHear(heard)] : []),
   ].join(" · ");
@@ -2839,6 +2840,14 @@ async function showVersions(again = false): Promise<void> {
   const named = async () => {
     const called = name.value.trim();
     if (!called) return name.focus();
+    // The same words under the same name: one row is enough.
+    const now = text();
+    if (versions.some((kept) => kept.pinned && kept.why === called && sameText(kept.text, now))) {
+      failed.textContent = `The story as it is now is kept as “${called}” already.`;
+      failed.hidden = false;
+      name.focus();
+      return;
+    }
     button.disabled = true;
     const stored = await snapshot(called, text(), true);
     button.disabled = false;
@@ -2864,6 +2873,7 @@ async function showVersions(again = false): Promise<void> {
   const now = text();
   const detailOf = (kept: Version) =>
     [
+      kept.pinned ? when(kept.at) : "",
       wordsOfVersion(kept) === undefined ? "" : wordsSaid(wordsOfVersion(kept) ?? 0),
       kept.pinned ? "kept under its name" : "",
       sameText(kept.text, now) ? "the same as now" : "",
@@ -2877,7 +2887,8 @@ async function showVersions(again = false): Promise<void> {
       : "None yet: a version is kept when the story is opened or saved, and every ten minutes of writing. Keep one now under a name of your own.",
     versions
       .map((kept) => ({
-        title: kept.pinned ? `“${kept.why}” · ${when(kept.at)}` : `${when(kept.at)} · ${kept.why}`,
+        // A name in full, its date below it: a long name cut its date off.
+        title: kept.pinned ? `“${kept.why}”` : `${when(kept.at)} · ${kept.why}`,
         detail: detailOf(kept),
         actions: sameText(kept.text, now)
           ? []
@@ -3350,6 +3361,9 @@ function passageAtCursor(): number {
     let last = to;
     while (last > from && /\s/.test(view.state.sliceDoc(last - 1, last))) last--;
     head = Math.max(from, last - 1);
+    // A quote selected from its opening mark (Next quote): the passage it opens in, though it
+    // may end on the next line (a quote over two lines was looked for in the line it ends on).
+    if (/^[“"«»„‘「『]/u.test(view.state.sliceDoc(from, from + 1))) head = from + 1;
   }
   // A long book's from its paragraph alone, or as the worker last read it: reading the whole
   // book again here, just after a give, held the page a fifth of a second on a slow computer.

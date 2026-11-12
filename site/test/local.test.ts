@@ -1,7 +1,16 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { type Speech, type Story, applyChanges, parse, setDirection, setSpeaker } from "voxdown";
+import {
+  type Speech,
+  type Story,
+  applyChanges,
+  parse,
+  setDirection,
+  setDirectionWithin,
+  setSpeaker,
+  setSpeakerWithin,
+} from "voxdown";
 import { paragraphScope } from "../src/writer/local";
 import { nextNarratedQuote } from "../src/writer/stretch";
 
@@ -50,6 +59,20 @@ describe("an edit in a long book's paragraph alone", () => {
     );
     expect(applyChanges(STORY, how)).toContain("@Ann (softly) “Me.”");
     expect(there.toDoc(there.at(ann))).toBe(ann);
+  });
+
+  it("reads a place before its paragraph as outside it, the paragraph before however short", () => {
+    // Shorter than the front matter: mapped on, it fell inside the scope's own front matter, and
+    // a selection over both paragraphs was taken as the second alone.
+    const source =
+      "---\ntitle: A story with a long title\nauthor: Someone\n---\n\nShort.\n\nTwo here.\n";
+    const scope = paragraphScope(source, source.indexOf("Two"));
+    if (!scope) throw new Error("no scope");
+    expect(scope.at(source.indexOf("Short"))).toBeLessThan(0);
+    expect(scope.toDoc(scope.at(source.indexOf("Two")))).toBe(source.indexOf("Two"));
+    const both = paragraphScope(source, source.indexOf("Short"), source.indexOf("here"));
+    expect(both?.at(source.indexOf("Short"))).toBeGreaterThanOrEqual(0);
+    expect(both?.story.source).toContain("Short.\n\nTwo here.");
   });
 
   it("isn't taken where the paragraph doesn't stand alone", () => {
@@ -117,6 +140,53 @@ describe("the paragraph shortcut, against the whole story", () => {
       expect(differ).toEqual([]);
       expect(taken).toBeGreaterThan(0);
       // Every passage of a book, edited twice each way: more time than a test usually needs.
+    },
+    60_000,
+  );
+
+  it.each(books)(
+    "gives words selected over one to three paragraphs as the whole story does, in $name",
+    ({ source }) => {
+      const whole = parse(source);
+      // Seeded, so a failure comes back the same.
+      let seed = 7;
+      const random = () => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return seed / 2147483648;
+      };
+      const paragraphs = whole.blocks.filter((block) => block.kind === "paragraph");
+      const run = (story: Story, from: number, to: number, how: "speaker" | "direction") => {
+        try {
+          return how === "speaker"
+            ? setSpeakerWithin(story, from, to, "Tester")
+            : setDirectionWithin(story, from, to, "softly");
+        } catch (error) {
+          return `refused: ${(error as Error).message}`;
+        }
+      };
+      const differ: string[] = [];
+      let taken = 0;
+      for (let round = 0; round < 25 && paragraphs.length > 0; round++) {
+        const first = Math.floor(random() * paragraphs.length);
+        const last = Math.min(paragraphs.length - 1, first + Math.floor(random() * 3));
+        const start = paragraphs[first]?.range.from ?? 0;
+        const end = paragraphs[last]?.range.to ?? 0;
+        const from = start + Math.floor(random() * Math.max(1, (end - start) / 2));
+        const to = Math.max(from + 1, end - Math.floor(random() * Math.max(1, (end - from) / 2)));
+        // As the Writer reads them in a long book: the paragraphs the selection runs over.
+        const scope = paragraphScope(source, from, to);
+        if (!scope || scope.at(from) < 0) continue;
+        taken++;
+        for (const how of ["speaker", "direction"] as const) {
+          const local = run(scope.story, scope.at(from), scope.at(to), how);
+          const everywhere = run(whole, from, to, how);
+          const a = typeof local === "string" ? local : applyChanges(source, scope.back(local));
+          const b = typeof everywhere === "string" ? everywhere : applyChanges(source, everywhere);
+          if (a !== b) differ.push(`${how} ${from}-${to}`);
+        }
+      }
+      expect(differ).toEqual([]);
+      if (paragraphs.length > 3) expect(taken).toBeGreaterThan(0);
     },
     60_000,
   );

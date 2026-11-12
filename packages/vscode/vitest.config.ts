@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineProject } from "vitest/config";
-import { workspaceAliases } from "../../vitest.shared";
+import { setupFiles, workspaceAliases } from "../../vitest.shared";
 
 export default defineProject({
   resolve: {
@@ -13,5 +13,5 @@ export default defineProject({
       },
     ],
   },
-  test: { name: "vscode", include: ["test/**/*.test.ts"] },
+  test: { name: "vscode", setupFiles, include: ["test/**/*.test.ts"] },
 });

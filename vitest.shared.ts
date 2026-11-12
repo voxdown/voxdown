@@ -20,3 +20,6 @@ export const workspaceAliases = [
  * tests' own budgets (test-support/timing.ts), not this.
  */
 export const testTimeout = Math.max(30_000, Number(process.env.FUZZ_RUNS ?? 0) * 60);
+
+/** Run before each project's tests: a turn of the event loop after each test (yield.ts). */
+export const setupFiles = [source("./test-support/yield.ts")];

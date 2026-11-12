@@ -1,7 +1,7 @@
 import { defineProject } from "vitest/config";
-import { testTimeout, workspaceAliases } from "../../vitest.shared";
+import { setupFiles, testTimeout, workspaceAliases } from "../../vitest.shared";
 
 export default defineProject({
   resolve: { alias: workspaceAliases },
-  test: { name: "cli", testTimeout, include: ["test/**/*.test.ts"] },
+  test: { name: "cli", testTimeout, setupFiles, include: ["test/**/*.test.ts"] },
 });

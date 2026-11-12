@@ -2,7 +2,7 @@
   "name": "voxdown-vscode",
   "displayName": "VoxDown",
   "description": "VoxDown stories in VS Code: syntax colors, warnings as you type, snippets, an outline, and a live script and book preview.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "voxdown",
   "private": true,
   "license": "MIT",

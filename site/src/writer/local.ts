@@ -59,12 +59,13 @@ function leavesOpen(head: string, text: string): boolean {
 }
 
 /** The paragraph at `place` with the front matter, as a scope of its own; undefined if it doesn't stand alone. */
-export function paragraphScope(source: string, place: number): Scope | undefined {
+export function paragraphScope(source: string, place: number, until = place): Scope | undefined {
   const front = /^---\n[\s\S]*?\n---[ \t]*(?:\n|$)/.exec(source)?.[0] ?? "";
   if (place < front.length) return undefined;
   const before = source.lastIndexOf("\n\n", place - 1);
   const from = before < front.length ? front.length : before + 2;
-  const after = source.indexOf("\n\n", place);
+  // To the paragraph `until` is in: a selection over several, read as one stretch.
+  const after = source.indexOf("\n\n", Math.max(place, until));
   const to = after < 0 ? source.length : after;
   const paragraph = source.slice(from, to);
   const earlier = source.slice(front.length, from);

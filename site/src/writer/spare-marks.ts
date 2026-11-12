@@ -4,8 +4,7 @@
  * second `@Wanda` saying again who already speaks) is taken out. A mark is taken out only if,
  * without it, every word is heard as before: by the same voice, said the same way.
  */
-import { type Story, type TextChange, applyChanges, lines, parse } from "voxdown";
-import { composed } from "./changes";
+import { type Story, type TextChange, applyChanges, diffChanges, lines, parse } from "voxdown";
 
 /**
  * Everything heard, in order, by whom and how: each character of speech by itself, so that a
@@ -25,59 +24,99 @@ const heard = (story: Story) =>
 /** `changes` made to `story`, with the marks they leave that change nothing taken out too. */
 export function withoutSpareMarks(story: Story, changes: readonly TextChange[]): TextChange[] {
   if (changes.length === 0) return [...changes];
-  let source = applyChanges(story.source, changes);
-  let after = parse(source);
-  const wanted = heard(after);
-  // The stretch of lines the edit touched, in the text it makes.
+  const first = applyChanges(story.source, changes);
+  const wanted = heard(parse(first));
+  // Again and again: a mark taken out can leave another saying nothing (`@Bob @() cb` once the
+  // name's own direction has gone).
+  let source = first;
+  for (let pass = 0; pass < 4; pass++) {
+    const next = merged(story.source, sparePass(story.source, source, wanted), wanted);
+    if (next === source) break;
+    source = next;
+  }
+  return source === first ? [...changes] : diffChanges(story.source, source);
+}
+
+/** The lines the edit touched, in the text it makes: from the first changed to the last. */
+function touched(original: string, source: string): { from: number; to: number } {
   let start = 0;
-  while (start < source.length && source[start] === story.source[start]) start++;
+  while (start < source.length && source[start] === original[start]) start++;
   let end = 0;
   while (
     end < source.length - start &&
-    end < story.source.length - start &&
-    source[source.length - 1 - end] === story.source[story.source.length - 1 - end]
+    end < original.length - start &&
+    source[source.length - 1 - end] === original[original.length - 1 - end]
   )
     end++;
   const from = source.lastIndexOf("\n", start - 1) + 1;
   const lineEnd = source.indexOf("\n", source.length - end);
-  const to = lineEnd < 0 ? source.length : lineEnd;
-  // The marks there (names, directions, `@/`), the last first, so that taking one out moves
-  // none still to try.
-  const items = after.blocks
-    .flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
+  return { from, to: lineEnd < 0 ? source.length : lineEnd };
+}
+
+/** The marks in the touched lines (names, directions, `@/`). */
+function marksIn(source: string, original: string) {
+  const { from, to } = touched(original, source);
+  return parse(source)
+    .blocks.flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
     .flatMap((line) => line.items)
     .filter(
-      (item) =>
+      (item): item is Extract<typeof item, { kind: "mark" | "direction" | "end" }> =>
         (item.kind === "mark" || item.kind === "direction" || item.kind === "end") &&
         item.range.from >= from &&
         item.range.to <= to,
     );
+}
+
+/** One sweep: each mark that changes nothing heard taken out, the last first. */
+function sparePass(original: string, text: string, wanted: string): string {
+  let source = text;
+  const items = marksIn(source, original);
   // Each mark whole, and a name's own direction alone (`@Gerald (softly) @(sadly)`: the softly
   // says nothing), each with the space after it, never the words.
   const marks = [
-    ...items.map((item) => {
-      const end = source[item.range.to] === " " ? item.range.to + 1 : item.range.to;
-      return { from: item.range.from, to: end };
-    }),
+    ...items.map((item) => ({
+      from: item.range.from,
+      to: source[item.range.to] === " " ? item.range.to + 1 : item.range.to,
+    })),
     ...items.flatMap((item) =>
       item.kind === "mark" && item.directionRange
         ? [{ from: item.nameRange.to, to: item.directionRange.to }]
         : [],
     ),
   ].sort((a, b) => b.from - a.from || a.to - b.to);
-  const spare: TextChange[] = [];
   let reach = Number.POSITIVE_INFINITY;
   for (const mark of marks) {
-    // A place already changed by a mark taken out after it is left as it is.
+    // A place already changed by a mark taken out after it waits for the next sweep.
     if (mark.to > reach) continue;
-    const end = mark.to;
-    const without = applyChanges(source, [{ from: mark.from, to: end, insert: "" }]);
-    const read = parse(without);
-    if (heard(read) !== wanted) continue;
-    spare.push({ from: mark.from, to: end, insert: "" });
+    const without = applyChanges(source, [{ from: mark.from, to: mark.to, insert: "" }]);
+    if (heard(parse(without)) !== wanted) continue;
     source = without;
-    after = read;
     reach = mark.from;
   }
-  return spare.length ? composed(story.source, changes, spare) : [...changes];
+  return source;
+}
+
+/** A name and the direction straight after it as one mark: `@Ann @(loudly)` is `@Ann (loudly)`. */
+function merged(original: string, text: string, wanted: string): string {
+  let source = text;
+  const items = marksIn(source, original).sort((a, b) => b.range.from - a.range.from);
+  for (const item of items) {
+    if (item.kind !== "direction" || !item.direction) continue;
+    // The name straight before it: before it, and only spaces between.
+    const name = items.find(
+      (other) =>
+        other.kind === "mark" &&
+        !other.directionRange &&
+        other.range.to <= item.range.from &&
+        /^[ \t]*$/.test(source.slice(other.range.to, item.range.from)),
+    );
+    if (!name || name.kind !== "mark") continue;
+    const joined = applyChanges(source, [
+      // ` @(` becomes ` (`: the `@` and the space before it go, one space stays.
+      { from: name.range.to, to: item.range.from + 1, insert: " " },
+    ]);
+    if (heard(parse(joined)) !== wanted) continue;
+    source = joined;
+  }
+  return source;
 }

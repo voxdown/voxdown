@@ -52,7 +52,7 @@ export type StretchContext = {
    * A long book's passage worked on in its paragraph alone (local.ts): the scope for an edit at
    * `at`, or undefined to read the whole story.
    */
-  scope?: (at: number) => Scope | undefined;
+  scope?: (at: number, until?: number) => Scope | undefined;
   /** A word to the writer: a quote that went along with the one given, say. */
   notice?: (message: string, action?: { label: string; run: () => void }) => void;
   /** Said to a screen reader: what an edit did, which a sighted writer sees in the text. */
@@ -163,7 +163,10 @@ export function nextNarratedQuote(story: Story, after: number): Wanting | undefi
  */
 export function giveQuote(story: Story, quote: Quote, name: string): TextChange[] {
   let changes: TextChange[] = [{ from: quote.from, to: quote.from, insert: `@${name} ` }];
-  const known = story.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
+  // The narrator is no one new: never added to the cast.
+  const known =
+    name.toLowerCase() === story.meta.narrator.toLowerCase() ||
+    story.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
   const hasCast = story.cast.length > 0 || "cast" in (story.frontMatter?.data ?? {});
   if (!known && hasCast) {
     const cast = setFullName(parse(applyChanges(story.source, changes)), name, name);
@@ -494,10 +497,13 @@ export class StretchTools {
       anchor,
       at,
     );
+    // First, the name the quote's tag gives, whoever says it now (a quote carrying on Ann's
+    // speech whose tag names Bob); a quote the narrator reads with no one named, the box, to type
+    // who; else whoever says it now.
+    const waiting = current.toLowerCase() === story.meta.narrator.toLowerCase() && quote;
     (
-      (current.toLowerCase() === story.meta.narrator.toLowerCase()
-        ? list.querySelector<HTMLElement>("[data-tagged]")
-        : null) ??
+      list.querySelector<HTMLElement>("[data-tagged]") ??
+      (waiting ? input : null) ??
       list.querySelector<HTMLElement>("[aria-current]") ??
       list.querySelector<HTMLElement>("button")
     )?.focus({ preventScroll: true });
@@ -616,7 +622,13 @@ export class StretchTools {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const direction = input.value.trim();
-      if (direction === (speech.ownDirection ?? "")) return this.closePopover(true);
+      if (!selected && direction === (speech.ownDirection ?? "")) {
+        this.context.notice?.(
+          direction ? `That is said “${direction}” already.` : "That has no direction already.",
+        );
+        this.closePopover(true);
+        return;
+      }
       set(direction || null);
     });
     remove.addEventListener("click", () => set(null));
@@ -641,12 +653,16 @@ export class StretchTools {
   private scopeAt(at: number): Scope {
     const near = this.context.scope?.(at);
     if (!near) return wholeScope(this.context.story());
-    // Words selected beyond the paragraphs read around `at` (a long book reads only those): the
-    // whole story, read once for this change.
+    // Words selected beyond the paragraph read around `at` (a long book reads only those): the
+    // paragraphs they run over, read as one; the whole story only where those can't be read
+    // alone (a group or a note open across them).
     if (this.bySelection) {
       const { from, to } = this.context.view.state.selection.main;
       if (from !== to && (near.at(from) < 0 || near.at(to) > near.story.source.length))
-        return wholeScope(this.context.story());
+        return (
+          this.context.scope?.(Math.min(at, from), Math.max(at, to)) ??
+          wholeScope(this.context.story())
+        );
     }
     return near;
   }
@@ -686,8 +702,15 @@ export class StretchTools {
       )
     )
       return undefined;
-    // All of a quote's words: the quote, as with no selection.
-    if (target.quoted && start >= target.range.from && end <= target.range.to) {
+    // All of a quote's words: the quote, as with no selection. A quote over several lines is
+    // all of it only with every line chosen: this stretch is one line of it.
+    if (
+      target.quoted &&
+      target.openQuote &&
+      target.closeQuote &&
+      start >= target.range.from &&
+      end <= target.range.to
+    ) {
       const words = source.slice(target.textRange.from, target.textRange.to).trim();
       const chosen = source
         .slice(Math.max(start, target.textRange.from), Math.min(end, target.textRange.to))
@@ -788,6 +811,13 @@ export class StretchTools {
       this.closePopover(true);
       return;
     }
+    if (quote && name.toLowerCase() === fresh.meta.narrator.toLowerCase()) {
+      this.context.notice?.(
+        "The narrator reads that quote already: it waits for someone else to say it.",
+      );
+      this.closePopover(true);
+      return;
+    }
     if (quote) {
       const scoped = { ...quote, from: scope.at(quote.from), to: scope.at(quote.to) };
       const changes = giveQuote(fresh, scoped, name);
@@ -815,6 +845,11 @@ export class StretchTools {
       return;
     }
     if (!part && target.speaker.toLowerCase() === name.toLowerCase()) {
+      this.context.notice?.(
+        name.toLowerCase() === fresh.meta.narrator.toLowerCase()
+          ? "The narrator reads that already."
+          : `${name} says that already.`,
+      );
       this.closePopover(true);
       return;
     }

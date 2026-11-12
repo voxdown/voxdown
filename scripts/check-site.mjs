@@ -1954,6 +1954,26 @@ if (!tagged.endsWith("@Ann “Hi,” Ann said. “How are you today?”"))
   problems.push(
     `writer: Next quote then Who gave the line as ${JSON.stringify(tagged.slice(-60))}`,
   );
+// A quote carrying on Ann's speech whose tag names Bob: Who offers Bob first, and Enter gives it.
+await author.click(".cm-content");
+await author.keyboard.press("Control+a");
+await author.keyboard.insertText("“Hi,” said Ann. “Bye,” said Bob.");
+await settled();
+await author.keyboard.press("Control+Home");
+// The first quote to Ann, its tag's name; then the next waiting, which now carries Ann's speech.
+for (let quote = 0; quote < 2; quote++) {
+  await author.keyboard.press("Control+Shift+K");
+  await author.waitForTimeout(300);
+  await author.keyboard.press("Control+k");
+  await author.waitForSelector(".speaker-list");
+  await author.keyboard.press("Enter");
+  await settled();
+}
+const both = await kept();
+if (!both.endsWith("@Ann “Hi,” said Ann. @Bob “Bye,” said Bob."))
+  problems.push(
+    `writer: the tagged name wasn't offered first for a quote carrying another's speech: ${JSON.stringify(both.slice(-60))}`,
+  );
 // Words selected across voices, with every mark showing: given alone, the marks inside them
 // gone and the voice after them back; and Undo puts it all as it was. (A selection beyond a
 // passage changed the whole passage.)

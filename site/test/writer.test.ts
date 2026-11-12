@@ -1015,12 +1015,16 @@ describe("an edit's marks, no more than needed", () => {
     expect(spare("She said @Wanda hello @/ @Bob to me.")).toBe("She said @Wanda hello @Bob to me.");
     // A name's own direction that a direction straight after it overrides.
     expect(spare("@Bob (softly) @(sadly) Could you not? I am tired.")).toBe(
-      "@Bob @(sadly) Could you not? I am tired.",
+      "@Bob (sadly) Could you not? I am tired.",
     );
     // A direction already in force.
     expect(spare("I @(softly) knock twice @(softly) and wait.")).toBe(
       "I @(softly) knock twice and wait.",
     );
+    // Again and again: once the name's own direction goes, the @() after it says nothing either.
+    expect(spare("@Bob (angrily) @() cb cc cd")).toBe("@Bob cb cc cd");
+    // A name and the direction straight after it, one mark.
+    expect(spare("Then @Ann @(loudly) hello there.")).toBe("Then @Ann (loudly) hello there.");
   });
 
   it("keeps every mark that changes who or how", () => {

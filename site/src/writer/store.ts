@@ -295,8 +295,9 @@ export async function keepVersion(version: Version): Promise<void> {
   try {
     const earlier = await versionsOf(version.doc);
     const last = earlier[0];
-    if (last?.text === version.text) {
-      // Named as the last one kept: that one takes the name, and is kept for good.
+    if (last?.text === version.text && !(version.pinned && last.pinned)) {
+      // Named as the last one kept: that one takes the name, and is kept for good. (Named again
+      // as it is, a version of its own: each name is kept.)
       if (version.pinned && last.key !== undefined)
         (await store(VERSIONS, "readwrite")).put({ ...last, why: version.why, pinned: true });
       return;
@@ -313,6 +314,15 @@ export async function keepVersion(version: Version): Promise<void> {
     for (const old of earlier) if (!kept.has(old) && old.key !== undefined) writer.delete(old.key);
   } catch {
     // Without IndexedDB there are no versions; the draft is all there is.
+  }
+}
+
+/** Lets one version go: one the writer named, when they say so. */
+export async function forgetVersion(key: number): Promise<void> {
+  try {
+    await done((await store(VERSIONS, "readwrite")).delete(key));
+  } catch {
+    // Nothing kept to let go.
   }
 }
 

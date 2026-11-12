@@ -135,6 +135,7 @@ import {
   draftForFile,
   forgetDraft,
   forgetFile,
+  forgetVersion,
   keepDraft,
   keepVersion,
   listDrafts,
@@ -632,8 +633,10 @@ const tools: StretchTools = new StretchTools({
     return read && readNow() ? passageIn(read.reply.passages, at) : undefined;
   },
   // A long book's passage is edited in its paragraph alone, never by reading the book again.
-  scope: (at) =>
-    view.state.doc.length >= LONG ? paragraphScope(view.state.doc.toString(), at) : undefined,
+  scope: (at, until) =>
+    view.state.doc.length >= LONG
+      ? paragraphScope(view.state.doc.toString(), at, until)
+      : undefined,
   notice: (message, action) => notice(message, false, action),
   announce: (message) => announce(message),
   directions: () =>
@@ -2800,7 +2803,7 @@ async function showDrafts(): Promise<void> {
   );
 }
 
-async function showVersions(): Promise<void> {
+async function showVersions(again = false): Promise<void> {
   const versions = await versionsOf(file.id);
   // The story as it is now, kept under a name of the writer's: never thinned out.
   const keep = document.createElement("div");
@@ -2818,7 +2821,7 @@ async function showVersions(): Promise<void> {
     if (!called) return name.focus();
     await snapshot(called, text(), true);
     announce(`Kept as “${called}”`);
-    void showVersions();
+    void showVersions(true);
   };
   button.addEventListener("click", () => void named());
   name.addEventListener("keydown", (event) => {
@@ -2833,19 +2836,47 @@ async function showVersions(): Promise<void> {
     versions.length
       ? "Kept when the story was opened, each time it was saved, every ten minutes of writing and before tidying, and those kept under a name, which are never let go. Going back to one is a change like any other: Undo takes it back."
       : "None yet: a version is kept when the story is opened or saved, and every ten minutes of writing. Keep one now under a name of your own.",
-    versions.map((kept) => ({
-      title: kept.pinned ? `“${kept.why}” · ${when(kept.at)}` : `${when(kept.at)} · ${kept.why}`,
-      detail: `${wordsSaid(proseWords(kept.text))}${kept.pinned ? " · kept under its name" : ""}${sameText(kept.text, text()) ? " · the same as now" : ""}`,
-      actions: sameText(kept.text, text())
-        ? []
-        : [
-            { label: "Compare", run: () => compare(kept) },
-            { label: "Go back to it", main: true, run: () => goBack(kept) },
+    versions
+      .map((kept) => ({
+        title: kept.pinned ? `“${kept.why}” · ${when(kept.at)}` : `${when(kept.at)} · ${kept.why}`,
+        detail: `${wordsSaid(proseWords(kept.text))}${kept.pinned ? " · kept under its name" : ""}${sameText(kept.text, text()) ? " · the same as now" : ""}`,
+        actions: sameText(kept.text, text())
+          ? []
+          : [
+              { label: "Compare", run: () => compare(kept) },
+              { label: "Go back to it", main: true, run: () => goBack(kept) },
+            ],
+      }))
+      .map((row, index) => {
+        const kept = versions[index] as Version;
+        // One the writer named goes only when they say so.
+        if (!kept.pinned || kept.key === undefined) return row;
+        const key = kept.key;
+        return {
+          ...row,
+          actions: [
+            ...row.actions,
+            {
+              label: "Let go…",
+              run: async () => {
+                const answer = await ask(
+                  `Let go of the version kept as “${kept.why}”? It is kept nowhere else.`,
+                  [
+                    { label: "Cancel", value: "cancel", main: true },
+                    { label: "Let it go", value: "forget" },
+                  ],
+                );
+                if (answer === "forget") await forgetVersion(key);
+                void showVersions();
+              },
+            },
           ],
-    })),
+        };
+      }),
     keep,
   );
-  if (versions.length === 0) name.focus();
+  // Kept under a name just now, or none kept yet: the name's field, for the next.
+  if (again || versions.length === 0) name.focus();
 }
 
 function goBack(kept: Version): void {

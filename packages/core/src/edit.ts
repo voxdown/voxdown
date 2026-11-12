@@ -702,6 +702,24 @@ function wordsWithin(source: string, from: number, to: number): Range | undefine
   while (start > 0 && /[*_]/.test(source[start - 1] ?? "")) start--;
   if (start > 0 && source[start - 1] === "@") start--;
   while (word.test(source[end] ?? "") && word.test(source[end - 1] ?? "")) end++;
+  // A heading's `#`, a quotation's `>` or a list's marker belongs to its line, not its words: a
+  // mark goes after it, never before (where it made the line a paragraph).
+  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const marker = /^[ \t]*(?:#{1,6}[ \t]+|>[ \t]*|[-+*][ \t]+|\d{1,9}[.)][ \t]+)/.exec(
+    source.slice(lineStart, Math.max(start, lineStart + 12)),
+  );
+  if (marker && start < lineStart + marker[0].length) start = lineStart + marker[0].length;
+  // Words in italics or bold, some of them chosen: all of them, so no mark falls inside the signs.
+  const lineEnd = source.indexOf("\n", start);
+  const line = source.slice(lineStart, lineEnd < 0 ? source.length : lineEnd);
+  for (const emphasis of line.matchAll(
+    /\*\*[^*\n]+?\*\*|\*[^*\n]+?\*|__[^_\n]+?__|\b_[^_\n]+?_\b/g,
+  )) {
+    const from = lineStart + (emphasis.index ?? 0);
+    const to = from + emphasis[0].length;
+    if (start > from && start < to) start = from;
+    if (end > from && end < to) end = to;
+  }
   while (/[\p{Pe}\p{Pf}.,;:!?…*_]/u.test(source[end] ?? "")) end++;
   return /[\p{L}\p{N}]/u.test(source.slice(start, end)) ? { from: start, to: end } : undefined;
 }
@@ -901,9 +919,11 @@ function speakerInLine(story: Story, from: number, to: number, name: string): Te
       : [{ from: start, to: start, insert }, ...removed];
   };
   const openings = own ? [opening(null), opening("@/")] : [opening(`@${speaker}`)];
+  // Each word said as it was, by its new voice: a direction it had stays, one it hadn't comes in.
   const promise = {
-    inside: (_was: Heard, now: Heard) => sameName(now.speaker, speaker),
-    wanted: () => ({ speaker, direction: null }),
+    inside: (was: Heard, now: Heard) =>
+      sameName(now.speaker, speaker) && now.direction === was.direction,
+    wanted: (was: Heard) => ({ speaker, direction: was.direction }),
   };
   for (const first of openings) {
     // The mark alone, the voices after the words given back where they changed.
@@ -1235,7 +1255,10 @@ function settled(
       const done = tidied(story, before, current, promise).filter(
         (change) => story.source.slice(change.from, change.to) !== change.insert,
       );
-      return done.length > 0 && sameBook(story, done) && noNewWarnings(story, done)
+      return done.length > 0 &&
+        sameBook(story, done) &&
+        sameShape(story, done) &&
+        noNewWarnings(story, done)
         ? declared(story, done)
         : [];
     }
@@ -1363,6 +1386,27 @@ function noNewWarnings(story: Story, changes: readonly TextChange[]): boolean {
   return true;
 }
 
+/** The story's blocks, by kind and level: what an edit of marks never changes. */
+const shapeOf = (story: Story) =>
+  story.blocks
+    .map((block) =>
+      block.kind === "heading"
+        ? `h${block.level}`
+        : block.kind === "paragraph"
+          ? `p${block.lines.length}`
+          : block.kind,
+    )
+    .join(" ");
+
+/**
+ * Whether the story keeps its shape: its headings headings at their levels, its paragraphs of as
+ * many lines (a mark before a heading's `#` made it a paragraph, and heard the same, as `#` is
+ * punctuation, the book went on reading it as a heading's words).
+ */
+function sameShape(story: Story, changes: readonly TextChange[]): boolean {
+  return shapeOf(parsed(applyChanges(story.source, changes))) === shapeOf(story);
+}
+
 /** Whether the book reads the same after the changes: an edit adds or moves marks, never print. */
 function sameBook(story: Story, changes: readonly TextChange[]): boolean {
   return bookOf(parsed(applyChanges(story.source, changes))) === bookOf(story);
@@ -1383,6 +1427,13 @@ export function heardIndex(story: Story, item: Speech | Vocal): number {
  */
 export function heardVoices(story: Story): Voice[] {
   return heard(story).map((char) => ({ speaker: char.speaker, direction: char.direction }));
+}
+
+/** Every character heard, where it is, and who says it how (for tests; not part of the package's API). */
+export function heardPlaces(
+  story: Story,
+): Array<{ at: number; char: string; speaker: string; direction: string | null }> {
+  return heard(story).map(({ at, char, speaker, direction }) => ({ at, char, speaker, direction }));
 }
 
 /** Whether two stories have the same words heard, each said by the same character in the same way. */

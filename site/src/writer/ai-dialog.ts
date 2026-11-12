@@ -550,8 +550,9 @@ async function nameSpeakers(
       result.append(list);
     }
     lastNaming = { said: progress.textContent ?? "", held: [...result.childNodes] };
-    // Written on while it worked: what it did, as the dialog says it, the dialog there to open.
-    if (changes.length)
+    // Written on while it worked (the dialog put away): what it did, as the dialog would say it.
+    // With the dialog open, the dialog says it, once.
+    if (changes.length && behind)
       context.notice(
         [
           `${plural(givenNow, "speaker")} given ${ai === "tags" ? "by their dialogue tags" : "by AI"}${joined.length ? `, ${joined.join(", ")} joining the cast` : ""}.`,

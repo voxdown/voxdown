@@ -207,12 +207,21 @@ function duration(ms: number): string {
 /** At most this many characters are said to hear a voice. */
 const SAMPLE = 220;
 
-/** The first words someone says in the story (the narrator: the first told), to hear in a voice. */
+/**
+ * Words someone says in the story, to hear a voice say them: their first line of ten words or
+ * more that isn't a heading (a chapter's "One" says little of a voice), else their longest; cut
+ * at a sentence's end where it runs long.
+ */
 export function firstWords(script: ProductionScript, name: string): string | undefined {
   const key = name.toLowerCase();
-  const line = script.lines.find(
+  const theirs = script.lines.filter(
     (line) => line.kind === "speech" && line.speaker?.toLowerCase() === key && line.text.trim(),
   );
+  const count = (text: string) => text.split(/\s+/).filter(Boolean).length;
+  const told = theirs.filter((line) => line.heading === undefined);
+  const line =
+    told.find((candidate) => count(candidate.text) >= 10) ??
+    [...(told.length ? told : theirs)].sort((a, b) => count(b.text) - count(a.text))[0];
   if (!line) return undefined;
   const text = line.text.trim();
   if (text.length <= SAMPLE) return text;

@@ -2246,7 +2246,7 @@ function tell(message: string): Promise<string> {
 // No title in its details: the heading names it until the writer gives it one (Story details).
 const NEW_STORY = [
   "---",
-  "voxdown: 1.1",
+  `voxdown: ${SPEC_VERSION}`,
   `language: ${navigator.language || "en"}`,
   "cast:",
   "---",
@@ -3056,9 +3056,9 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Mod+B", "Bold"],
   ["Mod+Shift+V", "Paste the text alone: VoxDown as written, a page without its formatting"],
   ["F9", "Hear it read aloud, to the end of the scene"],
-  ["Mod+K", "Who says this passage"],
+  ["Mod+K", "Who says this passage, or the words selected"],
   ["Mod+Shift+K", "The next quote with no speaker"],
-  ["Mod+J", "How it’s said"],
+  ["Mod+J", "How it’s said: this passage, or the words selected"],
   ["Alt+↑ / Alt+↓", "Move the paragraph up or down"],
   ["Enter", "In a quote: close it, and open it again on a new line for the same speaker"],
   ["Mod+Shift+M", "Every mark raw, or drawn"],

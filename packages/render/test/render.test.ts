@@ -319,6 +319,23 @@ describe("the book view", () => {
   });
 });
 
+describe("@/, the end of a speech without quotes", () => {
+  it("is never printed, in the book or the script", () => {
+    const story = parse(
+      "---\ncast:\n  Gerald:\n---\nWhenever I find @Gerald myself pausing @/ before the door.",
+    );
+    const book = dom(renderBook(story, { header: false })).body.textContent ?? "";
+    const script = dom(renderScript(story, { header: false })).body.textContent ?? "";
+    expect(book).toContain("Whenever I find myself pausing before the door.");
+    for (const text of [book, script]) expect(text).not.toContain("@/");
+    expect(
+      [...dom(renderScript(story, { header: false })).querySelectorAll(".vxd-speech")].map((span) =>
+        span.getAttribute("data-speaker"),
+      ),
+    ).toEqual(["Narrator", "Gerald", "Narrator"]);
+  });
+});
+
 describe("the script view", () => {
   it.each(inputs)("%s puts every line heard under its speaker", (_name, source) => {
     const story = parse(source);

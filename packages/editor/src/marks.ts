@@ -396,9 +396,10 @@ function unclosedBrackets(story: Story): EditorMark[] {
         },
       });
     }
-    // An @ with no name, direction or sound after it says nothing, and is left out.
+    // An @ with no name, direction or sound after it says nothing, and is left out. Never `@/`:
+    // a mark that ends a speech without quotes (§5.9), or, before a letter, digit or `/`, text.
     for (const lone of line.matchAll(
-      /(^|[^\p{L}\p{N}\\])@(?=[ \t]*$|[ \t]*[^\p{L}\p{N}(\[\s])/gu,
+      /(^|[^\p{L}\p{N}\\])@(?!\/)(?=[ \t]*$|[ \t]*[^\p{L}\p{N}(\[\s])/gu,
     )) {
       const from = (lone.index ?? 0) + (lone[1] ?? "").length;
       if (inNote(at(from))) continue;
@@ -787,12 +788,25 @@ export function marksOf(story: Story): EditorMark[] {
         ? story.source.length
         : Math.max(lineEnd, warning.range.from + 1)
       : Math.max(warning.range.to, Math.min(story.source.length, warning.range.from + 1));
+    // A `@/` that ends nothing changes nothing heard: taken out, with the space after it.
+    const end = warning.range;
+    const spaced = story.source[end.to] === " " && /\s/.test(story.source[end.from - 1] ?? " ");
     out.push({
       kind: "warning",
       from: warning.range.from,
       to,
       ...plain(warning, story.source),
       code: warning.code,
+      ...(warning.code === "idle-end"
+        ? {
+            fix: {
+              from: end.from,
+              to: end.to + (spaced ? 1 : 0),
+              insert: "",
+              label: "Take it out",
+            },
+          }
+        : {}),
     });
   }
   for (const open of unclosedBrackets(story)) out.push(open);

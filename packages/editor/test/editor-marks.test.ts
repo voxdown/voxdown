@@ -135,6 +135,16 @@ describe("editor marks", () => {
     );
   });
 
+  it("takes `@/` for the mark it is, and offers to take out one that ends nothing", () => {
+    const source = "Whenever I find @Gerald myself pausing @/ before the door. See @/lib.";
+    expect(editorMarks(source).filter((m) => m.kind === "warning")).toEqual([]);
+    const idle = "It was late @/ and dark.";
+    const warning = editorMarks(idle).find((m) => m.kind === "warning" && m.code === "idle-end");
+    const fix = warning?.kind === "warning" ? warning.fix : undefined;
+    expect(fix).toMatchObject({ insert: "", label: "Take it out" });
+    expect(fix ? idle.slice(0, fix.from) + idle.slice(fix.to) : idle).toBe("It was late and dark.");
+  });
+
   it("offers to close a group left open after its paragraph", () => {
     const source = "::: whispering\nOne.\nTwo.\n\nThree.\n";
     const warning = editorMarks(source).find(

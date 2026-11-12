@@ -314,6 +314,10 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   const describe = () => {
     const option = options.find((candidate) => candidate.id === choice.value);
     about.textContent = option?.note ? `${option.label}: ${option.note}.` : "";
+    // Free on this computer: nothing to pay for the sounds either.
+    $("#ai-sounds-cost").textContent = /\bfree\b/i.test(option?.note ?? "")
+      ? ""
+      : " (they cost too)";
   };
   choice.onchange = describe;
   describe();

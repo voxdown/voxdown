@@ -3,6 +3,7 @@
  * runs (for a Word document or an ebook), and paragraphs from them written as a story, its text
  * escaped so that nothing in it reads as a mark it isn't.
  */
+import { SPEC_VERSION } from "voxdown";
 
 /** A stretch of text in one style. */
 export type Run = { text: string; italic: boolean; bold: boolean } | { lineBreak: true };
@@ -253,7 +254,7 @@ export function writeStory(
   paragraphs: readonly Paragraph[],
   details: { title?: string; subtitle?: string; author?: string; language?: string },
 ): string {
-  const front = ["---", "voxdown: 1.1"];
+  const front = ["---", `voxdown: ${SPEC_VERSION}`];
   const quoted = (value: string) =>
     /^[\p{L}\p{N}][\p{L}\p{N} ,.'’!?-]*$/u.test(value) ? value : JSON.stringify(value);
   if (details.title) front.push(`title: ${quoted(details.title)}`);

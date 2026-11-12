@@ -975,6 +975,16 @@ describe("an edit's marks, no more than needed", () => {
     expect(give("@Wanda “Fine!” @Bob “Hm.”", 1, "Wanda")).toBe("@Wanda “Fine!” “Hm.”");
   });
 
+  it("leaves out a mark that only cuts one voice's words in two, and @() or @/ another mark undoes", () => {
+    const spare = (text: string) =>
+      applyChanges(text, withoutSpareMarks(parse(text), [{ from: 0, to: 0, insert: "" }]));
+    expect(spare("@Wanda She said @Wanda hello @/ to me.")).toBe("@Wanda She said hello @/ to me.");
+    expect(spare("@Wanda (softly) myself pausing @() @/ before the door.")).toBe(
+      "@Wanda (softly) myself pausing @/ before the door.",
+    );
+    expect(spare("She said @Wanda hello @/ @Bob to me.")).toBe("She said @Wanda hello @Bob to me.");
+  });
+
   it("keeps every mark that changes who or how", () => {
     expect(give("@Wanda “Fine!” said Bob. “Hm.”", 2, "Bob")).toBe(
       "@Wanda “Fine!” said Bob. @Bob “Hm.”",

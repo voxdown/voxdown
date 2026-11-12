@@ -6,6 +6,7 @@ import {
   parse,
   setDirectionWithin,
   setSpeakerWithin,
+  wordsSelected,
 } from "../src/index";
 
 const front = "---\ncast:\n  Gerald:\n  Mara:\n---\n";
@@ -173,5 +174,61 @@ describe("@/ before a letter or digit", () => {
       expect(
         lines(parse(`${front}@Gerald hello @/${after} there`)).map((line) => line.text),
       ).toEqual([`hello @/${after} there`]);
+  });
+});
+
+describe("words given back to the line's own voice", () => {
+  const narrator = (body: string, pick: string) =>
+    edited(body, pick, (s, f, t) => setSpeakerWithin(s, f, t, "Narrator"))?.text ?? null;
+
+  it("takes their marks out, or writes @/, never the narrator's name", () => {
+    expect(narrator("She said @Mara hello @/ to me.", "hello")).toBe("She said hello to me.");
+    expect(narrator("@Gerald Could you not? I’m tired.", "Could you not?")).toBe(
+      "Could you not? @Gerald I’m tired.",
+    );
+    expect(narrator("@Gerald Could you not? I’m tired.", "I’m tired")).toBe(
+      "@Gerald Could you not? @/ I’m tired.",
+    );
+  });
+
+  it("changes nothing for words that are the narrator's already", () => {
+    expect(
+      narrator("Whenever I find myself pausing, “I knock,” he said.", "myself pausing"),
+    ).toBeNull();
+  });
+
+  it("in a group, gives back with @/ and @(), which follow the group", () => {
+    const group = "::: whispering\nIt was late and so very dark outside.\n:::";
+    expect(
+      edited(group, "so very dark", (s, f, t) => setSpeakerWithin(s, f, t, "Gerald"))?.text,
+    ).toBe("::: whispering\nIt was late and @Gerald so very dark @/ outside.\n:::");
+    expect(
+      edited(group, "so very dark", (s, f, t) => setDirectionWithin(s, f, t, "loudly"))?.text,
+    ).toBe("::: whispering\nIt was late and @(loudly) so very dark @() outside.\n:::");
+  });
+});
+
+describe("a story that declares an older version", () => {
+  it("declares 1.2 once an edit writes @/ in it", () => {
+    const source = "---\nvoxdown: 1.1\ncast:\n  Gerald:\n---\nWhenever I find myself pausing here.";
+    const from = source.indexOf("myself pausing");
+    const changes = setSpeakerWithin(parse(source), from, from + "myself pausing".length, "Gerald");
+    expect(applyChanges(source, changes)).toBe(
+      "---\nvoxdown: 1.2\ncast:\n  Gerald:\n---\nWhenever I find @Gerald myself pausing @/ here.",
+    );
+  });
+});
+
+describe("what words selected are", () => {
+  it("says who says them, and whether a quote or an unspaced dash keeps them from a mark", () => {
+    const source = `${front}It was dark—very dark—and @Mara “Go,” she said.`;
+    const story = parse(source);
+    const at = (words: string) => {
+      const from = source.indexOf(words);
+      return wordsSelected(story, from, from + words.length);
+    };
+    expect(at("very")).toMatchObject({ speakers: ["Narrator"], glued: true, quoted: false });
+    expect(at("It was")).toMatchObject({ glued: false });
+    expect(at("Go")).toMatchObject({ speakers: ["Mara"], quoted: true });
   });
 });

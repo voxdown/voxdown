@@ -22,6 +22,7 @@ import {
   setSpeaker,
   setSpeakerWithin,
   taggedName,
+  wordsSelected,
 } from "voxdown";
 import { composed, mapped } from "./changes";
 import { type Scope, wholeScope } from "./local";
@@ -366,6 +367,7 @@ export class StretchTools {
   /** The speaker picker for the passage at `at`, below `anchor` or the cursor. */
   openSpeaker(at: number, anchor?: Element, cursor?: number): void {
     if (this.revealThen(at, anchor, () => this.openSpeaker(at, anchor, cursor))) return;
+    this.bySelection = anchor === undefined;
     const scope = this.scopeAt(at);
     const story = scope.story;
     const speech = speechAt(story, scope.at(at));
@@ -485,7 +487,13 @@ export class StretchTools {
       this.giveTo(passageFrom, name, later);
     });
     // The box above the list: up from the list's top goes to it.
-    this.showPopover("Who says this?", [form, list], anchor, at);
+    const words = this.selectedPart(scope, speech);
+    this.showPopover(
+      words && words !== "outside" ? "Who says these words?" : "Who says this?",
+      [form, list],
+      anchor,
+      at,
+    );
     (
       (current.toLowerCase() === story.meta.narrator.toLowerCase()
         ? list.querySelector<HTMLElement>("[data-tagged]")
@@ -498,6 +506,7 @@ export class StretchTools {
   /** The direction picker for the passage at `at`. */
   openDirection(at: number, anchor?: Element): void {
     if (this.revealThen(at, anchor, () => this.openDirection(at, anchor))) return;
+    this.bySelection = anchor === undefined;
     const scope = this.scopeAt(at);
     const story = scope.story;
     const speech = speechAt(story, scope.at(at));
@@ -565,7 +574,7 @@ export class StretchTools {
       const done = this.context.apply(
         changes,
         part
-          ? `The words selected can’t be said ${direction ? `“${direction}”` : "without a direction"} alone, so nothing changed.`
+          ? this.whyNot(fresh, part)
           : direction
             ? `“${direction}” can’t be set here without changing how other lines are said, so nothing changed.`
             : "This direction can’t be taken out without changing other lines, so nothing changed.",
@@ -604,12 +613,24 @@ export class StretchTools {
       set(direction || null);
     });
     remove.addEventListener("click", () => set(null));
-    this.showPopover("How is it said?", [form], anchor, at);
+    this.showPopover(
+      selected ? "How are these words said?" : "How is it said?",
+      [form],
+      anchor,
+      at,
+    );
     input.focus({ preventScroll: true });
     input.select();
   }
 
   /** The story an edit at `at` is worked out on: its paragraph alone in a long book, else all of it. */
+  /**
+   * Whether the tools were opened for the selection (the keys, the toolbar, the menu) rather
+   * than for a passage under the pointer (its bar): then words selected are what is changed,
+   * wherever they are.
+   */
+  private bySelection = false;
+
   private scopeAt(at: number): Scope {
     return this.context.scope?.(at) ?? wholeScope(this.context.story());
   }
@@ -628,10 +649,13 @@ export class StretchTools {
     if (from === to) return undefined;
     const start = scope.at(from);
     const end = scope.at(to);
-    if (end <= target.range.from || start >= target.range.to) return undefined;
+    // From the bar over another passage, that passage.
+    if (!this.bySelection && (end <= target.range.from || start >= target.range.to))
+      return undefined;
     const source = scope.story.source;
     if (start < 0 || end > source.length) return "outside";
-    if (start >= target.range.from && end <= target.range.to) {
+    // All of a quote's words: the quote, as with no selection.
+    if (target.quoted && start >= target.range.from && end <= target.range.to) {
       const words = source.slice(target.textRange.from, target.textRange.to).trim();
       const chosen = source
         .slice(Math.max(start, target.textRange.from), Math.min(end, target.textRange.to))
@@ -639,6 +663,25 @@ export class StretchTools {
       if (chosen === words) return undefined;
     }
     return { from: start, to: end };
+  }
+
+  /** Why words selected couldn't be given to `name`, or said another way, alone. */
+  private whyNot(story: Story, part: { from: number; to: number }, name?: string): string {
+    const words = wordsSelected(story, part.from, part.to);
+    if (!words) return "No words are selected there, so nothing changed.";
+    if (
+      name &&
+      words.speakers.length > 0 &&
+      words.speakers.every((who) => who.toLowerCase() === name.toLowerCase())
+    )
+      return `Those words are ${name}’s already.`;
+    if (name && words.quoted)
+      return `The words selected can’t be given to ${name} alone: words in a quote are said by the quote’s voice. Select words outside quotes, or a whole quote.`;
+    if (words.glued)
+      return "The words selected touch the words beside them with no space between (an unspaced dash?), where a mark would change how the book reads. Select up to a space, or put spaces around the dash.";
+    return name
+      ? `The words selected can’t be given to ${name} alone without changing who says other words, so nothing changed.`
+      : "The words selected can’t be said that way alone without changing how other words are said, so nothing changed.";
   }
 
   /** Said when a selection in a long book runs beyond what can be changed at once. */
@@ -730,10 +773,14 @@ export class StretchTools {
     }
     let changes: TextChange[];
     try {
-      changes = withoutSpareMarks(
-        fresh,
-        part ? setSpeakerWithin(fresh, part.from, part.to, name) : setSpeaker(fresh, target, name),
-      );
+      let given = part
+        ? setSpeakerWithin(fresh, part.from, part.to, name)
+        : setSpeaker(fresh, target, name);
+      // Words without quotes given back to the line's own voice (the narrator): their marks
+      // taken out, as for the same words selected.
+      if (!part && given.length === 0 && !target.quoted)
+        given = setSpeakerWithin(fresh, target.textRange.from, target.textRange.to, name);
+      changes = withoutSpareMarks(fresh, given);
       // Someone new, in a story with a cast: added to it in the same step, so the name raises
       // no warning.
       const known = fresh.cast.some((member) => member.handle.toLowerCase() === name.toLowerCase());
@@ -756,7 +803,7 @@ export class StretchTools {
     const done = this.context.apply(
       docChanges,
       part
-        ? `The words selected can’t be given to ${name} alone: words in a quote are said by the quote’s voice, so nothing changed. Select words outside quotes, or a whole quote.`
+        ? this.whyNot(fresh, part, name)
         : `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,
     );
     if (done) {

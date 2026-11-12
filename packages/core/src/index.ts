@@ -24,6 +24,7 @@ export {
   setMeta,
   setSpeaker,
   setSpeakerWithin,
+  wordsSelected,
 } from "./edit";
 export {
   type Gift,

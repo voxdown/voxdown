@@ -7,11 +7,20 @@
 import { type Story, type TextChange, applyChanges, lines, parse } from "voxdown";
 import { composed } from "./changes";
 
-/** Everything heard, in order, by whom and how. */
+/**
+ * Everything heard, in order, by whom and how: each character of speech by itself, so that a
+ * mark which only cuts one voice's words in two (`@Ann She said @Ann hello`) changes nothing.
+ */
 const heard = (story: Story) =>
-  JSON.stringify(
-    lines(story).map((line) => [line.kind, line.speaker, line.direction, line.text, line.name]),
-  );
+  lines(story)
+    .flatMap((line) =>
+      line.kind === "speech"
+        ? [...line.text.replace(/\s+/g, "")].map(
+            (char) => `${line.speaker}|${line.direction}|${char}`,
+          )
+        : [`${line.kind}|${line.speaker}|${line.direction}|${line.text}|${line.name}`],
+    )
+    .join("\n");
 
 /** `changes` made to `story`, with the marks they leave that change nothing taken out too. */
 export function withoutSpareMarks(story: Story, changes: readonly TextChange[]): TextChange[] {
@@ -32,11 +41,17 @@ export function withoutSpareMarks(story: Story, changes: readonly TextChange[]):
   const from = source.lastIndexOf("\n", start - 1) + 1;
   const lineEnd = source.indexOf("\n", source.length - end);
   const to = lineEnd < 0 ? source.length : lineEnd;
-  // The character marks there, the last first, so that taking one out moves none still to try.
+  // The marks there (names, directions, `@/`), the last first, so that taking one out moves
+  // none still to try.
   const marks = after.blocks
     .flatMap((block) => (block.kind === "paragraph" ? block.lines : []))
     .flatMap((line) => line.items)
-    .filter((item) => item.kind === "mark" && item.range.from >= from && item.range.to <= to)
+    .filter(
+      (item) =>
+        (item.kind === "mark" || item.kind === "direction" || item.kind === "end") &&
+        item.range.from >= from &&
+        item.range.to <= to,
+    )
     .map((item) => item.range)
     .sort((a, b) => b.from - a.from);
   const spare: TextChange[] = [];

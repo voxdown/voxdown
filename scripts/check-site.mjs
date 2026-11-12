@@ -1903,6 +1903,23 @@ if (
   problems.push(
     `writer: Who and How on a few words selected changed more than those words: ${JSON.stringify((await kept()).slice(-180))}`,
   );
+// What they write is no slip: no warning about it.
+if ((await author.textContent("#warning-count")) !== "0")
+  problems.push(
+    `writer: giving a few words alone left ${await author.textContent("#warning-count")} warnings`,
+  );
+// And given back to the narrator: the marks around them go, not a name written for the narrator.
+await selectWords("myself pausing before");
+await author.waitForTimeout(200);
+await author.keyboard.press("Control+k");
+await author.waitForSelector(".speaker-list");
+await author.keyboard.type("Narrator");
+await author.keyboard.press("Enter");
+await settled();
+if (!(await kept()).includes("Whenever I find myself pausing before warehouses"))
+  problems.push(
+    `writer: words given back to the narrator kept marks: ${JSON.stringify((await kept()).slice(-120))}`,
+  );
 // Words selected across voices, with every mark showing: given alone, the marks inside them
 // gone and the voice after them back; and Undo puts it all as it was. (A selection beyond a
 // passage changed the whole passage.)

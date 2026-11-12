@@ -417,7 +417,9 @@ function lexAt(source: string, at: number, to: number): Atom | null {
   if (holdsAt(codePointBefore(source, at))) return null;
   const next = source[at + 1];
   if (next === "/") {
-    const after = at + 2 < to ? source[at + 2] : undefined;
+    // The whole character after it: a letter outside the first plane is two UTF-16 units.
+    const code = at + 2 < to ? source.codePointAt(at + 2) : undefined;
+    const after = code === undefined ? undefined : String.fromCodePoint(code);
     if (after !== undefined && (after === "/" || /[\p{L}\p{N}]/u.test(after))) return null;
     return { type: "end", range: { from: at, to: at + 2 } };
   }

@@ -11,7 +11,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - `setSpeakerWithin(story, from, to, name)` and `setDirectionWithin(story, from, to, direction)` give a few words of a line to a character, or say them a way, and nothing else, each checked against everything a listener hears. Edits that give the narrator back in words without quotes write `@/`, not the narrator's name.
 
 **VoxDown Writer**
-- **Who** and **How** on a few words selected in a line change those words alone, as italics do: `@Gerald` … `@/`, `@(softly)` … `@()`. With the cursor alone, they change the whole quote or passage as before. Part of a quote can be said another way, not given to someone else, and the Writer says why.
+- **Who** and **How** on words selected change those words alone, as italics do: `@Gerald` … `@/`, `@(softly)` … `@()`, across voices (the marks inside the words go, and whoever spoke after them is given back) and over several lines, line by line, every line or none. With the cursor alone, they change the whole quote or passage as before. Part of a quote can be said another way, not given to someone else, and the Writer says why; a selection is never widened to a whole passage.
 
 **@voxdown/render**, **@voxdown/editor**, **VS Code extension**
 - `@/` is left out of the book and the script, hidden in the editor where the marks are (the character's words show whose they are), and highlighted as a mark.

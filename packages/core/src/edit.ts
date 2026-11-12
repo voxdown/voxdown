@@ -705,10 +705,11 @@ function wordsWithin(source: string, from: number, to: number): Range | undefine
 }
 
 /**
- * Gives the words between `from` and `to`, within one line, to `name`, and nothing else: a mark
- * before them, and after them whatever gives the rest of the line back as it was, `@/` for the
- * line's own voice, the narrator or a group's character (§5.9). A quote is said by one voice: part of one can't be given to someone else
- * without new quotation marks, and gets no changes; nor does a stretch across lines.
+ * Gives the words between `from` and `to` to `name`, and nothing else: on each line (marks work a
+ * line at a time, §5.3), a mark before them, the marks inside them taken out, and after them
+ * whatever gives the rest of the line back as it was, `@/` for the line's own voice, the narrator
+ * or a group's character (§5.9). A quote is said by one voice: words in one can't be given to
+ * someone else without new quotation marks. All of it, or no changes.
  */
 export function setSpeakerWithin(
   story: Story,
@@ -716,40 +717,12 @@ export function setSpeakerWithin(
   to: number,
   name: string,
 ): TextChange[] {
-  return session(() => {
-    const span = wordsWithin(story.source, from, to);
-    if (!span) return [];
-    const within = (char: Heard) => char.at >= span.from && char.at < span.to;
-    const chars = heard(story).filter(within);
-    if (chars.length === 0) return [];
-    if (chars.some((char) => char.item.kind !== "speech" || char.item.quoted)) return [];
-    const speaker = spelled(story, name);
-    const source = story.source;
-    const at = span.from;
-    const mark = { from: at, to: at, insert: markAt(source, at, `@${speaker}`) };
-    const promise = {
-      inside: (_was: Heard, now: Heard) => sameName(now.speaker, speaker),
-      wanted: () => ({ speaker, direction: null }),
-    };
-    // The mark alone, the voices after the words given back where they changed.
-    const alone = settled(story, within, [mark], promise);
-    if (alone.length) return alone;
-    // A quote further on the line took the mark (§5.4): `@/` straight after the words keeps it
-    // from it, where the line's own voice speaks next (§5.9).
-    const lineEnd = source.indexOf("\n", span.to);
-    const end = lineEnd < 0 ? source.length : lineEnd;
-    let next = span.to;
-    while (next < end && /\s/.test(source[next] ?? "")) next++;
-    const after = heard(story).find((char) => char.at >= next && char.at < end);
-    if (!after || !sameName(after.speaker, baseVoiceAt(story, next))) return [];
-    const back = { from: next, to: next, insert: markAt(source, next, "@/") };
-    return settled(story, within, [mark, back], promise);
-  });
+  return session(() => byLines(story, from, to, (line, a, b) => speakerInLine(line, a, b, name)));
 }
 
 /**
- * Says the words between `from` and `to`, within one line, as `direction` (or with no direction
- * of their own, `null`), and nothing else: `@(…)` before them, and after them whatever gives the
+ * Says the words between `from` and `to` as `direction` (or with no direction of their own,
+ * `null`), and nothing else: on each line, `@(…)` before them, and after them whatever gives the
  * rest back as it was said, `@()` or the direction it had (§6.2, §6.3). Inside a quote too.
  */
 export function setDirectionWithin(
@@ -758,21 +731,144 @@ export function setDirectionWithin(
   to: number,
   direction: string | null,
 ): TextChange[] {
-  return session(() => {
-    const span = wordsWithin(story.source, from, to);
-    if (!span) return [];
-    const within = (char: Heard) => char.at >= span.from && char.at < span.to;
-    if (!heard(story).some(within)) return [];
-    const value = direction?.replace(/\s+/g, " ").trim() || null;
-    const at = span.from;
-    const mark = value ? `@(${directionText(value)})` : "@()";
-    const changes = [{ from: at, to: at, insert: markAt(story.source, at, mark) }];
-    return settled(story, within, changes, {
+  return session(() =>
+    byLines(story, from, to, (line, a, b) => directionInLine(line, a, b, direction)),
+  );
+}
+
+/**
+ * An edit of the words between `from` and `to`, line by line, from the last line to the first so
+ * that the places before stay as they were. `edit` gives a line's changes, none where nothing
+ * needs changing, or null where it can't be done; then nothing is changed.
+ */
+function byLines(
+  story: Story,
+  from: number,
+  to: number,
+  edit: (story: Story, from: number, to: number) => TextChange[] | null,
+): TextChange[] {
+  const source = story.source;
+  const start = Math.min(from, to);
+  const end = Math.max(from, to);
+  const segments: Array<[number, number]> = [];
+  for (let at = start; at < end; ) {
+    const lineEnd = source.indexOf("\n", at);
+    const stop = lineEnd < 0 || lineEnd >= end ? end : lineEnd;
+    segments.push([at, stop]);
+    at = stop + 1;
+  }
+  if (segments.length === 1) {
+    const [a, b] = segments[0] as [number, number];
+    return edit(story, a, b) ?? [];
+  }
+  let current = story;
+  let changed = false;
+  for (const [a, b] of segments.reverse()) {
+    const changes = edit(current, a, b);
+    if (changes === null) return [];
+    if (changes.length === 0) continue;
+    current = parsed(applyChanges(current.source, changes));
+    changed = true;
+  }
+  if (!changed) return [];
+  // One change, from the first character changed to the last.
+  const before = story.source;
+  const after = current.source;
+  let head = 0;
+  while (head < before.length && head < after.length && before[head] === after[head]) head++;
+  let tail = 0;
+  while (
+    tail < before.length - head &&
+    tail < after.length - head &&
+    before[before.length - 1 - tail] === after[after.length - 1 - tail]
+  )
+    tail++;
+  return [{ from: head, to: before.length - tail, insert: after.slice(head, after.length - tail) }];
+}
+
+/** Who says a few words of one line: see `setSpeakerWithin`. */
+function speakerInLine(story: Story, from: number, to: number, name: string): TextChange[] | null {
+  const span = wordsWithin(story.source, from, to);
+  if (!span) return [];
+  const within = (char: Heard) => char.at >= span.from && char.at < span.to;
+  const chars = heard(story).filter(within);
+  if (chars.length === 0) return [];
+  if (chars.some((char) => char.item.kind !== "speech" || char.item.quoted)) return null;
+  const speaker = spelled(story, name);
+  if (chars.every((char) => sameName(char.speaker, speaker))) return [];
+  const source = story.source;
+  // The marks inside the words go, with the space after each: they are all one voice's now. A
+  // mark that gives a character's sound stays with it.
+  const line = place(story, (chars[0] as Heard).item).line;
+  const sounds = new Set(
+    line.items.flatMap((item) => (item.kind === "vocal" && item.mark ? [item.mark] : [])),
+  );
+  const removed = line.items
+    .filter(
+      (item) =>
+        ((item.kind === "mark" && !sounds.has(item)) || item.kind === "end") &&
+        item.range.from >= span.from &&
+        item.range.to <= span.to,
+    )
+    .map((item) => ({
+      from: item.range.from,
+      to: item.range.to + (source[item.range.to] === " " ? 1 : 0),
+      insert: "",
+    }));
+  const at = span.from;
+  const name_ = markAt(source, at, `@${speaker}`);
+  const first = removed[0];
+  const opening =
+    first && first.from === at
+      ? [{ ...first, insert: name_ }, ...removed.slice(1)]
+      : [{ from: at, to: at, insert: name_ }, ...removed];
+  const promise = {
+    inside: (_was: Heard, now: Heard) => sameName(now.speaker, speaker),
+    wanted: () => ({ speaker, direction: null }),
+  };
+  // The mark alone, the voices after the words given back where they changed.
+  const alone = settled(story, within, opening, promise);
+  if (alone.length) return alone;
+  // A quote further on the line took the mark (§5.4): `@/` straight after the words keeps it
+  // from it, where the line's own voice speaks next (§5.9).
+  const lineEnd = source.indexOf("\n", span.to);
+  const end = lineEnd < 0 ? source.length : lineEnd;
+  let next = span.to;
+  while (next < end && /\s/.test(source[next] ?? "")) next++;
+  const after = heard(story).find((char) => char.at >= next && char.at < end);
+  if (!after || !sameName(after.speaker, baseVoiceAt(story, next))) return null;
+  const back = { from: next, to: next, insert: markAt(source, next, "@/") };
+  const closed = settled(story, within, [...opening, back], promise);
+  return closed.length ? closed : null;
+}
+
+/** How a few words of one line are said: see `setDirectionWithin`. */
+function directionInLine(
+  story: Story,
+  from: number,
+  to: number,
+  direction: string | null,
+): TextChange[] | null {
+  const span = wordsWithin(story.source, from, to);
+  if (!span) return [];
+  const within = (char: Heard) => char.at >= span.from && char.at < span.to;
+  const chars = heard(story).filter(within);
+  if (chars.length === 0) return [];
+  const value = direction?.replace(/\s+/g, " ").trim() || null;
+  if (value !== null && chars.every((char) => char.direction === value)) return [];
+  const at = span.from;
+  const mark = value ? `@(${directionText(value)})` : "@()";
+  const changes = settled(
+    story,
+    within,
+    [{ from: at, to: at, insert: markAt(story.source, at, mark) }],
+    {
       inside: (was, now) =>
         sameName(now.speaker, was.speaker) && (value === null || now.direction === value),
       wanted: (was, now) => ({ speaker: was.speaker, direction: value ?? now.direction }),
-    });
-  });
+    },
+  );
+  return changes.length ? changes : value === null ? [] : null;
 }
 
 function setDirectionNow(story: Story, speech: Speech, direction: string | null): TextChange[] {

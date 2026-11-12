@@ -1903,6 +1903,33 @@ if (
   problems.push(
     `writer: Who and How on a few words selected changed more than those words: ${JSON.stringify((await kept()).slice(-180))}`,
   );
+// Words selected across voices, with every mark showing: given alone, the marks inside them
+// gone and the voice after them back; and Undo puts it all as it was. (A selection beyond a
+// passage changed the whole passage.)
+await author.keyboard.press("Control+Shift+M");
+await author.click(".cm-content");
+await author.keyboard.press("Control+a");
+await author.keyboard.insertText("One @Gerald two three @/ four five.");
+await settled();
+await author.keyboard.press("Home");
+for (let step = 0; step < "One @Gerald two".length; step++)
+  await author.keyboard.press("Shift+ArrowRight");
+await author.keyboard.press("Control+k");
+await author.waitForSelector(".speaker-list");
+await author.keyboard.type("Wanda");
+await author.keyboard.press("Enter");
+await settled();
+const across = await kept();
+if (!across.includes("@Wanda One two @Gerald three @/ four five."))
+  problems.push(
+    `writer: Who on words selected across voices changed others: ${JSON.stringify(across.slice(-80))}`,
+  );
+await author.click(".cm-content");
+await author.keyboard.press("Control+z");
+await settled();
+if (!(await kept()).includes("One @Gerald two three @/ four five."))
+  problems.push("writer: Undo didn't put back words given across voices");
+await author.keyboard.press("Control+Shift+M");
 await authoring.close();
 console.log("writer: speaker, direction, undo, search, move, cast, fix: ok");
 

@@ -95,15 +95,10 @@ describe("who says a few words of a line", () => {
     ).toMatch(/pausing before @Gerald coffin warehouses\.$/);
   });
 
-  it("never splits a quote, or crosses a line", () => {
+  it("never splits a quote", () => {
     expect(
       edited("@Gerald “I know. I’m tired.”", "I’m tired", (s, f, t) =>
         setSpeakerWithin(s, f, t, "Mara"),
-      ),
-    ).toBeNull();
-    expect(
-      edited("One line here.\nAnother line.", "here.\nAnother", (s, f, t) =>
-        setSpeakerWithin(s, f, t, "Gerald"),
       ),
     ).toBeNull();
   });
@@ -131,5 +126,52 @@ describe("how a few words of a line are said", () => {
         setDirectionWithin(s, f, t, "yawning"),
       )?.text,
     ).toBe("@Gerald (happily) “I know. @(yawning) I’m tired, @(happily) she said.”");
+  });
+});
+
+describe("words selected across voices and lines", () => {
+  it("are given alone: the marks inside them go, and the voice after them comes back", () => {
+    expect(
+      edited("One @Mara two three @/ four five.", "One @Mara two", (s, f, t) =>
+        setSpeakerWithin(s, f, t, "Gerald"),
+      ),
+    ).toEqual({
+      text: "@Gerald One two @Mara three @/ four five.",
+      heard: ["Gerald: One two", "Mara: three", "Narrator: four five."],
+    });
+  });
+
+  it("are changed line by line, every line or none", () => {
+    const body = "Whenever I find myself pausing.\nThen I go to sea and stay there.";
+    expect(
+      edited(body, "pausing.\nThen I go", (s, f, t) => setSpeakerWithin(s, f, t, "Gerald"))?.heard,
+    ).toEqual([
+      "Narrator: Whenever I find myself",
+      "Gerald: pausing.",
+      "Gerald: Then I go",
+      "Narrator: to sea and stay there.",
+    ]);
+    expect(
+      edited(body, "pausing.\nThen I go", (s, f, t) => setDirectionWithin(s, f, t, "softly"))?.text,
+    ).toBe(
+      "Whenever I find myself @(softly) pausing.\n@(softly) Then I go @() to sea and stay there.",
+    );
+    // A quote in the second line: nothing changes on either.
+    expect(
+      edited(
+        "Whenever I find myself pausing.\n@Mara “Go,” she said.",
+        "pausing.\n@Mara “Go",
+        (s, f, t) => setSpeakerWithin(s, f, t, "Gerald"),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("@/ before a letter or digit", () => {
+  it("is text, whatever plane the letter is from", () => {
+    for (const after of ["lib", "𐐀bc", "𝟘"])
+      expect(
+        lines(parse(`${front}@Gerald hello @/${after} there`)).map((line) => line.text),
+      ).toEqual([`hello @/${after} there`]);
   });
 });

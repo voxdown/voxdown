@@ -529,6 +529,10 @@ export class StretchTools {
     const remove = form.querySelector(".remove") as HTMLButtonElement;
     // A few words selected: their own direction, from nothing.
     const selected = this.selectedPart(scope, speech);
+    if (selected === "outside") {
+      this.tooFar();
+      return;
+    }
     if (selected) input.value = "";
     remove.hidden = !speech.ownDirection || selected !== undefined;
     const set = (direction: string | null) => {
@@ -540,6 +544,10 @@ export class StretchTools {
         return;
       }
       const part = this.selectedPart(now, target);
+      if (part === "outside") {
+        this.tooFar();
+        return;
+      }
       let changes: TextChange[];
       try {
         changes = now.back(
@@ -556,9 +564,11 @@ export class StretchTools {
       }
       const done = this.context.apply(
         changes,
-        direction
-          ? `“${direction}” can’t be set here without changing how other lines are said, so nothing changed.`
-          : "This direction can’t be taken out without changing other lines, so nothing changed.",
+        part
+          ? `The words selected can’t be said ${direction ? `“${direction}”` : "without a direction"} alone, so nothing changed.`
+          : direction
+            ? `“${direction}” can’t be set here without changing how other lines are said, so nothing changed.`
+            : "This direction can’t be taken out without changing other lines, so nothing changed.",
       );
       if (done)
         this.context.announce?.(
@@ -605,28 +615,38 @@ export class StretchTools {
   }
 
   /**
-   * The words selected inside `target`, on one line, when they are not all of its words: an edit
-   * of those words alone, as italics would be. Undefined with no selection, or one elsewhere.
+   * The words selected, where the selection takes in some of `target`: an edit of those words
+   * alone, as italics would be, over any lines and voices. Undefined with no selection, one
+   * elsewhere (the tools are for `target`), or one that is all of `target`'s words and no more.
+   * "outside": in a long book, a selection beyond the paragraphs read around the cursor.
    */
-  private selectedPart(scope: Scope, target: Speech): { from: number; to: number } | undefined {
+  private selectedPart(
+    scope: Scope,
+    target: Speech,
+  ): { from: number; to: number } | "outside" | undefined {
     const { from, to } = this.context.view.state.selection.main;
     if (from === to) return undefined;
-    if (
-      this.context.view.state.doc.lineAt(from).number !==
-      this.context.view.state.doc.lineAt(to).number
-    )
-      return undefined;
     const start = scope.at(from);
     const end = scope.at(to);
-    if (start < target.range.from || end > target.range.to) return undefined;
-    // All of its words: the whole stretch, as with no selection.
-    const words = scope.story.source.slice(target.textRange.from, target.textRange.to);
-    const chosen = scope.story.source.slice(
-      Math.max(start, target.textRange.from),
-      Math.min(end, target.textRange.to),
-    );
-    if (chosen.trim() === words.trim()) return undefined;
+    if (end <= target.range.from || start >= target.range.to) return undefined;
+    const source = scope.story.source;
+    if (start < 0 || end > source.length) return "outside";
+    if (start >= target.range.from && end <= target.range.to) {
+      const words = source.slice(target.textRange.from, target.textRange.to).trim();
+      const chosen = source
+        .slice(Math.max(start, target.textRange.from), Math.min(end, target.textRange.to))
+        .trim();
+      if (chosen === words) return undefined;
+    }
     return { from: start, to: end };
+  }
+
+  /** Said when a selection in a long book runs beyond what can be changed at once. */
+  private tooFar(): void {
+    this.context.notice?.(
+      "In a long story, select words within one paragraph to change them alone (or put the cursor in a passage to change all of it).",
+    );
+    this.closePopover(true);
   }
 
   /**
@@ -693,7 +713,11 @@ export class StretchTools {
       return;
     }
     const part = this.selectedPart(scope, target);
-    if (part && target.quoted) {
+    if (part === "outside") {
+      this.tooFar();
+      return;
+    }
+    if (part && target.quoted && part.from >= target.range.from && part.to <= target.range.to) {
       this.context.notice?.(
         `A quote is said by one voice: to give ${name} part of it, close the quote where that part begins and open another.`,
       );
@@ -731,7 +755,9 @@ export class StretchTools {
     const docChanges = scope.back(changes);
     const done = this.context.apply(
       docChanges,
-      `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,
+      part
+        ? `The words selected can’t be given to ${name} alone: words in a quote are said by the quote’s voice, so nothing changed. Select words outside quotes, or a whole quote.`
+        : `Giving this to ${name} would change who says other lines too, so nothing changed. You can write the mark by hand.`,
     );
     if (done) {
       this.context.announce?.(`${name} says this now.`);

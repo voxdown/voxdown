@@ -1144,6 +1144,16 @@ body[data-welcome] #draft-state {
 .statusbar .spacer {
   flex: 1;
 }
+/* A narrow window cuts the counts short, never the place or whether the draft is kept. */
+.statusbar > * {
+  flex-shrink: 0;
+}
+.statusbar > #counts {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .status-warnings {
   background: none;
   border: 0;

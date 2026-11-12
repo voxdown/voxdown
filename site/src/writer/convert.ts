@@ -83,7 +83,28 @@ export function paragraphsOf(root: Element, styleOf?: StyleOf): Paragraph[] {
       return;
     }
     if (tag === "pre") {
-      text(runsOf([...element.childNodes], here, true));
+      // Its lines as they are; a blank line between them starts a paragraph, as in the story.
+      let part: Run[] = [];
+      let line: Run[] = [];
+      let blank = 0;
+      const endLine = () => {
+        if (line.some((run) => "text" in run && run.text.trim())) {
+          if (blank && part.length) {
+            text(part);
+            part = [];
+          }
+          if (part.length) part.push({ lineBreak: true });
+          part.push(...line);
+          blank = 0;
+        } else blank++;
+        line = [];
+      };
+      for (const run of runsOf([...element.childNodes], here, true)) {
+        if ("lineBreak" in run) endLine();
+        else line.push(run);
+      }
+      endLine();
+      text(part);
       return;
     }
     // The text between blocks, a paragraph to each stretch of it; the blocks, each as itself.

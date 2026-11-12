@@ -14,12 +14,14 @@ import {
 } from "@codemirror/commands";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import {
+  ChangeSet,
   Compartment,
   EditorSelection,
   EditorState,
   type Extension,
   Prec,
   RangeSetBuilder,
+  StateEffect,
   Text,
 } from "@codemirror/state";
 import {
@@ -81,7 +83,6 @@ import "./writer.css";
 import "../theme";
 import { type AiContext, openAi } from "./ai-dialog";
 import { castPanel } from "./cast";
-import { chunks } from "./chunks";
 import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
 import { changesOnly, diffLines, withWords } from "./diff";
@@ -124,6 +125,7 @@ import { sameText } from "./saving";
 import { StoryScrollbar } from "./scrollbar";
 import { searchCount } from "./search-count";
 import { moveSection } from "./sections";
+import { SideDrawing } from "./side-draw";
 import { sidesHtml, sidesText } from "./sides";
 import {
   type Draft,
@@ -268,13 +270,30 @@ function current(): Story {
   return story;
 }
 
-const characters = (): readonly Character[] =>
-  [...colors].map(([handle, color]) => ({
+/** A long story's cast as the worker last read it: newer than `story` until the page reads it. */
+let castRead: ReadonlyArray<{ handle: string; name: string }> | undefined;
+
+const characters = (): readonly Character[] => {
+  const cast = castRead ?? story.cast;
+  return [...colors].map(([handle, color]) => ({
     handle,
-    name: story.cast.find((member) => member.handle === handle)?.name ?? handle,
+    name: cast.find((member) => member.handle === handle)?.name ?? handle,
     color,
-    ...(story.cast.some((member) => member.handle === handle) ? {} : { provisional: true }),
+    ...(cast.some((member) => member.handle === handle) ? {} : { provisional: true }),
   }));
+};
+
+/** Tells the editor the cast was read again: its names and colors drawn again, if they changed. */
+const castChanged = StateEffect.define<null>();
+let castShown = "";
+function showCast(): void {
+  queueMicrotask(() => {
+    const now = JSON.stringify(characters());
+    if (now === castShown) return;
+    castShown = now;
+    view.dispatch({ effects: castChanged.of(null) });
+  });
+}
 
 /** The text as it will be saved: with the line breaks the story came with. */
 const text = () => view.state.sliceDoc();
@@ -475,6 +494,9 @@ function editorState(source: string, cursor: number): EditorState {
         if (update.docChanged) {
           version++;
           tools.hide();
+          // The side's places carried to the text as it is now (side-draw.ts).
+          sinceShown = sinceShown?.compose(update.changes);
+          sinceAsked = sinceAsked?.compose(update.changes);
           changed();
         }
         if (update.docChanged || update.selectionSet) cursorMoved();
@@ -502,7 +524,28 @@ function editorState(source: string, cursor: number): EditorState {
 }
 
 /** Where the front matter ends, which a paragraph never moves above. */
-const frontMatterEnd = () => current().frontMatter?.range.to ?? null;
+const frontMatterEnd = (): number | null => {
+  // Found as the parser finds it (§4.4), from the lines alone: moving a paragraph in a long book
+  // never reads the whole story again for it.
+  const doc = view.state.doc;
+  if (
+    doc.lines < 2 ||
+    doc
+      .line(1)
+      .text.replace(/^\uFEFF/, "")
+      .trimEnd() !== "---"
+  )
+    return null;
+  let at = doc.line(1).to + 1;
+  let first = true;
+  for (const text of doc.iterLines(2)) {
+    if (!first) at += 1;
+    first = false;
+    if (text.trimEnd() === "---") return at + text.length;
+    at += text.length;
+  }
+  return null;
+};
 
 /** A warning's message, and its fix as one click, over the words it underlines. */
 const warningTips = hoverTooltip(
@@ -743,6 +786,10 @@ async function load(
   $("#elsewhere").hidden = mine;
   tools.hide();
   tabStory(id);
+  // The side shows another story: drawn afresh, from its start.
+  sideShows = "";
+  sinceShown = undefined;
+  sinceAsked = undefined;
   file.id = id;
   file.name = opened.name;
   file.handle = opened.handle;
@@ -820,7 +867,9 @@ function refresh(): void {
   clearTimeout(refreshTimer);
   story = readStory(view.state.doc.toString());
   storyVersion = version;
+  castRead = undefined;
   colors = characterColors(story);
+  showCast();
   rail.update(story);
   showSaveState();
   cancelIdle();
@@ -926,6 +975,8 @@ function showRead(): void {
   if (!read || !readNow()) return;
   const { reply } = read;
   colors = new Map(reply.colors);
+  castRead = reply.cast.cast;
+  showCast();
   rail.show(numbered(reply.scenes, sceneNumbers(view.state)));
   showCounts(reply);
   showWarningCount();
@@ -990,8 +1041,20 @@ function persistOnce(): void {
 let keptAt = 0;
 let keptVersion = 0;
 
+/** A new story no one has written in: nothing in it to keep, or to ask about. */
+const untouched = () => !file.handle && file.saved === "" && sameText(text(), NEW_STORY);
+
 async function keep(): Promise<void> {
   clearTimeout(keepTimer);
+  // A new story still as it began is kept nowhere (it would be a draft with changes not saved, and
+  // the story opened on the next visit); one typed in and taken back lets its draft go.
+  if (untouched()) {
+    keptAt = Date.now();
+    void forgetDraft(file.id);
+    file.kept = true;
+    showDraftState();
+    return;
+  }
   // Another tab writes the story: this one keeps nothing over it, and says so.
   if (!lock.owner) {
     file.kept = false;
@@ -1163,7 +1226,7 @@ function showCounts({ words, said, voices, heard }: Counts): void {
     session.reached = true;
     notice(`${wordsSaid(prefs.goal)} written: the goal is reached.`);
   }
-  $("#counts").textContent = [
+  const counts = [
     `${plural(words, "word")}${since || goal ? ` (${signed}${goal})` : ""}`,
     plural(said, "line said", "lines said"),
     plural(voices, "voice"),
@@ -1171,9 +1234,11 @@ function showCounts({ words, said, voices, heard }: Counts): void {
     // How long it takes to hear: what is read aloud, and its pauses, not what is printed.
     ...(heard > 0 ? [timeToHear(heard)] : []),
   ].join(" · ");
+  $("#counts").textContent = counts;
+  // All of it, where a narrow window cuts it short.
   $("#counts").title = since
-    ? `${since > 0 ? "+" : "−"}${wordsSaid(Math.abs(since))} since the story was opened`
-    : "";
+    ? `${counts}\n${since > 0 ? "+" : "−"}${wordsSaid(Math.abs(since))} since the story was opened`
+    : counts;
 }
 
 function cursorMoved(): void {
@@ -1203,48 +1268,46 @@ function showWarningCount(): void {
 
 // The side: the script, the book, and the warnings.
 
-/** The side, drawn again: the script or the book (`drawn`, when the worker drew it), cast or warnings. */
-/** Each drawing of the side; one drawn in parts stops when a newer one starts. */
-let drawing = 0;
-
-/**
- * A long story's script or book, drawn a few chunks at a time (chunks.ts): the first at once, the
- * rest while the browser is idle, so that the page never stops for a whole book at once.
- */
-function drawInParts(sheet: HTMLElement, html: string): void {
-  const run = drawing;
-  const lines = html.split("\n");
-  const head = lines[0] ?? "";
-  const tail = lines.at(-1) ?? "";
-  if (!/^<article\b/.test(head) || tail !== "</article>" || lines.length < 400) {
-    sheet.innerHTML = html;
-    return;
-  }
-  const pieces = chunks(lines.slice(1, -1));
-  const parts: string[] = [];
-  for (let i = 0; i < pieces.length; i += 5) parts.push(pieces.slice(i, i + 5).join("\n"));
-  sheet.innerHTML = `${head}\n${parts.shift() ?? ""}\n${tail}`;
-  const article = sheet.firstElementChild;
-  const next = () => {
-    if (run !== drawing || !article) return;
-    const more = parts.shift();
-    if (more === undefined) {
-      indexSheet();
-      markPlace();
-      return;
-    }
-    article.insertAdjacentHTML("beforeend", more);
-    later(next);
-  };
-  later(next);
-}
-
 /** When the browser is next idle (or soon, where it can't say). */
 const later = (run: () => void) =>
   "requestIdleCallback" in window
     ? window.requestIdleCallback(run, { timeout: 200 })
     : setTimeout(run, 16);
 
+/**
+ * The script or book on the side (side-draw.ts): drawn again at the reader's place. Its parts say
+ * where they are in the text the drawing shown was made from; the changes since that text, and
+ * since the text of a drawing under way, carry those places to the text now.
+ */
+const sideDrawing = new SideDrawing(
+  $("#side-sheet"),
+  () => {
+    indexSheet();
+    markPlace();
+  },
+  later,
+);
+let sinceShown: ChangeSet | undefined;
+let sinceAsked: ChangeSet | undefined;
+/** Which story's which tab the side shows: the same again is drawn again at the reader's place. */
+let sideShows = "";
+
+function drawSheet(html: string): void {
+  const again = sideShows === `${file.id}:${prefs.tab}`;
+  sideShows = `${file.id}:${prefs.tab}`;
+  const toNew = again ? sinceShown : undefined;
+  sinceAsked = ChangeSet.empty(view.state.doc.length);
+  sideDrawing.draw(
+    html,
+    again,
+    (from) => (toNew && from <= toNew.length ? toNew.mapPos(from, -1) : from),
+    () => {
+      sinceShown = sinceAsked;
+    },
+  );
+}
+
+/** The side, drawn again: the script or the book (`drawn`, when the worker drew it), cast or warnings. */
 function showSide(drawn?: string): void {
   const sheet = $("#side-sheet");
   for (const tab of document.querySelectorAll<HTMLElement>(".side-tab")) {
@@ -1259,17 +1322,16 @@ function showSide(drawn?: string): void {
   const long = view.state.doc.length >= LONG;
   // Any drawing in parts still going stops: a book drawn into a tab no longer shown is work for
   // nothing (and grew a page no one sees to thousands of parts).
-  drawing++;
+  sideDrawing.stop();
   if (prefs.tab === "script" || prefs.tab === "book") {
     // A long story's comes from the worker: until it does, the page shows what it showed.
-    if (drawn !== undefined) {
-      if (long) drawInParts(sheet, drawn);
-      else sheet.innerHTML = drawn;
-    } else if (!long)
-      sheet.innerHTML =
+    if (drawn !== undefined) drawSheet(drawn);
+    else if (!long)
+      drawSheet(
         prefs.tab === "script"
-          ? renderScript(story, { positions: true })
-          : renderBook(story, { pages: true, positions: true });
+          ? renderScript(current(), { positions: true })
+          : renderBook(current(), { pages: true, positions: true }),
+      );
     else {
       // A long story's comes from the worker, read for this side.
       const doc = view.state.doc;
@@ -1280,7 +1342,8 @@ function showSide(drawn?: string): void {
       });
       return;
     }
-  } else if (prefs.tab === "cast")
+  } else if (prefs.tab === "cast") {
+    sideShows = "";
     sheet.replaceChildren(
       castPanel(
         castData(),
@@ -1322,7 +1385,10 @@ function showSide(drawn?: string): void {
         lockedOut,
       ),
     );
-  else sheet.replaceChildren(warningList());
+  } else {
+    sideShows = "";
+    sheet.replaceChildren(warningList());
+  }
   indexSheet();
   markPlace();
 }
@@ -1913,7 +1979,7 @@ async function mayLeave(): Promise<boolean> {
   if (!(await mayWrite())) return false;
   if (sameText(text(), file.saved)) return true;
   // A new story no one has written in yet: nothing to save.
-  if (!file.handle && file.saved === "" && sameText(text(), NEW_STORY)) return true;
+  if (untouched()) return true;
   const answer = await ask(
     `Save the changes to ${file.name} first? If you don't, they stay in this browser: File › Recover a draft brings them back.`,
     [
@@ -2871,7 +2937,12 @@ function showOutline(): void {
   const dialog = $<HTMLDialogElement>("#outline");
   const filter = $<HTMLInputElement>("#outline-filter");
   const list = $("#outline-list");
-  const scenes = railScenes(current(), sceneNumbers(view.state));
+  // A long book's scenes as the worker read them, when it read the text as it is now: never read
+  // again on the page to open the list.
+  const scenes =
+    read && readNow()
+      ? numbered(read.reply.scenes, sceneNumbers(view.state))
+      : railScenes(current(), sceneNumbers(view.state));
   // Each scene with the chapter it is in, to tell apart scenes of the same name.
   let chapter = "";
   const within = scenes.map((scene) => {

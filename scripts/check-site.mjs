@@ -1179,6 +1179,50 @@ for (let give = 0; give < 3; give++) {
   gave++;
 }
 if (gave === 0) problems.push("writer: no speaker could be given in the 100,000-word book");
+// The side drawn again after a pause in typing keeps the reader's place, in a tab that is only
+// read too: it showed the book's first page for a moment after every pause, and stayed there
+// where the editor didn't have the keyboard to bring it back.
+await longPage.waitForTimeout(2500);
+await longPage.click(".cm-content");
+await longPage.keyboard.press("Control+End");
+await longPage.keyboard.type(" and so on", { delay: 40 });
+// The keyboard elsewhere, as in a tab that only reads: nothing but the side's own memory of the
+// place puts it back.
+await longPage.evaluate(() => {
+  const sheet = document.querySelector("#side-sheet");
+  sheet.focus({ preventScroll: true });
+  // The reader halfway down the book, far from its start.
+  sheet.scrollTop = sheet.scrollHeight / 2;
+});
+await longPage.waitForTimeout(300);
+await longPage.evaluate(() => {
+  const sheet = document.querySelector("#side-sheet");
+  const top = () => {
+    const edge = sheet.getBoundingClientRect().top;
+    for (const part of sheet.querySelectorAll(".vxd > [data-from], .side-chunk > [data-from]"))
+      if (part.getBoundingClientRect().bottom > edge) return Number(part.dataset.from);
+    return 0;
+  };
+  window.__article = sheet.querySelector(":scope > article");
+  window.__tops = [top()];
+  const watch = () => {
+    window.__tops.push(top());
+    if (window.__tops.length < 600) requestAnimationFrame(watch);
+  };
+  requestAnimationFrame(watch);
+});
+await longPage.waitForTimeout(4500);
+const sideKept = await longPage.evaluate(() => ({
+  tops: window.__tops,
+  redrawn: document.querySelector("#side-sheet > article") !== window.__article,
+}));
+const sideTop = sideKept.tops[0];
+const sideLowest = Math.min(...sideKept.tops);
+if (!sideKept.redrawn) problems.push("writer: the side wasn't drawn again after a pause in typing");
+else if (sideLowest < sideTop * 0.9 || Math.abs((sideKept.tops.at(-1) ?? 0) - sideTop) > 2000)
+  problems.push(
+    `writer: the side drawn again lost the reader's place (from ${sideTop} to ${sideKept.tops.at(-1)}, at ${sideLowest} on the way)`,
+  );
 await long.close();
 console.log(`writer: a 100,000-word book, slowest key ${slowest} ms, ${gave} speakers given: ok`);
 

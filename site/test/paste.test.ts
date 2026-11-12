@@ -26,6 +26,37 @@ describe("a paste from a web page, Word or Google Docs", () => {
     ).toBe("# Chapter One\n\n*Softly* now, she said.\n\nThe second paragraph.");
   });
 
+  it("reads a manuscript set in Courier as a page, from Google Docs or Word", () => {
+    const courier = "font-family:'Courier New',monospace;white-space:pre;white-space:pre-wrap;";
+    expect(
+      pastedText(
+        `<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-3"><h1 dir="ltr"><span style="${courier}">Chapter One</span></h1><p dir="ltr"><span style="${courier}font-style:italic;">Softly</span><span style="${courier}"> now, she said.</span></p><p dir="ltr"><span style="${courier}">The second paragraph.</span></p></b>`,
+        "Chapter One\nSoftly now, she said.\nThe second paragraph.",
+      ),
+    ).toBe("# Chapter One\n\n*Softly* now, she said.\n\nThe second paragraph.");
+    expect(
+      pastedText(
+        `<html xmlns:o="urn:schemas-microsoft-com:office:office"><body><p class=MsoNormal><i><span style="font-family:'Courier Prime'">Softly</span></i><span style="font-family:'Courier Prime'"> now.</span></p><p class=MsoNormal><span style="font-family:'Courier Prime'">Go.</span></p></body></html>`,
+      ),
+    ).toBe("*Softly* now.\n\nGo.");
+    // A typewriter face alone, anywhere, is no sign of code.
+    expect(
+      pastedText(
+        '<p style="font-family: Courier">It was <em>late</em>.</p><p style="font-family: Courier">Then.</p>',
+      ),
+    ).toBe("It was *late*.\n\nThen.");
+  });
+
+  it("keeps the paragraphs of a block of code pasted as a page's", () => {
+    expect(
+      pastedText(
+        "<p>Here is the opening you asked for, with its heading and the sound of the door.</p><pre><code>## Chapter\n\nShe ran home.\n  \n[door slams]\nThen quiet.</code></pre>",
+      ),
+    ).toBe(
+      "Here is the opening you asked for, with its heading and the sound of the door.\n\n\\## Chapter\n\nShe ran home.\n\n\\[door slams]\nThen quiet.",
+    );
+  });
+
   it("reads a page with a few blocks of code in it as a page", () => {
     expect(
       pastedText(

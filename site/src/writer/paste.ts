@@ -14,29 +14,24 @@ import { styleSheets } from "./epub";
 const VOXDOWN =
   /(?:^|\s)@[\p{L}\p{N}_'’-]*\s*(?:\([^()\n]*\)\s*)?[“"‘'«(]|\{(?:pause|page|book only|hidden|audio only|heard only|printed only)\b[^}\n]*\}|%%[^\n]*%%|(?:^|\n)(?::::|---[ \t]*\r?\n)/u;
 
-/** A typewriter face, as code editors set their text. */
-const MONOSPACE =
-  /monospace|Consolas|Menlo|Monaco|Courier|Cascadia|Fira Code|JetBrains Mono|SF Mono/i;
+/** What Google Docs and Word put on the clipboard: a document, whatever its font. */
+const DOCUMENT = /id="docs-internal-guid-|urn:schemas-microsoft-com:office|class="?Mso/i;
 
 /**
  * Source, not a page: most of what is pasted set as code is (VS Code wraps all it copies in
- * `white-space: pre` and a typewriter face; a `<pre>` or `<code>`). A page with a few such blocks
- * in it (Project Gutenberg's, its licence's tables) is a page, and Google Docs' `pre-wrap` is how
- * it keeps spaces, not code.
+ * `white-space: pre`; a `<pre>` or `<code>`). A typewriter face alone is not code: a manuscript is
+ * set in Courier. A page with a few code blocks in it (Project Gutenberg's, its licence's tables)
+ * is a page, and Google Docs' `pre-wrap` is how it keeps spaces, not code.
  */
-function isSource(page: Document): boolean {
+function isSource(page: Document, html: string): boolean {
+  if (DOCUMENT.test(html)) return false;
   const all = page.body.textContent?.replace(/\s+/g, "").length ?? 0;
   if (all === 0) return false;
   let code = 0;
   const walk = (element: Element) => {
     const tag = element.tagName.toLowerCase();
     const style = (element as HTMLElement).style;
-    if (
-      tag === "pre" ||
-      tag === "code" ||
-      style?.whiteSpace === "pre" ||
-      MONOSPACE.test(style?.fontFamily ?? "")
-    ) {
+    if (tag === "pre" || tag === "code" || style?.whiteSpace === "pre") {
       code += element.textContent?.replace(/\s+/g, "").length ?? 0;
       return;
     }
@@ -56,7 +51,7 @@ export function pastedStory(
 ): { text: string; escaped: boolean; marks: string } | undefined {
   if (VOXDOWN.test(plain)) return undefined;
   const page = new DOMParser().parseFromString(html, "text/html");
-  if (isSource(page)) return undefined;
+  if (isSource(page, html)) return undefined;
   const css = [...page.querySelectorAll("style")].map((style) => style.textContent ?? "");
   const paragraphs: Paragraph[] = paragraphsOf(page.body, styleSheets(css));
   if (paragraphs.length === 0) return undefined;

@@ -1479,6 +1479,67 @@ await sync.waitForTimeout(2800);
 if (!(await sync.textContent("#save-state"))?.includes("changed on disk"))
   problems.push("writer: saving by itself stopped for a change on disk without saying so for long");
 await synced.close();
+
+// Reading a file changed elsewhere again waits on the browser's storage (a version is kept first):
+// a story opened and typed in meanwhile is never replaced by it, nor marked saved.
+const racing = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await racing.addInitScript(() => {
+  window.__disk = "# Original\n\nOriginal text.\n";
+  window.showOpenFilePicker = async () => [
+    {
+      kind: "file",
+      name: "race.vxd",
+      getFile: async () => new File([window.__disk], "race.vxd", { lastModified: 1 }),
+      queryPermission: async () => "granted",
+      requestPermission: async () => "granted",
+      isSameEntry: async () => false,
+    },
+  ];
+});
+const race = await racing.newPage();
+watch(race, "writer read again while a story opens");
+await race.goto(`${base}/writer/`);
+await race.click('.welcome [data-command="open"]');
+await race.waitForFunction(() => document.querySelector("#file-name")?.textContent === "race.vxd");
+await race.waitForTimeout(800);
+// The browser's storage held (as a busy disk holds it), the file changed, the writer back.
+await race.evaluate(async () => {
+  window.__holding = true;
+  const db = await new Promise((done) => {
+    const opening = indexedDB.open("voxdown-writer");
+    opening.onsuccess = () => done(opening.result);
+  });
+  const store = db.transaction("versions", "readwrite").objectStore("versions");
+  const hold = () => {
+    if (window.__holding) store.get(0).onsuccess = hold;
+  };
+  hold();
+  window.__disk = "# Changed elsewhere\n\nTheir text.\n";
+  window.dispatchEvent(new Event("focus"));
+});
+await race.waitForTimeout(300);
+await race.click("#file-menu-button");
+await race.click('#file-menu [data-command="new"]');
+await race.waitForTimeout(300);
+await race.keyboard.type("My New Story");
+await race.evaluate(() => {
+  window.__holding = false;
+});
+await race.waitForTimeout(1200);
+const raced = await race.evaluate(() => ({
+  text: document.querySelector(".cm-content")?.textContent ?? "",
+  name: document.querySelector("#file-name")?.textContent,
+}));
+if (!raced.text.includes("My New Story") || raced.text.includes("Their text"))
+  problems.push(
+    `writer: a file read again after the browser's storage waited replaced the story opened meanwhile (${raced.name}: ${JSON.stringify(raced.text.slice(0, 80))})`,
+  );
+await race.reload();
+await race.waitForTimeout(1200);
+const back = (await race.textContent(".cm-content")) ?? "";
+if (!back.includes("My New Story"))
+  problems.push("writer: a story typed while a file was read again was gone after a reload");
+await racing.close();
 console.log("writer: a file changed elsewhere, read again, compared: ok");
 
 // Writing in the Writer: who says a passage and how, from the bar over it; undo; search; moving
@@ -2316,6 +2377,25 @@ console.log("writer: two tabs, a file changed on disk: ok");
     for await (const chunk of request) body += chunk;
     const asked = JSON.parse(body);
     sent.push({ path, ...asked });
+    if (path === "/v1/listen") {
+      // A tenth of a second of silence, as a WAV.
+      const samples = 2400;
+      const wav = Buffer.alloc(44 + samples * 2);
+      wav.write("RIFF", 0);
+      wav.writeUInt32LE(36 + samples * 2, 4);
+      wav.write("WAVEfmt ", 8);
+      wav.writeUInt32LE(16, 16);
+      wav.writeUInt16LE(1, 20);
+      wav.writeUInt16LE(1, 22);
+      wav.writeUInt32LE(24000, 24);
+      wav.writeUInt32LE(48000, 28);
+      wav.writeUInt16LE(2, 32);
+      wav.writeUInt16LE(16, 34);
+      wav.write("data", 36);
+      wav.writeUInt32LE(samples * 2, 40);
+      response.writeHead(200, { "content-type": "audio/wav" });
+      return response.end(wav);
+    }
     response.writeHead(200, { "content-type": "application/x-ndjson" });
     const say = (event) => response.write(`${JSON.stringify(event)}\n`);
     if (path === "/v1/tag") {
@@ -2355,8 +2435,19 @@ console.log("writer: two tabs, a file changed on disk: ok");
         type: "casting",
         file: "/books/untitled.audiobook/casting.json",
         people: [
-          { name: "Narrator", voice: "Heart", description: "female, en-US" },
-          { name: "Tom", voice: "Michael" },
+          {
+            name: "Narrator",
+            voice: "Heart",
+            id: "af_heart",
+            description: "female, en-US",
+            sample: "It was late.",
+          },
+          { name: "Tom", voice: "Michael", id: "am_michael", sample: "Who’s there?" },
+        ],
+        voices: [
+          { id: "af_heart", name: "Heart", description: "female, en-US" },
+          { id: "am_michael", name: "Michael", description: "male, en-US" },
+          { id: "bm_george", name: "George", description: "male, en-GB" },
         ],
       });
       say({
@@ -2441,6 +2532,20 @@ console.log("writer: two tabs, a file changed on disk: ok");
     .catch(() => problems.push("writer: the audiobook's casting isn't shown"));
   if ((await writer.textContent("#ai-go")) !== "Make it")
     problems.push("writer: no Make it after the casting");
+  // A voice chosen for Tom, and heard saying his first words, before the book is made with it.
+  const tomVoice = writer.getByRole("combobox", { name: "Tom’s voice" });
+  if ((await tomVoice.inputValue().catch(() => "")) !== "am_michael")
+    problems.push("writer: the casting doesn't show each character's voice to change");
+  await tomVoice.selectOption("bm_george");
+  await writer.getByRole("button", { name: "Hear Tom’s first words in this voice" }).click();
+  await writer.waitForTimeout(500);
+  const heardAsk = sent.find((request) => request.path === "/v1/listen");
+  if (heardAsk?.voice !== "bm_george" || heardAsk?.words !== "Who’s there?")
+    problems.push(
+      `writer: Listen didn't ask for Tom's words in the voice chosen (${JSON.stringify(heardAsk)})`,
+    );
+  if ((await writer.textContent("#ai-progress"))?.includes("isn't answering"))
+    problems.push("writer: hearing a voice failed");
   await writer.click("#ai-go");
   await writer
     .waitForFunction(
@@ -2451,6 +2556,9 @@ console.log("writer: two tabs, a file changed on disk: ok");
     .catch(() => problems.push("writer: making the audiobook didn't say where it is"));
   if (sent.find((request) => request.path === "/v1/audiobook")?.with !== "kokoro")
     problems.push("writer: the audiobook wasn't asked of the voices chosen");
+  const making = sent.filter((request) => request.path === "/v1/audiobook").at(-1);
+  if (making?.voices?.Tom !== "bm_george")
+    problems.push("writer: the audiobook wasn't made with the voice chosen for Tom");
   await connected.close();
   // Not connected: how to connect.
   const alone = await browser.newPage();

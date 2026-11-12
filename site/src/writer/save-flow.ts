@@ -77,6 +77,8 @@ export class SaveFlow {
   /** Saving by itself stopped, and says so until a save goes through. */
   stopped = false;
   private readonly queue = new SaveQueue();
+  /** A look at the file on coming back, while it goes on (focus and showing the tab both ask). */
+  private checking: Promise<void> | undefined;
 
   constructor(private readonly host: SaveHost) {}
 
@@ -192,7 +194,7 @@ export class SaveFlow {
         ],
       );
       if (answer === "theirs") {
-        await this.readAgain(disk);
+        if (still()) await this.readAgain(disk);
         return false;
       }
       if (answer === "both") {
@@ -239,33 +241,53 @@ export class SaveFlow {
 
   /**
    * The file as it is on disk now, in place of the story here: the same story with its versions,
-   * Undo to take it back; and what was here kept as a version first.
+   * Undo to take it back; and what was here kept as a version first. True once read; false, with
+   * nothing changed, if while that version was kept another story was opened, another tab took
+   * this one, or words were typed (they are never replaced unseen).
    */
-  async readAgain(disk: { text: string; modified: number }): Promise<void> {
+  async readAgain(disk: { text: string; modified: number }): Promise<boolean> {
     const { host } = this;
+    const { file } = host;
+    const story = file.id;
+    const handle = file.handle;
+    const before = host.text();
+    await host.snapshot("Before the file was read again", before);
+    if (file.id !== story || file.handle !== handle || !host.owner() || host.text() !== before)
+      return false;
     // The file and the story agree again: saving by itself can go on.
     this.stopped = false;
-    await host.snapshot("Before the file was read again", host.text());
-    host.file.saved = disk.text;
-    host.file.savedAt = Date.now();
-    host.file.modified = disk.modified;
+    file.saved = disk.text;
+    file.savedAt = Date.now();
+    file.modified = disk.modified;
     host.replaceText(disk.text);
     host.showSaveState();
+    // This story's version at once, before the wait for the draft (another may be open after it).
+    const read = host.snapshot("Read again from disk", disk.text);
     await host.keep();
-    await host.snapshot("Read again from disk", disk.text);
+    await read;
+    return true;
   }
 
   /**
    * Coming back to the Writer: if the file changed on disk meanwhile, a story with nothing unsaved
    * here is read again; one with changes here is left as it is, and Save will ask.
    */
-  async checkDisk(): Promise<void> {
+  checkDisk(): Promise<void> {
+    if (!this.checking)
+      this.checking = this.lookAtDisk().finally(() => {
+        this.checking = undefined;
+      });
+    return this.checking;
+  }
+
+  private async lookAtDisk(): Promise<void> {
     const { host } = this;
     const { file } = host;
+    const story = file.id;
     const handle = file.handle;
     if (!handle || file.modified === undefined || !host.owner()) return;
     const disk = await host.files.onDisk(handle);
-    if (!disk || handle !== file.handle) return;
+    if (!disk || handle !== file.handle || file.id !== story) return;
     // What it says, not its date: a sync or a copy can keep the date and change the words.
     if (sameText(disk.text, file.saved)) {
       if (disk.modified !== file.modified) {
@@ -275,10 +297,16 @@ export class SaveFlow {
       return;
     }
     if (sameText(host.text(), file.saved)) {
-      await this.readAgain(disk);
-      host.notice(
-        `${file.name} changed outside the Writer, so it was read again. Undo (Ctrl+Z) takes it back.`,
-      );
+      if (await this.readAgain(disk))
+        host.notice(
+          `${file.name} changed outside the Writer, so it was read again. Undo (Ctrl+Z) takes it back.`,
+        );
+      // Words typed while it was about to be read: they stay, and Save asks which to keep.
+      else if (file.id === story && file.handle === handle && host.owner())
+        this.stop(
+          `${file.name} changed outside the Writer. Save will ask which to keep.`,
+          "Not saved: changed on disk",
+        );
     } else {
       this.stop(
         `${file.name} changed outside the Writer. Save will ask which to keep.`,

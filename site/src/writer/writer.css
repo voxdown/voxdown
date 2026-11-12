@@ -2014,8 +2014,12 @@ body[data-welcome] .manuscript .editor {
 }
 .ai-casting {
   border-collapse: collapse;
+  width: 100%;
   margin: 0 0 0.6rem;
   font-size: 0.88rem;
+}
+.ai-casting td:nth-child(2) {
+  width: 100%;
 }
 .ai-casting caption {
   text-align: left;
@@ -2028,6 +2032,18 @@ body[data-welcome] .manuscript .editor {
 }
 .ai-casting td:first-child {
   font-weight: 600;
+  padding-top: 0.45rem;
+}
+.ai-casting select {
+  width: 100%;
+  font: inherit;
+}
+.ai-cast-note:empty {
+  display: none;
+}
+.ai-casting .ai-listen {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.82rem;
 }
 .link-button {
   border: 0;

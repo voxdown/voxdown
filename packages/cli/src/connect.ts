@@ -18,7 +18,7 @@ import { productionScript } from "@voxdown/produce";
 import { diffChanges, parse } from "voxdown";
 import { type Machine, backendNamed, findBackends } from "./ai";
 import { Failure } from "./errors";
-import { chooseService, fileName, makeAudiobook, speechServices } from "./produce";
+import { chooseService, fileName, makeAudiobook, sampleIn, speechServices } from "./produce";
 import { tagStory } from "./tag";
 
 /** Where the Writer is published. */
@@ -72,6 +72,15 @@ async function bodyOf(request: IncomingMessage): Promise<Record<string, unknown>
 }
 
 const text = (value: unknown) => (typeof value === "string" ? value : undefined);
+
+/** The voices the Writer chose, by character: names and voices as text, nothing else. */
+function recast(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const chosen = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
+  );
+  return chosen.length ? Object.fromEntries(chosen) : undefined;
+}
 
 export async function startHelper(options: HelperOptions): Promise<Helper> {
   const token = options.token ?? randomBytes(24).toString("base64url");
@@ -158,6 +167,26 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
           speech: speech.map(({ id, label, note }) => ({ id, label, ...(note ? { note } : {}) })),
         }),
       );
+      return;
+    }
+    // A voice heard before it is chosen: a character's first words in it.
+    if (request.method === "POST" && path === "/v1/listen") {
+      const body = await bodyOf(request);
+      const voice = text(body.voice);
+      const words = text(body.words);
+      if (!voice || !words?.trim()) throw new Failure("no voice or words to say were sent");
+      const model = text(body.model);
+      const service = await chooseService(
+        options.machine,
+        text(body.with),
+        model,
+        undefined,
+        () => {},
+      );
+      const language = text(body.language);
+      const { audio, type } = await sampleIn(service, voice, words, language);
+      response.writeHead(200, { "content-type": type, "cache-control": "no-store" });
+      response.end(audio);
       return;
     }
     if (request.method === "POST" && (path === "/v1/tag" || path === "/v1/audiobook")) {
@@ -251,6 +280,7 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
     const chapters = Array.isArray(body.chapters)
       ? body.chapters.filter((value): value is number => Number.isInteger(value))
       : undefined;
+    const chosen = recast(body.voices);
     const out = join(
       options.folder,
       `${fileName(0, name.replace(/\.[^.]+$/, "")).slice(3) || "story"}.audiobook`,
@@ -264,6 +294,7 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
       service,
       mode: mode === "make" || mode === "studio" ? mode : "estimate",
       sounds: body.sounds === true,
+      ...(chosen ? { recast: chosen } : {}),
       ...(model ? { model } : {}),
       ...(chapters?.length ? { chapters } : {}),
       signal,

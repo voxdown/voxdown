@@ -20,10 +20,12 @@ import {
   createStudioProject,
   elevenlabs,
   estimate,
+  fromPcm16,
   openaiSpeech,
   produce,
   productionScript,
   speakersOf,
+  toWav,
   voiceId,
 } from "@voxdown/produce";
 import {
@@ -202,6 +204,50 @@ function duration(ms: number): string {
 }
 
 /** Who needs a voice: the narrator, and everyone the script gives words or sounds to. */
+/** At most this many characters are said to hear a voice. */
+const SAMPLE = 220;
+
+/** The first words someone says in the story (the narrator: the first told), to hear in a voice. */
+export function firstWords(script: ProductionScript, name: string): string | undefined {
+  const key = name.toLowerCase();
+  const line = script.lines.find(
+    (line) => line.kind === "speech" && line.speaker?.toLowerCase() === key && line.text.trim(),
+  );
+  if (!line) return undefined;
+  const text = line.text.trim();
+  if (text.length <= SAMPLE) return text;
+  // Cut at the end of a sentence, else of a word.
+  const cut = text.slice(0, SAMPLE);
+  const sentence = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return sentence > SAMPLE / 3
+    ? cut.slice(0, sentence + 1)
+    : `${cut.slice(0, cut.lastIndexOf(" "))}…`;
+}
+
+/**
+ * Words said in a voice, to hear it before choosing it: a WAV or an MP3, and its type. Costs what
+ * the service charges for so many characters (at most a sentence or two).
+ */
+export async function sampleIn(
+  service: { id: string; adapter: Adapter },
+  voice: string,
+  words: string,
+  language?: string,
+): Promise<{ audio: Uint8Array; type: string }> {
+  const voices = await service.adapter.voices();
+  const id = voiceId(voices, voice);
+  if (!id) throw new Failure(`“${voice}” isn't one of ${service.adapter.name}'s voices`);
+  const clip = await service.adapter.speak({
+    text: words.slice(0, SAMPLE),
+    voice: id,
+    direction: null,
+    ...(language ? { language } : {}),
+  });
+  if (clip.format === "mp3") return { audio: clip.audio, type: "audio/mpeg" };
+  if (clip.format === "wav") return { audio: clip.audio, type: "audio/wav" };
+  return { audio: toWav(fromPcm16(clip.audio, clip.rate ?? 24_000)), type: "audio/wav" };
+}
+
 function peopleOf(story: Story, script: ProductionScript) {
   const speakers = script.lines
     .filter((line) => line.speaker && (line.kind === "speech" || line.kind === "vocal"))
@@ -356,7 +402,16 @@ export type AudiobookEvent =
   | {
       type: "casting";
       file: string;
-      people: Array<{ name: string; voice: string; description?: string }>;
+      /** Each voice, the voice's id, and the first words they say, to hear in a voice. */
+      people: Array<{
+        name: string;
+        voice: string;
+        id: string;
+        description?: string;
+        sample?: string;
+      }>;
+      /** The service's voices, to choose from. */
+      voices: Array<{ id: string; name: string; description?: string; language?: string }>;
     }
   | {
       type: "estimate";
@@ -410,6 +465,8 @@ export async function makeAudiobook(options: {
   chapters?: number[];
   sounds?: boolean;
   keepWav?: boolean;
+  /** Voices the writer chose (by id or name), by character: kept in `casting.json`. */
+  recast?: Record<string, string>;
   /** Asked before anything is paid for; no answer, and it goes ahead. */
   confirm?: () => Promise<boolean>;
   onEvent?: (event: AudiobookEvent) => void;
@@ -428,7 +485,13 @@ export async function makeAudiobook(options: {
   const voices = await adapter.voices();
   if (voices.length === 0) throw new Failure(`${adapter.name} offers no voices to cast`);
   const people = peopleOf(story, script);
-  const kept = allCasting[id] ?? {};
+  const kept: Record<string, string> = { ...(allCasting[id] ?? {}) };
+  for (const [name, voice] of Object.entries(options.recast ?? {})) {
+    if (!people.some((person) => person.name === name)) continue;
+    if (!voiceId(voices, voice))
+      throw new Failure(`${name}'s voice “${voice}” isn't one of ${adapter.name}'s`);
+    kept[name] = voice;
+  }
   const casting = castVoices(people, voices, {
     ...(script.language ? { language: script.language } : {}),
     kept,
@@ -438,7 +501,7 @@ export async function makeAudiobook(options: {
     throw new Failure(
       `${unknown.map(([name, voice]) => `${name}'s voice “${voice}”`).join(", ")} isn't one of ${adapter.name}'s: change it in ${castingFile}`,
     );
-  if (JSON.stringify(casting) !== JSON.stringify(kept)) {
+  if (JSON.stringify(casting) !== JSON.stringify(allCasting[id] ?? {})) {
     allCasting[id] = casting;
     await writeFile(castingFile, `${JSON.stringify(allCasting, null, 2)}\n`);
   }
@@ -450,12 +513,21 @@ export async function makeAudiobook(options: {
     file: castingFile,
     people: people.map((person) => {
       const voice = voices.find((candidate) => candidate.id === ids[person.name]);
+      const sample = firstWords(script, person.name);
       return {
         name: person.name,
         voice: voice?.name ?? (casting[person.name] as string),
+        id: ids[person.name] as string,
         ...(voice?.description ? { description: voice.description } : {}),
+        ...(sample ? { sample } : {}),
       };
     }),
+    voices: voices.map((voice) => ({
+      id: voice.id,
+      name: voice.name,
+      ...(voice.description ? { description: voice.description } : {}),
+      ...(voice.language ? { language: voice.language } : {}),
+    })),
   });
   const sounds = Boolean(options.sounds);
   const cost = estimate(script, {

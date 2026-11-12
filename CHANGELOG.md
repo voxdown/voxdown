@@ -28,6 +28,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - **The toolbar** under the menus (**View › Toolbar**, remembered): undo and redo, italics and bold, who says this and how, the next quote with no speaker, naming the speakers with AI, a sound, a pause, a page turn or a note, find, the outline, the next warning, Hear and Export. A click leaves the cursor in the story, Undo and Redo are dimmed with nothing to undo, and Hear stays pressed while it reads. Each button's name and keys show under it; the bar is one stop for Tab, the arrows moving along it. Focus hides it; on a narrow window it shows the pictures alone, and scrolls.
 - **File** in four short groups: **Open recent** is a menu of its own, every export and print is in one **Export…** dialog (the book, the script, each character's lines, and files for other tools), and tidying moved to **Edit**.
 - **Help › About VoxDown Writer**: what it is, when it was built and from which commit, the format's version, that it is private by design, its licenses, and links to the cheat sheet, the spec, what's new, the source and issues.
+- **Make an audiobook…** shows the casting to change: each character's voice chosen from the service's, and **Listen** says their first words in it, through the helper (`POST /v1/listen`). The choices go to `casting.json` with the next request; no file to edit by hand.
 - The AI dialog's command to run (`npx -y @voxdown/cli connect`) has a Copy button; where the page can't copy, it selects the command for Ctrl+C.
 - The AI dialog says plainly that the story stays the writer's: VoxDown has no server and no account, the helper runs on their own computer, and keys and sign-ins never leave it. [docs/ai.md](docs/ai.md) says the same at more length.
 
@@ -35,7 +36,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Never losing work:
   - One tab writes the story at a time: another opens it to read, with **Write here instead**, which takes it with the first tab's last words.
   - The words typed just before the page goes are written down at once, and come back with the writer's place.
-  - Saving over a file changed outside the Writer asks first; coming back to the Writer reads it again when nothing here is unsaved.
+  - Saving over a file changed outside the Writer asks first; coming back to the Writer reads it again when nothing here is unsaved. Reading it again waits on the browser's storage (a version is kept first): a story opened or words typed meanwhile are never replaced, nor marked saved.
   - **Save automatically**, on by default where the browser keeps files, two seconds after typing stops.
   - **Save as** keeps the new name, and a file dropped on the text opens instead of going into the story.
   - The browser is asked to keep the Writer's drafts when space runs short, and a byte order mark and mixed line endings open as they are.

@@ -33,6 +33,8 @@ Only to the voice service you choose, and only when you make an audiobook: VoxDo
 
 The first run writes `casting.json` in the output folder: a voice for each character, chosen from the service's voices (the narrator a storyteller's where there is one, each character a voice of their own, of the gender the cast's words suggest). Change any voice there, by its name or its id, and run again. `--dry-run` shows the casting and what the book would cost, and makes nothing.
 
+In the Writer, **File › Make an audiobook…** shows the casting to change: choose another of the service's voices for anyone, and **Listen** to hear their first words in it (a sentence or two, at the service's price; free with a voice engine on your computer). The voices you choose are kept in `casting.json` when the cost is counted again or the book is made.
+
 ```json
 {
   "elevenlabs": { "Narrator": "George", "Mara": "Lily", "Tom": "Bill" }

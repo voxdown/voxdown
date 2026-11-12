@@ -97,6 +97,25 @@ export async function hello(pairing: Pairing, signal?: AbortSignal): Promise<Hel
   }
 }
 
+/** A character's words said in a voice, to hear it before choosing it. */
+export async function listen(
+  pairing: Pairing,
+  body: { with: string; voice: string; words: string; language?: string },
+  signal?: AbortSignal,
+): Promise<Blob> {
+  try {
+    const response = await call(pairing, "/v1/listen", {
+      method: "POST",
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    });
+    return await response.blob();
+  } catch (error) {
+    if (error instanceof HelperError || (error as Error).name === "AbortError") throw error;
+    throw new HelperError("The helper isn't answering: is vxd connect still running?");
+  }
+}
+
 /** Asks the helper to do something, each event it sends passed on as it comes. */
 export async function work(
   pairing: Pairing,

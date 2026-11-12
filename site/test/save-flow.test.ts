@@ -19,6 +19,10 @@ function page(options: {
   slowAllowed?: Promise<void>;
   keepsFiles?: boolean;
   pick?: string;
+  /** Keeping a version (in the browser's storage, which can be slow), done when this settles. */
+  slowSnapshot?: Promise<void>;
+  /** Keeping the draft, done when this settles. */
+  slowKeep?: Promise<void>;
 }) {
   const disk: Record<string, Stored> = options.disk ?? {};
   const handles = new Map<string, FileSystemFileHandle>();
@@ -33,6 +37,9 @@ function page(options: {
   const said: string[] = [];
   const asked: string[] = [];
   const versions: Array<[string, string]> = [];
+  /** The story each version was kept for. */
+  const versionsOf: string[] = [];
+  let owner = true;
   const marked: string[] = [];
   const answers = [...(options.answers ?? [])];
   let text = options.text ?? "Mine.";
@@ -49,7 +56,7 @@ function page(options: {
   const host: SaveHost = {
     file,
     text: () => text,
-    owner: () => true,
+    owner: () => owner,
     mayWrite: async () => true,
     commitPending: () => {},
     autosaveOn: () => true,
@@ -97,9 +104,13 @@ function page(options: {
       state.replaced = next;
       text = next;
     },
-    keep: async () => {},
+    keep: async () => {
+      await options.slowKeep;
+    },
     snapshot: async (why, content) => {
       versions.push([why, content]);
+      versionsOf.push(file.id);
+      await options.slowSnapshot;
     },
     versionDue: () => false,
     markSaved: async (id) => {
@@ -114,8 +125,16 @@ function page(options: {
     said,
     asked,
     versions,
+    versionsOf,
     marked,
     state,
+    get text() {
+      return text;
+    },
+    /** Another tab takes the story. */
+    takenElsewhere: () => {
+      owner = false;
+    },
     type: (more: string) => {
       text += more;
     },
@@ -349,6 +368,111 @@ describe("coming back to the Writer", () => {
     expect(run.state.replaced).toBeUndefined();
     expect(run.flow.stopped).toBe(true);
     expect(run.said[0]).toContain("Save will ask");
+  });
+
+  /** A wait that ends when told. */
+  const held = () => {
+    let go = () => {};
+    const promise = new Promise<void>((done) => {
+      go = done;
+    });
+    return { promise, go };
+  };
+  const settle = () => new Promise((done) => setTimeout(done, 0));
+
+  it("never reads the file into a story opened while the version before was kept", async () => {
+    const storage = held();
+    const run = page({
+      text: "Saved.",
+      disk: { "tale.vxd": { text: "Theirs.", modified: 5 } },
+      slowSnapshot: storage.promise,
+    });
+    const checking = run.flow.checkDisk();
+    await settle();
+    run.open("new", "My New Story");
+    storage.go();
+    await checking;
+    expect(run.text).toBe("My New Story");
+    expect(run.state.replaced).toBeUndefined();
+    expect(run.file).toMatchObject({ id: "new", saved: "", handle: undefined });
+    expect(run.said).toEqual([]);
+    expect(run.flow.stopped).toBe(false);
+  });
+
+  it("keeps words typed while the version before was kept, and says Save will ask", async () => {
+    const storage = held();
+    const run = page({
+      text: "Saved.",
+      disk: { "tale.vxd": { text: "Theirs.", modified: 5 } },
+      slowSnapshot: storage.promise,
+    });
+    const checking = run.flow.checkDisk();
+    await settle();
+    run.type(" And more.");
+    storage.go();
+    await checking;
+    expect(run.text).toBe("Saved. And more.");
+    expect(run.state.replaced).toBeUndefined();
+    expect(run.file).toMatchObject({ saved: "Saved.", modified: 1 });
+    expect(run.flow.stopped).toBe(true);
+    expect(run.said[0]).toContain("Save will ask");
+  });
+
+  it("reads nothing once another tab has taken the story", async () => {
+    const storage = held();
+    const run = page({
+      text: "Saved.",
+      disk: { "tale.vxd": { text: "Theirs.", modified: 5 } },
+      slowSnapshot: storage.promise,
+    });
+    const checking = run.flow.checkDisk();
+    await settle();
+    run.takenElsewhere();
+    storage.go();
+    await checking;
+    expect(run.state.replaced).toBeUndefined();
+    expect(run.file.saved).toBe("Saved.");
+    expect(run.said).toEqual([]);
+  });
+
+  it("keeps the version read again as this story's, whatever opens while the draft is kept", async () => {
+    const draft = held();
+    const run = page({
+      text: "Saved.",
+      disk: { "tale.vxd": { text: "Theirs.", modified: 5 } },
+      slowKeep: draft.promise,
+    });
+    const checking = run.flow.checkDisk();
+    await settle();
+    expect(run.state.replaced).toBe("Theirs.");
+    run.open("new", "My New Story");
+    draft.go();
+    await checking;
+    expect(run.versions.map(([why]) => why)).toEqual([
+      "Before the file was read again",
+      "Read again from disk",
+    ]);
+    expect(run.versionsOf).toEqual(["story", "story"]);
+  });
+
+  it("looks once when coming back asks twice (focus, and the tab shown)", async () => {
+    const storage = held();
+    const run = page({
+      text: "Saved.",
+      disk: { "tale.vxd": { text: "Theirs.", modified: 5 } },
+      slowSnapshot: storage.promise,
+    });
+    const first = run.flow.checkDisk();
+    const second = run.flow.checkDisk();
+    await settle();
+    storage.go();
+    await Promise.all([first, second]);
+    expect(run.text).toBe("Theirs.");
+    expect(run.versions.filter(([why]) => why === "Before the file was read again")).toHaveLength(
+      1,
+    );
+    expect(run.said).toHaveLength(1);
+    expect(run.flow.stopped).toBe(false);
   });
 
   it("only learns the new date when the words are the same", async () => {

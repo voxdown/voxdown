@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +16,17 @@ cast:
 “Who’s there?” asked Tom.
 
 “Only me,” said Mara.
+`;
+
+/** The same story, its speakers marked. */
+const MARKED = `---
+cast:
+  Tom: Tom Hale
+  Mara:
+---
+@Tom “Who’s there?” he asked.
+
+@Mara “Only me,” she said.
 `;
 
 const ANSWER = {
@@ -162,6 +173,61 @@ describe("vxd connect", () => {
     expect(said.map((event) => event.type)).toEqual(["casting", "estimate", "done"]);
     expect(said[0]?.file).toBe(join(folder, "owl.audiobook", "casting.json"));
     expect(said.at(-1)?.result).toBe("estimated");
+  });
+
+  it("offers the service's voices, and each character's first words to hear them in", async () => {
+    const reply = await ask("/v1/audiobook", {
+      body: { text: MARKED, name: "owl.vxd", with: "kokoro", mode: "estimate" },
+    });
+    const casting = events(reply.text)[0] as {
+      people: Array<{ name: string; id: string; sample?: string }>;
+      voices: Array<{ id: string }>;
+    };
+    expect(casting.voices.map((voice) => voice.id)).toEqual(["af_bella", "bm_george"]);
+    const tom = casting.people.find((person) => person.name === "Tom");
+    expect(tom?.sample).toBe("Who’s there?");
+    expect(["af_bella", "bm_george"]).toContain(tom?.id);
+  });
+
+  it("keeps the voices the Writer chose in casting.json, and refuses one the service hasn't", async () => {
+    const reply = await ask("/v1/audiobook", {
+      body: {
+        text: MARKED,
+        name: "owl.vxd",
+        with: "kokoro",
+        mode: "estimate",
+        voices: { Tom: "af_bella", Mara: "bm_george", Nobody: "af_bella" },
+      },
+    });
+    const casting = events(reply.text)[0] as { people: Array<{ name: string; id: string }> };
+    expect(casting.people.find((person) => person.name === "Tom")?.id).toBe("af_bella");
+    expect(casting.people.find((person) => person.name === "Mara")?.id).toBe("bm_george");
+    const kept = JSON.parse(
+      await readFile(join(folder, "owl.audiobook", "casting.json"), "utf8"),
+    ) as Record<string, Record<string, string>>;
+    expect(kept.kokoro).toMatchObject({ Tom: "af_bella", Mara: "bm_george" });
+    expect(kept.kokoro?.Nobody).toBeUndefined();
+    const wrong = await ask("/v1/audiobook", {
+      body: { text: MARKED, name: "owl.vxd", with: "kokoro", voices: { Tom: "am_nobody" } },
+    });
+    expect(wrong.status).toBe(400);
+    expect(JSON.parse(wrong.text).error).toContain("am_nobody");
+  });
+
+  it("says a character's words in a voice, to hear it before choosing it", async () => {
+    const heard = await ask("/v1/listen", {
+      body: { with: "kokoro", voice: "bm_george", words: "Who’s there?" },
+    });
+    expect(heard.status).toBe(200);
+    expect(heard.headers["content-type"]).toBe("audio/wav");
+    expect(heard.text.startsWith("RIFF")).toBe(true);
+    const none = await ask("/v1/listen", { body: { with: "kokoro", voice: "bm_george" } });
+    expect(none.status).toBe(400);
+    const wrong = await ask("/v1/listen", {
+      body: { with: "kokoro", voice: "am_nobody", words: "Hello." },
+    });
+    expect(wrong.status).toBe(400);
+    expect(JSON.parse(wrong.text).error).toContain("am_nobody");
   });
 
   it("says plainly what went wrong", async () => {

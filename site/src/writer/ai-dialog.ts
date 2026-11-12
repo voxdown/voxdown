@@ -22,6 +22,7 @@ import {
   forgetPairing,
   hello,
   keptPairing,
+  listen,
   work,
 } from "./helper";
 import { keys } from "./menu";
@@ -55,6 +56,101 @@ let running: AbortController | undefined;
 let lastNaming: { said: string; held: Node[] } | undefined;
 /** A run the writer went back to writing beside: closing the dialog doesn't stop it. */
 let behind = false;
+
+/** The voices the writer chose in the casting, by service and character: sent with each request. */
+const chosen = new Map<string, Record<string, string>>();
+/** A voice being heard, stopped when another is. */
+let heard: { audio: HTMLAudioElement; url: string; stop: AbortController } | undefined;
+
+function stopHearing(): void {
+  if (!heard) return;
+  heard.stop.abort();
+  heard.audio.pause();
+  URL.revokeObjectURL(heard.url);
+  heard = undefined;
+}
+
+type Cast = {
+  file: string;
+  people: Array<{ name: string; voice: string; id: string; description?: string; sample?: string }>;
+  voices: Array<{ id: string; name: string; description?: string; language?: string }>;
+};
+
+/**
+ * The casting, to change: each character's voice chosen from the service's, and heard saying their
+ * first words. A choice goes with the next request, and the helper keeps it in casting.json.
+ */
+function castingTable(cast: Cast, pairing: Pairing, service: string): HTMLElement {
+  const holder = document.createElement("div");
+  const table = document.createElement("table");
+  table.className = "ai-casting";
+  const caption = document.createElement("caption");
+  caption.textContent =
+    "The voices: choose another for anyone, and Listen to hear their first words in it.";
+  table.append(caption);
+  // What a choice does, and what hearing a voice says when it can't: beside the casting, never over
+  // what the book would cost.
+  const said = document.createElement("p");
+  said.className = "sheet-note ai-cast-note";
+  said.setAttribute("role", "status");
+  const mine = chosen.get(service) ?? {};
+  chosen.set(service, mine);
+  for (const person of cast.people) {
+    const row = table.insertRow();
+    const name = row.insertCell();
+    name.textContent = person.name;
+    const choice = document.createElement("select");
+    choice.setAttribute("aria-label", `${person.name}’s voice`);
+    for (const voice of cast.voices) {
+      const option = document.createElement("option");
+      option.value = voice.id;
+      option.textContent = voice.description ? `${voice.name} (${voice.description})` : voice.name;
+      choice.append(option);
+    }
+    choice.value = mine[person.name] ?? person.id;
+    choice.addEventListener("change", () => {
+      mine[person.name] = choice.value;
+      said.textContent = `${person.name} will be read by ${choice.selectedOptions[0]?.text ?? choice.value}: kept in casting.json when the book is made, or its cost counted again.`;
+    });
+    row.insertCell().append(choice);
+    const hear = document.createElement("button");
+    hear.type = "button";
+    hear.className = "button ai-listen";
+    hear.textContent = "Listen";
+    hear.disabled = !person.sample;
+    hear.title = person.sample
+      ? `“${person.sample}” in this voice (a sentence or two, at the service’s price)`
+      : `${person.name} says nothing yet`;
+    hear.setAttribute("aria-label", `Hear ${person.name}’s first words in this voice`);
+    hear.addEventListener("click", async () => {
+      if (!person.sample) return;
+      stopHearing();
+      const stop = new AbortController();
+      hear.disabled = true;
+      hear.textContent = "Saying…";
+      try {
+        const sound = await listen(
+          pairing,
+          { with: service, voice: choice.value, words: person.sample },
+          stop.signal,
+        );
+        if (stop.signal.aborted) return;
+        const url = URL.createObjectURL(sound);
+        const audio = new Audio(url);
+        heard = { audio, url, stop };
+        await audio.play();
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") said.textContent = (error as Error).message;
+      } finally {
+        hear.disabled = false;
+        hear.textContent = "Listen";
+      }
+    });
+    row.insertCell().append(hear);
+  }
+  holder.append(table, said);
+  return holder;
+}
 
 /** The helper's command, copied in one click to paste in a terminal; "Copied" for a moment. */
 export function copyCommand(button: HTMLElement, command: HTMLElement): void {
@@ -132,6 +228,8 @@ export async function openAi(mode: Mode, context: AiContext): Promise<void> {
   ready.hidden = true;
   if (!dialog.open) dialog.showModal();
   dialog.onclose = () => {
+    // A voice being heard stops with the dialog.
+    stopHearing();
     if (behind) return;
     running?.abort();
     running = undefined;
@@ -408,24 +506,18 @@ async function audiobook(
     await work(
       pairing,
       "/v1/audiobook",
-      { text: context.text(), name: context.name(), with: service, mode, sounds },
+      {
+        text: context.text(),
+        name: context.name(),
+        with: service,
+        mode,
+        sounds,
+        voices: chosen.get(service) ?? {},
+      },
       (event) => {
         if (event.type === "casting") {
-          const table = document.createElement("table");
-          table.className = "ai-casting";
-          const caption = document.createElement("caption");
-          caption.textContent = `The voices (change them in ${String(event.file)})`;
-          table.append(caption);
-          for (const person of event.people as Array<{
-            name: string;
-            voice: string;
-            description?: string;
-          }>) {
-            const row = table.insertRow();
-            row.insertCell().textContent = person.name;
-            row.insertCell().textContent = `${person.voice}${person.description ? ` (${person.description})` : ""}`;
-          }
-          result.replaceChildren(table);
+          stopHearing();
+          result.replaceChildren(castingTable(event as unknown as Cast, pairing, service));
         } else if (event.type === "estimate") {
           const cost = event.costUsd as number | undefined;
           progress.textContent = `${plural(event.requests as number, "line")} to make, ${(event.characters as number).toLocaleString()} characters${cost !== undefined ? (cost > 0 ? `, about $${cost.toFixed(2)} at list price` : ", free") : ""}, less what was made before.`;

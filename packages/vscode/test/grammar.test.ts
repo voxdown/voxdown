@@ -170,7 +170,12 @@ describe("the grammar agrees with the core's tokens", () => {
  */
 function needsLookahead(text: string): boolean {
   const story = parse(text);
-  if (story.warnings.some((warning) => warning.code === "unclosed-note")) return true;
+  if (
+    story.warnings.some(
+      (warning) => warning.code === "unclosed-note" || warning.code === "unclosed-comment",
+    )
+  )
+    return true;
   return /^\uFEFF?---\s*$/.test(text.split("\n")[0] ?? "") && story.frontMatter === null;
 }
 

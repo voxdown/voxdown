@@ -116,6 +116,9 @@ export function lines(story: Story, options: LinesOptions = {}): ScriptLine[] {
         case "note":
           if (item.text) push(item, { ...base, kind: "note", text: item.text });
           break;
+        // The writer's own comments are no one else's: never a line (§10.1).
+        case "comment":
+          break;
         case "image":
           if (heard) push(item, { ...base, kind: "image", text: item.alt });
           break;

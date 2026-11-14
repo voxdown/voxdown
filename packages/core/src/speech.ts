@@ -156,7 +156,11 @@ class ParagraphReader {
           break;
         case "note":
           this.flush();
-          this.items.push({ kind: "note", text: token.text, range: token.range });
+          this.items.push({
+            kind: token.comment ? "comment" : "note",
+            text: token.text,
+            range: token.range,
+          });
           // A note that runs over a line break keeps its lines one line, but what a mark does
           // still ends with the line it is on (§5.3): after the note, the next line's words.
           if (token.breaks) {

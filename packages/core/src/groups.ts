@@ -42,6 +42,8 @@ export function readGroupLine(
       const visibility = visibilityOf(instruction.name);
       if (visibility && !group.visibility) group.visibility = visibility;
     } else if (token.type === "note") {
+      // The writer's comments on a group's line are theirs alone: kept in the text, nowhere else.
+      if (token.comment) continue;
       const note: Note = { kind: "note", text: token.text, range: token.range };
       group.notes.push(note);
     } else {

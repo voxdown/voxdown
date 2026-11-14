@@ -7,8 +7,11 @@ import { cleanText, isEscapable } from "./chars";
 import type { Range, SourceLine } from "./source";
 import type { Warn } from "./warnings";
 
-/** A note, `%% … %%`. `text` is what is between the signs, unescaped, spaces run together. */
-export type NoteSpan = Range & { text: string };
+/**
+ * A note, `%% … %%`, or the writer's comment, `<!-- … -->` (§10.1). `text` is what is between the
+ * signs, unescaped, spaces run together.
+ */
+export type NoteSpan = Range & { text: string; comment?: true };
 
 export type RawBlock =
   | { kind: "paragraph"; lines: Range[]; range: Range }
@@ -17,11 +20,33 @@ export type RawBlock =
   | { kind: "group-open"; content: Range; range: Range }
   | { kind: "group-close"; range: Range };
 
-/** Finds every note from `from` to the end. An unclosed `%%` stays text. */
+/**
+ * Finds every note and comment from `from` to the end. An unclosed `%%` or `<!--` stays text. In a
+ * comment nothing is a sign but its close, `-->`; a comment in a note is the note's text.
+ */
 export function findNotes(source: string, from: number, warn: Warn): NoteSpan[] {
   const notes: NoteSpan[] = [];
   let open = -1;
+  let comment = -1;
   for (let i = from; i < source.length; i++) {
+    if (comment >= 0) {
+      if (source.startsWith("-->", i)) {
+        notes.push({
+          from: comment,
+          to: i + 3,
+          text: cleanText(source.slice(comment + 4, i)),
+          comment: true,
+        });
+        comment = -1;
+        i += 2;
+      }
+      continue;
+    }
+    if (open < 0 && source.startsWith("<!--", i)) {
+      comment = i;
+      i += 3;
+      continue;
+    }
     if (source[i] === "\\" && isEscapable(source[i + 1])) {
       i++;
       continue;
@@ -39,6 +64,12 @@ export function findNotes(source: string, from: number, warn: Warn): NoteSpan[] 
     warn("unclosed-note", "This note is never closed, so it is read as text.", {
       from: open,
       to: open + 2,
+    });
+  }
+  if (comment >= 0) {
+    warn("unclosed-comment", "This comment is never closed, so it is read as text.", {
+      from: comment,
+      to: comment + 4,
     });
   }
   return notes;

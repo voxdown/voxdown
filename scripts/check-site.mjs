@@ -326,6 +326,216 @@ const draftIn = (page) =>
       }),
   );
 
+{
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const commenter = await context.newPage();
+  watch(commenter, "writer comments");
+  await commenter.goto(`${base}/writer/`);
+  await commenter.click('.welcome [data-command="new"]');
+  await commenter.waitForTimeout(400);
+  // A comment for yourself: written at the cursor, drawn quietly, in no view, listed, deleted, and
+  // brought back.
+  await commenter.click(".cm-content");
+  await commenter.keyboard.press("Control+End");
+  await commenter.keyboard.type("\n\nThe tide came in.");
+  await commenter.keyboard.press("Control+Alt+m");
+  await commenter.keyboard.type("Check the tide tables");
+  await commenter.keyboard.press("Control+Home");
+  await commenter.waitForTimeout(1200);
+  const commented = await commenter.evaluate(() => ({
+    chips: [...document.querySelectorAll(".manuscript .vxd-chip-comment")].map(
+      (e) => e.textContent,
+    ),
+    side: document.querySelector("#side-sheet")?.textContent ?? "",
+  }));
+  if (!(await draftIn(commenter))?.includes("The tide came in. <!-- Check the tide tables -->"))
+    problems.push(`writer: Ctrl+Alt+M wrote no comment: ${(await draftIn(commenter))?.slice(-80)}`);
+  if (!commented.chips.includes("Check the tide tables") || commented.side.includes("tide tables"))
+    problems.push(
+      `writer: a comment isn't drawn as the writer's alone: ${JSON.stringify(commented)}`,
+    );
+  await commenter.click("#view-menu-button");
+  await commenter.click('[data-command="comments"]');
+  await commenter.waitForSelector("#list-dialog[open]");
+  const listed = await commenter.$$eval("#list-items li strong", (items) =>
+    items.map((i) => i.textContent),
+  );
+  if (!listed.includes("Check the tide tables"))
+    problems.push(`writer: View › Comments lists ${JSON.stringify(listed)}`);
+  await commenter.click(
+    '#list-items li:has-text("Check the tide tables") button:has-text("Delete")',
+  );
+  await commenter.waitForTimeout(1200);
+  if ((await draftIn(commenter))?.includes("<!--"))
+    problems.push("writer: deleting a comment from the list left it in the story");
+  await commenter.keyboard.press("Control+z");
+  await commenter.waitForTimeout(1200);
+  if (!(await draftIn(commenter))?.includes("<!-- Check the tide tables -->"))
+    problems.push("writer: Ctrl+Z didn't bring a deleted comment back");
+  await context.close();
+  console.log("writer: a comment for yourself, drawn, listed, deleted and brought back: ok");
+}
+
+// Scraps: words cut to Scraps, a note, a search, put back at the cursor; a scraps file opened,
+// its scraps joining; and one dragged above another.
+{
+  const context = await browser.newContext({ viewport: { width: 1400, height: 860 } });
+  const scrapper = await context.newPage();
+  watch(scrapper, "writer scraps");
+  await scrapper.goto(`${base}/writer/`);
+  await scrapper.click('.welcome [data-command="new"]');
+  await scrapper.waitForTimeout(400);
+  await scrapper.click(".cm-content");
+  await scrapper.keyboard.press("Control+End");
+  await scrapper.keyboard.type("\n\nThe tide came in.\n\nThe owl said nothing at all.");
+  await scrapper.keyboard.press("Shift+Home");
+  await scrapper.keyboard.press("Control+Shift+X");
+  await scrapper.waitForTimeout(1200);
+  const cut = await scrapper.evaluate(() => ({
+    tab: document.querySelector(".side-tab[aria-selected=true]")?.textContent,
+    scraps: [...document.querySelectorAll(".scrap-text")].map((e) => e.textContent),
+  }));
+  if (cut.tab !== "Scraps" || cut.scraps[0] !== "The owl said nothing at all.")
+    problems.push(`writer: Cut to Scraps shows ${JSON.stringify(cut)}`);
+  if ((await draftIn(scrapper)).includes("The owl said"))
+    problems.push("writer: words cut to Scraps stayed in the story");
+  await scrapper.fill(".scrap-note", "For the ending");
+  await scrapper.dispatchEvent(".scrap-note", "change");
+  await scrapper.fill(".scraps-head input", "ENDING");
+  await scrapper.waitForTimeout(200);
+  if ((await scrapper.locator(".scrap").count()) !== 1)
+    problems.push("writer: a scrap isn't found by its note");
+  await scrapper.fill(".scraps-head input", "nowhere");
+  await scrapper.waitForTimeout(200);
+  if ((await scrapper.locator(".scrap").count()) !== 0)
+    problems.push("writer: a search for no scrap's words still shows one");
+  await scrapper.fill(".scraps-head input", "");
+  await scrapper.click(".cm-content");
+  await scrapper.keyboard.press("Control+End");
+  await scrapper.keyboard.type("\n\n");
+  await scrapper.hover(".scrap");
+  await scrapper.click('.scrap button:has-text("Put in at the cursor")');
+  await scrapper.waitForTimeout(1200);
+  if (!(await draftIn(scrapper)).endsWith("The owl said nothing at all."))
+    problems.push("writer: a scrap put in at the cursor isn't in the story");
+  if (!(await scrapper.textContent(".scrap-meta"))?.includes("used"))
+    problems.push("writer: a scrap put back isn't marked as used");
+  // A file of scraps saved beside the story elsewhere: its new one joins, the one here isn't twice.
+  const kept = await scrapper.evaluate(() => localStorage.getItem("vxd-writer-scraps") ?? "");
+  const id = /"id":"([^"]+)"/.exec(kept)?.[1] ?? "";
+  const chooser = scrapper.waitForEvent("filechooser");
+  await scrapper.click('.scraps-files button:has-text("Open")');
+  await (await chooser).setFiles({
+    name: "Untitled.scraps.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      `# Scraps for Untitled\n\n<!-- scrap id="${id}" at="2026-11-14T13:00:00.000Z" -->\nThe owl said nothing at all.\n\n<!-- scrap id="zz9" at="2026-11-13T09:00:00.000Z" from="Two" note="Older" -->\nA fox, far off.\n`,
+    ),
+  });
+  await scrapper.waitForTimeout(500);
+  const merged = await scrapper.$$eval(".scrap-text", (texts) => texts.map((t) => t.textContent));
+  if (
+    JSON.stringify(merged) !== JSON.stringify(["The owl said nothing at all.", "A fox, far off."])
+  )
+    problems.push(`writer: a scraps file opened gives ${JSON.stringify(merged)}`);
+  if (!(await scrapper.textContent("#notice"))?.includes("1 scrap added"))
+    problems.push(`writer: opening scraps says ${await scrapper.textContent("#notice")}`);
+  await scrapper
+    // Taken by its words: the note's field is for typing, never a handle.
+    .locator(".scrap-text")
+    .nth(1)
+    .dragTo(scrapper.locator(".scrap").nth(0), {
+      targetPosition: { x: 20, y: 4 },
+    });
+  await scrapper.waitForTimeout(300);
+  const order = await scrapper.$$eval(".scrap-text", (texts) => texts.map((t) => t.textContent));
+  if (order[0] !== "A fox, far off.")
+    problems.push(`writer: a scrap dragged above another stays below: ${JSON.stringify(order)}`);
+  await context.close();
+  console.log("writer: scraps cut, noted, found, put back, opened from a file and moved: ok");
+}
+
+// A manuscript to submit: the writer's name asked once, kept, and the Word document downloaded.
+{
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const submitter = await context.newPage();
+  watch(submitter, "writer manuscript");
+  await submitter.goto(`${base}/writer/#example=the-north-wind-and-the-sun`);
+  await submitter.waitForSelector(".cm-content");
+  await submitter.waitForTimeout(500);
+  await submitter.click('#toolbar [data-command="export"]');
+  await submitter.click('[data-command="export-manuscript"]');
+  await submitter.waitForSelector("#manuscript[open]");
+  await submitter.fill("#manuscript-contact", "Ann Teller\nann@example.com");
+  await submitter.dispatchEvent("#manuscript-contact", "input");
+  if ((await submitter.inputValue("#manuscript-surname")) !== "Teller")
+    problems.push("writer: the manuscript's surname doesn't follow the name");
+  const downloading = submitter.waitForEvent("download");
+  await submitter.click("#manuscript-go");
+  const file = await downloading;
+  if (!file.suggestedFilename().endsWith("(manuscript).docx"))
+    problems.push(`writer: the manuscript downloads as ${file.suggestedFilename()}`);
+  if (
+    !(await submitter.evaluate(() => localStorage.getItem("vxd-writer-contact")))?.includes(
+      "Teller",
+    )
+  )
+    problems.push("writer: the manuscript's contact isn't kept for the next one");
+  await context.close();
+  console.log("writer: a manuscript to submit: ok");
+}
+
+// The scene board: a line and a state written as the comment under a heading, a section dragged
+// above another with its text, and Ctrl+Z putting it back.
+{
+  const context = await browser.newContext({ viewport: { width: 1360, height: 860 } });
+  const planner = await context.newPage();
+  watch(planner, "writer board");
+  await planner.goto(`${base}/writer/#example=the-dragon-who-would-not-roar`);
+  await planner.waitForSelector(".cm-content");
+  await planner.waitForTimeout(500);
+  const openBoard = async () => {
+    await planner.click("#view-menu-button");
+    await planner.click('[data-command="board"]');
+    await planner.waitForSelector("#board[open]");
+  };
+  const names = () => planner.$$eval(".board-card .board-name", (n) => n.map((e) => e.textContent));
+  await openBoard();
+  if (
+    JSON.stringify(await names()) !==
+    JSON.stringify(["The proclamation", "The mountain", "The battle", "Home"])
+  )
+    problems.push(`writer: the board shows ${JSON.stringify(await names())}`);
+  await planner.locator(".board-line").nth(1).click();
+  await planner.keyboard.type("Percival meets a sleepy dragon.");
+  await planner.keyboard.press("Enter");
+  await planner.locator(".board-state").nth(1).selectOption("draft");
+  await planner.waitForTimeout(1200);
+  if (
+    !(await draftIn(planner)).includes(
+      "## The mountain {hidden}\n<!-- draft: Percival meets a sleepy dragon. -->",
+    )
+  )
+    problems.push("writer: the board's line and state aren't written under the heading");
+  await planner
+    .locator(".board-card .board-name")
+    .nth(3)
+    .dragTo(planner.locator(".board-card").nth(0), { targetPosition: { x: 30, y: 4 } });
+  await planner.waitForTimeout(300);
+  if ((await names())[0] !== "Home")
+    problems.push(`writer: a card dragged to the top gives ${JSON.stringify(await names())}`);
+  await planner.waitForTimeout(1200);
+  const draft = await draftIn(planner);
+  if (draft.indexOf("## Home") > draft.indexOf("## The proclamation"))
+    problems.push("writer: a scene moved on the board didn't move in the story");
+  await planner.keyboard.press("Escape");
+  await planner.keyboard.press("Control+z");
+  await openBoard();
+  if ((await names())[3] !== "Home") problems.push("writer: Ctrl+Z didn't put a moved scene back");
+  await context.close();
+  console.log("writer: the scene board, its lines, states and moves: ok");
+}
+
 /** A choice in File › Export…, as a writer makes it: the menu, the dialog, the choice. */
 const exportChoice = async (page, command) => {
   await page.click("#file-menu-button");
@@ -2505,26 +2715,48 @@ await maker.click(".cm-content");
 await maker.keyboard.press("Control+End");
 for (let i = 0; i < "\n\nOne paragraph.\n\nAnother one.".length; i++)
   await maker.keyboard.press("Backspace");
-// A writing goal: the words written since opening, out of it, and a word when it is reached.
-await maker.click("#view-menu-button");
-await maker.click('[data-command="goal"]');
-await maker.fill("#ask-input", "3");
+// A goal for the day, set from the word count: the words written today, out of it, and a word
+// when it is reached. Then a sprint: its time and words in the status bar, stopped, and logged.
+await maker.click("#counts");
+await maker.waitForSelector("#goal-panel[open]");
+await maker.click("#goal-own");
+await maker.keyboard.type("3");
 await maker.keyboard.press("Enter");
+if ((await maker.getAttribute('#goal-panel [data-goal="500"]', "aria-pressed")) !== "false")
+  problems.push("writer: a goal of one's own still shows a listed one chosen");
+await maker.keyboard.press("Escape");
 await maker.click(".cm-content");
 await maker.keyboard.press("Control+End");
 await maker.keyboard.type(" Three more words.");
 await maker.waitForTimeout(900);
-if (!(await maker.textContent("#counts"))?.includes("of 3)"))
-  problems.push("writer: the writing goal isn't shown with the words written");
+if (!(await maker.textContent("#counts"))?.includes("of 3 today)"))
+  problems.push(
+    `writer: the day's goal isn't shown with the words: ${await maker.textContent("#counts")}`,
+  );
+if (await maker.isHidden("#goal-bar")) problems.push("writer: the day's goal has no bar");
 if (!(await maker.textContent("#notice"))?.includes("goal is reached"))
-  problems.push("writer: reaching the writing goal says nothing");
-// Cancel leaves the goal as it was.
-await maker.click("#view-menu-button");
-await maker.click('[data-command="goal"]');
-await maker.click('#ask-buttons button[value="cancel"]');
+  problems.push("writer: reaching the day's goal says nothing");
+await maker.click("#counts");
+await maker.click('#goal-panel [data-minutes="15"]');
+await maker.click("#sprint-go");
 await maker.waitForTimeout(300);
-if (!(await maker.textContent("#counts"))?.includes("of 3)"))
-  problems.push("writer: Cancel took the writing goal away");
+await maker.click(".cm-content");
+await maker.keyboard.press("Control+End");
+await maker.keyboard.type(" Sprinting.");
+await maker.waitForTimeout(1500);
+const sprinting = await maker.textContent("#sprint-state");
+if (!/^Sprint 1[45]:\d\d · 1 word$/.test(sprinting ?? ""))
+  problems.push(`writer: a sprint running shows ${JSON.stringify(sprinting)}`);
+await maker.click("#sprint-state");
+await maker.click("#sprint-stop");
+await maker.waitForTimeout(300);
+if (!(await maker.textContent("#notice"))?.includes("Sprint stopped: 1 word"))
+  problems.push(`writer: stopping a sprint says ${await maker.textContent("#notice")}`);
+if (await maker.isVisible("#sprint-state")) problems.push("writer: a stopped sprint still shows");
+await maker.click("#counts");
+if (!(await maker.textContent("#sprint-log"))?.includes("1 word in 0 min"))
+  problems.push(`writer: the sprint log has ${await maker.textContent("#sprint-log")}`);
+await maker.keyboard.press("Escape");
 // A title that would close the print page's style and open a script stays words: nothing runs.
 await maker.click("#file-menu-button");
 await maker.click('[data-command="details"]');

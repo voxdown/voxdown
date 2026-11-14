@@ -2,9 +2,13 @@
 
 The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
-## Unreleased
+## 1.3 (14 November 2026)
 
-Clarifications: no file reads differently, and the version stays 1.2 (§16).
+New in 1.3, for something a 1.2 file would rarely hold (§16): SPEC.md marks it "new in 1.3", and `conformance.json` gives its examples `"since": "1.3"`.
+
+- **Comments** (§10.1): `<!-- … -->` is the writer's own comment, as in Markdown and HTML, never read aloud, printed or given to a performer, and hidden by Markdown viewers too. Inside it nothing is a mark. In 1.2 it was text, read aloud. A new warning, `unclosed-comment`, says when one is never closed.
+
+Clarifications: no file reads differently.
 
 - §4.4: a book's chapters are its headings of the highest level used at least twice, so every tool that divides a story into chapters divides it the same: `#` chapters with the title in the front matter, or `##` chapters under a single `#` title, which is no chapter itself. It said that `#` is the title or a chapter and `##` a scene, and the tools disagreed: the ebook made a book written `# Title`, `## Chapter 1` one chapter, and the Writer listed its chapters as scenes.
 

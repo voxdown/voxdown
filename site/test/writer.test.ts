@@ -609,7 +609,7 @@ describe("words", () => {
 
   it("counts a story's words as its book has them, marks and front matter left out", () => {
     const story =
-      "---\ntitle: A long title here\ncast:\n  Ann:\n---\n# The Start\n\n@Ann (softly) “Hush now,” [an owl hoots] she said. %% a note %% {pause 1s}";
+      "---\ntitle: A long title here\ncast:\n  Ann:\n---\n# The Start\n\n@Ann (softly) “Hush now,” [an owl hoots] she said. %% a note %% {pause 1s} <!-- my own\ncomment -->";
     expect(proseWords(story)).toBe(6);
   });
 

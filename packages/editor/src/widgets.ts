@@ -15,6 +15,7 @@ export type ChipKind =
   | "pause"
   | "page"
   | "note"
+  | "comment"
   | "instruction"
   | "tool"
   | "warning";

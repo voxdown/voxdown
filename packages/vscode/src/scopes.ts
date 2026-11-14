@@ -17,6 +17,7 @@ export const TOKEN_SCOPES: Readonly<Record<TokenKind, string>> = {
   vocal: "entity.name.type.vocal",
   instruction: "meta.instruction",
   note: "comment.block.note",
+  comment: "comment.block.html",
   escape: "constant.character.escape",
   quote: "punctuation.definition.string",
 };

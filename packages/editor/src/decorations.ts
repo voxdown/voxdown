@@ -264,7 +264,7 @@ export function sceneNumbers(state: EditorState): Map<number, number> {
     .sort((a, b) => a.from - b.from);
   // Notes, page turns, pauses and other instructions alone don't make a scene.
   const quiet = marks
-    .filter((m) => ["note", "page", "pause", "instruction"].includes(m.kind))
+    .filter((m) => ["note", "comment", "page", "pause", "instruction"].includes(m.kind))
     .sort((a, b) => a.from - b.from);
   /** Whether there are words between two places: read only as far as the first. */
   const words = (from: number, to: number) => {
@@ -759,6 +759,25 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 mark.text,
                 undefined,
                 "Note: never read aloud",
+                undefined,
+                mark.from,
+              ),
+            }),
+          );
+        break;
+      // The writer's own comment: always shown, quieter than a note, never anyone else's.
+      case "comment":
+        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-comment" }));
+        else
+          add(
+            mark.from,
+            mark.to,
+            Decoration.replace({
+              widget: new ChipWidget(
+                "comment",
+                mark.text,
+                undefined,
+                "Your comment: never read aloud, printed or given to a performer",
                 undefined,
                 mark.from,
               ),

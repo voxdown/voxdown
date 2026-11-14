@@ -334,7 +334,10 @@ function beforeGlued(story: Story, line: Line, at: number): number {
     const item = line.items.find(
       (other) =>
         other.range.to === where &&
-        (other.kind === "instruction" || other.kind === "note" || other.kind === "image"),
+        (other.kind === "instruction" ||
+          other.kind === "note" ||
+          other.kind === "comment" ||
+          other.kind === "image"),
     );
     if (!item) return at;
     where = item.range.from;
@@ -1236,22 +1239,32 @@ const END_MARK = /(?:^|[^\p{L}\p{N}])@\/(?![\p{L}\p{N}/])/u;
  */
 function declared(story: Story, changes: TextChange[]): TextChange[] {
   if (!changes.some((change) => END_MARK.test(change.insert))) return changes;
-  const version = story.meta.version;
+  const bump = declareVersion(story, "1.2");
+  return bump ? [...changes, bump].sort((a, b) => a.from - b.from || a.to - b.to) : changes;
+}
+
+/**
+ * The change that makes a story declare `version` (`"1.3"`), for an edit that writes what that
+ * version added: a reader that holds to an older version declared reads it as text (§16). None
+ * when the story declares that version or a later one, or none at all.
+ */
+export function declareVersion(story: Story, version: string): TextChange | undefined {
+  const declaredNow = story.meta.version;
   const front = story.frontMatter;
-  if (!version || !front) return changes;
-  const [major = 0, minor = 0] = version.split(".").map(Number);
-  if (major > 1 || (major === 1 && minor >= 2)) return changes;
+  if (!declaredNow || !front) return undefined;
+  const [major = 0, minor = 0] = declaredNow.split(".").map(Number);
+  const [wantedMajor = 0, wantedMinor = 0] = version.split(".").map(Number);
+  if (major > wantedMajor || (major === wantedMajor && minor >= wantedMinor)) return undefined;
   const text = story.source.slice(front.range.from, front.range.to);
   const line = /^voxdown:[ \t]*(["']?)([^"'\s#]*)\1/mu.exec(text);
-  if (!line) return changes;
+  if (!line) return undefined;
   const at =
     front.range.from +
     line.index +
     line[0].length -
     (line[1] ?? "").length -
     (line[2] ?? "").length;
-  const bump = { from: at, to: at + (line[2] ?? "").length, insert: "1.2" };
-  return [...changes, bump].sort((a, b) => a.from - b.from || a.to - b.to);
+  return { from: at, to: at + (line[2] ?? "").length, insert: version };
 }
 
 /**
@@ -2120,7 +2133,11 @@ function insertLineNow(story: Story, offset: number, text: string): TextChange[]
   if (text.trim() === "" || /[\r\n]/.test(text)) return [];
   let at = Math.max(lineStart(source, offset), bodyStart(story));
   for (const item of allLines(story).flatMap((line) => line.items)) {
-    if (item.kind === "note" && item.range.from < at && at < item.range.to) {
+    if (
+      (item.kind === "note" || item.kind === "comment") &&
+      item.range.from < at &&
+      at < item.range.to
+    ) {
       at = Math.max(lineStart(source, item.range.from), bodyStart(story));
     }
   }

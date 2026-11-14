@@ -21,6 +21,8 @@ export type EditorMark =
   | { kind: "pause"; from: number; to: number; value?: string }
   | { kind: "instruction"; from: number; to: number; text: string; raw: string }
   | { kind: "note"; from: number; to: number; text: string }
+  /** `<!-- … -->`, the writer's own comment. */
+  | { kind: "comment"; from: number; to: number; text: string }
   | {
       kind: "group";
       from: number;
@@ -683,6 +685,9 @@ export function marksOf(story: Story): EditorMark[] {
           break;
         case "note":
           out.push({ kind: "note", ...item.range, text: item.text });
+          break;
+        case "comment":
+          out.push({ kind: "comment", ...item.range, text: item.text });
           break;
         case "instruction":
           if (item.name === "page")

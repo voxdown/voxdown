@@ -61,6 +61,7 @@ import {
   type Story,
   type TextChange,
   bookText,
+  declareVersion,
   diffChanges,
   findShape,
   format,
@@ -80,7 +81,8 @@ import {
 import { examples } from "../examples";
 import "../style.css";
 import "./writer.css";
-import { type AiContext, openAi } from "./ai-dialog";
+import { type AiContext, chapterAt, openAi } from "./ai-dialog";
+import { openBoard } from "./board-dialog";
 import { castPanel } from "./cast";
 import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
@@ -109,6 +111,16 @@ import {
   reopen,
   writeFile,
 } from "./files";
+import {
+  clock,
+  dayOf,
+  daysWritten,
+  endSprint,
+  sprintNow,
+  sprintsDone,
+  startSprint,
+  writtenToday,
+} from "./goal";
 import { Hearing, onlineService, speaksOnline, toHear } from "./hear";
 import { keepPairing, pairingIn } from "./helper";
 import { paragraphScope } from "./local";
@@ -124,6 +136,17 @@ import type { RenderAsk, RenderReply } from "./render-worker";
 import { Rescue, tabStory as tabStoryIn } from "./rescue";
 import { SaveFlow } from "./save-flow";
 import { sameText } from "./saving";
+import {
+  type Scrap,
+  keepScraps,
+  mergeScraps,
+  newScrapId,
+  readScrapsFile,
+  scrapsFile,
+  scrapsFileName,
+  scrapsOf,
+} from "./scraps";
+import { type ScrapsHost, scrapsPanel } from "./scraps-panel";
 import { StoryScrollbar } from "./scrollbar";
 import { searchCount } from "./search-count";
 import { moveSection } from "./sections";
@@ -180,7 +203,7 @@ document.head.append(rendererStyle);
 
 // What the writer chose to see, kept on this computer.
 
-type Tab = "script" | "book" | "cast" | "warnings";
+type Tab = "script" | "book" | "cast" | "warnings" | "scraps";
 type Prefs = ViewSwitches & {
   marks: boolean;
   side: boolean;
@@ -191,8 +214,12 @@ type Prefs = ViewSwitches & {
   typewriter: boolean;
   /** The writer agreed to the browser's online voices, its only ones: the words go to be spoken. */
   onlineVoices: boolean;
-  /** Words to write in a sitting; 0 for none. */
+  /** Words to write a day; 0 for none. */
   goal: number;
+  /** A sprint's length last chosen, in minutes; Focus while it runs; a chime at its end. */
+  sprintMinutes: number;
+  sprintFocus: boolean;
+  sprintChime: boolean;
   /** Resting the pointer on a passage brings its bar. */
   hoverBar: boolean;
   /** The toolbar under the menus. */
@@ -227,6 +254,9 @@ const prefs: Prefs = {
   typewriter: false,
   onlineVoices: false,
   goal: 0,
+  sprintMinutes: 25,
+  sprintFocus: false,
+  sprintChime: true,
   hoverBar: true,
   toolbar: true,
   smart: true,
@@ -532,6 +562,15 @@ function editorState(source: string, cursor: number): EditorState {
           { key: "F8", run: () => nextProblem(1), shift: () => nextProblem(-1) },
           { key: "F9", run: () => hearFromHere() },
           { key: "Mod-.", run: fixHere },
+          { key: "Mod-Shift-x", run: () => cutToScraps(), preventDefault: true },
+          {
+            key: "Mod-Alt-m",
+            run: () => {
+              insertComment();
+              return true;
+            },
+            preventDefault: true,
+          },
           // Redo on Ctrl+Shift+Z everywhere, as the menu says (Windows has Ctrl+Y too).
           { key: "Mod-Shift-z", run: redo, preventDefault: true },
           { key: "Mod-y", run: redo, preventDefault: true },
@@ -1301,25 +1340,32 @@ function showDraftState(): void {
 const startedAt = Date.now();
 let nudged = "";
 
-/** The story open, and its words when it was opened here. */
-let session: { id: string; words: number; reached: boolean } | undefined;
+/** The story's words as last counted, and the day its goal was last said to be reached. */
+const counted = { story: "", words: 0, reached: "" };
 
 function showCounts({ words, said, voices, heard }: Counts): void {
   // As many as the rail shows: a story's chapters and headings, and its scene breaks.
   const scenes = rail.size;
   const plural = (n: number, one: string, many = `${one}s`) =>
     `${n.toLocaleString()} ${n === 1 ? one : many}`;
-  // The words written since the story was opened here, and the goal for the sitting, if any.
-  if (session?.id !== file.id) session = { id: file.id, words, reached: false };
-  const since = words - session.words;
+  // The words written today in this story, kept through a reload, and the day's goal, if any.
+  const now = Date.now();
+  const since = writtenToday(localStorage, file.id, words, now);
+  Object.assign(counted, { story: file.id, words });
   const signed = `${since > 0 ? "+" : since < 0 ? "−" : ""}${Math.abs(since).toLocaleString()}`;
   const goal = prefs.goal > 0 ? ` of ${prefs.goal.toLocaleString()}` : "";
-  if (prefs.goal > 0 && since >= prefs.goal && !session.reached) {
-    session.reached = true;
-    notice(`${wordsSaid(prefs.goal)} written: the goal is reached.`);
+  const today = `${file.id}:${dayOf(now)}`;
+  if (prefs.goal > 0 && since >= prefs.goal && counted.reached !== today) {
+    counted.reached = today;
+    notice(`${wordsSaid(prefs.goal)} written today: the goal is reached.`);
   }
+  const bar = $("#goal-bar");
+  bar.hidden = prefs.goal <= 0;
+  $("#goal-fill").style.width =
+    `${Math.max(0, Math.min(1, since / Math.max(1, prefs.goal))) * 100}%`;
+  showSprint();
   const counts = [
-    `${plural(words, "word")}${since || goal ? ` (${signed}${goal})` : ""}`,
+    `${plural(words, "word")}${since || goal ? ` (${signed}${goal} today)` : ""}`,
     plural(said, "line said", "lines said"),
     plural(voices, "voice"),
     // None yet: nothing said of them (a story without headings showed “0 scenes”).
@@ -1327,11 +1373,364 @@ function showCounts({ words, said, voices, heard }: Counts): void {
     // How long it takes to hear: what is read aloud, and its pauses, not what is printed.
     ...(heard > 0 ? [timeToHear(heard)] : []),
   ].join(" · ");
-  $("#counts").textContent = counts;
-  // All of it, where a narrow window cuts it short.
-  $("#counts").title = since
-    ? `${counts}\n${since > 0 ? "+" : "−"}${wordsSaid(Math.abs(since))} since the story was opened`
-    : counts;
+  $("#counts-text").textContent = counts;
+  // All of it, where a narrow window cuts it short, and what a click does.
+  $("#counts").title = `${counts}\nA goal for the day, and sprints`;
+}
+
+// Scraps: passages set aside from the story, kept in this browser by the story, and in a file
+// beside it (owl.scraps.md) when saved there.
+
+/** The file each story's scraps were saved to this visit, to save them there again. */
+const scrapsFiles = new Map<string, FileSystemFileHandle>();
+
+/** Words set aside: a scrap, with the chapter they came from. */
+function setAside(text: string): Scrap {
+  const story = current();
+  const scrap: Scrap = {
+    id: newScrapId(),
+    text: text.replace(/^\s*\n|\s+$/g, ""),
+    note: "",
+    at: Date.now(),
+    from: chapterAt(story, view.state.selection.main.from).name,
+  };
+  const scraps = scrapsOf(localStorage, file.id);
+  scraps.unshift(scrap);
+  if (!keepScraps(localStorage, file.id, scraps))
+    notice("This browser is short of room: the scrap couldn’t be kept.");
+  return scrap;
+}
+
+/** Edit › Cut to Scraps: the words selected set aside, and taken out of the story. */
+function cutToScraps(): boolean {
+  if (lockedOut) return true;
+  const { from, to } = view.state.selection.main;
+  const text = view.state.sliceDoc(from, to);
+  if (!text.trim()) {
+    notice("Select the words to set aside first.");
+    return true;
+  }
+  setAside(text);
+  view.dispatch({ changes: { from, to }, userEvent: "delete.cut" });
+  if (prefs.side) selectTab("scraps");
+  else showSide();
+  notice(`Set aside in Scraps. ${keys("Mod+Z")} puts the words back; the scrap stays.`);
+  view.focus();
+  return true;
+}
+
+const scrapsHost: ScrapsHost = {
+  scraps: () => scrapsOf(localStorage, file.id),
+  keep: (scraps) => {
+    if (!keepScraps(localStorage, file.id, scraps))
+      notice("This browser is short of room: the scraps couldn’t be kept.");
+    showSide();
+  },
+  dropped: (text, copy) => {
+    setAside(text);
+    // Moved here from the story: taken out of it, as the selection it was dragged from.
+    const { from, to } = view.state.selection.main;
+    if (!copy && !lockedOut && view.state.sliceDoc(from, to) === text)
+      view.dispatch({ changes: { from, to }, userEvent: "delete.cut" });
+    notice(
+      copy
+        ? "Copied to Scraps."
+        : `Set aside in Scraps. ${keys("Mod+Z")} puts the words back; the scrap stays.`,
+    );
+    showSide();
+  },
+  insert: (scrap) => {
+    if (lockedOut) return;
+    const { from, to } = view.state.selection.main;
+    view.dispatch({
+      changes: { from, to, insert: scrap.text },
+      selection: EditorSelection.cursor(from + scrap.text.length),
+      scrollIntoView: true,
+      userEvent: "input.paste",
+    });
+    view.focus();
+  },
+  open: () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".md,.markdown,.txt";
+    input.addEventListener("change", () => {
+      const chosen = input.files?.[0];
+      if (!chosen) return;
+      void chosen.text().then((text) => {
+        const found = readScrapsFile(text);
+        if (!found.length) {
+          notice(`${chosen.name} holds no scraps.`);
+          return;
+        }
+        const { scraps, added } = mergeScraps(scrapsOf(localStorage, file.id), found);
+        keepScraps(localStorage, file.id, scraps);
+        showSide();
+        notice(
+          added
+            ? `${added} ${added === 1 ? "scrap" : "scraps"} added from ${chosen.name}.`
+            : `Every scrap in ${chosen.name} is here already.`,
+        );
+      });
+    });
+    input.click();
+  },
+  save: () => void saveScraps(true),
+  fileName: () => scrapsFileName(file.name),
+  notice,
+};
+
+/**
+ * The story's scraps in their file beside it. Asked where the first time (or always, `asked`),
+ * and written there again with the story after that; downloaded where a browser can't keep files.
+ */
+async function saveScraps(asked: boolean): Promise<void> {
+  const scraps = scrapsOf(localStorage, file.id);
+  if (!scraps.length) return;
+  const text = scrapsFile(scraps, current().meta.title ?? file.name.replace(/\.[^.]+$/, ""));
+  const name = scrapsFileName(file.name);
+  let handle = scrapsFiles.get(file.id);
+  if (!handle && !asked) return;
+  if (!window.showSaveFilePicker) {
+    download(text, name);
+    return;
+  }
+  try {
+    if (!handle || asked) {
+      handle = await window.showSaveFilePicker({
+        suggestedName: name,
+        types: [{ description: "Scraps", accept: { "text/markdown": [".md"] } }],
+      });
+      scrapsFiles.set(file.id, handle);
+    }
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+    if (asked) notice(`Scraps saved in ${handle.name}.`);
+  } catch (error) {
+    if ((error as Error).name !== "AbortError") notice("The scraps couldn’t be saved there.");
+  }
+}
+
+// The goal for the day and sprints: from the word count in the status bar, or View › Writing goal.
+
+/** When a key was last pressed: a sprint's end waits for a pause in the writing. */
+let lastTyped = 0;
+document.addEventListener("keydown", () => {
+  lastTyped = Date.now();
+});
+/** Whether the sprint turned Focus on, to turn it off again at its end. */
+let sprintFocused = false;
+let sprintTimer: ReturnType<typeof setInterval> | undefined;
+
+/** The sprint in the status bar: its time left and its words, or nothing. */
+function showSprint(): void {
+  const sprint = sprintNow(localStorage);
+  const state = $<HTMLButtonElement>("#sprint-state");
+  if (!sprint) {
+    state.hidden = true;
+    return;
+  }
+  const left = sprint.startedAt + sprint.minutes * 60_000 - Date.now();
+  const words = sprint.story === counted.story ? counted.words - sprint.startWords : 0;
+  state.hidden = false;
+  state.textContent = `Sprint ${clock(left / 1000)} · ${words.toLocaleString()} ${Math.abs(words) === 1 ? "word" : "words"}`;
+  state.title = "The sprint: its time left, and the words written in it";
+  if ($<HTMLDialogElement>("#goal-panel").open) {
+    $("#sprint-now").textContent =
+      `${clock(left / 1000)} left, and ${wordsSaid(Math.max(0, words))} written in it.`;
+  }
+}
+
+/** Every second while a sprint runs: its time, and its end once a pause in the writing comes. */
+function tickSprint(): void {
+  const sprint = sprintNow(localStorage);
+  if (!sprint) {
+    clearInterval(sprintTimer);
+    sprintTimer = undefined;
+    showSprint();
+    return;
+  }
+  const over = Date.now() >= sprint.startedAt + sprint.minutes * 60_000;
+  // Over, but never in the middle of a sentence: once the keys have rested a moment.
+  if (over && Date.now() - lastTyped > 1500) finishSprint(true);
+  else showSprint();
+}
+
+function runSprintTimer(): void {
+  if (!sprintTimer) sprintTimer = setInterval(tickSprint, 1000);
+  tickSprint();
+}
+
+function finishSprint(ranItsTime: boolean): void {
+  const sprint = sprintNow(localStorage);
+  const words =
+    sprint && sprint.story === counted.story ? counted.words : (sprint?.startWords ?? 0);
+  const done = endSprint(localStorage, words, Date.now());
+  clearInterval(sprintTimer);
+  sprintTimer = undefined;
+  showSprint();
+  if (sprintFocused) {
+    sprintFocused = false;
+    focusMode(false);
+  }
+  if (!done) return;
+  if (ranItsTime && prefs.sprintChime) chime();
+  notice(
+    ranItsTime
+      ? `Sprint over: ${wordsSaid(Math.max(0, done.words))} in ${done.minutes} minutes.`
+      : `Sprint stopped: ${wordsSaid(Math.max(0, done.words))} in ${done.minutes} ${done.minutes === 1 ? "minute" : "minutes"}.`,
+  );
+  if ($<HTMLDialogElement>("#goal-panel").open) showGoalPanel();
+}
+
+/** Two soft notes, quieter than a notification. */
+function chime(): void {
+  try {
+    const audio = new AudioContext();
+    for (const [index, pitch] of [660, 880].entries()) {
+      const tone = audio.createOscillator();
+      const loud = audio.createGain();
+      const at = audio.currentTime + index * 0.22;
+      tone.frequency.value = pitch;
+      loud.gain.setValueAtTime(0.0001, at);
+      loud.gain.exponentialRampToValueAtTime(0.08, at + 0.02);
+      loud.gain.exponentialRampToValueAtTime(0.0001, at + 0.9);
+      tone.connect(loud).connect(audio.destination);
+      tone.start(at);
+      tone.stop(at + 1);
+    }
+    setTimeout(() => void audio.close(), 1600);
+  } catch {
+    // No sound here: the notice says it.
+  }
+}
+
+const dayName = (day: string) => {
+  const [year = 0, month = 1, date = 1] = day.split("-").map(Number);
+  const at = new Date(year, month - 1, date);
+  return day === dayOf(Date.now())
+    ? "Today"
+    : at.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+};
+
+/** The panel: today's words and the goal, a sprint to start or the one running, and the logs. */
+function showGoalPanel(): void {
+  const dialog = $<HTMLDialogElement>("#goal-panel");
+  const today = writtenToday(localStorage, file.id, counted.words, Date.now());
+  $("#goal-today").textContent =
+    prefs.goal > 0
+      ? `${wordsSaid(Math.max(0, today))} written today in this story, of ${prefs.goal.toLocaleString()}.`
+      : `${wordsSaid(Math.max(0, today))} written today in this story. A goal for each day:`;
+  for (const pick of dialog.querySelectorAll<HTMLButtonElement>("[data-goal]"))
+    pick.setAttribute("aria-pressed", String(Number(pick.dataset.goal) === prefs.goal));
+  const own = $<HTMLInputElement>("#goal-own");
+  const listed = [0, 250, 500, 1000, 1667, 2000].includes(prefs.goal);
+  own.value = listed ? "" : String(prefs.goal);
+  for (const pick of dialog.querySelectorAll<HTMLButtonElement>("[data-minutes]"))
+    pick.setAttribute("aria-pressed", String(Number(pick.dataset.minutes) === prefs.sprintMinutes));
+  $<HTMLInputElement>("#sprint-own").value = [15, 25, 45, 60].includes(prefs.sprintMinutes)
+    ? ""
+    : String(prefs.sprintMinutes);
+  $<HTMLInputElement>("#sprint-focus").checked = prefs.sprintFocus;
+  $<HTMLInputElement>("#sprint-chime").checked = prefs.sprintChime;
+  const running = Boolean(sprintNow(localStorage));
+  $("#sprint-start").hidden = running;
+  $("#sprint-running").hidden = !running;
+  const days = daysWritten(localStorage).slice(0, 7);
+  $("#goal-days").replaceChildren(
+    ...(days.length ? days : [{ day: dayOf(Date.now()), words: 0 }]).map(({ day, words }) => {
+      const item = document.createElement("li");
+      item.textContent = `${dayName(day)}: ${wordsSaid(Math.max(0, words))}`;
+      return item;
+    }),
+  );
+  const sprints = sprintsDone(localStorage).slice(0, 5);
+  const log = $("#sprint-log");
+  if (sprints.length)
+    log.replaceChildren(
+      ...sprints.map((done) => {
+        const item = document.createElement("li");
+        const at = new Date(done.at).toLocaleTimeString(undefined, {
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        item.textContent = `${dayName(done.day)}, ${at}: ${wordsSaid(Math.max(0, done.words))} in ${done.minutes} min`;
+        if (done.title) item.title = done.title;
+        return item;
+      }),
+    );
+  else {
+    const none = document.createElement("li");
+    none.className = "none";
+    none.textContent = "None yet.";
+    log.replaceChildren(none);
+  }
+  if (!dialog.open) dialog.showModal();
+  showSprint();
+}
+
+{
+  const dialog = $<HTMLDialogElement>("#goal-panel");
+  const setGoal = (goal: number) => {
+    prefs.goal = goal > 0 ? Math.round(goal) : 0;
+    counted.reached = "";
+    keepPrefs();
+    refresh();
+    showGoalPanel();
+  };
+  for (const pick of dialog.querySelectorAll<HTMLButtonElement>("[data-goal]"))
+    pick.addEventListener("click", () => setGoal(Number(pick.dataset.goal)));
+  $<HTMLInputElement>("#goal-own").addEventListener("change", (event) => {
+    const wanted = Number((event.target as HTMLInputElement).value);
+    if (Number.isFinite(wanted) && wanted > 0) setGoal(wanted);
+  });
+  const setMinutes = (minutes: number) => {
+    prefs.sprintMinutes = Math.min(240, Math.max(1, Math.round(minutes)));
+    keepPrefs();
+    showGoalPanel();
+  };
+  for (const pick of dialog.querySelectorAll<HTMLButtonElement>("[data-minutes]"))
+    pick.addEventListener("click", () => setMinutes(Number(pick.dataset.minutes)));
+  $<HTMLInputElement>("#sprint-own").addEventListener("change", (event) => {
+    const wanted = Number((event.target as HTMLInputElement).value);
+    if (Number.isFinite(wanted) && wanted > 0) setMinutes(wanted);
+  });
+  $<HTMLInputElement>("#sprint-focus").addEventListener("change", (event) => {
+    prefs.sprintFocus = (event.target as HTMLInputElement).checked;
+    keepPrefs();
+  });
+  $<HTMLInputElement>("#sprint-chime").addEventListener("change", (event) => {
+    prefs.sprintChime = (event.target as HTMLInputElement).checked;
+    keepPrefs();
+  });
+  $("#sprint-go").addEventListener("click", () => {
+    if (storyVersion !== version) refresh();
+    startSprint(localStorage, {
+      startedAt: Date.now(),
+      minutes: prefs.sprintMinutes,
+      story: file.id,
+      title: current().meta.title ?? file.name,
+      startWords: counted.words,
+    });
+    dialog.close();
+    if (prefs.sprintFocus && !prefs.focus) {
+      sprintFocused = true;
+      focusMode(true);
+    }
+    runSprintTimer();
+    notice(`Sprint started: ${prefs.sprintMinutes} minutes. The status bar keeps the time.`);
+    view.focus();
+  });
+  $("#sprint-stop").addEventListener("click", () => {
+    dialog.close();
+    finishSprint(false);
+    view.focus();
+  });
+  $("#counts").addEventListener("click", showGoalPanel);
+  $("#sprint-state").addEventListener("click", showGoalPanel);
+  // A sprint started before the page was loaded again goes on, or ends if its time ran out.
+  if (sprintNow(localStorage)) runSprintTimer();
 }
 
 function cursorMoved(): void {
@@ -1479,6 +1878,9 @@ function showSide(drawn?: string): void {
         lockedOut,
       ),
     );
+  } else if (prefs.tab === "scraps") {
+    sideShows = "";
+    sheet.replaceChildren(scrapsPanel(scrapsHost));
   } else {
     sideShows = "";
     sheet.replaceChildren(warningList());
@@ -1918,7 +2320,7 @@ function selectTab(tab: Tab, focus = false): void {
   if (focus) document.querySelector<HTMLElement>(`.side-tab[data-tab="${tab}"]`)?.focus();
 }
 
-const TABS: readonly Tab[] = ["script", "book", "cast", "warnings"];
+const TABS: readonly Tab[] = ["script", "book", "cast", "warnings", "scraps"];
 for (const tab of document.querySelectorAll<HTMLButtonElement>(".side-tab")) {
   tab.addEventListener("click", () => selectTab(tab.dataset.tab as Tab));
   tab.addEventListener("keydown", (event) => {
@@ -1974,7 +2376,8 @@ function indexSheet(): void {
  * by halves among the parts, not by reading every one on each key.
  */
 function markPlace(): void {
-  if (!prefs.side || prefs.tab === "warnings" || prefs.tab === "cast") return;
+  if (!prefs.side || prefs.tab === "warnings" || prefs.tab === "cast" || prefs.tab === "scraps")
+    return;
   const cursor = view.state.selection.main.head;
   let low = 0;
   let high = placed.length;
@@ -2287,7 +2690,11 @@ const saving = new SaveFlow({
     void showRecent();
   },
   replaceText: (next) => replaceText(next, "input.disk", allCrlf(next)),
-  keep: () => keep(),
+  keep: () => {
+    // Scraps saved beside the story this visit are saved there again with it.
+    void saveScraps(false);
+    return keep();
+  },
   snapshot: async (why, content) => {
     await snapshot(why, content);
   },
@@ -2692,7 +3099,12 @@ async function insertSoundHere(): Promise<void> {
 }
 
 /** Puts `text` in at the cursor, the part `select` selected, with a space before it if needed. */
-function insertAtCursor(text: string, select?: string): void {
+function insertAtCursor(
+  text: string,
+  select?: string,
+  /** Changes made with it, as one step (a version declared in the front matter). */
+  also: ReadonlyArray<{ from: number; to: number; insert: string }> = [],
+): void {
   if (lockedOut) return;
   // After what is selected, never over it.
   let from = view.state.selection.main.to;
@@ -2708,6 +3120,7 @@ function insertAtCursor(text: string, select?: string): void {
           mark.kind === "sound" ||
           mark.kind === "vocal" ||
           mark.kind === "note" ||
+          mark.kind === "comment" ||
           mark.kind === "direction") &&
         mark.from < from &&
         from < mark.to,
@@ -2729,16 +3142,98 @@ function insertAtCursor(text: string, select?: string): void {
   const before = view.state.sliceDoc(Math.max(0, from - 1), from);
   const insert = before && !/\s/.test(before) ? ` ${text}` : text;
   const at = select ? insert.indexOf(select) : -1;
+  const changes = view.state.changes([...also, { from, to, insert }]);
+  const start = changes.mapPos(from, -1);
   view.dispatch({
-    changes: { from, to, insert },
+    changes,
     selection:
       at >= 0
-        ? EditorSelection.range(from + at, from + at + (select?.length ?? 0))
-        : EditorSelection.cursor(from + insert.length),
+        ? EditorSelection.range(start + at, start + at + (select?.length ?? 0))
+        : EditorSelection.cursor(start + insert.length),
     scrollIntoView: true,
     userEvent: "input.insert",
   });
   view.focus();
+}
+
+/**
+ * Insert › A comment for yourself: `<!-- … -->` at the cursor, its words selected to write over;
+ * or, with words selected, those words commented out. A story that declares an older version
+ * declares 1.3, which reads comments (§10.1, §16).
+ */
+function insertComment(): void {
+  if (lockedOut) return;
+  const bump = declareVersion(current(), "1.3");
+  const also = bump ? [bump] : [];
+  const { from, to } = view.state.selection.main;
+  if (from === to || view.state.sliceDoc(from, to).trim() === "") {
+    insertAtCursor("<!-- comment -->", "comment", also);
+    return;
+  }
+  const changes = view.state.changes([
+    ...also,
+    { from, to: from, insert: "<!-- " },
+    { from: to, to, insert: " -->" },
+  ]);
+  view.dispatch({
+    changes,
+    selection: EditorSelection.cursor(changes.mapPos(to, 1)),
+    scrollIntoView: true,
+    userEvent: "input.insert",
+  });
+  notice(
+    `Commented out: kept in the text, never read aloud or printed. ${keys("Mod+Z")} puts it back.`,
+  );
+  view.focus();
+}
+
+/** View › Comments: the writer's comments, each to go to, or to delete once done with. */
+function showComments(): void {
+  const story = current();
+  const found = story.blocks
+    .flatMap((block) =>
+      block.kind === "paragraph" ? block.lines : block.kind === "heading" ? [block.line] : [],
+    )
+    .flatMap((line) => line.items)
+    .filter((item) => item.kind === "comment");
+  const doc = view.state.doc;
+  showList(
+    "Comments",
+    found.length
+      ? "Your comments: never read aloud, printed or given to a performer."
+      : `No comments yet. Insert › A comment for yourself (${keys("Mod+Alt+M")}) leaves one at the cursor, or comments out the words selected.`,
+    found.map((item) => {
+      const text = item.text || "(empty)";
+      return {
+        title: text.length > 90 ? `${text.slice(0, 89)}…` : text,
+        detail: `Line ${doc.lineAt(Math.min(item.range.from, doc.length)).number}`,
+        actions: [
+          {
+            label: "Delete",
+            run: () => {
+              const { from, to } = item.range;
+              // The space before it goes with it, so the words around it meet as before.
+              const start = view.state.sliceDoc(from - 1, from) === " " ? from - 1 : from;
+              view.dispatch({ changes: { from: start, to }, userEvent: "delete" });
+              notice(`Comment deleted. ${keys("Mod+Z")} brings it back.`);
+              view.focus();
+            },
+          },
+          {
+            label: "Go to",
+            main: true,
+            run: () => {
+              view.dispatch({
+                selection: EditorSelection.cursor(item.range.to),
+                effects: EditorView.scrollIntoView(item.range.from, { y: "center" }),
+              });
+              view.focus();
+            },
+          },
+        ],
+      };
+    }),
+  );
 }
 
 /** Puts a line of its own after the paragraph the cursor is in, a blank line around it. */
@@ -2754,10 +3249,83 @@ function insertAfterParagraph(line: string, select?: string): void {
 
 // Export: what the story becomes, as files.
 
+/** Export › A manuscript to submit: the writer's name and contact, then the Word document. */
+function showManuscript(): void {
+  const dialog = $<HTMLDialogElement>("#manuscript");
+  const story = current();
+  const kept = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("vxd-writer-contact") ?? "{}") as {
+        contact?: string;
+        surname?: string;
+      };
+    } catch {
+      return {};
+    }
+  })();
+  const contact = $<HTMLTextAreaElement>("#manuscript-contact");
+  const byline = $<HTMLInputElement>("#manuscript-byline");
+  const surname = $<HTMLInputElement>("#manuscript-surname");
+  contact.value = kept.contact ?? "";
+  byline.value = story.meta.author ?? kept.contact?.split("\n")[0]?.trim() ?? "";
+  const lastWord = (name: string) => name.trim().split(/\s+/).at(-1) ?? "";
+  surname.value = kept.surname ?? lastWord(contact.value.split("\n")[0] ?? "") ?? "";
+  // The surname follows the name until the writer gives one.
+  contact.oninput = () => {
+    if (!kept.surname) surname.value = lastWord(contact.value.split("\n")[0] ?? "");
+  };
+  $("#manuscript-go").onclick = () => {
+    try {
+      localStorage.setItem(
+        "vxd-writer-contact",
+        JSON.stringify({ contact: contact.value, surname: surname.value }),
+      );
+    } catch {
+      // Kept for this visit only.
+    }
+    dialog.close();
+    void exportManuscript({
+      contact: contact.value,
+      byline: byline.value.trim() || lastWord(contact.value.split("\n")[0] ?? ""),
+      surname: surname.value.trim(),
+    });
+  };
+  dialog.showModal();
+  contact.focus();
+}
+
+async function exportManuscript(who: {
+  contact: string;
+  byline: string;
+  surname: string;
+}): Promise<void> {
+  const story = current();
+  const body = new DOMParser().parseFromString(
+    renderBook(story, { header: false }),
+    "text/html",
+  ).body;
+  const paragraphs = paragraphsOf(body);
+  const { manuscriptDocx } = await import("./manuscript");
+  const title = story.meta.title ?? baseName();
+  download(
+    manuscriptDocx(paragraphs, {
+      ...who,
+      title,
+      words: countsOf(story).words,
+      ...(story.meta.language ? { language: story.meta.language } : {}),
+    }),
+    `${baseName()} (manuscript).docx`,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  );
+  notice("The manuscript is in your downloads.");
+}
+
 /** The book as a Word document or an ebook: its headings, paragraphs and emphasis. */
 async function exportDocument(kind: "docx" | "epub"): Promise<void> {
   const story = current();
-  const body = new DOMParser().parseFromString(renderBook(story), "text/html").body;
+  // A Word document is for an editor: the writer's comments go in it as Word's own.
+  const html = renderBook(story, kind === "docx" ? { comments: true } : {});
+  const body = new DOMParser().parseFromString(html, "text/html").body;
   const paragraphs = paragraphsOf(body);
   const { title = baseName(), subtitle, author, language } = story.meta;
   const details = {
@@ -3323,6 +3891,8 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Mod+K", "Who says this passage, or the words selected"],
   ["Mod+Shift+K", "The next quote with no speaker"],
   ["Mod+J", "How it’s said: this passage, or the words selected"],
+  ["Mod+Alt+M", "A comment for yourself, or the words selected commented out"],
+  ["Mod+Shift+X", "Cut the words selected to Scraps, to bring back later"],
   ["Alt+↑ / Alt+↓", "Move the paragraph up or down"],
   ["Enter", "In a quote: close it, and open it again on a new line for the same speaker"],
   ["Mod+Shift+M", "Every mark raw, or drawn"],
@@ -3374,21 +3944,7 @@ const COMMANDS: Record<string, () => unknown> = {
   "scene-down": () => moveSectionHere(false, 1),
   "chapter-up": () => moveSectionHere(true, -1),
   "chapter-down": () => moveSectionHere(true, 1),
-  goal: async () => {
-    const answer = await askText(
-      `Words to write in this sitting${prefs.goal ? ` (now ${prefs.goal.toLocaleString()})` : ""}. Empty or 0 for none.`,
-      "500",
-      "Set the goal",
-    );
-    // Cancel or Escape leave the goal as it was; an empty answer takes it away.
-    if (answer === null) return;
-    const wanted = Number.parseInt(answer.replace(/[^\d]/g, ""), 10);
-    prefs.goal = Number.isFinite(wanted) && wanted > 0 ? wanted : 0;
-    keepPrefs();
-    if (session) session.reached = false;
-    refresh();
-    view.focus();
-  },
+  goal: showGoalPanel,
   details: showDetails,
   hear: () => {
     hearFromHere();
@@ -3428,6 +3984,29 @@ const COMMANDS: Record<string, () => unknown> = {
       "A page turn can’t go before this line.",
     ),
   "insert-note": () => insertAtCursor("%% note %%", "note"),
+  "insert-comment": insertComment,
+  "export-manuscript": showManuscript,
+  board: () =>
+    openBoard({
+      story: () => current(),
+      change: (changes, said) => {
+        if (lockedOut) return;
+        view.dispatch({ changes, userEvent: "input" });
+        announce(said);
+      },
+      goTo: (at) => {
+        view.dispatch({
+          selection: EditorSelection.cursor(Math.min(at, view.state.doc.length)),
+          effects: EditorView.scrollIntoView(at, { y: "start", yMargin: 40 }),
+        });
+        view.focus();
+      },
+      readOnly: () => lockedOut,
+    }),
+  "cut-to-scraps": () => {
+    cutToScraps();
+  },
+  comments: showComments,
   "insert-break": () => insertAfterParagraph("* * *"),
   "insert-chapter": () =>
     insertAfterParagraph(
@@ -4168,7 +4747,17 @@ const aiContext: AiContext = {
 // a click outside it: a question waits for its answer; Story details and Page settings keep what
 // is being typed; naming the speakers isn't stopped by a click beside it.
 for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog")) addCloseButton(dialog);
-for (const id of ["shortcuts", "outline", "list-dialog", "compare", "export", "about", "shape"])
+for (const id of [
+  "shortcuts",
+  "outline",
+  "list-dialog",
+  "compare",
+  "export",
+  "about",
+  "shape",
+  "board",
+  "goal-panel",
+])
   closeOnClickOutside($<HTMLDialogElement>(`#${id}`));
 closeOnClickOutside($<HTMLDialogElement>("#ai"), () => !$<HTMLButtonElement>("#ai-go").disabled);
 

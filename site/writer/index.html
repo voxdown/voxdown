@@ -50,6 +50,8 @@
         <button role="menuitem" type="button" data-command="next-warning">Next warning<kbd data-keys="F8"></kbd></button>
         <button role="menuitem" type="button" data-command="fix-here">Fix the warning here<kbd data-keys="Mod+."></kbd></button>
         <hr>
+        <button role="menuitem" type="button" data-command="cut-to-scraps">Cut to Scraps<kbd data-keys="Mod+Shift+X"></kbd></button>
+        <hr>
         <button role="menuitem" type="button" data-command="italic">Italics<kbd data-keys="Mod+I"></kbd></button>
         <button role="menuitem" type="button" data-command="bold">Bold<kbd data-keys="Mod+B"></kbd></button>
         <hr>
@@ -78,6 +80,7 @@
         <button role="menuitem" type="button" data-command="insert-pause">A pause</button>
         <button role="menuitem" type="button" data-command="insert-page">A page turn</button>
         <button role="menuitem" type="button" data-command="insert-note">A note for the performer</button>
+        <button role="menuitem" type="button" data-command="insert-comment">A comment for yourself<kbd data-keys="Mod+Alt+M"></kbd></button>
         <hr>
         <button role="menuitem" type="button" data-command="insert-break">A scene break</button>
         <button role="menuitem" type="button" data-command="insert-chapter">A chapter heading</button>
@@ -92,6 +95,8 @@
         <button role="menuitemcheckbox" type="button" data-view="smart" aria-checked="true">Curly quotes and dashes as I type</button>
         <button role="menuitemcheckbox" type="button" data-view="toolbar" aria-checked="true">Toolbar</button>
         <button role="menuitemcheckbox" type="button" data-view="hover-bar" aria-checked="true">The bar over a passage</button>
+        <button role="menuitem" type="button" data-command="board">Scene board…</button>
+        <button role="menuitem" type="button" data-command="comments">Comments…</button>
         <button role="menuitem" type="button" data-command="goal">Writing goal…</button>
         <button role="menuitem" type="button" data-command="page">Page and text…</button>
         <hr>
@@ -202,6 +207,7 @@
         <button class="side-tab" role="tab" type="button" id="tab-book" data-tab="book" aria-controls="side-sheet">Book</button>
         <button class="side-tab" role="tab" type="button" id="tab-cast" data-tab="cast" aria-controls="side-sheet">Cast</button>
         <button class="side-tab" role="tab" type="button" id="tab-warnings" data-tab="warnings" aria-controls="side-sheet">Warnings <span class="count" id="warning-count">0</span></button>
+        <button class="side-tab" role="tab" type="button" id="tab-scraps" data-tab="scraps" aria-controls="side-sheet">Scraps</button>
       </div>
       <button class="side-close" type="button" id="side-close" title="Hide the side (View › Book and script)" aria-label="Hide the book and script">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
@@ -212,7 +218,8 @@
 </main>
 
 <footer class="statusbar">
-  <span id="counts"></span>
+  <button type="button" class="counts" id="counts" aria-haspopup="dialog" aria-controls="goal-panel"><span id="counts-text"></span><span class="goal-bar" id="goal-bar" hidden><span class="goal-fill" id="goal-fill"></span></span></button>
+  <button type="button" class="sprint-state" id="sprint-state" aria-controls="goal-panel" hidden></button>
   <span class="spacer"></span>
   <button type="button" class="status-warnings" id="status-warnings" hidden></button>
   <span id="cursor-place"></span>
@@ -286,6 +293,80 @@
     <div class="ask-buttons">
       <button class="button" type="button" id="page-reset">As it was</button>
       <button class="button primary" value="done">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="goal-panel" id="goal-panel" aria-labelledby="goal-title">
+  <form method="dialog">
+    <h2 id="goal-title">Today</h2>
+    <p class="goal-today" id="goal-today"></p>
+    <fieldset class="goal-set">
+      <legend>Words a day</legend>
+      <div class="picks" id="goal-picks">
+        <button type="button" class="pick" data-goal="250">250</button>
+        <button type="button" class="pick" data-goal="500">500</button>
+        <button type="button" class="pick" data-goal="1000">1,000</button>
+        <button type="button" class="pick" data-goal="1667" title="50,000 words in a month">1,667</button>
+        <button type="button" class="pick" data-goal="2000">2,000</button>
+        <label class="pick-own"><span class="sr-only">Words a day</span><input type="number" id="goal-own" min="1" max="100000" step="50" placeholder="Other"></label>
+        <button type="button" class="pick" data-goal="0">No goal</button>
+      </div>
+    </fieldset>
+    <h2>A sprint</h2>
+    <div id="sprint-start">
+      <fieldset class="goal-set">
+        <legend>Minutes to write in</legend>
+        <div class="picks" id="sprint-picks">
+          <button type="button" class="pick" data-minutes="15">15</button>
+          <button type="button" class="pick" data-minutes="25">25</button>
+          <button type="button" class="pick" data-minutes="45">45</button>
+          <button type="button" class="pick" data-minutes="60">60</button>
+          <label class="pick-own"><span class="sr-only">Minutes</span><input type="number" id="sprint-own" min="1" max="240" placeholder="Other"></label>
+        </div>
+      </fieldset>
+      <label class="check"><input type="checkbox" id="sprint-focus"> Focus while it runs</label>
+      <label class="check"><input type="checkbox" id="sprint-chime"> A soft chime at the end</label>
+      <button type="button" class="button primary" id="sprint-go">Start the sprint</button>
+    </div>
+    <div id="sprint-running" hidden>
+      <p class="sprint-now" id="sprint-now"></p>
+      <button type="button" class="button" id="sprint-stop">Stop the sprint</button>
+    </div>
+    <div class="goal-log">
+      <div>
+        <h3>Words written</h3>
+        <ul id="goal-days"></ul>
+      </div>
+      <div>
+        <h3>Sprints</h3>
+        <ul id="sprint-log"></ul>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="board-dialog" id="board" aria-labelledby="board-title">
+  <form method="dialog">
+    <h2 id="board-title">Scene board</h2>
+    <p class="sheet-note" id="board-summary"></p>
+    <div class="board-columns" id="board-columns"></div>
+  </form>
+</dialog>
+
+<dialog class="details manuscript-dialog" id="manuscript" aria-labelledby="manuscript-title">
+  <form method="dialog">
+    <h2 id="manuscript-title">A manuscript to submit</h2>
+    <p class="sheet-note">Times New Roman, double-spaced, your name and the word count on the first page, and your surname, the title and the page on every page after. What you write here stays in this browser, for the next one.</p>
+    <label for="manuscript-contact">Your name and how to reach you, a line each</label>
+    <textarea id="manuscript-contact" rows="4" placeholder="Ann Teller&#10;1 Harbour Lane, Port Ellis&#10;ann@example.com"></textarea>
+    <label for="manuscript-byline">The name it is published under</label>
+    <input type="text" id="manuscript-byline" autocomplete="off">
+    <label for="manuscript-surname">Your surname, for the top of each page</label>
+    <input type="text" id="manuscript-surname" autocomplete="off">
+    <div class="ask-buttons">
+      <button class="button" value="cancel">Cancel</button>
+      <button class="button primary" type="button" id="manuscript-go">Make the manuscript</button>
     </div>
   </form>
 </dialog>
@@ -414,6 +495,13 @@
           <button class="button" type="button" data-command="export-epub">Ebook (EPUB)</button>
           <button class="button" type="button" data-command="export-book">Web page</button>
           <button class="button" type="button" data-command="print">Print…</button>
+        </div>
+      </section>
+      <section aria-labelledby="export-manuscript">
+        <h3 id="export-manuscript">A manuscript to submit</h3>
+        <p class="sheet-note">Standard manuscript format, as agents and editors ask for it.</p>
+        <div class="export-choices">
+          <button class="button" type="button" data-command="export-manuscript">Word document…</button>
         </div>
       </section>
       <section aria-labelledby="export-script">

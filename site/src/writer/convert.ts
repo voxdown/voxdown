@@ -6,7 +6,13 @@
 import { SPEC_VERSION } from "voxdown";
 
 /** A stretch of text in one style. */
-export type Run = { text: string; italic: boolean; bold: boolean } | { lineBreak: true };
+/**
+ * A run of text in one style, or a line break. `comment` is the writer's comment at that place
+ * (its text empty): only a book rendered for an editor has them, which a Word document keeps.
+ */
+export type Run =
+  | { text: string; italic: boolean; bold: boolean; comment?: string }
+  | { lineBreak: true };
 
 /** A paragraph: a heading (its level), a scene break, or text. */
 export type Paragraph =
@@ -60,7 +66,8 @@ export function paragraphsOf(root: Element, styleOf?: StyleOf): Paragraph[] {
   const runsOf = (nodes: readonly Node[], start: { italic: boolean; bold: boolean }, pre = false) =>
     readRuns(nodes, start, styleOf, pre);
   const text = (runs: Run[]) => {
-    if (runs.some((run) => "text" in run && run.text.trim())) out.push({ kind: "text", runs });
+    if (runs.some((run) => "text" in run && (run.text.trim() || run.comment)))
+      out.push({ kind: "text", runs });
   };
   const visit = (element: Element, inherited: { italic: boolean; bold: boolean }) => {
     const tag = element.tagName.toLowerCase();
@@ -161,6 +168,12 @@ function readRuns(
     const tag = (node as Element).tagName.toLowerCase();
     // Page numbers and the like the book draws aside are no part of the text.
     if ((node as Element).classList.contains("vxd-page-number")) return;
+    // The writer's comment, where an editor's copy of the book has it.
+    if ((node as Element).classList.contains("vxd-comment")) {
+      const comment = (node as Element).getAttribute("data-comment");
+      if (comment) runs.push({ text: "", italic, bold, comment });
+      return;
+    }
     if (tag === "br") {
       runs.push({ lineBreak: true });
       return;
@@ -190,7 +203,7 @@ function readRuns(
     if (!after || "lineBreak" in after) run.text = run.text.trimEnd();
   });
   // No line break at either end.
-  const kept = runs.filter((run) => !("text" in run) || run.text);
+  const kept = runs.filter((run) => !("text" in run) || run.text || run.comment);
   while (kept[0] && "lineBreak" in kept[0]) kept.shift();
   while (kept.at(-1) && "lineBreak" in (kept.at(-1) as Run)) kept.pop();
   return kept;
@@ -208,6 +221,8 @@ export function mergedRuns(runs: readonly Run[]): Run[] {
       last &&
       "text" in last &&
       "text" in run &&
+      !last.comment &&
+      !run.comment &&
       last.italic === run.italic &&
       last.bold === run.bold
     )

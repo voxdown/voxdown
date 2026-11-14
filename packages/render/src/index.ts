@@ -40,6 +40,12 @@ export type RenderOptions = {
    * `data-from` and `data-to` (UTF-16 offsets), to link a view to an editor. Default false.
    */
   positions?: boolean;
+  /**
+   * Book view: each of the writer's comments (`<!-- … -->`, spec §10.1) where it was, as an empty
+   * `<span class="vxd-comment" data-comment="…">`, for a document an editor reads (a Word
+   * document's comments). Default false: they are the writer's own.
+   */
+  comments?: boolean;
 };
 
 /** ` data-from="…" data-to="…"`, when positions are asked for. */
@@ -113,8 +119,15 @@ export function renderBook(story: Story, options: RenderOptions = {}): string {
     }
     if (block.visibility === "audio" || block.visibility === "hidden") continue;
     // Emphasis can run over a paragraph's lines: they are rendered together, each its own.
-    const texts = lines.map((line) => printedText(story.source, line));
-    const htmls = inlineHtmlPieces(texts);
+    const comments: string[] | undefined = options.comments ? [] : undefined;
+    const texts = lines.map((line) => printedText(story.source, line, comments));
+    const htmls = inlineHtmlPieces(texts).map((html) =>
+      html.replace(
+        COMMENT_AT,
+        (_found, index: string) =>
+          `<span class="vxd-comment" data-comment="${escapeHtml(comments?.[Number(index)] ?? "")}"></span>`,
+      ),
+    );
     const printed = lines
       .map((line, index) => {
         const html = texts[index] === "" ? "" : (htmls[index] ?? "");
@@ -149,7 +162,11 @@ const NOT_PRINTED: ReadonlySet<Item["kind"]> = new Set([
   "vocal",
   "instruction",
   "note",
+  "comment",
 ]);
+
+/** Where a comment goes in a printed line, until its line is HTML: `\uE010` + its number + `\uE011`. */
+const COMMENT_AT = /\uE010(\d+)\uE011/g;
 
 /** A line as printed (§12.2), as HTML. Where a removed mark leaves two spaces, one remains. */
 function printedLine(source: string, line: Line): string {
@@ -157,7 +174,7 @@ function printedLine(source: string, line: Line): string {
 }
 
 /** A line as printed (§12.2), its Markdown not yet read. */
-function printedText(source: string, line: Line): string {
+function printedText(source: string, line: Line, comments?: string[]): string {
   // Pieces joined once at the end: a long line of many marks stays linear.
   const printed: string[] = [];
   let spaced = false;
@@ -174,6 +191,10 @@ function printedText(source: string, line: Line): string {
   for (const item of line.items) {
     if (!NOT_PRINTED.has(item.kind) || item.range.from < at) continue;
     append(item.range.from);
+    if (comments && item.kind === "comment" && item.text) {
+      printed.push(`\uE010${comments.length}\uE011`);
+      comments.push(item.text);
+    }
     at = item.range.to;
     joint = true;
   }
@@ -383,6 +404,11 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
       case "note":
         gap(item.range.from);
         html += `<span class="vxd-note" role="note"${placed(item.range, options)}>${escapeHtml(item.text)}</span>`;
+        at = item.range.to;
+        break;
+      // The writer's own comment: in no one's script (spec §10.1).
+      case "comment":
+        gap(item.range.from);
         at = item.range.to;
         break;
       case "image":

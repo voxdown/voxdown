@@ -106,6 +106,7 @@ export type Item =
   | Sound
   | Instruction
   | Note
+  | Comment
   | Image
   | Mark
   | DirectionMark
@@ -165,6 +166,12 @@ export type Instruction = {
 /** `%% … %%` (§10). `text` has its spaces and line breaks run together. */
 export type Note = { kind: "note"; text: string; range: Range };
 
+/**
+ * `<!-- … -->`, the writer's own comment (§10.1): never heard, printed or given to a performer.
+ * `text` has its spaces and line breaks run together.
+ */
+export type Comment = { kind: "comment"; text: string; range: Range };
+
 /** An image (§8.3): shown in the book, not heard. `link` is where it links to, if a link holds it. */
 export type Image = { kind: "image"; alt: string; src: string; link?: string; range: Range };
 
@@ -199,6 +206,7 @@ export type WarningCode =
   | "pause-value"
   | "sound-looks-like-link"
   | "unclosed-note"
+  | "unclosed-comment"
   | "front-matter";
 
 export type Warning = {

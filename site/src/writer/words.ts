@@ -14,7 +14,11 @@ export const wordCount = (content: string): number =>
  */
 export function proseWords(source: string): number {
   const front = /^\uFEFF?---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(source);
-  const body = source.slice(front ? front[0].length : 0).replace(/%%[\s\S]*?(?:%%|$)/g, " ");
+  // Notes and the writer's comments are no part of the story's words.
+  const body = source
+    .slice(front ? front[0].length : 0)
+    .replace(/%%[\s\S]*?(?:%%|$)/g, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ");
   const unprinted = /\{\s*(?:hidden|audio only)\s*\}/i;
   const kept: string[] = [];
   // Groups open around the lines, each printed or not.

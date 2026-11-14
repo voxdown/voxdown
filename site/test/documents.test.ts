@@ -157,6 +157,32 @@ describe("Word documents", () => {
   });
 });
 
+describe("Word documents for an editor", () => {
+  it("carry the writer's comments as Word's own, where they were, and nothing of them in the text", async () => {
+    const story =
+      "Night fell. <!-- Was it raining? --> The end.\n\n@Ann “Hi.” <!-- Too short? -->\n";
+    const html = renderBook(parse(story), { comments: true });
+    const paragraphs = paragraphsOf(new DOMParser().parseFromString(html, "text/html").body);
+    const files = await unzip(docxOf(paragraphs, { author: "A. Teller" }));
+    const document = decoder.decode(files.get("word/document.xml"));
+    const comments = decoder.decode(files.get("word/comments.xml"));
+    expect(document).toContain(
+      'Night fell. </w:t></w:r><w:commentRangeStart w:id="0"/><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r><w:r><w:t xml:space="preserve">The end.',
+    );
+    expect(document).not.toContain("raining");
+    expect(comments).toContain('<w:comment w:id="0" w:author="A. Teller"');
+    expect(comments).toContain("Was it raining?");
+    expect(comments).toContain("Too short?");
+    expect(decoder.decode(files.get("[Content_Types].xml"))).toContain("/word/comments.xml");
+    expect(decoder.decode(files.get("word/_rels/document.xml.rels"))).toContain("comments.xml");
+    // Read back, the words are the story's, its comments left to Word.
+    const { story: back } = await storyOfDocx(docxOf(paragraphs, {}).buffer as ArrayBuffer);
+    expect(back).toContain("Night fell. The end.");
+    // Without comments, the parts for them aren't written.
+    expect((await unzip(docxOf(book("Hi."), {}))).has("word/comments.xml")).toBe(false);
+  });
+});
+
 describe("ebooks", () => {
   it("are written a chapter to a heading, and read back as a story", async () => {
     const paragraphs = book(STORY);

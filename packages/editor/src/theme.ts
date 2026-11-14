@@ -34,6 +34,7 @@ export const scriptTheme = EditorView.theme({
   ".vxd-sound": { color: "var(--vxd-sound, #15803d)" },
   ".vxd-page": { color: "var(--vxd-page, #b7791f)" },
   ".vxd-note": { color: "var(--vxd-note, #6b7280)", fontStyle: "italic" },
+  ".vxd-comment": { color: "var(--vxd-muted, #6b7280)" },
   ".vxd-group": { color: "var(--vxd-direction, #7c3aed)", fontStyle: "italic" },
   ".vxd-heading": { fontWeight: "600", fontFamily: "var(--vxd-ui-font, system-ui, sans-serif)" },
   ".vxd-break": { color: "var(--vxd-muted, #6b7280)" },
@@ -167,6 +168,16 @@ export const scriptTheme = EditorView.theme({
     borderRadius: "6px",
     fontStyle: "italic",
     whiteSpace: "normal",
+    margin: "0 0.2em",
+  },
+  // The writer's own comment: a margin note in pencil, quieter than a note for the performer.
+  ".vxd-chip-comment": {
+    color: "var(--vxd-muted, #6b7280)",
+    border: "1px dashed var(--vxd-line, #d0d4da)",
+    borderRadius: "6px",
+    whiteSpace: "normal",
+    fontSize: "0.86em",
+    padding: "0 0.4em",
     margin: "0 0.2em",
   },
   // A host's own small mark (such as a tie a recording tool writes between two sentences): quiet, in the accent.

@@ -4,7 +4,7 @@
  */
 export const CHEATSHEET = `# VoxDown cheat sheet
 
-Every mark on one page. VoxDown 1.2; the full rules are in [SPEC.md](SPEC.md).
+Every mark on one page. VoxDown 1.3; the full rules are in [SPEC.md](SPEC.md).
 
 **The one rule:** on each line, the quotes after a name belong to it, and everything else belongs to the narrator.
 
@@ -40,6 +40,7 @@ Every mark on one page. VoxDown 1.2; the full rules are in [SPEC.md](SPEC.md).
 | \`@Gerald [snores]\` | A sound Gerald makes. Inside his speech: \`@[sneezes]\`. |
 | \`{pause}\`, \`{pause 2s}\`, \`{pause 500ms}\` | A pause: a beat, or a length. |
 | \`%% Leave a pause after this. %%\` | A note for the performer. Never read aloud or printed. |
+| \`<!-- Was it raining in chapter one? -->\` | A comment for yourself: never read aloud, printed or given to a performer (new in 1.3). |
 | \`{recorder:take 3}\` | A tool’s own instruction: kept in place, ignored by other tools. |
 
 ## The page
@@ -59,7 +60,7 @@ Every mark on one page. VoxDown 1.2; the full rules are in [SPEC.md](SPEC.md).
 
 \`\`\`yaml
 ---
-voxdown: 1.2
+voxdown: 1.3
 title: The Tale of Peter Rabbit
 author: Beatrix Potter
 language: en-GB

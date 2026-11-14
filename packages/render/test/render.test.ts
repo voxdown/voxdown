@@ -594,3 +594,26 @@ describe("a long direction", () => {
     expect(html.match(/vxd-direction-long/g)?.length).toBe(1);
   });
 });
+
+describe("the writer's comments (spec §10.1)", () => {
+  const story = parse(
+    "Night fell. <!-- Was it *raining*? --> The end.\n\n<!-- alone -->\n\n@Tom “Hi.” <!-- c --> “Bye.”\n",
+  );
+
+  it("are in neither view", () => {
+    for (const html of [renderBook(story), renderScript(story)]) {
+      expect(html).not.toContain("raining");
+      expect(html).not.toContain("alone");
+      expect(html).not.toContain("&lt;!--");
+    }
+    expect(renderBook(story, { header: false })).toContain("Night fell. The end.");
+  });
+
+  it("are marked where they were in the book, when asked for an editor's copy", () => {
+    const html = renderBook(story, { header: false, comments: true });
+    expect(html).toContain(
+      'Night fell. <span class="vxd-comment" data-comment="Was it *raining*?"></span>The end.',
+    );
+    expect(html).toContain('“Hi.” <span class="vxd-comment" data-comment="c"></span>“Bye.”');
+  });
+});

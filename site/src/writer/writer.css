@@ -783,6 +783,7 @@ body.writer > .statusbar {
 /* The welcome has no story behind it: no scenes, no counts, nothing kept. */
 body[data-welcome] .scene-rail,
 body[data-welcome] #counts,
+body[data-welcome] #sprint-state,
 body[data-welcome] #cursor-place,
 body[data-welcome] #draft-state {
   visibility: hidden;
@@ -1153,6 +1154,169 @@ body[data-welcome] #draft-state {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* The words: a button for the day's goal and sprints, the goal's progress under them. */
+.statusbar .counts,
+.statusbar .sprint-state {
+  position: relative;
+  padding: 0.1rem 0.3rem;
+  margin: -0.1rem -0.3rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.statusbar .counts:hover,
+.statusbar .sprint-state:hover {
+  background: var(--tab);
+  color: var(--ink);
+}
+#counts-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.goal-bar {
+  position: absolute;
+  left: 0.3rem;
+  right: 0.3rem;
+  bottom: -0.05rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--desk-edge);
+}
+.goal-bar[hidden] {
+  display: none;
+}
+.goal-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 1px;
+  background: var(--brand);
+  transition: width 0.3s ease;
+}
+.statusbar .sprint-state {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.statusbar .sprint-state[hidden] {
+  display: none;
+}
+
+/* The day's goal and sprints: a panel over the status bar, by the words it opened from. */
+.goal-panel {
+  position: fixed;
+  inset: auto auto 2.4rem clamp(0.6rem, 1.6vw, 1.2rem);
+  margin: 0;
+  width: min(30rem, calc(100vw - 1.2rem));
+  max-height: calc(100vh - 5rem);
+  overflow: auto;
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 1rem 1.2rem 1.1rem;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+  font-size: 0.88rem;
+}
+.goal-panel::backdrop {
+  background: rgb(20 25 35 / 0.12);
+}
+.goal-panel h2 {
+  margin: 0 0 0.35rem;
+  font: 600 1.02rem / 1.3 var(--story);
+}
+.goal-panel h2:not(:first-of-type) {
+  margin-top: 1.1rem;
+}
+.goal-panel h3 {
+  margin: 0 0 0.3rem;
+  font: 600 0.82rem / 1.3 var(--ui);
+  color: var(--quiet);
+}
+.goal-today {
+  margin: 0 0 0.6rem;
+}
+.goal-panel fieldset {
+  border: 0;
+  margin: 0 0 0.6rem;
+  padding: 0;
+}
+.goal-panel legend {
+  color: var(--quiet);
+  margin-bottom: 0.3rem;
+}
+.picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.pick {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.pick:hover {
+  border-color: var(--quiet);
+}
+.pick[aria-pressed="true"] {
+  border-color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
+}
+.pick-own input {
+  width: 5.2rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+.goal-panel .check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+}
+#sprint-go,
+#sprint-stop {
+  margin-top: 0.4rem;
+}
+.sprint-now {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.goal-log {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 1rem;
+  margin-top: 1.1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--rule);
+}
+.goal-log ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.15rem;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 520px) {
+  .goal-log {
+    grid-template-columns: 1fr;
+  }
 }
 .status-warnings {
   background: none;
@@ -2687,4 +2851,321 @@ dialog:has(> .dialog-close) #ask-message {
 }
 .manuscript .cm-line.para-indent {
   text-indent: 1.6em;
+}
+
+/* Scraps: passages set aside, each a slip of paper; shown whole while the pointer or the keys are
+   on it; a line where one dragged would go; the tab lit when words are dragged over it. */
+.scraps {
+  min-height: 100%;
+  padding: 0.8rem 0.9rem 2rem;
+  font: 0.88rem / 1.45 var(--ui);
+}
+.scraps.receiving {
+  background: color-mix(in srgb, var(--brand) 7%, transparent);
+  outline: 2px dashed color-mix(in srgb, var(--brand) 55%, transparent);
+  outline-offset: -6px;
+}
+.scraps-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+.scraps-head input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+.scraps-files {
+  display: flex;
+  gap: 0.2rem;
+}
+.scraps-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.6rem;
+}
+.scraps-empty {
+  color: var(--quiet);
+  line-height: 1.55;
+}
+.scrap {
+  position: relative;
+  padding: 0.6rem 0.7rem 0.45rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 1px 2px rgb(30 40 60 / 0.06);
+  cursor: grab;
+}
+.scrap:focus-visible {
+  outline: 2px solid var(--pencil);
+  outline-offset: 2px;
+}
+.scrap.dragging {
+  opacity: 0.45;
+}
+.scrap.before::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -0.42rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--brand);
+}
+.scrap-text {
+  font: 400 0.95rem / 1.5 var(--story);
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+/* Whole, while the pointer or the keys are on it: a long one scrolls within. */
+.scrap:hover .scrap-text,
+.scrap:focus-within .scrap-text {
+  display: block;
+  max-height: 22rem;
+  overflow: auto;
+}
+.scrap-note {
+  display: block;
+  width: 100%;
+  margin: 0.45rem 0 0.1rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  font: italic 0.85rem / 1.4 var(--ui);
+}
+.scrap-note:hover {
+  border-color: var(--desk-edge);
+}
+.scrap-note:focus {
+  border-color: var(--pencil);
+  outline: none;
+  font-style: normal;
+}
+.scrap-meta {
+  color: var(--quiet);
+  font-size: 0.78rem;
+  padding: 0 0.3rem;
+}
+.scrap-actions {
+  display: flex;
+  gap: 0.2rem;
+  margin-top: 0.2rem;
+  opacity: 0;
+}
+.scrap:hover .scrap-actions,
+.scrap:focus-within .scrap-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .scrap-actions {
+    opacity: 1;
+  }
+}
+
+/* A manuscript to submit: the writer's name and contact, a field each, one above the other. */
+.manuscript-dialog form {
+  display: grid;
+  gap: 0.35rem;
+}
+.manuscript-dialog label {
+  margin-top: 0.4rem;
+  font-size: 0.88rem;
+  color: var(--quiet);
+}
+.manuscript-dialog textarea,
+.manuscript-dialog input {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+.manuscript-dialog .ask-buttons {
+  margin-top: 0.8rem;
+}
+
+/* The scene board: a column for each chapter, a card for each scene, the window's width. */
+.board-dialog {
+  width: min(96vw, 90rem);
+  height: min(88vh, 60rem);
+  border: 1px solid var(--desk-edge);
+  border-radius: 12px;
+  padding: 1rem 1.2rem 1.2rem;
+  background: var(--desk);
+  color: var(--ink);
+  box-shadow: 0 30px 80px -30px rgb(20 30 50 / 0.55);
+}
+.board-dialog::backdrop {
+  background: rgb(20 25 35 / 0.35);
+}
+.board-dialog form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.board-dialog h2 {
+  margin: 0 2.4rem 0.2rem 0;
+  font: 600 1.1rem / 1.3 var(--story);
+}
+.board-columns {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 0.9rem;
+  margin-top: 0.8rem;
+  overflow: auto;
+  align-items: flex-start;
+}
+.board-column {
+  flex: 0 0 17rem;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: var(--tab);
+  border: 1px solid var(--desk-edge);
+}
+.board-column.before {
+  box-shadow: -4px 0 0 var(--brand);
+}
+.board-column.dragging {
+  opacity: 0.5;
+}
+.board-chapter {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem 0.4rem;
+  cursor: grab;
+}
+.board-chapter .board-name {
+  font: 600 0.98rem / 1.3 var(--story);
+}
+.board-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.board-name:hover {
+  color: var(--pencil);
+  text-decoration: underline;
+}
+.board-words {
+  flex: none;
+  color: var(--quiet);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+.board-cards {
+  margin: 0;
+  padding: 0.2rem 0.6rem 0.7rem;
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+  overflow: auto;
+  min-height: 3rem;
+}
+.board-cards.before {
+  box-shadow: inset 0 -3px 0 var(--brand);
+}
+.board-empty {
+  color: var(--quiet);
+  font-size: 0.82rem;
+  padding: 0.3rem 0.2rem;
+}
+.board-card {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem 0.5rem;
+  border: 1px solid var(--desk-edge);
+  border-left: 4px solid var(--desk-edge);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 1px 2px rgb(30 40 60 / 0.06);
+  cursor: grab;
+}
+.board-card[data-state="idea"] {
+  border-left-color: var(--quiet);
+}
+.board-card[data-state="draft"] {
+  border-left-color: var(--mark-page);
+}
+.board-card[data-state="revised"] {
+  border-left-color: var(--pencil);
+}
+.board-card[data-state="done"] {
+  border-left-color: var(--brand);
+}
+.board-card.before::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -0.4rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+.board-card.dragging {
+  opacity: 0.45;
+}
+.board-card .board-name {
+  font: 600 0.9rem / 1.3 var(--ui);
+}
+.board-line {
+  width: 100%;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink);
+  font: italic 0.88rem / 1.4 var(--story);
+  resize: none;
+}
+.board-line:hover {
+  border-color: var(--desk-edge);
+}
+.board-line:focus {
+  border-color: var(--pencil);
+  outline: none;
+  font-style: normal;
+}
+.board-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.board-state {
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 0.78rem / 1.3 var(--ui);
 }

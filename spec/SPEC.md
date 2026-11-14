@@ -1,6 +1,6 @@
 # VoxDown
 
-**Version 1.2, 11 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
+**Version 1.3, 14 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
 
 VoxDown is a plain-text format for stories that are read aloud. It records:
 
@@ -9,6 +9,7 @@ VoxDown is a plain-text format for stories that are read aloud. It records:
 - where the pages turn and where the reader pauses;
 - what is printed but not read aloud, and what is read aloud but not printed;
 - notes for whoever performs or produces the story.
+- the writer's own comments, kept out of everything else.
 
 A file in this format is a Markdown story with light marks in it. Take the marks out and you have the printed story. Leave them in and you have a script that a narrator, a cast, or a speech engine can perform.
 
@@ -78,6 +79,7 @@ Sir Percival stopped.
 | Printed, not read aloud | `{book only} First published 1902.` |
 | Read aloud, not printed | `{audio only} Turn the page when you hear the bell.` |
 | A note for the performer | `%% Leave a clear pause after this line. %%` |
+| A comment for yourself | `<!-- Was it raining in chapter one? -->` (§10.1) |
 | Title, chapter, scene | `# Title`, `## Chapter 1`, `### A scene` (§4.4) |
 | A scene break | `---` |
 | The cast | Front matter: `cast:` (§4.3) |
@@ -94,7 +96,7 @@ The spoken script has one line per thing heard. A line is either:
 - `[description]` for a sound;
 - `Character [description]` for a sound made by a character;
 - `{page}`, `{pause}` or another instruction;
-- `%% text %%` for a note.
+- `%% text %%` for a note, and `<!-- text -->` for the writer's own comment.
 
 A new line in the file starts a new line in the script. A blank line separates paragraphs. Headings start with `#` and scene breaks are `---`. §12.1 gives the details.
 
@@ -1527,6 +1529,34 @@ Narrator: “Goodbye.”
 
 Write `\%` for a literal percent sign where it would otherwise start a note.
 
+### 10.1 Comments
+
+New in 1.3. Text between `<!--` and `-->` is the writer's own comment, as in Markdown and HTML: a reminder, a question, a line set aside. It is kept in place and never read aloud, printed or given to a performer, so unlike a note it is not in the spoken script. A Markdown viewer hides it too. A comment can sit inside a line, on its own line, or run over several lines and paragraphs, and like a note it leaves the lines it runs over two lines (§5.3).
+
+```example
+Night fell. <!-- Was it raining in chapter one? --> The harbour was quiet.
+.
+Narrator: Night fell.
+Narrator: The harbour was quiet.
+.
+Night fell. The harbour was quiet.
+```
+
+Inside a comment nothing is a mark: names, quotes, `%%` and the rest are its text, and the first `-->` ends it. A `<!--` inside a note is the note's text. A comment that is never closed is read as text, with a warning.
+
+```example
+<!--
+@Gerald “Could you not?”
+Too much? It slows the scene down.
+-->
+
+@Percival “Real sheep?”
+.
+Percival: Real sheep?
+.
+“Real sheep?”
+```
+
 ## 11. Markdown inside the story
 
 Emphasis works as in Markdown. `*a word*` or `_a word_` is printed in italics and stressed when read; `**words**` or `__words__` is printed in bold. The spoken script keeps emphasis as written, so a speech engine can use it.
@@ -1561,7 +1591,7 @@ Narrator: Tom & Jerry said "hello".
 Tom & Jerry said "hello".
 ```
 
-Links and images work as in Markdown (§8.3). Other Markdown blocks (lists, block quotes, tables, code, HTML) are not part of version 1.0. Their lines are treated as ordinary paragraph text.
+Links and images work as in Markdown (§8.3). Other Markdown blocks (lists, block quotes, tables, code, HTML) are not part of version 1.0. Their lines are treated as ordinary paragraph text, except HTML comments, which are the writer's own (§10.1).
 
 ## 12. The two readings
 
@@ -1667,6 +1697,7 @@ A parser never rejects a file. It should report these warnings, each with its li
 | `pause-value` | `{pause}` has a value that is not a length. | warning |
 | `sound-looks-like-link` | A sound is followed directly by `(`, which Markdown reads as a link. | warning |
 | `unclosed-note` | A `%%` is never closed, so it is read as text. | warning |
+| `unclosed-comment` | A `<!--` is never closed, so it is read as text (new in 1.3). | warning |
 | `front-matter` | The front matter uses YAML outside the part a reader must understand (§4.2), or its cast is not a map. | warning |
 
 ## 13. Tools that edit files

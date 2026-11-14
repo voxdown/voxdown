@@ -48,8 +48,11 @@ export type InstructionToken = {
   raw: string;
   range: Range;
 };
-/** `breaks` when the note runs over a line break: what a mark does ends there (§5.3). */
-export type NoteToken = { type: "note"; text: string; range: Range; breaks?: true };
+/**
+ * A note, or a comment when `comment`. `breaks` when it runs over a line break: what a mark does
+ * ends there (§5.3).
+ */
+export type NoteToken = { type: "note"; text: string; range: Range; breaks?: true; comment?: true };
 export type ImageToken = { type: "image"; alt: string; src: string; link?: string; range: Range };
 export type OpenToken = { type: "open"; char: string; range: Range };
 export type CloseToken = { type: "close"; char: string; range: Range };
@@ -120,6 +123,7 @@ function lexAtoms(source: string, line: Range, notes: readonly NoteSpan[], warn:
       text: note.text,
       range: { from: note.from, to: note.to },
       ...(breaks ? { breaks: true as const } : {}),
+      ...(note.comment ? { comment: true as const } : {}),
     });
     at = note.to;
   }

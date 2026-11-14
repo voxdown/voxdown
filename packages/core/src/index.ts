@@ -13,6 +13,7 @@ export { write, changesFrom, diffChanges } from "./write";
 export {
   type TextChange,
   applyChanges,
+  declareVersion,
   insertLine,
   insertSound,
   isName,
@@ -62,6 +63,7 @@ export type {
   Mark,
   Meta,
   Note,
+  Comment,
   Paragraph,
   Range,
   Sound,

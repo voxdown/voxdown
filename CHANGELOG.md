@@ -9,6 +9,23 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **voxdown**
 - `directingPassages`, `DIRECTING_INSTRUCTIONS`, `directingPrompt`, `directingSchema` and `directingRequest` say what to ask a model to direct a reading: the story a passage at a time, to be given back with marks added for how it is performed. `readDirected` reads the answer (text, a code block, or JSON) as suggestions, keeping a mark only where the paragraph still prints the same words, given to the same speakers, with the writer's own marks; `chosenChanges` gives the changes for the ones chosen, checked again together.
 
+**Comments for the writer** (spec 1.3, §10.1): `<!-- … -->` is the writer's own comment, never read aloud, printed or given to a performer, and hidden by Markdown viewers too.
+
+**voxdown**
+- Follows spec 1.3: `SPEC_VERSION` is `"1.3"`. A comment is an item of its own (`comment`), in no line, script or book text, and a token for editors; one never closed is text, with a warning (`unclosed-comment`). `declareVersion(story, "1.3")` gives the change that makes a story declaring an older version declare that one, for an edit that writes what it added. The directing AI is told to keep comments as they are, and a paragraph given back without its comment is left alone.
+
+**@voxdown/render**
+- Comments are in neither view. `renderBook(story, { comments: true })` marks where each was, as an empty `<span class="vxd-comment" data-comment="…">`, for a copy an editor reads.
+
+**@voxdown/editor**, **VS Code extension**
+- A comment is drawn as a quiet chip with a dashed edge, the writer's own, and highlighted as an HTML comment.
+
+**@voxdown/cli**
+- The cheat sheet a model reads is for VoxDown 1.3, comments with it.
+
+**VoxDown Writer**
+- **Insert › A comment for yourself** (Ctrl+Alt+M) leaves a comment at the cursor, its words selected to write over, or comments out the words selected; a story declaring an older version declares 1.3. **View › Comments…** lists them, each to go to or to delete. The Word document has them as Word's own comments, where they were, for an editor.
+
 **A front page, and the Writer's looks.**
 
 **The website**
@@ -16,6 +33,12 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 **VoxDown Writer**
 - **View › Page and text** has looks, each designed with its marks and its characters' colours, all at 4.5:1 or better on its paper (`scripts/check-looks.mjs` checks them in a browser): Auto, Paper, Sepia, Night, Slate and High contrast. The button in the bar names the look and opens Page and text. Also there: **line spacing**, and **paragraphs** with a line between them or indented, as in a book, where the empty line between two paragraphs is drawn short (the line the cursor is on keeps its height).
+- **The goal is for the day**, not the sitting: the words written today in a story go on counting through a reload, and start again the next day. The word count in the status bar opens it, with a bar under the words as it fills; quick choices (250 to 2,000, 1,667 for 50,000 in a month) or any number.
+- **Sprints**: a time to write in (15, 25, 45 or 60 minutes, or any), its time left and its words in the status bar, Focus while it runs if wanted, and a soft chime at its end, which waits for a pause in the typing. The panel lists the words written each day and the sprints written, all kept in this browser.
+- **Scraps**, a tab beside Script, Book, Cast and Warnings: passages set aside, to bring back later. Drag words from the story onto it (they move; with Ctrl or ⌥ held, they are copied), or select them and use **Edit › Cut to Scraps** (Ctrl+Shift+X); drag a scrap back into the story, or **Put in at the cursor**, and it stays in Scraps, marked as used. Each scrap has a note and the chapter it came from, is shown whole while the pointer or the keys are on it, and is found by a search of its words and notes; drag one to put it elsewhere in the list. Kept in this browser with the story, and saved in a file beside it, `owl.scraps.md`, a Markdown file any viewer shows as the passages, saved again with the story once saved there. Opening such a file adds its scraps to the ones here, none twice, so a heap started before the old one was opened loses nothing.
+- **Export › A manuscript to submit**: a Word document in the standard manuscript format agents and editors ask for. Times New Roman 12, double-spaced, one-inch margins, paragraphs set in half an inch; the writer's name and contact and the word count (to the nearest hundred) on the first page, the title and byline halfway down it; the surname, a word of the title and the page number on every page after; chapters on a new page; `#` for a scene break; `END` at the end. The name and contact are asked once and kept in this browser.
+- **View › Scene board…**: a column for each chapter with its words, a card for each scene with its words, a line about what happens and how far along it is (idea, draft, revised, done). The line and the state are written as a comment straight under the scene's heading (`<!-- draft: The knight meets the dragon. -->`), so the board needs nothing the format doesn't have. Drag a card to move the scene, or a chapter's head to move the chapter: the text moves with it, one step for Ctrl+Z. A short story's sections, with no scenes inside them, are cards in one column. A card's name goes to the scene.
+- The status bar's word count leaves the writer's comments out, as it does notes.
 - **Hear** reads with the voices on the computer only. Chrome's Google voices and Edge's Online ones speak on their makers' services, so the story's words went there; where a browser has only those, the Writer asks once before using them.
 - `writer/#example=the-dragon-who-would-not-roar` opens that example, after asking about unsaved changes to the story open, and the address is put back.
 - The italics button is slanted, no longer like the text cursor, and a question's words keep clear of its ×.

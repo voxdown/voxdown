@@ -149,7 +149,7 @@ The story is written in VoxDown, a plain-text format for stories read aloud:
 - \`{pause}\` is a beat of silence; \`{pause 2s}\` a longer one.
 - \`[door creaks]\` is a sound in the world, heard where it is written.
 - \`@[sighs]\` inside a character's quote is a sound they make; \`@Mara [sighs]\` is Mara sighing on her own.
-- \`{…}\`, \`%% … %%\` and \`::: …\` are other instructions and notes: keep them as they are.
+- \`{…}\`, \`%% … %%\`, \`<!-- … -->\` and \`::: …\` are other instructions, notes and the writer's comments: keep them as they are.
 
 What to add, sparingly:
 - A direction where a good narrator or actor would change their voice: a whisper, a shout, sarcasm, fear, a line said through tears. One to three words, like an actor's note: softly, bitterly, with a laugh, barely audible. Put it straight after the speaker's name, or as @(…) for the narrator.
@@ -338,6 +338,7 @@ function readingOf(text: string): Reading {
     else if (item.kind === "instruction")
       (item.name === "pause" ? added : kept).push(`instruction:${item.raw}`);
     else if (item.kind === "note") kept.push(`note:${item.text}`);
+    else if (item.kind === "comment") kept.push(`comment:${item.text}`);
     else if (item.kind === "image") kept.push(`image:${item.src}`);
     else if (item.kind === "end") kept.push("end");
   }

@@ -8,20 +8,27 @@ import { unzip, zip } from "./zip";
 
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
-function runXml(run: Run): string {
+/** The writer's comments met while writing the document: each one's place says its number. */
+type Comments = string[];
+
+function runXml(run: Run, comments: Comments): string {
   if ("lineBreak" in run) return "<w:r><w:br/></w:r>";
+  if (run.comment) {
+    const id = comments.push(run.comment) - 1;
+    return `<w:commentRangeStart w:id="${id}"/><w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r>`;
+  }
   const style = `${run.bold ? "<w:b/>" : ""}${run.italic ? "<w:i/>" : ""}`;
   return `<w:r>${style ? `<w:rPr>${style}</w:rPr>` : ""}<w:t xml:space="preserve">${xmlText(run.text)}</w:t></w:r>`;
 }
 
-function paragraphXml(paragraph: Paragraph): string {
+function paragraphXml(paragraph: Paragraph, comments: Comments): string {
   if (paragraph.kind === "break")
     return `<w:p><w:pPr><w:pStyle w:val="SceneBreak"/></w:pPr><w:r><w:t>* * *</w:t></w:r></w:p>`;
   const style =
     paragraph.kind === "heading"
       ? `<w:pPr><w:pStyle w:val="Heading${Math.min(paragraph.level, 6)}"/></w:pPr>`
       : "";
-  return `<w:p>${style}${paragraph.runs.map(runXml).join("")}</w:p>`;
+  return `<w:p>${style}${paragraph.runs.map((run) => runXml(run, comments)).join("")}</w:p>`;
 }
 
 /** The document's styles: a book face, Word's headings, and a centred scene break. */
@@ -55,7 +62,20 @@ export function docxOf(
   const titlePage = details.title
     ? `${styled("Title", details.title)}${styled("Subtitle", details.subtitle)}${styled("Author", details.author)}<w:p><w:r><w:br w:type="page"/></w:r></w:p>`
     : "";
-  const body = titlePage + paragraphs.map(paragraphXml).join("");
+  const comments: Comments = [];
+  const body =
+    titlePage + paragraphs.map((paragraph) => paragraphXml(paragraph, comments)).join("");
+  // The writer's comments, as Word's own, by the book's author (or the writer).
+  const who = xmlText(details.author ?? "The writer");
+  const commentsXml = comments.length
+    ? `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:comments xmlns:w="${W}">${comments
+        .map(
+          (text, id) =>
+            `<w:comment w:id="${id}" w:author="${who}" w:initials=""><w:p><w:r><w:t xml:space="preserve">${xmlText(text)}</w:t></w:r></w:p></w:comment>`,
+        )
+        .join("")}</w:comments>`
+    : "";
   const language = details.language ? `<w:lang w:val="${xmlText(details.language)}"/>` : "";
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="${W}"><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
@@ -65,7 +85,7 @@ export function docxOf(
     {
       name: "[Content_Types].xml",
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`,
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>${commentsXml ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' : ""}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`,
     },
     {
       name: "_rels/.rels",
@@ -75,10 +95,11 @@ export function docxOf(
     {
       name: "word/_rels/document.xml.rels",
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${commentsXml ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>' : ""}</Relationships>`,
     },
     { name: "word/document.xml", data: document },
     { name: "word/styles.xml", data: styles(language) },
+    ...(commentsXml ? [{ name: "word/comments.xml", data: commentsXml }] : []),
     { name: "docProps/core.xml", data: core },
   ]);
 }

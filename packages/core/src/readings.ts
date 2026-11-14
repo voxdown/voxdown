@@ -78,6 +78,9 @@ function scriptLine(item: Item): string | null {
       return item.value === null ? `{${item.name}}` : `{${item.name} ${item.value}}`;
     case "note":
       return item.text ? `%% ${item.text} %%` : null;
+    // The writer's own: never listed (§10.1).
+    case "comment":
+      return null;
     case "image":
       return item.link === undefined
         ? `![${item.alt}](${item.src})`
@@ -105,6 +108,7 @@ const NOT_PRINTED: ReadonlySet<Item["kind"]> = new Set([
   "vocal",
   "instruction",
   "note",
+  "comment",
 ]);
 
 /**

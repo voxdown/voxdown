@@ -14,6 +14,7 @@ export type TokenKind =
   | "vocal"
   | "instruction"
   | "note"
+  | "comment"
   | "group"
   | "heading"
   | "break"
@@ -62,6 +63,7 @@ export function tokens(story: Story): SyntaxToken[] {
       case "sound":
       case "instruction":
       case "note":
+      case "comment":
         add(item.kind, item.range);
         break;
       case "image":

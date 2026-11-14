@@ -9,7 +9,8 @@
  * - Which quotation marks belong to a speech (SPEC.md §5.4 to §5.7). The grammar colors the quotes
  *   after a character mark, to the end of the line where the last of them closes, so a quote that
  *   carries a speech on into the next paragraph stays plain.
- * - Whether a `%%` is ever closed. Until it is, the rest of the file is colored as a note.
+ * - Whether a `%%` or a `<!--` is ever closed. Until it is, the rest of the file is colored as a
+ *   note or a comment.
  * - Whether a first line `---` is ever closed. Until it is, the file is colored as front matter.
  *
  * test/grammar.test.ts checks the grammar against the core's tokens, with these exceptions.
@@ -128,6 +129,15 @@ const ESCAPE = String.raw`\\[!-\/:-@\[-\x60{-~“”‘’„‚«»‹›「」
 // Inline marks.
 
 const escapeRule: Rule = { name: vd(S.escape), match: ESCAPE };
+
+/** The writer's own comment, `<!-- … -->` (§10.1): nothing inside it is a mark. */
+const comment: Rule = {
+  name: vd(S.comment),
+  begin: "<!--",
+  end: "-->",
+  beginCaptures: { 0: { name: "punctuation.definition.comment.begin.voxdown" } },
+  endCaptures: { 0: { name: "punctuation.definition.comment.end.voxdown" } },
+};
 
 const note: Rule = {
   name: vd(S.note),
@@ -316,8 +326,8 @@ function quote(open: string, close: string, style: string, multiLine: boolean): 
   };
 }
 
-/** A note that doesn't close on its line. */
-const NOTE_OVER_LINE = "(?=%%(?!.*%%))";
+/** A note, or a comment, that doesn't close on its line. */
+const NOTE_OVER_LINE = "(?=%%(?!.*%%))|(?=<!--(?!.*-->))";
 
 /** From a character mark to the end of its line, or to the next character mark. */
 function speech(multiLine: boolean): Rule {
@@ -333,6 +343,7 @@ function speech(multiLine: boolean): Rule {
     end: multiLine ? `$|(?=^)|${nextMark}|${NOTE_OVER_LINE}` : `$|${nextMark}|${NOTE_OVER_LINE}`,
     patterns: [
       include("escape"),
+      include("comment"),
       include("note"),
       include("image"),
       include("link"),
@@ -459,6 +470,7 @@ const groupLine: Rule = {
   end: "$",
   patterns: [
     include("escape"),
+    include("comment"),
     include("note"),
     include("instruction"),
     match(
@@ -475,6 +487,7 @@ const groupLine: Rule = {
 
 const markText = [
   include("escape"),
+  include("comment"),
   include("note"),
   include("image"),
   include("link"),
@@ -527,6 +540,7 @@ export const grammar = {
       ],
     },
     escape: escapeRule,
+    comment,
     note,
     image,
     link,

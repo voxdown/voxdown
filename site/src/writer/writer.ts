@@ -12,7 +12,14 @@ import {
   undo,
   undoDepth,
 } from "@codemirror/commands";
-import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
+import {
+  SearchQuery,
+  findNext,
+  openSearchPanel,
+  search,
+  searchKeymap,
+  setSearchQuery,
+} from "@codemirror/search";
 import {
   ChangeSet,
   Compartment,
@@ -182,6 +189,7 @@ import {
   speechAt,
   speechOfMark,
 } from "./stretch";
+import { overusedWords, styleHints } from "./style";
 import { toolbar } from "./toolbar";
 import {
   fileNameFor,
@@ -212,6 +220,8 @@ type Prefs = ViewSwitches & {
   focus: boolean;
   /** The cursor's line kept in the middle of the page as it goes, focus or not. */
   typewriter: boolean;
+  /** A word said again too soon, and a sentence too long, quietly underlined. */
+  styleHints: boolean;
   /** The writer agreed to the browser's online voices, its only ones: the words go to be spoken. */
   onlineVoices: boolean;
   /** Words to write a day; 0 for none. */
@@ -253,6 +263,7 @@ const prefs: Prefs = {
   focus: false,
   typewriter: false,
   onlineVoices: false,
+  styleHints: false,
   goal: 0,
   sprintMinutes: 25,
   sprintFocus: false,
@@ -486,6 +497,75 @@ const bookLines = ViewPlugin.fromClass(
   { decorations: (plugin) => plugin.decorations },
 );
 
+// Style hints (View › Style hints): a word said again too soon, a sentence too long, on the stretch
+// on screen, read again as it changes.
+
+const styleLines = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(readonly view: EditorView) {
+      this.decorations = this.build();
+    }
+    update(update: ViewUpdate) {
+      const switched = update.transactions.some((tr) => tr.effects.length > 0);
+      if (update.docChanged || update.viewportChanged || switched) this.decorations = this.build();
+    }
+    build(): DecorationSet {
+      if (!prefs.styleHints) return Decoration.none;
+      const { doc } = this.view.state;
+      const body = frontMatterEnd() ?? 0;
+      const found: Array<ReturnType<Decoration["range"]>> = [];
+      for (const { from, to } of this.view.visibleRanges) {
+        // A little before what shows, so a word said just above the screen counts.
+        const start = doc.lineAt(Math.max(body, from - 600)).from;
+        const end = doc.lineAt(to).to;
+        for (const hint of styleHints(doc.sliceString(start, end), start)) {
+          if (hint.to <= from || hint.from >= to || hint.from < body) continue;
+          found.push(
+            Decoration.mark({
+              class: hint.kind === "again" ? "style-again" : "style-long",
+              attributes: { title: hint.message },
+            }).range(hint.from, hint.to),
+          );
+        }
+      }
+      return Decoration.set(found, true);
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
+/** View › Words leaned on: the words the story uses most, each a click from finding it. */
+function showOverused(): void {
+  const body = view.state.doc.sliceString(frontMatterEnd() ?? 0);
+  const words = overusedWords(body);
+  showList(
+    "Words leaned on",
+    words.length
+      ? "The words this story uses most, beyond the common ones, and words drafts often lean on. Find one to see each place it comes."
+      : "No word stands out: none is used much more than the rest.",
+    words.map((word) => ({
+      title: word.word,
+      detail: `${word.count} times, ${word.perThousand.toLocaleString()} in every 1,000 words${word.crutch ? "; a word drafts often lean on" : ""}`,
+      actions: [
+        {
+          label: "Find",
+          main: true,
+          run: () => {
+            openSearchPanel(view);
+            view.dispatch({
+              effects: setSearchQuery.of(
+                new SearchQuery({ search: word.word, wholeWord: true, caseSensitive: false }),
+              ),
+            });
+            findNext(view);
+          },
+        },
+      ],
+    })),
+  );
+}
+
 /** Read only while another tab writes the story. */
 const editable = new Compartment();
 /** The line breaks the story is saved with: changed when the file is read again with others. */
@@ -503,6 +583,7 @@ function editorState(source: string, cursor: number): EditorState {
       editable.of(editability()),
       focusLines,
       bookLines,
+      styleLines,
       // The browser's spelling check, in the story's own language.
       // Coming back to the story (from the rail, a warning, the side) marks the place on the side.
       EditorView.domEventHandlers({
@@ -3986,6 +4067,7 @@ const COMMANDS: Record<string, () => unknown> = {
   "insert-note": () => insertAtCursor("%% note %%", "note"),
   "insert-comment": insertComment,
   "export-manuscript": showManuscript,
+  overused: showOverused,
   board: () =>
     openBoard({
       story: () => current(),
@@ -4109,6 +4191,14 @@ function viewCommand(name: string, on: boolean): void {
     prefs.hoverBar = on;
     keepPrefs();
     if (!on) tools.hide();
+  } else if (name === "style") {
+    prefs.styleHints = on;
+    keepPrefs();
+    view.dispatch({ effects: redrawn.of(null) });
+    if (on)
+      notice(
+        "Style hints: a word said again too soon is underlined, and a sentence long enough to lose a listener is shaded. Rest the pointer on one to see why.",
+      );
   } else if (name === "typewriter") {
     prefs.typewriter = on;
     keepPrefs();
@@ -4617,6 +4707,7 @@ async function start(): Promise<void> {
   checkMenu("hover-bar", prefs.hoverBar);
   checkMenu("toolbar", prefs.toolbar);
   checkMenu("smart", prefs.smart);
+  checkMenu("style", prefs.styleHints);
   view.dispatch({ effects: setSmartPunctuation.of(prefs.smart) });
   $("#toolbar").hidden = !prefs.toolbar;
   showUndoState(view.state);

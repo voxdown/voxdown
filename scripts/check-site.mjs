@@ -536,6 +536,49 @@ const draftIn = (page) =>
   console.log("writer: the scene board, its lines, states and moves: ok");
 }
 
+// The style check: off until asked; then a word said again too soon and a long sentence marked,
+// and the words leaned on listed, each found in a click.
+{
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const styler = await context.newPage();
+  watch(styler, "writer style");
+  await styler.goto(`${base}/writer/`);
+  await styler.click('.welcome [data-command="new"]');
+  await styler.waitForTimeout(400);
+  await styler.click(".cm-content");
+  await styler.keyboard.press("Control+End");
+  await styler.keyboard.type(
+    `\n\nThe harbour was quiet. Boats knocked in the harbour. ${"And the lantern swung and the rope creaked ".repeat(9)}until morning.`,
+  );
+  await styler.waitForTimeout(500);
+  if (await styler.locator(".style-again").count())
+    problems.push("writer: style hints show before they are asked for");
+  await styler.click("#view-menu-button");
+  await styler.click('[data-view="style"]');
+  await styler.waitForTimeout(400);
+  const marked = await styler.evaluate(() => ({
+    again: [...document.querySelectorAll(".style-again")].map((e) => e.textContent),
+    long: document.querySelectorAll(".style-long").length,
+    why: document.querySelector(".style-again")?.getAttribute("title"),
+  }));
+  if (!marked.again.includes("harbour") || marked.long < 1 || !marked.why?.includes("again"))
+    problems.push(`writer: style hints show ${JSON.stringify(marked)}`);
+  await styler.click("#view-menu-button");
+  await styler.click('[data-command="overused"]');
+  await styler.waitForSelector("#list-dialog[open]");
+  const leaned = await styler.$$eval("#list-items li strong", (items) =>
+    items.map((i) => i.textContent),
+  );
+  if (!leaned.includes("lantern"))
+    problems.push(`writer: Words leaned on lists ${JSON.stringify(leaned)}`);
+  await styler.click('#list-items li:has-text("lantern") button:has-text("Find")');
+  await styler.waitForTimeout(300);
+  if ((await styler.inputValue(".cm-search input[name=search]")) !== "lantern")
+    problems.push("writer: Find from Words leaned on doesn't search for the word");
+  await context.close();
+  console.log("writer: style hints and the words leaned on: ok");
+}
+
 /** A choice in File › Export…, as a writer makes it: the menu, the dialog, the choice. */
 const exportChoice = async (page, command) => {
   await page.click("#file-menu-button");

@@ -3169,3 +3169,16 @@ dialog:has(> .dialog-close) #ask-message {
   color: var(--ink);
   font: 0.78rem / 1.3 var(--ui);
 }
+
+/* Style hints: a word said again too soon, underlined in dots; a long sentence, faintly shaded. */
+.manuscript .style-again {
+  text-decoration: underline dotted color-mix(in srgb, var(--mark-page) 75%, transparent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.manuscript .style-long {
+  background: color-mix(in srgb, var(--mark-page) 8%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  border-radius: 2px;
+}

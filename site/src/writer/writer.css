@@ -2524,7 +2524,8 @@ dialog .dialog-close:focus-visible {
   outline: 2px solid var(--pencil);
   outline-offset: -2px;
 }
-dialog:has(> .dialog-close) h2:first-of-type {
+dialog:has(> .dialog-close) h2:first-of-type,
+dialog:has(> .dialog-close) #ask-message {
   padding-right: 2.2rem;
 }
 

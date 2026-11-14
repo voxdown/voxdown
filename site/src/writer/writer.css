@@ -2433,8 +2433,11 @@ body[data-welcome] .manuscript .editor {
   line-height: 1;
   text-align: center;
 }
+/* Literata's italic capital is nearly upright, and looked like the text cursor: slanted further. */
 .toolbar .glyph.italic {
+  display: inline-block;
   font-style: italic;
+  transform: skewX(-12deg);
 }
 .toolbar .glyph.bold {
   font-weight: 700;

@@ -6,7 +6,7 @@
 <title>VoxDown Writer</title>
 <meta name="description" content="Write and mark up a story to be read aloud. Open a .vxd file, edit it, save it back. Runs in your browser; your story stays on your computer.">
 <link rel="icon" href="../icon.svg">
-<script>try{var t=localStorage.getItem("vxd-theme");if(t==="light"||t==="dark")document.documentElement.dataset.vxdTheme=t}catch(e){}</script>
+<script>try{var d=document.documentElement,t=localStorage.getItem("vxd-theme"),p=localStorage.getItem("vxd-writer-paper");if(t==="light"||t==="dark"){d.dataset.vxdTheme=t;if(t==="light"?p==="sepia"||p==="contrast":p==="slate")d.dataset.writerPaper=p}}catch(e){}</script>
 </head>
 <body class="writer">
 <header class="appbar">
@@ -120,7 +120,7 @@
         <a role="menuitem" href="../cheatsheet.html" target="_blank" rel="noopener">Every mark on one page</a>
         <a role="menuitem" href="../spec.html" target="_blank" rel="noopener">The VoxDown spec</a>
         <hr>
-        <a role="menuitem" href="../">The playground</a>
+        <a role="menuitem" href="../playground.html">The playground</a>
         <a role="menuitem" href="https://github.com/voxdown/voxdown" target="_blank" rel="noopener">VoxDown on GitHub</a>
         <hr>
         <button role="menuitem" type="button" data-command="about">About VoxDown Writer…</button>
@@ -253,6 +253,10 @@
   <form method="dialog">
     <h2 id="page-title">Page and text</h2>
     <fieldset>
+      <legend>Look</legend>
+      <div class="looks" id="page-looks"></div>
+    </fieldset>
+    <fieldset>
       <legend>Font</legend>
       <div class="fonts">
         <label><input type="radio" name="font" value="story"> Serif</label>
@@ -267,6 +271,17 @@
     <fieldset>
       <label for="page-measure">Line length: <output id="page-measure-shown"></output></label>
       <input type="range" id="page-measure" min="30" max="80" step="1">
+    </fieldset>
+    <fieldset>
+      <label for="page-leading">Line spacing: <output id="page-leading-shown"></output></label>
+      <input type="range" id="page-leading" min="1.3" max="2.4" step="0.05">
+    </fieldset>
+    <fieldset>
+      <legend>Paragraphs</legend>
+      <div class="fonts">
+        <label><input type="radio" name="paragraphs" value="spaced"> A line between</label>
+        <label><input type="radio" name="paragraphs" value="indented"> Indented, as in a book</label>
+      </div>
     </fieldset>
     <div class="ask-buttons">
       <button class="button" type="button" id="page-reset">As it was</button>

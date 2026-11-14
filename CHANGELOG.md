@@ -9,7 +9,16 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **voxdown**
 - `directingPassages`, `DIRECTING_INSTRUCTIONS`, `directingPrompt`, `directingSchema` and `directingRequest` say what to ask a model to direct a reading: the story a passage at a time, to be given back with marks added for how it is performed. `readDirected` reads the answer (text, a code block, or JSON) as suggestions, keeping a mark only where the paragraph still prints the same words, given to the same speakers, with the writer's own marks; `chosenChanges` gives the changes for the ones chosen, checked again together.
 
+**A front page, and the Writer's looks.**
+
+**The website**
+- `voxdown.github.io/voxdown/` is a front page: a recorded scene whose text lights up line by line as it is heard, with **Open this scene in the Writer**; what the Writer does; what stays on your computer; what is free; and the format for developers. The playground moved to `playground.html`, and a story shared from it before (`#story=…`) is sent on there.
+
 **VoxDown Writer**
+- **View › Page and text** has looks, each designed with its marks and its characters' colours, all at 4.5:1 or better on its paper (`scripts/check-looks.mjs` checks them in a browser): Auto, Paper, Sepia, Night, Slate and High contrast. The button in the bar names the look and opens Page and text. Also there: **line spacing**, and **paragraphs** with a line between them or indented, as in a book, where the empty line between two paragraphs is drawn short (the line the cursor is on keeps its height).
+- **Hear** reads with the voices on the computer only. Chrome's Google voices and Edge's Online ones speak on their makers' services, so the story's words went there; where a browser has only those, the Writer asks once before using them.
+- `writer/#example=the-dragon-who-would-not-roar` opens that example, after asking about unsaved changes to the story open, and the address is put back.
+- The italics button is slanted, no longer like the text cursor, and a question's words keep clear of its ×.
 - **Edit › Direct the reading with AI…**: an AI suggests directions, stressed words, pauses and sounds for the chapter, the story or the selection, and the writer chooses which to add, as one step to undo. Any AI chat will do: **Copy the request**, paste it into the chat, and paste its answer back. A paragraph where the AI changed a word is left as written, and listed.
 
 **@voxdown/produce**

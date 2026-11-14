@@ -54,7 +54,7 @@ const TABS = {
 
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 watch(page, "playground");
-await page.goto(`${base}/index.html`);
+await page.goto(`${base}/playground.html`);
 await page.waitForSelector(".example");
 const names = await page.$$eval(".example", (buttons) =>
   buttons.map((button) => button.dataset.name),
@@ -230,6 +230,48 @@ for (const [width, height] of [
 }
 await page.setViewportSize({ width: 1440, height: 900 });
 console.log("layout: the pages never cover the colophon: ok");
+
+// The front page: a recorded scene, lit as it plays; each scene opens in the Writer; and the
+// playground's shared links, made when it was the front page, still reach it.
+const front = await browser.newPage({ viewport: { width: 1360, height: 860 } });
+watch(front, "front page");
+await front.goto(`${base}/`);
+await front.waitForSelector(".sheet .row");
+const sceneTabs = await front.$$eval(".scene-tab", (buttons) => buttons.map((b) => b.textContent));
+if (sceneTabs.length < 2) problems.push(`front page: ${sceneTabs.length} scenes to hear, not 2`);
+await front.click("#scene-play");
+await front.waitForTimeout(2500);
+const heard = await front.evaluate(() => ({
+  lit: document.querySelectorAll(".sheet .row.heard").length,
+  who: document.querySelector("#scene-who")?.textContent,
+}));
+if (heard.lit !== 1 || heard.who?.startsWith("Press play"))
+  problems.push(
+    `front page: the scene doesn't light its lines as it plays: ${JSON.stringify(heard)}`,
+  );
+await front.click("#scene-play");
+const firstScene = await front.getAttribute("#scene-open", "href");
+await front.click(".scene-tab >> nth=1");
+const secondScene = await front.getAttribute("#scene-open", "href");
+if (firstScene === secondScene || !secondScene?.startsWith("./writer/#example="))
+  problems.push(`front page: the scenes open ${firstScene} and ${secondScene} in the Writer`);
+const opened = await browser.newPage();
+watch(opened, "writer from the front page");
+await opened.goto(`${base}/writer/${secondScene?.slice("./writer/".length)}`);
+await opened.waitForSelector(".cm-content");
+await opened.waitForTimeout(600);
+const openedName = await opened.textContent("#file-name");
+if (!openedName?.includes("north-wind") || opened.url().includes("#"))
+  problems.push(`writer: a scene from the front page opened as ${openedName}, at ${opened.url()}`);
+await opened.close();
+await front.close();
+const shared = await browser.newPage();
+await shared.goto(`${base}/#story=abc`);
+await shared.waitForURL(/playground\.html#story=abc$/);
+await shared.close();
+console.log(
+  "front page: a scene lit as it plays, each opened in the Writer, old links sent on: ok",
+);
 
 // The listening page: each recording was made from the story as it is now, and every part it
 // plays has its place on the page.
@@ -2416,6 +2458,53 @@ const sizeAfter = await maker.evaluate(
 );
 if (sizeAfter === sizeBefore || sizeAfter !== "21px")
   problems.push(`writer: Page and text set the text to ${sizeAfter}, not 21px`);
+// A look, the line spacing, and paragraphs set in as in a book; then all as they were.
+const leadingBefore = await maker.evaluate(
+  () => getComputedStyle(document.querySelector(".cm-content")).lineHeight,
+);
+await maker.click("#theme");
+await maker.waitForSelector("#page-settings[open]");
+await maker.click('#page-looks label:has(input[value="sepia"])');
+await maker.fill("#page-leading", "2.2");
+await maker.dispatchEvent("#page-leading", "input");
+await maker.check('#page-settings input[name="paragraphs"][value="indented"]');
+await maker.click('#page-settings button[value="done"]');
+await maker.click(".cm-content");
+await maker.keyboard.press("Control+End");
+await maker.keyboard.type("\n\nOne paragraph.\n\nAnother one.");
+await maker.keyboard.press("ArrowUp");
+await maker.keyboard.press("ArrowUp");
+await maker.keyboard.press("ArrowUp");
+await maker.waitForTimeout(200);
+const looked = await maker.evaluate(() => ({
+  paper: document.documentElement.dataset.writerPaper,
+  kept: localStorage.getItem("vxd-writer-paper"),
+  bar: document.querySelector("#theme")?.textContent,
+  leading: getComputedStyle(document.querySelector(".cm-content")).lineHeight,
+  gap: document.querySelectorAll(".cm-line.para-gap").length,
+  indent: [...document.querySelectorAll(".cm-line.para-indent")].map((line) => line.textContent),
+}));
+if (looked.paper !== "sepia" || looked.kept !== "sepia" || looked.bar !== "Sepia")
+  problems.push(`writer: the Sepia look wasn't taken and kept: ${JSON.stringify(looked)}`);
+if (looked.leading === leadingBefore)
+  problems.push("writer: the line spacing didn't change the page's lines");
+if (looked.gap < 1 || !looked.indent.includes("Another one."))
+  problems.push(`writer: paragraphs aren't set in as in a book: ${JSON.stringify(looked)}`);
+await maker.click("#theme");
+await maker.click('#page-looks label:has(input[value="auto"])');
+await maker.click("#page-reset");
+await maker.click('#page-settings button[value="done"]');
+if (
+  await maker.evaluate(
+    () => document.documentElement.dataset.writerPaper || localStorage.getItem("vxd-theme"),
+  )
+)
+  problems.push("writer: Auto left a look behind");
+// The two paragraphs typed for it taken out again.
+await maker.click(".cm-content");
+await maker.keyboard.press("Control+End");
+for (let i = 0; i < "\n\nOne paragraph.\n\nAnother one.".length; i++)
+  await maker.keyboard.press("Backspace");
 // A writing goal: the words written since opening, out of it, and a word when it is reached.
 await maker.click("#view-menu-button");
 await maker.click('[data-command="goal"]');

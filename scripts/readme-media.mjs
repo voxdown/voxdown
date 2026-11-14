@@ -187,12 +187,12 @@ for (const token of tokens(story)) {
   at = token.range.to;
 }
 written += escapeHtml(line.slice(at));
-const css = readFileSync(join(dist, "index.html"), "utf8").match(
+const css = readFileSync(join(dist, "playground.html"), "utf8").match(
   /href="\.\/(assets\/[^"]+\.css)"/,
 )?.[1];
 const icon = readFileSync(join(assets, "icon.svg"), "utf8");
 const card = await browser.newPage({ viewport: { width: 1280, height: 640 } });
-await card.goto(`${base}/index.html`);
+await card.goto(`${base}/playground.html`);
 await card.setContent(`<!doctype html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="${base}/${css}">
 <style>${stylesheet}</style>

@@ -50,6 +50,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(here, "index.html"),
+        playground: resolve(here, "playground.html"),
         element: resolve(here, "element.html"),
         spec: resolve(here, "spec.html"),
         cheatsheet: resolve(here, "cheatsheet.html"),

@@ -3,79 +3,152 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VoxDown playground</title>
-<meta name="description" content="Write a story with VoxDown marks and see the script, the book and the lines it becomes. Runs in your browser.">
+<title>VoxDown: write stories to be read aloud</title>
+<meta name="description" content="VoxDown is plain text that marks who says each line and how. Write in the free VoxDown Writer, hear it as you go, and make an audiobook with a voice for every character. Runs in your browser; your story stays on your computer.">
+<meta property="og:title" content="VoxDown: write stories to be read aloud">
+<meta property="og:description" content="Plain text that marks who says each line and how. A free writing app that runs in your browser, and audiobooks with a voice for every character.">
 <link rel="icon" href="./icon.svg">
+<!-- A story shared from the playground when it was the front page: sent on to the playground. -->
+<script>if(/^#story=/.test(location.hash))location.replace("./playground.html"+location.hash)</script>
 <script>try{var t=localStorage.getItem("vxd-theme");if(t==="light"||t==="dark")document.documentElement.dataset.vxdTheme=t}catch(e){}</script>
 </head>
-<body>
+<body class="front">
 <header class="masthead">
   <a class="wordmark" href="./"><img class="logo" src="./icon.svg" alt="" width="30" height="30">VoxDown</a>
-  <p class="tagline">Markdown for stories read aloud.</p>
-  <p class="listen-note" aria-hidden="true">psst! hear the stories read aloud<small>every character in their own voice</small><svg class="listen-arrow" viewBox="0 0 60 36"><path class="stroke" pathLength="1" d="M2 6C18 30 38 34 56 20"/><path class="head" d="M47.1 21.2 56 20l-3.4 8.3"/></svg></p>
   <nav aria-label="Site">
-    <a class="listen-link" href="./listen.html"><span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Listen</a>
     <a href="./writer/">Writer</a>
+    <a href="./listen.html">Listen</a>
+    <a href="./playground.html">Playground</a>
     <a href="./spec.html">Spec</a>
-    <a href="./cheatsheet.html">Cheat sheet</a>
-    <a href="https://github.com/voxdown/voxdown">Source</a>
+    <a href="https://github.com/voxdown/voxdown">GitHub</a>
     <button class="theme-switch" type="button" id="theme" hidden>Auto</button>
   </nav>
 </header>
-<section class="shelf" aria-labelledby="shelf-title">
-  <h2 id="shelf-title">Examples</h2>
-  <ul id="examples"></ul>
-</section>
-<main class="desk">
-  <section class="page page-left" aria-label="Manuscript">
-    <header class="page-head">
-      <span class="file" id="file-name">story.vxd</span>
-      <span class="spacer"></span>
-      <label class="toggle" title="Show every mark raw (Ctrl+Shift+M)"><input type="checkbox" id="show-marks"> Show marks</label>
-      <button class="button quiet" type="button" id="new-story">New</button>
-      <button class="button quiet" type="button" id="open-file">Open…</button>
-      <input type="file" id="file-input" accept=".vxd,.md,.txt,.fountain" hidden>
-    </header>
-    <div class="marks-key" role="toolbar" aria-label="Insert a mark">
-      <span class="marks-key-label">Insert</span>
-      <button class="mk mk-name" type="button" data-insert="@Name " data-select="Name" title="Who says the line: @Name “…”">@Name</button>
-      <button class="mk mk-direction" type="button" data-insert="(how) " data-select="how" title="How it is said, after a name: @Name (whispering) “…”">(how)</button>
-      <button class="mk mk-sound" type="button" data-insert="[sound]" data-select="sound" title="A sound the listener hears">[sound]</button>
-      <button class="mk mk-page" type="button" data-insert="{page}" title="A page turn">{page}</button>
-      <button class="mk mk-note" type="button" data-insert="%% note %%" data-select="note" title="A note for the performer, never read aloud">%% note %%</button>
-      <a class="mk-all" href="./cheatsheet.html">All marks</a>
+
+<main>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-words">
+      <h1 id="hero-title">Write stories to be read aloud.</h1>
+      <p class="hero-lede">VoxDown is plain text that marks who says each line, and how. Write in the free VoxDown Writer, hear it as you go, and make it an audiobook with a voice for every character.</p>
+      <div class="hero-actions">
+        <a class="action main" href="./writer/">Open the Writer</a>
+        <button class="action" type="button" id="hero-play" aria-controls="scene">
+          <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+          <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+          <span>Hear a scene</span>
+        </button>
+      </div>
+      <p class="hero-small">Free and open source. No account. Your story never leaves your computer.</p>
     </div>
-    <div class="editor" id="editor"></div>
-    <details class="warnings-box" id="warnings-box" hidden>
-      <summary>What the parser noticed</summary>
-      <ol id="warnings"></ol>
-    </details>
-    <footer class="page-foot">
-      <span id="status" class="status-ok">No warnings</span>
-      <span class="spacer"></span>
-      <label class="toggle" title="Change straight quotation marks to curly ones when formatting"><input type="checkbox" id="curly"> Curly quotes</label>
-      <button class="button" type="button" id="format">Format</button>
-      <button class="button" type="button" id="download-story">Download .vxd</button>
-    </footer>
+
+    <figure class="scene" id="scene" aria-label="A scene, as written and as heard">
+      <div class="scene-pick" role="tablist" aria-label="Scene" id="scene-pick"></div>
+      <div class="sheet" id="sheet" tabindex="0" aria-label="The scene as written in VoxDown"></div>
+      <div class="scene-bar">
+        <button class="scene-play" type="button" id="scene-play" aria-label="Play">
+          <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+          <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+        </button>
+        <div class="scene-now">
+          <p id="scene-who" aria-live="polite">Press play: the line being heard lights up.</p>
+          <div class="scene-track" id="scene-track" role="slider" tabindex="0" aria-label="Position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="scene-fill" id="scene-fill"></div></div>
+        </div>
+        <span class="scene-time" id="scene-time">0:00</span>
+      </div>
+      <figcaption>Recorded with ElevenLabs voices from this text, marks and all. <a id="scene-open" href="./writer/">Open this scene in the Writer</a></figcaption>
+    </figure>
   </section>
-  <section class="page page-right" aria-label="What it becomes">
-    <div class="tabs" role="tablist" aria-label="Show as">
-      <button class="tab" role="tab" type="button" data-tab="script" aria-controls="output">Script</button>
-      <button class="tab" role="tab" type="button" data-tab="book" aria-controls="output">Book</button>
-      <button class="tab" role="tab" type="button" data-tab="lines" aria-controls="output">Lines</button>
-      <button class="tab" role="tab" type="button" data-tab="csv" aria-controls="output">CSV</button>
-      <button class="tab" role="tab" type="button" data-tab="sides" aria-controls="output">Sides</button>
+
+  <section class="part writer-part" aria-labelledby="writer-title">
+    <div class="part-head">
+      <h2 id="writer-title">A writing app that knows who is speaking</h2>
+      <p>The VoxDown Writer is a calm page for writing fiction, scripts and audio drama, with the cast and the reading beside you.</p>
     </div>
-    <div class="sheet" id="output" role="tabpanel" tabindex="0"></div>
-    <footer class="page-foot">
-      <span id="summary"></span>
-      <span class="spacer"></span>
-      <button class="button quiet" type="button" id="copy-link">Copy link</button>
-      <button class="button" type="button" id="download-output">Download HTML</button>
-    </footer>
+    <dl class="abilities">
+      <div>
+        <dt><code class="mark-sample"><span class="t-mark" style="--c: #2563eb">@</span><span class="t-name" style="--c: #2563eb">Mara</span></code>Who says this</dt>
+        <dd>Give each line its speaker with Ctrl+K, or let an AI you already use make a first pass for you to check.</dd>
+      </div>
+      <div>
+        <dt><code class="mark-sample"><span class="t-direction">(whispering)</span> <span class="t-instruction">{pause}</span></code>How it’s said</dt>
+        <dd>Directions like <em>whispering</em>, pauses, sounds and stressed words, each in its own colour and never in the way of the words.</dd>
+      </div>
+      <div>
+        <dt><code class="mark-sample"><kbd>F9</kbd></code>Hear it as you write</dt>
+        <dd>Press F9 and the scene is read from the cursor by your computer’s voices, a different one for each character where it has them.</dd>
+      </div>
+      <div>
+        <dt><code class="mark-sample"><span class="t-sound">[door slams]</span></code>From draft to audiobook</dt>
+        <dd>Print the book, the script or each performer’s lines, or make an audiobook with the voices you choose.</dd>
+      </div>
+    </dl>
+    <picture class="shot">
+      <img src="./front/writer-light.jpg" width="1440" height="864" loading="lazy" alt="The VoxDown Writer: a story on the left with each speaker’s lines underlined in their colour and directions above the words, and the script on the right." id="shot">
+    </picture>
+    <p class="also">Also: Word, EPUB and Fountain in and out, named versions to go back to, focus mode, designed themes, and it keeps working offline.</p>
+    <p><a class="action main" href="./writer/">Open the Writer</a></p>
+  </section>
+
+  <section class="part private-part" aria-labelledby="private-title">
+    <h2 id="private-title">Your story stays with you</h2>
+    <dl class="promises">
+      <div>
+        <dt>No account</dt>
+        <dd>Open the Writer and start. There is nothing to sign up for.</dd>
+      </div>
+      <div>
+        <dt>Nothing uploaded</dt>
+        <dd>The Writer runs in your browser. It opens files from your computer, saves them back there, and keeps working offline.</dd>
+      </div>
+      <div>
+        <dt>AI only when you ask</dt>
+        <dd>Paste a request into any AI chat you like, or connect the AI already on your computer. Nothing is sent until you press the button.</dd>
+      </div>
+      <div>
+        <dt>Voices on your computer</dt>
+        <dd>Hearing a scene uses your computer’s own voices. Online voices only if you say yes.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="part free-part" aria-labelledby="free-title">
+    <h2 id="free-title">Free, with nothing held back</h2>
+    <div>
+    <p>The Writer, the format and every tool are open source under the MIT license, and the specification is CC BY 4.0. No subscription, no ads, no analytics.</p>
+    <p>Audiobooks cost nothing with Kokoro, which runs on your own computer. Or use ElevenLabs, OpenAI or Azure voices with your own account, at their prices.</p>
+    </div>
+  </section>
+
+  <section class="part code-part" aria-labelledby="code-title">
+    <div class="code-words">
+      <h2 id="code-title">Plain text underneath</h2>
+      <p>A <code>.vxd</code> file is Markdown with a few marks. Any editor opens it, Git diffs it, and a Markdown viewer still shows a readable story.</p>
+      <ul class="links">
+        <li><a href="./spec.html">The specification</a>, and <a href="./cheatsheet.html">every mark on one page</a></li>
+        <li><a href="./playground.html">The playground</a>, to see a story become a script, a book and lines</li>
+        <li><a href="https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown">VoxDown for VS Code</a>, with colours, warnings and a preview</li>
+        <li><a href="https://github.com/voxdown/voxdown">The source on GitHub</a></li>
+      </ul>
+    </div>
+    <div class="code-sample">
+      <pre class="vxd-sample" id="sample" aria-label="A VoxDown story"></pre>
+      <pre class="shell"><code>npm install voxdown
+npx @voxdown/cli check story.vxd</code></pre>
+    </div>
   </section>
 </main>
-<footer class="colophon">VoxDown 1.0. Code under MIT, the spec under CC BY 4.0. This page runs in your browser: your story stays on this computer unless you copy a link.</footer>
-<script type="module" src="./src/playground.ts"></script>
+
+<footer class="front-foot">
+  <p>VoxDown is open source under the MIT license. The example stories are free to copy (CC0). The recordings were voiced with ElevenLabs.</p>
+  <nav aria-label="More">
+    <a href="./writer/">Writer</a>
+    <a href="./listen.html">Listen</a>
+    <a href="./playground.html">Playground</a>
+    <a href="./spec.html">Spec</a>
+    <a href="./cheatsheet.html">Cheat sheet</a>
+    <a href="https://github.com/voxdown/voxdown">GitHub</a>
+  </nav>
+</footer>
+<script type="module" src="./src/front.ts"></script>
 </body>
 </html>

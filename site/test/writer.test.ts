@@ -9,7 +9,14 @@ import { countsOf } from "../src/writer/counts";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, plainText, toggleEmphasis } from "../src/writer/emphasis";
 import { asStory, decode } from "../src/writer/files";
-import { Hearing, type Voice, pauseSeconds, toHear, voicesFor } from "../src/writer/hear";
+import {
+  Hearing,
+  type Voice,
+  onlineService,
+  pauseSeconds,
+  toHear,
+  voicesFor,
+} from "../src/writer/hear";
 import { rankScenes } from "../src/writer/outline";
 import { afterParagraph, moveParagraph } from "../src/writer/paragraphs";
 import { nearestName, problems } from "../src/writer/problems";
@@ -943,6 +950,29 @@ describe("hearing it read aloud", () => {
     expect(voices[chosen.get("Bob") ?? -1]?.name).toBe("Bob");
     expect(voices[chosen.get("Cy") ?? -1]?.name).toBe("Ann");
     expect(voicesFor(["Ann"], [], "en", "Narrator").size).toBe(0);
+  });
+
+  it("reads with the voices on this computer, and online ones only when the writer agreed", () => {
+    const mixed = [
+      { name: "Google UK English Female", lang: "en-GB", default: true, localService: false },
+      { name: "Daniel", lang: "en-GB", default: false, localService: true },
+    ];
+    const local = voicesFor(["Narrator", "Ann"], mixed, "en", "Narrator");
+    expect([...local.values()]).toEqual([1, 1]);
+    const online = [mixed[0] as (typeof mixed)[number]];
+    expect(voicesFor(["Narrator"], online, "en", "Narrator").size).toBe(0);
+    expect(voicesFor(["Narrator"], online, "en", "Narrator", true).get("Narrator")).toBe(0);
+    expect(onlineService(online)).toBe("Google");
+    expect(
+      onlineService([
+        {
+          name: "Microsoft Ava Online (Natural)",
+          lang: "en-US",
+          default: false,
+          localService: false,
+        },
+      ]),
+    ).toBe("Microsoft");
   });
 
   it("reads from the cursor to the end of its scene, pauses included", () => {

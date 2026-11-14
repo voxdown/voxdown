@@ -1,0 +1,442 @@
+/* The front page: a scene as written, lit as it is heard; then the Writer, the promises, and the
+   format. One bold thing (the scene), and quiet, left-aligned pages around it. */
+
+body.front {
+  display: block;
+  height: auto;
+}
+.front main {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0 clamp(1.1rem, 4vw, 2.5rem);
+}
+.front h1,
+.front h2 {
+  font-family: var(--story);
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+.front :where(p) {
+  margin: 0;
+}
+
+/* The scene's marks, coloured as the Writer colours them: a character's colour drawn toward the
+   ink, so it reads on either paper. */
+.front .t-name {
+  color: color-mix(in oklab, var(--c, var(--pencil)) 78%, var(--ink));
+  font-weight: 650;
+}
+.front .t-mark {
+  color: color-mix(in oklab, var(--c, var(--quiet)) 60%, var(--quiet));
+}
+.front .t-quote {
+  color: var(--quiet);
+}
+.front .t-direction {
+  color: var(--mark-direction);
+  font-style: italic;
+}
+.front .t-sound,
+.front .t-vocal {
+  color: var(--mark-sound);
+}
+.front .t-instruction {
+  color: var(--mark-page);
+}
+.front .t-note {
+  color: var(--mark-note);
+}
+
+/* Buttons and links that start something. */
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.68rem 1.15rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 0.98rem / 1.2 var(--ui);
+  text-decoration: none;
+  cursor: pointer;
+}
+.action:hover {
+  border-color: var(--quiet);
+}
+.action.main {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+.action.main:hover {
+  background: color-mix(in oklab, var(--brand) 88%, var(--ink));
+}
+.action svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+.action .icon-pause,
+.action.playing .icon-play {
+  display: none;
+}
+.action.playing .icon-pause {
+  display: block;
+}
+
+/* The opening: the words on the left, the scene on the right. */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 2rem clamp(2rem, 5vw, 4.5rem);
+  padding: clamp(2.5rem, 7vh, 5rem) 0 clamp(3.5rem, 9vh, 6rem);
+}
+.hero h1 {
+  font-size: clamp(2.5rem, 5vw, 4.1rem);
+  line-height: 1.02;
+  letter-spacing: -0.028em;
+  max-width: 10ch;
+}
+.hero-lede {
+  margin-top: 1.4rem;
+  max-width: 31rem;
+  font: 400 1.2rem / 1.6 var(--story);
+  color: color-mix(in oklab, var(--ink) 86%, var(--paper));
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 2rem;
+}
+.hero-small {
+  margin-top: 1.1rem;
+  color: var(--quiet);
+  font-size: 0.9rem;
+}
+
+/* The scene: the page as written, the line being heard lit in its speaker's colour. */
+.scene {
+  margin: 0;
+  min-width: 0;
+}
+.scene-pick {
+  display: flex;
+  gap: 0.2rem;
+  padding-left: 0.9rem;
+}
+.scene-tab {
+  position: relative;
+  top: 1px;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  color: var(--quiet);
+  font: 500 0.92rem / 1.2 var(--story);
+  cursor: pointer;
+}
+.scene-tab:hover {
+  color: var(--ink);
+}
+.scene-tab[aria-selected="true"] {
+  background: var(--paper);
+  border-color: var(--desk-edge);
+  color: var(--ink);
+}
+.sheet {
+  position: relative;
+  height: clamp(17rem, 46vh, 25rem);
+  overflow: auto;
+  padding: 1.5rem 1.4rem;
+  background: var(--paper);
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px 10px 0 0;
+  box-shadow: 0 1px 2px rgb(30 40 60 / 0.06), 0 24px 60px -30px rgb(30 40 60 / 0.35);
+  font: 400 0.9rem / 1.72 var(--mono);
+  font-variation-settings: "MONO" 1, "CASL" 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  mask-image: linear-gradient(transparent, #000 1.4rem, #000 calc(100% - 2.2rem), transparent);
+}
+.sheet:focus-visible {
+  outline-offset: -2px;
+}
+.sheet .row {
+  padding: 0.05rem 0.6rem;
+  border-left: 3px solid transparent;
+  border-radius: 0 4px 4px 0;
+  transition: opacity 0.35s ease, background-color 0.35s ease, border-color 0.35s ease;
+}
+.sheet.playing .row {
+  opacity: 0.4;
+}
+.sheet .row.heard {
+  opacity: 1;
+  border-left-color: var(--c, var(--quiet));
+  background: color-mix(in srgb, var(--c, var(--quiet)) 9%, transparent);
+}
+.scene-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.8rem 1rem;
+  background: var(--tab);
+  border: 1px solid var(--desk-edge);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+.scene-play {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--brand-ink);
+  cursor: pointer;
+}
+.scene-play svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: currentColor;
+}
+.scene-play .icon-pause,
+.scene-play.playing .icon-play {
+  display: none;
+}
+.scene-play.playing .icon-pause {
+  display: block;
+}
+.scene-now {
+  flex: 1;
+  min-width: 0;
+}
+#scene-who {
+  font: italic 400 0.98rem / 1.3 var(--story);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scene-track {
+  position: relative;
+  height: 0.9rem;
+  margin-top: 0.25rem;
+  cursor: pointer;
+}
+.scene-track::before,
+.scene-fill {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.35rem;
+  height: 3px;
+  border-radius: 2px;
+}
+.scene-track::before {
+  right: 0;
+  background: var(--desk-edge);
+}
+.scene-fill {
+  width: 0;
+  background: var(--brand);
+}
+.scene-time {
+  flex: none;
+  color: var(--quiet);
+  font: 0.85rem / 1 var(--ui);
+  font-variant-numeric: tabular-nums;
+}
+.scene figcaption {
+  margin-top: 0.7rem;
+  color: var(--quiet);
+  font-size: 0.85rem;
+}
+.scene figcaption a {
+  display: inline-block;
+  margin-top: 0.25rem;
+}
+
+/* The parts below: each a page of its own, left-aligned, with room around it. */
+.part {
+  padding: clamp(3.5rem, 9vh, 6rem) 0;
+  border-top: 1px solid var(--desk-edge);
+}
+.part h2 {
+  font-size: clamp(1.75rem, 3vw, 2.45rem);
+  line-height: 1.12;
+  letter-spacing: -0.018em;
+  max-width: 22ch;
+}
+.part-head p,
+.free-part p,
+.code-words > p {
+  margin-top: 1rem;
+  max-width: 38rem;
+  font: 400 1.1rem / 1.6 var(--story);
+  color: color-mix(in oklab, var(--ink) 86%, var(--paper));
+}
+.free-part p {
+  margin-top: 0;
+}
+.free-part p + p {
+  margin-top: 0.9rem;
+}
+.front dl {
+  display: grid;
+  gap: 1.8rem 2.4rem;
+  margin: 2.6rem 0 0;
+}
+.front dt {
+  font: 600 1rem / 1.3 var(--ui);
+  color: var(--ink);
+}
+.front dd {
+  margin: 0.4rem 0 0;
+  color: color-mix(in oklab, var(--ink) 78%, var(--paper));
+  line-height: 1.55;
+}
+.abilities {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.mark-sample {
+  display: block;
+  margin-bottom: 0.55rem;
+  font: 500 0.88rem / 1.4 var(--mono);
+  font-variation-settings: "MONO" 1;
+}
+.mark-sample kbd {
+  display: inline-block;
+  padding: 0 0.4rem;
+  border: 1px solid var(--desk-edge);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+.shot {
+  display: block;
+  margin: 3rem 0 1.3rem;
+}
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--desk-edge);
+  border-radius: 12px;
+  box-shadow: 0 30px 80px -40px rgb(30 40 60 / 0.45);
+}
+.also {
+  color: var(--quiet);
+  margin-bottom: 1.6rem;
+}
+
+/* The promises, and what is free: each heading beside its words. */
+.private-part,
+.free-part {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 2rem clamp(2rem, 5vw, 4.5rem);
+}
+.promises {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+/* The format: words and links on the left, a story and two commands on the right. */
+.code-part {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 2rem clamp(2rem, 5vw, 4.5rem);
+}
+.code-words code {
+  font: 0.92em var(--mono);
+  font-variation-settings: "MONO" 1;
+}
+.links {
+  margin: 1.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.6rem;
+}
+.code-sample pre {
+  margin: 0;
+  padding: 1.2rem 1.3rem;
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  font: 400 0.88rem / 1.7 var(--mono);
+  font-variation-settings: "MONO" 1, "CASL" 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.vxd-sample {
+  background: var(--paper);
+}
+.shell {
+  margin-top: 0.8rem;
+  background: var(--tab);
+  color: var(--ink);
+}
+
+.front-foot {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 2rem clamp(1.1rem, 4vw, 2.5rem) 3rem;
+  border-top: 1px solid var(--desk-edge);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  color: var(--quiet);
+  font-size: 0.88rem;
+}
+.front-foot nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+}
+
+@media (max-width: 1040px) {
+  .abilities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .hero,
+  .private-part,
+  .free-part,
+  .code-part {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hero h1 {
+    max-width: 14ch;
+  }
+}
+@media (max-width: 560px) {
+  .abilities,
+  .promises {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .scene-pick {
+    padding-left: 0.3rem;
+  }
+  .scene-tab {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet .row {
+    transition: none;
+  }
+}

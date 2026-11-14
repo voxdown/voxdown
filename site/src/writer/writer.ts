@@ -80,7 +80,6 @@ import {
 import { examples } from "../examples";
 import "../style.css";
 import "./writer.css";
-import "../theme";
 import { type AiContext, openAi } from "./ai-dialog";
 import { castPanel } from "./cast";
 import { paragraphsOf } from "./convert";
@@ -110,10 +109,11 @@ import {
   reopen,
   writeFile,
 } from "./files";
-import { Hearing, toHear } from "./hear";
+import { Hearing, onlineService, speaksOnline, toHear } from "./hear";
 import { keepPairing, pairingIn } from "./helper";
 import { paragraphScope } from "./local";
 import { DraftLock } from "./lock";
+import { LOOKS, type Look, SWATCH_INK, chooseLook, lookLabel, savedLook } from "./looks";
 import { keys, menus } from "./menu";
 import { rankScenes } from "./outline";
 import { afterParagraph, moveParagraph } from "./paragraphs";
@@ -189,6 +189,8 @@ type Prefs = ViewSwitches & {
   focus: boolean;
   /** The cursor's line kept in the middle of the page as it goes, focus or not. */
   typewriter: boolean;
+  /** The writer agreed to the browser's online voices, its only ones: the words go to be spoken. */
+  onlineVoices: boolean;
   /** Words to write in a sitting; 0 for none. */
   goal: number;
   /** Resting the pointer on a passage brings its bar. */
@@ -201,6 +203,10 @@ type Prefs = ViewSwitches & {
   font: "story" | "ui" | "mono";
   size: number;
   measure: number;
+  /** The space between lines, as a share of the text's size. */
+  leading: number;
+  /** Paragraphs with an empty line between them, or set in as in a book. */
+  paragraphs: "spaced" | "indented";
   /** The side's width, as a share of the window (percent); 0 for the usual. */
   sideWidth: number;
 };
@@ -219,6 +225,7 @@ const prefs: Prefs = {
   autosave: true,
   focus: false,
   typewriter: false,
+  onlineVoices: false,
   goal: 0,
   hoverBar: true,
   toolbar: true,
@@ -226,6 +233,8 @@ const prefs: Prefs = {
   font: "story",
   size: 17,
   measure: 52,
+  leading: 1.65,
+  paragraphs: "spaced",
   sideWidth: 0,
   ...savedPrefs(),
 };
@@ -386,6 +395,67 @@ const focusLines = ViewPlugin.fromClass(
   { decorations: (plugin) => plugin.decorations },
 );
 
+// Paragraphs as in a book (View › Page and text): the one empty line between two paragraphs drawn
+// short, and the second one's first line set in. Headings, breaks, lists and the front matter keep
+// their lines; two empty lines or more stay as the writer left them.
+
+/** Nothing changes but the way the page is drawn. */
+const redrawn = StateEffect.define<null>();
+const PARA_GAP = Decoration.line({ class: "para-gap" });
+const PARA_INDENT = Decoration.line({ class: "para-indent" });
+const NOT_PROSE = /^(#|>|```|~~~|\||<!--|!\[|[-*+] |\d+[.)] |([-*_])( *\2){2,} *$)/;
+
+const bookLines = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(readonly view: EditorView) {
+      this.decorations = this.build();
+    }
+    update(update: ViewUpdate) {
+      const switched = update.transactions.some((tr) => tr.effects.length > 0);
+      if (update.docChanged || update.selectionSet || update.viewportChanged || switched)
+        this.decorations = this.build();
+    }
+    build(): DecorationSet {
+      if (prefs.paragraphs !== "indented" || prefs.marks) return Decoration.none;
+      const { doc, selection } = this.view.state;
+      // The front matter's last line, if the story has one.
+      let matter = 0;
+      if (doc.lines > 1 && doc.line(1).text.trim() === "---") {
+        for (let number = 2; number <= Math.min(doc.lines, 400); number++) {
+          const text = doc.line(number).text.trim();
+          if (text === "---" || text === "...") {
+            matter = number;
+            break;
+          }
+        }
+      }
+      const prose = (number: number) => {
+        if (number <= matter || number < 1 || number > doc.lines) return false;
+        const text = doc.line(number).text.trim();
+        return text !== "" && !NOT_PROSE.test(text);
+      };
+      const blank = (number: number) =>
+        number >= 1 && number <= doc.lines && doc.line(number).text.trim() === "";
+      const here = new Set(selection.ranges.map((range) => doc.lineAt(range.head).number));
+      const builder = new RangeSetBuilder<Decoration>();
+      for (const { from, to } of this.view.visibleRanges) {
+        let number = doc.lineAt(from).number;
+        const last = doc.lineAt(to).number;
+        for (; number <= last; number++) {
+          if (!blank(number) || !prose(number - 1) || !prose(number + 1)) continue;
+          const line = doc.line(number);
+          if (!here.has(number)) builder.add(line.from, line.from, PARA_GAP);
+          const next = doc.line(number + 1);
+          builder.add(next.from, next.from, PARA_INDENT);
+        }
+      }
+      return builder.finish();
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
 /** Read only while another tab writes the story. */
 const editable = new Compartment();
 /** The line breaks the story is saved with: changed when the file is read again with others. */
@@ -402,6 +472,7 @@ function editorState(source: string, cursor: number): EditorState {
       breaks.of(lineBreaks(source)),
       editable.of(editability()),
       focusLines,
+      bookLines,
       // The browser's spelling check, in the story's own language.
       // Coming back to the story (from the rail, a warning, the side) marks the place on the side.
       EditorView.domEventHandlers({
@@ -1514,6 +1585,21 @@ function hearFromHere(): boolean {
       );
       return;
     }
+    // Only voices that speak online: the words would leave the computer, so the writer says so.
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.every(speaksOnline) && !prefs.onlineVoices) {
+      const service = onlineService(voices);
+      const answer = await ask(
+        `This browser’s voices all speak online: to hear the story, its words go to ${service} to be spoken. Everything else stays on this computer. Use them?`,
+        [
+          { label: "Cancel", value: "cancel" },
+          { label: `Use ${service}’s voices`, value: "online", main: true },
+        ],
+      );
+      if (answer !== "online") return;
+      prefs.onlineVoices = true;
+      keepPrefs();
+    }
     readFromHere();
   })();
   return true;
@@ -1548,14 +1634,20 @@ function readFromHere(): boolean {
   notice(`Reading aloud to the end of the scene. ${keys("F9")} or Escape stops it.`);
   showHearing(true);
   void hearing
-    .read(rows, story.meta.language ?? navigator.language, story.meta.narrator, (row) => {
-      const line = view.state.doc.line(Math.min(row.line, view.state.doc.lines));
-      const at = Math.min(line.from + row.column - 1, line.to);
-      view.dispatch({
-        selection: EditorSelection.cursor(at),
-        effects: EditorView.scrollIntoView(at, { y: "nearest" }),
-      });
-    })
+    .read(
+      rows,
+      story.meta.language ?? navigator.language,
+      story.meta.narrator,
+      (row) => {
+        const line = view.state.doc.line(Math.min(row.line, view.state.doc.lines));
+        const at = Math.min(line.from + row.column - 1, line.to);
+        view.dispatch({
+          selection: EditorSelection.cursor(at),
+          effects: EditorView.scrollIntoView(at, { y: "nearest" }),
+        });
+      },
+      prefs.onlineVoices,
+    )
     // Done, or stopped: pressed only if another reading took its place.
     .finally(() => showHearing(hearing.on));
   return true;
@@ -3796,9 +3888,12 @@ function applyPage(): void {
   style.setProperty("--page-font", `var(--${prefs.font})`);
   style.setProperty("--page-size", `${prefs.size}px`);
   style.setProperty("--page-measure", `${prefs.measure}rem`);
+  style.setProperty("--page-leading", String(prefs.leading));
   if (prefs.sideWidth) style.setProperty("--side-width", `minmax(18rem, ${prefs.sideWidth}%)`);
   else style.removeProperty("--side-width");
   $("#side-resize").setAttribute("aria-valuenow", String(prefs.sideWidth || 34));
+  // Paragraphs set in or not: the page's lines drawn again.
+  view.dispatch({ effects: redrawn.of(null) });
   view.requestMeasure();
 }
 
@@ -3806,25 +3901,69 @@ function showPageSettings(): void {
   const dialog = $<HTMLDialogElement>("#page-settings");
   const size = $<HTMLInputElement>("#page-size");
   const measure = $<HTMLInputElement>("#page-measure");
+  const leading = $<HTMLInputElement>("#page-leading");
   const fonts = [...dialog.querySelectorAll<HTMLInputElement>('input[name="font"]')];
+  const paragraphs = [...dialog.querySelectorAll<HTMLInputElement>('input[name="paragraphs"]')];
+  const looks = $("#page-looks");
+  if (!looks.childElementCount) {
+    for (const look of LOOKS) {
+      const label = document.createElement("label");
+      label.className = "look";
+      label.title = look.about;
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "look";
+      input.value = look.id;
+      const swatch = document.createElement("span");
+      swatch.className = "look-swatch";
+      swatch.setAttribute("aria-hidden", "true");
+      swatch.style.background = look.swatch;
+      swatch.style.color = SWATCH_INK[look.id];
+      swatch.textContent = look.id === "auto" ? "" : "Aa";
+      label.append(input, swatch, look.label);
+      looks.append(label);
+    }
+  }
+  const lookInputs = [...looks.querySelectorAll<HTMLInputElement>("input")];
   const show = () => {
+    const look = savedLook();
+    for (const input of lookInputs) input.checked = input.value === look;
     for (const font of fonts) font.checked = font.value === prefs.font;
+    for (const kind of paragraphs) kind.checked = kind.value === prefs.paragraphs;
     size.value = String(prefs.size);
     measure.value = String(prefs.measure);
+    leading.value = String(prefs.leading);
     $("#page-size-shown").textContent = `${prefs.size} px`;
     $("#page-measure-shown").textContent = `about ${Math.round(prefs.measure * 1.6)} letters`;
+    $("#page-leading-shown").textContent =
+      prefs.leading >= 2.3 ? "double" : `${prefs.leading.toFixed(2).replace(/0$/, "")}`;
   };
   const change = () => {
     prefs.font = (fonts.find((font) => font.checked)?.value ?? "story") as Prefs["font"];
+    prefs.paragraphs = (paragraphs.find((kind) => kind.checked)?.value ??
+      "spaced") as Prefs["paragraphs"];
     prefs.size = Number(size.value);
     prefs.measure = Number(measure.value);
+    prefs.leading = Number(leading.value);
     keepPrefs();
     applyPage();
     show();
   };
-  for (const input of [size, measure, ...fonts]) input.oninput = change;
+  for (const input of [size, measure, leading, ...fonts, ...paragraphs]) input.oninput = change;
+  for (const input of lookInputs)
+    input.onchange = () => {
+      chooseLook(input.value as Look);
+      showLook();
+      show();
+    };
   $("#page-reset").onclick = () => {
-    Object.assign(prefs, { font: "story", size: 17, measure: 52 });
+    Object.assign(prefs, {
+      font: "story",
+      size: 17,
+      measure: 52,
+      leading: 1.65,
+      paragraphs: "spaced",
+    });
     keepPrefs();
     applyPage();
     show();
@@ -3832,6 +3971,17 @@ function showPageSettings(): void {
   show();
   dialog.showModal();
 }
+
+/** The look's name on the bar's button, which opens Page and text. */
+function showLook(): void {
+  const button = $<HTMLButtonElement>("#theme");
+  const look = savedLook();
+  button.textContent = lookLabel(look);
+  button.title = `Look: ${lookLabel(look)}. Change it, and the page and text, here.`;
+  button.hidden = false;
+}
+$("#theme").addEventListener("click", showPageSettings);
+showLook();
 
 // The edge between the manuscript and the side: dragged, or moved with the arrow keys.
 {
@@ -3899,10 +4049,20 @@ async function start(): Promise<void> {
   checkMenu("rail-names", rail.names);
   void showRecent();
   showExamples();
+  // Sent here to open an example (the front page's "Open this scene in the Writer"): opened, the
+  // address put back as it was.
+  const asked = /^#example=([\w-]+)$/.exec(location.hash)?.[1];
+  const example = asked ? examples.find((each) => each.name === `${asked}.vxd`) : undefined;
+  if (asked) window.history.replaceState(null, "", location.href.split("#")[0]);
   // This tab's own story after a reload; in a new tab, the one written last.
   const mine = tabStory();
   const draft = (mine ? await draftById(mine) : undefined) ?? (await loadDraft());
   if (!draft) {
+    if (example) {
+      await load({ name: example.name, text: example.text }, { saved: "" });
+      view.focus();
+      return;
+    }
     showWelcome();
     refresh();
     showDraftState();
@@ -3916,6 +4076,8 @@ async function start(): Promise<void> {
     announce(back);
   }
   void checkDisk();
+  // The story written last is there first, to save or keep before the example takes its place.
+  if (example && lock.owner) await openExample(example);
 }
 
 /**

@@ -6,15 +6,35 @@
 import type { ScriptLine } from "voxdown";
 import { plainText } from "./emphasis";
 
-/** The voices to read with: the story's language first (its family, `en` for `en-GB`). */
+type VoiceInfo = Pick<SpeechSynthesisVoice, "lang" | "default" | "name"> &
+  Partial<Pick<SpeechSynthesisVoice, "localService">>;
+
+/** Whether a voice speaks on a service online (Chrome's Google voices, Edge's Online ones). */
+export const speaksOnline = (voice: VoiceInfo): boolean => voice.localService === false;
+
+/** Whose service a browser's online voices are, for the question before using them. */
+export function onlineService(voices: readonly VoiceInfo[]): string {
+  const names = voices.filter(speaksOnline).map((voice) => voice.name);
+  if (names.some((name) => /google/i.test(name))) return "Google";
+  if (names.some((name) => /microsoft/i.test(name))) return "Microsoft";
+  return "the browser’s maker";
+}
+
+/**
+ * The voices to read with: the story's language first (its family, `en` for `en-GB`). Only the
+ * voices on this computer, unless the writer agreed to online ones: those send the words away.
+ */
 export function voicesFor(
   speakers: readonly string[],
-  voices: ReadonlyArray<Pick<SpeechSynthesisVoice, "lang" | "default" | "name">>,
+  voices: readonly VoiceInfo[],
   language: string,
   narrator: string,
+  online = false,
 ): Map<string, number> {
   const family = language.toLowerCase().split("-")[0] ?? "";
-  const indexed = voices.map((voice, index) => ({ voice, index }));
+  const indexed = voices
+    .map((voice, index) => ({ voice, index }))
+    .filter(({ voice }) => online || !speaksOnline(voice));
   const own = indexed.filter(({ voice }) => voice.lang.toLowerCase().split("-")[0] === family);
   const pool = own.length ? own : indexed;
   const chosen = new Map<string, number>();
@@ -75,6 +95,7 @@ export class Hearing {
     language: string,
     narrator: string,
     at: (row: ScriptLine) => void,
+    online = false,
   ): Promise<void> {
     const synth = this.voice();
     if (!synth) return;
@@ -101,7 +122,7 @@ export class Hearing {
       voices = synth.getVoices();
     }
     const speakers = [...new Set(rows.flatMap((row) => (row.speaker ? [row.speaker] : [])))];
-    const chosen = voicesFor(speakers, voices, language, narrator);
+    const chosen = voicesFor(speakers, voices, language, narrator, online);
     for (const row of rows) {
       if (!live()) return;
       at(row);

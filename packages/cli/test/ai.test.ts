@@ -121,6 +121,10 @@ describe("asking an AI", () => {
     expect(args[args.indexOf("--model") + 1]).toBe("sonnet");
     // The instructions from a file, in the empty folder it runs in.
     expect(args[args.indexOf("--system-prompt-file") + 1]?.startsWith(call.cwd)).toBe(true);
+    // What is asked, in a line, as the caller says it.
+    await claude?.ask({ ...ASK, task: "Mark the passage." });
+    const again = calls[1] as Call;
+    expect(again.args[again.args.indexOf("-p") + 1]).toBe("Mark the passage.");
   });
 
   it("says what to do when an agent program isn't signed in", async () => {

@@ -165,6 +165,31 @@ describe("vxd connect", () => {
     expect(tagged).toContain("@Mara “Only me,” said Mara.");
   });
 
+  it("asks an AI about a passage for the Writer, and sends back its answer as it came", async () => {
+    const hello = JSON.parse((await ask("/v1/hello")).text);
+    expect(hello.can).toEqual(["ask"]);
+    const reply = await ask("/v1/ask", {
+      body: {
+        with: "claude",
+        instructions: "Mark the reading.",
+        prompt: "@Tom “Hi.”",
+        schema: { type: "object" },
+        task: "Mark the passage.",
+        name: "directions",
+      },
+    });
+    expect(reply.status).toBe(200);
+    expect(JSON.parse(reply.text)).toEqual({
+      ai: "Claude Code (your Claude plan)",
+      answer: JSON.stringify(ANSWER),
+    });
+    const empty = await ask("/v1/ask", { body: { with: "claude", prompt: "x" } });
+    expect(empty.status).toBe(400);
+    expect(JSON.parse(empty.text).error).toBe(
+      "no instructions, passage or answer's shape was sent",
+    );
+  });
+
   it("casts and prices an audiobook, in a folder where it was started", async () => {
     const reply = await ask("/v1/audiobook", {
       body: { text: STORY, name: "owl.vxd", with: "kokoro", mode: "estimate" },

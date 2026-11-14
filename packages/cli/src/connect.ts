@@ -5,10 +5,11 @@
  * that key, from the Writer's own address, to this computer's own name (so no other site, and no
  * site that renames itself to look local, can use it).
  *
- * It does three things: says which AIs and voice services are here; names the speakers in a
- * story with one of the AIs (`vxd tag`'s engine), sending back the changes; and makes an audiobook
- * with one of the voice services (`vxd produce`'s), in a folder beside where it was started.
- * Progress comes as it goes, one JSON object a line; closing the request stops the work.
+ * It says which AIs and voice services are here; names the speakers in a story with one of the
+ * AIs (`vxd tag`'s engine), sending back the changes; asks one of the AIs about a passage for the
+ * Writer, which reads the answer itself (directing a reading); and makes an audiobook with one of
+ * the voice services (`vxd produce`'s), in a folder beside where it was started. Progress comes
+ * as it goes, one JSON object a line; closing the request stops the work.
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
@@ -184,6 +185,8 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
           name: "vxd connect",
           version: options.version,
           folder: options.folder,
+          // What this helper can do beyond naming speakers and making audiobooks.
+          can: ["ask"],
           ais: [
             ...ais.map(({ id, label, kind, note }) => ({
               id,
@@ -222,6 +225,44 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
       const { audio, type } = await sampleIn(service, voice, words, language);
       response.writeHead(200, { "content-type": type, "cache-control": "no-store" });
       response.end(audio);
+      return;
+    }
+    // One passage asked of one of the AIs, its answer sent back as it came: the Writer reads it.
+    if (request.method === "POST" && path === "/v1/ask") {
+      const body = await bodyOf(request);
+      const instructions = text(body.instructions);
+      const prompt = text(body.prompt);
+      const schema = body.schema;
+      if (
+        !instructions ||
+        !prompt ||
+        !schema ||
+        typeof schema !== "object" ||
+        Array.isArray(schema)
+      )
+        throw new Failure("no instructions, passage or answer's shape was sent");
+      const model = text(body.model);
+      const found = await findBackends(options.machine, model ? { model } : {});
+      const named = text(body.with);
+      const backend = named ? backendNamed(found, named) : found[0];
+      if (!backend)
+        throw new Failure(named ? `${named} isn't here` : "no AI was found on this computer");
+      const stop = new AbortController();
+      response.on("close", () => {
+        if (!response.writableFinished) stop.abort();
+      });
+      const task = text(body.task);
+      const name = text(body.name);
+      const answer = await backend.ask({
+        instructions,
+        prompt,
+        schema: schema as Record<string, unknown>,
+        ...(task ? { task } : {}),
+        ...(name ? { name } : {}),
+        signal: stop.signal,
+      });
+      response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+      response.end(JSON.stringify({ ai: backend.label, answer }));
       return;
     }
     if (request.method === "POST" && (path === "/v1/tag" || path === "/v1/audiobook")) {

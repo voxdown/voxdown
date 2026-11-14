@@ -23,6 +23,10 @@ export type Ask = {
   prompt: string;
   /** The JSON schema the answer must match. */
   schema: Record<string, unknown>;
+  /** What is asked, in a line, where a program wants one beside the passage. */
+  task?: string;
+  /** The schema's name, where a service wants one: `speakers`, `directions`. */
+  name?: string;
   signal?: AbortSignal;
 };
 
@@ -171,7 +175,8 @@ function claudeCode(machine: Machine, program: string, model: string | undefined
         await writeFile(instructions, ask.instructions);
         const args = [
           "-p",
-          "Attribute the numbered quotes in the passage on standard input. Answer only with the JSON object.",
+          ask.task ??
+            "Attribute the numbered quotes in the passage on standard input. Answer only with the JSON object.",
           // None of the writer's settings, hooks, skills or servers, and no tools: only the text.
           "--safe-mode",
           "--tools",
@@ -421,7 +426,7 @@ function localBackend(machine: Machine, server: LocalServer, model: string): Bac
                   temperature: 0,
                   response_format: {
                     type: "json_schema",
-                    json_schema: { name: "speakers", strict: true, schema: ask.schema },
+                    json_schema: { name: ask.name ?? "speakers", strict: true, schema: ask.schema },
                   },
                 },
           ),
@@ -466,7 +471,7 @@ function openAiCompatible(
           ],
           response_format: {
             type: "json_schema",
-            json_schema: { name: "speakers", strict: true, schema: ask.schema },
+            json_schema: { name: ask.name ?? "speakers", strict: true, schema: ask.schema },
           },
           ...spec.extra,
         }),

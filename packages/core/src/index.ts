@@ -74,6 +74,23 @@ export type {
 } from "./model";
 export { chapterLevel, chapterLevelOf } from "./chapters";
 export {
+  DIRECTING_INSTRUCTIONS,
+  DIRECTING_WORDS,
+  type Directed,
+  type DirectingPassage,
+  type Refusal,
+  type Suggestion,
+  type SuggestionKind,
+  addedMarks,
+  chosenChanges,
+  directingPassages,
+  directingPrompt,
+  directingRequest,
+  directingSchema,
+  readDirected,
+  whyNot,
+} from "./directing";
+export {
   type Shape,
   type ShapeChoice,
   type Span,

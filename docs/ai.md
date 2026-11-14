@@ -86,9 +86,19 @@ The tools:
 
 They read and write only `.vxd` and `.md` files, and a story is written whole or not at all. Giving speakers with a revision from before the story's words changed is refused, so an app working while you write can't put a mark in the wrong place.
 
+## Directing the reading, in the Writer
+
+**Edit › Direct the reading with AI…** asks an AI how the story should be performed. It gives the text back with marks added where a narrator or actor would do something the words alone don't say: a direction (`@Mara (softly) “Who’s there?”`), a stressed word (`I *never* said that`), a pause (`{pause}`), a sound (`[door slams]`), a sound a character makes (`@[sighs]`). The Writer lists each one with its line, all ticked; untick any you don't want, and **Add** puts the rest in as one step to undo.
+
+The AI is told to change no word, and the Writer makes sure of it: each paragraph given back is lined up with yours, and its marks are kept only if the paragraph still prints the same words, given to the same speakers, with your own marks still there. A paragraph where the AI changed a word or a comma is left as you wrote it, and listed. The marks go into your text, not the AI's, so a straight quote it wrote for a curly one changes nothing.
+
+It works with **any AI chat**: **Copy the request** copies the instructions and the text (the chapter, the whole story, or the selection); paste it into ChatGPT, Claude, Gemini or another chat, and paste its answer back. A chapter at a time works best: a chat may give back only part of a long text.
+
+Directions are written in English, which voice services understand best. They are heard where the voices can take them: on ElevenLabs' `eleven_v4` and `eleven_v3` (`vxd produce`, and **Make an audiobook…**), directions go as audio tags and stressed words in capitals.
+
 ## Where your words go
 
-Only to the AI you choose, and only when you run `vxd tag`, ask your app to, or press **Name the speakers** in the Writer: VoxDown itself sends nothing anywhere. A local model keeps everything on your computer.
+Only to the AI you choose, and only when you run `vxd tag`, ask your app to, or press **Name the speakers** in the Writer: VoxDown itself sends nothing anywhere. Directing the reading through a chat sends the text only where you paste it. A local model keeps everything on your computer.
 
 - **VoxDown has no server and no account.** The Writer is a page your browser keeps; your stories stay in your browser and in your own files.
 - **`vxd connect` runs on your computer, and only for the Writer.** It listens on your computer alone (127.0.0.1), answers only the Writer's page, and only with a key made when it starts; it sends a story only to the AI or voice service you choose for it.

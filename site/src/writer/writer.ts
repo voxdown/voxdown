@@ -87,6 +87,7 @@ import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
 import { addCloseButton, closeOnClickOutside } from "./dialogs";
 import { changesOnly, diffLines, withWords } from "./diff";
+import { openDirect } from "./direct-dialog";
 import {
   emphasis,
   frontMatterEnd as emphasisFrom,
@@ -3383,6 +3384,7 @@ const COMMANDS: Record<string, () => unknown> = {
   export: () => $<HTMLDialogElement>("#export").showModal(),
   about: showAbout,
   "ai-speakers": () => void openAi("speakers", aiContext),
+  "ai-direct": () => void openDirect(aiContext),
   audiobook: () => void openAi("audiobook", aiContext),
   shortcuts: showShortcuts,
   outline: showOutline,

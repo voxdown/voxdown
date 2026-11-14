@@ -4,11 +4,20 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 ## Unreleased
 
+**Directing the reading with AI** ([docs/ai.md](docs/ai.md#directing-the-reading-in-the-writer)).
+
+**voxdown**
+- `directingPassages`, `DIRECTING_INSTRUCTIONS`, `directingPrompt`, `directingSchema` and `directingRequest` say what to ask a model to direct a reading: the story a passage at a time, to be given back with marks added for how it is performed. `readDirected` reads the answer (text, a code block, or JSON) as suggestions, keeping a mark only where the paragraph still prints the same words, given to the same speakers, with the writer's own marks; `chosenChanges` gives the changes for the ones chosen, checked again together.
+
+**VoxDown Writer**
+- **Edit › Direct the reading with AI…**: an AI suggests directions, stressed words, pauses and sounds for the chapter, the story or the selection, and the writer chooses which to add, as one step to undo. Any AI chat will do: **Copy the request**, paste it into the chat, and paste its answer back. A paragraph where the AI changed a word is left as written, and listed.
+
 **@voxdown/produce**
 - Stress is heard: a word written `*never*` or `**never**` goes to `eleven_v4` and `eleven_v3` in capitals (`NEVER`), which is how those models hear stress, in `vxd produce` and in ElevenLabs Studio; the SSML has it as `<emphasis>`. The production script's speech lines say where it is (`stress`, as offsets in `text`), and a line is made again when its stress moves. Emphasis was taken out before a line was sent, so the voice never heard it. The words' times keep the words as written.
 - The production script's chapters come from `voxdown`'s `chapterLevel`, the rule they already followed.
 
 **@voxdown/cli**
+- `vxd connect` can ask one of the AIs on the computer about a passage for the Writer (`/v1/ask`), which reads the answer itself: **Direct the reading with AI…** then offers that AI beside a chat. The helper says it can (`can: ["ask"]`), so a Writer meeting an older one offers only the chat.
 - The cheat sheet a model reads to tag a story says how its chapters are found.
 
 ## `voxdown` 1.4.0, VoxDown Writer (12 November 2026)

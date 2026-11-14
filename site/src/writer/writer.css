@@ -2055,6 +2055,102 @@ body[data-welcome] .manuscript .editor {
   padding: 0.2rem 0.6rem;
   font-size: 0.82rem;
 }
+/* Directing the reading with AI. */
+.direct-dialog {
+  width: min(40rem, 94vw);
+}
+.direct-dialog > form > label,
+.direct-steps label,
+#direct-local > label {
+  display: block;
+  font-size: 0.88rem;
+  margin-bottom: 0.3rem;
+}
+#direct-scope,
+#direct-ai {
+  font: inherit;
+  padding: 0.35rem 0.4rem;
+  margin-bottom: 0.4rem;
+}
+#direct-scope {
+  width: 100%;
+}
+#direct-ai {
+  flex: 1;
+  margin-bottom: 0;
+}
+.direct-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+.direct-steps {
+  margin: 0 0 0.6rem;
+  padding-left: 1.3rem;
+}
+.direct-steps li {
+  margin-bottom: 0.6rem;
+}
+#direct-answer {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.4rem;
+  font: 0.85rem / 1.4 var(--mono, ui-monospace, monospace);
+  resize: vertical;
+}
+#direct-long:empty,
+#direct-progress:empty {
+  display: none;
+}
+.direct-ticks {
+  gap: 1rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+.direct-list {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  max-height: 18rem;
+  overflow: auto;
+  border: 1px solid var(--desk-edge);
+  border-radius: 6px;
+}
+.direct-list li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--desk-edge);
+  font-size: 0.88rem;
+}
+.direct-list li:last-child {
+  border-bottom: 0;
+}
+.direct-list label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  flex: 1;
+  min-width: 0;
+}
+.direct-preview {
+  font-family: var(--story);
+  overflow-wrap: anywhere;
+}
+.direct-preview mark {
+  background: color-mix(in srgb, var(--pencil) 22%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 0.1em;
+  font-weight: 600;
+}
+.direct-line {
+  flex: none;
+  font-size: 0.8rem;
+}
 .link-button {
   border: 0;
   padding: 0;

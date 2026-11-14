@@ -57,6 +57,7 @@
         <button role="menuitem" type="button" data-command="next-quote">Next quote with no speaker<kbd data-keys="Mod+Shift+K"></kbd></button>
         <button role="menuitem" type="button" data-command="ai-speakers">Name the speakers with AI…</button>
         <button role="menuitem" type="button" data-command="how">How it’s said…<kbd data-keys="Mod+J"></kbd></button>
+        <button role="menuitem" type="button" data-command="ai-direct">Direct the reading with AI…</button>
         <hr>
         <button role="menuitem" type="button" data-command="paragraph-up">Move paragraph up<kbd data-keys="Alt+↑"></kbd></button>
         <button role="menuitem" type="button" data-command="paragraph-down">Move paragraph down<kbd data-keys="Alt+↓"></kbd></button>
@@ -341,6 +342,47 @@
       <button class="button" value="close" id="ai-close">Close</button>
       <button class="button" type="button" id="ai-second" hidden></button>
       <button class="button primary" type="button" id="ai-go">Name the speakers</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="ai-dialog direct-dialog" id="direct" aria-labelledby="direct-title" aria-describedby="direct-about">
+  <form method="dialog">
+    <h2 id="direct-title">Direct the reading with AI</h2>
+    <p class="sheet-note" id="direct-about">An AI suggests how the story is performed: directions, pauses, stressed words and sounds, as marks. You choose which to keep. Your words stay exactly as they are: a suggestion that would change one is left out.</p>
+    <label for="direct-scope">What to direct</label>
+    <select id="direct-scope">
+      <option value="chapter">This chapter</option>
+      <option value="story">The whole story</option>
+      <option value="selection">The selection</option>
+    </select>
+    <p class="sheet-note" id="direct-long" role="status"></p>
+    <div id="direct-local" hidden>
+      <label for="direct-ai">With an AI on this computer</label>
+      <div class="direct-row">
+        <select id="direct-ai"></select>
+        <button class="button" type="button" id="direct-ask">Ask</button>
+      </div>
+      <p class="sheet-note">Or with any AI chat:</p>
+    </div>
+    <ol class="direct-steps">
+      <li><button class="button" type="button" id="direct-copy">Copy the request</button> and paste it into ChatGPT, Claude, Gemini or another AI chat. It holds the text, so it goes to that chat.</li>
+      <li><label for="direct-answer">Paste its answer here</label>
+        <textarea id="direct-answer" rows="4" spellcheck="false" placeholder="The answer, as the chat gave it"></textarea>
+        <button class="button" type="button" id="direct-read">Read the answer</button></li>
+    </ol>
+    <p id="direct-progress" role="status" aria-live="polite"></p>
+    <div id="direct-found" hidden>
+      <div class="direct-row direct-ticks">
+        <button class="link-button" type="button" id="direct-all">Tick all</button>
+        <button class="link-button" type="button" id="direct-none">Untick all</button>
+      </div>
+      <ul class="direct-list" id="direct-list"></ul>
+      <ul class="ai-held" id="direct-refused" hidden></ul>
+    </div>
+    <div class="ask-buttons">
+      <button class="button" value="close">Close</button>
+      <button class="button primary" type="button" id="direct-add" disabled>Add marks</button>
     </div>
   </form>
 </dialog>

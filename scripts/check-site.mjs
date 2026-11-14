@@ -2816,6 +2816,7 @@ console.log("writer: two tabs, a file changed on disk: ok");
           folder: "/books",
           ais: [{ id: "claude", label: "Claude Code (your Claude plan)", kind: "plan" }],
           speech: [{ id: "kokoro", label: "Kokoro", note: "free, on this computer" }],
+          can: ["ask"],
         }),
       );
     }
@@ -2841,6 +2842,17 @@ console.log("writer: two tabs, a file changed on disk: ok");
       wav.writeUInt32LE(samples * 2, 40);
       response.writeHead(200, { "content-type": "audio/wav" });
       return response.end(wav);
+    }
+    if (path === "/v1/ask") {
+      // The passage given back with a direction for Tom, as a model would.
+      const passage = asked.prompt.split("to give back with marks added:\n")[1] ?? "";
+      response.writeHead(200, { "content-type": "application/json" });
+      return response.end(
+        JSON.stringify({
+          ai: "Claude Code",
+          answer: JSON.stringify({ text: passage.replace("@Tom “", "@Tom (flatly) “") }),
+        }),
+      );
     }
     response.writeHead(200, { "content-type": "application/x-ndjson" });
     const say = (event) => response.write(`${JSON.stringify(event)}\n`);
@@ -3066,6 +3078,35 @@ console.log("writer: two tabs, a file changed on disk: ok");
   const making = sent.filter((request) => request.path === "/v1/audiobook").at(-1);
   if (making?.voices?.Tom !== "bm_george")
     problems.push("writer: the audiobook wasn't made with the voice chosen for Tom");
+  // Directing the reading, with the AI on this computer: a passage asked, a direction found.
+  await writer.keyboard.press("Escape");
+  await writer.click(".cm-content");
+  await writer.keyboard.press("Control+End");
+  await writer.keyboard.type("\n\n@Tom “Who’s there?” asked Tom.");
+  await writer.waitForTimeout(400);
+  await writer.click("#edit-menu-button");
+  await writer.click('[data-command="ai-direct"]');
+  await writer.waitForSelector("#direct-local:not([hidden])", { timeout: 5000 }).catch(() => {
+    problems.push("writer: directing doesn't offer the AI on this computer");
+  });
+  await writer.selectOption("#direct-scope", "story");
+  await writer.click("#direct-ask");
+  await writer.waitForSelector("#direct-list li", { timeout: 5000 }).catch(() => {});
+  const asked = sent.find((request) => request.path === "/v1/ask");
+  if (asked?.with !== "claude" || !asked.instructions?.includes("audiobook director"))
+    problems.push("writer: directing didn't ask the AI chosen, with the instructions");
+  if (
+    !(await writer.textContent("#direct-list"))?.startsWith(
+      "@Tom (flatly) “Who’s there?” asked Tom.Line",
+    )
+  )
+    problems.push(
+      `writer: directing found “${await writer.textContent("#direct-list")}”: ${await writer.textContent("#direct-progress")} (the story: ${JSON.stringify(await writer.locator(".cm-content").innerText())}; asked: ${JSON.stringify(asked?.prompt)})`,
+    );
+  if (await writer.isEnabled("#direct-add")) await writer.click("#direct-add");
+  await writer.waitForTimeout(900);
+  if (!(await draftIn(writer)).includes("@Tom (flatly) “Who’s there?” asked Tom."))
+    problems.push("writer: the direction found wasn't added");
   await connected.close();
   // Not connected: how to connect.
   const alone = await browser.newPage();
@@ -3089,7 +3130,63 @@ console.log("writer: two tabs, a file changed on disk: ok");
   await alone.waitForSelector("#ai-connect:not([hidden])", { timeout: 5000 }).catch(() => {});
   if (!(await alone.textContent("#ai-connect"))?.includes("npx -y @voxdown/cli connect"))
     problems.push("writer: the AI dialog doesn't say how to connect");
+  await alone.keyboard.press("Escape");
   await alone.close();
+  // Directing the reading with any AI chat: the request copied, the answer pasted back, the marks
+  // chosen. A mark that would change the words is left out, and said.
+  const chat = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    permissions: ["clipboard-read", "clipboard-write"],
+  });
+  const directing = await chat.newPage();
+  watch(directing, "writer directing with a chat");
+  await directing.goto(`${base}/writer/`);
+  await directing.click('.welcome [data-command="new"]');
+  await directing.waitForTimeout(500);
+  await directing.keyboard.press("Control+a");
+  await directing.keyboard.type(
+    "# The Owl\n\n@Mara “Who’s there?” she whispered.\n\nThe door slammed.\n\n@Tom “Only me.”",
+  );
+  await directing.waitForTimeout(500);
+  await directing.click("#edit-menu-button");
+  await directing.click('[data-command="ai-direct"]');
+  await directing.waitForSelector("#direct[open]");
+  if (!(await directing.isHidden("#direct-local")))
+    problems.push("writer: directing offers an AI on this computer with none connected");
+  await directing.click("#direct-copy");
+  const request = await directing.evaluate(() => navigator.clipboard.readText());
+  if (!request.includes("audiobook director") || !request.includes("@Mara “Who’s there?”"))
+    problems.push("writer: directing's request isn't the instructions and the story");
+  await directing.fill(
+    "#direct-answer",
+    '```\n@Mara (softly) "Who\'s there?" she whispered. {pause}\n\nThe door slammed. [door slams]\n\n@Tom “Only me!”\n```',
+  );
+  await directing.click("#direct-read");
+  await directing.waitForSelector("#direct-list li", { timeout: 5000 }).catch(() => {});
+  if ((await directing.locator("#direct-list li").count()) !== 3)
+    problems.push(`writer: directing found ${await directing.textContent("#direct-list")}`);
+  if (!(await directing.textContent("#direct-refused"))?.includes("Line 7"))
+    problems.push("writer: directing didn't say which paragraph it left as written");
+  // The pause unticked: the rest added, as one step to undo.
+  await directing.locator("#direct-list li").nth(1).locator("input").uncheck();
+  if ((await directing.textContent("#direct-add")) !== "Add 2 marks")
+    problems.push(`writer: directing's button says ${await directing.textContent("#direct-add")}`);
+  await directing.click("#direct-add");
+  await directing.waitForTimeout(900);
+  const directed = await draftIn(directing);
+  if (
+    !directed.includes("@Mara (softly) “Who’s there?” she whispered.") ||
+    !directed.includes("The door slammed. [door slams]") ||
+    directed.includes("{pause}") ||
+    !directed.includes("@Tom “Only me.”")
+  )
+    problems.push(`writer: directing added the wrong marks: ${directed}`);
+  await directing.keyboard.press("Control+z");
+  await directing.waitForTimeout(900);
+  if ((await draftIn(directing)).includes("(softly)"))
+    problems.push("writer: Ctrl+Z doesn't take the marks back");
+  await chat.close();
+  console.log("writer: directing the reading, with a chat and with vxd connect: ok");
   helperServer.close();
   console.log("writer: naming speakers and an audiobook, through vxd connect: ok");
 }

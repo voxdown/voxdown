@@ -179,10 +179,28 @@ export function plan(
         ...(script.language ? { language: script.language } : {}),
       };
       const texts = pieces(line.text, Math.max(200, can.maxCharacters - 200));
+      // Where each piece starts in the line, so its stress can be told in its own offsets.
+      let cursor = 0;
+      const starts = texts.map((text) => {
+        const at = line.text.indexOf(text, cursor);
+        cursor = at < 0 ? cursor : at + text.length;
+        return at < 0 ? -1 : at;
+      });
       const requests = texts.map((text, part) => {
+        const start = starts[part] as number;
+        const stress =
+          start < 0
+            ? []
+            : (line.stress ?? [])
+                .map(([from, to]): [number, number] => [
+                  Math.max(0, from - start),
+                  Math.min(text.length, to - start),
+                ])
+                .filter(([from, to]) => to > from);
         const request: SpeakRequest = {
           ...base,
           text,
+          ...(stress.length ? { stress } : {}),
           ...(part === 0 && before ? { before } : {}),
           ...(part === texts.length - 1 && after ? { after } : {}),
           ...(part > 0
@@ -212,6 +230,7 @@ export function plan(
             request.before,
             request.after,
             base.language,
+            ...(request.stress ? [request.stress] : []),
           ]),
           request,
         };

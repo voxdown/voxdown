@@ -32,6 +32,8 @@ export type SpeakRequest = {
   voice: string;
   /** How it is said, in the writer's words: `softly`, `with a sigh`. */
   direction: string | null;
+  /** The words the writer stressed, as `[from, to]` offsets in `text`. */
+  stress?: Array<[number, number]>;
   /** A character's sounds beside the words, before and after them (`[laughs]`). */
   before?: string;
   after?: string;

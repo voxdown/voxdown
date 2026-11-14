@@ -1,14 +1,14 @@
 /**
  * Sending a book to ElevenLabs Studio: a project made from the production script, a chapter for
  * each chapter, a block for each paragraph and heading, and each speech in its character's voice
- * (with its direction as an audio tag on the models that take them). The writer listens, changes
- * and converts it in Studio, and can publish from there: the way to stores that take only books
- * made in ElevenLabs.
+ * (on the models that take them, with its direction as an audio tag and its stressed words in
+ * capitals). The writer listens, changes and converts it in Studio, and can publish from there:
+ * the way to stores that take only books made in ElevenLabs.
  *
  * API: https://elevenlabs.io/docs/api-reference/studio/add-project
  */
 import { failure } from "../adapter";
-import type { ProductionScript } from "../script";
+import { type ProductionScript, capitalized } from "../script";
 
 type Node = { type: "tts_node"; voice_id: string; text: string };
 type Block = { sub_type: string; nodes: Node[] };
@@ -51,7 +51,7 @@ export function studioContent(
         block.nodes.push({
           type: "tts_node",
           voice_id: voiceOf(line.speaker),
-          text: tag + line.text,
+          text: tag + (options.tags ? capitalized(line.text, line.stress) : line.text),
         });
       } else if (line.kind === "vocal" && options.tags) {
         if (!block) {

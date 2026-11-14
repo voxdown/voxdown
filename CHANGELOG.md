@@ -5,6 +5,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 ## Unreleased
 
 **@voxdown/produce**
+- Stress is heard: a word written `*never*` or `**never**` goes to `eleven_v4` and `eleven_v3` in capitals (`NEVER`), which is how those models hear stress, in `vxd produce` and in ElevenLabs Studio; the SSML has it as `<emphasis>`. The production script's speech lines say where it is (`stress`, as offsets in `text`), and a line is made again when its stress moves. Emphasis was taken out before a line was sent, so the voice never heard it. The words' times keep the words as written.
 - The production script's chapters come from `voxdown`'s `chapterLevel`, the rule they already followed.
 
 **@voxdown/cli**

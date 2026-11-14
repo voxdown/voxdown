@@ -44,10 +44,27 @@ export function styleFor(direction: string | null): string | undefined {
   return STYLES.find(([pattern]) => pattern.test(direction))?.[1];
 }
 
-/** One line as SSML inside a `<voice>`. */
-export function lineSsml(text: string, direction: string | null): string {
+/** Text for XML, its stressed words (`[from, to]` offsets) in `<emphasis>`. */
+function stressed(text: string, stress: ReadonlyArray<[number, number]>): string {
+  let out = "";
+  let at = 0;
+  for (const [from, to] of [...stress].sort((a, b) => a[0] - b[0])) {
+    if (from < at) continue;
+    out += `${xml(text.slice(at, from))}<emphasis>${xml(text.slice(from, to))}</emphasis>`;
+    at = to;
+  }
+  return out + xml(text.slice(at));
+}
+
+/** One line as SSML inside a `<voice>`, with its stressed words in `<emphasis>` when given. */
+export function lineSsml(
+  text: string,
+  direction: string | null,
+  stress: ReadonlyArray<[number, number]> = [],
+): string {
   const style = styleFor(direction);
-  return style ? `<mstts:express-as style="${style}">${xml(text)}</mstts:express-as>` : xml(text);
+  const words = stressed(text, stress);
+  return style ? `<mstts:express-as style="${style}">${words}</mstts:express-as>` : words;
 }
 
 /** A whole SSML document for one line, as Azure's REST API takes it. */
@@ -72,8 +89,8 @@ export const GAPS: Record<ProductionLine["next"], number> = {
 };
 
 /**
- * A chapter as one SSML document: each speech in its voice (`casting` by speaker), breaks between
- * lines as the pacing has them, pauses as breaks. Sounds and page turns are left as comments.
+ * A chapter as one SSML document: each speech in its voice (`casting` by speaker), its stress as
+ * `<emphasis>`, breaks between lines as the pacing has them, pauses as breaks. Sounds and page turns are left as comments.
  */
 export function chapterSsml(
   script: ProductionScript,
@@ -88,7 +105,7 @@ export function chapterSsml(
     if (line.kind === "speech") {
       const voice = casting[line.speaker ?? script.narrator] ?? casting[script.narrator] ?? "";
       parts.push(
-        `<voice name="${xml(voice)}">${lineSsml(line.text, line.direction)}${gap ? `<break time="${gap}ms"/>` : ""}</voice>`,
+        `<voice name="${xml(voice)}">${lineSsml(line.text, line.direction, line.stress)}${gap ? `<break time="${gap}ms"/>` : ""}</voice>`,
       );
     } else if (line.kind === "pause") {
       parts.push(

@@ -13,7 +13,7 @@ It needs [Node.js](https://nodejs.org) 20 or later, and [ffmpeg](https://ffmpeg.
 
 | Service | How it's found | Cost (list price, November 2026) | Notes |
 | --- | --- | --- | --- |
-| [ElevenLabs](https://elevenlabs.io) | `ELEVENLABS_API_KEY` | about $0.08 a thousand characters (a 100,000-word book: about $48), less on a plan | Directions and the sounds characters make go as audio tags (`[softly]`, `[laughs]`) on `eleven_v4` and `eleven_v3`. Every word's time is known. `--sounds` makes sounds and page turns with its sound effects. |
+| [ElevenLabs](https://elevenlabs.io) | `ELEVENLABS_API_KEY` | about $0.08 a thousand characters (a 100,000-word book: about $48), less on a plan | Directions and the sounds characters make go as audio tags (`[softly]`, `[laughs]`) on `eleven_v4` and `eleven_v3`, and words you stressed (`*never*`) in capitals, which is how those models hear stress. Every word's time is known. `--sounds` makes sounds and page turns with its sound effects. |
 | [Kokoro](https://github.com/remsky/Kokoro-FastAPI), on your computer | running on port 8880 (or `KOKORO_URL`) | free | `docker run -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu` runs it on an ordinary CPU. Many voices, no acting: directions are left out. |
 | [Azure AI Speech](https://learn.microsoft.com/azure/ai-services/speech-service/) | `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` | about $15 a million characters | Directions become the nearest of Azure's speaking styles (`whispering`, `sad`, `cheerful`…) on voices that have them. |
 | OpenAI | `OPENAI_API_KEY` | about $15 a million characters | Directions go as instructions. OpenAI retires these voices on 6 January 2027. |
@@ -57,7 +57,7 @@ In `story.audiobook/`, beside the story (or `--out`):
 
 Its chapters are the story's headings of the highest level used at least twice, as the Writer's and the ebook's are ([SPEC.md](../spec/SPEC.md), §4.4): `#` chapters with the title in the front matter, or `##` chapters under a single `# Title`. What comes before the first chapter, the title read aloud with it, is a chapter of its own, named by the title. A story with no level used twice is one chapter.
 
-**ElevenLabs Studio.** `vxd produce story.vxd --with elevenlabs --studio` makes nothing here: it sends the book to [ElevenLabs Studio](https://elevenlabs.io/docs/product-guides/products/studio) as a new project, each chapter a chapter, each paragraph a block and each line in its character's voice (directions as audio tags). You listen, change and convert it there, and nothing is converted, or paid for, until you do. From Studio a book can be published where only books made in ElevenLabs are taken.
+**ElevenLabs Studio.** `vxd produce story.vxd --with elevenlabs --studio` makes nothing here: it sends the book to [ElevenLabs Studio](https://elevenlabs.io/docs/product-guides/products/studio) as a new project, each chapter a chapter, each paragraph a block and each line in its character's voice (directions as audio tags, stressed words in capitals). You listen, change and convert it there, and nothing is converted, or paid for, until you do. From Studio a book can be published where only books made in ElevenLabs are taken.
 
 `--chapters 1` makes one chapter to listen to first. `--script-only` writes the production script and an SSML file a chapter, with no service, for other tools.
 
@@ -87,6 +87,7 @@ Its chapters are the story's headings of the highest level used at least twice, 
 - `next` says what follows the line: `part` (more on its line), `line`, `paragraph`, `heading`, `scene`, `chapter` or `end`. The silence after it is set by that: 250, 450, 800, 1,100 and 1,500 ms.
 - `id` stays the same while the story is edited elsewhere in its chapter; `hash` changes only when what the line sounds like does.
 - A character's sound beside their own words has `with`: the id of the speech it is voiced with.
+- Speech with words the writer stressed (`*never*`) has `stress`: where they are in `text`, as `[from, to]` offsets. An adapter is told them in `SpeakRequest.stress`, for the piece of the line it is sent.
 
 ## Writing an adapter
 

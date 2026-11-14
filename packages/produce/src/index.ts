@@ -64,7 +64,9 @@ export {
   type ProductionScript,
   hashOf,
   pauseMs,
+  capitalized,
   plain,
+  plainWithStress,
   productionScript,
 } from "./script";
 export { GAPS, chapterSsml, lineSsml, ssmlDocument, styleFor, xml } from "./ssml";

@@ -9,6 +9,7 @@ import {
   type Clip,
   type SpeakRequest,
   azure,
+  capitalized,
   castVoices,
   chapterSsml,
   createStudioProject,
@@ -21,6 +22,8 @@ import {
   memoryStore,
   openaiSpeech,
   pieces,
+  plainWithStress,
+  plan,
   produce,
   productionScript,
   resample,
@@ -118,6 +121,25 @@ describe("the production script", () => {
     expect(after?.id).toBe(before?.id);
     expect(after?.hash).toBe(before?.hash);
     expect(edited.lines[1]?.hash).not.toBe(script.lines[1]?.hash);
+  });
+
+  it("keeps where the writer stressed a word, and makes it again when the stress moves", () => {
+    expect(plainWithStress("I *never* said she took **the** [money](x).")).toEqual({
+      text: "I never said she took the money.",
+      stress: [
+        [2, 7],
+        [22, 25],
+      ],
+    });
+    expect(plainWithStress("*All of it*")).toEqual({ text: "All of it", stress: [[0, 9]] });
+    expect(plainWithStress("No stress here.")).toEqual({ text: "No stress here.", stress: [] });
+    const stressed = productionScript(parse(STORY.replace("“Only me.”", "“Only *me*.”")));
+    const line = stressed.lines.find((other) => other.text === "Only me.");
+    expect(line?.stress).toEqual([[5, 7]]);
+    expect(line?.hash).not.toBe(script.lines.find((other) => other.text === "Only me.")?.hash);
+    // A line with no stress keeps the hash it always had.
+    expect(stressed.lines[1]?.hash).toBe(script.lines[1]?.hash);
+    expect(capitalized("Only me, Straße.", [[5, 15]])).toBe("Only ME, STRAßE.");
   });
 
   it("is a whole chapter when the story has no chapter headings", () => {
@@ -394,6 +416,61 @@ describe("ElevenLabs", () => {
     expect(clip.audio.length).toBe(pcm.length);
   });
 
+  it("says stressed words in capitals on the models that take tags, the words kept as written", async () => {
+    const pcm = toPcm16(silence(100, 24000));
+    const answer = (body: { text: string }) => {
+      const chars = [...body.text];
+      return new Response(
+        JSON.stringify({
+          audio_base64: Buffer.from(pcm).toString("base64"),
+          alignment: {
+            characters: chars,
+            character_start_times_seconds: chars.map((_, index) => index * 0.01),
+            character_end_times_seconds: chars.map((_, index) => index * 0.01 + 0.01),
+          },
+        }),
+      );
+    };
+    const { fetch, calls } = stand((_, init) => answer(JSON.parse(String(init.body))));
+    const request = { text: "I never said that.", voice: "v", direction: null, stress: [[2, 7]] };
+    const clip = await elevenlabs({ key: "k", fetch }).speak(request as SpeakRequest);
+    expect(JSON.parse(String(calls[0]?.init.body)).text).toBe("I NEVER said that.");
+    expect(clip.words?.map((word) => word.text)).toEqual(["I", "never", "said", "that."]);
+    await elevenlabs({ key: "k", model: "eleven_multilingual_v2", fetch }).speak(
+      request as SpeakRequest,
+    );
+    expect(JSON.parse(String(calls[1]?.init.body)).text).toBe("I never said that.");
+  });
+
+  it("is told a line's stress piece by piece when a long line is cut", () => {
+    const words = "word ".repeat(70).trim();
+    const story = `@Tom “${words}. And *then* it ended.”`;
+    const adapter: Adapter = {
+      id: "test",
+      name: "Test",
+      model: "m",
+      capabilities: {
+        maxCharacters: 400,
+        directions: "tags",
+        vocalTags: true,
+        sounds: false,
+        timings: "none",
+        concurrency: 1,
+      },
+      voices: async () => [],
+      speak: async () => ({ audio: new Uint8Array(), format: "pcm16", rate: 24000 }),
+    };
+    const { jobs } = plan(productionScript(parse(story)), 1, {
+      adapter,
+      voices: { Tom: "t", Narrator: "n" },
+    });
+    const job = [...jobs.values()][0];
+    expect(job?.kind).toBe("speak-parts");
+    const last = job?.kind === "speak-parts" ? job.parts.at(-1)?.request : undefined;
+    expect(last?.text).toBe("And then it ended.");
+    expect(last?.stress).toEqual([[4, 8]]);
+  });
+
   it("lists the account's voices, page after page", async () => {
     const { fetch, calls } = stand(
       (url) =>
@@ -568,6 +645,9 @@ describe("Azure and SSML", () => {
       Tom: "en-GB-ThomasNeural",
     });
     expect(ssml).toContain('xml:lang="en-GB"');
+    expect(
+      chapterSsml(productionScript(parse("@Tom “Not *you*.”")), 1, { Tom: "t", Narrator: "n" }),
+    ).toContain("Not <emphasis>you</emphasis>.");
     expect(ssml).toContain('<voice name="en-GB-RyanNeural"><break time="2000ms"/></voice>');
     expect(ssml).toContain(
       '<voice name="en-GB-SoniaNeural"><mstts:express-as style="gentle">Who’s there?</mstts:express-as><break time="250ms"/></voice>',

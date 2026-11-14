@@ -1,8 +1,8 @@
 /**
  * ElevenLabs: each line in its character's voice with `with-timestamps` (so every word's time is
  * known), the direction and the character's own sounds as audio tags on the models that take them
- * (`[softly] Come here. [laughs]`), the lines around it sent for flow, and sound effects from
- * their descriptions. Audio comes back as 24 kHz PCM, which every plan can ask for.
+ * (`[softly] Come here. [laughs]`), stressed words in capitals on those models too (their way of
+ * hearing stress), the lines around it sent for flow, and sound effects from their descriptions. Audio comes back as 24 kHz PCM, which every plan can ask for.
  *
  * API: https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps
  */
@@ -16,6 +16,7 @@ import {
   failure,
   fromBase64,
 } from "../adapter";
+import { capitalized } from "../script";
 
 export type ElevenLabsOptions = {
   key: string;
@@ -146,9 +147,8 @@ export function elevenlabs(options: ElevenLabsOptions): Adapter {
       ]
         .filter(Boolean)
         .join(" ");
-      const text = [lead, request.text, request.after ? tag(request.after) : ""]
-        .filter(Boolean)
-        .join(" ");
+      const words = tagged ? capitalized(request.text, request.stress) : request.text;
+      const text = [lead, words, request.after ? tag(request.after) : ""].filter(Boolean).join(" ");
       const wordsFrom = lead ? lead.length + 1 : 0;
       const language = request.language?.slice(0, 2).toLowerCase();
       const body = {
@@ -176,14 +176,26 @@ export function elevenlabs(options: ElevenLabsOptions): Adapter {
         alignment?: Parameters<typeof wordsFromAlignment>[0] | null;
       };
       if (!data.audio_base64) throw new AdapterError(`${name} sent no sound`);
+      // The words' times come back with the capitals sent; the words keep the writer's case.
+      const alignment = data.alignment
+        ? {
+            ...data.alignment,
+            characters: data.alignment.characters.map((char, index) => {
+              const at = index - wordsFrom;
+              return at >= 0 && at < request.text.length && char.length === 1
+                ? (request.text[at] as string)
+                : char;
+            }),
+          }
+        : undefined;
       const requestId = response.headers.get("request-id") ?? response.headers.get("x-request-id");
       return {
         audio: fromBase64(data.audio_base64),
         format: "pcm16",
         rate: RATE,
-        ...(data.alignment
+        ...(alignment
           ? {
-              words: wordsFromAlignment(data.alignment, wordsFrom, wordsFrom + request.text.length),
+              words: wordsFromAlignment(alignment, wordsFrom, wordsFrom + request.text.length),
             }
           : {}),
         ...(requestId ? { requestId } : {}),

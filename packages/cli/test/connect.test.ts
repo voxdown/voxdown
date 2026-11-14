@@ -174,7 +174,6 @@ describe("vxd connect", () => {
         instructions: "Mark the reading.",
         prompt: "@Tom “Hi.”",
         schema: { type: "object" },
-        task: "Mark the passage.",
         name: "directions",
       },
     });

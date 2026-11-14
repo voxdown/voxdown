@@ -19,6 +19,8 @@ export type Hello = {
   folder: string;
   ais: Found[];
   speech: Found[];
+  /** What it can do beyond naming speakers and making audiobooks: `ask` (a passage, for the Writer to read). */
+  can?: string[];
 };
 
 /** The pairing in an address's fragment, if it has one: only ever this computer. */
@@ -114,6 +116,33 @@ export async function listen(
     if (error instanceof HelperError || (error as Error).name === "AbortError") throw error;
     throw new HelperError("The helper isn't answering: is vxd connect still running?");
   }
+}
+
+/** One passage asked of an AI on this computer: its answer, as it came, and which AI gave it. */
+export async function askAi(
+  pairing: Pairing,
+  body: {
+    with: string;
+    instructions: string;
+    prompt: string;
+    schema: Record<string, unknown>;
+    task?: string;
+    name?: string;
+  },
+  signal?: AbortSignal,
+): Promise<{ ai: string; answer: string }> {
+  let response: Response;
+  try {
+    response = await call(pairing, "/v1/ask", {
+      method: "POST",
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    });
+  } catch (error) {
+    if (error instanceof HelperError || (error as Error).name === "AbortError") throw error;
+    throw new HelperError("The helper isn't answering: is vxd connect still running?");
+  }
+  return (await response.json()) as { ai: string; answer: string };
 }
 
 /** Asks the helper to do something, each event it sends passed on as it comes. */

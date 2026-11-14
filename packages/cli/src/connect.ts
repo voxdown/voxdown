@@ -241,6 +241,9 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
         Array.isArray(schema)
       )
         throw new Failure("no instructions, passage or answer's shape was sent");
+      // Some programs are given the text among their arguments: none may read as an option.
+      if (/^\s*-/.test(instructions) || /^\s*-/.test(prompt))
+        throw new Failure("the instructions and the passage can't start with a dash");
       const model = text(body.model);
       const found = await findBackends(options.machine, model ? { model } : {});
       const named = text(body.with);
@@ -251,14 +254,14 @@ export async function startHelper(options: HelperOptions): Promise<Helper> {
       response.on("close", () => {
         if (!response.writableFinished) stop.abort();
       });
-      const task = text(body.task);
       const name = text(body.name);
       const answer = await backend.ask({
         instructions,
         prompt,
         schema: schema as Record<string, unknown>,
-        ...(task ? { task } : {}),
-        ...(name ? { name } : {}),
+        // The helper's own line, never the page's: some programs take it among their arguments.
+        task: "Answer about the passage on standard input as the instructions say, with only the JSON object.",
+        ...(name && /^[a-z][a-z0-9_-]{0,40}$/.test(name) ? { name } : {}),
         signal: stop.signal,
       });
       response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });

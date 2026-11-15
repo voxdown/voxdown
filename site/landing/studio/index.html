@@ -80,7 +80,7 @@
               <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
             </button>
             <div class="player-mid">
-              <p class="now" id="now"><span class="now-dot" id="now-dot" aria-hidden="true"></span><span id="now-text">Press play: the line being heard lights up.</span></p>
+              <p class="now" id="now"><span class="now-dot" id="now-dot" aria-hidden="true"></span><span id="now-text">Press play to follow along.</span></p>
               <div class="track" id="track" role="slider" tabindex="0" aria-label="Position in the scene" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0:00"><div class="track-fill" id="track-fill"></div></div>
             </div>
             <span class="time" id="time">2:28</span>
@@ -171,28 +171,17 @@
     </div>
   </section>
 
-  <!-- 02. The cast, each with their own line from the recording. -->
-  <section class="cast band" aria-labelledby="cast-title">
-    <div class="wrap">
-      <header class="sec-head">
-        <p class="eyebrow"><span>02</span> Meet the cast</p>
-        <h2 id="cast-title">Four voices, cast from one file.</h2>
-        <p class="sec-lede">The cast list sits at the top of the story. Give each character a voice once, and every line they say goes to it. Press play on any of them to hear who got the part.</p>
-      </header>
-      <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"></div>
-      <ul class="cast-list" id="cast-list"></ul>
-    </div>
-  </section>
-
-  <!-- 03. Production-ready: to people, or to an engine. -->
-  <section class="dark" aria-labelledby="prod-title">
+  <!-- 02. The payoff: the cast heard, then the file handed to people or to an engine. -->
+  <section class="dark prod" aria-labelledby="prod-title">
     <div class="dark-glow" aria-hidden="true"></div>
     <div class="wrap">
       <header class="sec-head sec-head-dark">
-        <p class="eyebrow eyebrow-dark"><span>03</span> Production-ready</p>
-        <h2 id="prod-title">Straight to the booth. Or straight to the engine.</h2>
-        <p class="sec-lede">The file already knows who says every line and how, so nobody has to work it out again.</p>
+        <p class="eyebrow eyebrow-dark"><span>02</span> Production-ready</p>
+        <h2 id="prod-title">Four voices, one file.</h2>
+        <p class="sec-lede">The cast list sits at the top of the story: give each character a voice once, and every line they say goes to it. Hear who got the part, then send the same file straight to the booth, or straight to the engine.</p>
       </header>
+      <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"></div>
+      <ul class="cast-list" id="cast-list" aria-label="The cast, each with a line from the recording"></ul>
       <div class="routes">
         <article class="route">
           <p class="route-kicker">To people</p>
@@ -225,9 +214,9 @@
   <section class="proof band" aria-labelledby="proof-title">
     <div class="wrap">
       <header class="sec-head">
-        <p class="eyebrow"><span>04</span> The real thing</p>
+        <p class="eyebrow"><span>03</span> The real thing</p>
         <h2 id="proof-title">A whole book, in one calm window.</h2>
-        <p class="sec-lede">The Writer’s own screens, with the dragon story open. The cast on the left, the story in the middle, the script on the right. Pick a look.</p>
+        <p class="sec-lede">The Writer’s own screens, with the dragon story open. <span class="wide-only">The cast on the left, the story in the middle, the script on the right.</span><span class="narrow-only">Here, the story itself; open the full window to see the cast and the script beside it.</span> Pick a look.</p>
       </header>
 
       <figure class="shot-tile">
@@ -318,7 +307,7 @@
     <div class="dark-glow" aria-hidden="true"></div>
     <div class="wrap devs">
       <div class="devs-words">
-        <p class="eyebrow eyebrow-dark"><span>05</span> For developers</p>
+        <p class="eyebrow eyebrow-dark"><span>04</span> For developers</p>
         <h2 id="devs-title">Open all the way down.</h2>
         <p class="sec-lede">A published spec, a parser, renderers, an editor component and a command line. Build your own reader, your own voices, your own tools.</p>
         <p class="dev-links"><a href="../../spec.html">The spec</a><a href="../../cheatsheet.html">Cheat sheet</a><a href="../../playground.html">Playground</a><a href="https://github.com/voxdown/voxdown">GitHub</a></p>

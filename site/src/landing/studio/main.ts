@@ -283,6 +283,7 @@ const fill = $("#track-fill");
 const track = $("#track");
 const time = $("#time");
 const tip = $("#tip");
+const heroTime = $("#hero-time");
 
 /** The kind of mark the "spot the marks" buttons are showing, if any. */
 let spot = "";
@@ -349,7 +350,7 @@ function showScene(index: number): void {
   }
   $<HTMLAnchorElement>("#demo-open").href =
     `../../writer/#example=${scene.example.name.replace(/\.vxd$/, "")}`;
-  nowText.textContent = "Press play: the line being heard lights up.";
+  nowText.textContent = "Press play to follow along.";
   nowDot.style.removeProperty("--c");
   time.textContent = clock(scene.manifest.duration);
   $("#hero-time").textContent = clock(scene.manifest.duration);
@@ -369,6 +370,7 @@ function heroTick(seconds: number): void {
   fill.style.transform = `scaleX(${share})`;
   track.setAttribute("aria-valuenow", String(Math.round(share * 100)));
   time.textContent = `${clock(seconds)} / ${clock(duration)}`;
+  heroTime.textContent = clock(Math.max(0, duration - seconds));
   const heard = cues[cue];
   let row = -1;
   if (heard) for (const [i, each] of hero.rows.entries()) if (each.from <= heard.line[0]) row = i;
@@ -407,6 +409,12 @@ function showHeroPlaying(): void {
   heroPlay.classList.toggle("playing", on);
   $("#demo").classList.toggle("is-playing", on);
   $(".hero-play-label").textContent = `${on ? "Pause" : "Hear"} ${heroOwner.label}`;
+  // At the end, the button shows the whole length again.
+  if (
+    !on &&
+    (!player.audio || player.audio.ended || hero.at >= heroScene().manifest.duration - 0.5)
+  )
+    heroTime.textContent = clock(heroScene().manifest.duration);
 }
 
 function toggleHero(): void {
@@ -569,7 +577,7 @@ function initSpine(): void {
     | "pause"
     | "group"
     | "comment";
-  type Seg = { t: string; k?: Kind; s?: number; who?: string; slot?: boolean };
+  type Seg = { t: string; k?: Kind; s?: number; who?: string; slot?: boolean; dirSlot?: boolean };
   type Line = {
     segs: Seg[];
     s?: number;
@@ -608,7 +616,7 @@ function initSpine(): void {
       id: "could",
       segs: [
         { t: "@Gerald ", k: "name", s: 2, who: G, slot: true },
-        { t: "(deep, polite and utterly unbothered) ", k: "dir", s: 3 },
+        { t: "(deep, polite and utterly unbothered) ", k: "dir", s: 3, dirSlot: true },
         { t: "“Could you not?”", k: "speech", who: G },
       ],
     },
@@ -689,6 +697,7 @@ function initSpine(): void {
     line: Line,
     upTo?: number,
     pen?: { seg: number; mark: "ring" | "under" },
+    fresh?: number,
   ): string {
     return line.segs
       .map((seg, index) => {
@@ -705,11 +714,16 @@ function initSpine(): void {
           // The Writer underlines the words, not the quotation marks around them.
           const open = seg.t.startsWith("“") ? "“" : "";
           const close = seg.t.endsWith("”") ? "”" : "";
-          const words = seg.t.slice(open.length, seg.t.length - close.length);
+          // A one- or two-letter first word stays with the next, never alone at a line's end.
+          const words = seg.t
+            .slice(open.length, seg.t.length - close.length)
+            .replace(/^(\S{1,2}) /, "$1\u00a0");
           return `${open}<span class="k-speech${inked}"${style}>${escapeHtml(words)}</span>${close}`;
         }
-        const slot = seg.slot ? " who-slot" : "";
-        return `<span class="mk k-${k}${slot}${inked}"${step}${style}>${escapeHtml(seg.t)}</span>`;
+        const slot = seg.slot ? " who-slot" : seg.dirSlot ? " dir-slot" : "";
+        const isNew = fresh !== undefined && seg.s === fresh ? " new" : "";
+        const text = seg.slot ? `@${who || G} ` : seg.dirSlot ? `(${dirOf(who)}) ` : seg.t;
+        return `<span class="mk k-${k}${slot}${inked}${isNew}"${step}${style}>${escapeHtml(text)}</span>`;
       })
       .join("");
   }
@@ -718,6 +732,7 @@ function initSpine(): void {
     lines: Line[],
     upTo?: number,
     pens: Record<string, { seg: number; mark: "ring" | "under"; note: string }> = {},
+    fresh?: number,
   ): string {
     return lines
       .filter(
@@ -731,6 +746,7 @@ function initSpine(): void {
           line.group ? `g${line.group}` : "",
           line.cut ? "cut" : "",
           pen ? "noted" : "",
+          fresh !== undefined && line.s === fresh ? "new" : "",
         ]
           .filter(Boolean)
           .join(" ");
@@ -747,7 +763,7 @@ function initSpine(): void {
         const note = pen
           ? `<span class="note" aria-hidden="true">${escapeHtml(pen.note)}</span>`
           : "";
-        return `<p ${attrs}>${lineHtml(line, upTo, pen)}${note}</p>`;
+        return `<p ${attrs}>${lineHtml(line, upTo, pen, fresh)}${note}</p>`;
       })
       .join("");
   }
@@ -765,7 +781,7 @@ function initSpine(): void {
         if ((line.s ?? 0) > upTo || (line.cut && upTo >= CUT_AT)) continue;
         const text = line.segs
           .filter((seg) => !(seg.s && seg.s > upTo) && !(seg.slot && !who))
-          .map((seg) => (seg.slot ? `@${who} ` : seg.t))
+          .map((seg) => (seg.slot ? `@${who} ` : seg.dirSlot ? `(${dirOf(who)}) ` : seg.t))
           .join("");
         out += text + (line.tight ? "\n" : "\n\n");
       }
@@ -776,6 +792,13 @@ function initSpine(): void {
       : ["mountain", "battle"];
     return `${front}\n\n${order.map(block).filter(Boolean).join("\n\n")}\n`;
   }
+  /** How "Could you not?" is said, by whoever says it. */
+  const DIRS: Record<string, string> = {
+    Gerald: "deep, polite and utterly unbothered",
+    Percival: "in a very small voice",
+    Narrator: "drily",
+  };
+  const dirOf = (handle: string): string => DIRS[handle || G] ?? (DIRS.Gerald as string);
   const nameFor = (handle: string) =>
     handle === "Narrator"
       ? "The narrator"
@@ -808,7 +831,7 @@ function initSpine(): void {
     return {
       book: `<div class="book-page" data-vxd-theme="light"><p class="book-run">The Dragon Who Would Not Roar</p>${(render as Render).renderBook(story, { header: false })}<p class="book-folio">12</p></div>`,
       script: `<div class="script-page" data-vxd-theme="light">${(render as Render).renderScript(story, { header: false })}</div>`,
-      lines: `<div class="sides-page"><p class="sides-head"><span style="--sp:${colorFor(whose)}">${escapeHtml(nameFor(whose))}</span> · each character’s lines</p>${said
+      lines: `<div class="sides-page" style="--sp:${colorFor(whose)}"><p class="sides-head"><span style="--sp:${colorFor(whose)}">${escapeHtml(nameFor(whose))}</span> · each character’s lines</p>${said
         .map(
           (row) => `<p class="said">${escapeHtml(row).replace(/^\(([^)]*)\)/, "<i>($1)</i>")}</p>`,
         )
@@ -861,8 +884,9 @@ function initSpine(): void {
     <li><span class="dot" style="--sp:${colorFor(P)}"></span>Sir Percival<b>${escapeHtml(voices.Percival ?? "")}</b></li>
   </ul>
   ${lanesHtml()}
-  <p class="ab-recast" hidden>The recording keeps Gerald: it was voiced from the original file. <button type="button" data-recast>Use the recording’s casting</button></p>
   <p class="ab-now"><span data-seg-who>Voiced from this file</span><span data-seg-clock>0:00 / ${clock(SEG_TO - SEG_FROM)}</span></p>
+  <p class="ab-line" data-seg-line>“Then he heard a deep rumble.”</p>
+  <p class="ab-recast" hidden>The recording keeps Gerald: it was voiced from the original file. <button type="button" data-recast>Use the recording’s casting</button></p>
 </div>`;
 
   const ICON = {
@@ -980,6 +1004,13 @@ function initSpine(): void {
   ).join("")}</ol>`;
   }
 
+  const benchTabs = () => `
+        <span class="bt bt-scenes">${icon("scenes")}<em>Scenes</em></span>
+        <span class="bt bt-cast">${icon("cast")}<em>Cast</em></span>
+        <span class="bt bt-scraps">${icon("scraps")}<em>Scraps</em></span>
+        <span class="bt bt-comments">${icon("comments")}<em>Comments</em></span>
+        <span class="bt">${icon("warn")}<small>0</small></span>`;
+
   function buildMock(wr: HTMLElement): void {
     wr.innerHTML = `
   <div class="wr-top" aria-hidden="true">
@@ -1002,13 +1033,7 @@ function initSpine(): void {
   </div>
   <div class="wr-body">
     <aside class="bench">
-      <div class="bench-tabs" aria-hidden="true">
-        <span class="bt bt-scenes">${icon("scenes")}<em>Scenes</em></span>
-        <span class="bt bt-cast">${icon("cast")}<em>Cast</em></span>
-        <span class="bt bt-scraps">${icon("scraps")}<em>Scraps</em></span>
-        <span class="bt bt-comments">${icon("comments")}<em>Comments</em></span>
-        <span class="bt">${icon("warn")}<small>0</small></span>
-      </div>
+      <div class="bench-tabs" aria-hidden="true" id="wr-bench-tabs">${benchTabs()}</div>
       <div class="pane pane-cast" aria-hidden="true">${CAST.map(castCard).join("")}</div>
       <div class="pane pane-scenes">${boardHtml("wr", true)}</div>
       <div class="pane pane-comments" aria-hidden="true">
@@ -1019,7 +1044,7 @@ function initSpine(): void {
       </div>
     </aside>
     <div class="desk">
-      <div class="paper" aria-hidden="true"><div class="doc" id="wr-doc">${linesHtml(LINES)}<span class="caret"></span>
+      <div class="paper" aria-hidden="true"><div class="doc" id="wr-doc"><div class="doc-lines" id="wr-lines-doc">${linesHtml(LINES, 0, {}, 0)}</div><span class="caret"></span>
         <div class="annot" id="annot"></div>
       </div></div>
       ${pickerHtml("picker")}
@@ -1177,7 +1202,13 @@ function initSpine(): void {
     for (const holder of $$(".who-card")) holder.innerHTML = member ? castCard(member) : "";
     refresh();
     // On the phone's page, the pencilled question answered.
-    for (const note of $$('.step-example [data-id="could"] .note'))
+    // How it's said follows who says it: the mark, step 3's heading and its caption.
+    const dir = dirOf(handle);
+    for (const slot of $$(".dir-slot")) slot.textContent = `(${dir}) `;
+    const how = steps[2] ? $("h3", steps[2] as HTMLElement) : undefined;
+    if (how) how.textContent = `${dir.charAt(0).toUpperCase()}${dir.slice(1)}.`;
+    sizeCaption();
+    for (const note of $$('.step[data-step="2"] .step-example [data-id="could"] .note'))
       note.innerHTML = `<s>who?</s><br>${escapeHtml(shortName(handle))}${TICK}`;
     for (const note of $$(".ab-recast")) note.hidden = handle === G;
     if (!quietly) {
@@ -1403,22 +1434,16 @@ function initSpine(): void {
     refresh();
     wr.dataset.step = String(n);
     for (let k = 1; k <= STEPS; k++) wr.classList.toggle(`s${k}`, k <= n);
-    wr.dataset.tab = TAB_OF[n] ?? "";
+    setTab(TAB_OF[n] ?? "");
     wr.dataset.hl = HL_OF[n] ?? "";
     if (n === 6) pickPane("script");
     else wr.dataset.pane = n === 7 ? "audio" : "";
     preview.inert = n !== 6 && n !== 7;
     // Comments, then the cut line lands in Scraps.
     clearTimeout(scrapTimer);
-    if (n === 5)
-      scrapTimer = window.setTimeout(
-        () => {
-          wr.dataset.tab = "scraps";
-        },
-        calm.matches ? 0 : 1800,
-      );
-    for (const mark of $$<HTMLElement>("[data-s]", doc))
-      mark.classList.toggle("new", Number(mark.dataset.s) === n);
+    if (n === 5) scrapTimer = window.setTimeout(() => setTab("scraps"), calm.matches ? 0 : 1800);
+    // The page drawn afresh for the beat: its new marks and lines arrive, nothing already there moves.
+    $("#wr-lines-doc").innerHTML = linesHtml(LINES, Math.max(n, 0), {}, n);
     wr.classList.remove("typing");
     if (n === 1 && !calm.matches) {
       void wr.offsetWidth;
@@ -1428,10 +1453,7 @@ function initSpine(): void {
       if (i + 1 === n) button.setAttribute("aria-current", "step");
       else button.removeAttribute("aria-current");
     }
-    const step = steps[n - 1];
-    caption.innerHTML = step
-      ? `<p class="cap-n"><span>${n}</span>${escapeHtml(step.dataset.feature ?? "")}</p><p class="cap-h">${escapeHtml($("h3", step).textContent ?? "")}</p><p class="cap-p">${escapeHtml($("h3 + p", step).textContent ?? "")}${step.dataset.try ? ` <b class="cap-try">${escapeHtml(step.dataset.try)}</b>` : ""}</p>`
-      : `<p class="cap-n"><span>0</span>A new story</p><p class="cap-h">A blank page.</p><p class="cap-p">Scroll, or pick a step above, and the scene begins.</p>`;
+    caption.innerHTML = captionHtml(n);
     $(".caption .finale-label").textContent =
       player.owner === finaleOwner && playing()
         ? "Pause"
@@ -1454,6 +1476,35 @@ function initSpine(): void {
     document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(draw)));
   }
   let scrapTimer = 0;
+
+  function captionHtml(n: number): string {
+    const step = steps[n - 1];
+    return step
+      ? `<p class="cap-n"><span>${n}</span>${escapeHtml(step.dataset.feature ?? "")}</p><p class="cap-h">${escapeHtml($("h3", step).textContent ?? "")}</p><p class="cap-p">${escapeHtml($("h3 + p", step).textContent ?? "")}${step.dataset.try ? ` <b class="cap-try">${escapeHtml(step.dataset.try)}</b>` : ""}</p>`
+      : `<p class="cap-n"><span>0</span>A new story</p><p class="cap-h">A blank page.</p><p class="cap-p">Scroll, or pick a step above, and the scene begins.</p>`;
+  }
+  /** The caption is as tall as its tallest beat at this width, so nothing below it ever moves. */
+  function sizeCaption(): void {
+    const box = caption.parentElement as HTMLElement;
+    const probe = caption.cloneNode() as HTMLElement;
+    probe.removeAttribute("id");
+    probe.style.cssText = `position:absolute;visibility:hidden;left:0;top:0;width:${caption.getBoundingClientRect().width}px`;
+    box.append(probe);
+    let tallest = 0;
+    for (let n = 0; n <= STEPS; n++) {
+      probe.innerHTML = captionHtml(n);
+      tallest = Math.max(tallest, probe.getBoundingClientRect().height);
+    }
+    probe.remove();
+    box.style.minHeight = `${Math.ceil(tallest)}px`;
+  }
+
+  /** A workbench tab, its row drawn afresh so a label appearing moves nothing that was there. */
+  function setTab(tab: string): void {
+    if (wr.dataset.tab === tab) return;
+    wr.dataset.tab = tab;
+    $("#wr-bench-tabs").innerHTML = benchTabs();
+  }
 
   function goTo(n: number): void {
     const step = steps[n - 1];
@@ -1504,7 +1555,7 @@ function initSpine(): void {
       const group = document.createElement("div");
       // "who?" answered: struck through, the speaker named, a tick; the pen itself stays away.
       const done = mark.word === "who?" && Boolean(who);
-      group.className = `pen pen-${mark.shape}${done ? " pen-done" : ""}${answered ? " pen-now" : ""}`;
+      group.className = `pen mark-${mark.shape}${done ? " pen-done" : ""}${answered ? " pen-now" : ""}`;
       group.style.setProperty("--d", `${i * 0.6}s`);
       const shape =
         mark.shape === "circle"
@@ -1559,6 +1610,13 @@ function initSpine(): void {
         el.textContent = `${clock(Math.max(0, seconds - SEG_FROM))} / ${clock(span)}`;
       if (index !== finaleCue && cue) {
         finaleCue = index;
+        const said =
+          cue.kind === "pause"
+            ? "(a pause)"
+            : cue.kind === "sound" || cue.kind === "vocal"
+              ? `[${cue.text ?? ""}]`
+              : `“${cue.text ?? ""}”`;
+        for (const el of $$("[data-seg-line]")) el.textContent = said;
         for (const el of $$("[data-seg-who]")) el.textContent = described(dragon.story, cue);
       }
       let from = -1;
@@ -1626,7 +1684,9 @@ function initSpine(): void {
       const n = active;
       active = -1;
       setStep(n);
+      sizeCaption();
     };
+    void document.fonts.ready.then(sizeCaption);
     jump.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-go]");
       if (button) goTo(Number(button.dataset.go));

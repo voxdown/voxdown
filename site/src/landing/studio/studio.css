@@ -35,10 +35,9 @@
 @font-face {
   font-family: "Rec";
   font-style: normal;
-  font-weight: 300 1000;
+  font-weight: 400 700;
   font-display: swap;
-  src: url("../../../node_modules/@fontsource-variable/recursive/files/recursive-latin-mono-normal.woff2")
-    format("woff2-variations");
+  src: url("./rec.woff2") format("woff2-variations");
 }
 @font-face {
   font-family: "Rec Hand";
@@ -4747,5 +4746,185 @@ button {
   }
   .foot {
     contain-intrinsic-size: auto 305px;
+  }
+}
+
+/* ------------------------------------------------------------------ round 6 */
+
+/* Lines wrap without leaving a lone word or letter at an edge. */
+.doc .ln,
+.mini-paper .ln {
+  text-wrap: pretty;
+}
+
+/* Labels in the handouts and scripts: never under 11 px. */
+:is(.route-viz, #wr, .step-example)
+  :is(.vxd-name, .vxd-group-name, .vxd-group-direction, .vxd-group-label) {
+  font-size: 11px !important;
+}
+:is(.route-viz, #wr, .step-example) .vxd-group-label {
+  line-height: 1.4;
+}
+/* Each character's lines, in their own colour. */
+.sides-page .said {
+  border-left-color: color-mix(in oklab, var(--sp, #c2410c) 85%, #000);
+}
+.sides-page .said b {
+  color: color-mix(in oklab, var(--sp, #c2410c) 70%, #000);
+}
+
+/* The audiobook panel: the line being heard, as it's heard. */
+.ab-line {
+  min-height: 4.4em;
+  margin-top: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  font: italic 400 15px / 1.45 var(--serif);
+  color: #25282d;
+}
+.mini .ab-line {
+  min-height: 0;
+}
+
+/* Wide and narrow wording. */
+.narrow-only {
+  display: none;
+}
+@media (max-width: 600px) {
+  .wide-only {
+    display: none;
+  }
+  .narrow-only {
+    display: inline;
+  }
+}
+
+/* Pen notes keep their distance from the words. */
+.mini-paper .ln.noted {
+  padding-right: 7rem;
+}
+
+/* The privacy card: its words fill it, chips at its foot. */
+@media (min-width: 861px) {
+  .fact-private h3 {
+    font-size: clamp(2rem, 3.1vw, 2.8rem);
+  }
+  .fact-private > p:not(.fact-kicker) {
+    font-size: 1.1rem;
+    line-height: 1.6;
+  }
+}
+
+/* The cast, in the production section: a compact strip of auditions on the dark. */
+.prod .cast-list {
+  gap: 0.8rem;
+  margin-bottom: 1.2rem;
+}
+.prod .cast-card {
+  padding: 1rem 1rem 1.1rem;
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+  color: #e9e6f5;
+}
+.prod .cast-card.on {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--sp) 60%, #fff) inset;
+}
+.prod .cast-card h3 {
+  color: #fff;
+  font-size: 1.1rem;
+}
+.prod .cast-voice {
+  color: #b9b3cf;
+}
+.prod .cast-about {
+  display: none;
+}
+.prod .cast-line {
+  margin: 0.8rem 0 0.9rem;
+  background: rgb(0 0 0 / 0.3);
+  color: #e9e6f5;
+  --m-direction: #c4b5fd;
+  --m-sound: #5eead4;
+  --m-quiet: #b9b3cf;
+}
+.prod .cast-line .t-name,
+.prod .cast-line .t-mark,
+.prod .cast-line .t-vocal {
+  color: color-mix(in oklab, var(--c, #c4b5fd) 50%, #fff);
+}
+.prod .cast-line .t-quote {
+  color: #b9b3cf;
+}
+.prod .audition {
+  background: color-mix(in srgb, var(--sp) 22%, #1d1638);
+  box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--sp) 55%, #fff) inset;
+  color: #fff;
+}
+.prod .audition:hover {
+  background: color-mix(in srgb, var(--sp) 34%, #1d1638);
+}
+.prod .audition:focus-visible {
+  outline-color: #c4b5fd;
+}
+.prod .cast-chip {
+  color: var(--ink);
+}
+.prod .routes {
+  margin-top: 0.4rem;
+}
+
+/* The page's lines in a column of their own (a moved scene takes its place by order). */
+.doc-lines {
+  display: flex;
+  flex-direction: column;
+}
+/* The caption: top-aligned, its button a fixed width, its height set to its tallest beat. */
+.caption {
+  align-items: flex-start;
+}
+.caption .finale-play {
+  width: 13.5rem;
+  margin-top: 0.3rem;
+}
+/* One preview width throughout (no beat changes it). */
+.wr,
+.wr[data-step="6"] {
+  --pv: 26rem;
+}
+@media (max-width: 1180px) {
+  .wr,
+  .wr[data-step="6"] {
+    --pv: 22rem;
+  }
+}
+/* The button's glyph and time stay put whatever its label says. */
+.caption .finale-play {
+  justify-content: flex-start;
+}
+.caption .finale-play .btn-time {
+  margin-left: auto;
+}
+@media (max-height: 820px) and (min-width: 861px) {
+  .pv-p-audio .ab-line {
+    min-height: 0;
+    margin-top: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    font-size: 14px;
+  }
+  .pv-p-audio .ab-recast {
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 12px;
+  }
+}
+/* Measured heights, now the cast is part of production. */
+.prod {
+  contain-intrinsic-size: auto 1584px;
+}
+@media (max-width: 860px) {
+  .prod {
+    contain-intrinsic-size: auto 1003px;
   }
 }

@@ -11,6 +11,7 @@ import {
   markScrapsSaved,
   mergeScraps,
   readScrapsFile,
+  scrapPlaced,
   scrapsByName,
   scrapsFile,
   scrapsFileName,
@@ -168,5 +169,31 @@ describe("scraps kept safe", () => {
     expect(scrapsByName(store, "owl.vxd", "second")).toEqual({ story: "first", scraps: [owl] });
     expect(scrapsByName(store, "owl.vxd", "first")).toBeUndefined();
     expect(scrapsByName(store, "hen.vxd", "second")).toBeUndefined();
+  });
+
+  it("go back in spaced as words meet, or as paragraphs of their own", () => {
+    const put = (source: string, at: number, scrap: string, whole = false) => {
+      const placed = scrapPlaced(source, at, at, scrap, whole);
+      return source.slice(0, at) + placed.text + source.slice(at);
+    };
+    const story = "The night went on. The moon was up.\n\nMorning came slowly.";
+    // Mid-line, before a sentence: a space each side as they meet.
+    expect(put(story, story.indexOf("The moon"), " It was cold. ")).toBe(
+      "The night went on. It was cold. The moon was up.\n\nMorning came slowly.",
+    );
+    // At a paragraph's end, a sentence: a space before it.
+    expect(put(story, story.indexOf("\n\n"), "It was cold.")).toBe(
+      "The night went on. The moon was up. It was cold.\n\nMorning came slowly.",
+    );
+    // A whole paragraph cut, at a paragraph's start or end: its own paragraph.
+    expect(put(story, story.indexOf("Morning"), "@Mouse “Awake?”", true)).toBe(
+      "The night went on. The moon was up.\n\n@Mouse “Awake?”\n\nMorning came slowly.",
+    );
+    expect(put(story, story.length, "@Mouse “Awake?”", true)).toBe(`${story}\n\n@Mouse “Awake?”`);
+    // Several paragraphs, mid-line: splitting it, a paragraph of their own.
+    expect(put("One two.", 4, "A.\n\nB.")).toBe("One \n\nA.\n\nB.\n\ntwo.");
+    // On a blank line between paragraphs.
+    const blank = "One.\n\n\nTwo.";
+    expect(put(blank, 5, "Mid.")).toBe("One.\n\nMid.\nTwo.".replace("Mid.\nTwo", "Mid.\n\nTwo"));
   });
 });

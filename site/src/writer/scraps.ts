@@ -20,6 +20,8 @@ export type Scrap = {
   from: string;
   /** When it was last put back into the story, if it was. */
   used?: number;
+  /** Cut as whole paragraphs: put back as paragraphs of its own. */
+  whole?: boolean;
 };
 
 /** Where scraps are kept, or a stand-in for a test. */
@@ -386,4 +388,50 @@ export function readScrapsFile(text: string): Scrap[] {
   }
   end();
   return scraps;
+}
+
+/**
+ * A scrap as it goes back in at `from`–`to` in `source`: within a line, a space where it meets
+ * words on either side; a passage of paragraphs, a scrap cut as whole paragraphs at a
+ * paragraph's start or end, or one put on a blank line, its own paragraphs, a blank line around
+ * them. Its text, and where the cursor goes after it.
+ */
+export function scrapPlaced(
+  source: string,
+  from: number,
+  to: number,
+  scrap: string,
+  whole = false,
+): { text: string; cursor: number } {
+  const words = scrap.trim();
+  const lineStart = source.lastIndexOf("\n", from - 1) + 1;
+  const toEnd = source.indexOf("\n", to);
+  const lineEnd = toEnd < 0 ? source.length : toEnd;
+  const before = source.slice(lineStart, from);
+  const after = source.slice(to, lineEnd);
+  const atStart = !before.trim();
+  const atEnd = !after.trim();
+  const nextEnd = source.indexOf("\n", lineEnd + 1);
+  const next = toEnd < 0 ? "" : source.slice(lineEnd + 1, nextEnd < 0 ? source.length : nextEnd);
+  if (atStart && atEnd) {
+    // On a blank line: a blank line before it (never two), and before the words after it.
+    const lead =
+      lineStart === 0 || source.slice(Math.max(0, lineStart - 2), lineStart) === "\n\n" ? "" : "\n";
+    const tail = next.trim() ? "\n" : "";
+    return { text: `${lead}${words}${tail}`, cursor: lead.length + words.length };
+  }
+  if (words.includes("\n\n") || whole) {
+    // Before the paragraph it meets, after it, or splitting it: always a paragraph of its own.
+    if (atStart) return { text: `${words}\n\n`, cursor: words.length };
+    if (atEnd) {
+      const tail = next.trim() ? "\n\n" : "";
+      return { text: `\n\n${words}${tail}`, cursor: 2 + words.length };
+    }
+    return { text: `\n\n${words}\n\n`, cursor: 2 + words.length };
+  }
+  const space = (char: string | undefined) =>
+    char !== undefined && /[\p{L}\p{N}.,;:!?…”’"')\]*]/u.test(char);
+  const lead = space(before.at(-1)) ? " " : "";
+  const tail = after && /^[\p{L}\p{N}“"‘(@*\[{]/u.test(after) ? " " : "";
+  return { text: `${lead}${words}${tail}`, cursor: lead.length + words.length };
 }

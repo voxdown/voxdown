@@ -533,13 +533,14 @@ const draftIn = (page) =>
   await keeper.keyboard.press("Shift+Home");
   await keeper.keyboard.press("Control+Shift+X");
   await keeper.waitForTimeout(300);
-  await keeper.keyboard.press("ArrowUp");
-  await keeper.keyboard.press("ArrowUp");
-  await keeper.keyboard.press("End");
+  // A whole paragraph cut: its blank line went with it, the story ending with the owl's line.
+  if (!(await draftIn(keeper)).endsWith("A fox ran."))
+    problems.push("writer: a whole paragraph cut to Scraps left its blank lines behind");
+  await keeper.keyboard.press("Control+End");
   for (let i = 0; i < "A fox ran.".length; i++) await keeper.keyboard.press("Shift+ArrowLeft");
   await keeper.keyboard.press("Control+Shift+X");
   await keeper.waitForTimeout(1200);
-  if (!(await draftIn(keeper)).includes("The owl sat still.\n"))
+  if (!/The owl sat still\.(?:\n|$)/.test(await draftIn(keeper)))
     problems.push("writer: words cut from a line's end left a space behind them");
   const order = () => keeper.$$eval(".scrap-text", (texts) => texts.map((t) => t.textContent));
   await keeper.locator(".scrap").nth(0).focus();

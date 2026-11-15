@@ -35,6 +35,13 @@ describe("commenting words out", () => {
     );
   });
 
+  it("leaves the name where a quote after the one commented out is still the speaker's", () => {
+    const source = "@Baker “Just a little flame,” said the baker. “Gently.”";
+    expect(apply(source, source.indexOf("“"), source.indexOf(",”") + 2)).toBe(
+      "@Baker <!-- “Just a little flame,” --> said the baker. “Gently.”",
+    );
+  });
+
   it("spaces a stray --> in the words so it can't end their comment", () => {
     expect(apply("A --> B", 0, 7)).toBe("<!-- A -- > B -->");
   });

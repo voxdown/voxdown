@@ -121,6 +121,7 @@ export class ScrapsFiles {
       unreadable = (error as Error).name !== "NotFoundError";
     }
     const baseline = this.written.get(id) ?? writtenBefore(this.keeper, id);
+    let joinedSaid = "";
     const about = scrapsFile(scraps, title);
     if (unreadable) {
       const answer = await this.host.ask(
@@ -135,32 +136,37 @@ export class ScrapsFiles {
         return;
       }
     } else if (onDisk.trim() && onDisk !== baseline && onDisk !== about) {
+      // (Said with the save's own words, once written, so neither notice hides the other.)
       const gone = new Set(deletedScraps(this.keeper, id).map((scrap) => scrap.id));
       const there = readScrapsFile(onDisk).filter((scrap) => !gone.has(scrap.id));
-      // The same scraps there as here, however written: nothing of theirs to lose.
-      if (scrapsSignature(there) !== scrapsSignature(scraps)) {
-        const answer = await this.host.ask(
-          there.length
+      // Anything else in it (a note above the scraps, other words), even with the same scraps:
+      // asked about, never written over unasked.
+      const sameScraps = scrapsSignature(there) === scrapsSignature(scraps);
+      const answer = await this.host.ask(
+        sameScraps
+          ? `${handle.name} holds these scraps and words of its own besides (written outside the Writer), which saving here would take out. Save over it?`
+          : there.length
             ? `${handle.name} has scraps that aren’t as they are here: changed outside the Writer, or saved from another browser. Join them with these, or save these over them?`
             : `${handle.name} holds something other than these scraps. Save these over it?`,
-          [
-            { label: "Leave it", value: "cancel" },
-            { label: "Save over it", value: "over" },
-            ...(there.length ? [{ label: "Join them", value: "join", main: true }] : []),
-          ],
-        );
-        if (answer !== "over" && answer !== "join") {
-          this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
-          return;
-        }
-        if (answer === "join") {
-          const joined = joinScraps(scraps, there, baseline ? readScrapsFile(baseline) : []);
-          scraps = joined.scraps;
-          keepScraps(this.keeper, id, scraps, storyName);
-          this.host.notice(
-            `${joined.fromThere ? `${joined.fromThere} ${joined.fromThere === 1 ? "scrap" : "scraps"} from ${handle.name} joined these;` : "Joined:"} both are the same now.`,
-          );
-        }
+        [
+          { label: "Leave it", value: "cancel" },
+          { label: "Save over it", value: "over" },
+          ...(!sameScraps && there.length
+            ? [{ label: "Join them", value: "join", main: true }]
+            : []),
+        ],
+      );
+      if (answer !== "over" && answer !== "join") {
+        this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
+        return;
+      }
+      if (answer === "join") {
+        const joined = joinScraps(scraps, there, baseline ? readScrapsFile(baseline) : []);
+        scraps = joined.scraps;
+        keepScraps(this.keeper, id, scraps, storyName);
+        joinedSaid = joined.fromThere
+          ? `${joined.fromThere} ${joined.fromThere === 1 ? "scrap" : "scraps"} from ${handle.name} joined these.`
+          : "Joined.";
       }
     }
     const text = scrapsFile(scraps, title);
@@ -173,7 +179,8 @@ export class ScrapsFiles {
       keepWritten(this.keeper, id, text);
       markScrapsSaved(this.keeper, id, scraps);
       this.host.redraw();
-      if (asked) this.host.notice(`Scraps saved in ${handle.name}.`);
+      if (asked || joinedSaid)
+        this.host.notice(`${joinedSaid ? `${joinedSaid} ` : ""}Scraps saved in ${handle.name}.`);
     } catch {
       this.host.notice("The scraps couldn’t be saved there.");
     }

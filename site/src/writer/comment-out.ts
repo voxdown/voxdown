@@ -46,7 +46,15 @@ export function commentOut(
   }
   // A whole quote commented out takes its speaker's name (and direction) before it, never left
   // to give the words after it to someone.
-  if (/^[“"«„]/u.test(source.slice(from, to)) && /[”"»]/u.test(source.slice(from + 1, to))) {
+  // Only when no quote after it on its line is still the speaker's (a speech broken by narration,
+  // `@Baker “Just a little flame,” said the baker. “Gently.”`, keeps its name for the rest).
+  const lineEnd = source.indexOf("\n", to);
+  const rest = source.slice(to, lineEnd < 0 ? source.length : lineEnd);
+  if (
+    /^[“"«„]/u.test(source.slice(from, to)) &&
+    /[”"»]/u.test(source.slice(from + 1, to)) &&
+    !/[“"«„]/u.test(rest)
+  ) {
     const lineStart = source.lastIndexOf("\n", from - 1) + 1;
     const name = /@[\p{L}][\p{L}\p{M}\p{N}_'’-]*(?:[ \t]*\([^)\n]*\))?[ \t]*$/u.exec(
       source.slice(lineStart, from),

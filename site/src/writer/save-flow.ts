@@ -174,13 +174,27 @@ export class SaveFlow {
         : ({ kind: "write" } as const);
     if (!still()) return false;
     if (check.kind === "unread") {
+      // Not there any more (moved, renamed or deleted), or there and not to be read.
+      const gone = await Promise.resolve()
+        .then(() => handle.getFile())
+        .then(() => false)
+        .catch((error: Error) => error?.name === "NotFoundError");
       const answer = await host.ask(
-        `${file.name} couldn’t be read to see whether it changed outside the Writer. Save over it anyway?`,
-        [
-          { label: "Cancel", value: "cancel", main: true },
-          { label: "Save over it", value: "mine" },
-        ],
+        gone
+          ? `${file.name} is no longer where it was (moved, renamed or deleted). Save the story there again, or somewhere else?`
+          : `${file.name} couldn’t be read to see whether it changed outside the Writer. Save over it anyway?`,
+        gone
+          ? [
+              { label: "Cancel", value: "cancel" },
+              { label: "Save it there again", value: "mine" },
+              { label: "Save as…", value: "save-as", main: true },
+            ]
+          : [
+              { label: "Cancel", value: "cancel", main: true },
+              { label: "Save over it", value: "mine" },
+            ],
       );
+      if (answer === "save-as") return this.saveAs();
       if (answer !== "mine") return false;
     } else if (check.kind === "changed") {
       const disk = check.disk;

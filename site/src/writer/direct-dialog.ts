@@ -310,7 +310,7 @@ function show(
       ? `${plural(read.suggestions.length, "suggestion")}: ${found}. Untick any you don't want.`
       : "No marks to add: the answer suggested none that keep the words as they are.",
     read.refused.length
-      ? `${plural(read.refused.length, "paragraph")} left as written, below: the AI changed more than marks there.`
+      ? `${plural(read.refused.length, "paragraph")} left as written, below, with the reason for each.`
       : "",
     missed.length
       ? `${plural(missed.length, "paragraph")} the answer didn't give back, below.`

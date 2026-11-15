@@ -83,4 +83,30 @@ describe("a manuscript to submit", () => {
     expect(document).not.toContain("Arrival");
     expect(document).toContain("Chapter Two");
   });
+
+  it("keeps a part's heading on a page of its own, and leaves the book's title to its page", async () => {
+    const paragraphs: Paragraph[] = [
+      { kind: "heading", level: 1, runs: [run("Review Novel")] },
+      { kind: "heading", level: 2, runs: [run("Part One: Arrival")] },
+      { kind: "heading", level: 3, runs: [run("Chapter 1")] },
+      { kind: "text", runs: [run("They came.")] },
+      { kind: "heading", level: 3, runs: [run("Chapter 2")] },
+      { kind: "text", runs: [run("They stayed.")] },
+    ];
+    const files = await unzip(
+      manuscriptDocx(paragraphs, {
+        title: "Review Novel",
+        byline: "A. Teller",
+        contact: "Ann Teller",
+        surname: "Teller",
+        words: 100,
+        chapterLevel: 3,
+      }),
+    );
+    const document = decoder.decode(files.get("word/document.xml"));
+    expect(document).toContain("Part One: Arrival");
+    expect(document.match(/>Review Novel</g)).toHaveLength(1);
+    // The part's page, then each chapter on a page of its own.
+    expect(document.match(/<w:pageBreakBefore\/>/g)).toHaveLength(2);
+  });
 });

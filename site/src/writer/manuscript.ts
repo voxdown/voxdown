@@ -84,6 +84,8 @@ export function manuscriptDocx(
   // start or end. It waits for the words after it.
   let text = false;
   let pending = false;
+  /** A part's page just begun: the chapter after it starts a page of its own. */
+  let parted = false;
   const sceneBreak = () => {
     pending = text;
     return "";
@@ -92,14 +94,29 @@ export function manuscriptDocx(
     .map((paragraph) => {
       if (paragraph.kind === "break") return sceneBreak();
       if (paragraph.kind === "heading") {
-        // A heading over the chapters (the book's own title, a part's): the title page has it.
-        if (paragraph.level < level) return "";
+        // A heading over the chapters: the book's own title is on the title page already; a
+        // part's ("Part One") is a page of its own, a third of the way down, centred.
+        if (paragraph.level < level) {
+          const words = paragraph.runs
+            .map((run) => ("text" in run ? run.text : " "))
+            .join("")
+            .trim();
+          if (words.toLowerCase() === details.title.trim().toLowerCase()) return "";
+          text = false;
+          pending = false;
+          const newPage = chapters++ > 0 ? "<w:pageBreakBefore/>" : "";
+          parted = true;
+          const runs = paragraph.runs.map(runXml).join("");
+          return `<w:p><w:pPr>${newPage}<w:spacing w:before="2880"/><w:jc w:val="center"/><w:ind w:firstLine="0"/></w:pPr>${runs}</w:p>`;
+        }
         // A scene's heading: a break, as the format has them, not a page of its own.
         if (paragraph.level > level) return sceneBreak();
-        // A chapter on a new page, a third of the way down; the first follows the title.
+        // A chapter on a new page, a third of the way down; the first follows the title, or its
+        // part's page.
         text = false;
         pending = false;
-        const newPage = chapters++ > 0 ? "<w:pageBreakBefore/>" : "";
+        const newPage = chapters++ > 0 || parted ? "<w:pageBreakBefore/>" : "";
+        parted = false;
         const runs = paragraph.runs.map(runXml).join("");
         return `<w:p><w:pPr>${newPage}<w:spacing w:before="${newPage ? 2880 : 0}"/><w:jc w:val="center"/><w:ind w:firstLine="0"/></w:pPr>${runs}</w:p>${plain("")}`;
       }

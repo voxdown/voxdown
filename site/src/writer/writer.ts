@@ -165,6 +165,7 @@ import {
   mergeScraps,
   newScrapId,
   readScrapsFile,
+  scrapPlaced,
   scrapsByName,
   scrapsFile,
   scrapsFileName,
@@ -641,6 +642,8 @@ function editorState(source: string, cursor: number): EditorState {
         },
         // From a web page, Word or Google Docs: its paragraphs, headings and emphasis kept.
         paste: (event, editor) => pasteShaped(event, editor),
+        // A scrap dragged back in: put in as "Put in at the cursor" puts it, where it is dropped.
+        drop: (event, editor) => dropScrap(event, editor),
       }),
       EditorView.contentAttributes.of(() => ({
         spellcheck: "true",
@@ -1551,8 +1554,48 @@ window.addEventListener("storage", (event) => {
   if (prefs.bench && prefs.benchTab === "scraps") showBench();
 });
 
+/** A scrap dropped on the story from the Scraps tab: spaced, or its own paragraph, and marked used. */
+function dropScrap(event: DragEvent, editor: EditorView): boolean {
+  const id = event.dataTransfer?.getData("application/x-vxd-scrap");
+  if (!id || lockedOut) return false;
+  const scrap = scrapsOf(localStorage, file.id).find((each) => each.id === id);
+  const at = editor.posAtCoords({ x: event.clientX, y: event.clientY });
+  if (!scrap || at === null) return false;
+  event.preventDefault();
+  const insert = scrapPlaced(editor.state.doc.toString(), at, at, scrap.text, scrap.whole);
+  editor.dispatch({
+    changes: { from: at, insert: insert.text },
+    selection: EditorSelection.cursor(at + insert.cursor),
+    scrollIntoView: true,
+    userEvent: "input.drop",
+  });
+  // Used, as when put in from its button.
+  keepScraps(
+    localStorage,
+    file.id,
+    scrapsOf(localStorage, file.id).map((each) =>
+      each.id === id ? { ...each, used: Date.now() } : each,
+    ),
+    file.name,
+  );
+  if (prefs.bench && prefs.benchTab === "scraps") showBench();
+  editor.focus();
+  return true;
+}
+
+/** Whether `from`–`to` is whole paragraphs: from a paragraph's start to one's end. */
+function wholeParagraphs(from: number, to: number): boolean {
+  const doc = view.state.doc;
+  const first = doc.lineAt(from);
+  const last = doc.lineAt(to);
+  if (doc.sliceString(first.from, from).trim() || doc.sliceString(to, last.to).trim()) return false;
+  const blankOrEdge = (number: number) =>
+    number < 1 || number > doc.lines || !doc.line(number).text.trim();
+  return blankOrEdge(first.number - 1) && blankOrEdge(last.number + 1);
+}
+
 /** Words set aside: a scrap, with the chapter they came from. */
-function setAside(text: string): Scrap | undefined {
+function setAside(text: string, whole = false): Scrap | undefined {
   const story = current();
   const scrap: Scrap = {
     id: newScrapId(),
@@ -1560,6 +1603,7 @@ function setAside(text: string): Scrap | undefined {
     note: "",
     at: Date.now(),
     from: chapterAt(story, view.state.selection.main.from).name,
+    ...(whole ? { whole: true } : {}),
   };
   const scraps = scrapsOf(localStorage, file.id);
   scraps.unshift(scrap);
@@ -1573,45 +1617,20 @@ function setAside(text: string): Scrap | undefined {
 }
 
 /**
- * A scrap as it goes back in at `from`–`to`: within a line, a space where it meets words on either
- * side; a passage of paragraphs, or at a blank line, its own paragraphs, a blank line around them.
- */
-function scrapPlaced(
-  doc: Text,
-  from: number,
-  to: number,
-  scrap: string,
-): { text: string; cursor: number } {
-  const words = scrap.trim();
-  const line = doc.lineAt(from);
-  const before = doc.sliceString(line.from, from);
-  const after = doc.sliceString(to, doc.lineAt(to).to);
-  if (words.includes("\n\n") || (!before.trim() && !after.trim())) {
-    // Its own paragraphs: a blank line before and after, never three line breaks.
-    const lead = !before.trim()
-      ? doc.sliceString(Math.max(0, line.from - 2), line.from) === "\n\n" || line.from === 0
-        ? ""
-        : "\n"
-      : "\n\n";
-    // Words on the line after a blank one it went in on: a blank line between them too.
-    const next = line.number < doc.lines ? doc.line(line.number + 1).text : "";
-    const tail = after.trim() ? "\n\n" : next.trim() ? "\n" : "";
-    const text = `${lead}${words}${tail}`;
-    return { text, cursor: lead.length + words.length };
-  }
-  const space = (char: string | undefined) =>
-    char !== undefined && /[\p{L}\p{N}.,;:!?…”’"')\]*]/u.test(char);
-  const lead = space(before.at(-1)) ? " " : "";
-  const tail = after && /^[\p{L}\p{N}“"‘(@*\[{]/u.test(after) ? " " : "";
-  return { text: `${lead}${words}${tail}`, cursor: lead.length + words.length };
-}
-
-/**
  * Words taken out of a line, and the space left beside them: a sentence cut from between two
  * others leaves one space, not two, and one cut from a line's end leaves none behind it.
  */
 function cutRange(from: number, to: number): { from: number; to: number } {
   const doc = view.state.doc;
+  // Whole paragraphs: a blank line goes with them, so the ones around meet as paragraphs do.
+  if (wholeParagraphs(from, to)) {
+    const start = doc.lineAt(from).from;
+    const end = doc.lineAt(to).to;
+    if (doc.sliceString(end, end + 2) === "\n\n") return { from: start, to: end + 2 };
+    if (start >= 2 && doc.sliceString(start - 2, start) === "\n\n")
+      return { from: start - 2, to: end };
+    return { from: start, to: end };
+  }
   const before = doc.sliceString(Math.max(0, from - 1), from);
   const after = doc.sliceString(to, Math.min(doc.length, to + 1));
   if (/[ \t]/.test(after) && (before === "" || /[ \t\n]/.test(before))) return { from, to: to + 1 };
@@ -1633,7 +1652,7 @@ function cutToScraps(): boolean {
     return true;
   }
   // Kept first: words that can't be kept stay in the story.
-  if (!setAside(text)) return true;
+  if (!setAside(text, wholeParagraphs(from, to))) return true;
   view.dispatch({ changes: cutRange(from, to), userEvent: "delete.cut" });
   selectBench("scraps");
   notice(`Set aside in Scraps. ${keys("Mod+Z")} puts the words back; the scrap stays.`);
@@ -1699,7 +1718,7 @@ const scrapsHost: ScrapsHost = {
   insert: (scrap) => {
     if (lockedOut) return;
     const { from, to } = view.state.selection.main;
-    const insert = scrapPlaced(view.state.doc, from, to, scrap.text);
+    const insert = scrapPlaced(view.state.doc.toString(), from, to, scrap.text, scrap.whole);
     view.dispatch({
       changes: { from, to, insert: insert.text },
       selection: EditorSelection.cursor(from + insert.cursor),

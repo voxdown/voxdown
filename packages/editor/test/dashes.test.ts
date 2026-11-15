@@ -66,6 +66,12 @@ describe("dashes typed", () => {
     );
   });
 
+  it("leave a comment's hyphens as typed: its <!-- and -->, and its words", () => {
+    expect(typed("Night fell. ", "<!-- rain -- maybe? --> The end --").state.doc.toString()).toBe(
+      "Night fell. <!-- rain -- maybe? --> The end –",
+    );
+  });
+
   it("are typed as hyphens with smart punctuation off", () => {
     expect(typed("I mean", "---no", false).state.doc.toString()).toBe("I mean---no");
   });

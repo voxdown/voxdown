@@ -1,8 +1,9 @@
 /**
  * View › Scene board: a column for each chapter, a card for each scene. A card's name goes to the
  * scene; its state and line are written as a comment under its heading; dragging a card moves the
- * scene before another, or to a chapter's end, and dragging a chapter's head moves the chapter.
- * Each change is one step to undo, and the board is drawn again from the story.
+ * scene before another, or to a chapter's end, and dragging a chapter's head moves the chapter;
+ * Alt+↑ and Alt+↓ on a name do the same from the keyboard. Each change is one step to undo. A
+ * move draws the board again from the story; a note leaves it as it is, where the writer is.
  */
 import type { Story } from "voxdown";
 import {
@@ -21,6 +22,8 @@ export type BoardHost = {
   change(changes: Array<{ from: number; to: number; insert: string }>, said: string): void;
   goTo(at: number): void;
   readOnly(): boolean;
+  /** Said to a screen reader, as a change's words are. */
+  announce(said: string): void;
 };
 
 const CARD = "application/x-vxd-scene";
@@ -53,9 +56,63 @@ export function openBoard(host: BoardHost): void {
         `${scenes} ${scenes === 1 ? "scene" : "scenes"}`,
         words(total),
       ].join(", ");
-      summary.textContent = `${counted}. Drag a scene${chapters ? " or a chapter" : ""} to move it; the text moves with it, and ${navigator.platform.includes("Mac") ? "⌘Z" : "Ctrl+Z"} moves it back.`;
+      summary.textContent = `${counted}. Drag a scene${chapters ? " or a chapter" : ""}, or press Alt+↑ or Alt+↓ on its name, to move it; the text moves with it, and ${navigator.platform.includes("Mac") ? "⌘Z" : "Ctrl+Z"} moves it back.`;
     }
     columns.replaceChildren(...board.map(column));
+  };
+
+  /** The board read again after a note, its cards kept where they are, and the writer in them. */
+  const reread = () => {
+    const before = board.flatMap((chapter) => chapter.scenes).length;
+    board = boardOf(host.story());
+    const scenes = board.flatMap((chapter) => chapter.scenes);
+    const cards = [...columns.querySelectorAll<HTMLElement>(".board-card")];
+    if (scenes.length !== before || cards.length !== scenes.length) {
+      draw();
+      return;
+    }
+    for (const [index, item] of cards.entries()) {
+      const scene = scenes[index] as BoardScene;
+      item.dataset.from = String(scene.from);
+      if (scene.state) item.dataset.state = scene.state;
+      else delete item.dataset.state;
+    }
+  };
+
+  /** A scene now, as the board last read it: the card's place, not what it was drawn with. */
+  const sceneAt = (chapter: number, index: number) => board[chapter]?.scenes[index];
+
+  /** The changes that move a scene one place up or down, into the chapter beside it at its ends. */
+  const sceneMove = (chapter: number, index: number, by: -1 | 1) => {
+    const scene = sceneAt(chapter, index);
+    const own = board[chapter];
+    if (!scene || !own) return undefined;
+    const story = host.story();
+    let at: number | undefined;
+    const beside = own.scenes[index + by];
+    if (beside) at = by < 0 ? beside.from : beside.to;
+    else {
+      const next = board[chapter + by];
+      if (!next) return undefined;
+      at = by < 0 ? next.to : (next.scenes[0]?.from ?? next.to);
+    }
+    return moveSpan(story.source, scene.from, scene.to, at);
+  };
+
+  /** After a move from the keyboard, the moved card's (or chapter's) name has the focus again. */
+  const focusName = (name: string, near: number, selector: string) => {
+    const found = [...columns.querySelectorAll<HTMLElement>(selector)];
+    const order = [near, near - 1, near + 1, ...found.keys()];
+    const at = order.find((index) => found[index]?.textContent === name);
+    found[at ?? near]?.focus();
+  };
+
+  /** Alt+↑ or Alt+↓ on a scene's or a chapter's name. */
+  const moveKey = (event: KeyboardEvent): -1 | 1 | undefined => {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return undefined;
+    if (event.key === "ArrowUp") return -1;
+    if (event.key === "ArrowDown") return 1;
+    return undefined;
   };
 
   const column = (chapter: BoardChapter, index: number): HTMLElement => {
@@ -69,6 +126,7 @@ export function openBoard(host: BoardHost): void {
     name.className = "board-name";
     name.textContent = chapter.name;
     name.title = "Go to this chapter";
+    if (chapter.opening) name.dataset.opening = "";
     name.addEventListener("click", () => {
       dialog.close();
       host.goTo(chapter.from);
@@ -78,6 +136,39 @@ export function openBoard(host: BoardHost): void {
     count.textContent = words(chapter.words);
     head.append(name, count);
     if (!chapter.opening && !host.readOnly()) {
+      name.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown");
+      name.title = "Go to this chapter (Alt+↑ or Alt+↓ moves it)";
+      name.addEventListener("keydown", (event) => {
+        const by = moveKey(event);
+        if (!by) return;
+        event.preventDefault();
+        const moving = board[index];
+        const beside = board[index + by];
+        if (!moving || !beside || beside.opening) {
+          host.announce(`${chapter.name} is already ${by < 0 ? "the first" : "the last"} chapter.`);
+          return;
+        }
+        const story = host.story();
+        const changes = moveSpan(
+          story.source,
+          moving.from,
+          moving.to,
+          by < 0 ? beside.from : beside.to,
+        );
+        if (!changes.length) return;
+        host.change(
+          changes,
+          `Moved ${moving.name} ${by < 0 ? "up, before" : "down, after"} ${beside.name}.`,
+        );
+        draw();
+        const chapters = board.filter((each) => !each.opening).length;
+        const first = board.length - chapters;
+        focusName(
+          moving.name,
+          index + by - first,
+          ".board-chapter .board-name:not([data-opening])",
+        );
+      });
       head.draggable = true;
       head.addEventListener("dragstart", (event) => {
         event.dataTransfer?.setData(COLUMN, String(index));
@@ -88,7 +179,7 @@ export function openBoard(host: BoardHost): void {
     }
     const list = document.createElement("ol");
     list.className = "board-cards";
-    list.append(...chapter.scenes.map((scene) => card(scene)));
+    list.append(...chapter.scenes.map((scene, place) => card(scene, index, place)));
     if (!chapter.scenes.length) {
       const none = document.createElement("li");
       none.className = "board-empty";
@@ -128,22 +219,23 @@ export function openBoard(host: BoardHost): void {
           .find((each) => String(each.from) === card);
         if (!scene) return;
         const before = cardBefore(event)?.dataset.from;
-        const at = before ? Number(before) : chapter.to;
+        const at = before ? Number(before) : (board[index]?.to ?? chapter.to);
         const changes = moveSpan(story.source, scene.from, scene.to, at);
         if (changes.length) host.change(changes, `Moved ${scene.name}.`);
         draw();
         return;
       }
       const moving = board[Number(data.getData(COLUMN))];
-      if (!moving || moving === chapter) return;
-      const changes = moveSpan(story.source, moving.from, moving.to, chapter.from);
+      const here = board[index];
+      if (!moving || !here || moving === here) return;
+      const changes = moveSpan(story.source, moving.from, moving.to, here.from);
       if (changes.length) host.change(changes, `Moved ${moving.name}.`);
       draw();
     });
     return section;
   };
 
-  const card = (scene: BoardScene): HTMLElement => {
+  const card = (scene: BoardScene, chapter: number, place: number): HTMLElement => {
     const item = document.createElement("li");
     item.className = "board-card";
     item.dataset.from = String(scene.from);
@@ -155,8 +247,28 @@ export function openBoard(host: BoardHost): void {
     name.title = "Go to this scene";
     name.addEventListener("click", () => {
       dialog.close();
-      host.goTo(scene.from);
+      host.goTo(sceneAt(chapter, place)?.from ?? scene.from);
     });
+    if (!host.readOnly()) {
+      name.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown");
+      name.title = "Go to this scene (Alt+↑ or Alt+↓ moves it)";
+      name.addEventListener("keydown", (event) => {
+        const by = moveKey(event);
+        if (!by) return;
+        event.preventDefault();
+        const flat = board.flatMap((each) => each.scenes);
+        const now = sceneAt(chapter, place) ?? scene;
+        const from = flat.indexOf(now);
+        const changes = sceneMove(chapter, place, by);
+        if (!changes?.length) {
+          host.announce(`${scene.name} is already ${by < 0 ? "the first" : "the last"} scene.`);
+          return;
+        }
+        host.change(changes, `Moved ${scene.name} ${by < 0 ? "up" : "down"}.`);
+        draw();
+        focusName(scene.name, from + by, ".board-card .board-name");
+      });
+    }
     const line = document.createElement("textarea");
     line.className = "board-line";
     line.rows = 2;
@@ -181,21 +293,28 @@ export function openBoard(host: BoardHost): void {
     foot.append(state, count);
     // The line and the state, written as the comment under the heading.
     const write = () => {
+      // The scene as the story has it now: a note just written is there to be written over.
+      const now = sceneAt(chapter, place) ?? scene;
       const comment = aboutComment(
         (state.value || undefined) as SceneState | undefined,
         line.value,
       );
-      const change = scene.about
+      const written = now.about ? host.story().source.slice(now.about.from, now.about.to) : "";
+      if (comment === written) return;
+      const change = now.about
         ? comment
-          ? { from: scene.about.from, to: scene.about.to, insert: comment }
+          ? { from: now.about.from, to: now.about.to, insert: comment }
           : // The comment's line goes with it.
-            { from: scene.about.from - 1, to: scene.about.to, insert: "" }
+            { from: now.about.from - 1, to: now.about.to, insert: "" }
         : comment
-          ? { from: scene.aboutAt, to: scene.aboutAt, insert: `\n${comment}` }
+          ? { from: now.aboutAt, to: now.aboutAt, insert: `\n${comment}` }
           : undefined;
       if (!change) return;
       host.change([change], `${scene.name}: ${comment ? "noted" : "note taken out"}.`);
-      draw();
+      const shown = (state.value || undefined) as SceneState | undefined;
+      if (shown) item.dataset.state = shown;
+      else delete item.dataset.state;
+      reread();
     };
     line.addEventListener("change", write);
     line.addEventListener("keydown", (event) => {
@@ -222,7 +341,7 @@ export function openBoard(host: BoardHost): void {
         });
       }
       item.addEventListener("dragstart", (event) => {
-        event.dataTransfer?.setData(CARD, String(scene.from));
+        event.dataTransfer?.setData(CARD, item.dataset.from ?? String(scene.from));
         if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
         item.classList.add("dragging");
       });

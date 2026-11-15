@@ -4,7 +4,7 @@
  * `–`, a third makes it `—`), and Backspace straight after gives the hyphens back, as autocorrect
  * does. Never where hyphens are the format's own or a reader's: a line of hyphens alone (a scene
  * break, the edge of the front matter), the front matter, a sound's label, an instruction, a
- * link's address, a web address.
+ * link's address, a web address, a comment's `<!--` and `-->` and its words.
  *
  * With the curly quotes, one switch: `setSmartPunctuation`.
  */
@@ -42,6 +42,12 @@ function inFrontMatter(state: EditorState, at: number): boolean {
   return !close || at <= 3 + close.index + close[0].length;
 }
 
+/** Whether `at` is inside a comment (`<!--` not yet closed by `-->`), on its line or before. */
+function inComment(state: EditorState, at: number): boolean {
+  const before = state.sliceDoc(Math.max(0, at - 4096), at);
+  return before.lastIndexOf("<!--") > before.lastIndexOf("-->");
+}
+
 /** Whether the line so far is inside a sound's label: a `[` it hasn't closed. */
 function inLabel(head: string): boolean {
   let inside = false;
@@ -68,6 +74,8 @@ export function dashFor(
   // A hyphen escaped (`\-`) is the writer's own.
   if (head.at(-2) === "\\") return undefined;
   if (inFrontMatter(state, at)) return undefined;
+  // A comment's own hyphens (`<!--`, `-->`), and anything in one: the writer's, as typed.
+  if (/<!-$/.test(head) || inComment(state, at)) return undefined;
   if (
     inLabel(head) ||
     /\{[^{}]*$/u.test(head) ||

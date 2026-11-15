@@ -156,6 +156,7 @@
   <span class="spacer"></span>
   <button class="button save-button" type="button" id="save-button" data-command="save" title="Save (Ctrl+S)">Save</button>
   <button class="theme-switch" type="button" id="theme" hidden>Auto</button>
+  <button type="button" class="button quiet focus-exit" id="focus-exit" hidden>Leave focus</button>
   <div class="panel-toggles" role="group" aria-label="Panels">
     <button type="button" class="panel-toggle" id="bench-toggle" aria-pressed="false" aria-label="Workbench"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect class="strip" x="1.5" y="2.5" width="4.5" height="11" rx="1.5"/><path class="edge" d="M6 2.5v11"/></svg></button>
     <button type="button" class="panel-toggle" id="preview-toggle" aria-pressed="true" aria-label="Preview"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect class="strip" x="10" y="2.5" width="4.5" height="11" rx="1.5"/><path class="edge" d="M10 2.5v11"/></svg></button>
@@ -203,11 +204,11 @@
   <aside class="bench" id="bench" aria-label="Workbench">
     <div class="side-head">
       <div class="side-tabs" role="tablist" aria-label="Workbench">
-        <button class="side-tab bench-tab" role="tab" type="button" id="tab-scenes" data-bench="scenes" aria-controls="bench-sheet">Scenes</button>
-        <button class="side-tab bench-tab" role="tab" type="button" id="tab-cast" data-bench="cast" aria-controls="bench-sheet">Cast</button>
-        <button class="side-tab bench-tab" role="tab" type="button" id="tab-scraps" data-bench="scraps" aria-controls="bench-sheet">Scraps</button>
-        <button class="side-tab bench-tab" role="tab" type="button" id="tab-comments" data-bench="comments" aria-controls="bench-sheet">Comments</button>
-        <button class="side-tab bench-tab" role="tab" type="button" id="tab-warnings" data-bench="warnings" aria-controls="bench-sheet">Warnings <span class="count" id="warning-count">0</span></button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-scenes" data-bench="scenes" aria-controls="bench-sheet" title="Scenes"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h6"/></svg><span class="tab-label">Scenes</span></button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-cast" data-bench="cast" aria-controls="bench-sheet" title="Cast"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3.5 13.5c.6-2.6 2.4-4 4.5-4s3.9 1.4 4.5 4"/></svg><span class="tab-label">Cast</span></button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-scraps" data-bench="scraps" aria-controls="bench-sheet" title="Scraps"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4.5" cy="4.5" r="1.8"/><circle cx="4.5" cy="11.5" r="1.8"/><path d="M6 5.6l7 6M6 10.4l7-6"/></svg><span class="tab-label">Scraps</span></button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-comments" data-bench="comments" aria-controls="bench-sheet" title="Comments"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7.5H8l-3 2.5V11H2.5z"/><path d="M5 6h6M5 8.5h4"/></svg><span class="tab-label">Comments</span></button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-warnings" data-bench="warnings" aria-controls="bench-sheet" title="Warnings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l6 11H2z"/><path d="M8 6.5v3.2M8 11.6v.01"/></svg><span class="tab-label">Warnings</span> <span class="count" id="warning-count">0</span></button>
       </div>
       <button class="side-close" type="button" id="bench-close" title="Hide the workbench (View › Workbench)" aria-label="Hide the workbench">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
@@ -224,6 +225,7 @@
     </div>
     <div class="editor" id="editor"></div>
     <p class="notice" id="notice" role="status" hidden></p>
+    <p class="focus-hint" id="focus-hint" hidden></p>
     <div class="welcome" id="welcome" hidden>
       <h1>Write a story to be read aloud.</h1>
       <p>Mark who says each line, how, and the sounds around it. Open a <code>.vxd</code> file from your computer, or start one here. Everything stays in this browser until you save it.</p>

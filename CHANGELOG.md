@@ -8,6 +8,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 **voxdown**
 - `directingPassages`, `DIRECTING_INSTRUCTIONS`, `directingPrompt`, `directingSchema` and `directingRequest` say what to ask a model to direct a reading: the story a passage at a time, to be given back with marks added for how it is performed. `readDirected` reads the answer (text, a code block, or JSON) as suggestions, keeping a mark only where the paragraph still prints the same words, given to the same speakers, with the writer's own marks; `chosenChanges` gives the changes for the ones chosen, checked again together.
+- `readDirected` lists a paragraph given back with its words changed among those it refuses, rather than counting it as not given back; reads a group's paragraphs given back with their `:::` lines; and takes a pause given a line of its own as one before the line after it.
 
 **VoxDown Writer: what you work with on the left, what it becomes on the right.**
 - **The workbench**, on the left (View › Workbench, Ctrl+Shift+\\): Scenes (each chapter and scene with its words, a click from going there, and the scene board a click away), Cast, Scraps, Comments (the writer's comments in order, each to go to or delete once done; it was a dialog) and Warnings. **The preview**, on the right (View › Preview, Ctrl+\\), is the script or the book alone. Below 1,200 px wide they take turns. A tab the side showed before (Cast, Warnings, Scraps) opens in the workbench.
@@ -17,6 +18,14 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - The browser's spell check leaves names, instructions and the front matter alone: a character's name is never underlined in its mark. Directions, sounds, notes and comments are still checked.
 - Scraps this browser alone has are said to be: a line in the Scraps tab until they are saved beside the story (or while they have changed since), and, once a visit, a word after Save with a button that saves them there. A story opened where the browser can't tell it is the same file (Firefox, Safari), or opened afresh, is offered the scraps this browser has under the same file name; they are never taken without asking.
 - Two buttons at the top right show and hide the workbench and the preview, and say which show; they replace the narrow window's Preview button.
+- **Focus** puts both panels away, the workbench too. The bar's panel buttons show them off, and either one leaves focus with its panel shown. **Leave focus** stays in the bar, and Escape leaves too; a word saying how fades in as focus starts. With the workbench open, the rail's button for scene names is put away, since its Scenes tab names them.
+- The workbench's tabs stay on one line, each with its sign: where the workbench is narrow, the tabs not chosen show only their signs, and their names are still read out. The search in Scraps is the tab's full width.
+- **Cut to Scraps** takes the words out only once the scrap is kept: a browser short of room leaves them in the story and says so. The space beside cut words goes with them. Scraps move with Alt+↑ and Alt+↓ or their arrows, and a deleted scrap comes back with the notice's Undo.
+- **The scene board**: Alt+↑ and Alt+↓ on a scene's or a chapter's name move it, the keys staying on it. A line and a state written straight after each other write one comment, not two.
+- **A manuscript to submit**: only chapters start a new page. A scene, under a heading of its own (printed or not) or after a break, follows a centred `#`, never two together or at a chapter's start or end.
+- Commenting out words that hold a comment comments out the words around it: none is left to be read.
+- On a phone, every menu stays inside the window, and the look's button sits beside Save rather than on a row of its own.
+- The status line counts chapters and scenes each by their name; the directing dialog counts a reach's words as the status line does.
 
 **Comments for the writer** (spec 1.3, §10.1): `<!-- … -->` is the writer's own comment, never read aloud, printed or given to a performer, and hidden by Markdown viewers too.
 
@@ -28,6 +37,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 **@voxdown/editor**, **VS Code extension**
 - A comment is drawn as a quiet chip with a dashed edge, the writer's own, and highlighted as an HTML comment.
+- Smart dashes leave a comment's hyphens as typed: `<!--`, `-->` and the words between them, so a comment typed by hand is a comment.
 
 **@voxdown/cli**
 - The cheat sheet a model reads is for VoxDown 1.3, comments with it.

@@ -157,6 +157,18 @@ export class SceneRail {
     return this.scenes.length;
   }
 
+  /** Its chapters, and its scenes that aren't chapters; a book's title is neither. */
+  get parts(): { chapters: number; scenes: number } {
+    let chapters = 0;
+    let scenes = 0;
+    for (const scene of this.scenes) {
+      if (scene.title) continue;
+      if (scene.chapter) chapters++;
+      else scenes++;
+    }
+    return { chapters, scenes };
+  }
+
   /** The story's scenes, read again after a change. */
   update(story: Story): void {
     this.show(railScenes(story, sceneNumbers(this.view.state)));

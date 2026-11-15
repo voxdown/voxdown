@@ -258,6 +258,49 @@ function keyOf(text: string): string {
     .toLowerCase();
 }
 
+/** The words alone, marks taken out, for telling a paragraph given back with its words changed. */
+function wordsOf(text: string): string[] {
+  return (
+    text
+      .replace(
+        /@\([^()\n]*\)|@[\p{L}\p{N}_][\p{L}\p{N}_'’-]*(?:[ \t]*\([^()\n]*\))?|\[[^[\]\n]*\]|\{[^{}\n]*\}/gu,
+        " ",
+      )
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+/gu) ?? []
+  );
+}
+
+/** How alike two paragraphs' words are, from 0 to 1: the words they share, over all of them. */
+function alike(a: readonly string[], b: readonly string[]): number {
+  if (!a.length || !b.length) return 0;
+  const counts = new Map<string, number>();
+  for (const word of a) counts.set(word, (counts.get(word) ?? 0) + 1);
+  let shared = 0;
+  for (const word of b) {
+    const left = counts.get(word) ?? 0;
+    if (left > 0) {
+      shared++;
+      counts.set(word, left - 1);
+    }
+  }
+  return (2 * shared) / (a.length + b.length);
+}
+
+/**
+ * A paragraph given back, as the story's paragraphs are: a group's `:::` lines and headings,
+ * which are no paragraph's, taken out, and a pause given a line of its own put at the start of
+ * the line after it, where it is heard the same.
+ */
+function givenParagraph(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !/^[ \t]*(?::::|#{1,6}(?:[ \t]|$))/.test(line))
+    .join("\n")
+    .replace(/(^|\n)[ \t]*(\{pause[^{}\n]*\})[ \t]*\n(?=[ \t]*\S)/g, "$1$2 ")
+    .replace(/^\n+|\n+$/g, "");
+}
+
 /**
  * The marks a paragraph given back adds to the one as written, as insertions into it; undefined
  * if it does anything but add marks.
@@ -425,12 +468,28 @@ export function readDirected(
   const seen = new Map<string, number>();
   const matched = new Set<number>();
   let cursor = 0;
-  for (const given of paragraphsOf(answer)) {
+  for (const answered of paragraphsOf(answer)) {
+    const given = givenParagraph(answered);
     const key = keyOf(given);
     if (!key) continue;
     let index = keys.indexOf(key, cursor);
     // Not there in order: a paragraph the model gave back earlier than it is.
     if (index < 0) index = keys.findIndex((other, at) => other === key && !matched.has(at));
+    // Not there at all: its words changed. The next paragraphs not yet given back, if one is
+    // mostly the same words, is the one it is, refused below and listed, not counted missing.
+    if (index < 0) {
+      const words = wordsOf(given);
+      let best = 0.6;
+      for (let at = cursor; at < Math.min(keys.length, cursor + 3); at++) {
+        if (matched.has(at)) continue;
+        const paragraph = paragraphs[at] as Paragraph;
+        const score = alike(words, wordsOf(source.slice(paragraph.range.from, paragraph.range.to)));
+        if (score >= best) {
+          best = score;
+          index = at;
+        }
+      }
+    }
     if (index < 0) continue;
     matched.add(index);
     cursor = index + 1;

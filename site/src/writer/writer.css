@@ -1288,10 +1288,48 @@ body[data-welcome] #draft-state {
   }
 }
 
-/* Focus: the rail and the side away, the paragraph being written alone in full ink. */
+/* Focus: the rail and both panels away, the paragraph being written alone in full ink. */
 .writer[data-focus] .scene-rail,
-.writer[data-focus] .workspace[data-side] .side {
+.writer[data-focus] .workspace[data-side] .side,
+.writer[data-focus] .workspace[data-bench] .bench,
+.writer[data-focus] .bench-resize {
   display: none;
+}
+.writer[data-focus] .workspace[data-bench],
+.writer[data-focus] .workspace[data-bench][data-side] {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* The way out, in the bar while focus lasts, and said as it starts. */
+.focus-exit {
+  font-size: 0.82rem;
+}
+.focus-hint {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  margin: 0;
+  padding: 0.45rem 0.9rem;
+  background: color-mix(in srgb, var(--ink) 82%, transparent);
+  color: var(--paper);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.focus-hint.leaving {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-hint {
+    transition: none;
+  }
+}
+/* With the workbench open, its Scenes tab names the scenes: the rail keeps its dots, and no
+   button to name them there too. */
+.workspace[data-bench] .scene-rail-toggle {
+  visibility: hidden;
 }
 .writer[data-focus] .workspace,
 .writer[data-focus] .workspace[data-side] {
@@ -2103,9 +2141,9 @@ body[data-welcome] #draft-state {
   .menu-button {
     padding: 0.25rem 0.45rem;
   }
+  /* The look's button beside Save, on the story's row: no row of its own. */
   .appbar .theme-switch {
-    order: 1;
-    margin-left: auto;
+    order: 4;
   }
   .appbar .spacer {
     display: block;
@@ -3089,12 +3127,15 @@ dialog:has(> .dialog-close) #ask-message {
 }
 .scraps-head {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.5rem;
   align-items: center;
+  justify-content: flex-end;
   margin-bottom: 0.8rem;
 }
+/* The search the width of the tab, its words never cut short; the files' buttons under it. */
 .scraps-head input[type="search"] {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
   padding: 0.3rem 0.55rem;
   border: 1px solid var(--desk-edge);
@@ -3494,10 +3535,38 @@ dialog:has(> .dialog-close) #ask-message {
   }
 }
 /* Five tabs in a narrow column: on two rows rather than out of sight. */
+/* The workbench's five tabs on one line, each with its sign: where they don't all fit, the
+   others keep only their signs, their names still read out and shown at the pointer. */
 .bench .side-tabs {
-  flex-wrap: wrap;
-  overflow: visible;
-  row-gap: 0;
+  flex-wrap: nowrap;
+}
+.bench-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.bench-tab svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bench-tab .count {
+  margin-left: 0;
+}
+@container (max-width: 30rem) {
+  .bench-tab:not([aria-selected="true"]) .tab-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 /* Scraps only this browser has: said under the search. */
 .scraps-standing {

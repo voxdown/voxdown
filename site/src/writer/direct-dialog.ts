@@ -21,6 +21,7 @@ import {
 } from "voxdown";
 import { type AiContext, chapterAt } from "./ai-dialog";
 import { type Found, HelperError, askAi, hello, keptPairing } from "./helper";
+import { proseWords } from "./words";
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector(selector) as T;
 
@@ -75,7 +76,8 @@ function sayReaches(context: AiContext): void {
   const story = context.story();
   const { from, to } = context.selection();
   const chapter = chapterAt(story, from);
-  const words = (start: number, end: number) => wordsIn(story.source.slice(start, end));
+  // The story's own words, as the status line counts them: not its marks or its front matter.
+  const words = (start: number, end: number) => proseWords(story.source.slice(start, end));
   const options = $("#direct-scope").querySelectorAll<HTMLOptionElement>("option");
   for (const option of options) {
     if (option.value === "story")

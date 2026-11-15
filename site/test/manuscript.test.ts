@@ -52,4 +52,35 @@ describe("a manuscript to submit", () => {
     expect(header).toContain("Teller / OWL / ");
     expect(header).toContain(" PAGE ");
   });
+
+  it("starts chapters on a new page, and a scene after a #, never two together", async () => {
+    const paragraphs: Paragraph[] = [
+      { kind: "heading", level: 1, runs: [run("Chapter One")] },
+      { kind: "heading", level: 2, runs: [run("Arrival")] },
+      { kind: "text", runs: [run("They came.")] },
+      { kind: "heading", level: 2, runs: [run("Departure")] },
+      { kind: "text", runs: [run("They went.")] },
+      { kind: "break" },
+      { kind: "text", runs: [run("Later.")] },
+      { kind: "break" },
+      { kind: "heading", level: 1, runs: [run("Chapter Two")] },
+      { kind: "text", runs: [run("Again.")] },
+    ];
+    const files = await unzip(
+      manuscriptDocx(paragraphs, {
+        title: "The Owl",
+        byline: "A. Teller",
+        contact: "Ann Teller",
+        surname: "Teller",
+        words: 100,
+        chapterLevel: 1,
+      }),
+    );
+    const document = decoder.decode(files.get("word/document.xml"));
+    expect(document.match(/<w:pageBreakBefore\/>/g)).toHaveLength(1);
+    // A # between Arrival and Departure, and before Later: none after a chapter's heading.
+    expect(document.match(/>#<\/w:t>/g)).toHaveLength(2);
+    expect(document).not.toContain("Arrival");
+    expect(document).toContain("Chapter Two");
+  });
 });

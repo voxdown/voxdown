@@ -138,4 +138,28 @@ Night fell over the harbour. {pause} Somewhere a door slammed. [door slams]
     expect(readDirected(story, answer, { from: two }).suggestions).toEqual([]);
     expect(readDirected(story, answer, { to: two }).suggestions.length).toBe(1);
   });
+
+  it("lists a paragraph whose words were changed, and reads a group's paragraphs", () => {
+    const story = parse(
+      "# One\n\nSir Percival stopped.\n\n@Gerald “Could you not?”\n\n::: whispering\nHe crept.\nClank.\n:::\n\nThe end.\n",
+    );
+    const changed = readDirected(
+      story,
+      "Sir Percival stopped dead.\n\n@Gerald (sleepily) “Could you not?”\n\n::: whispering\nHe crept.\nClank.\n:::\n\nThe end.",
+    );
+    expect(changed.refused).toEqual([
+      expect.objectContaining({ line: 3, why: "its words weren’t given back as written" }),
+    ]);
+    expect(changed.missing).toBe(0);
+    expect(changed.suggestions.map((each) => each.label)).toEqual(["(sleepily)"]);
+    // A pause given a line of its own inside a group: put before the line after it.
+    const paused = readDirected(
+      story,
+      "Sir Percival stopped.\n\n@Gerald “Could you not?”\n\n::: whispering\nHe crept.\n{pause}\nClank.\n:::\n\nThe end.",
+    );
+    expect(paused.missing).toBe(0);
+    expect(paused.refused).toEqual([]);
+    expect(paused.suggestions.map((each) => each.label)).toEqual(["{pause}"]);
+    expect(paused.suggestions[0]?.line).toBe(9);
+  });
 });

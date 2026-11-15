@@ -87,6 +87,7 @@ import {
   textByCharacter,
 } from "voxdown";
 import { examples } from "../examples";
+import { commentOut } from "./comment-out";
 import "../style.css";
 import "./writer.css";
 import { type AiContext, chapterAt, openAi } from "./ai-dialog";
@@ -1455,8 +1456,8 @@ let nudged = "";
 const counted = { story: "", words: 0, reached: "" };
 
 function showCounts({ words, said, voices, heard }: Counts): void {
-  // As many as the rail shows: a story's chapters and headings, and its scene breaks.
-  const scenes = rail.size;
+  // As the rail shows them: chapters, and the scenes in them (headings under a chapter, breaks).
+  const parts = rail.parts;
   const plural = (n: number, one: string, many = `${one}s`) =>
     `${n.toLocaleString()} ${n === 1 ? one : many}`;
   // The words written today in this story, kept through a reload, and the day's goal, if any.
@@ -1479,8 +1480,9 @@ function showCounts({ words, said, voices, heard }: Counts): void {
     `${plural(words, "word")}${since || goal ? ` (${signed}${goal} today)` : ""}`,
     plural(said, "line said", "lines said"),
     plural(voices, "voice"),
-    // None yet: nothing said of them (a story without headings showed “0 scenes”).
-    ...(scenes > 0 ? [plural(scenes, "scene")] : []),
+    // Chapters and scenes each by their name; none yet, nothing said of them.
+    ...(parts.chapters > 0 ? [plural(parts.chapters, "chapter")] : []),
+    ...(parts.scenes > 0 ? [plural(parts.scenes, "scene")] : []),
     // How long it takes to hear: what is read aloud, and its pauses, not what is printed.
     ...(heard > 0 ? [timeToHear(heard)] : []),
   ].join(" · ");
@@ -1496,7 +1498,7 @@ function showCounts({ words, said, voices, heard }: Counts): void {
 const scrapsFiles = new Map<string, FileSystemFileHandle>();
 
 /** Words set aside: a scrap, with the chapter they came from. */
-function setAside(text: string): Scrap {
+function setAside(text: string): Scrap | undefined {
   const story = current();
   const scrap: Scrap = {
     id: newScrapId(),
@@ -1507,9 +1509,30 @@ function setAside(text: string): Scrap {
   };
   const scraps = scrapsOf(localStorage, file.id);
   scraps.unshift(scrap);
-  if (!keepScraps(localStorage, file.id, scraps, file.name))
-    notice("This browser is short of room: the scrap couldn’t be kept.");
+  if (!keepScraps(localStorage, file.id, scraps, file.name)) {
+    notice(
+      "This browser is short of room: the scrap couldn’t be kept, so the words stay in the story.",
+    );
+    return undefined;
+  }
   return scrap;
+}
+
+/**
+ * Words taken out of a line, and the space left beside them: a sentence cut from between two
+ * others leaves one space, not two, and one cut from a line's end leaves none behind it.
+ */
+function cutRange(from: number, to: number): { from: number; to: number } {
+  const doc = view.state.doc;
+  const before = doc.sliceString(Math.max(0, from - 1), from);
+  const after = doc.sliceString(to, Math.min(doc.length, to + 1));
+  if (/[ \t]/.test(after) && (before === "" || /[ \t\n]/.test(before))) return { from, to: to + 1 };
+  if (after === "" || after === "\n") {
+    const line = doc.lineAt(from);
+    const spaces = /[ \t]*$/.exec(doc.sliceString(line.from, from))?.[0].length ?? 0;
+    return { from: from - spaces, to };
+  }
+  return { from, to };
 }
 
 /** Edit › Cut to Scraps: the words selected set aside, and taken out of the story. */
@@ -1521,8 +1544,9 @@ function cutToScraps(): boolean {
     notice("Select the words to set aside first.");
     return true;
   }
-  setAside(text);
-  view.dispatch({ changes: { from, to }, userEvent: "delete.cut" });
+  // Kept first: words that can't be kept stay in the story.
+  if (!setAside(text)) return true;
+  view.dispatch({ changes: cutRange(from, to), userEvent: "delete.cut" });
   selectBench("scraps");
   notice(`Set aside in Scraps. ${keys("Mod+Z")} puts the words back; the scrap stays.`);
   view.focus();
@@ -1537,11 +1561,15 @@ const scrapsHost: ScrapsHost = {
     showBench();
   },
   dropped: (text, copy) => {
-    setAside(text);
+    // Kept first: words that can't be kept stay in the story.
+    if (!setAside(text)) {
+      showBench();
+      return;
+    }
     // Moved here from the story: taken out of it, as the selection it was dragged from.
     const { from, to } = view.state.selection.main;
     if (!copy && !lockedOut && view.state.sliceDoc(from, to) === text)
-      view.dispatch({ changes: { from, to }, userEvent: "delete.cut" });
+      view.dispatch({ changes: cutRange(from, to), userEvent: "delete.cut" });
     notice(
       copy
         ? "Copied to Scraps."
@@ -1590,7 +1618,8 @@ const scrapsHost: ScrapsHost = {
   save: () => void saveScraps(true),
   fileName: () => scrapsFileName(file.name),
   standing: () => scrapsStanding(localStorage, file.id, scrapsOf(localStorage, file.id)),
-  notice,
+  notice: (message, action) => notice(message, false, action),
+  announce,
 };
 
 /** The stories this visit has already been told their scraps are in this browser only. */
@@ -2716,6 +2745,7 @@ document.addEventListener("keydown", (event) => {
   if (event.code !== "Backslash" || !(event.ctrlKey || event.metaKey) || event.altKey) return;
   if (onWelcome()) return;
   event.preventDefault();
+  if (leaveFocusFor(event.shiftKey ? "bench" : "side")) return;
   if (event.shiftKey) showBenchPanel(!prefs.bench);
   else showSidePanel(!prefs.side);
 });
@@ -2769,9 +2799,15 @@ function showMarksMenu(raw: boolean): void {
 const narrow = window.matchMedia("(max-width: 899px)");
 function overlaid(): void {
   const over = narrow.matches && prefs.side;
-  // The bar's two panel buttons say which panels show.
-  $("#preview-toggle").setAttribute("aria-pressed", String(prefs.side));
-  $("#bench-toggle").setAttribute("aria-pressed", String(prefs.bench));
+  // The bar's two panel buttons say which panels show: none, in focus.
+  $("#preview-toggle").setAttribute("aria-pressed", String(prefs.side && !prefs.focus));
+  $("#bench-toggle").setAttribute("aria-pressed", String(prefs.bench && !prefs.focus));
+  $("#preview-toggle").title = prefs.focus
+    ? `Leave focus, and show the preview (${keys("Mod+\\")})`
+    : `Preview: the script or the book (${keys("Mod+\\")})`;
+  $("#bench-toggle").title = prefs.focus
+    ? `Leave focus, and show the workbench (${keys("Mod+Shift+\\")})`
+    : `Workbench: scenes, cast, scraps, comments, warnings (${keys("Mod+Shift+\\")})`;
   if (document.body.hasAttribute("data-welcome")) return;
   // The workbench lies over the manuscript from the left on a narrow window, as the side does
   // from the right.
@@ -2792,10 +2828,34 @@ document.addEventListener("pointerdown", (event) => {
   }
 });
 
-$("#preview-toggle").title = `Preview: the script or the book (${keys("Mod+\\")})`;
-$("#bench-toggle").title =
-  `Workbench: scenes, cast, scraps, comments, warnings (${keys("Mod+Shift+\\")})`;
+/** A panel asked for in focus: focus ends, and the panel shows, whether it was on or not. */
+function leaveFocusFor(panel: "side" | "bench"): boolean {
+  if (!prefs.focus) return false;
+  focusMode(false);
+  if (panel === "side") showSidePanel(true);
+  else showBenchPanel(true);
+  return true;
+}
+
+$("#focus-exit").title = `Leave focus (Esc, or ${keys("Mod+Shift+F")})`;
+$("#focus-exit").addEventListener("click", () => {
+  focusMode(false);
+  view.focus();
+});
+// Escape leaves focus, once nothing else is using it: a menu, a dialog, a search, reading aloud.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !prefs.focus || event.defaultPrevented) return;
+  if (hearing.on || document.querySelector("dialog[open]")) return;
+  if ((event.target as HTMLElement | null)?.closest?.(".cm-panels, [role=menubar], [role=menu]"))
+    return;
+  focusMode(false);
+});
+
 $("#preview-toggle").addEventListener("click", () => {
+  if (leaveFocusFor("side")) {
+    view.focus();
+    return;
+  }
   const preview = !prefs.side;
   showSidePanel(preview);
   // Lying over the manuscript on a narrow window, it is what is read next.
@@ -2804,6 +2864,10 @@ $("#preview-toggle").addEventListener("click", () => {
   else view.focus();
 });
 $("#bench-toggle").addEventListener("click", () => {
+  if (leaveFocusFor("bench")) {
+    view.focus();
+    return;
+  }
   const shown = !prefs.bench;
   showBenchPanel(shown);
   if (shown && narrow.matches)
@@ -3516,19 +3580,20 @@ function insertComment(): void {
     insertAtCursor("<!-- comment -->", "comment", also);
     return;
   }
-  const changes = view.state.changes([
-    ...also,
-    { from, to: from, insert: "<!-- " },
-    { from: to, to, insert: " -->" },
-  ]);
+  const out = commentOut(view.state.doc.toString(), from, to);
+  if (!out) {
+    notice("Those words are already commented out.");
+    return;
+  }
+  const changes = view.state.changes([...also, { from: out.from, to: out.to, insert: out.insert }]);
   view.dispatch({
     changes,
-    selection: EditorSelection.cursor(changes.mapPos(to, 1)),
+    selection: EditorSelection.cursor(changes.mapPos(out.to, 1)),
     scrollIntoView: true,
     userEvent: "input.insert",
   });
   notice(
-    `Commented out: kept in the text, never read aloud or printed. ${keys("Mod+Z")} puts it back.`,
+    `Commented out${out.kept ? `, around the ${out.kept === 1 ? "comment" : `${out.kept} comments`} already there` : ""}: kept in the text, never read aloud or printed. ${keys("Mod+Z")} puts it back.`,
   );
   view.focus();
 }
@@ -3659,8 +3724,20 @@ async function exportManuscript(who: {
   surname: string;
 }): Promise<void> {
   const story = current();
+  const level = chapterLevelIn(story);
+  // A scene heading the book never prints (hidden, or for the audio) still starts a scene:
+  // a break, where the manuscript has one.
+  let source = story.source;
+  for (const block of [...story.blocks].reverse())
+    if (
+      block.kind === "heading" &&
+      block.level > level &&
+      (block.visibility === "hidden" || block.visibility === "audio")
+    )
+      source = `${source.slice(0, block.range.from)}* * *${source.slice(block.range.to)}`;
+  const printed = source === story.source ? story : parse(source);
   const body = new DOMParser().parseFromString(
-    renderBook(story, { header: false }),
+    renderBook(printed, { header: false }),
     "text/html",
   ).body;
   const paragraphs = paragraphsOf(body);
@@ -3669,6 +3746,7 @@ async function exportManuscript(who: {
   download(
     manuscriptDocx(paragraphs, {
       ...who,
+      chapterLevel: level,
       title,
       words: countsOf(story).words,
       ...(story.meta.language ? { language: story.meta.language } : {}),
@@ -4112,11 +4190,33 @@ function compare(kept: Version): void {
   $("#compare-lines").scrollTop = 0;
 }
 
+/** Focus's word on how to leave it, shown as it starts, as a browser's full screen says. */
+let focusHintTimer: ReturnType<typeof setTimeout> | undefined;
+
 function focusMode(on: boolean): void {
+  const starting = on && !prefs.focus;
   prefs.focus = on;
   keepPrefs();
   checkMenu("focus", on);
   document.body.toggleAttribute("data-focus", on);
+  // The panels are away while it lasts: the bar's buttons say so, and bring one back by leaving.
+  $("#focus-exit").hidden = !on;
+  checkMenu("side", prefs.side && !on);
+  checkMenu("bench", prefs.bench && !on);
+  overlaid();
+  const hint = $("#focus-hint");
+  clearTimeout(focusHintTimer);
+  if (starting && !onWelcome()) {
+    hint.textContent = `Focus: only the words. Press Esc or ${keys("Mod+Shift+F")} to leave.`;
+    hint.hidden = false;
+    hint.classList.remove("leaving");
+    focusHintTimer = setTimeout(() => {
+      hint.classList.add("leaving");
+      focusHintTimer = setTimeout(() => {
+        hint.hidden = true;
+      }, 600);
+    }, 3200);
+  } else if (!on) hint.hidden = true;
   // Redrawn: the faded lines, and the page about the cursor.
   view.dispatch({
     effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: "center" }),
@@ -4351,6 +4451,7 @@ const COMMANDS: Record<string, () => unknown> = {
   board: () =>
     openBoard({
       story: () => current(),
+      announce,
       change: (changes, said) => {
         if (lockedOut) return;
         view.dispatch({ changes, userEvent: "input" });
@@ -4496,9 +4597,9 @@ function viewCommand(name: string, on: boolean): void {
     view.dispatch({ effects: setShowMarks.of(raw) });
     showMarksMenu(raw);
   } else if (name === "bench") {
-    showBenchPanel(on);
+    if (!leaveFocusFor("bench")) showBenchPanel(on);
   } else if (name === "side") {
-    showSidePanel(on);
+    if (!leaveFocusFor("side")) showSidePanel(on);
   } else if (name === "rail-names") {
     rail.showNames(on);
   } else if ((SWITCHES as readonly string[]).includes(name)) {

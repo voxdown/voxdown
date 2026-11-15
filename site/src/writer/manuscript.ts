@@ -4,9 +4,11 @@
  * one-inch margins and each paragraph's first line set in half an inch. The first page has the
  * writer's name and contact at the top left, the word count at the top right, and the title and
  * byline halfway down; every page after has the surname, a word of the title and the page number
- * at the top right. Chapters start on a new page, a third of the way down; a scene break is a
- * centred `#`; italics stay italics; the story ends with `END`.
+ * at the top right. Chapters start on a new page, a third of the way down; a scene, after a
+ * break or under a heading of its own, starts after a centred `#`; italics stay italics; the
+ * story ends with `END`.
  */
+import { chapterLevelOf } from "voxdown";
 import { type Paragraph, type Run, xmlText } from "./convert";
 import { zip } from "./zip";
 
@@ -24,6 +26,8 @@ export type ManuscriptDetails = {
   /** The words of the story. */
   words: number;
   language?: string;
+  /** The level the chapters' headings are (voxdown's `chapterLevel`); a heading under it is a scene's. */
+  chapterLevel?: number;
 };
 
 /** "about 3,500 words": to the nearest hundred, or the nearest thousand from 10,000 words. */
@@ -71,18 +75,38 @@ export function manuscriptDocx(
     .join("");
   // Halfway down the page: the title, and the byline under it.
   const title = `${plain("", '<w:spacing w:before="3600"/>')}${plain(details.title, '<w:jc w:val="center"/><w:ind w:firstLine="0"/>')}${plain(`by ${details.byline}`, '<w:jc w:val="center"/><w:ind w:firstLine="0"/>')}${plain("")}`;
+  const level =
+    details.chapterLevel ??
+    chapterLevelOf(paragraphs.flatMap((each) => (each.kind === "heading" ? [each.level] : []))) ??
+    1;
   let chapters = 0;
+  // A scene break between words of the same chapter: never two together, never at a chapter's
+  // start or end. It waits for the words after it.
+  let text = false;
+  let pending = false;
+  const sceneBreak = () => {
+    pending = text;
+    return "";
+  };
   const body = paragraphs
     .map((paragraph) => {
-      if (paragraph.kind === "break")
-        return plain("#", '<w:jc w:val="center"/><w:ind w:firstLine="0"/>');
+      if (paragraph.kind === "break") return sceneBreak();
       if (paragraph.kind === "heading") {
+        // A heading over the chapters (the book's own title, a part's): the title page has it.
+        if (paragraph.level < level) return "";
+        // A scene's heading: a break, as the format has them, not a page of its own.
+        if (paragraph.level > level) return sceneBreak();
         // A chapter on a new page, a third of the way down; the first follows the title.
+        text = false;
+        pending = false;
         const newPage = chapters++ > 0 ? "<w:pageBreakBefore/>" : "";
         const runs = paragraph.runs.map(runXml).join("");
         return `<w:p><w:pPr>${newPage}<w:spacing w:before="${newPage ? 2880 : 0}"/><w:jc w:val="center"/><w:ind w:firstLine="0"/></w:pPr>${runs}</w:p>${plain("")}`;
       }
-      return `<w:p>${paragraph.runs.map(runXml).join("")}</w:p>`;
+      const before = pending ? plain("#", '<w:jc w:val="center"/><w:ind w:firstLine="0"/>') : "";
+      text = true;
+      pending = false;
+      return `${before}<w:p>${paragraph.runs.map(runXml).join("")}</w:p>`;
     })
     .join("");
   const end = plain(

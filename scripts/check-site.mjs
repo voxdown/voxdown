@@ -480,6 +480,80 @@ const draftIn = (page) =>
   console.log("writer: scraps cut, noted, found, put back, opened from a file and moved: ok");
 }
 
+// Scraps by the keys, and safe: a scrap moved with Alt+↓, a deleted one brought back, words cut
+// leaving no space behind; words never cut when the browser can't keep them. And words holding a
+// comment, commented out, all of them hidden.
+{
+  const context = await browser.newContext({ viewport: { width: 1400, height: 860 } });
+  const keeper = await context.newPage();
+  watch(keeper, "writer scraps keys");
+  await keeper.goto(`${base}/writer/`);
+  await keeper.click('.welcome [data-command="new"]');
+  await keeper.waitForTimeout(400);
+  await keeper.click(".cm-content");
+  await keeper.keyboard.press("Control+End");
+  await keeper.keyboard.type("\n\nThe owl sat still. A fox ran.\n\nThe tide came in.");
+  await keeper.keyboard.press("Shift+Home");
+  await keeper.keyboard.press("Control+Shift+X");
+  await keeper.waitForTimeout(300);
+  await keeper.keyboard.press("ArrowUp");
+  await keeper.keyboard.press("ArrowUp");
+  await keeper.keyboard.press("End");
+  for (let i = 0; i < "A fox ran.".length; i++) await keeper.keyboard.press("Shift+ArrowLeft");
+  await keeper.keyboard.press("Control+Shift+X");
+  await keeper.waitForTimeout(1200);
+  if (!(await draftIn(keeper)).includes("The owl sat still.\n"))
+    problems.push("writer: words cut from a line's end left a space behind them");
+  const order = () => keeper.$$eval(".scrap-text", (texts) => texts.map((t) => t.textContent));
+  await keeper.locator(".scrap").nth(0).focus();
+  await keeper.keyboard.press("Alt+ArrowDown");
+  await keeper.waitForTimeout(300);
+  const reordered = await order();
+  const on = await keeper.evaluate(
+    () => document.activeElement?.querySelector(".scrap-text")?.textContent,
+  );
+  if (reordered[1] !== "A fox ran." || on !== "A fox ran.")
+    problems.push(`writer: Alt+↓ on a scrap gives ${JSON.stringify({ reordered, on })}`);
+  await keeper.hover(".scrap >> nth=0");
+  await keeper.click('.scrap >> nth=0 >> button:has-text("Delete")');
+  await keeper.click('#notice button:has-text("Undo")');
+  await keeper.waitForTimeout(300);
+  if (JSON.stringify(await order()) !== JSON.stringify(reordered))
+    problems.push(`writer: a deleted scrap brought back gives ${JSON.stringify(await order())}`);
+  // The browser out of room: the words stay in the story, and it says so.
+  await keeper.evaluate(() => {
+    const set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "vxd-writer-scraps") throw new DOMException("full", "QuotaExceededError");
+      return set.call(this, key, value);
+    };
+  });
+  await keeper.click(".cm-content");
+  await keeper.keyboard.press("Control+End");
+  await keeper.keyboard.type("\n\nKeep me here.");
+  await keeper.keyboard.press("Shift+Home");
+  await keeper.keyboard.press("Control+Shift+X");
+  await keeper.waitForTimeout(1200);
+  if (!(await draftIn(keeper)).includes("Keep me here."))
+    problems.push("writer: words cut to Scraps were taken out though no scrap could be kept");
+  if (!(await keeper.textContent("#notice"))?.includes("stay in the story"))
+    problems.push(`writer: a scrap not kept says ${await keeper.textContent("#notice")}`);
+  // Words holding a comment, commented out: around it, none of them left to be read.
+  await keeper.keyboard.press("End");
+  await keeper.keyboard.type("\n\nNight fell. <!-- rain? --> The harbour was quiet.");
+  await keeper.keyboard.press("Shift+Home");
+  await keeper.keyboard.press("Control+Alt+m");
+  await keeper.waitForTimeout(1200);
+  if (
+    !(await draftIn(keeper)).includes(
+      "<!-- Night fell. --> <!-- rain? --> <!-- The harbour was quiet. -->",
+    )
+  )
+    problems.push("writer: words holding a comment, commented out, leave some to be read");
+  await context.close();
+  console.log("writer: scraps moved by keys, brought back, kept safe; a comment around one: ok");
+}
+
 // A first visit: marks as written, the preview beside them with its word about drawn marks, and
 // the drawn-only choices waiting; the workbench a key away; one panel at a time when crowded.
 {
@@ -579,6 +653,51 @@ const draftIn = (page) =>
   console.log("writer: a manuscript to submit: ok");
 }
 
+// A phone: every menu inside the window, the look's button beside Save; a narrow workbench's tabs
+// on one line.
+{
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const phone = await context.newPage();
+  watch(phone, "writer phone menus");
+  await phone.goto(`${base}/writer/#example=the-dragon-who-would-not-roar`);
+  await phone.waitForSelector(".cm-content");
+  await phone.waitForTimeout(500);
+  for (const menu of ["View", "Help"]) {
+    await phone.tap(`.menus >> text="${menu}"`);
+    await phone.waitForTimeout(200);
+    const right = await phone.evaluate(() => {
+      const list = [...document.querySelectorAll("[role=menu]")].find(
+        (each) => each.offsetParent && !each.hidden,
+      );
+      return list ? Math.round(list.getBoundingClientRect().right) : -1;
+    });
+    if (right < 0 || right > 390) problems.push(`writer: on a phone, ${menu} ends at ${right}`);
+    await phone.keyboard.press("Escape");
+  }
+  const rows = await phone.evaluate(() => [
+    Math.round(document.querySelector("#theme")?.getBoundingClientRect().top ?? -1),
+    Math.round(document.querySelector("#save-button")?.getBoundingClientRect().top ?? -2),
+  ]);
+  if (Math.abs(rows[0] - rows[1]) > 8)
+    problems.push(`writer: on a phone, the look's button has a row of its own: ${rows}`);
+  await context.close();
+  const narrow = await browser.newContext({ viewport: { width: 1100, height: 800 } });
+  const bencher = await narrow.newPage();
+  await bencher.goto(`${base}/writer/#example=the-dragon-who-would-not-roar`);
+  await bencher.waitForSelector(".cm-content");
+  await benchTab(bencher, "scraps");
+  const tops = await bencher.$$eval("#bench .side-tab", (tabs) =>
+    tabs.map((tab) => Math.round(tab.getBoundingClientRect().top)),
+  );
+  if (new Set(tops).size !== 1) problems.push(`writer: the workbench's tabs wrap: ${tops}`);
+  await narrow.close();
+  console.log("writer: a phone's menus in the window, the workbench's tabs on one line: ok");
+}
+
 // The scene board: a line and a state written as the comment under a heading, a section dragged
 // above another with its text, and Ctrl+Z putting it back.
 {
@@ -626,8 +745,28 @@ const draftIn = (page) =>
   await planner.keyboard.press("Control+z");
   await openBoard();
   if ((await names())[3] !== "Home") problems.push("writer: Ctrl+Z didn't put a moved scene back");
+  // A line typed and a state chosen straight after, the line never left: one comment, not two.
+  await planner.locator(".board-line").nth(2).click();
+  await planner.keyboard.type("Gerald wakes.");
+  await planner.locator(".board-state").nth(2).selectOption("idea");
+  await planner.locator(".board-line").nth(3).click();
+  await planner.waitForTimeout(1200);
+  const noted = (await draftIn(planner)).split("<!-- idea: Gerald wakes. -->").length - 1;
+  if (noted !== 1) problems.push(`writer: a line then a state wrote the comment ${noted} times`);
+  // Alt+↓ on a card's name moves its scene, the keys staying on it.
+  await planner.locator(".board-card .board-name").nth(0).focus();
+  await planner.keyboard.press("Alt+ArrowDown");
+  await planner.waitForTimeout(300);
+  const moved = await names();
+  const focused = await planner.evaluate(() => document.activeElement?.textContent);
+  if (moved[1] !== "The proclamation" || focused !== "The proclamation")
+    problems.push(`writer: Alt+↓ on the board gives ${JSON.stringify({ moved, focused })}`);
+  await planner.waitForTimeout(1200);
+  const after = await draftIn(planner);
+  if (after.indexOf("## The proclamation") < after.indexOf("## The mountain"))
+    problems.push("writer: a scene moved by Alt+↓ didn't move in the story");
   await context.close();
-  console.log("writer: the scene board, its lines, states and moves: ok");
+  console.log("writer: the scene board, its lines, states and moves, by mouse and keys: ok");
 }
 
 // The style check: off until asked; then a word said again too soon and a long sentence marked,
@@ -2954,6 +3093,38 @@ if ((await maker.locator(".cm-line.in-focus").count()) === 0)
 await maker.keyboard.press("Control+Shift+f");
 if (await maker.evaluate(() => document.body.hasAttribute("data-focus")))
   problems.push("writer: Ctrl+Shift+F doesn't leave focus");
+// Focus with the workbench open: both panels away, the bar's buttons off, the way out said;
+// Escape leaves, and a panel's button leaves with that panel shown.
+const benchWas = await maker.evaluate(() =>
+  document.querySelector("#workspace")?.hasAttribute("data-bench"),
+);
+if (!benchWas) await maker.keyboard.press("Control+Shift+Backslash");
+await maker.keyboard.press("Control+Shift+f");
+const focused = await maker.evaluate(() => ({
+  bench: !!document.querySelector("#bench")?.offsetParent,
+  pressed: [...document.querySelectorAll(".panel-toggle")].map((b) =>
+    b.getAttribute("aria-pressed"),
+  ),
+  exit: !document.querySelector("#focus-exit")?.hidden,
+  hint: !document.querySelector("#focus-hint")?.hidden,
+}));
+if (
+  JSON.stringify(focused) !==
+  JSON.stringify({ bench: false, pressed: ["false", "false"], exit: true, hint: true })
+)
+  problems.push(`writer: focus with the workbench open looks like ${JSON.stringify(focused)}`);
+await maker.keyboard.press("Escape");
+if (await maker.evaluate(() => document.body.hasAttribute("data-focus")))
+  problems.push("writer: Escape doesn't leave focus");
+await maker.keyboard.press("Control+Shift+f");
+await maker.click("#preview-toggle");
+const left = await maker.evaluate(() => ({
+  focus: document.body.hasAttribute("data-focus"),
+  side: document.querySelector("#workspace")?.hasAttribute("data-side"),
+}));
+if (left.focus || !left.side)
+  problems.push(`writer: the preview's button in focus gives ${JSON.stringify(left)}`);
+if (!benchWas) await maker.keyboard.press("Control+Shift+Backslash");
 // Focus away from the toolbar too, and back with it.
 await maker.keyboard.press("Control+Shift+f");
 if (await maker.isVisible("#toolbar")) problems.push("writer: in focus, the toolbar stays");

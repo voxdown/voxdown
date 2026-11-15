@@ -125,11 +125,14 @@ export function menus(
       "--menu-top",
       `${Math.round(button.getBoundingClientRect().bottom + 6)}px`,
     );
+    // The window's width before the menu shows: on a phone, a menu running past its edge widens
+    // the page it is measured against.
+    const room = document.documentElement.clientWidth || window.innerWidth;
+    list.style.left = "";
     list.hidden = false;
     // Never past the window's right edge: moved left as far as it needs.
-    list.style.left = "";
     const right = list.getBoundingClientRect().right;
-    if (right > window.innerWidth - 4) list.style.left = `${window.innerWidth - 4 - right}px`;
+    if (right > room - 4) list.style.left = `${room - 4 - right}px`;
     button.setAttribute("aria-expanded", "true");
     open = button;
     const all = items(list);

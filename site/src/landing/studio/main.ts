@@ -7,22 +7,20 @@
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/literata";
+import * as renderLib from "@voxdown/render";
 /** Text made safe for HTML (the renderer's own rule; the renderer itself loads with the spine). */
 const escapeHtml = (text: string) =>
   text.replace(
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
   );
-/** The renderer, for the book and the script: loaded once, when first needed. */
-type Render = typeof import("@voxdown/render");
-let render: Render | undefined;
-async function renderer(): Promise<Render> {
-  if (render) return render;
-  render = await import("@voxdown/render");
+/** The renderer, for the book and the script, and its stylesheet. */
+type Render = typeof renderLib;
+const render: Render = renderLib;
+{
   const style = document.createElement("style");
   style.textContent = render.stylesheet;
   document.head.prepend(style);
-  return render;
 }
 import {
   type Story,
@@ -561,6 +559,76 @@ sheet.addEventListener("pointerover", (event) => {
 sheet.addEventListener("pointerleave", () => tip.classList.remove("on"));
 sheet.addEventListener("scroll", () => tip.classList.remove("on"), { passive: true });
 
+/* ================================================================== the typewriter */
+
+/**
+ * Types the text in `root` a character at a time, with a caret after the last one. Every
+ * character is laid out from the start and only made visible in turn, so no line re-wraps.
+ * Returns a function that finishes the typing at once.
+ */
+function typewrite(root: HTMLElement, caret: HTMLElement | null): () => void {
+  const nodes: Text[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode())
+    if ((node as Text).data.length && !(node.parentElement as HTMLElement).closest(".caret"))
+      nodes.push(node as Text);
+  const chars: HTMLElement[] = [];
+  for (const node of nodes) {
+    const frag = document.createDocumentFragment();
+    for (const ch of node.data) {
+      const span = document.createElement("span");
+      span.className = "tw";
+      span.textContent = ch;
+      frag.append(span);
+      chars.push(span);
+    }
+    node.replaceWith(frag);
+  }
+  root.classList.add("typing-on");
+  root.classList.remove("typed");
+  let at = 0;
+  let timer = 0;
+  const place = () => {
+    if (!caret) return;
+    const last = chars[Math.max(0, at - 1)];
+    const base = caret.offsetParent?.getBoundingClientRect();
+    if (!last || !base) return;
+    const box = last.getBoundingClientRect();
+    const x = at === 0 ? box.left - base.left : box.right - base.left;
+    caret.style.transform = `translate(${x.toFixed(1)}px, ${(box.top - base.top).toFixed(1)}px)`;
+    caret.style.height = `${box.height}px`;
+  };
+  const finish = () => {
+    clearTimeout(timer);
+    for (const ch of chars) ch.classList.add("on");
+    at = chars.length;
+    place();
+    root.classList.remove("typing-on");
+    root.classList.add("typed");
+  };
+  const next = () => {
+    const ch = chars[at];
+    if (!ch) {
+      finish();
+      return;
+    }
+    ch.classList.add("on");
+    at += 1;
+    place();
+    const following = chars[at];
+    const lineEnd = following && following.closest("p") !== ch.closest("p");
+    const pause = lineEnd
+      ? 210
+      : /[.,!?;:]/.test(ch.textContent ?? "")
+        ? 130
+        : 24 + Math.random() * 14;
+    timer = window.setTimeout(next, pause);
+  };
+  place();
+  timer = window.setTimeout(next, 250);
+  return finish;
+}
+
 /* ================================================================== the spine */
 
 /* Built when it nears the screen: nothing of it costs the first view. */
@@ -838,8 +906,8 @@ function initSpine(): void {
     const whose = !who || who === "Narrator" ? G : who;
     const said = (textByCharacter(story).get(whose) ?? "").trim().split("\n").filter(Boolean);
     return {
-      book: `<div class="book-page" data-vxd-theme="light"><p class="book-run">The Dragon Who Would Not Roar</p>${(render as Render).renderBook(story, { header: false })}<p class="book-folio">12</p></div>`,
-      script: `<div class="script-page" data-vxd-theme="light">${(render as Render).renderScript(story, { header: false })}</div>`,
+      book: `<div class="book-page" data-vxd-theme="light"><p class="book-run">The Dragon Who Would Not Roar</p>${render.renderBook(story, { header: false })}<p class="book-folio">12</p></div>`,
+      script: `<div class="script-page" data-vxd-theme="light">${render.renderScript(story, { header: false })}</div>`,
       lines: `<div class="sides-page" style="--sp:${colorFor(whose)}"><p class="sides-head"><span style="--sp:${colorFor(whose)}">${escapeHtml(nameFor(whose))}</span> · each character’s lines</p>${said
         .map(
           (row) => `<p class="said">${escapeHtml(row).replace(/^\(([^)]*)\)/, "<i>($1)</i>")}</p>`,
@@ -1079,7 +1147,7 @@ function initSpine(): void {
   function exampleHtml(step: number): string {
     switch (step) {
       case 1:
-        return mini(paper(linesHtml(LINES.slice(0, 3), 1)));
+        return mini(paper(linesHtml(LINES.slice(0, 5), 1)));
       case 2:
         return mini(
           `${paper(linesHtml(byId("could"), 2, { could: { seg: 2, mark: "ring", note: "who?" } }))}
@@ -1235,7 +1303,7 @@ function initSpine(): void {
     const stats = castStats(Math.max(2, Math.min(active, STEPS)));
     for (const line of $$<HTMLElement>(".cc[data-cast]"))
       $(".cc-s", line).textContent = statText(stats.get(line.dataset.cast as string));
-    if (!render) return;
+
     const made = outputs();
     for (const panel of $$(".pv-p-script")) panel.innerHTML = made.script;
     for (const panel of $$(".pv-p-book")) panel.innerHTML = made.book;
@@ -1452,17 +1520,26 @@ function initSpine(): void {
     clearTimeout(scrapTimer);
     if (n === 5) scrapTimer = window.setTimeout(() => setTab("scraps"), calm.matches ? 0 : 1800);
     // The page drawn afresh for the beat: its new marks and lines arrive, nothing already there moves.
-    $("#wr-lines-doc").innerHTML = linesHtml(LINES, Math.max(n, 0), {}, n);
-    wr.classList.remove("typing");
-    if (n === 1 && !calm.matches) {
-      void wr.offsetWidth;
-      wr.classList.add("typing");
-    }
+    $("#wr-lines-doc").innerHTML =
+      n === 1 ? linesHtml(LINES.slice(0, 5), 1) : linesHtml(LINES, Math.max(n, 0), {}, n);
+    // Step 1 types its opening a character at a time; moving on finishes it at once.
+    finishTyping?.();
+    finishTyping = undefined;
+    const caret = $(".caret", wr);
+    caret.style.transform = "";
+    if (n === 1 && !calm.matches) finishTyping = typewrite($("#wr-lines-doc"), caret);
     for (const [i, button] of $$<HTMLButtonElement>("[data-go]").entries()) {
       if (i + 1 === n) button.setAttribute("aria-current", "step");
       else button.removeAttribute("aria-current");
     }
     caption.innerHTML = captionHtml(n);
+    {
+      const whoButton = $<HTMLButtonElement>("#wr-who");
+      const live = n === 2;
+      whoButton.tabIndex = live ? 0 : -1;
+      if (live) whoButton.removeAttribute("aria-hidden");
+      else whoButton.setAttribute("aria-hidden", "true");
+    }
     $(".caption .finale-label").textContent =
       player.owner === finaleOwner && playing()
         ? "Pause"
@@ -1485,6 +1562,8 @@ function initSpine(): void {
     document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(draw)));
   }
   let scrapTimer = 0;
+
+  let finishTyping: (() => void) | undefined;
 
   function captionHtml(n: number): string {
     const step = steps[n - 1];
@@ -1720,6 +1799,33 @@ function initSpine(): void {
       if (calm.matches) example.classList.add("seen");
       else seenOnce.observe(example);
     }
+    // The phone's first beat types too: each time it comes into view, finished when it leaves.
+    const first = document.querySelector<HTMLElement>(
+      '.step[data-step="1"] .step-example .mini-paper',
+    );
+    if (first && !calm.matches) {
+      const html = first.innerHTML;
+      const words = document.createElement("div");
+      words.className = "sr-only";
+      words.innerHTML = html;
+      first.after(words);
+      first.setAttribute("aria-hidden", "true");
+      let finish: (() => void) | undefined;
+      new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting && !finish && window.innerWidth <= 860) {
+              first.innerHTML = `${html}<span class="caret tw-caret"></span>`;
+              finish = typewrite(first, $(".tw-caret", first));
+            } else if (!entry.isIntersecting && finish) {
+              finish();
+              finish = undefined;
+            }
+          }
+        },
+        { threshold: 0.6 },
+      ).observe(first);
+    }
   }
 }
 {
@@ -1729,7 +1835,7 @@ function initSpine(): void {
     if (built) return;
     built = true;
     near.disconnect();
-    void renderer().then(initSpine);
+    initSpine();
   };
   const near = new IntersectionObserver(
     (entries) => entries.some((e) => e.isIntersecting) && build(),
@@ -1738,6 +1844,8 @@ function initSpine(): void {
     },
   );
   near.observe($("#spine"));
+  // On a phone the beats' examples are part of the page's length: built now, so nothing below moves.
+  if (window.matchMedia("(max-width: 860px)").matches) build();
   const idle = () =>
     "requestIdleCallback" in window
       ? window.requestIdleCallback(build, { timeout: 4000 })
@@ -1748,13 +1856,13 @@ function initSpine(): void {
 
 /* ================================================================== the cast */
 
-/* Built when the page is idle, or as the reader nears it. */
+/* Built with the page, so the section is its full height from the start. */
 function initCast(): void {
   const story = dragon.story;
   const manifest = dragon.manifest;
   const auditions: Record<string, [number, number]> = {
     Narrator: [1, 1],
-    King: [5, 7],
+    King: [10, 10],
     Percival: [40, 40],
     Gerald: [35, 36],
   };
@@ -1823,30 +1931,9 @@ function initCast(): void {
     }
   }
 }
-{
-  let built = false;
-  const build = () => {
-    if (built) return;
-    built = true;
-    near.disconnect();
-    initCast();
-  };
-  const near = new IntersectionObserver(
-    (entries) => entries.some((e) => e.isIntersecting) && build(),
-    {
-      rootMargin: "600px 0px",
-    },
-  );
-  near.observe($("#cast-list"));
-  const idle = () =>
-    "requestIdleCallback" in window
-      ? window.requestIdleCallback(build, { timeout: 5000 })
-      : globalThis.setTimeout(build, 2000);
-  if (document.readyState === "complete") idle();
-  else window.addEventListener("load", idle, { once: true });
-}
+initCast();
 
-/* Section 03: the battle's script with its note to the performer, and the lines as CSV. Built
+/* Section 02: the battle's script with its note to the performer, and the lines as CSV. Built
    when it nears the screen. */
 {
   const build = () => {
@@ -1856,7 +1943,7 @@ function initCast(): void {
     const to = full.indexOf("I’ve been practicing.”") + "I’ve been practicing.”".length;
     const battle = parse(`${front}\n\n${full.slice(from, to)}\n`);
     $("#route-script").innerHTML =
-      `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${(render as Render).renderScript(battle, { header: false })}</div>`;
+      `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${render.renderScript(battle, { header: false })}</div>`;
     // The rows as the Writer's Export › Lines as CSV writes them: who, how, what, and where.
     const all = lines(dragon.story);
     const start = Math.max(
@@ -1872,15 +1959,7 @@ function initCast(): void {
       "page",
     ]).trimEnd();
   };
-  const near = new IntersectionObserver(
-    (entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      near.disconnect();
-      void renderer().then(build);
-    },
-    { rootMargin: "800px 0px" },
-  );
-  near.observe($("#route-script"));
+  build();
 }
 
 /* ================================================================== the real Writer */
@@ -1893,16 +1972,54 @@ function initCast(): void {
     slate: "Slate",
     contrast: "High contrast",
   };
+  // The window: one view (focus, workbench, marks as written or drawn) in one look.
+  const VIEWS: Record<string, { file: (look: string) => string; cap: string; alt: string }> = {
+    focus: {
+      file: (look) => `calm-focus-${look}`,
+      cap: "Focus mode: the toolbar and panels step away, and every paragraph but yours fades back.",
+      alt: "The VoxDown Writer in focus mode, in the LOOK look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.",
+    },
+    workbench: {
+      file: (look) => `full-${look}`,
+      cap: 'The workbench and the preview open: the cast beside the story<span class="wide-only">, and its script on the right</span><span class="narrow-only">; tap for the script beside them</span>.',
+      alt: "The VoxDown Writer with the workbench and the preview open, in the LOOK look: the cast on the left, the dragon story in the middle, its script on the right.",
+    },
+    written: {
+      file: (look) => `calm-written-${look}`,
+      cap: "Marks as written: every @, ( ), [ ] and { } exactly as you typed it.",
+      alt: "The dragon story with its marks as written, in the LOOK look: @Gerald, (deep, polite and utterly unbothered), [snores] and {pause} in the text, each in its colour.",
+    },
+    drawn: {
+      file: (look) => `calm-drawn-${look}`,
+      cap: "Marks drawn: names as tags, directions as small notes above the words.",
+      alt: "The same passage with its marks drawn, in the LOOK look: “Gerald the Dragon” as a tag before his lines, his direction as a small note above “Could you not?”, sounds and the pause as chips.",
+    },
+  };
   const shot = $<HTMLImageElement>("#shot");
   const phone = $<HTMLSourceElement>("#shot-phone");
+  const state = { view: "focus", look: "light" };
+  const showWindow = () => {
+    const view = VIEWS[state.view] as (typeof VIEWS)[string];
+    const name = view.file(state.look);
+    const phoneName = state.view === "workbench" ? `phone-${state.look}` : `${name}-phone`;
+    shot.src = `../../landing/studio/app/${name}.webp`;
+    phone.srcset = `../../landing/studio/app/${phoneName}.webp`;
+    shot.alt = view.alt.replace("LOOK", LOOK_NAMES[state.look] ?? "");
+    $("#view-cap").innerHTML = view.cap;
+  };
+  for (const button of $$<HTMLButtonElement>("[data-view]"))
+    button.addEventListener("click", () => {
+      state.view = button.dataset.view as string;
+      for (const other of $$<HTMLButtonElement>("[data-view]"))
+        other.setAttribute("aria-pressed", String(other === button));
+      showWindow();
+    });
   for (const button of $$<HTMLButtonElement>("[data-look]"))
     button.addEventListener("click", () => {
-      const look = button.dataset.look as string;
-      shot.src = `../../landing/studio/app/full-${look}.webp`;
-      phone.srcset = `../../landing/studio/app/phone-${look}.webp`;
-      shot.alt = `The dragon story in the VoxDown Writer, in the ${LOOK_NAMES[look]} look: Gerald’s and Sir Percival’s lines underlined in their colours, and Gerald’s direction in violet.`;
+      state.look = button.dataset.look as string;
       for (const other of $$<HTMLButtonElement>("[data-look]"))
         other.setAttribute("aria-pressed", String(other === button));
+      showWindow();
     });
 
   // Any screenshot, full size.

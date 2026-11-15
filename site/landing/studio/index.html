@@ -87,7 +87,7 @@
           </div>
           <div class="tip" id="tip" aria-hidden="true"></div>
         </figure>
-        <p class="demo-cap">Voiced with ElevenLabs from this exact file, marks and all. <a id="demo-open" href="../../writer/#example=the-dragon-who-would-not-roar">Open this scene in the Writer <span aria-hidden="true">→</span></a></p>
+        <p class="demo-cap">Voiced with ElevenLabs from this exact file, marks and all. <a id="demo-open" href="../../writer/#example=the-dragon-who-would-not-roar" target="_blank" rel="noopener">Open this scene in the Writer<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
       </div>
     </div>
 
@@ -167,7 +167,7 @@
       </ol>
     </div>
     <div class="wrap">
-      <p class="spine-after"><a class="btn btn-grad btn-lg" href="../../writer/#example=the-dragon-who-would-not-roar">Open this story in the Writer <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a></p>
+      <p class="spine-after"><a class="btn btn-grad btn-lg" href="../../writer/#example=the-dragon-who-would-not-roar" target="_blank" rel="noopener">Open this story in the Writer<span class="sr-only"> (opens in a new tab)</span> <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></p>
     </div>
   </section>
 
@@ -177,8 +177,8 @@
     <div class="wrap">
       <header class="sec-head sec-head-dark">
         <p class="eyebrow eyebrow-dark"><span>02</span> Production-ready</p>
-        <h2 id="prod-title">Four voices, one file.</h2>
-        <p class="sec-lede">The cast list sits at the top of the story: give each character a voice once, and every line they say goes to it. Hear who got the part, then send the same file straight to the booth, or straight to the engine.</p>
+        <h2 id="prod-title">Every voice, one file.</h2>
+        <p class="sec-lede"><span class="wide-only">The cast list sits at the top of the story: give each character a voice once, and every line they say goes to it. </span>Hear who got the part, then send the same file straight to the booth, or straight to the engine.</p>
       </header>
       <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"></div>
       <ul class="cast-list" id="cast-list" aria-label="The cast, each with a line from the recording"></ul>
@@ -186,13 +186,13 @@
         <article class="route">
           <p class="route-kicker">To people</p>
           <h3>Notes that ride along, and never get read out</h3>
-          <p>A note to the performer goes in the script right where it matters. The narrator sees it; the listener never hears it.</p>
+          <p><span class="narrow-only">A script with notes the narrator sees and the listener never hears.</span><span class="wide-only">A note to the performer goes in the script right where it matters. The narrator sees it; the listener never hears it.</span></p>
           <div class="route-viz" id="route-script"></div>
         </article>
         <article class="route">
           <p class="route-kicker">To engines and tools</p>
           <h3>Every line, a row</h3>
-          <p>A voice per character through <b>Make an audiobook…</b>, or every line as CSV or JSON for your own pipeline: who, how, what, and where in the story.</p>
+          <p><span class="narrow-only">A voice per character, or every line as CSV or JSON for your own tools.</span><span class="wide-only">A voice per character through <b>Make an audiobook…</b>, or every line as CSV or JSON for your own pipeline: who, how, what, and where in the story.</span></p>
           <div class="route-viz engines" aria-hidden="true">
             <span class="eng"><b>ElevenLabs</b><i>your account</i></span>
             <span class="eng"><b>OpenAI</b><i>your account</i></span>
@@ -203,8 +203,12 @@
         </article>
       </div>
       <div class="route-foot">
-        <pre class="term"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
-        <p class="route-note">The Writer reaches the voices through this small connector on your computer. You pay the voice service directly, at its prices; VoxDown never sees your story or your keys.</p>
+        <pre class="term wide-only-block"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
+        <p class="route-note"><span class="wide-only">The Writer reaches the voices through this small connector on your computer. You pay the voice service directly, at its prices; VoxDown never sees your story or your keys.</span><span class="narrow-only">Voices come through a small connector on your computer: ElevenLabs, OpenAI or Azure on your own account, or Kokoro, free. VoxDown never sees your story or your keys.</span></p>
+        <details class="more more-dark narrow-only-block">
+          <summary>The command</summary>
+          <pre class="term"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
+        </details>
       </div>
       <p class="also-out">Also from the same file: a Word document with your comments as Word comments, an EPUB, a standard manuscript to submit, and a production file for audio tools.</p>
     </div>
@@ -216,13 +220,23 @@
       <header class="sec-head">
         <p class="eyebrow"><span>03</span> The real thing</p>
         <h2 id="proof-title">A whole book, in one calm window.</h2>
-        <p class="sec-lede">The Writer’s own screens, with the dragon story open. <span class="wide-only">The cast on the left, the story in the middle, the script on the right.</span><span class="narrow-only">Here, the story itself; open the full window to see the cast and the script beside it.</span> Pick a look.</p>
+        <p class="sec-lede">The Writer’s own screens, with the dragon story open: as quiet as a blank page, or with everything to hand. <span class="narrow-only">Tap the picture for the whole window.</span></p>
       </header>
 
-      <figure class="shot-tile">
+      <figure class="shot-tile" aria-labelledby="view-cap">
         <div class="shot-bar">
           <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-          <div class="seg seg-looks" role="group" aria-label="The Writer’s look">
+          <div class="seg seg-views" role="group" aria-label="What the window shows">
+            <button type="button" data-view="focus" aria-pressed="true">Focus</button>
+            <button type="button" data-view="workbench" aria-pressed="false">Workbench</button>
+            <button type="button" data-view="written" aria-pressed="false">As written</button>
+            <button type="button" data-view="drawn" aria-pressed="false">Drawn</button>
+          </div>
+        </div>
+        <div class="shot-sub">
+          <p class="view-cap" id="view-cap" aria-live="polite">Focus mode: the toolbar and panels step away, and every paragraph but yours fades back.</p>
+          <div class="seg seg-looks" role="group" aria-label="Look">
+            <span class="seg-label" aria-hidden="true">Look</span>
             <button type="button" data-look="light" aria-pressed="true">Paper</button>
             <button type="button" data-look="sepia" aria-pressed="false">Sepia</button>
             <button type="button" data-look="dark" aria-pressed="false">Night</button>
@@ -232,8 +246,8 @@
         </div>
         <button type="button" class="zoom" data-zoom="look" aria-label="View the whole window, full size">
           <picture>
-            <source media="(max-width: 600px)" srcset="../../landing/studio/app/phone-light.webp" width="800" height="480" id="shot-phone">
-            <img class="shot" id="shot" src="../../landing/studio/app/full-light.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="The dragon story in the VoxDown Writer, in the Paper look: Gerald’s and Sir Percival’s lines underlined in their colours, and Gerald’s direction in violet.">
+            <source media="(max-width: 600px)" srcset="../../landing/studio/app/calm-focus-light-phone.webp" width="800" height="480" id="shot-phone">
+            <img class="shot" id="shot" src="../../landing/studio/app/calm-focus-light.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="The VoxDown Writer in focus mode, in the Paper look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.">
           </picture>
           <span class="zoom-hint" aria-hidden="true">View the whole window</span>
         </button>
@@ -268,16 +282,16 @@
       <div class="index">
         <h3 class="index-title">And it quietly takes care of the rest</h3>
         <ul class="outcomes">
-          <li><b>Nothing slips through.</b> <span class="out-d">Quotes with no speaker, and odd marks, are flagged.</span></li>
-          <li><b>Nothing gets lost.</b> <span class="out-d">Drafts kept as you type; versions you name.</span></li>
-          <li><b>Start from what you have.</b> <span class="out-d">Word, EPUB, Fountain or a paste from Docs.</span></li>
-          <li><b>Built for long books.</b> <span class="out-d">150,000 words open in a quarter of a second.</span></li>
+          <li><b>Warnings with fixes.</b> <span class="out-d">Odd marks get a warning and a fix; “Next quote with no speaker” finds each unnamed line.</span></li>
+          <li><b>Autosaved drafts and versions.</b> <span class="out-d">Drafts kept as you type, so a closed tab loses nothing; name versions to go back to.</span></li>
+          <li><b>Import Word and EPUB.</b> <span class="out-d">Or Fountain, Markdown, or a paste from Google Docs with the formatting kept.</span></li>
+          <li><b>Built for long books.</b> <span class="out-d">150,000 words open in about a quarter of a second.</span></li>
         </ul>
         <details class="more">
           <summary>Everything it does</summary>
           <ul class="index-list">
             <li>Warnings, each with a fix</li>
-            <li>Next quote with no speaker</li>
+            <li>Next quote with no speaker <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>K</kbd></li>
             <li>Go to a chapter or scene <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>O</kbd></li>
             <li>Move a paragraph, scene or chapter</li>
             <li>Focus mode and typewriter scrolling</li>

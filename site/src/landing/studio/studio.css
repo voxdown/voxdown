@@ -1392,25 +1392,6 @@ button {
     transform: scaleX(0);
   }
 }
-.pen-hero {
-  position: absolute;
-  z-index: 3;
-  width: clamp(8rem, 13vw, 12rem);
-  height: auto;
-  right: clamp(-2.5rem, -2vw, -1rem);
-  top: -3.6rem;
-  rotate: 8deg;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.6s ease;
-  filter: drop-shadow(0 14px 18px rgb(21 17 42 / 0.25));
-}
-
-.pen-hero.loaded {
-  opacity: 1;
-}
-
-.pen-hero.missing,
 .pen-final.missing,
 .lock.missing {
   display: none;
@@ -2312,31 +2293,26 @@ button {
     transform: translateY(4px);
   }
 }
+/* The step's one pencil: its lead at the origin, moved by a transform as it draws. */
 .pencil-tip {
+  position: absolute;
+  left: calc(-0.0488 * 5.6rem);
+  top: calc(-0.9619 * 5.6rem * 347 / 520);
   width: 5.6rem;
   height: auto;
+  z-index: 2;
   opacity: 0;
+  pointer-events: none;
   filter: drop-shadow(0 8px 10px rgb(21 17 42 / 0.25));
-  animation: pencil-move 1.7s ease var(--d) both;
+  will-change: transform, opacity;
 }
-
-@keyframes pencil-move {
-  0% {
-    opacity: 0;
-    transform: translate(50px, -30px);
-  }
-  20% {
-    opacity: 1;
-    transform: translate(0, 0);
-  }
-  60% {
-    opacity: 1;
-    transform: translate(24px, 3px);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(30px, -40px);
-  }
+/* While it draws, the marks come only from the pencil: no fades of their own. */
+.annot.drawing .to-draw,
+.annot.drawing .ring,
+.annot.drawing .under,
+.annot.drawing .lead,
+.annot.drawing .hand {
+  animation: none;
 }
 /* "Who says this?" */
 .picker {
@@ -3489,12 +3465,6 @@ button {
 @media (max-width: 960px) {
   .hero-in {
     grid-template-columns: 1fr;
-  }
-
-  .pen-hero {
-    top: -4rem;
-    right: 0;
-    width: 8rem;
   }
 
   .routes,
@@ -5210,11 +5180,6 @@ html:not(.js) .big-edit .struck {
   .fine {
     margin-top: 0.7rem;
   }
-
-  .pen-hero {
-    top: -2.6rem;
-    width: 6.5rem;
-  }
 }
 
 /* The workbench's tab row fits its badge at narrower widths. */
@@ -5532,15 +5497,6 @@ html:not(.js) .big-edit .struck {
 .js .big-edit:not(.corrected) .pen-free {
   opacity: 0;
 }
-/* The hero's pencil, resting on the scene: a little smaller than the pen it replaces. */
-.pen-hero {
-  width: clamp(7rem, 11vw, 10rem);
-}
-@media (max-width: 600px) {
-  .pen-hero {
-    width: 5.6rem;
-  }
-}
 @media (max-width: 860px) {
   /* A shorter pencil in the narrow card; its lead in the same place. */
   .big-edit .pen-free {
@@ -5548,4 +5504,105 @@ html:not(.js) .big-edit .struck {
     left: calc(100% + 0.016em);
     top: 0.011em;
   }
+}
+
+/* The hero's pencil, resting with its lead at the end of the line it drew under "whole cast." */
+.pen-under .pen-rest {
+  position: absolute;
+  /* The line runs from -3% to 97% of the words; it ends at 97.86% of its own width. */
+  left: calc(94.86% - 0.0735em);
+  bottom: -0.098em;
+  width: 1.5em;
+  height: auto;
+  object-fit: contain;
+  transform: none;
+  transform-origin: 0 100%;
+  filter: drop-shadow(0 10px 14px rgb(21 17 42 / 0.22));
+  animation: pen-rest-in 0.4s ease 1.35s both;
+}
+.pen-under .pen-rest.missing {
+  display: none;
+}
+@keyframes pen-rest-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (max-width: 600px) {
+  .pen-under .pen-rest {
+    width: 1.2em;
+    left: calc(94.86% - 0.0586em);
+    bottom: -0.09em;
+  }
+}
+
+/* Rings clear of the letters on the phone too. */
+.ink-ring {
+  padding: 0.46em 0.85em 0.5em;
+  margin: 0 -0.85em;
+  background-size: 100% 100%;
+}
+
+/* The full view on a phone: dark around the picture, and a cue to pan. */
+@media (max-width: 600px) {
+  .lightbox {
+    background: #15112a;
+  }
+  .lb-hint {
+    position: fixed;
+    left: 50%;
+    bottom: 1.2rem;
+    translate: -50% 0;
+    margin: 0;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: rgb(21 17 42 / 0.88);
+    color: #fff;
+    font: 600 0.9rem / 1 var(--body);
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  .lb-hint.gone {
+    opacity: 0;
+  }
+}
+.lb-hint {
+  display: none;
+}
+@media (max-width: 600px) {
+  .lightbox[open] .lb-hint {
+    display: block;
+  }
+}
+
+/* Short screens: the mock's page a touch smaller, so each step's lines and notes fit above the
+   status bar. */
+@media (max-height: 820px) and (min-width: 861px) {
+  .doc {
+    font-size: 14px;
+    line-height: 1.62;
+    padding-top: 1.1rem;
+  }
+  .desk {
+    padding-top: 0.6rem;
+  }
+}
+/* A ringed spoken line on the phone: the ring round the words, the speaker's underline under them. */
+.mini-paper .k-speech.ink-ring {
+  padding: 0.5em 0.95em 0.56em;
+  margin: 0 -0.95em;
+  background-image: url("/landing/studio/pen/pencil-circle.webp"),
+    linear-gradient(
+      color-mix(in srgb, var(--sp) 60%, transparent),
+      color-mix(in srgb, var(--sp) 60%, transparent)
+    );
+  background-size: 100% 100%, calc(100% - 1.9em) 2px;
+  background-position: center, 0.95em calc(100% - 0.36em);
+  background-repeat: no-repeat;
+  background-color: transparent;
+}
+.step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech.ink-ring {
+  background-image: url("/landing/studio/pen/pencil-circle.webp");
+  background-size: 100% 100%;
+  background-position: center;
 }

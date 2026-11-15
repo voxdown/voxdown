@@ -45,7 +45,7 @@
     <div class="hero-in wrap">
       <div class="hero-words">
         <p class="pill-note"><span class="dot-live" aria-hidden="true"></span>Free · open source · runs in your browser</p>
-        <h1 id="hero-title">Write it once.<br>Hand it to the <span class="keep pen-under">whole cast.<img src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" decoding="async"></span></h1>
+        <h1 id="hero-title">Write it once.<br>Hand it to the <span class="keep pen-under">whole cast.<img src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" decoding="async"><img class="pen-rest" data-clay src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" decoding="async"></span></h1>
         <p class="lede">VoxDown is plain text that knows who says every line, and how. Write in the free Writer, then hand the very same file to the booth or to an audiobook engine.</p>
         <div class="cta-row">
           <a class="btn btn-grad btn-lg" href="../../writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span>
@@ -59,7 +59,6 @@
       </div>
 
       <div class="hero-demo">
-        <img class="pen-hero" data-clay src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" decoding="async">
         <figure class="demo" id="demo" aria-label="A recorded scene, as written in VoxDown and as heard">
           <div class="demo-head">
             <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -155,7 +154,7 @@
         </li>
         <li class="step" data-step="6" data-label="Hand over" data-feature="Preview › Script, Book · Export › Each character’s lines" data-try="Try the tabs: Script, Book, Lines.">
           <h3>Three handouts, zero retyping.</h3>
-          <p>The script for the table read, the book for readers, and each character’s lines for the booth, all from the same file.</p>
+          <p>The script for the table read, the book for readers, and each character’s lines for the booth, with the cue before each one.</p>
         </li>
         <li class="step" data-step="7" data-label="Audio" data-feature="File › Make an audiobook…">
           <h3>Press play. That’s the file talking.</h3>
@@ -179,7 +178,7 @@
       <header class="sec-head sec-head-dark">
         <p class="eyebrow eyebrow-dark"><span>02</span> Production-ready</p>
         <h2 id="prod-title">Every voice, one file.</h2>
-        <p class="sec-lede"><span class="wide-only">The cast list sits at the top of the story: give each character a voice once, and every line they say goes to it. </span>Hear who got the part, then send the same file straight to the booth, or straight to the engine.</p>
+        <p class="sec-lede"><span class="wide-only">The cast list sits at the top of the story. Pick each character’s voice once in Make an audiobook…, and every line they say goes to it. </span>Hear who got the part, then choose who gets the file: people who perform it, or an engine that voices it, at that service’s own prices, or free with Kokoro.</p>
       </header>
       <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"></div>
       <ul class="cast-list" id="cast-list" aria-label="The cast, each with a line from the recording"></ul>
@@ -205,13 +204,13 @@
       </div>
       <div class="route-foot">
         <pre class="term wide-only-block"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
-        <p class="route-note"><span class="wide-only">The Writer reaches the voices through this small connector on your computer. You pay the voice service directly, at its prices; VoxDown never sees your story or your keys.</span><span class="narrow-only">Voices come through a small connector on your computer: ElevenLabs, OpenAI or Azure on your own account, or Kokoro, free. VoxDown never sees your story or your keys.</span></p>
+        <p class="route-note"><span class="wide-only">The small connector the Writer reaches your voices through. VoxDown never sees your story or your keys.</span><span class="narrow-only">Voices come through a small connector on your computer. VoxDown never sees your story or your keys.</span></p>
         <details class="more more-dark narrow-only-block">
           <summary>The command</summary>
           <pre class="term"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
         </details>
       </div>
-      <p class="also-out">Also from the same file: a Word document with your comments as Word comments, an EPUB, a standard manuscript to submit, and a production file for audio tools.</p>
+      <p class="also-out">Also: a Word document with your comments as Word comments, an EPUB, a standard manuscript to submit, and a production file for audio tools.</p>
     </div>
   </section>
 
@@ -405,6 +404,7 @@
 <dialog class="lightbox" id="lightbox" aria-label="Screenshot, full size">
   <form method="dialog"><button class="lb-close" type="submit" aria-label="Close">×</button></form>
   <img id="lightbox-img" alt="" width="1600" height="1000">
+  <p class="lb-hint" id="lb-hint" aria-hidden="true">Drag to look around</p>
 </dialog>
 <p class="sr-only" aria-live="polite" id="announce"></p>
 <script type="module" src="../../src/landing/studio/main.ts"></script>

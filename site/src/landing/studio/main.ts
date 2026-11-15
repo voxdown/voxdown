@@ -1291,7 +1291,14 @@ function initSpine(): void {
     6: "preview",
     7: "audio",
   };
-  const FOCUS_OF: Record<number, string> = { 2: "could", 3: "rumble", 4: "battle", 5: "imaginary" };
+  /** The lines each step is about: all shown, with their notes, above the status bar. The last is the
+   * one that must be seen if they can't all fit. */
+  const FOCUS_OF: Record<number, string[]> = {
+    2: ["could"],
+    3: ["rumble", "pause", "could"],
+    4: ["battle"],
+    5: ["imaginary"],
+  };
 
   const countWords = (text: string) => text.split(/\s+/).filter((word) => /\w/.test(word)).length;
   const OPENING_WORDS = countWords(
@@ -1507,7 +1514,7 @@ function initSpine(): void {
       `${title} moved ${way === "up" ? "before" : "after"} ${other}. Its text moved with it.`,
     );
     from?.focus();
-    if (active === 4 && window.innerWidth > 860) scrollDoc("battle");
+    if (active === 4 && window.innerWidth > 860) scrollDoc(["battle"]);
   }
   for (const list of $$("[data-board]")) {
     list.addEventListener("click", (event) => {
@@ -1618,6 +1625,7 @@ function initSpine(): void {
     if (!picker.hidden && n !== 2) picker.hidden = true;
     if (window.innerWidth <= 860) return;
     scrollDoc(FOCUS_OF[n]);
+    finishPen?.();
     annot.replaceChildren();
     // The pencil measures the words once they're laid out, in their fonts, and the page has moved.
     const draw = () => {
@@ -1667,23 +1675,49 @@ function initSpine(): void {
     setStep(n);
   }
 
-  function scrollDoc(id?: string): void {
+  function scrollDoc(ids: string[] = []): void {
     const page = doc.parentElement as HTMLElement;
-    const line = id ? doc.querySelector<HTMLElement>(`[data-id="${id}"]`) : null;
     const room = page.clientHeight;
     const most = Math.max(0, doc.scrollHeight - room + 24);
-    const y = line ? Math.min(most, Math.max(0, line.offsetTop - room * 0.3)) : 0;
-    doc.style.transform = `translateY(${-y}px)`;
+    const lines = ids
+      .map((id) => doc.querySelector<HTMLElement>(`[data-id="${id}"]`))
+      .filter((line): line is HTMLElement => Boolean(line?.offsetParent));
+    let y = 0;
+    if (lines.length) {
+      // Room above for a ring or a note, below for a ring's lower stroke.
+      const top = Math.min(...lines.map((l) => l.offsetTop)) - 18;
+      const bottom = Math.max(...lines.map((l) => l.offsetTop + l.offsetHeight)) + 18;
+      const last = lines[lines.length - 1] as HTMLElement;
+      y =
+        bottom - top <= room
+          ? top - (room - (bottom - top)) / 2
+          : last.offsetTop + last.offsetHeight + 18 - room;
+    }
+    doc.style.transform = `translateY(${-Math.min(most, Math.max(0, y))}px)`;
   }
 
+  /** A step's pencil, drawing; finishing it at once leaves its marks complete. */
+  let finishPen: (() => void) | undefined;
+
   function drawPen(n: number, answered = false): void {
+    finishPen?.();
+    finishPen = undefined;
     annot.replaceChildren();
     const marks = PEN[n];
     if (!marks) return;
     // The margin: the strip of paper right of the text, where an editor writes.
     const margin = doc.clientWidth - Number.parseFloat(getComputedStyle(doc).paddingRight) + 16;
     const base = doc.getBoundingClientRect();
-    for (const [i, mark] of marks.entries()) {
+    type Stroke = {
+      el: HTMLElement;
+      kind: "ring" | "under" | "lead" | "word";
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    };
+    const strokes: Stroke[] = [];
+    for (const mark of marks) {
       const [id, inner] = mark.at.split(" ");
       const line = doc.querySelector<HTMLElement>(`[data-id="${id}"]`);
       const target = inner ? line?.querySelector<HTMLElement>(inner) : line;
@@ -1705,15 +1739,15 @@ function initSpine(): void {
           .map((r) => r.right - base.left),
       );
       const group = document.createElement("div");
-      // "who?" answered: struck through, the speaker named, a tick; the pencil itself stays away.
+      // "who?" answered: struck through, the speaker named, a tick; nothing left to draw.
       const done = mark.word === "who?" && Boolean(who);
       group.className = `pen mark-${mark.shape}${done ? " pen-done" : ""}${answered ? " pen-now" : ""}`;
-      group.style.setProperty("--d", `${i * 0.6}s`);
+      // A ring clear of the letters: wider and taller than the words it circles.
       const shape =
         mark.shape === "circle"
-          ? `<img class="ring" src="../../landing/studio/pen/pencil-circle.webp" alt="" style="left:${x - 12}px;top:${y - 8}px;width:${w + 24}px;height:${h + 16}px">`
+          ? `<img class="ring" src="../../landing/studio/pen/pencil-circle.webp" alt="" style="left:${x - 16}px;top:${y - 12}px;width:${w + 32}px;height:${h + 24}px">`
           : `<img class="under" src="../../landing/studio/pen/pencil-underline.webp" alt="" style="left:${x - 4}px;top:${y + h - 9}px;width:${w + 8}px;height:20px">`;
-      const leadFrom = end + 14;
+      const leadFrom = end + 18;
       const lead = margin - 8 - leadFrom;
       // A leader only where it clears the words by a margin; otherwise the note alone.
       const leader =
@@ -1723,18 +1757,147 @@ function initSpine(): void {
       const words = done
         ? `<i><s>who?</s><br>${escapeHtml(shortName(who))}</i>${TICK}`
         : `<i>${escapeHtml(mark.word)}</i>`;
-      group.innerHTML = `${shape}${leader}<span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px">${words}</span>${
-        done || calm.matches
-          ? ""
-          : // The pencil's lead (at 4.9% and 96.2% of its picture) where the note's first letter sits.
-            `<img class="pencil-tip" src="../../landing/studio/pen/red-pencil.webp" alt="" style="left:${margin - 6}px;top:${y + h / 2 - 48}px">`
-      }`;
-      // The moving pencil leaves once it has written: never a pencil left hanging over the page.
-      group
-        .querySelector(".pencil-tip")
-        ?.addEventListener("animationend", (event) => (event.target as HTMLElement).remove());
+      group.innerHTML = `${shape}${leader}<span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px">${words}</span>`;
       annot.append(group);
+      if (done) continue;
+      const ring = $(".ring, .under", group);
+      strokes.push({
+        el: ring,
+        kind: mark.shape === "circle" ? "ring" : "under",
+        x: ring.offsetLeft,
+        y: ring.offsetTop,
+        w: ring.offsetWidth,
+        h: ring.offsetHeight,
+      });
+      const leadEl = group.querySelector<HTMLElement>(".lead");
+      if (leadEl)
+        strokes.push({
+          el: leadEl,
+          kind: "lead",
+          x: leadEl.offsetLeft,
+          y: leadEl.offsetTop,
+          w: leadEl.offsetWidth,
+          h: leadEl.offsetHeight,
+        });
+      const hand = $(".hand", group);
+      const letters = $("i", hand);
+      strokes.push({
+        el: hand,
+        kind: "word",
+        x: hand.offsetLeft,
+        y: hand.offsetTop,
+        w: letters.offsetWidth + 4,
+        h: hand.offsetHeight,
+      });
     }
+    if (calm.matches || answered || !strokes.length) return;
+
+    // One pencil, its lead (at 4.9% and 96.2% of its picture) at the point it is drawing.
+    const pencil = document.createElement("img");
+    pencil.className = "pencil-tip";
+    pencil.src = "../../landing/studio/pen/red-pencil.webp";
+    pencil.alt = "";
+    annot.classList.add("drawing");
+    annot.append(pencil);
+    for (const stroke of strokes) stroke.el.classList.add("to-draw");
+
+    // Each stroke's path for the lead, and how long it takes.
+    const ringAt = (s: Stroke, t: number): [number, number] => {
+      // Clockwise from about ten o'clock, once round and a little over, as a hand rings a word.
+      const a = ((-60 + t * 380) * Math.PI) / 180;
+      return [
+        s.x + s.w / 2 + (s.w / 2 - 4) * Math.sin(a),
+        s.y + s.h / 2 - (s.h / 2 - 4) * Math.cos(a),
+      ];
+    };
+    const along = (s: Stroke, t: number): [number, number] =>
+      s.kind === "word" ? [s.x + s.w * t, s.y + s.h * 0.78] : [s.x + s.w * t, s.y + s.h * 0.5];
+    const DUR = { ring: 300, under: 200, lead: 140, word: 240 } as const;
+    const MOVE = 70;
+    type Seg = { s: Stroke; from: number; to: number };
+    const plan: Seg[] = [];
+    let clock0 = 60;
+    for (const s of strokes) {
+      clock0 += MOVE;
+      plan.push({ s, from: clock0, to: clock0 + DUR[s.kind] });
+      clock0 += DUR[s.kind];
+    }
+    const total = clock0 + 260;
+    const startAt = (s: Stroke): [number, number] =>
+      s.kind === "ring" ? ringAt(s, 0) : along(s, 0);
+    const endAt = (s: Stroke): [number, number] => (s.kind === "ring" ? ringAt(s, 1) : along(s, 1));
+    const reveal = (s: Stroke, t: number) => {
+      const p = Math.max(0, Math.min(1, t));
+      if (s.kind === "ring") {
+        s.el.style.maskImage = `conic-gradient(from -60deg, #000 ${(p * 380).toFixed(1)}deg, transparent 0)`;
+        s.el.style.setProperty("-webkit-mask-image", s.el.style.maskImage);
+      } else if (s.kind === "lead") {
+        // The arrow is drawn mirrored: its visual left is its own right.
+        s.el.style.clipPath = `inset(0 0 0 ${((1 - p) * 100).toFixed(1)}%)`;
+      } else s.el.style.clipPath = `inset(-20% ${((1 - p) * 100).toFixed(1)}% -20% 0)`;
+    };
+    const finishStroke = (s: Stroke) => {
+      s.el.classList.remove("to-draw");
+      s.el.style.maskImage = "";
+      s.el.style.removeProperty("-webkit-mask-image");
+      s.el.style.clipPath = "";
+    };
+    for (const seg of plan) reveal(seg.s, 0);
+    const first = startAt((plan[0] as Seg).s);
+    const offstage: [number, number] = [first[0] + 90, first[1] - 70];
+    const put = ([x, y]: [number, number], fade = 1) => {
+      pencil.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      pencil.style.opacity = String(fade);
+    };
+    put(offstage, 0);
+    const t0 = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const t = now - t0;
+      let pos: [number, number] = offstage;
+      let fade = 1;
+      let prevEnd: [number, number] = offstage;
+      for (const seg of plan) {
+        if (t < seg.from) {
+          // Travelling to this stroke's start.
+          const k = Math.max(0, Math.min(1, (t - (seg.from - MOVE)) / MOVE));
+          const target = startAt(seg.s);
+          const e = k * k * (3 - 2 * k);
+          pos = [
+            prevEnd[0] + (target[0] - prevEnd[0]) * e,
+            prevEnd[1] + (target[1] - prevEnd[1]) * e,
+          ];
+          if (seg === plan[0]) fade = k;
+          break;
+        }
+        const k = Math.min(1, (t - seg.from) / (seg.to - seg.from));
+        reveal(seg.s, k);
+        pos = seg.s.kind === "ring" ? ringAt(seg.s, k) : along(seg.s, k);
+        if (k >= 1) finishStroke(seg.s);
+        prevEnd = endAt(seg.s);
+        if (k < 1) break;
+      }
+      const last = plan[plan.length - 1] as Seg;
+      if (t > last.to) {
+        // Lifted away.
+        const k = Math.min(1, (t - last.to) / 260);
+        const e = endAt(last.s);
+        pos = [e[0] + 40 * k, e[1] - 50 * k];
+        fade = 1 - k;
+      }
+      put(pos, fade);
+      if (t < total) frame = requestAnimationFrame(tick);
+      else finish();
+    };
+    const finish = () => {
+      cancelAnimationFrame(frame);
+      for (const seg of plan) finishStroke(seg.s);
+      pencil.remove();
+      annot.classList.remove("drawing");
+      if (finishPen === finish) finishPen = undefined;
+    };
+    finishPen = finish;
+    frame = requestAnimationFrame(tick);
   }
 
   /* The finale: the scene, voiced from this file, each line lit as it's heard. */
@@ -1944,7 +2107,7 @@ function initCast(): void {
     item.style.setProperty("--sp", color);
     item.innerHTML = `
       <div class="cast-top"><span class="medal" aria-hidden="true">${escapeHtml(name.replace(/^(The|Sir) /, "").slice(0, 1))}</span>
-        <div><h3>${escapeHtml(name)}</h3><p class="cast-voice">${voice ? `Voice: ${escapeHtml(voice)}, on ElevenLabs` : ""}</p></div></div>
+        <div><h3>${escapeHtml(name)}</h3><p class="cast-voice">${voice ? `In the recording: ${escapeHtml(voice)}, on ElevenLabs` : ""}</p></div></div>
       <p class="cast-about">${escapeHtml(member.about ?? "")}</p>
       <p class="cast-line"><code>${marked(story, from.line[0], from.line[1], dragonColors)}</code></p>
       <button class="audition" type="button" aria-pressed="false">
@@ -2119,6 +2282,16 @@ initCast();
         };
         if (big.complete) fit();
         else big.addEventListener("load", fit, { once: true });
+        // "Drag to look around", until the first drag.
+        const hint = $("#lb-hint");
+        hint.classList.remove("gone");
+        const opened = performance.now();
+        const gone = () => {
+          if (performance.now() - opened < 400) return;
+          hint.classList.add("gone");
+          box.removeEventListener("scroll", gone);
+        };
+        box.addEventListener("scroll", gone, { passive: true });
       }
     });
   box.addEventListener("click", (event) => {

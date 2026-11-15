@@ -1009,6 +1009,34 @@ const draftIn = (page) =>
   console.log("writer: comments put back, speakers said, the details left alone, F6: ok");
 }
 
+// The workbench's edge, dragged and moved with the arrow keys, as soon as the Writer opens.
+{
+  const context = await browser.newContext({ viewport: { width: 1400, height: 860 } });
+  const sizer = await context.newPage();
+  watch(sizer, "writer workbench width");
+  await sizer.goto(`${base}/writer/#example=the-dragon-who-would-not-roar`);
+  await sizer.waitForSelector(".cm-content");
+  await benchTab(sizer, "scenes");
+  const width = () =>
+    sizer.evaluate(() =>
+      Math.round(document.querySelector("#bench").getBoundingClientRect().width),
+    );
+  const before = await width();
+  const edge = await sizer.locator("#bench-resize").boundingBox();
+  await sizer.mouse.move(edge.x + 4, edge.y + 200);
+  await sizer.mouse.down();
+  await sizer.mouse.move(edge.x + 160, edge.y + 200, { steps: 8 });
+  await sizer.mouse.up();
+  const dragged = await width();
+  await sizer.focus("#bench-resize");
+  await sizer.keyboard.press("ArrowLeft");
+  const keyed = await width();
+  if (!(dragged > before + 60) || !(keyed < dragged))
+    problems.push(`writer: the workbench's edge gives ${before}, ${dragged}, ${keyed} px`);
+  await context.close();
+  console.log("writer: the workbench's width, dragged and keyed: ok");
+}
+
 // A whole paragraph cut to Scraps and dragged back before another: its own paragraph again.
 {
   const context = await browser.newContext({ viewport: { width: 1400, height: 860 } });

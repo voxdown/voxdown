@@ -16,6 +16,8 @@ export type ScrapsHost = {
   open(): void;
   save(): void;
   fileName(): string;
+  /** Whether the scraps are in this browser only, changed since saved beside the story, or saved. */
+  standing(): "none" | "browser" | "changed" | "saved";
   notice(message: string): void;
 };
 
@@ -201,6 +203,18 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
   });
 
   draw();
-  panel.append(head, list);
+  panel.append(head);
+  // Scraps only this browser has: said, with the way to keep them beside the story.
+  const standing = host.standing();
+  if (standing === "browser" || standing === "changed") {
+    const warn = document.createElement("p");
+    warn.className = "scraps-standing";
+    warn.textContent =
+      standing === "browser"
+        ? `Kept in this browser only. Save… keeps them in ${host.fileName()}, beside the story.`
+        : `Changed since they were saved in ${host.fileName()}. Save… keeps the file up to date.`;
+    panel.append(warn);
+  }
+  panel.append(list);
   return panel;
 }

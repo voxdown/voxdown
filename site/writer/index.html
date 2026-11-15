@@ -90,34 +90,49 @@
     <div class="menu">
       <button class="menu-button" role="menuitem" type="button" id="view-menu-button" aria-haspopup="menu" aria-controls="view-menu" aria-expanded="false">View</button>
       <div class="menu-list" role="menu" id="view-menu" aria-labelledby="view-menu-button" hidden>
-        <button role="menuitemcheckbox" type="button" data-view="focus" aria-checked="false">Focus<kbd data-keys="Mod+Shift+F"></kbd></button>
-        <button role="menuitemcheckbox" type="button" data-view="typewriter" aria-checked="false">Typewriter scrolling</button>
-        <button role="menuitemcheckbox" type="button" data-view="style" aria-checked="false">Style hints</button>
-        <button role="menuitem" type="button" data-command="overused">Words leaned on…</button>
-        <button role="menuitemcheckbox" type="button" data-view="smart" aria-checked="true">Curly quotes and dashes as I type</button>
-        <button role="menuitemcheckbox" type="button" data-view="toolbar" aria-checked="true">Toolbar</button>
-        <button role="menuitemcheckbox" type="button" data-view="hover-bar" aria-checked="true">The bar over a passage</button>
+        <span class="menu-label" id="panels-label" aria-hidden="true">Panels</span>
+        <div role="group" aria-labelledby="panels-label">
+          <button role="menuitemcheckbox" type="button" data-view="side" aria-checked="true">Preview: script or book<kbd data-keys="Mod+\"></kbd></button>
+          <button role="menuitemcheckbox" type="button" data-view="bench" aria-checked="false">Workbench<kbd data-keys="Mod+Shift+\"></kbd></button>
+          <button role="menuitemcheckbox" type="button" data-view="rail-names" aria-checked="true">Scene names on the rail</button>
+        </div>
+        <hr>
+        <span class="menu-label" id="marks-label" aria-hidden="true">Marks in the text</span>
+        <div role="group" aria-labelledby="marks-label">
+          <button role="menuitemradio" type="button" data-view="written" aria-checked="true" title="Every @, ( ), [ ] and { } as it is written: nothing moves as you go">As written<kbd data-keys="Mod+Shift+M"></kbd></button>
+          <button role="menuitemradio" type="button" data-view="drawn" aria-checked="false" title="Names as tags, directions above the words, sounds as chips: the marks show raw on the line being written">Drawn</button>
+        </div>
+        <button role="menuitemcheckbox" type="button" data-view="color" aria-checked="true">Each speaker in a color</button>
+        <div class="submenu" role="none" id="drawn-group">
+          <button role="menuitem" type="button" class="submenu-button" id="drawn-button" aria-haspopup="menu" aria-expanded="false" aria-controls="drawn-only">Drawn marks show</button>
+          <div class="menu-list submenu-list drawn-only" role="menu" id="drawn-only" aria-labelledby="drawn-button" hidden>
+            <button role="menuitemcheckbox" type="button" data-view="names" aria-checked="true">Names</button>
+            <button role="menuitemcheckbox" type="button" data-view="directions" aria-checked="true">Directions</button>
+            <button role="menuitemcheckbox" type="button" data-view="sounds" aria-checked="true">Sounds</button>
+            <button role="menuitemcheckbox" type="button" data-view="vocal" aria-checked="true">Character sounds</button>
+            <button role="menuitemcheckbox" type="button" data-view="pages" aria-checked="true">Page turns</button>
+            <button role="menuitemcheckbox" type="button" data-view="notes" aria-checked="true">Notes</button>
+          </div>
+        </div>
+        <span class="menu-hint" id="drawn-hint">Only when marks are drawn</span>
+        <hr>
+        <span class="menu-label" id="writing-label" aria-hidden="true">Writing</span>
+        <div role="group" aria-labelledby="writing-label">
+          <button role="menuitemcheckbox" type="button" data-view="focus" aria-checked="false">Focus<kbd data-keys="Mod+Shift+F"></kbd></button>
+          <button role="menuitemcheckbox" type="button" data-view="typewriter" aria-checked="false">Typewriter scrolling</button>
+          <button role="menuitemcheckbox" type="button" data-view="style" aria-checked="false">Style hints</button>
+          <button role="menuitemcheckbox" type="button" data-view="smart" aria-checked="true">Curly quotes and dashes as I type</button>
+          <button role="menuitemcheckbox" type="button" data-view="toolbar" aria-checked="true">Toolbar</button>
+          <button role="menuitemcheckbox" type="button" data-view="hover-bar" aria-checked="true">The bar over a passage</button>
+        </div>
+        <hr>
         <button role="menuitem" type="button" data-command="board">Scene board…</button>
-        <button role="menuitem" type="button" data-command="comments">Comments…</button>
-        <button role="menuitem" type="button" data-command="goal">Writing goal…</button>
+        <button role="menuitem" type="button" data-command="comments">Comments</button>
+        <button role="menuitem" type="button" data-command="overused">Words leaned on…</button>
+        <button role="menuitem" type="button" data-command="goal">Writing goal and sprints…</button>
         <button role="menuitem" type="button" data-command="page">Page and text…</button>
         <hr>
         <button role="menuitem" type="button" data-command="hear">Hear it read aloud<kbd data-keys="F9"></kbd></button>
-        <button role="menuitemcheckbox" type="button" data-view="marks" aria-checked="false">Every mark raw<kbd data-keys="Mod+Shift+M"></kbd></button>
-        <hr>
-        <span class="menu-label" id="draw-label" aria-hidden="true">Draw</span>
-        <div role="group" aria-labelledby="draw-label">
-          <button role="menuitemcheckbox" type="button" data-view="color" aria-checked="true">Color by speaker</button>
-          <button role="menuitemcheckbox" type="button" data-view="names" aria-checked="true">Names</button>
-          <button role="menuitemcheckbox" type="button" data-view="directions" aria-checked="true">Directions</button>
-          <button role="menuitemcheckbox" type="button" data-view="sounds" aria-checked="true">Sounds</button>
-          <button role="menuitemcheckbox" type="button" data-view="vocal" aria-checked="true">Character sounds</button>
-          <button role="menuitemcheckbox" type="button" data-view="pages" aria-checked="true">Page turns</button>
-          <button role="menuitemcheckbox" type="button" data-view="notes" aria-checked="true">Notes</button>
-        </div>
-        <hr>
-        <button role="menuitemcheckbox" type="button" data-view="rail-names" aria-checked="true">Scene names</button>
-        <button role="menuitemcheckbox" type="button" data-view="side" aria-checked="true">Book and script</button>
       </div>
     </div>
     <div class="menu">
@@ -139,9 +154,12 @@
     <span class="save-state" id="save-state" data-state="saved">Saved</span>
   </div>
   <span class="spacer"></span>
-  <button class="button preview-toggle" type="button" id="preview-toggle">Preview</button>
   <button class="button save-button" type="button" id="save-button" data-command="save" title="Save (Ctrl+S)">Save</button>
   <button class="theme-switch" type="button" id="theme" hidden>Auto</button>
+  <div class="panel-toggles" role="group" aria-label="Panels">
+    <button type="button" class="panel-toggle" id="bench-toggle" aria-pressed="false" aria-label="Workbench"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect class="strip" x="1.5" y="2.5" width="4.5" height="11" rx="1.5"/><path class="edge" d="M6 2.5v11"/></svg></button>
+    <button type="button" class="panel-toggle" id="preview-toggle" aria-pressed="true" aria-label="Preview"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect class="strip" x="10" y="2.5" width="4.5" height="11" rx="1.5"/><path class="edge" d="M10 2.5v11"/></svg></button>
+  </div>
 </header>
 <div class="toolbar" role="toolbar" aria-label="Tools" id="toolbar">
   <button type="button" data-command="undo" aria-label="Undo" data-keys="Mod+Z"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 2.5 7 6 10.5"/><path d="M2.5 7h7a3.5 3.5 0 0 1 0 7H8"/></svg></button>
@@ -182,6 +200,23 @@
     </div>
   </nav>
 
+  <aside class="bench" id="bench" aria-label="Workbench">
+    <div class="side-head">
+      <div class="side-tabs" role="tablist" aria-label="Workbench">
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-scenes" data-bench="scenes" aria-controls="bench-sheet">Scenes</button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-cast" data-bench="cast" aria-controls="bench-sheet">Cast</button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-scraps" data-bench="scraps" aria-controls="bench-sheet">Scraps</button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-comments" data-bench="comments" aria-controls="bench-sheet">Comments</button>
+        <button class="side-tab bench-tab" role="tab" type="button" id="tab-warnings" data-bench="warnings" aria-controls="bench-sheet">Warnings <span class="count" id="warning-count">0</span></button>
+      </div>
+      <button class="side-close" type="button" id="bench-close" title="Hide the workbench (View › Workbench)" aria-label="Hide the workbench">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div class="side-sheet sheet bench-sheet" id="bench-sheet" role="tabpanel" tabindex="0"></div>
+    <div class="bench-resize" id="bench-resize" role="separator" aria-orientation="vertical" aria-label="Width of the workbench" aria-controls="bench" tabindex="0" aria-valuemin="14" aria-valuemax="40" aria-valuenow="22"></div>
+  </aside>
+
   <section class="manuscript" aria-label="Story">
     <div class="elsewhere" id="elsewhere" hidden>
       <span>This story is being written in another tab. Here it is only to read.</span>
@@ -201,20 +236,18 @@
     </div>
   </section>
 
-  <aside class="side" id="side" aria-label="What the story becomes">
+  <aside class="side" id="side" aria-label="Preview: what the story becomes">
     <div class="side-resize" id="side-resize" role="separator" aria-orientation="vertical" aria-label="Width of the side" aria-controls="side" tabindex="0" aria-valuemin="20" aria-valuemax="60" aria-valuenow="34"></div>
     <div class="side-head">
       <div class="side-tabs" role="tablist" aria-label="Show">
         <button class="side-tab" role="tab" type="button" id="tab-script" data-tab="script" aria-controls="side-sheet">Script</button>
         <button class="side-tab" role="tab" type="button" id="tab-book" data-tab="book" aria-controls="side-sheet">Book</button>
-        <button class="side-tab" role="tab" type="button" id="tab-cast" data-tab="cast" aria-controls="side-sheet">Cast</button>
-        <button class="side-tab" role="tab" type="button" id="tab-warnings" data-tab="warnings" aria-controls="side-sheet">Warnings <span class="count" id="warning-count">0</span></button>
-        <button class="side-tab" role="tab" type="button" id="tab-scraps" data-tab="scraps" aria-controls="side-sheet">Scraps</button>
       </div>
-      <button class="side-close" type="button" id="side-close" title="Hide the side (View › Book and script)" aria-label="Hide the book and script">
+      <button class="side-close" type="button" id="side-close" title="Hide the preview (View › Preview)" aria-label="Hide the preview">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
       </button>
     </div>
+    <p class="drawn-tip" id="drawn-tip" hidden>The marks are as written, and here is what they make. Prefer them drawn in the text, names as tags? <button type="button" class="button quiet" id="drawn-tip-yes">Draw them</button><button type="button" class="drawn-tip-close" id="drawn-tip-no" aria-label="Put this away" title="Put this away">×</button></p>
     <div class="side-sheet sheet" id="side-sheet" role="tabpanel" tabindex="0"></div>
   </aside>
 </main>

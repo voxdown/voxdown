@@ -26,6 +26,74 @@ export type Scrap = {
 export type Keeper = Pick<Storage, "getItem" | "setItem">;
 
 const KEY = "vxd-writer-scraps";
+/** Each story's file name, and what its scraps were when last saved beside it. */
+const NAMES = "vxd-writer-scraps-names";
+const SAVED = "vxd-writer-scraps-saved";
+
+function read<T>(keeper: Keeper, key: string): Record<string, T> {
+  try {
+    return (JSON.parse(keeper.getItem(key) ?? "{}") as Record<string, T>) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function write(keeper: Keeper, key: string, value: unknown): void {
+  try {
+    keeper.setItem(key, JSON.stringify(value));
+  } catch {
+    // Short of room: the scraps themselves are what matter.
+  }
+}
+
+/** What a heap of scraps is, to know whether it changed: their ids, words and notes, in order. */
+export function scrapsSignature(scraps: readonly Scrap[]): string {
+  let hash = 0;
+  for (const char of JSON.stringify(scraps.map((scrap) => [scrap.id, scrap.text, scrap.note])))
+    hash = (Math.imul(hash, 31) + (char.codePointAt(0) ?? 0)) | 0;
+  return `${scraps.length}:${hash >>> 0}`;
+}
+
+/** The story's scraps were just saved beside it, as they are. */
+export function markScrapsSaved(keeper: Keeper, story: string, scraps: readonly Scrap[]): void {
+  write(keeper, SAVED, { ...read<string>(keeper, SAVED), [story]: scrapsSignature(scraps) });
+}
+
+/**
+ * Where the story's scraps stand: none; in this browser only, never saved beside the story; or
+ * changed since they last were; or saved as they are.
+ */
+export function scrapsStanding(
+  keeper: Keeper,
+  story: string,
+  scraps: readonly Scrap[],
+): "none" | "browser" | "changed" | "saved" {
+  if (!scraps.length) return "none";
+  const saved = read<string>(keeper, SAVED)[story];
+  if (!saved) return "browser";
+  return saved === scrapsSignature(scraps) ? "saved" : "changed";
+}
+
+/**
+ * Scraps kept here under another story with the same file name: a file opened again where the
+ * browser can't tell it is the same one (Firefox, Safari), or opened afresh. The latest heap.
+ */
+export function scrapsByName(
+  keeper: Keeper,
+  name: string,
+  except: string,
+): { story: string; scraps: Scrap[] } | undefined {
+  const names = read<string>(keeper, NAMES);
+  const kept = all(keeper);
+  let found: { story: string; scraps: Scrap[]; at: number } | undefined;
+  for (const [story, named] of Object.entries(names)) {
+    if (story === except || named !== name || !kept[story]?.length) continue;
+    const scraps = kept[story] as Scrap[];
+    const at = Math.max(...scraps.map((scrap) => scrap.used ?? scrap.at));
+    if (!found || at > found.at) found = { story, scraps, at };
+  }
+  return found && { story: found.story, scraps: found.scraps };
+}
 
 function all(keeper: Keeper): Record<string, Scrap[]> {
   try {
@@ -41,7 +109,14 @@ export function scrapsOf(keeper: Keeper, story: string): Scrap[] {
 }
 
 /** Keeps a story's scraps; whether the browser kept them (it may be short of room). */
-export function keepScraps(keeper: Keeper, story: string, scraps: readonly Scrap[]): boolean {
+export function keepScraps(
+  keeper: Keeper,
+  story: string,
+  scraps: readonly Scrap[],
+  /** The story's file name, to find its scraps again by it. */
+  name?: string,
+): boolean {
+  if (name) write(keeper, NAMES, { ...read<string>(keeper, NAMES), [story]: name });
   const kept = all(keeper);
   if (scraps.length) kept[story] = [...scraps];
   else delete kept[story];

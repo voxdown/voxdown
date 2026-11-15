@@ -35,6 +35,28 @@ await new Promise((done) => server.listen(0, "127.0.0.1", done));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 const browser = await chromium.launch();
+// The Writer's checks were written for marks drawn in the text, its first look until marks as
+// written became it: each new context starts so, unless it asks for a first visit (`firstVisit`).
+{
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (options = {}) => {
+    const { firstVisit, ...rest } = options;
+    const context = await newContext(rest);
+    if (!firstVisit)
+      await context.addInitScript(() => {
+        if (!localStorage.getItem("vxd-writer-view"))
+          localStorage.setItem("vxd-writer-view", JSON.stringify({ marks: false }));
+      });
+    return context;
+  };
+  browser.newPage = async (options = {}) => (await browser.newContext(options)).newPage();
+}
+/** A tab of the Writer's workbench, the workbench opened for it. */
+const benchTab = async (page, tab) => {
+  if (!(await page.evaluate(() => document.querySelector("#workspace").hasAttribute("data-bench"))))
+    await page.keyboard.press("Control+Shift+Backslash");
+  await page.click(`#bench .side-tab[data-bench="${tab}"]`);
+};
 const problems = [];
 const watch = (page, where) => {
   page.on("pageerror", (error) => problems.push(`${where}: ${error}`));
@@ -356,14 +378,15 @@ const draftIn = (page) =>
     );
   await commenter.click("#view-menu-button");
   await commenter.click('[data-command="comments"]');
-  await commenter.waitForSelector("#list-dialog[open]");
-  const listed = await commenter.$$eval("#list-items li strong", (items) =>
+  await commenter.waitForSelector("#bench-sheet .comments-list");
+  const listed = await commenter.$$eval("#bench-sheet .comment-words", (items) =>
     items.map((i) => i.textContent),
   );
   if (!listed.includes("Check the tide tables"))
-    problems.push(`writer: View › Comments lists ${JSON.stringify(listed)}`);
+    problems.push(`writer: the workbench's Comments lists ${JSON.stringify(listed)}`);
+  await commenter.hover('#bench-sheet .comment-row:has-text("Check the tide tables")');
   await commenter.click(
-    '#list-items li:has-text("Check the tide tables") button:has-text("Delete")',
+    '#bench-sheet .comment-row:has-text("Check the tide tables") button:has-text("Delete")',
   );
   await commenter.waitForTimeout(1200);
   if ((await draftIn(commenter))?.includes("<!--"))
@@ -392,13 +415,15 @@ const draftIn = (page) =>
   await scrapper.keyboard.press("Control+Shift+X");
   await scrapper.waitForTimeout(1200);
   const cut = await scrapper.evaluate(() => ({
-    tab: document.querySelector(".side-tab[aria-selected=true]")?.textContent,
+    tab: document.querySelector("#bench .side-tab[aria-selected=true]")?.textContent,
     scraps: [...document.querySelectorAll(".scrap-text")].map((e) => e.textContent),
   }));
   if (cut.tab !== "Scraps" || cut.scraps[0] !== "The owl said nothing at all.")
     problems.push(`writer: Cut to Scraps shows ${JSON.stringify(cut)}`);
   if ((await draftIn(scrapper)).includes("The owl said"))
     problems.push("writer: words cut to Scraps stayed in the story");
+  if (!(await scrapper.textContent(".scraps-standing"))?.includes("Kept in this browser only"))
+    problems.push("writer: scraps only this browser has aren't said to be");
   await scrapper.fill(".scrap-note", "For the ending");
   await scrapper.dispatchEvent(".scrap-note", "change");
   await scrapper.fill(".scraps-head input", "ENDING");
@@ -453,6 +478,65 @@ const draftIn = (page) =>
     problems.push(`writer: a scrap dragged above another stays below: ${JSON.stringify(order)}`);
   await context.close();
   console.log("writer: scraps cut, noted, found, put back, opened from a file and moved: ok");
+}
+
+// A first visit: marks as written, the preview beside them with its word about drawn marks, and
+// the drawn-only choices waiting; the workbench a key away; one panel at a time when crowded.
+{
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 860 },
+    firstVisit: true,
+  });
+  const first = await context.newPage();
+  watch(first, "writer first visit");
+  await first.goto(`${base}/writer/#example=the-north-wind-and-the-sun`);
+  await first.waitForSelector(".cm-content");
+  await first.waitForTimeout(600);
+  const look = await first.evaluate(() => ({
+    raw: document.querySelector(".cm-content")?.textContent?.includes("@Wind"),
+    written: document.querySelector('[data-view="written"]')?.getAttribute("aria-checked"),
+    waiting: document.querySelector('[data-view="names"]')?.getAttribute("aria-disabled"),
+    tip: !document.querySelector("#drawn-tip")?.hidden,
+    side: document.querySelector("#workspace")?.hasAttribute("data-side"),
+    bench: document.querySelector("#workspace")?.hasAttribute("data-bench"),
+  }));
+  if (
+    JSON.stringify(look) !==
+    JSON.stringify({
+      raw: true,
+      written: "true",
+      waiting: "true",
+      tip: true,
+      side: true,
+      bench: false,
+    })
+  )
+    problems.push(`writer: a first visit looks like ${JSON.stringify(look)}`);
+  await first.click("#drawn-tip-yes");
+  await first.waitForTimeout(400);
+  const drawn = await first.evaluate(() => ({
+    raw: document.querySelector(".cm-content")?.textContent?.includes("@Wind"),
+    tip: !document.querySelector("#drawn-tip")?.hidden,
+    waiting: document.querySelector('[data-view="names"]')?.getAttribute("aria-disabled"),
+  }));
+  if (drawn.raw || drawn.tip || drawn.waiting !== "false")
+    problems.push(`writer: Draw them leaves ${JSON.stringify(drawn)}`);
+  await first.keyboard.press("Control+Shift+Backslash");
+  await first.waitForTimeout(300);
+  if (
+    !(await first.evaluate(() => document.querySelector("#workspace")?.hasAttribute("data-bench")))
+  )
+    problems.push("writer: Ctrl+Shift+\\ doesn't open the workbench");
+  await first.setViewportSize({ width: 1100, height: 800 });
+  await first.waitForTimeout(300);
+  const crowded = await first.evaluate(() => [
+    document.querySelector("#workspace")?.hasAttribute("data-side"),
+    document.querySelector("#workspace")?.hasAttribute("data-bench"),
+  ]);
+  if (JSON.stringify(crowded) !== "[true,false]")
+    problems.push(`writer: on a crowded window, the panels are ${JSON.stringify(crowded)}`);
+  await context.close();
+  console.log("writer: a first visit, marks as written, the workbench and the preview: ok");
 }
 
 // A manuscript to submit: the writer's name asked once, kept, and the Word document downloaded.
@@ -705,12 +789,13 @@ await writer.click('#ask-buttons button[value="discard"]');
 await writer.waitForFunction(
   () => document.querySelector("#file-name")?.textContent === "opened.vxd",
 );
-await writer.click('.side-tab[data-tab="warnings"]');
-if ((await writer.locator("#side-sheet .warning").count()) === 0)
+await benchTab(writer, "warnings");
+if ((await writer.locator("#bench-sheet .warning").count()) === 0)
   problems.push("writer: the warnings tab lists nothing for a story with an idle mark");
-await writer.click("#side-sheet .warning");
+await writer.click("#bench-sheet .warning");
 await writer.waitForTimeout(100);
 await writer.click("#view-menu-button");
+await writer.click("#drawn-button");
 await writer.click('[data-view="names"]');
 if ((await writer.getAttribute('[data-view="names"]', "aria-checked")) !== "false")
   problems.push("writer: View › Names doesn't switch off");
@@ -761,6 +846,8 @@ await safe.click('#ask-buttons button[value="discard"]');
 await safe.waitForFunction(
   () => document.querySelector("#file-name")?.textContent === "Untitled.vxd",
 );
+// The keys in the text first: the question just closed gives them back a frame later.
+await safe.click(".cm-content");
 await safe.keyboard.press("Control+Shift+s");
 await safe.waitForFunction(
   () => document.querySelector("#file-name")?.textContent === "renamed.vxd",
@@ -772,11 +859,32 @@ await safe.waitForTimeout(300);
 if ((await safe.textContent("#file-name")) !== "renamed.vxd")
   problems.push("writer: after Save as and a reload, the story has its old name");
 await safe.setViewportSize({ width: 390, height: 844 });
-if (!(await safe.isVisible("#side")))
+await safe.waitForTimeout(300);
+// Shown or not as the page says, not as a glance in the middle of the resize does.
+if (!(await safe.evaluate(() => document.querySelector("#workspace")?.hasAttribute("data-side"))))
   await safe.click("#view-menu-button").then(() => safe.click('[data-view="side"]'));
-await safe.click("#side-close");
-if (await safe.isVisible("#side"))
-  problems.push("writer: the side's close button doesn't close it");
+const closing = await safe
+  .waitForSelector("#side-close", { state: "visible", timeout: 5000 })
+  .then(() => true)
+  .catch(() => false);
+if (!closing)
+  problems.push(
+    `writer: the preview's close button can't be seen: ${JSON.stringify(
+      await safe.evaluate(() => ({
+        side: document.querySelector("#workspace")?.getAttribute("data-side"),
+        bench: document.querySelector("#workspace")?.getAttribute("data-bench"),
+        box: document.querySelector("#side")?.getBoundingClientRect().toJSON(),
+        close: document.querySelector("#side-close")?.getBoundingClientRect().toJSON(),
+        menu: document.querySelector("#view-menu")?.hidden,
+        width: window.innerWidth,
+      })),
+    )}`,
+  );
+else {
+  await safe.click("#side-close");
+  if (await safe.isVisible("#side"))
+    problems.push("writer: the side's close button doesn't close it");
+}
 await safety.close();
 console.log("writer: last words, place, Save as name, closing the side: ok");
 
@@ -1298,10 +1406,10 @@ for (const width of [800, 960, 1100]) {
     problems.push(`writer: at ${width} px wide, the page runs ${wide} px past the window`);
 }
 await edge.setViewportSize({ width: 1440, height: 900 });
-await edge.click('.side-tab[data-tab="cast"]').catch(async () => {
+await benchTab(edge, "cast").catch(async () => {
   await edge.click("#view-menu-button");
   await edge.click('[data-view="side"]');
-  await edge.click('.side-tab[data-tab="cast"]');
+  await benchTab(edge, "cast");
 });
 await edge.click(".cm-content");
 await edge.keyboard.press("Control+End");
@@ -1753,7 +1861,7 @@ await autoPage.click(".cm-content");
 await autoPage.keyboard.press("Control+End");
 await autoPage.keyboard.type("\n\n@Ann “Hello.”");
 await autoPage.waitForTimeout(600);
-await autoPage.click('.side-tab[data-tab="cast"]');
+await benchTab(autoPage, "cast");
 const firstAbout = autoPage.locator(".cast-about").first();
 await firstAbout.fill("Reads it all, warmly.");
 await autoPage.keyboard.press("Control+s");
@@ -2103,7 +2211,7 @@ await author.keyboard.press("Control+z");
 await settled();
 if (sceneOrder(await kept()) !== sceneBefore)
   problems.push("writer: Undo didn't move the scene back");
-await author.click('.side-tab[data-tab="cast"]');
+await benchTab(author, "cast");
 const king = author.locator('.cast-handle input[value="King"]');
 await king.fill("Monarch");
 await king.press("Enter");
@@ -2213,12 +2321,12 @@ await author.click(".cm-content");
 await author.keyboard.press("Control+End");
 await author.keyboard.insertText("\n\nThe gate [creaks\n");
 await settled();
-await author.click('.side-tab[data-tab="warnings"]');
+await benchTab(author, "warnings");
 await author.keyboard.press("Control+Home");
 await author.evaluate(() => document.querySelector(".cm-content")?.focus());
 await author.keyboard.press("Control+Home");
 await author.keyboard.insertText("PREFIX");
-await author.locator("#side-sheet .fix", { hasText: "Close it" }).first().click();
+await author.locator("#bench-sheet .fix", { hasText: "Close it" }).first().click();
 await settled();
 const fixedLate = await kept();
 if (
@@ -2248,8 +2356,8 @@ await author.keyboard.press("Control+.");
 await settled();
 if (!(await kept()).includes("[creaks]"))
   problems.push("writer: Ctrl+. didn't put the warning at the cursor right");
-await author.click('.side-tab[data-tab="warnings"]');
-const mend = author.locator("#side-sheet .fix").first();
+await benchTab(author, "warnings");
+const mend = author.locator("#bench-sheet .fix").first();
 if ((await mend.count()) === 0) problems.push("writer: no fix offered for “@ Wanda”");
 else {
   await mend.click();
@@ -2260,7 +2368,7 @@ else {
 // What is being typed about a character stays while the side is drawn again behind it.
 await author.click(".cm-content");
 await author.keyboard.type(" More.");
-await author.click('.side-tab[data-tab="cast"]');
+await benchTab(author, "cast");
 const typingAbout = author.locator(".cast-about").nth(1);
 await typingAbout.fill("Still being typed.");
 await author.waitForTimeout(900);
@@ -2268,11 +2376,11 @@ if ((await typingAbout.inputValue()) !== "Still being typed.")
   problems.push("writer: the side drawn again lost what was being typed about a character");
 await author.keyboard.press("Escape");
 // A warning clicked in a list drawn before the story changed goes where it is now, or says so.
-await author.click('.side-tab[data-tab="warnings"]');
+await benchTab(author, "warnings");
 await author.click(".cm-content");
 await author.keyboard.press("Control+a");
 await author.keyboard.press("Delete");
-const stale = author.locator("#side-sheet .warning").first();
+const stale = author.locator("#bench-sheet .warning").first();
 if (await stale.count()) await stale.click();
 await author.waitForTimeout(300);
 // Who and How on a few words selected in a line: those words alone, the rest of the line as it
@@ -2476,7 +2584,7 @@ await phonePage.goto(`${base}/writer/`);
 await phonePage.click(`.welcome-example[data-name="${dragonName}"]`);
 await phonePage.waitForSelector("#welcome", { state: "hidden" });
 await phonePage.click("#preview-toggle");
-await phonePage.click('.side-tab[data-tab="cast"]');
+await benchTab(phonePage, "cast");
 await phonePage.locator(".cast-find").first().click();
 await phonePage.waitForTimeout(300);
 if (
@@ -3105,7 +3213,7 @@ await second
   .catch(() => problems.push("writer: a tab that only reads doesn't follow the one that writes"));
 await first.keyboard.type(" Last words.");
 // What is typed about a character, the field not left, goes with the story to the other tab.
-await first.click('.side-tab[data-tab="cast"]');
+await benchTab(first, "cast");
 await first.locator(".cast-about").first().fill("Typed in the first tab, field not left.");
 await second.click("#edit-here");
 await second.waitForSelector("#elsewhere", { state: "hidden" });

@@ -9,6 +9,14 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **voxdown**
 - `directingPassages`, `DIRECTING_INSTRUCTIONS`, `directingPrompt`, `directingSchema` and `directingRequest` say what to ask a model to direct a reading: the story a passage at a time, to be given back with marks added for how it is performed. `readDirected` reads the answer (text, a code block, or JSON) as suggestions, keeping a mark only where the paragraph still prints the same words, given to the same speakers, with the writer's own marks; `chosenChanges` gives the changes for the ones chosen, checked again together.
 
+**VoxDown Writer: what you work with on the left, what it becomes on the right.**
+- **The workbench**, on the left (View › Workbench, Ctrl+Shift+\\): Scenes (each chapter and scene with its words, a click from going there, and the scene board a click away), Cast, Scraps, Comments (the writer's comments in order, each to go to or delete once done; it was a dialog) and Warnings. **The preview**, on the right (View › Preview, Ctrl+\\), is the script or the book alone. Below 1,200 px wide they take turns. A tab the side showed before (Cast, Warnings, Scraps) opens in the workbench.
+- **Marks as written** is the first look: every mark as it is typed, steady as the cursor moves, with the preview beside it saying, until put away, that marks can be drawn in the text instead. Anyone who chose before keeps their choice.
+- The View menu says what each choice does: **Marks in the text** is a choice of as written or drawn; **Each speaker in a color** holds for both; **Drawn marks show** (names, directions, sounds, page turns, notes) waits, greyed, while marks are as written, and says why. Panels, writing and tools are grouped.
+- Dragging a scrap or words into the story shows where they will land.
+- Scraps this browser alone has are said to be: a line in the Scraps tab until they are saved beside the story (or while they have changed since), and, once a visit, a word after Save with a button that saves them there. A story opened where the browser can't tell it is the same file (Firefox, Safari), or opened afresh, is offered the scraps this browser has under the same file name; they are never taken without asking.
+- Two buttons at the top right show and hide the workbench and the preview, and say which show; they replace the narrow window's Preview button.
+
 **Comments for the writer** (spec 1.3, §10.1): `<!-- … -->` is the writer's own comment, never read aloud, printed or given to a performer, and hidden by Markdown viewers too.
 
 **voxdown**

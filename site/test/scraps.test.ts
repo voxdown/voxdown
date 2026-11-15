@@ -3,11 +3,14 @@ import {
   type Keeper,
   type Scrap,
   keepScraps,
+  markScrapsSaved,
   mergeScraps,
   readScrapsFile,
+  scrapsByName,
   scrapsFile,
   scrapsFileName,
   scrapsOf,
+  scrapsStanding,
   searchScraps,
 } from "../src/writer/scraps";
 
@@ -76,5 +79,26 @@ The fox ran.
     expect(searchScraps([owl, fox, café], "cafe").map((s) => s.id)).toEqual(["d4"]);
     expect(searchScraps([owl, fox, café], "one owl").map((s) => s.id)).toEqual(["a1"]);
     expect(searchScraps([owl, fox], "  ")).toHaveLength(2);
+  });
+});
+
+describe("scraps kept safe", () => {
+  it("say whether they are in this browser only, or saved beside the story as they are", () => {
+    const store = keeper();
+    expect(scrapsStanding(store, "owl", [])).toBe("none");
+    keepScraps(store, "owl", [owl], "owl.vxd");
+    expect(scrapsStanding(store, "owl", [owl])).toBe("browser");
+    markScrapsSaved(store, "owl", [owl]);
+    expect(scrapsStanding(store, "owl", [owl])).toBe("saved");
+    expect(scrapsStanding(store, "owl", [{ ...owl, note: "changed" }])).toBe("changed");
+  });
+
+  it("are found by the story's file name, when it is opened as another story", () => {
+    const store = keeper();
+    keepScraps(store, "first", [owl], "owl.vxd");
+    keepScraps(store, "other", [fox], "fox.vxd");
+    expect(scrapsByName(store, "owl.vxd", "second")).toEqual({ story: "first", scraps: [owl] });
+    expect(scrapsByName(store, "owl.vxd", "first")).toBeUndefined();
+    expect(scrapsByName(store, "hen.vxd", "second")).toBeUndefined();
   });
 });

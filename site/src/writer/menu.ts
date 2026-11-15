@@ -177,6 +177,11 @@ export function menus(
       if (item.getAttribute("role") === "menuitemcheckbox") {
         item.setAttribute("aria-checked", String(item.getAttribute("aria-checked") !== "true"));
       }
+      // One of a group's choices: it, and none of the others.
+      if (item.getAttribute("role") === "menuitemradio") {
+        for (const other of item.parentElement?.querySelectorAll('[role="menuitemradio"]') ?? [])
+          other.setAttribute("aria-checked", String(other === item));
+      }
       close(true);
       onCommand(item.dataset.command ?? item.dataset.view ?? "", item);
     });

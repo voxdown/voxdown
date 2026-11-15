@@ -37,6 +37,7 @@ import {
   EditorView,
   ViewPlugin,
   type ViewUpdate,
+  dropCursor,
   hoverTooltip,
   keymap,
 } from "@codemirror/view";
@@ -89,6 +90,7 @@ import { examples } from "../examples";
 import "../style.css";
 import "./writer.css";
 import { type AiContext, chapterAt, openAi } from "./ai-dialog";
+import { boardOf } from "./board";
 import { openBoard } from "./board-dialog";
 import { castPanel } from "./cast";
 import { paragraphsOf } from "./convert";
@@ -146,12 +148,15 @@ import { sameText } from "./saving";
 import {
   type Scrap,
   keepScraps,
+  markScrapsSaved,
   mergeScraps,
   newScrapId,
   readScrapsFile,
+  scrapsByName,
   scrapsFile,
   scrapsFileName,
   scrapsOf,
+  scrapsStanding,
 } from "./scraps";
 import { type ScrapsHost, scrapsPanel } from "./scraps-panel";
 import { StoryScrollbar } from "./scrollbar";
@@ -211,7 +216,10 @@ document.head.append(rendererStyle);
 
 // What the writer chose to see, kept on this computer.
 
-type Tab = "script" | "book" | "cast" | "warnings" | "scraps";
+/** The preview's tabs, on the right: what the story becomes. */
+type Tab = "script" | "book";
+/** The workbench's tabs, on the left: what the story is made with. */
+type BenchTab = "scenes" | "cast" | "scraps" | "comments" | "warnings";
 type Prefs = ViewSwitches & {
   marks: boolean;
   side: boolean;
@@ -220,6 +228,12 @@ type Prefs = ViewSwitches & {
   focus: boolean;
   /** The cursor's line kept in the middle of the page as it goes, focus or not. */
   typewriter: boolean;
+  /** The workbench on the left, its tab, and its width (percent; 0 for the usual). */
+  bench: boolean;
+  benchTab: BenchTab;
+  benchWidth: number;
+  /** The preview's word about drawn marks, put away. */
+  drawnTipDone: boolean;
   /** A word said again too soon, and a sentence too long, quietly underlined. */
   styleHints: boolean;
   /** The writer agreed to the browser's online voices, its only ones: the words go to be spoken. */
@@ -256,13 +270,18 @@ const prefs: Prefs = {
   vocal: true,
   pages: true,
   notes: true,
-  marks: false,
+  // Marks as written, steady as the writer moves, with the preview beside them; drawn is a choice.
+  marks: true,
   side: window.matchMedia("(min-width: 900px)").matches,
   tab: "script",
   autosave: true,
   focus: false,
   typewriter: false,
   onlineVoices: false,
+  bench: false,
+  benchTab: "scenes",
+  benchWidth: 0,
+  drawnTipDone: false,
   styleHints: false,
   goal: 0,
   sprintMinutes: 25,
@@ -279,6 +298,12 @@ const prefs: Prefs = {
   sideWidth: 0,
   ...savedPrefs(),
 };
+
+// A tab of the side from before the workbench (cast, warnings, scraps) is the workbench's now.
+if (!["script", "book"].includes(prefs.tab)) {
+  prefs.benchTab = prefs.tab as unknown as BenchTab;
+  prefs.tab = "script";
+}
 
 function savedPrefs(): Partial<Prefs> {
   try {
@@ -582,6 +607,8 @@ function editorState(source: string, cursor: number): EditorState {
       breaks.of(lineBreaks(source)),
       editable.of(editability()),
       focusLines,
+      // Where a scrap or words dragged in will land.
+      dropCursor(),
       bookLines,
       styleLines,
       // The browser's spelling check, in the story's own language.
@@ -644,6 +671,7 @@ function editorState(source: string, cursor: number): EditorState {
           { key: "F9", run: () => hearFromHere() },
           { key: "Mod-.", run: fixHere },
           { key: "Mod-Shift-x", run: () => cutToScraps(), preventDefault: true },
+
           {
             key: "Mod-Alt-m",
             run: () => {
@@ -710,7 +738,7 @@ function editorState(source: string, cursor: number): EditorState {
         if (raw !== prefs.marks) {
           prefs.marks = raw;
           keepPrefs();
-          checkMenu("marks", raw);
+          showMarksMenu(raw);
         }
       }),
       EditorView.contentAttributes.of({ "aria-label": "Story" }),
@@ -885,6 +913,7 @@ function attempt(make: () => TextChange[], declined: string): boolean {
   } catch (error) {
     notice(error instanceof Error ? error.message : declined);
     if (prefs.side) showSide();
+    if (prefs.bench) showBench();
     return false;
   }
   return apply(changes, declined);
@@ -1013,7 +1042,7 @@ async function load(
   $("#welcome").hidden = true;
   document.body.removeAttribute("data-welcome");
   storyCommands(true);
-  for (const behind of ["#editor", "#scene-rail", "#side"]) $(behind).inert = false;
+  for (const behind of ["#editor", "#scene-rail", "#side", "#bench"]) $(behind).inert = false;
   overlaid();
   showFileName(file.name);
   refresh();
@@ -1089,6 +1118,7 @@ function showRest(): void {
   }
   showCounts(countsOf(story));
   if (prefs.side) showSide();
+  if (prefs.bench) showBench();
 }
 
 // A long story is read in a worker (render-worker.ts): once each time typing pauses, for
@@ -1477,7 +1507,7 @@ function setAside(text: string): Scrap {
   };
   const scraps = scrapsOf(localStorage, file.id);
   scraps.unshift(scrap);
-  if (!keepScraps(localStorage, file.id, scraps))
+  if (!keepScraps(localStorage, file.id, scraps, file.name))
     notice("This browser is short of room: the scrap couldn’t be kept.");
   return scrap;
 }
@@ -1493,8 +1523,7 @@ function cutToScraps(): boolean {
   }
   setAside(text);
   view.dispatch({ changes: { from, to }, userEvent: "delete.cut" });
-  if (prefs.side) selectTab("scraps");
-  else showSide();
+  selectBench("scraps");
   notice(`Set aside in Scraps. ${keys("Mod+Z")} puts the words back; the scrap stays.`);
   view.focus();
   return true;
@@ -1503,9 +1532,9 @@ function cutToScraps(): boolean {
 const scrapsHost: ScrapsHost = {
   scraps: () => scrapsOf(localStorage, file.id),
   keep: (scraps) => {
-    if (!keepScraps(localStorage, file.id, scraps))
+    if (!keepScraps(localStorage, file.id, scraps, file.name))
       notice("This browser is short of room: the scraps couldn’t be kept.");
-    showSide();
+    showBench();
   },
   dropped: (text, copy) => {
     setAside(text);
@@ -1518,7 +1547,7 @@ const scrapsHost: ScrapsHost = {
         ? "Copied to Scraps."
         : `Set aside in Scraps. ${keys("Mod+Z")} puts the words back; the scrap stays.`,
     );
-    showSide();
+    showBench();
   },
   insert: (scrap) => {
     if (lockedOut) return;
@@ -1545,8 +1574,10 @@ const scrapsHost: ScrapsHost = {
           return;
         }
         const { scraps, added } = mergeScraps(scrapsOf(localStorage, file.id), found);
-        keepScraps(localStorage, file.id, scraps);
-        showSide();
+        keepScraps(localStorage, file.id, scraps, file.name);
+        // Read from the file just opened: as it is there.
+        if (added === found.length) markScrapsSaved(localStorage, file.id, scraps);
+        showBench();
         notice(
           added
             ? `${added} ${added === 1 ? "scrap" : "scraps"} added from ${chosen.name}.`
@@ -1558,8 +1589,57 @@ const scrapsHost: ScrapsHost = {
   },
   save: () => void saveScraps(true),
   fileName: () => scrapsFileName(file.name),
+  standing: () => scrapsStanding(localStorage, file.id, scrapsOf(localStorage, file.id)),
   notice,
 };
+
+/** The stories this visit has already been told their scraps are in this browser only. */
+const scrapsToldOf = new Set<string>();
+
+/**
+ * After a save: scraps this browser alone has, never saved beside the story or changed since,
+ * said once a visit, with the way to keep them there.
+ */
+function remindOfScraps(): void {
+  const scraps = scrapsOf(localStorage, file.id);
+  const standing = scrapsStanding(localStorage, file.id, scraps);
+  if ((standing !== "browser" && standing !== "changed") || scrapsFiles.has(file.id)) return;
+  if (scrapsToldOf.has(file.id)) return;
+  scrapsToldOf.add(file.id);
+  notice(
+    `Saved. Its ${scraps.length === 1 ? "scrap is" : `${scraps.length} scraps are`} kept in this browser only: clearing the browser's data would lose ${scraps.length === 1 ? "it" : "them"}.`,
+    false,
+    { label: `Save in ${scrapsFileName(file.name)}`, run: () => void saveScraps(true) },
+  );
+}
+
+/**
+ * A story opened with no scraps here, where this browser has some under the same file name (a
+ * file opened again where the browser can't tell it is the same one): offered, never taken.
+ */
+function offerScrapsByName(): void {
+  if (/^Untitled/i.test(file.name) || scrapsOf(localStorage, file.id).length) return;
+  const found = scrapsByName(localStorage, file.name, file.id);
+  if (!found) return;
+  const count = found.scraps.length;
+  const id = file.id;
+  setTimeout(() => {
+    if (file.id !== id) return;
+    notice(
+      `${count === 1 ? "A scrap" : `${count} scraps`} from an earlier ${file.name} ${count === 1 ? "is" : "are"} in this browser.`,
+      false,
+      {
+        label: "Bring them here",
+        run: () => {
+          if (file.id !== id) return;
+          const { scraps } = mergeScraps(scrapsOf(localStorage, id), found.scraps);
+          keepScraps(localStorage, id, scraps, file.name);
+          selectBench("scraps");
+        },
+      },
+    );
+  }, 900);
+}
 
 /**
  * The story's scraps in their file beside it. Asked where the first time (or always, `asked`),
@@ -1574,6 +1654,8 @@ async function saveScraps(asked: boolean): Promise<void> {
   if (!handle && !asked) return;
   if (!window.showSaveFilePicker) {
     download(text, name);
+    markScrapsSaved(localStorage, file.id, scraps);
+    if (prefs.bench && prefs.benchTab === "scraps") showBench();
     return;
   }
   try {
@@ -1587,6 +1669,8 @@ async function saveScraps(asked: boolean): Promise<void> {
     const writable = await handle.createWritable();
     await writable.write(text);
     await writable.close();
+    markScrapsSaved(localStorage, file.id, scraps);
+    if (prefs.bench && prefs.benchTab === "scraps") showBench();
     if (asked) notice(`Scraps saved in ${handle.name}.`);
   } catch (error) {
     if ((error as Error).name !== "AbortError") notice("The scraps couldn’t be saved there.");
@@ -1884,7 +1968,7 @@ function drawSheet(html: string): void {
 /** The side, drawn again: the script or the book (`drawn`, when the worker drew it), cast or warnings. */
 function showSide(drawn?: string): void {
   const sheet = $("#side-sheet");
-  for (const tab of document.querySelectorAll<HTMLElement>(".side-tab")) {
+  for (const tab of document.querySelectorAll<HTMLElement>("#side .side-tab")) {
     const selected = tab.dataset.tab === prefs.tab;
     tab.setAttribute("aria-selected", String(selected));
     tab.tabIndex = selected ? 0 : -1;
@@ -1916,8 +2000,25 @@ function showSide(drawn?: string): void {
       });
       return;
     }
-  } else if (prefs.tab === "cast") {
-    sideShows = "";
+  }
+  indexSheet();
+  markPlace();
+}
+
+/** The workbench, drawn again: the scenes, the cast, the scraps or the warnings. */
+function showBench(): void {
+  if (!prefs.bench) return;
+  const sheet = $("#bench-sheet");
+  for (const tab of document.querySelectorAll<HTMLElement>("#bench .side-tab")) {
+    const selected = tab.dataset.bench === prefs.benchTab;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  }
+  sheet.setAttribute("aria-labelledby", `tab-${prefs.benchTab}`);
+  // A name or a note being typed isn't redrawn under the writer's fingers.
+  if (sheet.contains(document.activeElement) && document.activeElement?.matches("input, textarea"))
+    return;
+  if (prefs.benchTab === "cast") {
     sheet.replaceChildren(
       castPanel(
         castData(),
@@ -1959,15 +2060,77 @@ function showSide(drawn?: string): void {
         lockedOut,
       ),
     );
-  } else if (prefs.tab === "scraps") {
-    sideShows = "";
+  } else if (prefs.benchTab === "scraps") {
     sheet.replaceChildren(scrapsPanel(scrapsHost));
+  } else if (prefs.benchTab === "scenes") {
+    sheet.replaceChildren(scenesList());
+  } else if (prefs.benchTab === "comments") {
+    sheet.replaceChildren(commentsList());
   } else {
-    sideShows = "";
     sheet.replaceChildren(warningList());
   }
-  indexSheet();
-  markPlace();
+}
+
+/** The Scenes tab: each chapter and scene with its words, a click from going there. */
+function scenesList(): HTMLElement {
+  const list = document.createElement("div");
+  list.className = "scenes-list";
+  const top = document.createElement("div");
+  top.className = "scenes-top";
+  const board = document.createElement("button");
+  board.type = "button";
+  board.className = "button quiet";
+  board.textContent = "Open the scene board…";
+  board.addEventListener("click", () => void COMMANDS.board?.());
+  top.append(board);
+  list.append(top);
+  const go = (at: number) => {
+    view.dispatch({
+      selection: EditorSelection.cursor(Math.min(at, view.state.doc.length)),
+      effects: EditorView.scrollIntoView(at, { y: "start", yMargin: 40 }),
+    });
+    toTheText();
+  };
+  const here = view.state.selection.main.head;
+  for (const chapter of boardOf(current())) {
+    const group = document.createElement("section");
+    const head = document.createElement("button");
+    head.type = "button";
+    head.className = "scenes-chapter";
+    head.innerHTML = `<span></span><span class="scenes-words"></span>`;
+    (head.firstChild as HTMLElement).textContent = chapter.name;
+    (head.lastChild as HTMLElement).textContent = wordsSaid(chapter.words);
+    head.addEventListener("click", () => go(chapter.from));
+    if (chapter.from <= here && here < chapter.to && !chapter.scenes.length)
+      head.setAttribute("aria-current", "true");
+    const scenes = document.createElement("ol");
+    for (const scene of chapter.scenes) {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "scenes-scene";
+      if (scene.state) button.dataset.state = scene.state;
+      if (scene.from <= here && here < scene.to) button.setAttribute("aria-current", "true");
+      const name = document.createElement("span");
+      name.textContent = scene.name;
+      const count = document.createElement("span");
+      count.className = "scenes-words";
+      count.textContent = wordsSaid(scene.words);
+      button.append(name, count);
+      if (scene.summary) {
+        const line = document.createElement("span");
+        line.className = "scenes-line";
+        line.textContent = scene.summary;
+        button.append(line);
+      }
+      button.addEventListener("click", () => go(scene.from));
+      item.append(button);
+      scenes.append(item);
+    }
+    group.append(head, scenes);
+    list.append(group);
+  }
+  return list;
 }
 
 /**
@@ -2307,6 +2470,7 @@ function problemNow(code: string, words: string, near: number): Problem | undefi
 /** From the side to the text: on a narrow window the side lies over it, so it goes first. */
 function toTheText(): void {
   if (narrow.matches && prefs.side) showSidePanel(false);
+  if (narrow.matches && prefs.bench) showBenchPanel(false);
   view.focus();
 }
 
@@ -2398,11 +2562,41 @@ function selectTab(tab: Tab, focus = false): void {
   prefs.tab = tab;
   keepPrefs();
   showSide();
-  if (focus) document.querySelector<HTMLElement>(`.side-tab[data-tab="${tab}"]`)?.focus();
+  if (focus) document.querySelector<HTMLElement>(`#side .side-tab[data-tab="${tab}"]`)?.focus();
 }
 
-const TABS: readonly Tab[] = ["script", "book", "cast", "warnings", "scraps"];
-for (const tab of document.querySelectorAll<HTMLButtonElement>(".side-tab")) {
+/** A workbench tab, the workbench shown for it. */
+function selectBench(tab: BenchTab, focus = false): void {
+  prefs.benchTab = tab;
+  keepPrefs();
+  if (!prefs.bench) showBenchPanel(true);
+  else showBench();
+  if (focus) document.querySelector<HTMLElement>(`#bench .side-tab[data-bench="${tab}"]`)?.focus();
+}
+
+const BENCH_TABS: readonly BenchTab[] = ["scenes", "cast", "scraps", "comments", "warnings"];
+for (const tab of document.querySelectorAll<HTMLButtonElement>("#bench .side-tab")) {
+  tab.addEventListener("click", () => selectBench(tab.dataset.bench as BenchTab));
+  tab.addEventListener("keydown", (event) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const all = BENCH_TABS;
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      selectBench((event.key === "Home" ? all[0] : all.at(-1)) as BenchTab, true);
+      return;
+    }
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    selectBench(
+      all[(all.indexOf(prefs.benchTab) + step + all.length) % all.length] as BenchTab,
+      true,
+    );
+  });
+}
+
+const TABS: readonly Tab[] = ["script", "book"];
+for (const tab of document.querySelectorAll<HTMLButtonElement>("#side .side-tab")) {
   tab.addEventListener("click", () => selectTab(tab.dataset.tab as Tab));
   tab.addEventListener("keydown", (event) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -2419,8 +2613,7 @@ for (const tab of document.querySelectorAll<HTMLButtonElement>(".side-tab")) {
 }
 
 $("#status-warnings").addEventListener("click", () => {
-  showSidePanel(true);
-  selectTab("warnings", true);
+  selectBench("warnings", true);
 });
 
 /** A click on the script or the book puts the cursor where that part comes from. */
@@ -2457,8 +2650,7 @@ function indexSheet(): void {
  * by halves among the parts, not by reading every one on each key.
  */
 function markPlace(): void {
-  if (!prefs.side || prefs.tab === "warnings" || prefs.tab === "cast" || prefs.tab === "scraps")
-    return;
+  if (!prefs.side) return;
   const cursor = view.state.selection.main.head;
   let low = 0;
   let high = placed.length;
@@ -2505,13 +2697,69 @@ function bringIntoView(element: HTMLElement): void {
   });
 }
 
+/** Below this, the preview and the workbench take turns: one shows at a time. */
+const crowded = window.matchMedia("(max-width: 1199px)");
+
 function showSidePanel(shown: boolean): void {
   prefs.side = shown;
+  if (shown && crowded.matches && prefs.bench) setBench(false);
   keepPrefs();
   $("#workspace").toggleAttribute("data-side", shown);
   checkMenu("side", shown);
+  showDrawnTip();
   if (shown) showSide();
   overlaid();
+}
+
+// Ctrl+\ and Ctrl+Shift+\, wherever the keys are: the preview, and the workbench.
+document.addEventListener("keydown", (event) => {
+  if (event.code !== "Backslash" || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  if (onWelcome()) return;
+  event.preventDefault();
+  if (event.shiftKey) showBenchPanel(!prefs.bench);
+  else showSidePanel(!prefs.side);
+});
+// A window grown crowded keeps one panel: the preview.
+crowded.addEventListener("change", () => {
+  if (crowded.matches && prefs.side && prefs.bench) {
+    setBench(false);
+    keepPrefs();
+    overlaid();
+  }
+});
+
+function setBench(shown: boolean): void {
+  prefs.bench = shown;
+  $("#workspace").toggleAttribute("data-bench", shown);
+  checkMenu("bench", shown);
+}
+
+function showBenchPanel(shown: boolean): void {
+  if (shown && crowded.matches && prefs.side) {
+    prefs.side = false;
+    $("#workspace").toggleAttribute("data-side", false);
+    checkMenu("side", false);
+  }
+  setBench(shown);
+  keepPrefs();
+  if (shown) showBench();
+  overlaid();
+}
+
+/** The preview's word about drawn marks, while marks are as written, until it is put away. */
+function showDrawnTip(): void {
+  $("#drawn-tip").hidden = !prefs.marks || prefs.drawnTipDone || !prefs.side;
+}
+
+/** The menu says how marks are shown, and the drawn-only choices wait while they are written. */
+function showMarksMenu(raw: boolean): void {
+  checkMenu("written", raw);
+  checkMenu("drawn", !raw);
+  for (const item of document.querySelectorAll("#drawn-only [role^=menuitem], #drawn-button"))
+    item.setAttribute("aria-disabled", String(raw));
+  $("#drawn-button").title = raw ? "Only when marks are drawn: View › Drawn" : "";
+  $("#drawn-hint").hidden = !raw;
+  showDrawnTip();
 }
 
 /**
@@ -2521,13 +2769,15 @@ function showSidePanel(shown: boolean): void {
 const narrow = window.matchMedia("(max-width: 899px)");
 function overlaid(): void {
   const over = narrow.matches && prefs.side;
-  const toggle = $("#preview-toggle");
-  // Its words say what it does; the side showing is marked for the eye alone.
-  toggle.toggleAttribute("data-on", over);
-  toggle.textContent = over ? "Write" : "Preview";
+  // The bar's two panel buttons say which panels show.
+  $("#preview-toggle").setAttribute("aria-pressed", String(prefs.side));
+  $("#bench-toggle").setAttribute("aria-pressed", String(prefs.bench));
   if (document.body.hasAttribute("data-welcome")) return;
-  $(".manuscript").inert = over;
-  $("#scene-rail").inert = over;
+  // The workbench lies over the manuscript from the left on a narrow window, as the side does
+  // from the right.
+  const benchOver = narrow.matches && prefs.bench;
+  $(".manuscript").inert = over || benchOver;
+  $("#scene-rail").inert = over || benchOver;
 }
 narrow.addEventListener("change", overlaid);
 // The side lying over the manuscript closes at a click beside it, on the manuscript it covers.
@@ -2542,10 +2792,22 @@ document.addEventListener("pointerdown", (event) => {
   }
 });
 
+$("#preview-toggle").title = `Preview: the script or the book (${keys("Mod+\\")})`;
+$("#bench-toggle").title =
+  `Workbench: scenes, cast, scraps, comments, warnings (${keys("Mod+Shift+\\")})`;
 $("#preview-toggle").addEventListener("click", () => {
-  const preview = !(narrow.matches && prefs.side);
+  const preview = !prefs.side;
   showSidePanel(preview);
-  if (preview) document.querySelector<HTMLElement>('.side-tab[aria-selected="true"]')?.focus();
+  // Lying over the manuscript on a narrow window, it is what is read next.
+  if (preview && narrow.matches)
+    document.querySelector<HTMLElement>('#side .side-tab[aria-selected="true"]')?.focus();
+  else view.focus();
+});
+$("#bench-toggle").addEventListener("click", () => {
+  const shown = !prefs.bench;
+  showBenchPanel(shown);
+  if (shown && narrow.matches)
+    document.querySelector<HTMLElement>('#bench .side-tab[aria-selected="true"]')?.focus();
   else view.focus();
 });
 
@@ -2689,6 +2951,7 @@ async function openStory(opened: Opened): Promise<void> {
     await keepVersion({ doc: kept.id, at: kept.changedAt, text: kept.text, why: "Not saved" });
   }
   await load(opened, kept ? { id: kept.id } : {});
+  offerScrapsByName();
   if (!opened.imported) void snapshot("Opened", opened.text);
   if (opened.imported && opened.document)
     offerShape(
@@ -2726,7 +2989,7 @@ function commitPending(): void {
   const field = document.activeElement;
   if (
     (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) &&
-    field.closest("#side-sheet") &&
+    field.closest("#side-sheet, #bench-sheet") &&
     field.value !== field.defaultValue
   )
     field.blur();
@@ -2772,8 +3035,9 @@ const saving = new SaveFlow({
   },
   replaceText: (next) => replaceText(next, "input.disk", allCrlf(next)),
   keep: () => {
-    // Scraps saved beside the story this visit are saved there again with it.
-    void saveScraps(false);
+    // Scraps saved beside the story this visit are saved there again with it; those this browser
+    // alone has are said.
+    void saveScraps(false).then(remindOfScraps);
     return keep();
   },
   snapshot: async (why, content) => {
@@ -3118,6 +3382,7 @@ function showShape(): void {
     if (apply(diffChanges(before, made), "Nothing chosen to change.")) {
       notice("Set out as a book: Ctrl+Z takes it all back.");
       if (prefs.side) showSide();
+      if (prefs.bench) showBench();
     }
     view.focus();
   };
@@ -3268,8 +3533,8 @@ function insertComment(): void {
   view.focus();
 }
 
-/** View › Comments: the writer's comments, each to go to, or to delete once done with. */
-function showComments(): void {
+/** The workbench's Comments: the writer's comments in order, each to go to, or to delete once done. */
+function commentsList(): HTMLElement {
   const story = current();
   const found = story.blocks
     .flatMap((block) =>
@@ -3278,43 +3543,56 @@ function showComments(): void {
     .flatMap((line) => line.items)
     .filter((item) => item.kind === "comment");
   const doc = view.state.doc;
-  showList(
-    "Comments",
-    found.length
-      ? "Your comments: never read aloud, printed or given to a performer."
-      : `No comments yet. Insert › A comment for yourself (${keys("Mod+Alt+M")}) leaves one at the cursor, or comments out the words selected.`,
-    found.map((item) => {
-      const text = item.text || "(empty)";
-      return {
-        title: text.length > 90 ? `${text.slice(0, 89)}…` : text,
-        detail: `Line ${doc.lineAt(Math.min(item.range.from, doc.length)).number}`,
-        actions: [
-          {
-            label: "Delete",
-            run: () => {
-              const { from, to } = item.range;
-              // The space before it goes with it, so the words around it meet as before.
-              const start = view.state.sliceDoc(from - 1, from) === " " ? from - 1 : from;
-              view.dispatch({ changes: { from: start, to }, userEvent: "delete" });
-              notice(`Comment deleted. ${keys("Mod+Z")} brings it back.`);
-              view.focus();
-            },
-          },
-          {
-            label: "Go to",
-            main: true,
-            run: () => {
-              view.dispatch({
-                selection: EditorSelection.cursor(item.range.to),
-                effects: EditorView.scrollIntoView(item.range.from, { y: "center" }),
-              });
-              view.focus();
-            },
-          },
-        ],
-      };
-    }),
-  );
+  const here = view.state.selection.main.head;
+  const list = document.createElement("div");
+  list.className = "comments-list";
+  const note = document.createElement("p");
+  note.className = "sheet-note";
+  note.textContent = found.length
+    ? "Yours alone: never read aloud, printed or given to a performer."
+    : `No comments yet. Insert › A comment for yourself (${keys("Mod+Alt+M")}) leaves one at the cursor, or comments out the words selected.`;
+  list.append(note);
+  const items = document.createElement("ol");
+  for (const item of found) {
+    const row = document.createElement("li");
+    row.className = "comment-row";
+    if (item.range.from <= here && here <= item.range.to) row.setAttribute("aria-current", "true");
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "comment-go";
+    const words = document.createElement("span");
+    words.className = "comment-words";
+    words.textContent = item.text || "(empty)";
+    const where = document.createElement("span");
+    where.className = "comment-where";
+    where.textContent = `Line ${doc.lineAt(Math.min(item.range.from, doc.length)).number}`;
+    go.append(words, where);
+    go.title = "Go to this comment";
+    go.addEventListener("click", () => {
+      view.dispatch({
+        selection: EditorSelection.cursor(item.range.to),
+        effects: EditorView.scrollIntoView(item.range.from, { y: "center" }),
+      });
+      toTheText();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "button quiet comment-delete";
+    remove.textContent = "Delete";
+    remove.title = "Done with it: take it out of the story";
+    remove.addEventListener("click", () => {
+      if (lockedOut) return;
+      const { from, to } = item.range;
+      // The space before it goes with it, so the words around it meet as before.
+      const start = view.state.sliceDoc(from - 1, from) === " " ? from - 1 : from;
+      view.dispatch({ changes: { from: start, to }, userEvent: "delete" });
+      notice(`Comment deleted. ${keys("Mod+Z")} brings it back.`);
+    });
+    row.append(go, remove);
+    items.append(row);
+  }
+  list.append(items);
+  return list;
 }
 
 /** Puts a line of its own after the paragraph the cursor is in, a blank line around it. */
@@ -3974,6 +4252,8 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Mod+J", "How it’s said: this passage, or the words selected"],
   ["Mod+Alt+M", "A comment for yourself, or the words selected commented out"],
   ["Mod+Shift+X", "Cut the words selected to Scraps, to bring back later"],
+  ["Mod+\\", "The preview: the script or the book"],
+  ["Mod+Shift+\\", "The workbench: scenes, cast, scraps and warnings"],
   ["Alt+↑ / Alt+↓", "Move the paragraph up or down"],
   ["Enter", "In a quote: close it, and open it again on a new line for the same speaker"],
   ["Mod+Shift+M", "Every mark raw, or drawn"],
@@ -4088,7 +4368,7 @@ const COMMANDS: Record<string, () => unknown> = {
   "cut-to-scraps": () => {
     cutToScraps();
   },
-  comments: showComments,
+  comments: () => selectBench("comments", true),
   "insert-break": () => insertAfterParagraph("* * *"),
   "insert-chapter": () =>
     insertAfterParagraph(
@@ -4211,8 +4491,12 @@ function viewCommand(name: string, on: boolean): void {
     keepPrefs();
     if (on) scheduleAutosave();
     else clearTimeout(autosaveTimer);
-  } else if (name === "marks") {
-    view.dispatch({ effects: setShowMarks.of(on) });
+  } else if (name === "marks" || name === "written" || name === "drawn") {
+    const raw = name === "drawn" ? !on : on;
+    view.dispatch({ effects: setShowMarks.of(raw) });
+    showMarksMenu(raw);
+  } else if (name === "bench") {
+    showBenchPanel(on);
   } else if (name === "side") {
     showSidePanel(on);
   } else if (name === "rail-names") {
@@ -4298,7 +4582,7 @@ function showHearing(on: boolean): void {
 
 // Undo and Redo from a field on the side that hasn't been changed (a name just renamed in the
 // cast): the story's, as anywhere else.
-$("#side").addEventListener("keydown", (event) => {
+$("#bench").addEventListener("keydown", (event) => {
   const field = event.target;
   if (!(field instanceof HTMLInputElement) || field.value !== field.defaultValue) return;
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
@@ -4473,6 +4757,20 @@ $("#side-close").addEventListener("click", () => {
   showSidePanel(false);
   view.focus();
 });
+$("#bench-close").addEventListener("click", () => {
+  showBenchPanel(false);
+  view.focus();
+});
+$("#drawn-tip-yes").addEventListener("click", () => {
+  prefs.drawnTipDone = true;
+  viewCommand("drawn", true);
+  view.focus();
+});
+$("#drawn-tip-no").addEventListener("click", () => {
+  prefs.drawnTipDone = true;
+  keepPrefs();
+  showDrawnTip();
+});
 
 // The welcome, for a first visit: open a file, start one, or begin from an example.
 
@@ -4496,7 +4794,7 @@ function showWelcome(): void {
   $("#welcome").hidden = false;
   document.body.setAttribute("data-welcome", "");
   storyCommands(false);
-  for (const behind of ["#editor", "#scene-rail", "#side"]) $(behind).inert = true;
+  for (const behind of ["#editor", "#scene-rail", "#side", "#bench"]) $(behind).inert = true;
   $("#welcome-examples").replaceChildren(
     ...examples.map((example) => {
       const item = document.createElement("li");
@@ -4560,6 +4858,9 @@ function applyPage(): void {
   style.setProperty("--page-leading", String(prefs.leading));
   if (prefs.sideWidth) style.setProperty("--side-width", `minmax(18rem, ${prefs.sideWidth}%)`);
   else style.removeProperty("--side-width");
+  if (prefs.benchWidth) style.setProperty("--bench-width", `minmax(14rem, ${prefs.benchWidth}%)`);
+  else style.removeProperty("--bench-width");
+  $("#bench-resize").setAttribute("aria-valuenow", String(prefs.benchWidth || 22));
   $("#side-resize").setAttribute("aria-valuenow", String(prefs.sideWidth || 34));
   // Paragraphs set in or not: the page's lines drawn again.
   view.dispatch({ effects: redrawn.of(null) });
@@ -4615,6 +4916,52 @@ function showPageSettings(): void {
     prefs.measure = Number(measure.value);
     prefs.leading = Number(leading.value);
     keepPrefs();
+    // The edge between the workbench and the manuscript, as the side's.
+    {
+      const edge = $("#bench-resize");
+      const set = (percent: number) => {
+        prefs.benchWidth = Math.round(Math.min(40, Math.max(14, percent)));
+        keepPrefs();
+        applyPage();
+      };
+      edge.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        edge.setPointerCapture(event.pointerId);
+        edge.toggleAttribute("data-dragging", true);
+        const work = $("#workspace").getBoundingClientRect();
+        const rail = $("#scene-rail").getBoundingClientRect();
+        const move = (moved: PointerEvent) =>
+          set(((moved.clientX - rail.right) / work.width) * 100);
+        const done = () => {
+          edge.removeAttribute("data-dragging");
+          edge.removeEventListener("pointermove", move);
+        };
+        edge.addEventListener("pointermove", move);
+        edge.addEventListener("pointerup", done, { once: true });
+        edge.addEventListener("pointercancel", done, { once: true });
+      });
+      edge.addEventListener("keydown", (event) => {
+        const now = prefs.benchWidth || 22;
+        const to =
+          event.key === "ArrowRight"
+            ? now + 2
+            : event.key === "ArrowLeft"
+              ? now - 2
+              : event.key === "Home"
+                ? 14
+                : event.key === "End"
+                  ? 40
+                  : null;
+        if (to === null) return;
+        event.preventDefault();
+        set(to);
+      });
+      edge.addEventListener("dblclick", () => {
+        prefs.benchWidth = 0;
+        keepPrefs();
+        applyPage();
+      });
+    }
     applyPage();
     show();
   };
@@ -4702,8 +5049,9 @@ applyPage();
 // Start: the draft from last time, or the welcome.
 
 async function start(): Promise<void> {
-  for (const name of [...SWITCHES, "marks", "autosave", "focus", "typewriter"] as const)
+  for (const name of [...SWITCHES, "autosave", "focus", "typewriter"] as const)
     checkMenu(name, prefs[name]);
+  showMarksMenu(prefs.marks);
   checkMenu("hover-bar", prefs.hoverBar);
   checkMenu("toolbar", prefs.toolbar);
   checkMenu("smart", prefs.smart);
@@ -4715,6 +5063,8 @@ async function start(): Promise<void> {
   focusMode(prefs.focus);
   // Where the browser can't keep files, there's no file to save to automatically.
   $("#autosave-item").hidden = !keepsFiles;
+  // On a crowded window the preview, shown last, is the one kept.
+  if (prefs.bench && !(crowded.matches && prefs.side)) showBenchPanel(true);
   showSidePanel(prefs.side);
   checkMenu("rail-names", rail.names);
   void showRecent();

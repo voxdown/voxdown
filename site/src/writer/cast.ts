@@ -23,7 +23,7 @@ export type CastActions = {
  */
 function refocus(key: string): void {
   requestAnimationFrame(() =>
-    document.querySelector<HTMLElement>(`#side-sheet [data-focus="${CSS.escape(key)}"]`)?.focus(),
+    document.querySelector<HTMLElement>(`#bench-sheet [data-focus="${CSS.escape(key)}"]`)?.focus(),
   );
 }
 

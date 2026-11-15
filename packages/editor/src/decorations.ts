@@ -21,6 +21,12 @@ import { nameReadAt, readNamesField, spokenName } from "./scene-names";
 import { ChipWidget, LineWidget, type PageTurnTools, type ReadAloud } from "./widgets";
 
 /**
+ * Not to be checked for spelling: names, instructions and the front matter, which are no words of
+ * a dictionary's. Directions, sounds, notes and comments are words, and are checked.
+ */
+const NO_SPELL = { spellcheck: "false" } as const;
+
+/**
  * Live preview: every line shows the story as it reads, with a character's name as a chip in their
  * color, a direction as a small label above the words it directs,
  * sounds and page turns as chips, and scene breaks and groups drawn across the page. The line you
@@ -450,10 +456,14 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
     }
     decorations.push({ from, to, deco });
   };
-  const tinted = (cls: string, color?: string) =>
-    Decoration.mark(
-      color ? { class: cls, attributes: { style: `--vxd-speaker: ${color}` } } : { class: cls },
-    );
+  const tinted = (cls: string, color?: string, spell = true) =>
+    Decoration.mark({
+      class: cls,
+      attributes: {
+        ...(color ? { style: `--vxd-speaker: ${color}` } : {}),
+        ...(spell ? {} : NO_SPELL),
+      },
+    });
   /** A mark switched off: left out, with one space so the words either side still read. */
   const leaveOut = (from: number, to: number) => {
     const line = state.doc.lineAt(from);
@@ -529,14 +539,19 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         add(mark.from, mark.from, Decoration.line({ class: "vxd-unheard" }));
         break;
       case "frontmatter":
-        add(mark.from, mark.to, Decoration.mark({ class: "vxd-frontmatter" }));
+        add(
+          mark.from,
+          mark.to,
+          Decoration.mark({ class: "vxd-frontmatter", attributes: NO_SPELL }),
+        );
         break;
       case "escape":
         if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-escape" }));
         else add(mark.from, mark.to, Decoration.replace({}));
         break;
       case "name":
-        if (showRaw) add(mark.from, mark.to, tinted("vxd-name vxd-raw", color));
+        // A name is a name: never underlined as a misspelling, wherever the browser checks.
+        if (showRaw) add(mark.from, mark.to, tinted("vxd-name vxd-raw", color, false));
         else if (!shown.names) leaveOut(mark.from, mark.to);
         else
           add(
@@ -649,7 +664,12 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       case "page": {
         const turnsTo = mark.label ?? options.pageLabel?.(state, mark.from);
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-page vxd-raw" }));
+        if (showRaw)
+          add(
+            mark.from,
+            mark.to,
+            Decoration.mark({ class: "vxd-page vxd-raw", attributes: NO_SPELL }),
+          );
         else if (!shown.pages) leaveOut(mark.from, mark.to);
         else if (
           mark.ownLine ||
@@ -695,7 +715,12 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       }
       case "pause":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-page vxd-raw" }));
+        if (showRaw)
+          add(
+            mark.from,
+            mark.to,
+            Decoration.mark({ class: "vxd-page vxd-raw", attributes: NO_SPELL }),
+          );
         else
           add(
             mark.from,
@@ -726,7 +751,12 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
           (m) => m.kind === "warning" && m.from < mark.to && mark.from < m.to,
         );
         const tool = wrong ? undefined : options.toolMarks?.[mark.text.split(" ")[0] ?? ""];
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-note vxd-raw" }));
+        if (showRaw)
+          add(
+            mark.from,
+            mark.to,
+            Decoration.mark({ class: "vxd-note vxd-raw", attributes: NO_SPELL }),
+          );
         else
           add(
             mark.from,

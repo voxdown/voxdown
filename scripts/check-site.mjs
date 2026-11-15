@@ -512,6 +512,16 @@ const draftIn = (page) =>
     })
   )
     problems.push(`writer: a first visit looks like ${JSON.stringify(look)}`);
+  // Names, instructions and the front matter aren't checked for spelling; directions are words.
+  const spelling = await first.evaluate(() => ({
+    name: document.querySelector(".cm-content .vxd-name")?.getAttribute("spellcheck"),
+    front: document.querySelector(".cm-content .vxd-frontmatter")?.getAttribute("spellcheck"),
+    direction: document.querySelector(".cm-content .vxd-direction")?.getAttribute("spellcheck"),
+  }));
+  if (
+    JSON.stringify(spelling) !== JSON.stringify({ name: "false", front: "false", direction: null })
+  )
+    problems.push(`writer: spelling is checked as ${JSON.stringify(spelling)}`);
   await first.click("#drawn-tip-yes");
   await first.waitForTimeout(400);
   const drawn = await first.evaluate(() => ({

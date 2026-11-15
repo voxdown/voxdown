@@ -14,6 +14,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - **Marks as written** is the first look: every mark as it is typed, steady as the cursor moves, with the preview beside it saying, until put away, that marks can be drawn in the text instead. Anyone who chose before keeps their choice.
 - The View menu says what each choice does: **Marks in the text** is a choice of as written or drawn; **Each speaker in a color** holds for both; **Drawn marks show** (names, directions, sounds, page turns, notes) waits, greyed, while marks are as written, and says why. Panels, writing and tools are grouped.
 - Dragging a scrap or words into the story shows where they will land.
+- The browser's spell check leaves names, instructions and the front matter alone: a character's name is never underlined in its mark. Directions, sounds, notes and comments are still checked.
 - Scraps this browser alone has are said to be: a line in the Scraps tab until they are saved beside the story (or while they have changed since), and, once a visit, a word after Save with a button that saves them there. A story opened where the browser can't tell it is the same file (Firefox, Safari), or opened afresh, is offered the scraps this browser has under the same file name; they are never taken without asking.
 - Two buttons at the top right show and hide the workbench and the preview, and say which show; they replace the narrow window's Preview button.
 

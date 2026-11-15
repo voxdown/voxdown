@@ -354,6 +354,7 @@ function showScene(index: number): void {
     tab.setAttribute("aria-selected", String(i === index));
     tab.tabIndex = i === index ? 0 : -1;
   }
+  sheet.setAttribute("aria-labelledby", `demo-tab-${index}`);
   $<HTMLAnchorElement>("#demo-open").href =
     `../../writer/#example=${scene.example.name.replace(/\.vxd$/, "")}`;
   nowText.textContent = "Press play to follow along.";
@@ -714,7 +715,9 @@ function initSpine(): void {
           return inked
             ? `<span class="${inked.trim()}">${escapeHtml(seg.t)}</span>`
             : escapeHtml(seg.t);
-        const style = seg.who ? ` style="--sp:${colorFor(seg.who)}"` : "";
+        // "Could you not?" and its name take the colour of whoever the reader gave it to.
+        const owner = seg.slot || (line.id === "could" && k === "speech") ? who || G : seg.who;
+        const style = owner ? ` style="--sp:${colorFor(owner)}"` : "";
         const step = seg.s && upTo === undefined ? ` data-s="${seg.s}"` : "";
         if (k === "speech") {
           // The Writer underlines the words, not the quotation marks around them.
@@ -891,7 +894,7 @@ function initSpine(): void {
   </ul>
   ${lanesHtml()}
   <p class="ab-now"><span data-seg-who>Voiced from this file</span><span data-seg-clock>0:00 / ${clock(SEG_TO - SEG_FROM)}</span></p>
-  <p class="ab-line" data-seg-line>“Then he heard a deep rumble.”</p>
+  <p class="ab-line" data-seg-line>Then he heard a deep rumble.</p>
   <p class="ab-recast" hidden>The recording keeps Gerald: it was voiced from the original file. <button type="button" data-recast>Use the recording’s casting</button></p>
 </div>`;
 
@@ -1621,7 +1624,9 @@ function initSpine(): void {
             ? "(a pause)"
             : cue.kind === "sound" || cue.kind === "vocal"
               ? `[${cue.text ?? ""}]`
-              : `“${cue.text ?? ""}”`;
+              : !cue.speaker || cue.speaker === "Narrator"
+                ? (cue.text ?? "")
+                : `“${cue.text ?? ""}”`;
         for (const el of $$("[data-seg-line]")) el.textContent = said;
         for (const el of $$("[data-seg-who]")) el.textContent = described(dragon.story, cue);
       }

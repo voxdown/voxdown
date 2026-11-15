@@ -46,7 +46,7 @@
       <div class="hero-words">
         <p class="pill-note"><span class="dot-live" aria-hidden="true"></span>Free · open source · runs in your browser</p>
         <h1 id="hero-title">Write it once.<br>Hand it to the <span class="keep pen-under">whole cast.<img src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" decoding="async"></span></h1>
-        <p class="lede">VoxDown is plain text that knows who says every line, and how. Write in the free VoxDown Writer, then send that very file to a narrator, to voice actors, or to an audiobook engine with a voice for every character.</p>
+        <p class="lede">VoxDown is plain text that knows who says every line, and how. Write in the free Writer, then hand the very same file to the booth or to an audiobook engine.</p>
         <div class="cta-row">
           <a class="btn btn-grad btn-lg" href="../../writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
@@ -63,9 +63,9 @@
         <figure class="demo" id="demo" aria-label="A recorded scene, as written in VoxDown and as heard">
           <div class="demo-head">
             <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-            <div class="demo-tabs" role="tablist" aria-label="Choose a recorded scene" id="demo-tabs"><button type="button" class="demo-tab" role="tab" aria-controls="sheet" aria-selected="true" title="The Dragon Who Would Not Roar">The Dragon</button><button type="button" class="demo-tab" role="tab" aria-controls="sheet" aria-selected="false" tabindex="-1" title="The North Wind and the Sun">The North Wind</button></div>
+            <div class="demo-tabs" role="tablist" aria-label="Choose a recorded scene" id="demo-tabs"><button type="button" class="demo-tab" role="tab" id="demo-tab-0" aria-controls="sheet" aria-selected="true" title="The Dragon Who Would Not Roar">The Dragon</button><button type="button" class="demo-tab" role="tab" id="demo-tab-1" aria-controls="sheet" aria-selected="false" tabindex="-1" title="The North Wind and the Sun">The North Wind</button></div>
           </div>
-          <div class="sheet" id="sheet" tabindex="0" role="region" aria-label="The scene as written in VoxDown" aria-describedby="sheet-summary"></div>
+          <div class="sheet" id="sheet" tabindex="0" role="tabpanel" aria-labelledby="demo-tab-0" aria-describedby="sheet-summary"></div>
           <p class="sr-only" id="sheet-summary">The dragon story as written in VoxDown, from its first heading: each line marked with who says it and how, with the sounds and pauses, ready to be read aloud. Press play to hear it, voiced from this very text.</p>
           <div class="legend" role="group" aria-label="Spot a kind of mark in the scene">
             <span class="legend-label">Spot the marks</span>
@@ -94,12 +94,12 @@
     <div class="for wrap">
       <span class="for-label" id="for-label">Made for</span>
       <ul aria-labelledby="for-label">
-        <li><i style="--d:#7c3aed"></i>Fiction writers</li>
-        <li><i style="--d:#fb7185"></i>Audio drama</li>
-        <li><i style="--d:#f59e0b"></i>Podcasts</li>
-        <li><i style="--d:#14b8a6"></i>Audiobook makers</li>
-        <li><i style="--d:#7c3aed"></i>AI-voice and TTS tinkerers</li>
-        <li><i style="--d:#fb7185"></i>Curious developers</li>
+        <li><i style="--d:#7c3aed"></i><span class="wide-txt">Fiction writers</span><span class="short-txt">Fiction</span></li>
+        <li><i style="--d:#fb7185"></i><span class="wide-txt">Audio drama</span><span class="short-txt">Audio drama</span></li>
+        <li><i style="--d:#f59e0b"></i><span class="wide-txt">Podcasts</span><span class="short-txt">Podcasts</span></li>
+        <li><i style="--d:#14b8a6"></i><span class="wide-txt">Audiobook makers</span><span class="short-txt">Audiobooks</span></li>
+        <li><i style="--d:#7c3aed"></i><span class="wide-txt">AI-voice and TTS tinkerers</span><span class="short-txt">TTS tinkerers</span></li>
+        <li><i style="--d:#fb7185"></i><span class="wide-txt">Curious developers</span><span class="short-txt">Developers</span></li>
       </ul>
     </div>
   </section>
@@ -265,15 +265,13 @@
       </ul>
       </details>
 
-      <details class="fold" data-fold open>
-      <summary>And it quietly takes care of the rest</summary>
       <div class="index">
         <h3 class="index-title">And it quietly takes care of the rest</h3>
         <ul class="outcomes">
-          <li><b>Nothing slips through.</b> It finds the next quote with no speaker, and flags any mark that doesn’t make sense, with a fix.</li>
-          <li><b>Nothing gets lost.</b> Drafts are kept as you type, versions you name stay, and it works offline once loaded.</li>
-          <li><b>Start from what you have.</b> Word, EPUB, Fountain, Markdown, or a paste from Google Docs with the formatting kept.</li>
-          <li><b>Built for long books.</b> 150,000 words open in about a quarter of a second, and every command is on the keyboard.</li>
+          <li><b>Nothing slips through.</b> <span class="out-d">Quotes with no speaker, and odd marks, are flagged.</span></li>
+          <li><b>Nothing gets lost.</b> <span class="out-d">Drafts kept as you type; versions you name.</span></li>
+          <li><b>Start from what you have.</b> <span class="out-d">Word, EPUB, Fountain or a paste from Docs.</span></li>
+          <li><b>Built for long books.</b> <span class="out-d">150,000 words open in a quarter of a second.</span></li>
         </ul>
         <details class="more">
           <summary>Everything it does</summary>
@@ -298,7 +296,6 @@
           <p class="index-more"><a href="../../cheatsheet.html">Every mark on one page <span aria-hidden="true">→</span></a></p>
         </details>
       </div>
-      </details>
     </div>
   </section>
 
@@ -309,13 +306,13 @@
       <div class="devs-words">
         <p class="eyebrow eyebrow-dark"><span>04</span> For developers</p>
         <h2 id="devs-title">Open all the way down.</h2>
-        <p class="sec-lede">A published spec, a parser, renderers, an editor component and a command line. Build your own reader, your own voices, your own tools.</p>
+        <p class="sec-lede">A published spec, a parser, renderers, an editor component and a command line.</p>
         <p class="dev-links"><a href="../../spec.html">The spec</a><a href="../../cheatsheet.html">Cheat sheet</a><a href="../../playground.html">Playground</a><a href="https://github.com/voxdown/voxdown">GitHub</a></p>
       </div>
       <div class="devs-code">
         <pre class="term"><code><span class="prompt">$</span> npm install voxdown
 <span class="prompt">$</span> npx @voxdown/cli check story.vxd</code></pre>
-        <details class="fold" data-fold open>
+        <details class="more more-dark">
         <summary>The packages</summary>
         <ul class="pkgs">
           <li><code>voxdown</code><span>Parse a story: its cast, lines and marks.</span></li>

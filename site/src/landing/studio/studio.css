@@ -4931,32 +4931,39 @@ button {
 
 /* ------------------------------------------------------------------ owner additions */
 
-/* "$0", struck through by the red pencil, "Free" written beside it in the pen's hand. Both are
-   placed over the same box, so nothing around them moves. */
-.big-edit {
+/* "$0" corrected to "Free": one red stroke through "$0", which then fades to grey, and "Free"
+   written beside it in the same red. Both sit over the same box, so nothing around them moves. */
+.facts .big-edit {
   position: relative;
   display: inline-block;
+  align-self: flex-start;
+  width: fit-content;
 }
 .big-edit .struck {
   position: relative;
   text-decoration: none;
+  transition: color 0.5s ease 0.35s, -webkit-text-fill-color 0.5s ease 0.35s;
+}
+.big-edit.corrected .struck {
+  color: #8f8a9f;
+  -webkit-text-fill-color: #8f8a9f;
 }
 .big-edit .struck::after {
   content: "";
   position: absolute;
-  left: -0.12em;
-  right: -0.12em;
-  top: 50%;
-  height: 0.3em;
-  translate: 0 -40%;
-  rotate: -8deg;
-  background: url("/landing/studio/pen/pencil-underline.webp") center / 100% 100% no-repeat;
+  left: -0.1em;
+  right: -0.1em;
+  top: 52%;
+  height: 0.13em;
+  border-radius: 0.1em;
+  background: #c62f1b;
+  rotate: -9deg;
   transform-origin: left center;
   transition: transform 0.45s cubic-bezier(0.6, 0, 0.3, 1);
 }
 .big-edit .hand-free {
   position: absolute;
-  left: calc(100% + 0.18em);
+  left: calc(100% + 0.28em);
   bottom: 0.38em;
   font: 400 0.62em / 1 "Rec Hand", "Comic Sans MS", cursive;
   letter-spacing: 0;
@@ -4974,17 +4981,256 @@ button {
   opacity: 0;
   translate: 0 0.15em;
 }
-.facts .big-edit {
-  align-self: flex-start;
-  width: fit-content;
+html:not(.js) .big-edit .struck {
+  color: #8f8a9f;
+  -webkit-text-fill-color: #8f8a9f;
 }
-.big-edit .struck::after {
-  height: 0.38em;
+
+/* ------------------------------------------------------------------ round 7 */
+
+/* The phone's scene board: ↑ and ↓ side by side inside each card, 40 px targets, no overlap. */
+@media (max-width: 860px) {
+  .board-list .bcard {
+    padding-right: 0.65rem;
+  }
+  .moves {
+    position: static;
+    translate: none;
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: 0.45rem;
+  }
+  .moves button {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 16px;
+  }
 }
-.big-edit .struck::after {
-  height: 0.5em;
-  filter: brightness(0.5) saturate(1.4);
+
+/* Handout headings: 12 px; their bodies as they were. */
+.pv .book-run,
+.pv .book-folio,
+.pv .sides-head,
+.step-example .sides-head,
+.step-example .book-run,
+.script-head {
+  font-size: 12px !important;
 }
-.big-edit .hand-free {
-  left: calc(100% + 0.28em);
+
+/* "Made for" on the phone: the label on one line, the chips wrapping onto rows. */
+@media (max-width: 860px) {
+  .for {
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+  .for-label {
+    white-space: nowrap;
+  }
+  .for ul {
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 0.35rem;
+  }
+  .for li {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.84rem;
+    gap: 0.4rem;
+  }
+}
+
+/* The phone's first screen: less above the story, more of the story. */
+@media (max-width: 600px) {
+  .hero-in {
+    gap: 1.6rem;
+    padding-top: 1.4rem;
+  }
+  .hero h1 {
+    margin-top: 0.9rem;
+    font-size: clamp(2.3rem, 10.5vw, 3rem);
+  }
+  .lede {
+    margin-top: 0.9rem;
+    font-size: 1.02rem;
+  }
+  .cta-row {
+    margin-top: 1.2rem;
+    gap: 0.55rem;
+  }
+  .btn-lg {
+    --h: 3.1rem;
+  }
+  .fine {
+    margin-top: 0.7rem;
+  }
+  .pen-hero {
+    top: -2.6rem;
+    width: 6.5rem;
+  }
+}
+
+/* The workbench's tab row fits its badge at narrower widths. */
+@media (max-width: 1180px) {
+  .bench-tabs {
+    padding: 0 0.3rem;
+  }
+  .bt {
+    padding-inline: 0.32rem;
+  }
+}
+
+/* Headings break evenly. */
+.route h3,
+.proof-card h3,
+.cap-h,
+.step h3 {
+  text-wrap: balance;
+}
+
+/* The cast's lines: one height for all four, the long one trimmed. */
+.prod .cast-line {
+  flex: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  height: calc(4 * 1.6em + 1.4rem);
+}
+.prod .audition {
+  margin-top: auto;
+}
+
+/* Step 7: the current line fills the panel's room. */
+.pv-p-audio .ab {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.pv-p-audio .ab-line {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  font-size: 17px;
+}
+
+/* After the screenshots: four short outcomes, the inventory behind one closed link. */
+.outcomes {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem 1.4rem;
+}
+.outcomes li {
+  font-size: 0.92rem;
+}
+.outcomes b {
+  font-size: 1rem;
+}
+@media (max-width: 1100px) {
+  .outcomes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .outcomes {
+    grid-template-columns: 1fr;
+  }
+}
+.more-dark {
+  margin-top: 1rem;
+}
+.more-dark summary {
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16) inset;
+  color: #fff;
+}
+.more-dark summary::after {
+  color: #c4b5fd;
+}
+.more-dark summary:focus-visible {
+  outline: 3px solid #c4b5fd;
+  outline-offset: 2px;
+}
+.more-dark[open] .pkgs {
+  margin-top: 0.8rem;
+}
+.for .short-txt {
+  display: none;
+}
+@media (max-width: 600px) {
+  .for .wide-txt {
+    display: none;
+  }
+  .for .short-txt {
+    display: inline;
+  }
+}
+@media (max-width: 860px) {
+  .board-list .bcard .moves {
+    justify-content: flex-end;
+  }
+}
+.prod .cast-line {
+  display: block;
+  -webkit-line-clamp: none;
+  mask-image: linear-gradient(#000 calc(100% - 1.6rem), transparent calc(100% - 0.4rem));
+}
+/* Measured heights, round 7. */
+.prod {
+  contain-intrinsic-size: auto 1542px;
+}
+.proof {
+  contain-intrinsic-size: auto 2165px;
+}
+.dark-dev {
+  contain-intrinsic-size: auto 476px;
+}
+@media (max-width: 860px) {
+  .prod {
+    contain-intrinsic-size: auto 1045px;
+  }
+  .proof {
+    contain-intrinsic-size: auto 963px;
+  }
+  .dark-dev {
+    contain-intrinsic-size: auto 523px;
+  }
+  .final {
+    contain-intrinsic-size: auto 578px;
+  }
+}
+@media (max-width: 600px) {
+  .outcomes {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 0.9rem;
+  }
+  .outcomes .out-d {
+    display: none;
+  }
+  .outcomes b {
+    font-size: 0.95rem;
+  }
+}
+@media (max-width: 860px) {
+  /* Each card: its title and state on the left, ↑ ↓ side by side on the right. */
+  .board-list .bcard {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 0.6rem;
+  }
+  .board-list .bcard > b,
+  .board-list .bcard > span:not(.moves) {
+    grid-column: 1;
+  }
+  .board-list .bcard .moves {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    margin-top: 0;
+  }
+}
+@media (max-width: 860px) {
+  .proof {
+    contain-intrinsic-size: auto 1009px;
+  }
 }

@@ -6,10 +6,9 @@
  */
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/inter";
-import "@fontsource-variable/jetbrains-mono";
 import "@fontsource-variable/literata";
 import { escapeHtml, renderBook, renderScript, stylesheet } from "@voxdown/render";
-import { type Story, characterColors, parse, tokens } from "voxdown";
+import { type Story, characterColors, lines, linesToCsv, parse, tokens } from "voxdown";
 import { examples } from "../../examples";
 import "./studio.css";
 
@@ -198,6 +197,7 @@ function showPill(): void {
   const home = player.owner?.home();
   const away = home ? seen.get(home) === false : false;
   pill.hidden = !(playing() && away);
+  document.body.classList.toggle("np-on", !pill.hidden);
   $("#np-toggle").classList.toggle("playing", playing());
   $("#np-toggle").setAttribute("aria-label", playing() ? "Pause" : "Play");
   if (!pill.hidden && player.audio) updatePill(player.audio.currentTime);
@@ -396,14 +396,7 @@ function seekHero(share: number): void {
 
 {
   const tabs = $("#demo-tabs");
-  for (const [index, scene] of scenes.entries()) {
-    const tab = document.createElement("button");
-    tab.type = "button";
-    tab.className = "demo-tab";
-    tab.setAttribute("role", "tab");
-    tab.setAttribute("aria-controls", "sheet");
-    tab.textContent = scene.example.name.includes("dragon") ? "The Dragon" : "The North Wind";
-    tab.title = scene.example.title;
+  for (const [index, tab] of $$<HTMLButtonElement>(".demo-tab", tabs).entries()) {
     tab.addEventListener("click", () => showScene(index));
     tab.addEventListener("keydown", (event) => {
       const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
@@ -413,7 +406,6 @@ function seekHero(share: number): void {
       showScene(next);
       $$<HTMLButtonElement>(".demo-tab", tabs)[next]?.focus();
     });
-    tabs.append(tab);
   }
   demoPlay.addEventListener("click", toggleHero);
   heroPlay.addEventListener("click", () => {
@@ -523,9 +515,9 @@ sheet.addEventListener("scroll", () => tip.classList.remove("on"), { passive: tr
 /* ================================================================== the spine */
 
 /*
- * The scene, line by line, with each mark and the step it is set at. `s` on a segment: the step
- * its mark appears; on a line: the step the whole line appears. Every word is the dragon story's
- * own, except the line the writer cuts to Scraps.
+ * The scene, line by line, with each mark and the beat it is set at. `s` on a segment: the beat
+ * its mark appears; on a line: the beat the whole line appears. Every word is the dragon story's
+ * own, except the line the writer cuts to Scraps. `slot`: the speaker the reader gives at beat 2.
  */
 type Kind =
   | "text"
@@ -538,7 +530,7 @@ type Kind =
   | "pause"
   | "group"
   | "comment";
-type Seg = { t: string; k?: Kind; s?: number; who?: string };
+type Seg = { t: string; k?: Kind; s?: number; who?: string; slot?: boolean };
 type Line = {
   segs: Seg[];
   s?: number;
@@ -550,29 +542,30 @@ type Line = {
 };
 const G = "Gerald";
 const P = "Percival";
+const NARRATOR_COLOR = "#7c6fa8";
 const LINES: Line[] = [
   { segs: [{ t: "## The mountain", k: "head" }] },
   {
     id: "rumble",
     segs: [
       { t: "Then he heard a deep rumble." },
-      { t: " [deep rumbling, from inside a cave]", k: "sound", s: 4 },
+      { t: " [deep rumbling, from inside a cave]", k: "sound", s: 3 },
     ],
   },
   {
-    segs: [{ t: "The dragon was snoring." }, { t: " @Gerald [snores]", k: "vocal", s: 4, who: G }],
+    segs: [{ t: "The dragon was snoring." }, { t: " @Gerald [snores]", k: "vocal", s: 3, who: G }],
   },
   { s: 3, tight: true, group: 1, segs: [{ t: "::: whispering", k: "group" }] },
   { tight: true, group: 1, segs: [{ t: "Sir Percival crept inside." }] },
   { tight: true, group: 1, segs: [{ t: "Clank." }] },
   { tight: true, group: 1, segs: [{ t: "Clank." }] },
-  { id: "pause", s: 4, tight: true, group: 1, segs: [{ t: "{pause}", k: "pause" }] },
-  { tight: true, group: 1, id: "eye", segs: [{ t: "The dragon opened one eye." }] },
+  { id: "pause", s: 3, tight: true, group: 1, segs: [{ t: "{pause}", k: "pause" }] },
+  { id: "eye", tight: true, group: 1, segs: [{ t: "The dragon opened one eye." }] },
   { s: 3, group: 1, segs: [{ t: ":::", k: "group" }] },
   {
     id: "could",
     segs: [
-      { t: "@Gerald ", k: "name", s: 2, who: G },
+      { t: "@Gerald ", k: "name", s: 2, who: G, slot: true },
       { t: "(deep, polite and utterly unbothered) ", k: "dir", s: 3 },
       { t: "“Could you not?”", k: "speech", who: G },
     ],
@@ -597,12 +590,12 @@ const LINES: Line[] = [
     segs: [
       { t: "@Gerald ", k: "name", s: 2, who: G },
       { t: "“Imaginary ones. They were very difficult to catch.”", k: "speech", who: G },
-      { t: " <!-- Best line in the scene. Keep it. -->", k: "comment", s: 6 },
+      { t: " <!-- Best line in the scene. Keep it. -->", k: "comment", s: 5 },
     ],
   },
-  { id: "battle", s: 5, segs: [{ t: "## The battle", k: "head" }] },
+  { id: "battle", s: 4, segs: [{ t: "## The battle", k: "head" }] },
   {
-    s: 5,
+    s: 4,
     tight: true,
     group: 2,
     segs: [
@@ -611,24 +604,24 @@ const LINES: Line[] = [
       { t: " trying to sound brave", k: "group" },
     ],
   },
-  { s: 5, tight: true, group: 2, segs: [{ t: "I am Sir Percival of the Shining Shield!" }] },
+  { s: 4, tight: true, group: 2, segs: [{ t: "I am Sir Percival of the Shining Shield!" }] },
   {
     id: "smite",
-    s: 5,
+    s: 4,
     tight: true,
     group: 2,
     cut: true,
     segs: [{ t: "I shall smite thee most thoroughly!" }],
   },
-  { s: 5, tight: true, group: 2, segs: [{ t: "Prepare to meet thy doom!" }] },
-  { s: 5, tight: true, group: 2, segs: [{ t: ":::", k: "group" }] },
+  { s: 4, tight: true, group: 2, segs: [{ t: "Prepare to meet thy doom!" }] },
+  { s: 4, tight: true, group: 2, segs: [{ t: ":::", k: "group" }] },
 ];
 // Where each line of the mountain scene is in the story, to light it as it's heard.
 {
   const full = dragon.story.source;
   let cursor = full.indexOf("## The mountain");
   for (const line of LINES) {
-    if (line.s === 5) break;
+    if (line.s === 4) break;
     const text = line.segs
       .filter((seg) => seg.k !== "comment")
       .map((seg) => seg.t)
@@ -640,38 +633,62 @@ const LINES: Line[] = [
     }
   }
 }
-const STEPS = 11;
+const STEPS = 7;
+const CUT_AT = 5;
 const SEG_FROM = 50.2;
 const SEG_TO = 84.5;
 
-const colorFor = (who?: string) => (who ? (dragonColors.get(who) ?? "#555") : "#555");
+const colorFor = (who?: string) =>
+  who === "Narrator" ? NARRATOR_COLOR : who ? (dragonColors.get(who) ?? "#555") : "#555";
 
-/** A line's HTML: in the mock every mark is there and CSS shows it at its step; in an example only
- * what's been set by `upTo` is drawn. */
-function lineHtml(line: Line, upTo?: number): string {
+/** A line's HTML. In the mock every mark is there and CSS shows it at its beat; in an example,
+ * only what's set by `upTo` is drawn. `pen`: the words a pencil rings in an example. */
+function lineHtml(
+  line: Line,
+  upTo?: number,
+  pen?: { seg: number; mark: "ring" | "under" },
+): string {
   return line.segs
-    .map((seg) => {
+    .map((seg, index) => {
       if (upTo !== undefined && seg.s && seg.s > upTo) return "";
-      const text = escapeHtml(seg.t);
       const k = seg.k ?? "text";
-      if (k === "text") return text;
+      const inked = pen && pen.seg === index ? ` ink-${pen.mark}` : "";
+      if (k === "text")
+        return inked
+          ? `<span class="${inked.trim()}">${escapeHtml(seg.t)}</span>`
+          : escapeHtml(seg.t);
       const style = seg.who ? ` style="--sp:${colorFor(seg.who)}"` : "";
       const step = seg.s && upTo === undefined ? ` data-s="${seg.s}"` : "";
-      if (k === "speech") return `<span class="k-speech"${style}>${text}</span>`;
-      return `<span class="mk k-${k}"${step}${style}>${text}</span>`;
+      if (k === "speech") {
+        // The Writer underlines the words, not the quotation marks around them.
+        const open = seg.t.startsWith("“") ? "“" : "";
+        const close = seg.t.endsWith("”") ? "”" : "";
+        const words = seg.t.slice(open.length, seg.t.length - close.length);
+        return `${open}<span class="k-speech${inked}"${style}>${escapeHtml(words)}</span>${close}`;
+      }
+      const slot = seg.slot ? " who-slot" : "";
+      return `<span class="mk k-${k}${slot}${inked}"${step}${style}>${escapeHtml(seg.t)}</span>`;
     })
     .join("");
 }
 
-function linesHtml(lines: Line[], upTo?: number): string {
+function linesHtml(
+  lines: Line[],
+  upTo?: number,
+  pens: Record<string, { seg: number; mark: "ring" | "under"; note: string }> = {},
+): string {
   return lines
-    .filter((line) => upTo === undefined || ((line.s ?? 0) <= upTo && !(line.cut && upTo >= 7)))
+    .filter(
+      (line) => upTo === undefined || ((line.s ?? 0) <= upTo && !(line.cut && upTo >= CUT_AT)),
+    )
     .map((line, i) => {
+      const pen = line.id ? pens[line.id] : undefined;
       const classes = [
         "ln",
         line.tight ? "tight" : "",
         line.group ? `g${line.group}` : "",
         line.cut ? "cut" : "",
+        pen ? "noted" : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -679,17 +696,20 @@ function linesHtml(lines: Line[], upTo?: number): string {
         `class="${classes}"`,
         upTo === undefined && line.s ? `data-s="${line.s}"` : "",
         line.from !== undefined ? `data-line-from="${line.from}"` : "",
-        line.id && upTo === undefined ? `data-id="${line.id}"` : "",
+        line.id ? `data-id="${line.id}"` : "",
         `style="--i:${i}"`,
       ]
         .filter(Boolean)
         .join(" ");
-      return `<p ${attrs}>${lineHtml(line, upTo)}</p>`;
+      const note = pen
+        ? `<span class="note" aria-hidden="true">${escapeHtml(pen.note)}</span>`
+        : "";
+      return `<p ${attrs}>${lineHtml(line, upTo, pen)}${note}</p>`;
     })
     .join("");
 }
 
-/* The book, the script and the sides of the mountain scene, by the renderer. */
+/* The book, the script and Gerald's lines from the mountain scene, by the renderer. */
 const mountain = (() => {
   const full = dragon.story.source;
   const front = full.slice(0, full.indexOf("---", 4) + 3);
@@ -699,7 +719,7 @@ const mountain = (() => {
 })();
 const BOOK = `<div class="book-page" data-vxd-theme="light"><p class="book-run">The Dragon Who Would Not Roar</p>${renderBook(mountain, { header: false })}<p class="book-folio">12</p></div>`;
 const SCRIPT = `<div class="script-page" data-vxd-theme="light">${renderScript(mountain, { header: false })}</div>`;
-const SIDES = `<div class="sides-page">
+const LINES_OF = `<div class="sides-page">
   <p class="sides-head"><span style="--sp:${colorFor(G)}">Gerald</span> · his lines · The mountain</p>
   <p class="cue">… The dragon opened one eye.</p>
   <p class="said"><b>GERALD</b> <i>(deep, polite and utterly unbothered)</i> “Could you not?”</p>
@@ -721,7 +741,7 @@ function lanesHtml(): string {
     { key: P, name: "Sir Percival" },
     { key: "", name: "Sounds" },
   ];
-  return `<div class="lanes">${lanes
+  return `<div class="lanes" aria-hidden="true">${lanes
     .map((lane) => {
       const bits = segmentCues
         .filter((cue) =>
@@ -733,8 +753,7 @@ function lanesHtml(): string {
           return `<i style="--x:${x.toFixed(2)}%;--w:${w.toFixed(2)}%" data-start="${cue.start}" data-end="${cue.start + cue.duration}"></i>`;
         })
         .join("");
-      const color =
-        lane.key && lane.key !== "Narrator" ? colorFor(lane.key) : lane.key ? "#7c6fa8" : "#0f766e";
+      const color = lane.key ? colorFor(lane.key) : "#0f766e";
       return `<div class="lane" style="--c:${color}"><span>${lane.name}</span><div class="lane-track">${bits}</div></div>`;
     })
     .join("")}<div class="playhead-rail"><div class="playhead" data-playhead></div></div></div>`;
@@ -742,9 +761,9 @@ function lanesHtml(): string {
 const voices = dragon.manifest.voices;
 const AUDIO = `<div class="ab">
   <p class="ab-title">Make an audiobook</p>
-  <p class="ab-row"><span>The voices</span><b class="ab-select">ElevenLabs <i>▾</i></b></p>
+  <p class="ab-row"><span>The voices</span><b class="ab-select">ElevenLabs <i aria-hidden="true">▾</i></b></p>
   <ul class="ab-cast">
-    <li><span class="dot" style="--sp:#7c6fa8"></span>Narrator<b>${escapeHtml(voices.Narrator ?? "")}</b></li>
+    <li><span class="dot" style="--sp:${NARRATOR_COLOR}"></span>Narrator<b>${escapeHtml(voices.Narrator ?? "")}</b></li>
     <li><span class="dot" style="--sp:${colorFor(G)}"></span>Gerald<b>${escapeHtml(voices.Gerald ?? "")}</b></li>
     <li><span class="dot" style="--sp:${colorFor(P)}"></span>Sir Percival<b>${escapeHtml(voices.Percival ?? "")}</b></li>
   </ul>
@@ -774,13 +793,60 @@ const ICON = {
   left: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
   right: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
 };
-const icon = (name: keyof typeof ICON) => `<svg viewBox="0 0 24 24">${ICON[name]}</svg>`;
+const icon = (name: keyof typeof ICON) =>
+  `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
 const tool = (name: keyof typeof ICON, label: string, hl = "") =>
   `<span class="tb"${hl ? ` data-hl="${hl}"` : ""}>${icon(name)}${label}</span>`;
 
+/* The cast as the Writer's Cast tab shows it. */
+const CAST = [
+  {
+    handle: "Narrator",
+    name: "Narrator",
+    about: "Warm and unhurried, enjoying the joke.",
+    stats: "6 lines · 45 words",
+  },
+  {
+    handle: G,
+    name: "Gerald",
+    about: "An old dragon. Deep, polite and utterly unbothered.",
+    stats: "4 lines · 31 words",
+  },
+  {
+    handle: P,
+    name: "Sir Percival",
+    about: "A young knight. Brave in theory, nervous in practice.",
+    stats: "1 line · 2 words",
+  },
+];
+const castCard = (member: (typeof CAST)[number]) =>
+  `<div class="cc" data-cast="${member.handle}" style="--sp:${colorFor(member.handle)}"><p class="cc-h"><span class="dot"></span><span class="cc-at">@</span>${member.handle}<i>→</i></p><p class="cc-s">${member.stats}</p><p class="cc-a">${member.about}</p></div>`;
+
+/* The picker "Who says this?", as the Writer's: the cast, each in their colour. */
+const pickerHtml = (
+  id: string,
+) => `<div class="picker" id="${id}" role="dialog" aria-label="Who says this?" hidden>
+  <p class="picker-h">Who says this?</p>
+  <div class="picker-list">${CAST.map(
+    (member) =>
+      `<button type="button" data-pick="${member.handle}"><span class="dot" style="--sp:${colorFor(member.handle)}" aria-hidden="true"></span>${member.handle === "Narrator" ? "The narrator" : member.name}</button>`,
+  ).join("")}</div>
+</div>`;
+
+const tabsHtml = (prefix: string) => `<div class="pv-tabs" role="tablist" aria-label="Preview">
+  <button type="button" role="tab" id="${prefix}-t-script" aria-controls="${prefix}-script" aria-selected="true" data-pv="script">Script</button>
+  <button type="button" role="tab" id="${prefix}-t-book" aria-controls="${prefix}-book" aria-selected="false" tabindex="-1" data-pv="book">Book</button>
+  <button type="button" role="tab" id="${prefix}-t-lines" aria-controls="${prefix}-lines" aria-selected="false" tabindex="-1" data-pv="lines">Each character’s lines</button>
+  <span class="pv-title pv-audio" aria-hidden="true">File › Make an audiobook…</span>
+</div>`;
+const panelsHtml = (prefix: string) => `
+  <div class="pv pv-p-script" role="tabpanel" id="${prefix}-script" aria-labelledby="${prefix}-t-script" tabindex="0">${SCRIPT}</div>
+  <div class="pv pv-p-book" role="tabpanel" id="${prefix}-book" aria-labelledby="${prefix}-t-book" tabindex="0">${BOOK}</div>
+  <div class="pv pv-p-lines" role="tabpanel" id="${prefix}-lines" aria-labelledby="${prefix}-t-lines" tabindex="0">${LINES_OF}</div>`;
+
 function buildMock(wr: HTMLElement): void {
   wr.innerHTML = `
-  <div class="wr-top">
+  <div class="wr-top" aria-hidden="true">
     <span class="wr-logo"><img src="../../icon.svg" alt="" width="18" height="18"><b>VoxDown</b> <em>Writer</em></span>
     <span class="wr-menus"><span data-hl="audio">File</span><span>Edit</span><span data-hl="insert">Insert</span><span>View</span><span>Help</span></span>
     <span class="wr-file">the-dragon-who-would-not-roar.vxd <i class="wr-saved"></i><small>Kept in this browser</small></span>
@@ -789,16 +855,17 @@ function buildMock(wr: HTMLElement): void {
     <span class="wr-ico" data-hl="bench">${icon("left")}</span><span class="wr-ico" data-hl="preview">${icon("right")}</span>
   </div>
   <div class="wr-tools">
-    <span class="tb tb-i"><svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 0 10h-2"/></svg></span>
-    <span class="tb tb-i"><svg viewBox="0 0 24 24"><path d="M15 14l4-4-4-4M19 10h-9a5 5 0 0 0 0 10h2"/></svg></span>
-    <i class="tsep"></i><span class="tb tb-i tb-serif"><em>I</em></span><span class="tb tb-i tb-serif"><b>B</b></span><i class="tsep"></i>
-    ${tool("who", "Who", "who")}${tool("how", "How", "how")}${tool("next", "Next quote")}${tool("ai", "AI")}<i class="tsep"></i>
-    ${tool("sound", "Sound", "sound")}${tool("pause", "Pause", "sound")}${tool("page", "Page turn")}${tool("note", "Note")}<i class="tsep"></i>
+    <span class="tb tb-i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 0 10h-2"/></svg></span>
+    <span class="tb tb-i" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 14l4-4-4-4M19 10h-9a5 5 0 0 0 0 10h2"/></svg></span>
+    <i class="tsep"></i><span class="tb tb-i tb-serif" aria-hidden="true"><em>I</em></span><span class="tb tb-i tb-serif" aria-hidden="true"><b>B</b></span><i class="tsep"></i>
+    <button type="button" class="tb tb-live" id="wr-who" data-hl="who" aria-haspopup="dialog" aria-expanded="false" aria-keyshortcuts="Control+K" aria-label="Who says this? Give “Could you not?” its speaker">${icon("who")}Who</button>
+    <span aria-hidden="true" class="tb-group">${tool("how", "How", "how")}${tool("next", "Next quote")}${tool("ai", "AI")}<i class="tsep"></i>
+    ${tool("sound", "Sound", "how")}${tool("pause", "Pause", "how")}${tool("page", "Page turn")}${tool("note", "Note")}<i class="tsep"></i>
     <span class="tb tb-i">${icon("search")}</span><span class="tb tb-i">${icon("outline")}</span><span class="tb tb-i">${icon("warn")}</span><i class="tsep"></i>
-    ${tool("hear", "Hear")}<span class="wr-sp"></span>${tool("export", "Export", "export")}
+    ${tool("hear", "Hear")}</span><span class="wr-sp"></span><span aria-hidden="true">${tool("export", "Export", "export")}</span>
   </div>
   <div class="wr-body">
-    <aside class="bench">
+    <aside class="bench" aria-hidden="true">
       <div class="bench-tabs">
         <span class="bt bt-scenes">${icon("scenes")}<em>Scenes</em></span>
         <span class="bt bt-cast">${icon("cast")}<em>Cast</em></span>
@@ -806,11 +873,7 @@ function buildMock(wr: HTMLElement): void {
         <span class="bt bt-comments">${icon("comments")}<em>Comments</em></span>
         <span class="bt">${icon("warn")}<small>0</small></span>
       </div>
-      <div class="pane pane-cast">
-        <div class="cc" style="--sp:#7c6fa8"><span class="dot"></span><b>Narrator</b><small>Warm and unhurried, enjoying the joke.</small></div>
-        <div class="cc cc-new" style="--sp:${colorFor(G)}"><span class="dot"></span><b>Gerald</b><small>An old dragon. Deep, polite and utterly unbothered.</small><em>4 lines</em></div>
-        <div class="cc" style="--sp:${colorFor(P)}"><span class="dot"></span><b>Sir Percival</b><small>A young knight. Brave in theory, nervous in practice.</small><em>1 line</em></div>
-      </div>
+      <div class="pane pane-cast">${CAST.map(castCard).join("")}</div>
       <div class="pane pane-scenes">
         <p class="pane-link">Open the scene board…</p>
         <p class="scn"><b>The mountain</b><small>118 words</small></p>
@@ -824,60 +887,76 @@ function buildMock(wr: HTMLElement): void {
       </div>
     </aside>
     <div class="desk">
-      <div class="paper"><div class="doc" id="wr-doc">${linesHtml(LINES)}<span class="caret"></span>
+      <div class="paper" aria-hidden="true"><div class="doc" id="wr-doc">${linesHtml(LINES)}<span class="caret"></span>
         <div class="annot" id="annot"></div>
       </div></div>
+      ${pickerHtml("picker")}
     </div>
-    <aside class="preview">
-      <div class="pv-tabs"><span class="pv-script">Script</span><span class="pv-book">Book</span><span class="pv-title pv-sides">Export › Each character’s lines</span><span class="pv-title pv-audio">File › Make an audiobook…</span></div>
-      <div class="pv pv-p-book">${BOOK}</div>
-      <div class="pv pv-p-script">${SCRIPT}</div>
-      <div class="pv pv-p-sides">${SIDES}</div>
+    <aside class="preview" id="wr-preview">
+      ${tabsHtml("wr")}
+      ${panelsHtml("wr")}
       <div class="pv pv-p-audio">${AUDIO}</div>
     </aside>
-    <div class="board">
-      <p class="board-h">Scene board <span>The Dragon Who Would Not Roar</span></p>
-      <div class="board-cols">
-        <div class="bcol"><p>The Dragon Who Would Not Roar</p>
-          <div class="bcard st-done"><b>The proclamation</b><small>The King makes an offer.</small><em>Done</em></div>
-          <div class="bcard st-rev"><b>The mountain</b><small>Percival finds the dragon asleep.</small><em>Revised</em></div>
-          <div class="bcard st-draft bcard-new"><b>The battle</b><small>Percival tries to sound brave.</small><em>Draft</em></div>
-        </div>
+    <div class="board" aria-hidden="true">
+      <p class="board-h">Scene board</p>
+      <div class="bcol"><p class="bcol-h"><b>The Dragon Who Would Not Roar</b><small>270 words</small></p>
+        <div class="bcard st-done"><b>The proclamation</b><i>The King offers half his kingdom, and his biscuits.</i><span><em>Done ▾</em><small>79 words</small></span></div>
+        <div class="bcard st-rev"><b>The mountain</b><i>Percival climbs Mount Mumble and wakes the dragon.</i><span><em>Revised ▾</em><small>118 words</small></span></div>
+        <div class="bcard st-draft bcard-new"><b>The battle</b><i>Percival tries to sound brave.</i><span><em>Draft ▾</em><small>24 words</small></span></div>
       </div>
     </div>
   </div>
-  <div class="wr-status"><span data-status>0 words</span><span class="wr-sp"></span><span>Kept in this browser, for now</span></div>`;
+  <div class="wr-status" aria-hidden="true"><span data-status>0 words</span><span class="wr-sp"></span><span>Kept in this browser, for now</span></div>`;
 }
 
-/* Each step's example, as ordinary content: shown on a phone, read by a screen reader. */
+/* ------------------------------------------------------------------ each beat, as a small Writer */
+
+const miniBar = (pane = "") =>
+  `<div class="mini-bar" aria-hidden="true"><img src="../../icon.svg" alt="" width="14" height="14"><b>VoxDown</b><em>Writer</em><span>${pane || "the-dragon-who-would-not-roar.vxd"}</span></div>`;
+const mini = (body: string, pane = "", tools = "") =>
+  `<div class="mini">${miniBar(pane)}${tools}<div class="mini-body">${body}</div></div>`;
+const paper = (html: string) => `<div class="mini-paper">${html}</div>`;
+const byId = (...ids: string[]) => LINES.filter((line) => line.id && ids.includes(line.id));
+
 function exampleHtml(step: number): string {
-  const paper = (lines: Line[], upTo: number) =>
-    `<div class="ex-paper">${linesHtml(lines, upTo)}</div>`;
-  const by = (...ids: string[]) => LINES.filter((line) => line.id && ids.includes(line.id));
-  const castCard = `<div class="ex-card" style="--sp:${colorFor(G)}"><span class="dot" aria-hidden="true"></span><p><b>Gerald</b>, in the Cast: an old dragon. Deep, polite and utterly unbothered.</p></div>`;
   switch (step) {
     case 1:
-      return paper(LINES.slice(0, 3), 1);
+      return mini(paper(linesHtml(LINES.slice(0, 3), 1)));
     case 2:
-      return paper(by("could"), 2) + castCard;
+      return mini(
+        `${paper(linesHtml(byId("could"), 2, { could: { seg: 2, mark: "ring", note: "who?" } }))}
+         ${pickerHtml("picker-phone")}
+         <div class="mini-cast who-card"></div>`,
+        "",
+        `<div class="mini-tools live"><button type="button" class="tb tb-live" data-who-open="picker-phone" aria-haspopup="dialog" aria-expanded="false">${icon("who")}Who says this…</button><span class="mini-hint">Ctrl+K in the Writer</span></div>`,
+      );
     case 3:
-      return paper(by("could"), 3);
+      return mini(
+        paper(
+          linesHtml([...LINES.slice(1, 10), ...byId("could")], 3, {
+            rumble: { seg: 0, mark: "under", note: "what do we hear?" },
+            pause: { seg: 0, mark: "ring", note: "a beat" },
+            could: { seg: 1, mark: "under", note: "how?" },
+          }),
+        ),
+      );
     case 4:
-      return paper(LINES.slice(1, 10), 4);
+      return mini(
+        `<div class="mini-scenes"><p class="ex-h">Scenes</p><p><b>The mountain</b> <span>118 words</span></p><p class="is-new"><b>The battle</b> <span>24 words</span></p></div>
+         <div class="mini-board"><div class="bcard st-rev"><b>The mountain</b><i>Percival climbs Mount Mumble and wakes the dragon.</i><span><em>Revised</em><small>118 words</small></span></div><div class="bcard st-draft is-new"><b>The battle</b><i>Percival tries to sound brave.</i><span><em>Draft</em><small>24 words</small></span></div></div>`,
+        "Scenes · scene board",
+      );
     case 5:
-      return `<div class="ex-list"><p class="ex-h">Scenes</p><p><b>The mountain</b> <span>118 words</span></p><p><b>The battle</b> <span>24 words, new</span></p></div>`;
+      return mini(
+        `${paper(linesHtml(byId("imaginary"), 5))}
+         <div class="mini-pane"><p class="ex-h">Comments</p><div class="cmt"><p>Best line in the scene. Keep it.</p></div></div>
+         <div class="mini-pane"><p class="ex-h">Scraps</p><div class="scrap is-new"><p>I shall smite thee most thoroughly!</p><small>From The battle</small></div></div>`,
+        "Comments · Scraps",
+      );
     case 6:
-      return `${paper(by("imaginary"), 6)}<div class="ex-list"><p class="ex-h">Comments</p><p>Best line in the scene. Keep it.</p></div>`;
+      return `<div class="mini mini-tabs live">${miniBar("Preview")}${tabsHtml("ph")}<div class="mini-body">${panelsHtml("ph")}</div></div>`;
     case 7:
-      return `<div class="ex-list"><p class="ex-h">Scraps</p><p>I shall smite thee most thoroughly!</p></div>`;
-    case 8:
-      return BOOK;
-    case 9:
-      return SCRIPT;
-    case 10:
-      return SIDES;
-    case 11:
-      return `<div class="ex-audio">${AUDIO}</div>`;
+      return mini(AUDIO, "File › Make an audiobook…");
   }
   return "";
 }
@@ -885,8 +964,8 @@ function exampleHtml(step: number): string {
 /* The pen: it rings or underlines the words, and writes its question in the margin. */
 const PEN: Record<number, Array<{ at: string; word: string; shape: "circle" | "under" }>> = {
   2: [{ at: "could .k-speech", word: "who?", shape: "circle" }],
-  3: [{ at: "could .k-dir", word: "how?", shape: "under" }],
-  4: [
+  3: [
+    { at: "could .k-dir", word: "how?", shape: "under" },
     { at: "rumble", word: "what do we hear?", shape: "circle" },
     { at: "pause", word: "a beat", shape: "circle" },
   ],
@@ -899,9 +978,10 @@ const annot = $("#annot");
 const steps = $$("#steps .step");
 const jump = $("#jump");
 const caption = $("#caption-words");
+const preview = $("#wr-preview");
 let active = -1;
 
-// The step buttons, and each step's example.
+// The step buttons, and each beat's example.
 for (const step of steps) {
   const n = Number(step.dataset.step);
   const example = document.createElement("div");
@@ -910,6 +990,12 @@ for (const step of steps) {
   const button = step.querySelector(".step-play");
   if (button) step.insertBefore(example, button);
   else step.append(example);
+  if (step.dataset.try) {
+    const tryIt = document.createElement("p");
+    tryIt.className = "step-try live";
+    tryIt.textContent = step.dataset.try;
+    step.insertBefore(tryIt, example);
+  }
   const label = document.createElement("p");
   label.className = "step-label";
   label.innerHTML = `<span>${n}</span> ${escapeHtml(step.dataset.label ?? "")} <em>${escapeHtml(step.dataset.feature ?? "")}</em>`;
@@ -920,53 +1006,180 @@ for (const step of steps) {
 }
 const lanesRoots = () => $$(".lanes");
 
-const TAB_OF: Record<number, string> = {
-  2: "cast",
-  3: "cast",
-  4: "cast",
-  5: "scenes",
-  6: "comments",
-  7: "scraps",
-};
-const PANE_OF: Record<number, string> = { 8: "book", 9: "script", 10: "sides", 11: "audio" };
+const TAB_OF: Record<number, string> = { 2: "cast", 3: "cast", 4: "scenes", 5: "comments" };
 const HL_OF: Record<number, string> = {
   2: "who",
   3: "how",
-  4: "sound",
-  5: "bench",
-  6: "insert",
-  7: "bench",
-  8: "preview",
-  9: "preview",
-  10: "export",
-  11: "audio",
+  4: "bench",
+  5: "insert",
+  6: "preview",
+  7: "audio",
 };
-const FOCUS_OF: Record<number, string> = {
-  2: "could",
-  3: "could",
-  4: "rumble",
-  5: "battle",
-  6: "imaginary",
-  7: "battle",
-};
+const FOCUS_OF: Record<number, string> = { 2: "could", 3: "rumble", 4: "battle", 5: "imaginary" };
 
 function wordCount(upTo: number): number {
-  return LINES.filter((line) => (line.s ?? 0) <= upTo && !(line.cut && upTo >= 7))
+  return LINES.filter((line) => (line.s ?? 0) <= upTo && !(line.cut && upTo >= CUT_AT))
     .flatMap((line) => line.segs.filter((seg) => !seg.k || seg.k === "speech").map((seg) => seg.t))
     .join(" ")
     .split(/\s+/)
     .filter((word) => /\w/.test(word)).length;
 }
 
+/* ------------------------------------------------------------------ "Who says this?", live */
+
+let who = "";
+function giveWho(handle: string, quietly = false): void {
+  who = handle;
+  const color = colorFor(handle);
+  for (const slot of $$(".who-slot")) {
+    slot.textContent = `@${handle} `;
+    slot.style.setProperty("--sp", color);
+  }
+  for (const speech of $$('[data-id="could"] .k-speech')) speech.style.setProperty("--sp", color);
+  for (const host of [wr, ...$$(".step-example")]) host.classList.add("who-set");
+  for (const card of $$(".cc")) card.classList.toggle("cc-new", card.dataset.cast === handle);
+  const member = CAST.find((m) => m.handle === handle);
+  for (const holder of $$(".who-card")) holder.innerHTML = member ? castCard(member) : "";
+  if (!quietly) {
+    const name = handle === "Narrator" ? "the narrator" : (member?.name ?? handle);
+    announce(
+      `“Could you not?” is now ${name}’s${handle === "Narrator" ? "" : ", and his card is in the Cast"}.${handle === G ? "" : " The recording gave it to Gerald."}`,
+    );
+  }
+  // The pen's ring and note were measured with no name before the quote: measure again.
+  if (active === 2 && wr.offsetParent) requestAnimationFrame(() => drawPen(2));
+}
+
+function openPicker(picker: HTMLElement, opener: HTMLButtonElement): void {
+  if (picker.id === "picker") {
+    // In the mock: under the quote, wherever the scroll has put it.
+    const line = doc.querySelector<HTMLElement>('[data-id="could"]');
+    const desk = picker.parentElement as HTMLElement;
+    if (line) {
+      const box = line.getBoundingClientRect();
+      const base = desk.getBoundingClientRect();
+      picker.style.left = `${Math.max(8, box.left - base.left)}px`;
+      picker.style.top = `${box.bottom - base.top + 8}px`;
+    }
+  }
+  picker.hidden = false;
+  opener.setAttribute("aria-expanded", "true");
+  const current = picker.querySelector<HTMLButtonElement>(`[data-pick="${who || G}"]`);
+  (current ?? picker.querySelector<HTMLButtonElement>("button"))?.focus();
+  const close = (focus = true) => {
+    picker.hidden = true;
+    opener.setAttribute("aria-expanded", "false");
+    picker.removeEventListener("keydown", keys);
+    document.removeEventListener("pointerdown", outside, true);
+    if (focus) opener.focus();
+  };
+  const keys = (event: KeyboardEvent) => {
+    const buttons = $$<HTMLButtonElement>("button", picker);
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      buttons[
+        (at + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length
+      ]?.focus();
+    } else if (event.key === "Tab") close(false);
+  };
+  const outside = (event: Event) => {
+    if (!picker.contains(event.target as Node) && event.target !== opener) close(false);
+  };
+  picker.addEventListener("keydown", keys);
+  document.addEventListener("pointerdown", outside, true);
+  picker.onclick = (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-pick]");
+    if (!button) return;
+    giveWho(button.dataset.pick as string);
+    close();
+  };
+}
+
+{
+  const whoButton = $<HTMLButtonElement>("#wr-who");
+  const open = () => {
+    if (active !== 2) goTo(2);
+    requestAnimationFrame(() => openPicker($("#picker"), whoButton));
+  };
+  whoButton.addEventListener("click", open);
+  document.addEventListener("keydown", (event) => {
+    if (
+      !(event.ctrlKey || event.metaKey) ||
+      event.key.toLowerCase() !== "k" ||
+      event.altKey ||
+      event.shiftKey
+    )
+      return;
+    if (active !== 2 || window.innerWidth <= 860) return;
+    const box = wr.getBoundingClientRect();
+    if (box.bottom < 0 || box.top > window.innerHeight) return;
+    event.preventDefault();
+    open();
+  });
+  for (const button of $$<HTMLButtonElement>("[data-who-open]"))
+    button.addEventListener("click", () => openPicker($(`#${button.dataset.whoOpen}`), button));
+}
+
+/* ------------------------------------------------------------------ preview tabs, live */
+
+function bindTabs(root: HTMLElement, onPick: (pane: string) => void): (pane: string) => void {
+  const tabs = $$<HTMLButtonElement>("[role=tab]", root);
+  const select = (pane: string) => {
+    for (const tab of tabs) {
+      const on = tab.dataset.pv === pane;
+      tab.setAttribute("aria-selected", String(on));
+      tab.tabIndex = on ? 0 : -1;
+    }
+    onPick(pane);
+  };
+  for (const [i, tab] of tabs.entries()) {
+    tab.addEventListener("click", () => select(tab.dataset.pv as string));
+    tab.addEventListener("keydown", (event) => {
+      const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      if (!step) return;
+      event.preventDefault();
+      const next = tabs[(i + step + tabs.length) % tabs.length] as HTMLButtonElement;
+      select(next.dataset.pv as string);
+      next.focus();
+    });
+  }
+  return select;
+}
+const pickPane = bindTabs(preview, (pane) => {
+  wr.dataset.pane = pane;
+});
+{
+  const phone = document.querySelector<HTMLElement>(".mini-tabs");
+  if (phone) {
+    const pick = bindTabs(phone, (pane) => {
+      phone.dataset.pane = pane;
+    });
+    pick("script");
+  }
+}
+
+/* ------------------------------------------------------------------ the beats */
+
 function setStep(n: number): void {
   if (n === active) return;
+  // Moving on from "who?" untried: the line is Gerald's, as written.
+  if (n > 2 && !who && window.innerWidth > 860) giveWho(G, true);
   active = n;
   wr.dataset.step = String(n);
   for (let k = 1; k <= STEPS; k++) wr.classList.toggle(`s${k}`, k <= n);
   wr.dataset.tab = TAB_OF[n] ?? "";
-  wr.dataset.pane = PANE_OF[n] ?? "";
   wr.dataset.hl = HL_OF[n] ?? "";
-  // Marks set at this step arrive now; the rest are simply there.
+  if (n === 6) pickPane("script");
+  else wr.dataset.pane = n === 7 ? "audio" : "";
+  preview.inert = n !== 6;
+  // Comments, then the cut line lands in Scraps.
+  clearTimeout(scrapTimer);
+  if (n === 5)
+    scrapTimer = window.setTimeout(() => (wr.dataset.tab = "scraps"), calm.matches ? 0 : 1800);
   for (const mark of $$<HTMLElement>("[data-s]", doc))
     mark.classList.toggle("new", Number(mark.dataset.s) === n);
   wr.classList.remove("typing");
@@ -980,23 +1193,39 @@ function setStep(n: number): void {
   }
   const step = steps[n - 1];
   caption.innerHTML = step
-    ? `<p class="cap-n"><span>${n}</span>${escapeHtml(step.dataset.feature ?? "")}</p><p class="cap-h">${escapeHtml($("h3", step).textContent ?? "")}</p><p class="cap-p">${escapeHtml($("h3 + p", step).textContent ?? "")}</p>`
+    ? `<p class="cap-n"><span>${n}</span>${escapeHtml(step.dataset.feature ?? "")}</p><p class="cap-h">${escapeHtml($("h3", step).textContent ?? "")}</p><p class="cap-p">${escapeHtml($("h3 + p", step).textContent ?? "")}${step.dataset.try ? ` <b class="cap-try">${escapeHtml(step.dataset.try)}</b>` : ""}</p>`
     : `<p class="cap-n"><span>0</span>A new story</p><p class="cap-h">A blank page.</p><p class="cap-p">Scroll, or pick a step above, and the scene begins.</p>`;
   $(".caption .finale-play").hidden = n !== STEPS;
   $("[data-status]", wr).textContent =
-    `${wordCount(n)} words · ${n >= 2 ? "3 voices" : "1 voice"} · ${n >= 5 ? "2 scenes" : "1 scene"}`;
+    `${wordCount(n)} words · ${n >= 2 ? "3 voices" : "1 voice"} · ${n >= 4 ? "2 scenes" : "1 scene"}`;
   if (n !== STEPS && player.owner === finaleOwner && playing() && window.innerWidth > 860)
     player.audio?.pause();
+  const picker = $("#picker");
+  if (!picker.hidden && n !== 2) picker.hidden = true;
   if (window.innerWidth <= 860) return;
-  // Bring the line the step is about into view, and put the pen to it.
   scrollDoc(FOCUS_OF[n]);
-  drawPen(n);
+  annot.replaceChildren();
+  // The pen measures the words once they're laid out, in their fonts, and the page has moved.
+  const draw = () => {
+    if (active === n) drawPen(n);
+  };
+  document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(draw)));
+}
+let scrapTimer = 0;
+
+function goTo(n: number): void {
+  const step = steps[n - 1];
+  if (!step) return;
+  const box = step.getBoundingClientRect();
+  const top = window.scrollY + box.top + box.height / 2 - window.innerHeight / 2;
+  window.scrollTo({ top, behavior: calm.matches ? "auto" : "smooth" });
+  setStep(n);
 }
 
 function scrollDoc(id?: string): void {
-  const paper = doc.parentElement as HTMLElement;
+  const page = doc.parentElement as HTMLElement;
   const line = id ? doc.querySelector<HTMLElement>(`[data-id="${id}"]`) : null;
-  const room = paper.clientHeight;
+  const room = page.clientHeight;
   const most = Math.max(0, doc.scrollHeight - room + 24);
   const y = line ? Math.min(most, Math.max(0, line.offsetTop - room * 0.3)) : 0;
   doc.style.transform = `translateY(${-y}px)`;
@@ -1007,22 +1236,21 @@ function drawPen(n: number): void {
   const marks = PEN[n];
   if (!marks) return;
   // The margin: the strip of paper right of the text, where an editor writes.
-  const margin = doc.clientWidth - Number.parseFloat(getComputedStyle(doc).paddingRight) + 14;
+  const margin = doc.clientWidth - Number.parseFloat(getComputedStyle(doc).paddingRight) + 16;
+  const base = doc.getBoundingClientRect();
   for (const [i, mark] of marks.entries()) {
     const [id, inner] = mark.at.split(" ");
     const line = doc.querySelector<HTMLElement>(`[data-id="${id}"]`);
     const target = inner ? line?.querySelector<HTMLElement>(inner) : line;
-    if (!line || !target) continue;
-    // The words themselves (their first line), measured from the doc, which scrolls as one.
+    if (!line || !target || !target.offsetParent) continue;
     const range = document.createRange();
     range.selectNodeContents(target);
     const first = range.getClientRects()[0] ?? target.getBoundingClientRect();
-    const base = doc.getBoundingClientRect();
     const x = first.left - base.left;
     const y = first.top - base.top;
     const w = first.width;
     const h = first.height;
-    // The leader runs from the end of the line's first row (marks included) to the margin.
+    // The leader runs from the end of the row's ink (marks included) to the margin.
     const whole = document.createRange();
     whole.selectNodeContents(line);
     const end = Math.max(
@@ -1033,15 +1261,19 @@ function drawPen(n: number): void {
     );
     const group = document.createElement("div");
     group.className = `pen pen-${mark.shape}`;
-    group.style.setProperty("--d", `${i * 0.7}s`);
+    group.style.setProperty("--d", `${i * 0.6}s`);
     const shape =
       mark.shape === "circle"
         ? `<img class="ring" src="../../landing/studio/pen/pencil-circle.webp" alt="" style="left:${x - 12}px;top:${y - 8}px;width:${w + 24}px;height:${h + 16}px">`
-        : `<img class="under" src="../../landing/studio/pen/pencil-underline.webp" alt="" style="left:${x - 4}px;top:${y + h - 11}px;width:${w + 8}px;height:22px">`;
-    const leadFrom = end + 12;
-    const lead = margin - 6 - leadFrom;
-    group.innerHTML = `${shape}${lead >= 44 ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom}px;top:${y + h / 2 - 9}px;width:${lead}px;height:18px">` : ""}
-      <span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px"><i>${escapeHtml(mark.word)}</i></span>
+        : `<img class="under" src="../../landing/studio/pen/pencil-underline.webp" alt="" style="left:${x - 4}px;top:${y + h - 9}px;width:${w + 8}px;height:20px">`;
+    const leadFrom = end + 14;
+    const lead = margin - 8 - leadFrom;
+    // A leader only where it clears the words by a margin; otherwise the note alone.
+    const leader =
+      lead >= 40
+        ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom}px;top:${y + h / 2 - 9}px;width:${lead}px;height:18px">`
+        : "";
+    group.innerHTML = `${shape}${leader}<span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px"><i>${escapeHtml(mark.word)}</i></span>
       <img class="nib" src="../../landing/studio/pen/fountain-pen.webp" alt="" style="left:${margin - 8}px;top:${y + h / 2 - 50}px">`;
     annot.append(group);
   }
@@ -1073,7 +1305,6 @@ const finaleOwner: Owner = {
       finaleCue = index;
       for (const el of $$("[data-seg-who]")) el.textContent = described(dragon.story, cue);
     }
-    // The line being heard, in the mock and in the step's own example.
     let from = -1;
     if (cue)
       for (const line of LINES)
@@ -1084,9 +1315,9 @@ const finaleOwner: Owner = {
         el.classList.toggle("heard", Number(el.dataset.lineFrom) === from);
       const lit = doc.querySelector<HTMLElement>(`[data-line-from="${from}"]`);
       if (lit && window.innerWidth > 860) {
-        const paper = doc.parentElement as HTMLElement;
-        const most = Math.max(0, doc.scrollHeight - paper.clientHeight + 24);
-        doc.style.transform = `translateY(${-Math.min(most, Math.max(0, lit.offsetTop - paper.clientHeight * 0.4))}px)`;
+        const page = doc.parentElement as HTMLElement;
+        const most = Math.max(0, doc.scrollHeight - page.clientHeight + 24);
+        doc.style.transform = `translateY(${-Math.min(most, Math.max(0, lit.offsetTop - page.clientHeight * 0.4))}px)`;
       }
     }
   },
@@ -1111,7 +1342,7 @@ for (const button of $$<HTMLButtonElement>("[data-finale-play]"))
 homes.observe($("#wr"));
 homes.observe(steps[STEPS - 1] as HTMLElement);
 
-// Which step is in the middle of the screen.
+// Which beat is in the middle of the screen.
 {
   const middle = new IntersectionObserver(
     (entries) => {
@@ -1127,14 +1358,26 @@ homes.observe(steps[STEPS - 1] as HTMLElement);
   setStep(0);
   jump.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-go]");
-    if (!button) return;
-    const step = steps[Number(button.dataset.go) - 1];
-    if (!step) return;
-    const box = step.getBoundingClientRect();
-    const top = window.scrollY + box.top + box.height / 2 - window.innerHeight / 2;
-    window.scrollTo({ top, behavior: calm.matches ? "auto" : "smooth" });
-    setStep(Number(button.dataset.go));
+    if (button) goTo(Number(button.dataset.go));
   });
+}
+
+// On a phone, each small Writer plays its change as it comes into view.
+{
+  const seenOnce = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries)
+        if (entry.isIntersecting) {
+          entry.target.classList.add("seen");
+          seenOnce.unobserve(entry.target);
+        }
+    },
+    { threshold: 0.35 },
+  );
+  for (const example of $$(".step-example")) {
+    if (calm.matches) example.classList.add("seen");
+    else seenOnce.observe(example);
+  }
 }
 
 /* ================================================================== the cast */
@@ -1197,31 +1440,62 @@ homes.observe(steps[STEPS - 1] as HTMLElement);
   }
 }
 
-/* The sides, for the dark section's "to people" route. */
-$("#route-sides").innerHTML = SIDES;
+/* Section 03: the battle's script with its note to the performer, and the lines as CSV. */
+{
+  const full = dragon.story.source;
+  const front = full.slice(0, full.indexOf("---", 4) + 3);
+  const from = full.indexOf("%% Percival talks");
+  const to = full.indexOf("nap at four.”") + "nap at four.”".length;
+  const battle = parse(`${front}\n\n${full.slice(from, to)}\n`);
+  $("#route-script").innerHTML =
+    `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${renderScript(battle, { header: false })}</div>`;
+  const rows = lines(mountain).slice(0, 8);
+  $("#route-csv").textContent = linesToCsv(rows, [
+    "kind",
+    "speaker",
+    "direction",
+    "text",
+  ]).trimEnd();
+}
 
 /* ================================================================== the real Writer */
 
-for (const button of $$<HTMLButtonElement>("[data-look]"))
-  button.addEventListener("click", () => {
-    $<HTMLImageElement>("#shot").src = `../../landing/studio/app/full-${button.dataset.look}.webp`;
-    for (const other of $$<HTMLButtonElement>("[data-look]"))
-      other.setAttribute("aria-pressed", String(other === button));
-  });
 {
-  const looks = [
-    ["paper", "Paper", "dark ink on white"],
-    ["sepia", "Sepia", "brown ink on warm cream"],
-    ["night", "Night", "pale text on dark grey"],
-    ["slate", "Slate", "pale text on blue-grey"],
-    ["contrast", "High contrast", "black on white, every mark darker"],
-  ];
-  $("#looks-strip").innerHTML = looks
-    .map(
-      ([id, label, about]) =>
-        `<figure><img data-shot src="../../landing/studio/app/looks-${id}.webp" alt="The dragon story in the ${label} look: ${about}." loading="lazy" decoding="async" width="1400" height="904"><figcaption>${label}</figcaption></figure>`,
-    )
-    .join("");
+  const LOOK_NAMES: Record<string, string> = {
+    light: "Paper",
+    sepia: "Sepia",
+    dark: "Night",
+    slate: "Slate",
+    contrast: "High contrast",
+  };
+  const shot = $<HTMLImageElement>("#shot");
+  const phone = $<HTMLSourceElement>("#shot-phone");
+  for (const button of $$<HTMLButtonElement>("[data-look]"))
+    button.addEventListener("click", () => {
+      const look = button.dataset.look as string;
+      shot.src = `../../landing/studio/app/full-${look}.webp`;
+      phone.srcset = `../../landing/studio/app/phone-${look}.webp`;
+      shot.alt = `The dragon story in the VoxDown Writer, in the ${LOOK_NAMES[look]} look: Gerald’s and Sir Percival’s lines underlined in their colours, and Gerald’s direction in violet.`;
+      for (const other of $$<HTMLButtonElement>("[data-look]"))
+        other.setAttribute("aria-pressed", String(other === button));
+    });
+
+  // Any screenshot, full size.
+  const box = $<HTMLDialogElement>("#lightbox");
+  const big = $<HTMLImageElement>("#lightbox-img");
+  for (const zoom of $$<HTMLButtonElement>("[data-zoom]"))
+    zoom.addEventListener("click", () => {
+      const img = $<HTMLImageElement>("img", zoom);
+      const look = zoom.dataset.zoom === "look";
+      big.src = look ? shot.src : (zoom.dataset.zoom as string);
+      big.width = look ? 1600 : Number(zoom.dataset.zoomW);
+      big.height = look ? 1000 : Number(zoom.dataset.zoomH);
+      big.alt = img.alt;
+      box.showModal();
+    });
+  box.addEventListener("click", (event) => {
+    if (event.target === box) box.close();
+  });
 }
 
 /* ================================================================== pictures */

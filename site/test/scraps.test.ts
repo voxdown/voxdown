@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   type Keeper,
   type Scrap,
+  deletedScraps,
+  joinScraps,
+  keepDeleted,
   keepScraps,
   markScrapsSaved,
   mergeScraps,
@@ -12,6 +15,7 @@ import {
   scrapsOf,
   scrapsStanding,
   searchScraps,
+  takeDeleted,
 } from "../src/writer/scraps";
 
 const at = Date.UTC(2026, 10, 14, 13, 2);
@@ -95,6 +99,36 @@ describe("scraps kept safe", () => {
     expect(scrapsStanding(store, "owl", [])).toBe("changed");
     markScrapsSaved(store, "owl", []);
     expect(scrapsStanding(store, "owl", [])).toBe("none");
+  });
+
+  it("keep those deleted, the latest first, to bring back after a reload", () => {
+    const store = keeper();
+    keepDeleted(store, "owl", owl, 1000);
+    keepDeleted(store, "owl", fox, 2000);
+    expect(deletedScraps(store, "owl", 3000).map((each) => each.id)).toEqual([fox.id, owl.id]);
+    expect(takeDeleted(store, "owl", owl.id)).toEqual(owl);
+    expect(deletedScraps(store, "owl", 3000).map((each) => each.id)).toEqual([fox.id]);
+    // A month on, gone.
+    expect(deletedScraps(store, "owl", 2000 + 31 * 86_400_000)).toEqual([]);
+  });
+
+  it("join their file changed outside the Writer, losing nothing", () => {
+    const written = [owl, fox];
+    const there = [
+      { ...owl, text: "The owl said one thing." },
+      { ...fox, id: "new", text: "A hare." },
+    ];
+    const here = [owl, { ...fox, note: "changed here" }];
+    const joined = joinScraps(here, there, written);
+    expect(joined.scraps.map((each) => each.text)).toEqual([
+      "The owl said one thing.",
+      fox.text,
+      "A hare.",
+    ]);
+    expect(joined.scraps[1]?.note).toBe("changed here");
+    expect(joined.fromThere).toBe(2);
+    // Deleted here since: stays deleted, though the file still has it.
+    expect(joinScraps([owl], [owl, fox], written).scraps).toEqual([owl]);
   });
 
   it("are found by the story's file name, when it is opened as another story", () => {

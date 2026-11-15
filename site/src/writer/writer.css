@@ -2136,8 +2136,12 @@ body[data-welcome] #draft-state {
   }
 }
 
-/* A phone: the menus on one row, the story's name and its buttons on the next. */
+/* A phone: the menus on one row, the story's name and its buttons on the next; the rail away,
+   its room the text's (the outline, Ctrl+Shift+O, goes to a scene). */
 @media (max-width: 600px) {
+  .scene-rail {
+    display: none;
+  }
   .statusbar {
     flex-wrap: wrap;
     row-gap: 0;
@@ -3506,7 +3510,7 @@ dialog:has(> .dialog-close) #ask-message {
 }
 .comment-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: start;
   border: 1px dashed var(--desk-edge);
   border-radius: 8px;
@@ -3547,7 +3551,6 @@ dialog:has(> .dialog-close) #ask-message {
     opacity: 1;
   }
 }
-/* Five tabs in a narrow column: on two rows rather than out of sight. */
 /* The workbench's five tabs on one line, each with its sign: where they don't all fit, the
    others keep only their signs, their names still read out and shown at the pointer. */
 .bench .side-tabs {
@@ -3582,6 +3585,45 @@ dialog:has(> .dialog-close) #ask-message {
   }
 }
 /* Scraps only this browser has: said under the search. */
+/* Scraps deleted this last month, folded away under the list, each to bring back. */
+.scraps-deleted {
+  margin-top: 1.2rem;
+  font-size: 0.82rem;
+  color: var(--quiet);
+}
+.scraps-deleted summary {
+  cursor: pointer;
+}
+.scraps-deleted ol {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.scraps-deleted li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.1rem 0.5rem;
+  align-items: center;
+  padding: 0.4rem 0.5rem;
+  border: 1px dashed var(--desk-edge);
+  border-radius: 6px;
+}
+.scraps-deleted .scrap-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--ink);
+}
+.scraps-deleted .scrap-meta {
+  grid-column: 1;
+}
+.scraps-deleted button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
 .scraps-standing {
   margin: -0.3rem 0 0.8rem;
   padding: 0.4rem 0.6rem;

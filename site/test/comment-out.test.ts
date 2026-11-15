@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commentOut } from "../src/writer/comment-out";
+import { commentBack, commentOut, speakersChanged } from "../src/writer/comment-out";
 
 const apply = (source: string, from: number, to: number) => {
   const out = commentOut(source, from, to);
@@ -32,9 +32,31 @@ describe("commenting words out", () => {
     expect(apply("A --> B", 0, 7)).toBe("<!-- A -- > B -->");
   });
 
-  it("says when a quote after the words loses its speaker's name", () => {
+  it("says whose words change speaker: a name, or half a quote, commented out", () => {
     const source = "The sun rose. @Ann (softly) “Get up.”";
-    expect(commentOut(source, 0, 27)?.unnamed).toBe("Ann");
-    expect(commentOut(source, 0, 13)?.unnamed).toBeUndefined();
+    const out = commentOut(source, 0, 27);
+    if (!out) throw new Error("not commented out");
+    expect(speakersChanged(source, out)).toEqual([
+      { words: "Get up.", was: "Ann", now: "Narrator" },
+    ]);
+    const quote = "@King “Whoever brings back the dragon,” said the King.";
+    const half = commentOut(quote, 0, quote.indexOf("back the") + 8);
+    if (!half) throw new Error("not commented out");
+    expect(speakersChanged(quote, half).map((each) => [each.was, each.now])).toEqual([
+      ["King", "Narrator"],
+    ]);
+    const plain = commentOut(source, 0, 13);
+    if (!plain) throw new Error("not commented out");
+    expect(speakersChanged(source, plain)).toEqual([]);
+  });
+
+  it("puts a comment back: a cursor in it, its words as they were", () => {
+    const source = "One <!-- two <!-- note -- > three --> four.";
+    const back = commentBack(source, 10, 10);
+    expect(back && source.slice(0, back.from) + back.insert + source.slice(back.to)).toBe(
+      "One two <!-- note --> three four.",
+    );
+    expect(commentBack(source, 2, 2)).toBeUndefined();
+    expect(commentBack(source, 4, 4)).toBeUndefined();
   });
 });

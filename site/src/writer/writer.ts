@@ -69,6 +69,7 @@ import {
   type Story,
   type TextChange,
   bookText,
+  castMemberNamed,
   declareVersion,
   diffChanges,
   findShape,
@@ -87,7 +88,7 @@ import {
   textByCharacter,
 } from "voxdown";
 import { examples } from "../examples";
-import { commentOut } from "./comment-out";
+import { commentBack, commentOut, speakersChanged } from "./comment-out";
 import "../style.css";
 import "./writer.css";
 import { type AiContext, chapterAt, openAi } from "./ai-dialog";
@@ -148,6 +149,9 @@ import { SaveFlow } from "./save-flow";
 import { sameText } from "./saving";
 import {
   type Scrap,
+  deletedScraps,
+  joinScraps,
+  keepDeleted,
   keepScraps,
   markScrapsSaved,
   mergeScraps,
@@ -158,6 +162,7 @@ import {
   scrapsFileName,
   scrapsOf,
   scrapsStanding,
+  takeDeleted,
 } from "./scraps";
 import { type ScrapsHost, scrapsPanel } from "./scraps-panel";
 import { StoryScrollbar } from "./scrollbar";
@@ -539,7 +544,8 @@ const styleLines = ViewPlugin.fromClass(
     build(): DecorationSet {
       if (!prefs.styleHints) return Decoration.none;
       const { doc } = this.view.state;
-      const body = frontMatterEnd() ?? 0;
+      // Its own view's: drawn first while the page's editor is still being made.
+      const body = frontMatterEnd(doc) ?? 0;
       const found: Array<ReturnType<Decoration["range"]>> = [];
       for (const { from, to } of this.view.visibleRanges) {
         // A little before what shows, so a word said just above the screen counts.
@@ -752,10 +758,9 @@ function editorState(source: string, cursor: number): EditorState {
 }
 
 /** Where the front matter ends, which a paragraph never moves above. */
-const frontMatterEnd = (): number | null => {
+const frontMatterEnd = (doc: Text = view.state.doc): number | null => {
   // Found as the parser finds it (§4.4), from the lines alone: moving a paragraph in a long book
   // never reads the whole story again for it.
-  const doc = view.state.doc;
   if (
     doc.lines < 2 ||
     doc
@@ -1513,6 +1518,8 @@ function showCounts({ words, said, voices, heard }: Counts): void {
 
 /** The file each story's scraps were saved to this visit, to save them there again. */
 const scrapsFiles = new Map<string, FileSystemFileHandle>();
+/** What was last written there: a file that differs has been changed outside the Writer. */
+const scrapsWritten = new Map<string, string>();
 
 // Scraps changed in another tab (the one that writes the story, or another story's): the Scraps
 // tab here shows them as they are now, never a list another tab has since changed.
@@ -1588,6 +1595,18 @@ function scrapsReadOnly(): boolean {
 const scrapsHost: ScrapsHost = {
   scraps: () => scrapsOf(localStorage, file.id),
   readOnly: () => lockedOut,
+  discard: (scrap) => keepDeleted(localStorage, file.id, scrap),
+  deleted: () => deletedScraps(localStorage, file.id),
+  restore: (id, at = 0) => {
+    if (scrapsReadOnly()) return;
+    const scrap = takeDeleted(localStorage, file.id, id);
+    if (!scrap) return;
+    const scraps = scrapsOf(localStorage, file.id).filter((each) => each.id !== scrap.id);
+    scraps.splice(Math.min(at, scraps.length), 0, scrap);
+    keepScraps(localStorage, file.id, scraps, file.name);
+    announce("Scrap brought back.");
+    showBench();
+  },
   keep: (scraps) => {
     if (scrapsReadOnly()) return;
     if (!keepScraps(localStorage, file.id, scraps, file.name))
@@ -1719,14 +1738,51 @@ function offerScrapsByName(): void {
  * and written there again with the story after that; downloaded where a browser can't keep files.
  */
 async function saveScraps(asked: boolean): Promise<void> {
-  const scraps = scrapsOf(localStorage, file.id);
+  let scraps = scrapsOf(localStorage, file.id);
+  const standing = scrapsStanding(localStorage, file.id, scraps);
   // None: nothing to save, unless the ones saved beside the story were all deleted since, when
   // the file is emptied too, so that it never brings them back.
-  if (!scraps.length && scrapsStanding(localStorage, file.id, scraps) !== "changed") return;
-  const text = scrapsFile(scraps, current().meta.title ?? file.name.replace(/\.[^.]+$/, ""));
+  if (!scraps.length && standing !== "changed") return;
+  // Saved with the story: only when they changed, so a file changed elsewhere is left alone.
+  if (!asked && standing === "saved") return;
+  const title = current().meta.title ?? file.name.replace(/\.[^.]+$/, "");
+  let text = scrapsFile(scraps, title);
   const name = scrapsFileName(file.name);
   let handle = scrapsFiles.get(file.id);
   if (!handle && !asked) return;
+  // The file changed outside the Writer since it last wrote it: asked, never written over.
+  if (handle && !asked) {
+    const written = scrapsWritten.get(file.id);
+    let onDisk: string | undefined;
+    try {
+      onDisk = await (await handle.getFile()).text();
+    } catch {
+      onDisk = undefined;
+    }
+    if (written !== undefined && onDisk !== undefined && onDisk !== written) {
+      const answer = await ask(
+        `${handle.name} changed outside the Writer since it was saved here. Join its scraps with these, or save these over it?`,
+        [
+          { label: "Leave it", value: "cancel" },
+          { label: "Save over it", value: "over" },
+          { label: "Join them", value: "join", main: true },
+        ],
+      );
+      if (answer !== "over" && answer !== "join") {
+        notice(`The scraps weren’t saved: ${handle.name} is as it was changed.`);
+        return;
+      }
+      if (answer === "join") {
+        const joined = joinScraps(scraps, readScrapsFile(onDisk), readScrapsFile(written));
+        scraps = joined.scraps;
+        keepScraps(localStorage, file.id, scraps, file.name);
+        text = scrapsFile(scraps, title);
+        notice(
+          `${joined.fromThere ? `${joined.fromThere} ${joined.fromThere === 1 ? "scrap" : "scraps"} from ${handle.name} joined these;` : "Joined:"} both are the same now.`,
+        );
+      }
+    }
+  }
   if (!window.showSaveFilePicker) {
     download(text, name);
     markScrapsSaved(localStorage, file.id, scraps);
@@ -1744,6 +1800,7 @@ async function saveScraps(asked: boolean): Promise<void> {
     const writable = await handle.createWritable();
     await writable.write(text);
     await writable.close();
+    scrapsWritten.set(file.id, text);
     markScrapsSaved(localStorage, file.id, scraps);
     if (prefs.bench && prefs.benchTab === "scraps") showBench();
     if (asked) notice(`Scraps saved in ${handle.name}.`);
@@ -2819,6 +2876,40 @@ function showSidePanel(shown: boolean): void {
   overlaid();
 }
 
+// F6 (Shift+F6 back), as in a desktop app: from the text to the workbench to the preview, those
+// showing, and round to the text again.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "F6" || event.ctrlKey || event.metaKey || event.altKey || onWelcome()) return;
+  if (document.querySelector("dialog[open]")) return;
+  event.preventDefault();
+  const regions: Array<{ in: Element; go: () => void }> = [
+    { in: $(".manuscript"), go: () => view.focus() },
+    ...(prefs.bench && !prefs.focus
+      ? [
+          {
+            in: $("#bench"),
+            go: () =>
+              document
+                .querySelector<HTMLElement>('#bench .side-tab[aria-selected="true"]')
+                ?.focus(),
+          },
+        ]
+      : []),
+    ...(prefs.side && !prefs.focus
+      ? [
+          {
+            in: $("#side"),
+            go: () =>
+              document.querySelector<HTMLElement>('#side .side-tab[aria-selected="true"]')?.focus(),
+          },
+        ]
+      : []),
+  ];
+  const here = regions.findIndex((region) => region.in.contains(document.activeElement));
+  const next = regions[(here + (event.shiftKey ? -1 : 1) + regions.length) % regions.length];
+  next?.go();
+});
+
 // Ctrl+\ and Ctrl+Shift+\, wherever the keys are: the preview, and the workbench.
 document.addEventListener("keydown", (event) => {
   if (event.code !== "Backslash" || !(event.ctrlKey || event.metaKey) || event.altKey) return;
@@ -3652,18 +3743,51 @@ function insertAtCursor(
  */
 function insertComment(): void {
   if (lockedOut) return;
+  const { from, to } = view.state.selection.main;
+  // The story's details hold no comment: the front matter is YAML, where `#` starts one.
+  const body = frontMatterEnd() ?? 0;
+  if (from < body) {
+    notice(
+      "The story’s details at the top can’t hold a comment: there, a line starting with # is one.",
+    );
+    return;
+  }
+  const source = view.state.doc.toString();
+  // In a comment already: its words put back in the text.
+  const back = commentBack(source, from, to);
+  if (back) {
+    view.dispatch({
+      changes: back,
+      selection: EditorSelection.range(back.from, back.from + back.insert.length),
+      scrollIntoView: true,
+      userEvent: "input",
+    });
+    notice(
+      [
+        "Put back in the text: read aloud and printed again.",
+        ...speakersChanged(source, back).map(
+          (each) =>
+            `“${each.words}” is ${speakerName(each.now)}’s now, not ${speakerName(each.was)}’s.`,
+        ),
+        `${keys("Mod+Z")} comments it out again.`,
+      ].join(" "),
+    );
+    view.focus();
+    return;
+  }
   const bump = declareVersion(current(), "1.3");
   const also = bump ? [bump] : [];
-  const { from, to } = view.state.selection.main;
   if (from === to || view.state.sliceDoc(from, to).trim() === "") {
     insertAtCursor("<!-- comment -->", "comment", also);
     return;
   }
-  const out = commentOut(view.state.doc.toString(), from, to);
+  const out = commentOut(source, from, to);
   if (!out) {
     notice("Those words are already commented out.");
     return;
   }
+  // Words taken out can give what is left to someone else: said, never left to be found.
+  const moved = speakersChanged(source, out);
   const changes = view.state.changes([...also, { from: out.from, to: out.to, insert: out.insert }]);
   view.dispatch({
     changes,
@@ -3674,13 +3798,22 @@ function insertComment(): void {
   notice(
     [
       `Commented out${out.kept ? `, with the ${out.kept === 1 ? "comment" : `${out.kept} comments`} already there inside it` : ""}: kept in the text, never read aloud or printed.`,
-      out.unnamed ? `The quote after it is now the narrator’s: @${out.unnamed} went with it.` : "",
-      `${keys("Mod+Z")} puts it back.`,
-    ]
-      .filter(Boolean)
-      .join(" "),
+      ...moved.map(
+        (each) =>
+          `“${each.words}” is ${speakerName(each.now)}’s now, not ${speakerName(each.was)}’s.`,
+      ),
+      `${keys("Mod+Z")} puts it back, as does ${keys("Mod+Alt+M")} in the comment.`,
+    ].join(" "),
   );
   view.focus();
+}
+
+/** A speaker as the writer knows them: the narrator by that word, a character by their name. */
+function speakerName(handle: string): string {
+  const story = current();
+  const known = castMemberNamed(story, handle) ?? handle;
+  if (known === story.meta.narrator || handle === "Narrator") return "the narrator";
+  return story.cast.find((member) => member.handle === known)?.name ?? handle;
 }
 
 /** The workbench's Comments: the writer's comments in order, each to go to, or to delete once done. */
@@ -3738,7 +3871,17 @@ function commentsList(): HTMLElement {
       view.dispatch({ changes: { from: start, to }, userEvent: "delete" });
       notice(`Comment deleted. ${keys("Mod+Z")} brings it back.`);
     });
-    row.append(go, remove);
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "button quiet comment-delete";
+    restore.textContent = "Put back";
+    restore.title = "Its words back in the text, read aloud and printed";
+    restore.addEventListener("click", () => {
+      if (lockedOut) return;
+      view.dispatch({ selection: EditorSelection.cursor(item.range.from + 1) });
+      insertComment();
+    });
+    row.append(go, restore, remove);
     items.append(row);
   }
   list.append(items);
@@ -3810,13 +3953,14 @@ async function exportManuscript(who: {
 }): Promise<void> {
   const story = current();
   const level = chapterLevelIn(story);
-  // A scene heading the book never prints (hidden, or for the audio) still starts a scene:
-  // a break, where the manuscript has one.
+  // A chapter's or a scene's heading the book never prints (hidden, or for the audio) still
+  // starts one: a break, where the manuscript has one (a short story's sections are set apart
+  // that way, never each on a page of its own).
   let source = story.source;
   for (const block of [...story.blocks].reverse())
     if (
       block.kind === "heading" &&
-      block.level > level &&
+      block.level >= level &&
       (block.visibility === "hidden" || block.visibility === "audio")
     )
       source = `${source.slice(0, block.range.from)}* * *${source.slice(block.range.to)}`;
@@ -4438,7 +4582,8 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Mod+Alt+M", "A comment for yourself, or the words selected commented out"],
   ["Mod+Shift+X", "Cut the words selected to Scraps, to bring back later"],
   ["Mod+\\", "The preview: the script or the book"],
-  ["Mod+Shift+\\", "The workbench: scenes, cast, scraps and warnings"],
+  ["Mod+Shift+\\", "The workbench: scenes, cast, scraps, comments and warnings"],
+  ["F6", "From the text to the workbench to the preview, and back (Shift+F6)"],
   ["Alt+↑ / Alt+↓", "Move the paragraph up or down"],
   ["Enter", "In a quote: close it, and open it again on a new line for the same speaker"],
   ["Mod+Shift+M", "Every mark raw, or drawn"],

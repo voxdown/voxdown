@@ -3,14 +3,21 @@
  * here (moved, or copied with Ctrl or ⌥ held); a scrap dragged into the story is copied there, and
  * stays here, marked as used. Each has a note; a search finds them by their words or notes; a
  * scrap is shown whole while the pointer or the keys are on it. Alt+↑ and Alt+↓ (or its arrows)
- * move a scrap in the list; a deleted one can be brought back from the notice that says so.
+ * move a scrap in the list; a deleted one comes back from the notice that says so, or for a
+ * month from Deleted scraps under the list.
  */
-import { type Scrap, searchScraps } from "./scraps";
+import { type Deleted, type Scrap, searchScraps } from "./scraps";
 
 export type ScrapsHost = {
   scraps(): Scrap[];
   /** Whether the story is written in another tab: its scraps are only read here. */
   readOnly(): boolean;
+  /** A scrap deleted, kept among the deleted ones. */
+  discard(scrap: Scrap): void;
+  /** The scraps deleted, the latest first. */
+  deleted(): Deleted[];
+  /** A deleted scrap back among the scraps, at `at` (the top if not given). */
+  restore(id: string, at?: number): void;
   keep(scraps: Scrap[]): void;
   /** Words dropped here from the story: kept as a scrap, and taken out unless `copy`. */
   dropped(text: string, copy: boolean): void;
@@ -64,7 +71,7 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
   save.title = `Save these scraps in a file beside the story: ${host.fileName()}`;
   open.disabled = readOnly;
   // Nothing to save, unless the scraps saved beside the story have all been deleted since.
-  save.disabled = host.standing() !== "changed" && scraps.length === 0;
+  save.disabled = readOnly || (host.standing() !== "changed" && scraps.length === 0);
   save.addEventListener("click", () => host.save());
   files.append(open, save);
   head.append(search, files);
@@ -157,18 +164,16 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
     remove.addEventListener("click", () => {
       const at = scraps.indexOf(scrap);
       if (at < 0) return;
+      // Kept among the deleted ones first: brought back from the notice, or later from the list.
+      host.discard(scrap);
       scraps.splice(at, 1);
       host.keep(scraps);
-      host.notice("Scrap deleted.", {
+      host.notice("Scrap deleted: Deleted scraps, under the list, keeps it for a month.", {
         label: "Undo",
         run: () => {
           // Back where it was, in the scraps as they are now.
-          const now = host.scraps();
-          if (now.some((each) => each.id === scrap.id)) return;
-          now.splice(Math.min(at, now.length), 0, scrap);
           focusing = scrap.id;
-          host.keep(now);
-          host.announce("Scrap brought back.");
+          host.restore(scrap.id, at);
         },
       });
     });
@@ -288,6 +293,38 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
     panel.append(warn);
   }
   panel.append(list);
+  // The scraps deleted this last month, each to bring back.
+  const deleted = host.deleted();
+  if (deleted.length) {
+    const box = document.createElement("details");
+    box.className = "scraps-deleted";
+    const summary = document.createElement("summary");
+    summary.textContent = `Deleted scraps (${deleted.length})`;
+    const gone = document.createElement("ol");
+    for (const scrap of deleted) {
+      const item = document.createElement("li");
+      const words = document.createElement("span");
+      words.className = "scrap-text";
+      words.textContent = scrap.text;
+      const meta = document.createElement("span");
+      meta.className = "scrap-meta";
+      meta.textContent = `Deleted ${when(scrap.deleted)}`;
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "button quiet";
+      back.textContent = "Bring back";
+      back.disabled = readOnly;
+      back.setAttribute("aria-label", `Bring back: ${scrap.text.slice(0, 60)}`);
+      back.addEventListener("click", () => {
+        focusing = scrap.id;
+        host.restore(scrap.id);
+      });
+      item.append(words, meta, back);
+      gone.append(item);
+    }
+    box.append(summary, gone);
+    panel.append(box);
+  }
   // The keys back on the scrap just moved or brought back, once the tab is in the page.
   if (focusing) {
     const id = focusing;

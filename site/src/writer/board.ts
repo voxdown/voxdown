@@ -78,7 +78,11 @@ export function boardOf(story: Story): BoardChapter[] {
   const opening: BoardChapter = {
     from: title ? (titleEnd < 0 ? source.length : titleEnd) : body,
     to: openingTo,
-    name: firstChapter >= 0 ? "Before the first chapter" : "The story",
+    name: title
+      ? "Title and opening"
+      : firstChapter >= 0
+        ? "Before the first chapter"
+        : "The story",
     words: 0,
     scenes: [],
     opening: true,
@@ -87,10 +91,12 @@ export function boardOf(story: Story): BoardChapter[] {
   const card = (from: number, to: number, name: string, isBreak: boolean): BoardScene => {
     const lineEnd = source.indexOf("\n", from);
     const headEnd = lineEnd < 0 ? source.length : lineEnd;
-    // The line about it: a comment alone on the line straight after its heading or break.
-    const next = /^\r?\n[ \t]*<!--((?:(?!-->)[^\n])*)-->[ \t]*(?=\r?\n|$)/.exec(
-      source.slice(headEnd),
-    );
+    // The line about it: a comment alone on its line after its heading or break, straight after
+    // or after blank lines.
+    const next =
+      /^(?:\r?\n[ \t]*(?=\r?\n))*\r?\n[ \t]*<!--((?:(?!-->)[^\n])*)-->[ \t]*(?=\r?\n|$)/.exec(
+        source.slice(headEnd, headEnd + 4000),
+      );
     // The board's own only: a state, or `scene:`. A comment of the writer's stays theirs.
     const read = next ? readAbout(next[1] ?? "") : undefined;
     const about =
@@ -129,7 +135,11 @@ export function boardOf(story: Story): BoardChapter[] {
     const name = mark.break ? `Scene ${chapter.scenes.length + 1}` : mark.name;
     chapter.scenes.push(card(mark.from, endOf(index), name, mark.break));
   }
-  opening.words = words(opening.from, opening.to);
+  // The title's words too, as the status line counts them: the totals agree.
+  const before = words(opening.from, opening.to);
+  opening.words = words(title ? title.from : opening.from, opening.to);
+  // A column of its own only for words of its own: a title alone is the board's title.
+  const ownWords = before > 0;
   for (const each of chapters) each.words = words(each.from, each.to);
   // A short story's sections, with no scenes inside them: one column, each section a card.
   if (chapters.length > 1 && chapters.every((each) => !each.scenes.length)) {
@@ -143,11 +153,9 @@ export function boardOf(story: Story): BoardChapter[] {
       opening: true,
       chapters: true,
     };
-    return opening.words > 0 ? [opening, sections] : [sections];
+    return ownWords ? [opening, sections] : [sections];
   }
-  return opening.words > 0 || opening.scenes.length || !chapters.length
-    ? [opening, ...chapters]
-    : chapters;
+  return ownWords || opening.scenes.length || !chapters.length ? [opening, ...chapters] : chapters;
 }
 
 /**

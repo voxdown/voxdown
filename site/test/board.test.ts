@@ -93,4 +93,15 @@ describe("the scene board of a short story", () => {
       ["Morning", ""],
     ]);
   });
+
+  it("reads its state after blank lines, and leaves a comment of the writer's alone", () => {
+    const story =
+      "## One\n\n### The roar\n\n<!-- draft: he tries to roar -->\n\nRoar.\n\n### After\n<!-- remember the kettle -->\n\nTea.\n\n## Two\n\nEnd.\n";
+    const [roar, after] = boardOf(parse(story)).find((each) => each.name === "One")?.scenes ?? [];
+    expect([roar?.state, roar?.summary]).toEqual(["draft", "he tries to roar"]);
+    expect(roar?.about && story.slice(roar.about.from, roar.about.to)).toBe(
+      "<!-- draft: he tries to roar -->",
+    );
+    expect([after?.state, after?.summary, after?.about]).toEqual([undefined, "", undefined]);
+  });
 });

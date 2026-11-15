@@ -33,6 +33,10 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - The scene board takes a comment under a heading as its own only when it starts with a state or `scene:`; a comment of the writer's there is left as it is. A story whose chapters hold no scenes has them counted and listed as chapters, on the board and in the Scenes tab.
 - Commenting out words that hold a comment makes one comment of them, the one inside kept with its end spaced (`-- >`); the notice says when a quote after them is now the narrator's.
 - Style hints leave headings out; a selection's word count leaves comments out. Directing with AI lists, by line, the paragraphs an answer didn't give back.
+- Ctrl+Alt+M in a comment puts its words back in the text (Put back in the Comments tab does too). Commenting out, or putting back, says whose words change speaker; the story's details at the top hold no comment.
+- A scraps file changed outside the Writer is never written over: saving the story leaves it alone while the scraps here are as saved, and asks to join them or save over it once they change. Deleted scraps are kept for a month under Deleted scraps, each to bring back, after a reload too.
+- The board reads a state comment after blank lines under a heading; its first column counts the title, so the totals agree with the status line. A manuscript sets hidden chapters apart with `#`.
+- F6 (Shift+F6) goes from the text to the workbench to the preview; a phone's rail gives its room to the text. Style hints on through a reload no longer fail as the page opens.
 - The look's button is named "Look: …"; the goal's bar doesn't move under reduced motion; a phone's status line keeps the words rather than the cursor's line; a comment's `<!--` and `-->` are never broken over two lines.
 
 **Comments for the writer** (spec 1.3, §10.1): `<!-- … -->` is the writer's own comment, never read aloud, printed or given to a performer, and hidden by Markdown viewers too.

@@ -29,6 +29,11 @@ const KEY = "vxd-writer-scraps";
 /** Each story's file name, and what its scraps were when last saved beside it. */
 const NAMES = "vxd-writer-scraps-names";
 const SAVED = "vxd-writer-scraps-saved";
+/** Scraps deleted, each story's latest, to bring back after a reload too. */
+const DELETED = "vxd-writer-scraps-deleted";
+/** How many deleted scraps a story keeps, and for how long. */
+const DELETED_KEPT = 50;
+const DELETED_DAYS = 30;
 
 function read<T>(keeper: Keeper, key: string): Record<string, T> {
   try {
@@ -145,6 +150,68 @@ export function mergeScraps(
   const texts = new Set(kept.map((scrap) => scrap.text.trim()));
   const added = found.filter((scrap) => !ids.has(scrap.id) && !texts.has(scrap.text.trim()));
   return { scraps: [...kept, ...added], added: added.length };
+}
+
+/** A scrap deleted, and when. */
+export type Deleted = Scrap & { deleted: number };
+
+/** A story's deleted scraps, the latest first, as long as they are kept. */
+export function deletedScraps(keeper: Keeper, story: string, now = Date.now()): Deleted[] {
+  const since = now - DELETED_DAYS * 86_400_000;
+  return (read<Deleted[]>(keeper, DELETED)[story] ?? []).filter((each) => each.deleted >= since);
+}
+
+/** A scrap deleted: kept among the story's deleted ones, to bring back. */
+export function keepDeleted(keeper: Keeper, story: string, scrap: Scrap, now = Date.now()): void {
+  const all = read<Deleted[]>(keeper, DELETED);
+  const kept = deletedScraps(keeper, story, now).filter((each) => each.id !== scrap.id);
+  all[story] = [{ ...scrap, deleted: now }, ...kept].slice(0, DELETED_KEPT);
+  write(keeper, DELETED, all);
+}
+
+/** A deleted scrap taken from among the deleted ones, to go back with the story's scraps. */
+export function takeDeleted(keeper: Keeper, story: string, id: string): Scrap | undefined {
+  const all = read<Deleted[]>(keeper, DELETED);
+  const found = (all[story] ?? []).find((each) => each.id === id);
+  if (!found) return undefined;
+  all[story] = (all[story] ?? []).filter((each) => each.id !== id);
+  write(keeper, DELETED, all);
+  const { deleted: _, ...scrap } = found;
+  return scrap;
+}
+
+/**
+ * The scraps here joined with their file as it is now, changed outside the Writer since it was
+ * last written (`written`): a scrap added there joins; one changed there, and not here since,
+ * is as it is there; one deleted here stays deleted, and one deleted there stays here, so that
+ * nothing is lost. How many came from the file is said.
+ */
+export function joinScraps(
+  here: readonly Scrap[],
+  there: readonly Scrap[],
+  written: readonly Scrap[],
+): { scraps: Scrap[]; fromThere: number } {
+  const then = new Map(written.map((scrap) => [scrap.id, scrap]));
+  const now = new Map(there.map((scrap) => [scrap.id, scrap]));
+  const same = (a: Scrap, b: Scrap) => a.text === b.text && a.note === b.note;
+  let fromThere = 0;
+  const scraps = here.map((scrap) => {
+    const was = then.get(scrap.id);
+    const outside = now.get(scrap.id);
+    if (was && outside && !same(outside, was) && same(scrap, was)) {
+      fromThere++;
+      return outside;
+    }
+    return scrap;
+  });
+  const ids = new Set(scraps.map((scrap) => scrap.id));
+  const texts = new Set(scraps.map((scrap) => scrap.text.trim()));
+  for (const scrap of there)
+    if (!ids.has(scrap.id) && !then.has(scrap.id) && !texts.has(scrap.text.trim())) {
+      scraps.push(scrap);
+      fromThere++;
+    }
+  return { scraps, fromThere };
 }
 
 /** The scraps a search finds: in their words or their notes, whatever the case and the accents. */

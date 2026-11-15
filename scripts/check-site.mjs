@@ -717,6 +717,166 @@ const draftIn = (page) =>
   console.log("writer: a reading tab's scraps and scenes, and a scraps file emptied: ok");
 }
 
+// A scraps file changed outside the Writer: saving the story leaves it alone while the scraps
+// here are as saved, and asks before writing over it once they change. A deleted scrap comes back
+// from Deleted scraps after a reload.
+{
+  const context = await browser.newContext({ viewport: { width: 1400, height: 860 } });
+  await context.addInitScript(() => {
+    const handle = (name) => ({
+      kind: "file",
+      name,
+      getFile: async () => {
+        const disk = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+        return new File([disk[name]?.text ?? ""], name, { lastModified: disk[name]?.at ?? 1 });
+      },
+      createWritable: async () => {
+        let written = "";
+        return {
+          write: async (text) => {
+            written += text;
+          },
+          close: async () => {
+            const disk = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+            disk[name] = { text: written, at: (disk[name]?.at ?? 1) + 1 };
+            localStorage.setItem("__disk", JSON.stringify(disk));
+          },
+        };
+      },
+      isSameEntry: async (other) => other.name === name,
+      queryPermission: async () => "granted",
+      requestPermission: async () => "granted",
+    });
+    window.showOpenFilePicker = async () => {
+      const disk = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+      disk["fable.vxd"] ??= { text: "# A fable\n\nThe owl sat still.\n\nThe fox ran.\n", at: 1 };
+      localStorage.setItem("__disk", JSON.stringify(disk));
+      return [handle("fable.vxd")];
+    };
+    window.showSaveFilePicker = async ({ suggestedName }) => handle(suggestedName);
+  });
+  const filer = await context.newPage();
+  watch(filer, "writer scraps file");
+  await filer.goto(`${base}/writer/`);
+  await filer.click('.welcome [data-command="open"]');
+  await filer.waitForFunction(
+    () => document.querySelector("#file-name")?.textContent === "fable.vxd",
+  );
+  await filer.click(".cm-content");
+  await filer.keyboard.press("Control+End");
+  await filer.keyboard.press("ArrowUp");
+  await filer.keyboard.press("End");
+  await filer.keyboard.press("Shift+Home");
+  await filer.keyboard.press("Control+Shift+X");
+  await filer.click('.scraps-files button:has-text("Save")');
+  await filer.waitForTimeout(400);
+  const disk = () => filer.evaluate(() => JSON.parse(localStorage.getItem("__disk") ?? "{}"));
+  if (!(await disk())["fable.scraps.md"]?.text.includes("The fox ran."))
+    problems.push("writer: Save… in Scraps didn't write the scraps file");
+  // Changed outside: a scrap added there.
+  await filer.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+    all["fable.scraps.md"].text +=
+      '\n<!-- scrap id="out1" at="2026-11-14T10:00:00.000Z" -->\nA hare, from the laptop.\n';
+    all["fable.scraps.md"].at += 5;
+    localStorage.setItem("__disk", JSON.stringify(all));
+  });
+  await filer.click(".cm-content");
+  await filer.keyboard.type(" More.");
+  await filer.keyboard.press("Control+s");
+  await filer.waitForTimeout(600);
+  if (!(await disk())["fable.scraps.md"]?.text.includes("A hare, from the laptop."))
+    problems.push("writer: saving the story wrote over a scraps file changed elsewhere");
+  // The scraps changed here too: asked, and joined.
+  await filer.fill(".scrap-note", "Ending?");
+  await filer.dispatchEvent(".scrap-note", "change");
+  await filer.click(".cm-content");
+  await filer.keyboard.press("Control+s");
+  await filer.waitForSelector("#ask[open]");
+  if (!(await filer.textContent("#ask-message"))?.includes("changed outside the Writer"))
+    problems.push("writer: a scraps file changed elsewhere isn't said to be");
+  await filer.click('#ask-buttons button[value="join"]');
+  await filer.waitForTimeout(600);
+  const joined = (await disk())["fable.scraps.md"]?.text ?? "";
+  if (!joined.includes("A hare, from the laptop.") || !joined.includes('note="Ending?"'))
+    problems.push(`writer: joining a scraps file gives ${JSON.stringify(joined)}`);
+  // Deleted, reloaded, brought back.
+  await benchTab(filer, "scraps");
+  await filer.hover(".scrap >> nth=0");
+  await filer.click('.scrap >> nth=0 >> button:has-text("Delete")');
+  await filer.waitForTimeout(1200);
+  await filer.reload();
+  await filer.waitForSelector(".cm-content");
+  await filer.waitForTimeout(600);
+  await benchTab(filer, "scraps");
+  await filer.click(".scraps-deleted summary");
+  await filer.click('.scraps-deleted button:has-text("Bring back")');
+  await filer.waitForTimeout(300);
+  if (
+    (await filer.locator(".scrap").count()) !== 2 ||
+    (await filer.locator(".scraps-deleted").count())
+  )
+    problems.push("writer: a deleted scrap isn't brought back after a reload");
+  await context.close();
+  console.log(
+    "writer: a scraps file changed elsewhere, asked and joined; a deleted scrap back: ok",
+  );
+}
+
+// Commented out and put back: Ctrl+Alt+M in a comment puts its words back; half a quote
+// commented out says whose the rest is now; the story's details hold no comment. Style hints on
+// through a reload break nothing; F6 goes from the text to the workbench.
+{
+  const context = await browser.newContext({ viewport: { width: 1400, height: 860 } });
+  const editor = await context.newPage();
+  watch(editor, "writer comment back");
+  await editor.goto(`${base}/writer/`);
+  await editor.click('.welcome [data-command="new"]');
+  await editor.waitForTimeout(400);
+  await editor.click(".cm-content");
+  await editor.keyboard.press("Control+End");
+  await editor.keyboard.type("\n\n@Ann “Get up, the sun is high,” she said.");
+  await editor.keyboard.press("Home");
+  for (let i = 0; i < "@Ann “Get up,".length; i++) await editor.keyboard.press("Shift+ArrowRight");
+  await editor.keyboard.press("Control+Alt+m");
+  await editor.waitForTimeout(200);
+  if (!(await editor.textContent("#notice"))?.includes("the narrator’s now"))
+    problems.push(`writer: half a quote commented out says ${await editor.textContent("#notice")}`);
+  await editor.keyboard.press("Home");
+  await editor.keyboard.press("ArrowRight");
+  await editor.keyboard.press("ArrowRight");
+  await editor.keyboard.press("ArrowRight");
+  await editor.keyboard.press("Control+Alt+m");
+  await editor.waitForTimeout(1200);
+  if (!(await draftIn(editor)).includes("\n@Ann “Get up, the sun is high,” she said."))
+    problems.push("writer: Ctrl+Alt+M in a comment didn't put its words back");
+  await editor.keyboard.press("Control+Home");
+  await editor.keyboard.press("ArrowDown");
+  await editor.keyboard.press("Shift+End");
+  await editor.keyboard.press("Control+Alt+m");
+  await editor.waitForTimeout(1200);
+  if ((await draftIn(editor)).split("---")[1]?.includes("<!--"))
+    problems.push("writer: a comment went into the story's details");
+  // Style hints on, and the page reloaded: no plugin fails as the editor is made.
+  await editor.click("#view-menu-button");
+  await editor.click('[data-view="style"]');
+  await editor.reload();
+  await editor.waitForSelector(".cm-content");
+  await editor.waitForTimeout(600);
+  await editor.click(".cm-content");
+  await benchTab(editor, "scenes");
+  await editor.click(".cm-content");
+  await editor.keyboard.press("F6");
+  if (
+    !(await editor.evaluate(() =>
+      document.querySelector("#bench")?.contains(document.activeElement),
+    ))
+  )
+    problems.push("writer: F6 from the text doesn't go to the workbench");
+  await context.close();
+  console.log("writer: comments put back, speakers said, the details left alone, F6: ok");
+}
+
 // A phone: every menu inside the window, the look's button beside Save; a narrow workbench's tabs
 // on one line.
 {

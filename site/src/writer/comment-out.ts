@@ -90,12 +90,15 @@ function speechesOf(text: string): Speech[] {
 export function speakersChanged(
   source: string,
   change: { from: number; to: number; insert: string },
+  /** The groups the change is in (`::: @Wanda`, its lines given to her), read with them. */
+  around?: { from: number; to: number },
 ): Array<{ words: string; was: string; now: string }> {
-  // The paragraphs around the change: from the blank line before it to the one after.
+  // The paragraphs around the change, from the blank line before it to the one after, or the
+  // whole of the groups it is in, whose first line says whose its words are.
   const before = source.lastIndexOf("\n\n", change.from);
-  const start = before < 0 ? 0 : before + 2;
   const after = source.indexOf("\n\n", change.to);
-  const end = after < 0 ? source.length : after;
+  const start = Math.min(before < 0 ? 0 : before + 2, around?.from ?? source.length);
+  const end = Math.max(after < 0 ? source.length : after, around?.to ?? 0);
   const was = source.slice(start, end);
   const from = change.from - start;
   const to = change.to - start;
@@ -113,7 +116,11 @@ export function speakersChanged(
     const then = at < from ? at : at - grown;
     const said = old.find((each) => each.textRange.from <= then && then < each.textRange.to);
     if (!said || said.speaker === speech.speaker || !speech.text.trim()) continue;
-    const text = speech.text.replace(/^[“"«„]\s*|\s*[”"»]$/gu, "");
+    // The words alone, every quotation mark taken out.
+    const text = speech.text
+      .replace(/[“”"«»„]/gu, "")
+      .replace(/\s+/g, " ")
+      .trim();
     const words = text.length > 40 ? `${text.slice(0, 39)}…` : text;
     changed.push({ words, was: said.speaker, now: speech.speaker });
   }

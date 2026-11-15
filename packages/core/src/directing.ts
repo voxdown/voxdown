@@ -473,7 +473,9 @@ export function readDirected(
     return { line: lineAt(from), words: words.length > 60 ? `${words.slice(0, 59)}…` : words, why };
   };
   const seen = new Map<string, number>();
-  const matched = new Set<number>();
+  // A paragraph of marks alone (`{page}`, a sound) has no words to find it by, nor any to direct:
+  // never counted as not given back.
+  const matched = new Set<number>(keys.flatMap((key, index) => (key === "" ? [index] : [])));
   let cursor = 0;
   for (const answered of paragraphsOf(answer)) {
     const given = givenParagraph(answered);

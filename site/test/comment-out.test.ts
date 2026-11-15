@@ -50,6 +50,15 @@ describe("commenting words out", () => {
     expect(speakersChanged(source, plain)).toEqual([]);
   });
 
+  it("reads a group's lines with the group: a name taken out gives its words to the group's", () => {
+    const source = "::: @Wanda reading the letter\n@Bob “I refuse,” he wrote.\n:::\n";
+    const out = commentOut(source, source.indexOf("@Bob"), source.indexOf("@Bob") + 5);
+    if (!out) throw new Error("not commented out");
+    expect(speakersChanged(source, out, { from: 0, to: source.length })).toEqual([
+      { words: "I refuse, he wrote.", was: "Bob", now: "Wanda" },
+    ]);
+  });
+
   it("puts a comment back: a cursor in it, its words as they were", () => {
     const source = "One <!-- two <!-- note -- > three --> four.";
     const back = commentBack(source, 10, 10);

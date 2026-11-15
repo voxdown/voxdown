@@ -15,6 +15,7 @@ import {
   boardOf,
   moveSpan,
 } from "./board";
+import { countsOf } from "./counts";
 
 export type BoardHost = {
   story(): Story;
@@ -46,7 +47,8 @@ export function openBoard(host: BoardHost): void {
   const draw = () => {
     const story = host.story();
     board = boardOf(story);
-    const total = board.reduce((sum, chapter) => sum + chapter.words, 0);
+    // The story's words, as the status line counts them: a title alone, in no column, too.
+    const total = countsOf(story).words;
     const summary = document.querySelector("#board-summary");
     if (summary) {
       // Chapters and scenes named as the status line names them: a story whose chapters hold no

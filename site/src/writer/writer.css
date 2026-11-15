@@ -3508,9 +3508,11 @@ dialog:has(> .dialog-close) #ask-message {
   display: grid;
   gap: 0.4rem;
 }
+/* The comment the row's whole width; its buttons on a line of their own under it, never taking
+   its room. */
 .comment-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   border: 1px dashed var(--desk-edge);
   border-radius: 8px;
@@ -3538,8 +3540,14 @@ dialog:has(> .dialog-close) #ask-message {
   color: var(--quiet);
   font-size: 0.76rem;
 }
+.comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  margin-top: -0.35rem;
+  padding: 0 0.3rem 0.3rem;
+}
 .comment-delete {
-  margin: 0.3rem 0.3rem 0 0;
   opacity: 0;
 }
 .comment-row:hover .comment-delete,

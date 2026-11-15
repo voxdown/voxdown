@@ -3,6 +3,8 @@ import {
   type Keeper,
   type Scrap,
   deletedScraps,
+  findDeleted,
+  forgetDeleted,
   joinScraps,
   keepDeleted,
   keepScraps,
@@ -15,7 +17,6 @@ import {
   scrapsOf,
   scrapsStanding,
   searchScraps,
-  takeDeleted,
 } from "../src/writer/scraps";
 
 const at = Date.UTC(2026, 10, 14, 13, 2);
@@ -106,7 +107,8 @@ describe("scraps kept safe", () => {
     keepDeleted(store, "owl", owl, 1000);
     keepDeleted(store, "owl", fox, 2000);
     expect(deletedScraps(store, "owl", 3000).map((each) => each.id)).toEqual([fox.id, owl.id]);
-    expect(takeDeleted(store, "owl", owl.id)).toEqual(owl);
+    expect(findDeleted(store, "owl", owl.id)).toEqual(owl);
+    forgetDeleted(store, "owl", owl.id);
     expect(deletedScraps(store, "owl", 3000).map((each) => each.id)).toEqual([fox.id]);
     // A month on, gone.
     expect(deletedScraps(store, "owl", 2000 + 31 * 86_400_000)).toEqual([]);
@@ -127,6 +129,25 @@ describe("scraps kept safe", () => {
     ]);
     expect(joined.scraps[1]?.note).toBe("changed here");
     expect(joined.fromThere).toBe(2);
+    // Its words changed there, its note here: both kept, in the one scrap.
+    const fields = joinScraps(
+      [{ ...fox, note: "mine" }],
+      [{ ...fox, text: "The fox ran far." }],
+      [fox],
+    );
+    expect(fields.scraps).toEqual([{ ...fox, text: "The fox ran far.", note: "mine" }]);
+    expect(fields.fromThere).toBe(1);
+    // Its words changed on both sides: both versions kept, the file's beside it.
+    const clash = joinScraps(
+      [{ ...fox, text: "Here." }],
+      [{ ...fox, text: "There." }],
+      [fox],
+      () => "f1",
+    );
+    expect(clash.scraps.map((each) => [each.id, each.text, each.note])).toEqual([
+      [fox.id, "Here.", ""],
+      ["f1", "There.", "From the file"],
+    ]);
     // Deleted here since: stays deleted, though the file still has it.
     expect(joinScraps([owl], [owl, fox], written).scraps).toEqual([owl]);
   });

@@ -152,6 +152,10 @@ Night fell over the harbour. {pause} Somewhere a door slammed. [door slams]
     ]);
     expect(changed.missing).toBe(0);
     expect(changed.missed).toEqual([]);
+    // A paragraph of marks alone ({page}, a sound) is never missed.
+    const paged = parse("Night fell.\n\n{page}\n\n[door slams]\n\nMorning.\n");
+    const back = readDirected(paged, "Night *fell*.\n\n{page}\n\nMorning.");
+    expect([back.missing, back.missed, back.suggestions.length]).toEqual([0, [], 1]);
     // A paragraph not given back at all: said by its line and words.
     const short = readDirected(story, "Sir Percival stopped.\n\nThe beginning.");
     expect(short.missed.map((each) => [each.line, each.words])).toEqual([

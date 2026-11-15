@@ -161,49 +161,90 @@ export function deletedScraps(keeper: Keeper, story: string, now = Date.now()): 
   return (read<Deleted[]>(keeper, DELETED)[story] ?? []).filter((each) => each.deleted >= since);
 }
 
-/** A scrap deleted: kept among the story's deleted ones, to bring back. */
-export function keepDeleted(keeper: Keeper, story: string, scrap: Scrap, now = Date.now()): void {
+/** A scrap deleted: kept among the story's deleted ones, to bring back; whether it could be. */
+export function keepDeleted(
+  keeper: Keeper,
+  story: string,
+  scrap: Scrap,
+  now = Date.now(),
+): boolean {
   const all = read<Deleted[]>(keeper, DELETED);
   const kept = deletedScraps(keeper, story, now).filter((each) => each.id !== scrap.id);
   all[story] = [{ ...scrap, deleted: now }, ...kept].slice(0, DELETED_KEPT);
-  write(keeper, DELETED, all);
+  try {
+    keeper.setItem(DELETED, JSON.stringify(all));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** A deleted scrap taken from among the deleted ones, to go back with the story's scraps. */
-export function takeDeleted(keeper: Keeper, story: string, id: string): Scrap | undefined {
-  const all = read<Deleted[]>(keeper, DELETED);
-  const found = (all[story] ?? []).find((each) => each.id === id);
+/** A deleted scrap, as it was set aside (its deletion's date taken off), or undefined. */
+export function findDeleted(keeper: Keeper, story: string, id: string): Scrap | undefined {
+  const found = (read<Deleted[]>(keeper, DELETED)[story] ?? []).find((each) => each.id === id);
   if (!found) return undefined;
-  all[story] = (all[story] ?? []).filter((each) => each.id !== id);
-  write(keeper, DELETED, all);
   const { deleted: _, ...scrap } = found;
   return scrap;
 }
 
+/** A deleted scrap let go of: back among the scraps, kept there first. */
+export function forgetDeleted(keeper: Keeper, story: string, id: string): void {
+  const all = read<Deleted[]>(keeper, DELETED);
+  all[story] = (all[story] ?? []).filter((each) => each.id !== id);
+  write(keeper, DELETED, all);
+}
+
 /**
  * The scraps here joined with their file as it is now, changed outside the Writer since it was
- * last written (`written`): a scrap added there joins; one changed there, and not here since,
- * is as it is there; one deleted here stays deleted, and one deleted there stays here, so that
- * nothing is lost. How many came from the file is said.
+ * last written (`written`), losing nothing. A scrap added there joins. A scrap changed on one side
+ * only is as that side has it, its words and its note each on their own; where both sides changed
+ * the same one, the version there joins as a scrap of its own, beside this one, noted as from the
+ * file. One deleted here stays deleted; one deleted there stays here. How many came from the file
+ * is said.
  */
 export function joinScraps(
   here: readonly Scrap[],
   there: readonly Scrap[],
   written: readonly Scrap[],
+  newId: () => string = newScrapId,
 ): { scraps: Scrap[]; fromThere: number } {
   const then = new Map(written.map((scrap) => [scrap.id, scrap]));
   const now = new Map(there.map((scrap) => [scrap.id, scrap]));
-  const same = (a: Scrap, b: Scrap) => a.text === b.text && a.note === b.note;
   let fromThere = 0;
-  const scraps = here.map((scrap) => {
+  const scraps: Scrap[] = [];
+  for (const scrap of here) {
     const was = then.get(scrap.id);
     const outside = now.get(scrap.id);
-    if (was && outside && !same(outside, was) && same(scrap, was)) {
-      fromThere++;
-      return outside;
+    if (!was || !outside) {
+      scraps.push(scrap);
+      continue;
     }
-    return scrap;
-  });
+    // Each field: as the side that changed it has it; changed on both sides, a conflict.
+    const field = (name: "text" | "note") => {
+      const mine = scrap[name] !== was[name];
+      const theirs = outside[name] !== was[name];
+      if (theirs && !mine) return { value: outside[name], taken: true, clash: false };
+      return {
+        value: scrap[name],
+        taken: false,
+        clash: mine && theirs && scrap[name] !== outside[name],
+      };
+    };
+    const text = field("text");
+    const note = field("note");
+    if (text.clash || note.clash) {
+      // Both kept: this one as it is here, the file's beside it.
+      scraps.push(scrap, {
+        ...outside,
+        id: newId(),
+        note: outside.note ? `${outside.note} (from the file)` : "From the file",
+      });
+      fromThere++;
+      continue;
+    }
+    if (text.taken || note.taken) fromThere++;
+    scraps.push({ ...scrap, text: text.value, note: note.value });
+  }
   const ids = new Set(scraps.map((scrap) => scrap.id));
   const texts = new Set(scraps.map((scrap) => scrap.text.trim()));
   for (const scrap of there)

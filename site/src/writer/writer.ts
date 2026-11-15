@@ -95,6 +95,7 @@ import { type AiContext, chapterAt, openAi } from "./ai-dialog";
 import { type BoardScene, type SceneState, boardOf } from "./board";
 import { openBoard } from "./board-dialog";
 import { castPanel } from "./cast";
+import { commentsPanel } from "./comments-panel";
 import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
 import { addCloseButton, closeOnClickOutside } from "./dialogs";
@@ -150,6 +151,8 @@ import { sameText } from "./saving";
 import {
   type Scrap,
   deletedScraps,
+  findDeleted,
+  forgetDeleted,
   joinScraps,
   keepDeleted,
   keepScraps,
@@ -162,8 +165,8 @@ import {
   scrapsFileName,
   scrapsOf,
   scrapsStanding,
-  takeDeleted,
 } from "./scraps";
+import { ScrapsFiles } from "./scraps-files";
 import { type ScrapsHost, scrapsPanel } from "./scraps-panel";
 import { StoryScrollbar } from "./scrollbar";
 import { searchCount } from "./search-count";
@@ -1516,11 +1519,6 @@ function showCounts({ words, said, voices, heard }: Counts): void {
 // Scraps: passages set aside from the story, kept in this browser by the story, and in a file
 // beside it (owl.scraps.md) when saved there.
 
-/** The file each story's scraps were saved to this visit, to save them there again. */
-const scrapsFiles = new Map<string, FileSystemFileHandle>();
-/** What was last written there: a file that differs has been changed outside the Writer. */
-const scrapsWritten = new Map<string, string>();
-
 // Scraps changed in another tab (the one that writes the story, or another story's): the Scraps
 // tab here shows them as they are now, never a list another tab has since changed.
 window.addEventListener("storage", (event) => {
@@ -1599,11 +1597,19 @@ const scrapsHost: ScrapsHost = {
   deleted: () => deletedScraps(localStorage, file.id),
   restore: (id, at = 0) => {
     if (scrapsReadOnly()) return;
-    const scrap = takeDeleted(localStorage, file.id, id);
+    const scrap = findDeleted(localStorage, file.id, id);
     if (!scrap) return;
     const scraps = scrapsOf(localStorage, file.id).filter((each) => each.id !== scrap.id);
     scraps.splice(Math.min(at, scraps.length), 0, scrap);
-    keepScraps(localStorage, file.id, scraps, file.name);
+    // Kept among the scraps first; only then let go of among the deleted ones.
+    if (!keepScraps(localStorage, file.id, scraps, file.name)) {
+      notice(
+        "This browser is short of room: the scrap couldn’t be brought back. It is still under Deleted scraps.",
+      );
+      showBench();
+      return;
+    }
+    forgetDeleted(localStorage, file.id, id);
     announce("Scrap brought back.");
     showBench();
   },
@@ -1670,144 +1676,28 @@ const scrapsHost: ScrapsHost = {
     });
     input.click();
   },
-  save: () => void saveScraps(true),
+  save: () => void scrapsFiles.save(true),
   fileName: () => scrapsFileName(file.name),
   standing: () => scrapsStanding(localStorage, file.id, scrapsOf(localStorage, file.id)),
   notice: (message, action) => notice(message, false, action),
   announce,
 };
 
-/** The stories this visit has already been told their scraps are in this browser only. */
-const scrapsToldOf = new Set<string>();
-
-/**
- * After a save: scraps this browser alone has, never saved beside the story or changed since,
- * said once a visit, with the way to keep them there.
- */
-function remindOfScraps(): void {
-  const scraps = scrapsOf(localStorage, file.id);
-  const standing = scrapsStanding(localStorage, file.id, scraps);
-  if ((standing !== "browser" && standing !== "changed") || scrapsFiles.has(file.id)) return;
-  if (scrapsToldOf.has(file.id)) return;
-  scrapsToldOf.add(file.id);
-  if (!scraps.length) {
-    notice(
-      `Saved. Its scraps are all deleted, but ${scrapsFileName(file.name)} still holds them.`,
-      false,
-      { label: `Empty ${scrapsFileName(file.name)}`, run: () => void saveScraps(true) },
-    );
-    return;
-  }
-  notice(
-    `Saved. Its ${scraps.length === 1 ? "scrap is" : `${scraps.length} scraps are`} kept in this browser only: clearing the browser's data would lose ${scraps.length === 1 ? "it" : "them"}.`,
-    false,
-    { label: `Save in ${scrapsFileName(file.name)}`, run: () => void saveScraps(true) },
-  );
-}
-
-/**
- * A story opened with no scraps here, where this browser has some under the same file name (a
- * file opened again where the browser can't tell it is the same one): offered, never taken.
- */
-function offerScrapsByName(): void {
-  if (/^Untitled/i.test(file.name) || scrapsOf(localStorage, file.id).length) return;
-  const found = scrapsByName(localStorage, file.name, file.id);
-  if (!found) return;
-  const count = found.scraps.length;
-  const id = file.id;
-  setTimeout(() => {
-    if (file.id !== id) return;
-    notice(
-      `${count === 1 ? "A scrap" : `${count} scraps`} from an earlier ${file.name} ${count === 1 ? "is" : "are"} in this browser.`,
-      false,
-      {
-        label: "Bring them here",
-        run: () => {
-          if (file.id !== id) return;
-          const { scraps } = mergeScraps(scrapsOf(localStorage, id), found.scraps);
-          keepScraps(localStorage, id, scraps, file.name);
-          selectBench("scraps");
-        },
-      },
-    );
-  }, 900);
-}
-
-/**
- * The story's scraps in their file beside it. Asked where the first time (or always, `asked`),
- * and written there again with the story after that; downloaded where a browser can't keep files.
- */
-async function saveScraps(asked: boolean): Promise<void> {
-  let scraps = scrapsOf(localStorage, file.id);
-  const standing = scrapsStanding(localStorage, file.id, scraps);
-  // None: nothing to save, unless the ones saved beside the story were all deleted since, when
-  // the file is emptied too, so that it never brings them back.
-  if (!scraps.length && standing !== "changed") return;
-  // Saved with the story: only when they changed, so a file changed elsewhere is left alone.
-  if (!asked && standing === "saved") return;
-  const title = current().meta.title ?? file.name.replace(/\.[^.]+$/, "");
-  let text = scrapsFile(scraps, title);
-  const name = scrapsFileName(file.name);
-  let handle = scrapsFiles.get(file.id);
-  if (!handle && !asked) return;
-  // The file changed outside the Writer since it last wrote it: asked, never written over.
-  if (handle && !asked) {
-    const written = scrapsWritten.get(file.id);
-    let onDisk: string | undefined;
-    try {
-      onDisk = await (await handle.getFile()).text();
-    } catch {
-      onDisk = undefined;
-    }
-    if (written !== undefined && onDisk !== undefined && onDisk !== written) {
-      const answer = await ask(
-        `${handle.name} changed outside the Writer since it was saved here. Join its scraps with these, or save these over it?`,
-        [
-          { label: "Leave it", value: "cancel" },
-          { label: "Save over it", value: "over" },
-          { label: "Join them", value: "join", main: true },
-        ],
-      );
-      if (answer !== "over" && answer !== "join") {
-        notice(`The scraps weren’t saved: ${handle.name} is as it was changed.`);
-        return;
-      }
-      if (answer === "join") {
-        const joined = joinScraps(scraps, readScrapsFile(onDisk), readScrapsFile(written));
-        scraps = joined.scraps;
-        keepScraps(localStorage, file.id, scraps, file.name);
-        text = scrapsFile(scraps, title);
-        notice(
-          `${joined.fromThere ? `${joined.fromThere} ${joined.fromThere === 1 ? "scrap" : "scraps"} from ${handle.name} joined these;` : "Joined:"} both are the same now.`,
-        );
-      }
-    }
-  }
-  if (!window.showSaveFilePicker) {
-    download(text, name);
-    markScrapsSaved(localStorage, file.id, scraps);
+/** The scraps' files beside their stories. */
+const scrapsFiles = new ScrapsFiles({
+  story: () => ({
+    id: file.id,
+    name: file.name,
+    title: current().meta.title ?? file.name.replace(/\.[^.]+$/, ""),
+  }),
+  notice: (message, action) => notice(message, false, action),
+  ask,
+  download: (text, name) => download(text, name),
+  redraw: () => {
     if (prefs.bench && prefs.benchTab === "scraps") showBench();
-    return;
-  }
-  try {
-    if (!handle || asked) {
-      handle = await window.showSaveFilePicker({
-        suggestedName: name,
-        types: [{ description: "Scraps", accept: { "text/markdown": [".md"] } }],
-      });
-      scrapsFiles.set(file.id, handle);
-    }
-    const writable = await handle.createWritable();
-    await writable.write(text);
-    await writable.close();
-    scrapsWritten.set(file.id, text);
-    markScrapsSaved(localStorage, file.id, scraps);
-    if (prefs.bench && prefs.benchTab === "scraps") showBench();
-    if (asked) notice(`Scraps saved in ${handle.name}.`);
-  } catch (error) {
-    if ((error as Error).name !== "AbortError") notice("The scraps couldn’t be saved there.");
-  }
-}
+  },
+  show: () => selectBench("scraps"),
+});
 
 // The goal for the day and sprints: from the word count in the status bar, or View › Writing goal.
 
@@ -3104,8 +2994,14 @@ async function mayLeave(): Promise<boolean> {
   if (lockedOut) return true;
   if (!(await mayWrite())) return false;
   if (sameText(text(), file.saved)) return true;
-  // A new story no one has written in yet: nothing to save.
+  // A new story no one has written in yet, or an example as it came: nothing to save.
   if (untouched()) return true;
+  if (
+    !file.handle &&
+    file.saved === "" &&
+    examples.some((each) => each.name === file.name && sameText(text(), each.text))
+  )
+    return true;
   const answer = await ask(
     `Save the changes to ${file.name} first? If you don't, they stay in this browser: File › Recover a draft brings them back.`,
     [
@@ -3185,7 +3081,7 @@ async function openStory(opened: Opened): Promise<void> {
     await keepVersion({ doc: kept.id, at: kept.changedAt, text: kept.text, why: "Not saved" });
   }
   await load(opened, kept ? { id: kept.id } : {});
-  offerScrapsByName();
+  scrapsFiles.offerByName();
   if (!opened.imported) void snapshot("Opened", opened.text);
   if (opened.imported && opened.document)
     offerShape(
@@ -3271,7 +3167,7 @@ const saving = new SaveFlow({
   keep: () => {
     // Scraps saved beside the story this visit are saved there again with it; those this browser
     // alone has are said.
-    void saveScraps(false).then(remindOfScraps);
+    void scrapsFiles.save(false).then(() => scrapsFiles.remind());
     return keep();
   },
   snapshot: async (why, content) => {
@@ -3765,7 +3661,7 @@ function insertComment(): void {
     notice(
       [
         "Put back in the text: read aloud and printed again.",
-        ...speakersChanged(source, back).map(
+        ...speakersChanged(source, back, groupsAround(back.from, back.to)).map(
           (each) =>
             `“${each.words}” is ${speakerName(each.now)}’s now, not ${speakerName(each.was)}’s.`,
         ),
@@ -3787,7 +3683,7 @@ function insertComment(): void {
     return;
   }
   // Words taken out can give what is left to someone else: said, never left to be found.
-  const moved = speakersChanged(source, out);
+  const moved = speakersChanged(source, out, groupsAround(out.from, out.to));
   const changes = view.state.changes([...also, { from: out.from, to: out.to, insert: out.insert }]);
   view.dispatch({
     changes,
@@ -3808,6 +3704,21 @@ function insertComment(): void {
   view.focus();
 }
 
+/** The groups a change at `from`–`to` is in, from the first's opening line to its closing one. */
+function groupsAround(from: number, to: number): { from: number; to: number } | undefined {
+  const source = view.state.doc;
+  let span: { from: number; to: number } | undefined;
+  for (const group of current().groups) {
+    const end = group.closeRange?.to ?? source.length;
+    if (group.range.from <= from && to <= end)
+      span = {
+        from: Math.min(span?.from ?? group.range.from, group.range.from),
+        to: Math.max(span?.to ?? end, end),
+      };
+  }
+  return span;
+}
+
 /** A speaker as the writer knows them: the narrator by that word, a character by their name. */
 function speakerName(handle: string): string {
   const story = current();
@@ -3816,76 +3727,33 @@ function speakerName(handle: string): string {
   return story.cast.find((member) => member.handle === known)?.name ?? handle;
 }
 
-/** The workbench's Comments: the writer's comments in order, each to go to, or to delete once done. */
+/** The workbench's Comments, as the story has them now. */
 function commentsList(): HTMLElement {
-  const story = current();
-  const found = story.blocks
-    .flatMap((block) =>
-      block.kind === "paragraph" ? block.lines : block.kind === "heading" ? [block.line] : [],
-    )
-    .flatMap((line) => line.items)
-    .filter((item) => item.kind === "comment");
-  const doc = view.state.doc;
-  const here = view.state.selection.main.head;
-  const list = document.createElement("div");
-  list.className = "comments-list";
-  const note = document.createElement("p");
-  note.className = "sheet-note";
-  note.textContent = found.length
-    ? "Yours alone: never read aloud, printed or given to a performer."
-    : `No comments yet. Insert › A comment for yourself (${keys("Mod+Alt+M")}) leaves one at the cursor, or comments out the words selected.`;
-  list.append(note);
-  const items = document.createElement("ol");
-  for (const item of found) {
-    const row = document.createElement("li");
-    row.className = "comment-row";
-    if (item.range.from <= here && here <= item.range.to) row.setAttribute("aria-current", "true");
-    const go = document.createElement("button");
-    go.type = "button";
-    go.className = "comment-go";
-    const words = document.createElement("span");
-    words.className = "comment-words";
-    words.textContent = item.text || "(empty)";
-    const where = document.createElement("span");
-    where.className = "comment-where";
-    where.textContent = `Line ${doc.lineAt(Math.min(item.range.from, doc.length)).number}`;
-    go.append(words, where);
-    go.title = "Go to this comment";
-    go.addEventListener("click", () => {
+  return commentsPanel({
+    story: current(),
+    lineAt: (at) => view.state.doc.lineAt(Math.min(at, view.state.doc.length)).number,
+    here: view.state.selection.main.head,
+    keys,
+    goTo: (from, to) => {
       view.dispatch({
-        selection: EditorSelection.cursor(item.range.to),
-        effects: EditorView.scrollIntoView(item.range.from, { y: "center" }),
+        selection: EditorSelection.cursor(to),
+        effects: EditorView.scrollIntoView(from, { y: "center" }),
       });
       toTheText();
-    });
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "button quiet comment-delete";
-    remove.textContent = "Delete";
-    remove.title = "Done with it: take it out of the story";
-    remove.addEventListener("click", () => {
+    },
+    putBack: (from) => {
       if (lockedOut) return;
-      const { from, to } = item.range;
+      view.dispatch({ selection: EditorSelection.cursor(from + 1) });
+      insertComment();
+    },
+    remove: (from, to) => {
+      if (lockedOut) return;
       // The space before it goes with it, so the words around it meet as before.
       const start = view.state.sliceDoc(from - 1, from) === " " ? from - 1 : from;
       view.dispatch({ changes: { from: start, to }, userEvent: "delete" });
       notice(`Comment deleted. ${keys("Mod+Z")} brings it back.`);
-    });
-    const restore = document.createElement("button");
-    restore.type = "button";
-    restore.className = "button quiet comment-delete";
-    restore.textContent = "Put back";
-    restore.title = "Its words back in the text, read aloud and printed";
-    restore.addEventListener("click", () => {
-      if (lockedOut) return;
-      view.dispatch({ selection: EditorSelection.cursor(item.range.from + 1) });
-      insertComment();
-    });
-    row.append(go, restore, remove);
-    items.append(row);
-  }
-  list.append(items);
-  return list;
+    },
+  });
 }
 
 /** Puts a line of its own after the paragraph the cursor is in, a blank line around it. */

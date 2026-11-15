@@ -8,6 +8,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 **voxdown**
 - `directingPassages`, `DIRECTING_INSTRUCTIONS`, `directingPrompt`, `directingSchema` and `directingRequest` say what to ask a model to direct a reading: the story a passage at a time, to be given back with marks added for how it is performed. `readDirected` reads the answer (text, a code block, or JSON) as suggestions, keeping a mark only where the paragraph still prints the same words, given to the same speakers, with the writer's own marks; `chosenChanges` gives the changes for the ones chosen, checked again together.
+- `readDirected` never counts a paragraph of marks alone (`{page}`, a sound) as not given back.
 - `readDirected` gives `missed`: the paragraphs in reach an answer didn't give back, each with its line and first words.
 - `readDirected` lists a paragraph given back with its words changed among those it refuses, rather than counting it as not given back; reads a group's paragraphs given back with their `:::` lines; and takes a pause given a line of its own as one before the line after it.
 
@@ -36,6 +37,9 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Ctrl+Alt+M in a comment puts its words back in the text (Put back in the Comments tab does too). Commenting out, or putting back, says whose words change speaker; the story's details at the top hold no comment.
 - A scraps file changed outside the Writer is never written over: saving the story leaves it alone while the scraps here are as saved, and asks to join them or save over it once they change. Deleted scraps are kept for a month under Deleted scraps, each to bring back, after a reload too.
 - The board reads a state comment after blank lines under a heading; its first column counts the title, so the totals agree with the status line. A manuscript sets hidden chapters apart with `#`.
+- Joining a scraps file changed outside the Writer takes each scrap's words and note from whichever side changed them; where both changed the same, the file's version joins beside this one, noted as from the file. Bringing a deleted scrap back, or deleting one, with the browser out of room keeps it where it was and says so.
+- The Comments tab gives each comment its row's width, Put back and Delete on a line under it. The board's total is the status line's, a title alone included. Reopening an example as it came asks nothing.
+- Commenting out or putting back inside a group reads the group, so whose words change is said right.
 - F6 (Shift+F6) goes from the text to the workbench to the preview; a phone's rail gives its room to the text. Style hints on through a reload no longer fail as the page opens.
 - The look's button is named "Look: …"; the goal's bar doesn't move under reduced motion; a phone's status line keeps the words rather than the cursor's line; a comment's `<!--` and `-->` are never broken over two lines.
 

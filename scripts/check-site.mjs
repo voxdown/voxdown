@@ -384,6 +384,15 @@ const draftIn = (page) =>
   );
   if (!listed.includes("Check the tide tables"))
     problems.push(`writer: the workbench's Comments lists ${JSON.stringify(listed)}`);
+  // A comment's words take the row's width: its buttons never squeeze them.
+  const widths = await commenter.evaluate(() => [
+    document.querySelector("#bench-sheet .comment-go")?.getBoundingClientRect().width ?? 0,
+    document.querySelector("#bench-sheet .comment-row")?.getBoundingClientRect().width ?? 1,
+  ]);
+  if (widths[0] < widths[1] * 0.8)
+    problems.push(
+      `writer: a comment's words have ${Math.round(widths[0])} of ${Math.round(widths[1])} px`,
+    );
   await commenter.hover('#bench-sheet .comment-row:has-text("Check the tide tables")');
   await commenter.click(
     '#bench-sheet .comment-row:has-text("Check the tide tables") button:has-text("Delete")',
@@ -810,6 +819,26 @@ const draftIn = (page) =>
   await filer.waitForTimeout(600);
   await benchTab(filer, "scraps");
   await filer.click(".scraps-deleted summary");
+  // The browser out of room: still among the deleted ones, and said.
+  await filer.evaluate(() => {
+    window.__set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "vxd-writer-scraps") throw new DOMException("full", "QuotaExceededError");
+      return window.__set.call(this, key, value);
+    };
+  });
+  await filer.click('.scraps-deleted button:has-text("Bring back")');
+  await filer.waitForTimeout(300);
+  if (!(await filer.textContent("#notice"))?.includes("still under Deleted scraps"))
+    problems.push(
+      `writer: bringing a scrap back with no room says ${await filer.textContent("#notice")}`,
+    );
+  await filer.evaluate(() => {
+    Storage.prototype.setItem = window.__set;
+  });
+  if (!(await filer.locator(".scraps-deleted").count()))
+    problems.push("writer: a scrap not brought back for want of room left Deleted scraps");
+  await filer.click(".scraps-deleted summary");
   await filer.click('.scraps-deleted button:has-text("Bring back")');
   await filer.waitForTimeout(300);
   if (
@@ -938,6 +967,13 @@ const draftIn = (page) =>
   };
   const names = () => planner.$$eval(".board-card .board-name", (n) => n.map((e) => e.textContent));
   await openBoard();
+  // The board's words are the status line's.
+  const counted = await planner.evaluate(() => [
+    /([\d,]+) words?/.exec(document.querySelector("#counts-text")?.textContent ?? "")?.[1],
+    /([\d,]+) words?/.exec(document.querySelector("#board-summary")?.textContent ?? "")?.[1],
+  ]);
+  if (!counted[0] || counted[0] !== counted[1])
+    problems.push(`writer: the status line and the board count ${JSON.stringify(counted)} words`);
   if (
     JSON.stringify(await names()) !==
     JSON.stringify(["The proclamation", "The mountain", "The battle", "Home"])
@@ -990,6 +1026,22 @@ const draftIn = (page) =>
   if (after.indexOf("## The proclamation") < after.indexOf("## The mountain"))
     problems.push("writer: a scene moved by Alt+↓ didn't move in the story");
   await context.close();
+  // An example opened again, untouched, as it came: nothing to save first.
+  const fresh = await browser.newContext({ viewport: { width: 1360, height: 860 } });
+  const again = await fresh.newPage();
+  watch(again, "writer example again");
+  await again.goto(`${base}/writer/#example=the-north-wind-and-the-sun`);
+  await again.waitForSelector(".cm-content");
+  await again.waitForTimeout(600);
+  await again.goto(`${base}/writer/#example=the-north-wind-and-the-sun`);
+  await again.reload();
+  await again.waitForSelector(".cm-content");
+  await again.waitForTimeout(800);
+  if (await again.locator("#ask[open]").count())
+    problems.push(
+      `writer: an untouched example opened again asks ${await again.textContent("#ask-message")}`,
+    );
+  await fresh.close();
   console.log("writer: the scene board, its lines, states and moves, by mouse and keys: ok");
 }
 
@@ -1709,6 +1761,10 @@ const racer = await slow.newPage();
 watch(racer, "writer slow saves");
 await racer.goto(`${base}/writer/`);
 await racer.click(`.welcome-example[data-name="${dragonName}"]`);
+// Written in: an example as it came is put aside without asking.
+await racer.click(".cm-content");
+await racer.keyboard.press("Control+End");
+await racer.keyboard.type(" Begun.");
 await racer.click("#file-menu-button");
 await racer.click('[data-command="new"]');
 await racer.waitForSelector("#ask[open]");
@@ -1756,8 +1812,9 @@ await edge.evaluate(() => {
     new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true }),
   );
 });
-await edge.waitForSelector("#ask[open]");
-await edge.click('#ask-buttons button[value="discard"]');
+// The example as it came: nothing to ask before the file dropped opens.
+await edge.waitForTimeout(300);
+if (await edge.isVisible("#ask[open]")) await edge.click('#ask-buttons button[value="discard"]');
 await edge.waitForFunction(() => document.querySelector("#file-name")?.textContent === "other.vxd");
 const droppedText = await edge.locator(".cm-content").innerText();
 if (!droppedText.startsWith("DROPPED FILE TEXT") || droppedText.includes("Sir Percival"))

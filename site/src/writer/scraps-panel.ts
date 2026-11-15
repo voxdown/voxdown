@@ -12,8 +12,8 @@ export type ScrapsHost = {
   scraps(): Scrap[];
   /** Whether the story is written in another tab: its scraps are only read here. */
   readOnly(): boolean;
-  /** A scrap deleted, kept among the deleted ones. */
-  discard(scrap: Scrap): void;
+  /** A scrap deleted, kept among the deleted ones; whether it could be. */
+  discard(scrap: Scrap): boolean;
   /** The scraps deleted, the latest first. */
   deleted(): Deleted[];
   /** A deleted scrap back among the scraps, at `at` (the top if not given). */
@@ -165,9 +165,25 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
       const at = scraps.indexOf(scrap);
       if (at < 0) return;
       // Kept among the deleted ones first: brought back from the notice, or later from the list.
-      host.discard(scrap);
+      const kept = host.discard(scrap);
       scraps.splice(at, 1);
       host.keep(scraps);
+      if (!kept) {
+        // Nowhere to keep it after a reload: Undo, now, is the way back.
+        host.notice(
+          "Scrap deleted. This browser is short of room to keep it to bring back later.",
+          {
+            label: "Undo",
+            run: () => {
+              const now = host.scraps();
+              now.splice(Math.min(at, now.length), 0, scrap);
+              focusing = scrap.id;
+              host.keep(now);
+            },
+          },
+        );
+        return;
+      }
       host.notice("Scrap deleted: Deleted scraps, under the list, keeps it for a month.", {
         label: "Undo",
         run: () => {

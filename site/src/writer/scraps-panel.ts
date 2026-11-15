@@ -9,6 +9,8 @@ import { type Scrap, searchScraps } from "./scraps";
 
 export type ScrapsHost = {
   scraps(): Scrap[];
+  /** Whether the story is written in another tab: its scraps are only read here. */
+  readOnly(): boolean;
   keep(scraps: Scrap[]): void;
   /** Words dropped here from the story: kept as a scrap, and taken out unless `copy`. */
   dropped(text: string, copy: boolean): void;
@@ -37,6 +39,8 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
   const panel = document.createElement("div");
   panel.className = "scraps";
   const scraps = host.scraps();
+  // The story written in another tab: its scraps read here, changed there.
+  const readOnly = host.readOnly();
 
   const head = document.createElement("div");
   head.className = "scraps-head";
@@ -58,7 +62,9 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
   save.className = "button quiet";
   save.textContent = "Save…";
   save.title = `Save these scraps in a file beside the story: ${host.fileName()}`;
-  save.disabled = scraps.length === 0;
+  open.disabled = readOnly;
+  // Nothing to save, unless the scraps saved beside the story have all been deleted since.
+  save.disabled = host.standing() !== "changed" && scraps.length === 0;
   save.addEventListener("click", () => host.save());
   files.append(open, save);
   head.append(search, files);
@@ -103,7 +109,7 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
   const card = (scrap: Scrap): HTMLElement => {
     const item = document.createElement("li");
     item.className = "scrap";
-    item.draggable = true;
+    item.draggable = !readOnly;
     item.tabIndex = 0;
     item.dataset.id = scrap.id;
     const text = document.createElement("div");
@@ -115,6 +121,7 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
     note.placeholder = "A note";
     note.value = scrap.note;
     note.setAttribute("aria-label", "A note about this scrap");
+    note.readOnly = readOnly;
     note.addEventListener("change", () => {
       scrap.note = note.value.trim();
       host.keep(scraps);
@@ -124,7 +131,7 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
       item.draggable = false;
     });
     note.addEventListener("blur", () => {
-      item.draggable = true;
+      item.draggable = !readOnly;
     });
     const meta = document.createElement("div");
     meta.className = "scrap-meta";
@@ -179,10 +186,11 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
     down.title = "Move down (Alt+↓)";
     down.setAttribute("aria-label", "Move this scrap down");
     down.addEventListener("click", () => move(scrap, 1));
+    for (const button of [insert, remove, up, down]) button.disabled = readOnly;
     actions.append(insert, remove, up, down);
     item.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown");
     item.addEventListener("keydown", (event) => {
-      if (event.target === note) return;
+      if (event.target === note || readOnly) return;
       if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
       event.preventDefault();
@@ -223,6 +231,7 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
       return event.clientY < box.top + box.height / 2;
     });
   panel.addEventListener("dragover", (event) => {
+    if (readOnly) return;
     const types = event.dataTransfer?.types ?? [];
     if (!types.includes(SCRAP) && !types.includes("text/plain")) return;
     event.preventDefault();
@@ -262,13 +271,20 @@ export function scrapsPanel(host: ScrapsHost): HTMLElement {
   panel.append(head);
   // Scraps only this browser has: said, with the way to keep them beside the story.
   const standing = host.standing();
-  if (standing === "browser" || standing === "changed") {
+  if (readOnly) {
+    const elsewhere = document.createElement("p");
+    elsewhere.className = "scraps-standing";
+    elsewhere.textContent = "This story is being written in another tab: its scraps change there.";
+    panel.append(elsewhere);
+  } else if (standing === "browser" || standing === "changed") {
     const warn = document.createElement("p");
     warn.className = "scraps-standing";
     warn.textContent =
       standing === "browser"
         ? `Kept in this browser only. Save… keeps them in ${host.fileName()}, beside the story.`
-        : `Changed since they were saved in ${host.fileName()}. Save… keeps the file up to date.`;
+        : scraps.length
+          ? `Changed since they were saved in ${host.fileName()}. Save… keeps the file up to date.`
+          : `All deleted since they were saved in ${host.fileName()}. Save… empties the file too.`;
     panel.append(warn);
   }
   panel.append(list);

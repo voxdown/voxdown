@@ -45,4 +45,11 @@ describe("the style check", () => {
     ]);
     expect(found[0]?.perThousand).toBeGreaterThan(100);
   });
+
+  it("leaves headings out: a chapter's name is no sentence of the story's", () => {
+    const hints = styleHints(
+      "And that was chapter nineteen.\n\n## Chapter Twenty\n\nMorning came.",
+    );
+    expect(hints).toEqual([]);
+  });
 });

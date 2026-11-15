@@ -35,6 +35,7 @@ export const scriptTheme = EditorView.theme({
   ".vxd-page": { color: "var(--vxd-page, #b7791f)" },
   ".vxd-note": { color: "var(--vxd-note, #6b7280)", fontStyle: "italic" },
   ".vxd-comment": { color: "var(--vxd-muted, #6b7280)" },
+  ".vxd-comment-sign": { whiteSpace: "nowrap" },
   ".vxd-group": { color: "var(--vxd-direction, #7c3aed)", fontStyle: "italic" },
   ".vxd-heading": { fontWeight: "600", fontFamily: "var(--vxd-ui-font, system-ui, sans-serif)" },
   ".vxd-break": { color: "var(--vxd-muted, #6b7280)" },

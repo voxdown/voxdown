@@ -9,6 +9,7 @@
  */
 import {
   DIRECTING_INSTRUCTIONS,
+  type Refusal,
   type Story,
   type Suggestion,
   type SuggestionKind,
@@ -49,6 +50,8 @@ let last:
       answers: string[];
       reach: { from: number; to: number };
       suggestions: Suggestion[];
+      /** The paragraphs in reach the answers didn't give back, as they were first read. */
+      missed: Refusal[];
       /** The ids the writer has left unticked. */
       unticked: Set<string>;
       said: string;
@@ -266,6 +269,9 @@ function show(
     answers,
     reach,
     suggestions: read.suggestions,
+    // Read again over the whole story, every paragraph outside the reach would be missed: the
+    // reach's own, as first read.
+    missed: kept ? kept.missed : read.missed,
     unticked,
     said: "",
   };
@@ -276,8 +282,11 @@ function show(
     counts.set(suggestion.kind, (counts.get(suggestion.kind) ?? 0) + 1);
   const found = [...counts].map(([kind, count]) => plural(count, ...KINDS[kind])).join(", ");
   const refusals = $("#direct-refused");
+  // Said only beside something the answers did give: an answer about something else entirely
+  // would list every paragraph.
+  const missed = read.suggestions.length + read.refused.length > 0 ? last.missed : [];
   refusals.replaceChildren(
-    ...read.refused.slice(0, 30).map((refusal) => {
+    ...[...read.refused, ...missed].slice(0, 30).map((refusal) => {
       const item = document.createElement("li");
       const button = document.createElement("button");
       button.type = "button";
@@ -291,7 +300,7 @@ function show(
       return item;
     }),
   );
-  refusals.hidden = read.refused.length === 0;
+  refusals.hidden = read.refused.length + missed.length === 0;
   last.said = [
     read.suggestions.length
       ? `${plural(read.suggestions.length, "suggestion")}: ${found}. Untick any you don't want.`
@@ -299,14 +308,15 @@ function show(
     read.refused.length
       ? `${plural(read.refused.length, "paragraph")} left as written, below: the AI changed more than marks there.`
       : "",
-    read.missing && read.suggestions.length + read.refused.length > 0
-      ? `${plural(read.missing, "paragraph")} the answer didn't give back.`
+    missed.length
+      ? `${plural(missed.length, "paragraph")} the answer didn't give back, below.`
       : "",
   ]
     .filter(Boolean)
     .join(" ");
   say(last.said);
-  $("#direct-found").hidden = read.suggestions.length === 0 && read.refused.length === 0;
+  $("#direct-found").hidden =
+    read.suggestions.length === 0 && read.refused.length === 0 && missed.length === 0;
   sayAdd();
 }
 

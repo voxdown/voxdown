@@ -91,7 +91,7 @@ import { commentOut } from "./comment-out";
 import "../style.css";
 import "./writer.css";
 import { type AiContext, chapterAt, openAi } from "./ai-dialog";
-import { boardOf } from "./board";
+import { type BoardScene, type SceneState, boardOf } from "./board";
 import { openBoard } from "./board-dialog";
 import { castPanel } from "./cast";
 import { paragraphsOf } from "./convert";
@@ -597,8 +597,12 @@ const editable = new Compartment();
 /** The line breaks the story is saved with: changed when the file is read again with others. */
 const breaks = new Compartment();
 let lockedOut = false;
-const editability = () =>
-  lockedOut ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [];
+/**
+ * A tab that only reads: nothing typed, pasted or dropped changes the story, but the cursor still
+ * goes where the keys take it (Ctrl+End to the last line, not the bottom of a blank page), and
+ * words can be selected and copied.
+ */
+const editability = () => (lockedOut ? [EditorState.readOnly.of(true)] : []);
 
 function editorState(source: string, cursor: number): EditorState {
   return EditorState.create({
@@ -1015,6 +1019,7 @@ async function load(
   tabStory(id);
   // The side shows another story: drawn afresh, from its start.
   sideShows = "";
+  benchRead = false;
   sinceShown = undefined;
   sinceAsked = undefined;
   file.id = id;
@@ -1180,6 +1185,8 @@ function readInWorker(text: string): Promise<RenderReply> {
 
 /** What the worker last read of a long story, and the text it read (the editor's own). */
 let read: { doc: Text; reply: RenderReply } | undefined;
+/** Whether the workbench has been drawn from this story's first reading in the worker. */
+let benchRead = false;
 /** Whether the worker's reading is of the text as it is now. */
 const readNow = () => read !== undefined && read.doc === view.state.doc;
 
@@ -1208,7 +1215,17 @@ function showRead(): void {
   rail.show(numbered(reply.scenes, sceneNumbers(view.state)));
   showCounts(reply);
   showWarningCount();
-  if (prefs.side) whenStill(() => readNow() && showSide(read?.reply.html || undefined));
+  // The preview, and the workbench's lists of what the story holds, once the text is still: a
+  // workbench drawn before a long story was read (a second tab, a reload) shows it then.
+  if (prefs.side || prefs.bench)
+    whenStill(() => {
+      if (!readNow()) return;
+      if (prefs.side) showSide(read?.reply.html || undefined);
+      // The Scenes tab from the worker's reading, as the rail; the other tabs once, when they
+      // were drawn before the story was first read (a second tab, a reload).
+      if (prefs.bench && (prefs.benchTab === "scenes" || !benchRead)) showBench();
+      benchRead = true;
+    });
 }
 
 /** Runs `run` once the text has been still for a moment, in the browser's idle time. */
@@ -1497,6 +1514,13 @@ function showCounts({ words, said, voices, heard }: Counts): void {
 /** The file each story's scraps were saved to this visit, to save them there again. */
 const scrapsFiles = new Map<string, FileSystemFileHandle>();
 
+// Scraps changed in another tab (the one that writes the story, or another story's): the Scraps
+// tab here shows them as they are now, never a list another tab has since changed.
+window.addEventListener("storage", (event) => {
+  if (event.key !== "vxd-writer-scraps" && event.key !== "vxd-writer-scraps-saved") return;
+  if (prefs.bench && prefs.benchTab === "scraps") showBench();
+});
+
 /** Words set aside: a scrap, with the chapter they came from. */
 function setAside(text: string): Scrap | undefined {
   const story = current();
@@ -1553,14 +1577,25 @@ function cutToScraps(): boolean {
   return true;
 }
 
+/** Scraps change only where the story is written: another tab's are read here, never written. */
+function scrapsReadOnly(): boolean {
+  if (!lockedOut) return false;
+  notice("This story is being written in another tab: its scraps change there.");
+  showBench();
+  return true;
+}
+
 const scrapsHost: ScrapsHost = {
   scraps: () => scrapsOf(localStorage, file.id),
+  readOnly: () => lockedOut,
   keep: (scraps) => {
+    if (scrapsReadOnly()) return;
     if (!keepScraps(localStorage, file.id, scraps, file.name))
       notice("This browser is short of room: the scraps couldn’t be kept.");
     showBench();
   },
   dropped: (text, copy) => {
+    if (scrapsReadOnly()) return;
     // Kept first: words that can't be kept stay in the story.
     if (!setAside(text)) {
       showBench();
@@ -1601,6 +1636,7 @@ const scrapsHost: ScrapsHost = {
           notice(`${chosen.name} holds no scraps.`);
           return;
         }
+        if (scrapsReadOnly()) return;
         const { scraps, added } = mergeScraps(scrapsOf(localStorage, file.id), found);
         keepScraps(localStorage, file.id, scraps, file.name);
         // Read from the file just opened: as it is there.
@@ -1635,6 +1671,14 @@ function remindOfScraps(): void {
   if ((standing !== "browser" && standing !== "changed") || scrapsFiles.has(file.id)) return;
   if (scrapsToldOf.has(file.id)) return;
   scrapsToldOf.add(file.id);
+  if (!scraps.length) {
+    notice(
+      `Saved. Its scraps are all deleted, but ${scrapsFileName(file.name)} still holds them.`,
+      false,
+      { label: `Empty ${scrapsFileName(file.name)}`, run: () => void saveScraps(true) },
+    );
+    return;
+  }
   notice(
     `Saved. Its ${scraps.length === 1 ? "scrap is" : `${scraps.length} scraps are`} kept in this browser only: clearing the browser's data would lose ${scraps.length === 1 ? "it" : "them"}.`,
     false,
@@ -1676,7 +1720,9 @@ function offerScrapsByName(): void {
  */
 async function saveScraps(asked: boolean): Promise<void> {
   const scraps = scrapsOf(localStorage, file.id);
-  if (!scraps.length) return;
+  // None: nothing to save, unless the ones saved beside the story were all deleted since, when
+  // the file is emptied too, so that it never brings them back.
+  if (!scraps.length && scrapsStanding(localStorage, file.id, scraps) !== "changed") return;
   const text = scrapsFile(scraps, current().meta.title ?? file.name.replace(/\.[^.]+$/, ""));
   const name = scrapsFileName(file.name);
   let handle = scrapsFiles.get(file.id);
@@ -2121,7 +2167,33 @@ function scenesList(): HTMLElement {
     toTheText();
   };
   const here = view.state.selection.main.head;
-  for (const chapter of boardOf(current())) {
+  type Group = {
+    name: string;
+    from: number;
+    to: number;
+    words: number;
+    scenes: BoardScene[];
+    state?: SceneState;
+    about: string;
+  };
+  // A long story's, as the worker last read it when it read the text as it is now.
+  const chapters = read && readNow() ? read.reply.board : boardOf(current());
+  const columns = chapters.flatMap((chapter): Group[] =>
+    // A story whose chapters hold no scenes: each chapter a head of its own, as the status line
+    // counts them, never a scene under the book's title.
+    chapter.chapters
+      ? chapter.scenes.map((each) => ({
+          name: each.name,
+          from: each.from,
+          to: each.to,
+          words: each.words,
+          scenes: [],
+          ...(each.state ? { state: each.state } : {}),
+          about: each.summary,
+        }))
+      : [{ ...chapter, about: "" }],
+  );
+  for (const chapter of columns) {
     const group = document.createElement("section");
     const head = document.createElement("button");
     head.type = "button";
@@ -2129,6 +2201,13 @@ function scenesList(): HTMLElement {
     head.innerHTML = `<span></span><span class="scenes-words"></span>`;
     (head.firstChild as HTMLElement).textContent = chapter.name;
     (head.lastChild as HTMLElement).textContent = wordsSaid(chapter.words);
+    if (chapter.state) head.dataset.state = chapter.state;
+    if (chapter.about) {
+      const line = document.createElement("span");
+      line.className = "scenes-line";
+      line.textContent = chapter.about;
+      head.append(line);
+    }
     head.addEventListener("click", () => go(chapter.from));
     if (chapter.from <= here && here < chapter.to && !chapter.scenes.length)
       head.setAttribute("aria-current", "true");
@@ -3593,7 +3672,13 @@ function insertComment(): void {
     userEvent: "input.insert",
   });
   notice(
-    `Commented out${out.kept ? `, around the ${out.kept === 1 ? "comment" : `${out.kept} comments`} already there` : ""}: kept in the text, never read aloud or printed. ${keys("Mod+Z")} puts it back.`,
+    [
+      `Commented out${out.kept ? `, with the ${out.kept === 1 ? "comment" : `${out.kept} comments`} already there inside it` : ""}: kept in the text, never read aloud or printed.`,
+      out.unnamed ? `The quote after it is now the narrator’s: @${out.unnamed} went with it.` : "",
+      `${keys("Mod+Z")} puts it back.`,
+    ]
+      .filter(Boolean)
+      .join(" "),
   );
   view.focus();
 }
@@ -5095,6 +5180,7 @@ function showLook(): void {
   const look = savedLook();
   button.textContent = lookLabel(look);
   button.title = `Look: ${lookLabel(look)}. Change it, and the page and text, here.`;
+  button.setAttribute("aria-label", `Look: ${lookLabel(look)}`);
   button.hidden = false;
 }
 $("#theme").addEventListener("click", showPageSettings);

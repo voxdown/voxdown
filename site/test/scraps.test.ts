@@ -91,6 +91,10 @@ describe("scraps kept safe", () => {
     markScrapsSaved(store, "owl", [owl]);
     expect(scrapsStanding(store, "owl", [owl])).toBe("saved");
     expect(scrapsStanding(store, "owl", [{ ...owl, note: "changed" }])).toBe("changed");
+    // All deleted since they were saved: changed, so the file is emptied too; then none.
+    expect(scrapsStanding(store, "owl", [])).toBe("changed");
+    markScrapsSaved(store, "owl", []);
+    expect(scrapsStanding(store, "owl", [])).toBe("none");
   });
 
   it("are found by the story's file name, when it is opened as another story", () => {

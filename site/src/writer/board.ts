@@ -1,8 +1,9 @@
 /**
  * The scene board: the story's chapters side by side, each scene a card with its words, a line
- * about it and how far along it is. The line and the state are the writer's comment straight under
- * the scene's heading or break (`<!-- draft: The knight meets the dragon. -->`, spec §10.1), so a
- * board needs nothing the format doesn't have, and any Markdown viewer hides it.
+ * about it and how far along it is. The line and the state are a comment straight under the
+ * scene's heading or break (`<!-- draft: The knight meets the dragon. -->`, or `<!-- scene: … -->`
+ * with no state, spec §10.1), so a board needs nothing the format doesn't have, and any Markdown
+ * viewer hides it. Any other comment there is the writer's own, left as it is.
  */
 import type { Story } from "voxdown";
 import { scenesOf } from "./story-data";
@@ -34,20 +35,28 @@ export type BoardChapter = {
   scenes: BoardScene[];
   /** The words before the first chapter: shown, never moved. */
   opening: boolean;
+  /** Its cards are the story's chapters, not scenes: a story whose chapters hold no scenes. */
+  chapters?: boolean;
 };
 
-/** `draft: The knight meets the dragon.` → its state and its line. */
-export function readAbout(text: string): { state?: SceneState; summary: string } {
-  const found = /^(idea|draft|revised|done)(?:\s*[:.–—-]\s*(.*))?$/is.exec(text.trim());
-  if (!found) return { summary: text.trim() };
-  return { state: (found[1] ?? "").toLowerCase() as SceneState, summary: (found[2] ?? "").trim() };
+/**
+ * `draft: The knight meets the dragon.` → its state and its line; `scene: The knight…` → its line
+ * alone. Undefined for any other comment: the writer's own, which the board never takes or writes.
+ */
+export function readAbout(text: string): { state?: SceneState; summary: string } | undefined {
+  const found = /^(idea|draft|revised|done|scene)(?:\s*[:.–—-]\s*(.*))?$/is.exec(text.trim());
+  if (!found) return undefined;
+  const word = (found[1] ?? "").toLowerCase();
+  const summary = (found[2] ?? "").trim();
+  return word === "scene" ? { summary } : { state: word as SceneState, summary };
 }
 
 /** The comment a scene's state and line are written as, or "" for neither. */
 export function aboutComment(state: SceneState | undefined, summary: string): string {
   const line = summary.replace(/\s+/g, " ").replace(/-->/g, "→").trim();
   if (!state && !line) return "";
-  const said = state && line ? `${state}: ${line}` : (state ?? line);
+  // A line with no state is marked as the board's, so a comment of the writer's never reads as one.
+  const said = state ? (line ? `${state}: ${line}` : state) : `scene: ${line}`;
   return `<!-- ${said} -->`;
 }
 
@@ -82,20 +91,22 @@ export function boardOf(story: Story): BoardChapter[] {
     const next = /^\r?\n[ \t]*<!--((?:(?!-->)[^\n])*)-->[ \t]*(?=\r?\n|$)/.exec(
       source.slice(headEnd),
     );
-    const about = next
-      ? {
-          from: headEnd + (next[0].length - next[0].trimStart().length),
-          to: headEnd + next[0].length,
-        }
-      : undefined;
-    const read = next ? readAbout(next[1] ?? "") : { summary: "" };
+    // The board's own only: a state, or `scene:`. A comment of the writer's stays theirs.
+    const read = next ? readAbout(next[1] ?? "") : undefined;
+    const about =
+      next && read
+        ? {
+            from: headEnd + (next[0].length - next[0].trimStart().length),
+            to: headEnd + next[0].length,
+          }
+        : undefined;
     return {
       from,
       to,
       name,
       words: words(from, to),
-      ...(read.state ? { state: read.state } : {}),
-      summary: read.summary,
+      ...(read?.state ? { state: read.state } : {}),
+      summary: read?.summary ?? "",
       ...(about ? { about } : {}),
       aboutAt: headEnd,
       break: isBreak,
@@ -130,6 +141,7 @@ export function boardOf(story: Story): BoardChapter[] {
       words: chapters.reduce((sum, each) => sum + each.words, 0),
       scenes: chapters.map((each) => card(each.from, each.to, each.name, false)),
       opening: true,
+      chapters: true,
     };
     return opening.words > 0 ? [opening, sections] : [sections];
   }

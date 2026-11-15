@@ -797,8 +797,12 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
         break;
       // The writer's own comment: always shown, quieter than a note, never anyone else's.
       case "comment":
-        if (showRaw) add(mark.from, mark.to, Decoration.mark({ class: "vxd-comment" }));
-        else
+        if (showRaw) {
+          add(mark.from, mark.to, Decoration.mark({ class: "vxd-comment" }));
+          // Its signs never broken over two lines: `<!` and `--`, or `--` and `>`, kept together.
+          add(mark.from, mark.from + 4, Decoration.mark({ class: "vxd-comment-sign" }));
+          add(mark.to - 3, mark.to, Decoration.mark({ class: "vxd-comment-sign" }));
+        } else
           add(
             mark.from,
             mark.to,

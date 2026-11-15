@@ -49,14 +49,17 @@ export function openBoard(host: BoardHost): void {
     const total = board.reduce((sum, chapter) => sum + chapter.words, 0);
     const summary = document.querySelector("#board-summary");
     if (summary) {
+      // Chapters and scenes named as the status line names them: a story whose chapters hold no
+      // scenes has its chapters as the cards.
+      const cardsAre = board.some((chapter) => chapter.chapters) ? "chapter" : "scene";
       const chapters = board.filter((chapter) => !chapter.opening).length;
-      const scenes = board.reduce((sum, chapter) => sum + chapter.scenes.length, 0);
+      const cards = board.reduce((sum, chapter) => sum + chapter.scenes.length, 0);
       const counted = [
         ...(chapters ? [`${chapters} ${chapters === 1 ? "chapter" : "chapters"}`] : []),
-        `${scenes} ${scenes === 1 ? "scene" : "scenes"}`,
+        `${cards} ${cards === 1 ? cardsAre : `${cardsAre}s`}`,
         words(total),
       ].join(", ");
-      summary.textContent = `${counted}. Drag a scene${chapters ? " or a chapter" : ""}, or press Alt+↑ or Alt+↓ on its name, to move it; the text moves with it, and ${navigator.platform.includes("Mac") ? "⌘Z" : "Ctrl+Z"} moves it back.`;
+      summary.textContent = `${counted}. Drag a ${cardsAre}${chapters ? " or a chapter" : ""}, or press Alt+↑ or Alt+↓ on its name, to move it; the text moves with it, and ${navigator.platform.includes("Mac") ? "⌘Z" : "Ctrl+Z"} moves it back.`;
     }
     columns.replaceChildren(...board.map(column));
   };

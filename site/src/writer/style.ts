@@ -1,7 +1,7 @@
 /**
  * A gentle style check, on this computer, with no AI: a word said again too soon, a sentence long
  * enough to lose a listener, and the words a story leans on most. Only the story's words are read:
- * its marks, directions, sounds, instructions, notes and the writer's comments are left out.
+ * its marks, directions, sounds, instructions, notes, headings and the writer's comments are left out.
  */
 
 export type StyleHint = {
@@ -49,7 +49,8 @@ export function wordsOnly(text: string): string {
       .replace(/@[\p{L}][\p{L}\p{M}\p{N}_'’-]*(?:[ \t]*\([^)\n]*\))?|@\([^)\n]*\)|@\//gu, blank)
       // Sounds and a character's sounds, instructions, headings' and groups' signs.
       .replace(/\[[^\]\n]*\]|\{[^}\n]*\}/g, blank)
-      .replace(/^[ \t]*(?:#{1,6}|:::.*$)/gm, blank)
+      // Headings, whole: a chapter's name is no sentence of the story's.
+      .replace(/^[ \t]*(?:#{1,6}[ \t].*|#{1,6}$|:::.*)$/gm, blank)
   );
 }
 

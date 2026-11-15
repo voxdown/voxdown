@@ -58,6 +58,8 @@ export type Directed = {
   refused: Refusal[];
   /** Paragraphs in reach that the answer didn't give back. */
   missing: number;
+  /** Those paragraphs, each with its line and its first words. */
+  missed: Refusal[];
 };
 
 /** About this many words a passage: enough to read a scene, little enough to give back whole. */
@@ -463,8 +465,13 @@ export function readDirected(
   const keys = paragraphs.map((paragraph) =>
     keyOf(source.slice(paragraph.range.from, paragraph.range.to)),
   );
-  const result: Directed = { suggestions: [], refused: [], missing: 0 };
+  const result: Directed = { suggestions: [], refused: [], missing: 0, missed: [] };
   const lineAt = (at: number) => source.slice(0, at).split("\n").length;
+  /** A paragraph said by its line and its first words, and why. */
+  const said = (from: number, written: string, why: string): Refusal => {
+    const words = bare(written.replace(/\s+/g, " "));
+    return { line: lineAt(from), words: words.length > 60 ? `${words.slice(0, 59)}…` : words, why };
+  };
   const seen = new Map<string, number>();
   const matched = new Set<number>();
   let cursor = 0;
@@ -498,14 +505,7 @@ export function readDirected(
     const written = source.slice(from, paragraph.range.to);
     const occurrence = (seen.get(key) ?? 0) + 1;
     seen.set(key, occurrence);
-    const refuse = (why: string) => {
-      const words = bare(written.replace(/\s+/g, " "));
-      result.refused.push({
-        line: lineAt(from),
-        words: words.length > 60 ? `${words.slice(0, 59)}…` : words,
-        why,
-      });
-    };
+    const refuse = (why: string) => result.refused.push(said(from, written, why));
     const added = addedMarks(written, given);
     if (!added) {
       if (bare(given) !== bare(written)) refuse("its words weren’t given back as written");
@@ -558,6 +558,15 @@ export function readDirected(
     }
   }
   result.missing = paragraphs.length - matched.size;
+  for (const [index, paragraph] of paragraphs.entries())
+    if (!matched.has(index))
+      result.missed.push(
+        said(
+          paragraph.range.from,
+          source.slice(paragraph.range.from, paragraph.range.to),
+          "the answer didn’t give it back",
+        ),
+      );
   return result;
 }
 

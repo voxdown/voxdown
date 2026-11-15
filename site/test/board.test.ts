@@ -50,13 +50,14 @@ describe("the scene board", () => {
 
   it("reads and writes a scene's line and state", () => {
     expect(readAbout(" Revised — the end ")).toEqual({ state: "revised", summary: "the end" });
-    expect(readAbout("Just a line")).toEqual({ summary: "Just a line" });
+    expect(readAbout("Just a line")).toBeUndefined();
+    expect(readAbout("scene: Just a line")).toEqual({ summary: "Just a line" });
     expect(aboutComment("done", "It ends.")).toBe("<!-- done: It ends. -->");
     expect(aboutComment("idea", "")).toBe("<!-- idea -->");
-    expect(aboutComment(undefined, "a --> b")).toBe("<!-- a → b -->");
+    expect(aboutComment(undefined, "a --> b")).toBe("<!-- scene: a → b -->");
     expect(aboutComment(undefined, " ")).toBe("");
     expect(readAbout("idea")).toEqual({ state: "idea", summary: "" });
-    expect(readAbout("Ideas came")).toEqual({ summary: "Ideas came" });
+    expect(readAbout("Ideas came")).toBeUndefined();
   });
 
   it("moves a scene before another, and a chapter to the end, as one change", () => {

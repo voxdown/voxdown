@@ -361,16 +361,23 @@ body.writer > .statusbar {
   padding-left: 1rem;
   border-left: 3px solid transparent;
 }
-.scenes-scene[data-state="idea"] {
+.scenes-chapter[data-state] {
+  border-left: 3px solid transparent;
+}
+.scenes-scene[data-state="idea"],
+.scenes-chapter[data-state="idea"] {
   border-left-color: var(--quiet);
 }
-.scenes-scene[data-state="draft"] {
+.scenes-scene[data-state="draft"],
+.scenes-chapter[data-state="draft"] {
   border-left-color: var(--mark-page);
 }
-.scenes-scene[data-state="revised"] {
+.scenes-scene[data-state="revised"],
+.scenes-chapter[data-state="revised"] {
   border-left-color: var(--pencil);
 }
-.scenes-scene[data-state="done"] {
+.scenes-scene[data-state="done"],
+.scenes-chapter[data-state="done"] {
   border-left-color: var(--brand);
 }
 .scenes-chapter:hover,
@@ -1417,6 +1424,11 @@ body[data-welcome] #draft-state {
   background: var(--brand);
   transition: width 0.3s ease;
 }
+@media (prefers-reduced-motion: reduce) {
+  .goal-fill {
+    transition: none;
+  }
+}
 .statusbar .sprint-state {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -2118,7 +2130,8 @@ body[data-welcome] #draft-state {
   .scene-rail[data-labels] .scene-rail-name {
     display: none;
   }
-  #counts {
+  /* The words first, cut short as they must be; the cursor's line and column give way. */
+  #cursor-place {
     display: none;
   }
 }

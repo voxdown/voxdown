@@ -151,6 +151,14 @@ Night fell over the harbour. {pause} Somewhere a door slammed. [door slams]
       expect.objectContaining({ line: 3, why: "its words weren’t given back as written" }),
     ]);
     expect(changed.missing).toBe(0);
+    expect(changed.missed).toEqual([]);
+    // A paragraph not given back at all: said by its line and words.
+    const short = readDirected(story, "Sir Percival stopped.\n\nThe beginning.");
+    expect(short.missed.map((each) => [each.line, each.words])).toEqual([
+      [5, "@Gerald “Could you not?”"],
+      [8, "He crept. Clank."],
+      [12, "The end."],
+    ]);
     expect(changed.suggestions.map((each) => each.label)).toEqual(["(sleepily)"]);
     // A pause given a line of its own inside a group: put before the line after it.
     const paused = readDirected(

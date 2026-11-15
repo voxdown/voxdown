@@ -1,9 +1,9 @@
 /**
  * Commenting words out (Insert › A comment for yourself, with words selected). A comment ends at
  * its first `-->` (spec §10.1), so words holding a comment of their own can't simply be wrapped:
- * the comment inside would end the new one early, and the rest would be read and printed. The
- * words between the comments are each commented out instead, and the comments are kept as they
- * are; a selection that starts or ends inside a comment takes in that whole comment.
+ * the comment inside would end the new one early, and the rest would be read and printed. Its end
+ * is spaced instead (`-- >`), so the words and the comment inside are one comment; a selection
+ * that starts or ends inside a comment takes in that whole comment.
  */
 
 /** The comments in `text`, each from its `<!--` to the end of its `-->`. An unclosed one is text. */
@@ -20,13 +20,14 @@ export type CommentOut = {
   to: number;
   /** What it becomes. */
   insert: string;
-  /** Words already commented out, kept as they were. */
+  /** Comments already in it, kept inside the new one. */
   kept: number;
+  /** A speaker's name commented out with the words, whose quote after them is now the narrator's. */
+  unnamed?: string;
 };
 
 /**
- * `source` from `from` to `to` commented out: wrapped in one comment, or, around the comments
- * already in it, each run of words between them wrapped in its own. Undefined when it holds only
+ * `source` from `from` to `to` commented out, as one comment. Undefined when it holds only
  * comments and spaces: there is nothing left to comment out.
  */
 export function commentOut(
@@ -42,22 +43,22 @@ export function commentOut(
     if (comment.from < from && from < comment.to) from = comment.from;
     if (comment.from < to && to < comment.to) to = comment.to;
   }
+  const text = source.slice(from, to);
   const inside = all.filter((comment) => comment.from >= from && comment.to <= to);
-  const wrap = (text: string) => {
-    if (!text.trim()) return text;
-    const lead = /^\s*/.exec(text)?.[0] ?? "";
-    const tail = /\s*$/.exec(text)?.[0] ?? "";
-    // A stray `-->` in the words would end their comment early: spaced, it can't.
-    const words = text.slice(lead.length, text.length - tail.length).replace(/-->/g, "-- >");
-    return `${lead}<!-- ${words} -->${tail}`;
+  if (!text.replace(/<!--[\s\S]*?-->/g, "").trim()) return undefined;
+  const lead = /^\s*/.exec(text)?.[0] ?? "";
+  const tail = /\s*$/.exec(text)?.[0] ?? "";
+  // Every `-->` inside, a comment's or a stray one, spaced: only the new comment's end ends it.
+  const words = text.slice(lead.length, text.length - tail.length).replace(/-->/g, "-- >");
+  // A name (and its direction) at the end of the words, a quote straight after: the quote loses it.
+  const name = /@([\p{L}][\p{L}\p{M}\p{N}_'’-]*)(?:[ \t]*\([^)\n]*\))?$/u.exec(words);
+  const after = source.slice(to);
+  const unnamed = name && /^[ \t]*(?:\([^)\n]*\)[ \t]*)?[“"«„]/u.test(after) ? name[1] : undefined;
+  return {
+    from,
+    to,
+    insert: `${lead}<!-- ${words} -->${tail}`,
+    kept: inside.length,
+    ...(unnamed ? { unnamed } : {}),
   };
-  let insert = "";
-  let at = from;
-  for (const comment of inside) {
-    insert += wrap(source.slice(at, comment.from)) + source.slice(comment.from, comment.to);
-    at = comment.to;
-  }
-  insert += wrap(source.slice(at, to));
-  if (insert === source.slice(from, to)) return undefined;
-  return { from, to, insert, kept: inside.length };
 }

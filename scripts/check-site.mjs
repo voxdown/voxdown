@@ -545,9 +545,7 @@ const draftIn = (page) =>
   await keeper.keyboard.press("Control+Alt+m");
   await keeper.waitForTimeout(1200);
   if (
-    !(await draftIn(keeper)).includes(
-      "<!-- Night fell. --> <!-- rain? --> <!-- The harbour was quiet. -->",
-    )
+    !(await draftIn(keeper)).includes("<!-- Night fell. <!-- rain? -- > The harbour was quiet. -->")
   )
     problems.push("writer: words holding a comment, commented out, leave some to be read");
   await context.close();
@@ -651,6 +649,72 @@ const draftIn = (page) =>
     problems.push("writer: the manuscript's contact isn't kept for the next one");
   await context.close();
   console.log("writer: a manuscript to submit: ok");
+}
+
+// A second tab reads only: its scraps can't be deleted there, Ctrl+End goes to the last line, and
+// an open workbench shows the story's scenes. Deleting the last scrap saved beside the story says
+// the file still holds it, and Save… empties it.
+{
+  const context = await browser.newContext({ viewport: { width: 1400, height: 860 } });
+  const writing = await context.newPage();
+  watch(writing, "writer scraps two tabs");
+  await writing.goto(`${base}/writer/`);
+  await writing.click('.welcome [data-command="new"]');
+  await writing.waitForTimeout(400);
+  await writing.click(".cm-content");
+  await writing.keyboard.press("Control+End");
+  await writing.keyboard.type(
+    `\n\n## Morning\n\n${"The tide came in. ".repeat(60)}\n\n## Evening\n\nAn owl.`,
+  );
+  await writing.keyboard.press("Shift+Home");
+  await writing.keyboard.press("Control+Shift+X");
+  await benchTab(writing, "scenes");
+  await writing.waitForTimeout(1500);
+  const reading = await context.newPage();
+  watch(reading, "writer scraps reading tab");
+  await reading.goto(`${base}/writer/`);
+  await reading.waitForSelector("#elsewhere:not([hidden])");
+  await reading.waitForTimeout(1500);
+  const scenesThere = await reading.textContent("#bench-sheet");
+  if (!scenesThere?.includes("Morning") || !scenesThere.includes("Evening"))
+    problems.push(`writer: a reading tab's Scenes tab shows ${scenesThere?.slice(0, 80)}`);
+  await reading.click(".cm-content");
+  await reading.keyboard.press("Control+End");
+  await reading.waitForTimeout(400);
+  const shown = await reading.evaluate(() => {
+    const box = document.querySelector(".cm-scroller").getBoundingClientRect();
+    return [...document.querySelectorAll(".cm-line")].filter((line) => {
+      const at = line.getBoundingClientRect();
+      return at.bottom > box.top && at.top < box.bottom && line.textContent.trim();
+    }).length;
+  });
+  if (shown === 0) problems.push("writer: Ctrl+End in a reading tab shows a blank page");
+  await reading.keyboard.type("XYZ");
+  if ((await reading.textContent(".cm-content"))?.includes("XYZ"))
+    problems.push("writer: a reading tab takes what is typed");
+  await reading.click('#bench .side-tab[data-bench="scraps"]');
+  if (!(await reading.locator('.scrap button:has-text("Delete")').isDisabled()))
+    problems.push("writer: a reading tab's scraps can be deleted");
+  await reading.close();
+  // Saved beside the story (where a browser can't keep files, downloaded), then all deleted.
+  await writing.evaluate(() => {
+    window.showSaveFilePicker = undefined;
+  });
+  await benchTab(writing, "scraps");
+  const download = writing.waitForEvent("download");
+  await writing.click('.scraps-files button:has-text("Save")');
+  await download;
+  await writing.hover(".scrap");
+  await writing.click('.scrap button:has-text("Delete")');
+  await writing.waitForTimeout(300);
+  const emptied = await writing.evaluate(() => ({
+    said: document.querySelector(".scraps-standing")?.textContent ?? "",
+    save: !document.querySelector(".scraps-files button:nth-child(2)")?.disabled,
+  }));
+  if (!emptied.said.includes("All deleted") || !emptied.save)
+    problems.push(`writer: the last scrap deleted after saving gives ${JSON.stringify(emptied)}`);
+  await context.close();
+  console.log("writer: a reading tab's scraps and scenes, and a scraps file emptied: ok");
 }
 
 // A phone: every menu inside the window, the look's button beside Save; a narrow workbench's tabs
@@ -3380,8 +3444,11 @@ const second = await tabs.newPage();
 watch(second, "writer tab 2");
 await second.goto(`${base}/writer/`);
 await second.waitForSelector("#elsewhere:not([hidden])");
+// Read only: the cursor moves and words can be copied, nothing typed is taken.
 if (
-  !(await second.evaluate(() => document.querySelector(".cm-content")?.contentEditable === "false"))
+  !(await second.evaluate(
+    () => document.querySelector(".cm-content")?.getAttribute("aria-readonly") === "true",
+  ))
 )
   problems.push("writer: a second tab can write over the first tab's story");
 await first.keyboard.type(" Followed.");

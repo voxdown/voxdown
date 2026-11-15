@@ -1,12 +1,13 @@
 /**
  * A long story read for everything the page shows of it, at once: its marks for the editor, its
- * scenes for the rail, its cast, its passages for the bar over them, what to put right, its
- * counts, and the script or the book for the side. Done in a worker (render-worker.ts); on the
+ * scenes for the rail and the Scenes tab, its cast, its passages for the bar over them, what to
+ * put right, its counts, and the script or the book for the side. Done in a worker (render-worker.ts); on the
  * page only if the worker fails.
  */
 import { type EditorMark, editorMarks, readStory } from "@voxdown/editor";
 import { renderBook, renderScript } from "@voxdown/render";
 import { characterColors } from "voxdown";
+import { type BoardChapter, boardOf } from "./board";
 import { type Counts, countsOf } from "./counts";
 import { type Problem, problems } from "./problems";
 import {
@@ -32,6 +33,8 @@ export type StoryRead = {
   problems: Problem[];
   /** The quotes that want a speaker, for Ctrl+Shift+K. */
   wanting: Wanting[];
+  /** Its chapters and scenes with their words, for the workbench's Scenes tab. */
+  board: BoardChapter[];
 } & Counts;
 
 export type RenderReply = { id: number; html: string } & StoryRead;
@@ -72,6 +75,7 @@ export function readFor({ id, text, tab }: RenderAsk): RenderReply {
     cast: castOf(story),
     passages: passagesOf(story),
     wanting: wantingQuotes(story),
+    board: boardOf(story),
     problems: problems(story, marks, linesOf(text)),
     ...countsOf(story),
   };

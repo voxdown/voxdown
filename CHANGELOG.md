@@ -8,6 +8,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 
 **voxdown**
 - `directingPassages`, `DIRECTING_INSTRUCTIONS`, `directingPrompt`, `directingSchema` and `directingRequest` say what to ask a model to direct a reading: the story a passage at a time, to be given back with marks added for how it is performed. `readDirected` reads the answer (text, a code block, or JSON) as suggestions, keeping a mark only where the paragraph still prints the same words, given to the same speakers, with the writer's own marks; `chosenChanges` gives the changes for the ones chosen, checked again together.
+- `readDirected` gives `missed`: the paragraphs in reach an answer didn't give back, each with its line and first words.
 - `readDirected` lists a paragraph given back with its words changed among those it refuses, rather than counting it as not given back; reads a group's paragraphs given back with their `:::` lines; and takes a pause given a line of its own as one before the line after it.
 
 **VoxDown Writer: what you work with on the left, what it becomes on the right.**
@@ -26,6 +27,13 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 - Commenting out words that hold a comment comments out the words around it: none is left to be read.
 - On a phone, every menu stays inside the window, and the look's button sits beside Save rather than on a row of its own.
 - The status line counts chapters and scenes each by their name; the directing dialog counts a reach's words as the status line does.
+- A tab that only reads keeps its cursor: Ctrl+End goes to the last line, words can be selected and copied, and nothing typed changes the story. Its scraps are only read there, and the Scraps tab follows the tab that writes them.
+- Deleting every scrap saved beside the story says the file still holds them, and Save… (or saving the story, once the file is known) empties it, so that it never brings them back.
+- A long book's Scenes tab is read with the rest of the book, away from the page, and kept up as it changes; an open workbench in a second tab or after a reload shows the story once it is read.
+- The scene board takes a comment under a heading as its own only when it starts with a state or `scene:`; a comment of the writer's there is left as it is. A story whose chapters hold no scenes has them counted and listed as chapters, on the board and in the Scenes tab.
+- Commenting out words that hold a comment makes one comment of them, the one inside kept with its end spaced (`-- >`); the notice says when a quote after them is now the narrator's.
+- Style hints leave headings out; a selection's word count leaves comments out. Directing with AI lists, by line, the paragraphs an answer didn't give back.
+- The look's button is named "Look: …"; the goal's bar doesn't move under reduced motion; a phone's status line keeps the words rather than the cursor's line; a comment's `<!--` and `-->` are never broken over two lines.
 
 **Comments for the writer** (spec 1.3, §10.1): `<!-- … -->` is the writer's own comment, never read aloud, printed or given to a performer, and hidden by Markdown viewers too.
 

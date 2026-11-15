@@ -61,15 +61,16 @@ export function markScrapsSaved(keeper: Keeper, story: string, scraps: readonly 
 
 /**
  * Where the story's scraps stand: none; in this browser only, never saved beside the story; or
- * changed since they last were; or saved as they are.
+ * changed since they last were (all of them deleted, too); or saved as they are.
  */
 export function scrapsStanding(
   keeper: Keeper,
   story: string,
   scraps: readonly Scrap[],
 ): "none" | "browser" | "changed" | "saved" {
-  if (!scraps.length) return "none";
   const saved = read<string>(keeper, SAVED)[story];
+  // None now: none at all, or the ones saved beside the story all deleted since.
+  if (!scraps.length) return saved && saved !== scrapsSignature([]) ? "changed" : "none";
   if (!saved) return "browser";
   return saved === scrapsSignature(scraps) ? "saved" : "changed";
 }

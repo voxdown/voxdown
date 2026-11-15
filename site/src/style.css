@@ -346,6 +346,8 @@ select {
 }
 .theme-switch::before {
   content: "\25D0";
+  /* A sign only: its button is named by its words. */
+  content: "\25D0" / "";
   margin-right: 0.4rem;
 }
 .theme-switch:hover {

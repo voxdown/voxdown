@@ -402,7 +402,7 @@ export function scrapPlaced(
   to: number,
   scrap: string,
   whole = false,
-): { text: string; cursor: number } {
+): { text: string; cursor: number; back: number; ahead: number } {
   const words = scrap.trim();
   const lineStart = source.lastIndexOf("\n", from - 1) + 1;
   const toEnd = source.indexOf("\n", to);
@@ -413,25 +413,91 @@ export function scrapPlaced(
   const atEnd = !after.trim();
   const nextEnd = source.indexOf("\n", lineEnd + 1);
   const next = toEnd < 0 ? "" : source.slice(lineEnd + 1, nextEnd < 0 ? source.length : nextEnd);
+  const previous =
+    lineStart === 0 ? "" : source.slice(source.lastIndexOf("\n", lineStart - 2) + 1, lineStart - 1);
+  const put = (text: string, cursor: number, back = 0, ahead = 0) => ({
+    text,
+    cursor,
+    back,
+    ahead,
+  });
   if (atStart && atEnd) {
     // On a blank line: a blank line before it (never two), and before the words after it.
     const lead =
       lineStart === 0 || source.slice(Math.max(0, lineStart - 2), lineStart) === "\n\n" ? "" : "\n";
     const tail = next.trim() ? "\n" : "";
-    return { text: `${lead}${words}${tail}`, cursor: lead.length + words.length };
+    return put(`${lead}${words}${tail}`, lead.length + words.length);
   }
   if (words.includes("\n\n") || whole) {
-    // Before the paragraph it meets, after it, or splitting it: always a paragraph of its own.
-    if (atStart) return { text: `${words}\n\n`, cursor: words.length };
-    if (atEnd) {
-      const tail = next.trim() ? "\n\n" : "";
-      return { text: `\n\n${words}${tail}`, cursor: 2 + words.length };
-    }
-    return { text: `\n\n${words}\n\n`, cursor: 2 + words.length };
+    // A paragraph of its own: before the paragraph it meets, after it, or splitting it, the
+    // spaces where it splits taken away.
+    if (atStart && !previous.trim()) return put(`${words}\n\n`, words.length);
+    if (atEnd && !next.trim()) return put(`\n\n${words}`, 2 + words.length);
+    if (atStart) return put(`\n${words}\n\n`, 1 + words.length);
+    if (atEnd)
+      return put(`\n\n${words}\n`, 2 + words.length, before.length - before.trimEnd().length);
+    return put(
+      `\n\n${words}\n\n`,
+      2 + words.length,
+      before.length - before.trimEnd().length,
+      after.length - after.trimStart().length,
+    );
   }
   const space = (char: string | undefined) =>
     char !== undefined && /[\p{L}\p{N}.,;:!?…”’"')\]*]/u.test(char);
   const lead = space(before.at(-1)) ? " " : "";
   const tail = after && /^[\p{L}\p{N}“"‘(@*\[{]/u.test(after) ? " " : "";
-  return { text: `${lead}${words}${tail}`, cursor: lead.length + words.length };
+  return put(`${lead}${words}${tail}`, lead.length + words.length);
+}
+
+/** A selection ending at a line's start (a triple-click, Shift+↓): ending where that line before does. */
+function endOf(source: string, from: number, to: number): number {
+  return to > from && source[to - 1] === "\n" ? to - 1 : to;
+}
+
+/** Whether `from`–`to` in `source` is whole paragraphs: from a paragraph's start to one's end. */
+export function wholeParagraphs(source: string, from: number, selectedTo: number): boolean {
+  const to = endOf(source, from, selectedTo);
+  const lineStart = source.lastIndexOf("\n", from - 1) + 1;
+  const toEnd = source.indexOf("\n", to);
+  const lineEnd = toEnd < 0 ? source.length : toEnd;
+  if (source.slice(lineStart, from).trim() || source.slice(to, lineEnd).trim()) return false;
+  if (!source.slice(from, to).trim()) return false;
+  const before =
+    lineStart === 0 ? "" : source.slice(source.lastIndexOf("\n", lineStart - 2) + 1, lineStart - 1);
+  const nextEnd = source.indexOf("\n", lineEnd + 1);
+  const after = toEnd < 0 ? "" : source.slice(lineEnd + 1, nextEnd < 0 ? source.length : nextEnd);
+  return !before.trim() && !after.trim();
+}
+
+/**
+ * What cutting `from`–`to` in `source` takes out: whole paragraphs with a blank line beside them,
+ * so those around meet as paragraphs do; words within a line with the space beside them, so a
+ * sentence cut from between two others leaves one space, and one cut from a line's end none.
+ */
+export function cutRange(
+  source: string,
+  from: number,
+  selectedTo: number,
+): { from: number; to: number } {
+  if (wholeParagraphs(source, from, selectedTo)) {
+    const to = endOf(source, from, selectedTo);
+    const start = source.lastIndexOf("\n", from - 1) + 1;
+    const toEnd = source.indexOf("\n", to);
+    const end = toEnd < 0 ? source.length : toEnd;
+    if (source.slice(end, end + 2) === "\n\n") return { from: start, to: end + 2 };
+    if (start >= 2 && source.slice(start - 2, start) === "\n\n")
+      return { from: start - 2, to: end };
+    return { from: start, to: end };
+  }
+  const to = selectedTo;
+  const before = source.slice(Math.max(0, from - 1), from);
+  const after = source.slice(to, to + 1);
+  if (/[ \t]/.test(after) && (before === "" || /[ \t\n]/.test(before))) return { from, to: to + 1 };
+  if (after === "" || after === "\n") {
+    const lineStart = source.lastIndexOf("\n", from - 1) + 1;
+    const spaces = /[ \t]*$/.exec(source.slice(lineStart, from))?.[0].length ?? 0;
+    return { from: from - spaces, to };
+  }
+  return { from, to };
 }

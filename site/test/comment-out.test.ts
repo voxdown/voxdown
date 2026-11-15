@@ -42,6 +42,13 @@ describe("commenting words out", () => {
     );
   });
 
+  it("takes the name when the quote after is another speaker's", () => {
+    const source = "@Ann “Hi.” @Bob “Hello.”";
+    expect(apply(source, source.indexOf("“Hi"), source.indexOf("Hi.”") + 4)).toBe(
+      "<!-- @Ann “Hi.” --> @Bob “Hello.”",
+    );
+  });
+
   it("spaces a stray --> in the words so it can't end their comment", () => {
     expect(apply("A --> B", 0, 7)).toBe("<!-- A -- > B -->");
   });

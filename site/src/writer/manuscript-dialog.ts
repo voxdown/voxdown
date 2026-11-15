@@ -76,12 +76,38 @@ export function openManuscript(host: ManuscriptHost): void {
   contact.focus();
 }
 
+/**
+ * The level a manuscript's chapters are: the story's chapter level, unless its headings there are
+ * all parts ("Part One", "Book Two"), with headings under them: then those are the chapters, each
+ * titled on a page of its own, the parts over them.
+ */
+export function manuscriptChapterLevel(story: Story): number {
+  const level = chapterLevelIn(story);
+  const headings = story.blocks.flatMap((block) =>
+    block.kind === "heading"
+      ? [
+          {
+            level: block.level,
+            name: story.source
+              .slice(block.range.from, block.range.to)
+              .replace(/^[ \t]*#+[ \t]*/, "")
+              .replace(/[ \t]*\{[^}]*\}[ \t]*$/, "")
+              .trim(),
+          },
+        ]
+      : [],
+  );
+  const at = headings.filter((each) => each.level === level && each.name !== story.meta.title);
+  const parts = at.length > 0 && at.every((each) => /^(?:part|book|volume)\b/i.test(each.name));
+  return parts && headings.some((each) => each.level === level + 1) ? level + 1 : level;
+}
+
 async function exportManuscript(
   host: ManuscriptHost,
   who: { contact: string; byline: string; surname: string },
 ): Promise<void> {
   const story = host.story();
-  const level = chapterLevelIn(story);
+  const level = manuscriptChapterLevel(story);
   // A chapter's or a scene's heading the book never prints (hidden, or for the audio) still
   // starts one: a break, where the manuscript has one (a short story's sections are set apart
   // that way, never each on a page of its own).

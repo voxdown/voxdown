@@ -92,7 +92,7 @@ export class SaveFlow {
     return this.write(host.file.handle);
   }
 
-  async saveAs(keepBoth = false): Promise<boolean> {
+  async saveAs(keepBoth = false, gone = false): Promise<boolean> {
     const { host } = this;
     const { file } = host;
     host.commitPending();
@@ -118,8 +118,12 @@ export class SaveFlow {
       );
       return false;
     }
-    // The story's own file, chosen again: a Save, with its check for changes made elsewhere.
-    if (itself && file.handle) return this.write(file.handle);
+    // The story's own file, chosen again: a Save, with its check for changes made elsewhere;
+    // unless it was gone, when the picker has asked all there is to ask.
+    if (itself && file.handle) {
+      if (gone) file.modified = undefined;
+      return this.write(file.handle);
+    }
     // The new file is the story's from here: its name and handle go with what is kept, and back
     // to the old ones if it can't be written.
     const before = { handle: file.handle, name: file.name, modified: file.modified };
@@ -194,7 +198,7 @@ export class SaveFlow {
               { label: "Save over it", value: "mine" },
             ],
       );
-      if (answer === "save-as") return this.saveAs();
+      if (answer === "save-as") return this.saveAs(false, true);
       if (answer !== "mine") return false;
     } else if (check.kind === "changed") {
       const disk = check.disk;

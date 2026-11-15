@@ -1,9 +1,18 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
+import { parse } from "voxdown";
 import type { Paragraph } from "../src/writer/convert";
 import { headerWord, manuscriptDocx, wordsAbout } from "../src/writer/manuscript";
+import { manuscriptChapterLevel } from "../src/writer/manuscript-dialog";
 import { unzip } from "../src/writer/zip";
 
 const decoder = new TextDecoder();
+
+/** The paragraphs of a Word document that start a page, by their words. */
+const pageStarts = (document: string) =>
+  [...document.matchAll(/<w:p>(?:(?!<\/w:p>)[\s\S])*<\/w:p>/g)]
+    .filter((found) => found[0].includes("<w:pageBreakBefore/>"))
+    .map((found) => [...found[0].matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((t) => t[1]).join(""));
 const run = (text: string, italic = false) => ({ text, italic, bold: false });
 
 describe("a manuscript to submit", () => {
@@ -47,7 +56,8 @@ describe("a manuscript to submit", () => {
     expect(document).toContain('<w:i/></w:rPr><w:t xml:space="preserve">Very');
     expect(document).toContain(">#</w:t>");
     expect(document).toContain("The end &lt;of&gt; it.");
-    expect(document.match(/<w:pageBreakBefore\/>/g)).toHaveLength(1);
+    // A book of chapters: the title page its own, each chapter starting a page.
+    expect(pageStarts(document)).toEqual(["One", "Two"]);
     expect(document).toContain(">END</w:t>");
     expect(header).toContain("Teller / OWL / ");
     expect(header).toContain(" PAGE ");
@@ -77,7 +87,7 @@ describe("a manuscript to submit", () => {
       }),
     );
     const document = decoder.decode(files.get("word/document.xml"));
-    expect(document.match(/<w:pageBreakBefore\/>/g)).toHaveLength(1);
+    expect(pageStarts(document)).toEqual(["Chapter One", "Chapter Two"]);
     // A # between Arrival and Departure, and before Later: none after a chapter's heading.
     expect(document.match(/>#<\/w:t>/g)).toHaveLength(2);
     expect(document).not.toContain("Arrival");
@@ -106,7 +116,31 @@ describe("a manuscript to submit", () => {
     const document = decoder.decode(files.get("word/document.xml"));
     expect(document).toContain("Part One: Arrival");
     expect(document.match(/>Review Novel</g)).toHaveLength(1);
-    // The part's page, then each chapter on a page of its own.
-    expect(document.match(/<w:pageBreakBefore\/>/g)).toHaveLength(2);
+    // The title page its own; the part's page, then each chapter on a page of its own.
+    expect(pageStarts(document)).toEqual(["Part One: Arrival", "Chapter 1", "Chapter 2"]);
+  });
+
+  it("takes a novel's parts as parts, the headings under them as its chapters", () => {
+    const story = parse(
+      "---\ntitle: Night\n---\n\n# Part One: Dusk\n\n## The Owl\n\nHoot.\n\n## The Mouse\n\nSqueak.\n\n# Part Two: Dawn\n\n## Morning\n\nLight.\n",
+    );
+    expect(manuscriptChapterLevel(story)).toBe(2);
+    // Chapters with scenes under them: the chapters stay chapters.
+    expect(
+      manuscriptChapterLevel(parse("# One\n\n## A\n\nX.\n\n## B\n\nY.\n\n# Two\n\n## C\n\nZ.\n")),
+    ).toBe(1);
+  });
+
+  it("starts a story with no chapters under its byline, with no page of its own", async () => {
+    const files = await unzip(
+      manuscriptDocx([{ kind: "text", runs: [run("Once.")] }], {
+        title: "Short",
+        byline: "A. Teller",
+        contact: "Ann Teller",
+        surname: "Teller",
+        words: 1,
+      }),
+    );
+    expect(pageStarts(decoder.decode(files.get("word/document.xml")))).toEqual([]);
   });
 });

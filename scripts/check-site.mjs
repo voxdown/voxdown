@@ -1009,6 +1009,38 @@ const draftIn = (page) =>
   console.log("writer: comments put back, speakers said, the details left alone, F6: ok");
 }
 
+// A whole paragraph cut to Scraps and dragged back before another: its own paragraph again.
+{
+  const context = await browser.newContext({ viewport: { width: 1400, height: 860 } });
+  const dragger = await context.newPage();
+  watch(dragger, "writer scrap dragged back");
+  await dragger.goto(`${base}/writer/`);
+  await dragger.click('.welcome [data-command="new"]');
+  await dragger.waitForTimeout(400);
+  await dragger.click(".cm-content");
+  await dragger.keyboard.press("Control+End");
+  await dragger.keyboard.type("\n\nIt was cold.\n\nThe night went on.");
+  await dragger.keyboard.press("ArrowUp");
+  await dragger.keyboard.press("ArrowUp");
+  await dragger.keyboard.press("End");
+  await dragger.keyboard.press("Shift+Home");
+  await dragger.keyboard.press("Control+Shift+X");
+  await dragger.waitForTimeout(400);
+  await dragger
+    .locator(".scrap-text")
+    .first()
+    .dragTo(dragger.locator(".cm-line", { hasText: "The night went on." }), {
+      targetPosition: { x: 2, y: 8 },
+    });
+  await dragger.waitForTimeout(1200);
+  if (!(await draftIn(dragger)).endsWith("It was cold.\n\nThe night went on."))
+    problems.push(
+      `writer: a whole paragraph dragged back from Scraps gives ${JSON.stringify((await draftIn(dragger)).slice(-50))}`,
+    );
+  await context.close();
+  console.log("writer: a scrap dragged back into the story, in its place: ok");
+}
+
 // A phone: every menu inside the window, the look's button beside Save; a narrow workbench's tabs
 // on one line.
 {

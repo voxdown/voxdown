@@ -155,6 +155,7 @@ import { SaveFlow } from "./save-flow";
 import { sameText } from "./saving";
 import {
   type Scrap,
+  cutRange,
   deletedScraps,
   findDeleted,
   forgetDeleted,
@@ -172,6 +173,7 @@ import {
   scrapsOf,
   scrapsSignature,
   scrapsStanding,
+  wholeParagraphs,
 } from "./scraps";
 import { ScrapsFiles } from "./scraps-files";
 import { type ScrapsHost, scrapsPanel } from "./scraps-panel";
@@ -1563,9 +1565,10 @@ function dropScrap(event: DragEvent, editor: EditorView): boolean {
   if (!scrap || at === null) return false;
   event.preventDefault();
   const insert = scrapPlaced(editor.state.doc.toString(), at, at, scrap.text, scrap.whole);
+  const start = at - insert.back;
   editor.dispatch({
-    changes: { from: at, insert: insert.text },
-    selection: EditorSelection.cursor(at + insert.cursor),
+    changes: { from: start, to: at + insert.ahead, insert: insert.text },
+    selection: EditorSelection.cursor(start + insert.cursor),
     scrollIntoView: true,
     userEvent: "input.drop",
   });
@@ -1581,17 +1584,6 @@ function dropScrap(event: DragEvent, editor: EditorView): boolean {
   if (prefs.bench && prefs.benchTab === "scraps") showBench();
   editor.focus();
   return true;
-}
-
-/** Whether `from`–`to` is whole paragraphs: from a paragraph's start to one's end. */
-function wholeParagraphs(from: number, to: number): boolean {
-  const doc = view.state.doc;
-  const first = doc.lineAt(from);
-  const last = doc.lineAt(to);
-  if (doc.sliceString(first.from, from).trim() || doc.sliceString(to, last.to).trim()) return false;
-  const blankOrEdge = (number: number) =>
-    number < 1 || number > doc.lines || !doc.line(number).text.trim();
-  return blankOrEdge(first.number - 1) && blankOrEdge(last.number + 1);
 }
 
 /** Words set aside: a scrap, with the chapter they came from. */
@@ -1616,32 +1608,6 @@ function setAside(text: string, whole = false): Scrap | undefined {
   return scrap;
 }
 
-/**
- * Words taken out of a line, and the space left beside them: a sentence cut from between two
- * others leaves one space, not two, and one cut from a line's end leaves none behind it.
- */
-function cutRange(from: number, to: number): { from: number; to: number } {
-  const doc = view.state.doc;
-  // Whole paragraphs: a blank line goes with them, so the ones around meet as paragraphs do.
-  if (wholeParagraphs(from, to)) {
-    const start = doc.lineAt(from).from;
-    const end = doc.lineAt(to).to;
-    if (doc.sliceString(end, end + 2) === "\n\n") return { from: start, to: end + 2 };
-    if (start >= 2 && doc.sliceString(start - 2, start) === "\n\n")
-      return { from: start - 2, to: end };
-    return { from: start, to: end };
-  }
-  const before = doc.sliceString(Math.max(0, from - 1), from);
-  const after = doc.sliceString(to, Math.min(doc.length, to + 1));
-  if (/[ \t]/.test(after) && (before === "" || /[ \t\n]/.test(before))) return { from, to: to + 1 };
-  if (after === "" || after === "\n") {
-    const line = doc.lineAt(from);
-    const spaces = /[ \t]*$/.exec(doc.sliceString(line.from, from))?.[0].length ?? 0;
-    return { from: from - spaces, to };
-  }
-  return { from, to };
-}
-
 /** Edit › Cut to Scraps: the words selected set aside, and taken out of the story. */
 function cutToScraps(): boolean {
   if (lockedOut) return true;
@@ -1652,8 +1618,9 @@ function cutToScraps(): boolean {
     return true;
   }
   // Kept first: words that can't be kept stay in the story.
-  if (!setAside(text, wholeParagraphs(from, to))) return true;
-  view.dispatch({ changes: cutRange(from, to), userEvent: "delete.cut" });
+  const source = view.state.doc.toString();
+  if (!setAside(text, wholeParagraphs(source, from, to))) return true;
+  view.dispatch({ changes: cutRange(source, from, to), userEvent: "delete.cut" });
   selectBench("scraps");
   notice(`Set aside in Scraps. ${keys("Mod+Z")} puts the words back; the scrap stays.`);
   view.focus();
@@ -1707,7 +1674,10 @@ const scrapsHost: ScrapsHost = {
     // Moved here from the story: taken out of it, as the selection it was dragged from.
     const { from, to } = view.state.selection.main;
     if (!copy && !lockedOut && view.state.sliceDoc(from, to) === text)
-      view.dispatch({ changes: cutRange(from, to), userEvent: "delete.cut" });
+      view.dispatch({
+        changes: cutRange(view.state.doc.toString(), from, to),
+        userEvent: "delete.cut",
+      });
     notice(
       copy
         ? "Copied to Scraps."
@@ -1719,9 +1689,10 @@ const scrapsHost: ScrapsHost = {
     if (lockedOut) return;
     const { from, to } = view.state.selection.main;
     const insert = scrapPlaced(view.state.doc.toString(), from, to, scrap.text, scrap.whole);
+    const start = from - insert.back;
     view.dispatch({
-      changes: { from, to, insert: insert.text },
-      selection: EditorSelection.cursor(from + insert.cursor),
+      changes: { from: start, to: to + insert.ahead, insert: insert.text },
+      selection: EditorSelection.cursor(start + insert.cursor),
       scrollIntoView: true,
       userEvent: "input.paste",
     });

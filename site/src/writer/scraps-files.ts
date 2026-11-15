@@ -39,6 +39,9 @@ export type ScrapsFilesHost = {
 /** A file the browser can write, as the File System Access API gives one. */
 type Handle = FileSystemFileHandle;
 
+/** A file's words as compared: its line endings and the spaces at its end aside (an editor's own). */
+const plain = (text: string) => text.replace(/\r\n?/g, "\n").trimEnd();
+
 /** What the Writer last wrote in each story's scraps file, kept through a reload. */
 const WRITTEN = "vxd-writer-scraps-written";
 
@@ -135,7 +138,11 @@ export class ScrapsFiles {
         this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
         return;
       }
-    } else if (onDisk.trim() && onDisk !== baseline && onDisk !== about) {
+    } else if (
+      onDisk.trim() &&
+      plain(onDisk) !== plain(baseline ?? "") &&
+      plain(onDisk) !== plain(about)
+    ) {
       // (Said with the save's own words, once written, so neither notice hides the other.)
       const gone = new Set(deletedScraps(this.keeper, id).map((scrap) => scrap.id));
       const there = readScrapsFile(onDisk).filter((scrap) => !gone.has(scrap.id));

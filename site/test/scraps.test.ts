@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type Keeper,
   type Scrap,
+  cutRange,
   deletedScraps,
   findDeleted,
   forgetDeleted,
@@ -18,6 +19,7 @@ import {
   scrapsOf,
   scrapsStanding,
   searchScraps,
+  wholeParagraphs,
 } from "../src/writer/scraps";
 
 const at = Date.UTC(2026, 10, 14, 13, 2);
@@ -174,7 +176,7 @@ describe("scraps kept safe", () => {
   it("go back in spaced as words meet, or as paragraphs of their own", () => {
     const put = (source: string, at: number, scrap: string, whole = false) => {
       const placed = scrapPlaced(source, at, at, scrap, whole);
-      return source.slice(0, at) + placed.text + source.slice(at);
+      return source.slice(0, at - placed.back) + placed.text + source.slice(at + placed.ahead);
     };
     const story = "The night went on. The moon was up.\n\nMorning came slowly.";
     // Mid-line, before a sentence: a space each side as they meet.
@@ -191,9 +193,32 @@ describe("scraps kept safe", () => {
     );
     expect(put(story, story.length, "@Mouse “Awake?”", true)).toBe(`${story}\n\n@Mouse “Awake?”`);
     // Several paragraphs, mid-line: splitting it, a paragraph of their own.
-    expect(put("One two.", 4, "A.\n\nB.")).toBe("One \n\nA.\n\nB.\n\ntwo.");
+    expect(put("One two.", 4, "A.\n\nB.")).toBe("One\n\nA.\n\nB.\n\ntwo.");
+    // A whole paragraph at a paragraph's second line: splitting it, never joining it.
+    expect(put("First line.\nSecond line.", 12, "Mid.", true)).toBe(
+      "First line.\n\nMid.\n\nSecond line.",
+    );
     // On a blank line between paragraphs.
     const blank = "One.\n\n\nTwo.";
     expect(put(blank, 5, "Mid.")).toBe("One.\n\nMid.\nTwo.".replace("Mid.\nTwo", "Mid.\n\nTwo"));
+  });
+
+  it("are cut whole as paragraphs, however the paragraph was selected", () => {
+    const story = "The moon was up.\n\n@Mouse “Awake?” asked the mouse.\n\nThe night went on.";
+    const from = story.indexOf("@Mouse");
+    const end = story.indexOf("mouse.") + 6;
+    // Home, Shift+End; or a triple-click, Shift+↓: the selection ending at the next line's start.
+    for (const to of [end, end + 1]) {
+      expect(wholeParagraphs(story, from, to)).toBe(true);
+      const cut = cutRange(story, from, to);
+      expect(story.slice(0, cut.from) + story.slice(cut.to)).toBe(
+        "The moon was up.\n\nThe night went on.",
+      );
+    }
+    // Words within a line: the space beside them goes, never both.
+    const line = "One. Two. Three.";
+    const two = cutRange(line, 5, 9);
+    expect(line.slice(0, two.from) + line.slice(two.to)).toBe("One. Three.");
+    expect(wholeParagraphs(line, 5, 9)).toBe(false);
   });
 });

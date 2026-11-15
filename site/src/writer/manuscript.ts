@@ -4,7 +4,8 @@
  * one-inch margins and each paragraph's first line set in half an inch. The first page has the
  * writer's name and contact at the top left, the word count at the top right, and the title and
  * byline halfway down; every page after has the surname, a word of the title and the page number
- * at the top right. Chapters start on a new page, a third of the way down; a scene, after a
+ * at the top right. A book of chapters has that title page to itself, each part and chapter
+ * starting a page of its own, a third of the way down; a scene, after a
  * break or under a heading of its own, starts after a centred `#`; italics stay italics; the
  * story ends with `END`.
  */
@@ -79,13 +80,23 @@ export function manuscriptDocx(
     details.chapterLevel ??
     chapterLevelOf(paragraphs.flatMap((each) => (each.kind === "heading" ? [each.level] : []))) ??
     1;
-  let chapters = 0;
+  const words = (paragraph: { runs: readonly Run[] }) =>
+    paragraph.runs
+      .map((run) => ("text" in run ? run.text : " "))
+      .join("")
+      .trim();
+  const isTitle = (paragraph: { runs: readonly Run[] }) =>
+    words(paragraph).toLowerCase() === details.title.trim().toLowerCase();
+  // A book of chapters (or parts): its title page a page of its own, and every part and chapter
+  // starting a page, a third of the way down. A story without them starts under its byline.
+  const chaptered = paragraphs.some(
+    (paragraph) => paragraph.kind === "heading" && paragraph.level <= level && !isTitle(paragraph),
+  );
+  const newPage = chaptered ? "<w:pageBreakBefore/>" : "";
   // A scene break between words of the same chapter: never two together, never at a chapter's
   // start or end. It waits for the words after it.
   let text = false;
   let pending = false;
-  /** A part's page just begun: the chapter after it starts a page of its own. */
-  let parted = false;
   const sceneBreak = () => {
     pending = text;
     return "";
@@ -97,28 +108,21 @@ export function manuscriptDocx(
         // A heading over the chapters: the book's own title is on the title page already; a
         // part's ("Part One") is a page of its own, a third of the way down, centred.
         if (paragraph.level < level) {
-          const words = paragraph.runs
-            .map((run) => ("text" in run ? run.text : " "))
-            .join("")
-            .trim();
-          if (words.toLowerCase() === details.title.trim().toLowerCase()) return "";
+          if (isTitle(paragraph)) return "";
           text = false;
           pending = false;
-          const newPage = chapters++ > 0 ? "<w:pageBreakBefore/>" : "";
-          parted = true;
           const runs = paragraph.runs.map(runXml).join("");
           return `<w:p><w:pPr>${newPage}<w:spacing w:before="2880"/><w:jc w:val="center"/><w:ind w:firstLine="0"/></w:pPr>${runs}</w:p>`;
         }
         // A scene's heading: a break, as the format has them, not a page of its own.
         if (paragraph.level > level) return sceneBreak();
-        // A chapter on a new page, a third of the way down; the first follows the title, or its
-        // part's page.
+        // A chapter on a page of its own, a third of the way down (the book's title, alone at the
+        // top, the title page has).
+        if (isTitle(paragraph)) return "";
         text = false;
         pending = false;
-        const newPage = chapters++ > 0 || parted ? "<w:pageBreakBefore/>" : "";
-        parted = false;
         const runs = paragraph.runs.map(runXml).join("");
-        return `<w:p><w:pPr>${newPage}<w:spacing w:before="${newPage ? 2880 : 0}"/><w:jc w:val="center"/><w:ind w:firstLine="0"/></w:pPr>${runs}</w:p>${plain("")}`;
+        return `<w:p><w:pPr>${newPage}<w:spacing w:before="2880"/><w:jc w:val="center"/><w:ind w:firstLine="0"/></w:pPr>${runs}</w:p>${plain("")}`;
       }
       const before = pending ? plain("#", '<w:jc w:val="center"/><w:ind w:firstLine="0"/>') : "";
       text = true;

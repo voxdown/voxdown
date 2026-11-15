@@ -5106,6 +5106,53 @@ function applyPage(): void {
   view.requestMeasure();
 }
 
+// The edge between the workbench and the manuscript, as the side's: dragged, or the arrow keys
+// on it, or a double click for its width as it was.
+{
+  const edge = $("#bench-resize");
+  const set = (percent: number) => {
+    prefs.benchWidth = Math.round(Math.min(40, Math.max(14, percent)));
+    keepPrefs();
+    applyPage();
+  };
+  edge.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    edge.setPointerCapture(event.pointerId);
+    edge.toggleAttribute("data-dragging", true);
+    const work = $("#workspace").getBoundingClientRect();
+    const rail = $("#scene-rail").getBoundingClientRect();
+    const move = (moved: PointerEvent) => set(((moved.clientX - rail.right) / work.width) * 100);
+    const done = () => {
+      edge.removeAttribute("data-dragging");
+      edge.removeEventListener("pointermove", move);
+    };
+    edge.addEventListener("pointermove", move);
+    edge.addEventListener("pointerup", done, { once: true });
+    edge.addEventListener("pointercancel", done, { once: true });
+  });
+  edge.addEventListener("keydown", (event) => {
+    const now = prefs.benchWidth || 22;
+    const to =
+      event.key === "ArrowRight"
+        ? now + 2
+        : event.key === "ArrowLeft"
+          ? now - 2
+          : event.key === "Home"
+            ? 14
+            : event.key === "End"
+              ? 40
+              : null;
+    if (to === null) return;
+    event.preventDefault();
+    set(to);
+  });
+  edge.addEventListener("dblclick", () => {
+    prefs.benchWidth = 0;
+    keepPrefs();
+    applyPage();
+  });
+}
+
 function showPageSettings(): void {
   const dialog = $<HTMLDialogElement>("#page-settings");
   const size = $<HTMLInputElement>("#page-size");
@@ -5155,52 +5202,6 @@ function showPageSettings(): void {
     prefs.measure = Number(measure.value);
     prefs.leading = Number(leading.value);
     keepPrefs();
-    // The edge between the workbench and the manuscript, as the side's.
-    {
-      const edge = $("#bench-resize");
-      const set = (percent: number) => {
-        prefs.benchWidth = Math.round(Math.min(40, Math.max(14, percent)));
-        keepPrefs();
-        applyPage();
-      };
-      edge.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        edge.setPointerCapture(event.pointerId);
-        edge.toggleAttribute("data-dragging", true);
-        const work = $("#workspace").getBoundingClientRect();
-        const rail = $("#scene-rail").getBoundingClientRect();
-        const move = (moved: PointerEvent) =>
-          set(((moved.clientX - rail.right) / work.width) * 100);
-        const done = () => {
-          edge.removeAttribute("data-dragging");
-          edge.removeEventListener("pointermove", move);
-        };
-        edge.addEventListener("pointermove", move);
-        edge.addEventListener("pointerup", done, { once: true });
-        edge.addEventListener("pointercancel", done, { once: true });
-      });
-      edge.addEventListener("keydown", (event) => {
-        const now = prefs.benchWidth || 22;
-        const to =
-          event.key === "ArrowRight"
-            ? now + 2
-            : event.key === "ArrowLeft"
-              ? now - 2
-              : event.key === "Home"
-                ? 14
-                : event.key === "End"
-                  ? 40
-                  : null;
-        if (to === null) return;
-        event.preventDefault();
-        set(to);
-      });
-      edge.addEventListener("dblclick", () => {
-        prefs.benchWidth = 0;
-        keepPrefs();
-        applyPage();
-      });
-    }
     applyPage();
     show();
   };

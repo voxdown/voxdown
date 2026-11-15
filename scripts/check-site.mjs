@@ -3643,7 +3643,13 @@ if (await maker.isVisible("#toolbar"))
 await maker.click("#view-menu-button");
 await maker.click('#view-menu [data-view="toolbar"]');
 if (!(await maker.isVisible("#toolbar"))) problems.push("writer: View › Toolbar doesn't show it");
-// Ctrl+F from the side opens the story's own Find, not the browser's.
+// Ctrl+F from the side opens the story's own Find, not the browser's. (The side shown first: on a
+// slower machine the steps before can leave it closed.)
+if (!(await maker.isVisible("#side"))) {
+  console.log("note: the side was closed before Ctrl+F from the side; shown again");
+  await maker.keyboard.press("Control+Backslash");
+  await maker.waitForSelector("#side", { state: "visible" });
+}
 await maker.click('.side-tab[data-tab="book"]');
 await maker.keyboard.press("Control+f");
 if (!(await maker.waitForSelector(".cm-search", { timeout: 2000 }).catch(() => null)))

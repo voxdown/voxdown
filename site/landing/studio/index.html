@@ -211,9 +211,11 @@
             <span class="eng eng-free"><b>Kokoro</b><i>free, on your computer</i></span>
           </div>
           <figure class="csv"><figcaption>the-dragon-who-would-not-roar.csv</figcaption><pre id="route-csv" tabindex="0" aria-label="The scene’s lines as CSV"></pre></figure>
-          <pre class="term"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
-          <p class="route-note">You pay the voice service directly, at its prices. VoxDown never sees your story or your keys.</p>
         </article>
+      </div>
+      <div class="route-foot">
+        <pre class="term"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
+        <p class="route-note">The Writer reaches the voices through this small connector on your computer. You pay the voice service directly, at its prices; VoxDown never sees your story or your keys.</p>
       </div>
       <p class="also-out">Also from the same file: a Word document with your comments as Word comments, an EPUB, a standard manuscript to submit, and a production file for audio tools.</p>
     </div>
@@ -248,6 +250,8 @@
         </button>
       </figure>
 
+      <details class="fold" data-fold open>
+      <summary>Two more screens: the scene board, and bring your own AI</summary>
       <ul class="proof-grid">
         <li class="proof-card">
           <button type="button" class="zoom" data-zoom="../../landing/studio/app/board.webp" data-zoom-w="1192" data-zoom-h="1232" aria-label="View the scene board, full size">
@@ -270,7 +274,10 @@
           <p>A first pass of speakers or directions from the AI you already use, every suggestion yours to keep or drop. Nothing is sent until you press the button.</p>
         </li>
       </ul>
+      </details>
 
+      <details class="fold" data-fold open>
+      <summary>And it quietly takes care of the rest</summary>
       <div class="index">
         <h3 class="index-title">And it quietly takes care of the rest</h3>
         <ul class="outcomes">
@@ -302,6 +309,7 @@
           <p class="index-more"><a href="../../cheatsheet.html">Every mark on one page <span aria-hidden="true">→</span></a></p>
         </details>
       </div>
+      </details>
     </div>
   </section>
 
@@ -318,6 +326,8 @@
       <div class="devs-code">
         <pre class="term"><code><span class="prompt">$</span> npm install voxdown
 <span class="prompt">$</span> npx @voxdown/cli check story.vxd</code></pre>
+        <details class="fold" data-fold open>
+        <summary>The packages</summary>
         <ul class="pkgs">
           <li><code>voxdown</code><span>Parse a story: its cast, lines and marks.</span></li>
           <li><code>@voxdown/render</code><span>The book and the script, as HTML.</span></li>
@@ -325,6 +335,7 @@
           <li><code>@voxdown/cli</code><span><code>vxd</code> check · convert · connect · tag · produce · mcp</span></li>
           <li><code>VS Code</code><span>Colours, warnings and a preview.</span></li>
         </ul>
+        </details>
       </div>
     </div>
   </section>
@@ -338,7 +349,8 @@
           <svg class="lock" viewBox="0 0 48 48" aria-hidden="true"><path d="M15 21v-6a9 9 0 0 1 18 0v6"/><rect x="9" y="21" width="30" height="21" rx="5"/><path d="M24 36.5s-5.5-3.3-5.5-6.9a3 3 0 0 1 5.5-1.6 3 3 0 0 1 5.5 1.6c0 3.6-5.5 6.9-5.5 6.9z"/></svg>
           <p class="fact-kicker">Private by design</p>
           <h3>Your story, your computer.</h3>
-          <p>Nothing is sent to us; there’s no VoxDown server to send it to. Files open from your computer and save back there: in place in Chrome and Edge, as a downloaded copy elsewhere. No account, no analytics, no ads.</p>
+          <p>Nothing is sent to us; there’s no VoxDown server to send it to. Files open from your computer and save back there: in place in Chrome and Edge, as a downloaded copy elsewhere.</p>
+          <ul class="vows"><li>No account</li><li>No analytics</li><li>No ads</li><li>AI and voices only if you choose them</li></ul>
         </li>
         <li><p class="big">$0</p><p>No subscription and no sign-up. Audiobooks can be free too, with Kokoro on your own computer.</p></li>
         <li><p class="big">MIT</p><p>The Writer and every tool are open source, and the spec is CC BY 4.0. Once loaded, the Writer works offline.</p></li>

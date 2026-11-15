@@ -292,6 +292,7 @@ const hero = {
   current: -1,
   row: -1,
   at: 0,
+  second: -1,
 };
 const heroScene = () => scenes[hero.index] as Scene;
 
@@ -371,11 +372,17 @@ function heroTick(seconds: number): void {
   const heard = cues[cue];
   let row = -1;
   if (heard) for (const [i, each] of hero.rows.entries()) if (each.from <= heard.line[0]) row = i;
+  const second = Math.floor(seconds);
+  const speaking = heard && cue !== hero.current;
+  if (speaking || second !== hero.second) {
+    hero.second = second;
+    const now = heard ? described(scene.story, heard) : "";
+    track.setAttribute("aria-valuetext", now ? `${clock(seconds)}, ${now}` : clock(seconds));
+  }
   if (heard && cue !== hero.current) {
     hero.current = cue;
     const words = described(scene.story, heard);
     nowText.textContent = words;
-    track.setAttribute("aria-valuetext", `${clock(seconds)}, ${words}`);
     const color = colorOf(scene.story, heard.speaker);
     if (color) nowDot.style.setProperty("--c", color);
     else nowDot.style.removeProperty("--c");
@@ -745,16 +752,29 @@ function initSpine(): void {
       .join("");
   }
 
-  /* The book, the script and each character's lines from the mountain scene, by the renderer, from
-   the scene's own text, with "Could you not?" given to whoever the reader chose. */
-  const COULD = "@Gerald (deep, polite and utterly unbothered) “Could you not?”";
-  function mountainStory(handle: string): Story {
+  /* The mock's story as it stands: its two scenes in their current order, with "Could you not?"
+   given to whoever the reader chose, up to a beat. The cast's counts and every handout come from
+   this one text, through the same parser and renderer the Writer uses. */
+  function mockText(upTo: number): string {
     const full = dragon.story.source;
     const front = full.slice(0, full.indexOf("---", 4) + 3);
-    const from = full.indexOf("Then he heard");
-    const to = full.indexOf("difficult to catch.”") + "difficult to catch.”".length;
-    const passage = full.slice(from, to).replace(COULD, COULD.replace("@Gerald", `@${handle}`));
-    return parse(`${front}\n\n${passage}\n`);
+    const block = (scene: "mountain" | "battle") => {
+      let out = "";
+      for (const line of LINES) {
+        if ((line.s === 4 ? "battle" : "mountain") !== scene) continue;
+        if ((line.s ?? 0) > upTo || (line.cut && upTo >= CUT_AT)) continue;
+        const text = line.segs
+          .filter((seg) => !(seg.s && seg.s > upTo) && !(seg.slot && !who))
+          .map((seg) => (seg.slot ? `@${who} ` : seg.t))
+          .join("");
+        out += text + (line.tight ? "\n" : "\n\n");
+      }
+      return out.trim();
+    };
+    const order: Array<"mountain" | "battle"> = battleFirst
+      ? ["battle", "mountain"]
+      : ["mountain", "battle"];
+    return `${front}\n\n${order.map(block).filter(Boolean).join("\n\n")}\n`;
   }
   const nameFor = (handle: string) =>
     handle === "Narrator"
@@ -764,22 +784,40 @@ function initSpine(): void {
         : handle === "King"
           ? "The King"
           : handle;
-  function outputs(handle: string): { book: string; script: string; lines: string } {
-    const story = mountainStory(handle);
+  /** Each character's lines and words in the mock as it stands at a beat. */
+  function castStats(upTo: number): Map<string, { lines: number; words: number }> {
+    const stats = new Map<string, { lines: number; words: number }>();
+    for (const row of lines(parse(mockText(upTo)), { speechOnly: true })) {
+      const key = row.speaker && row.speaker !== "Narrator" ? row.speaker : "Narrator";
+      const it = stats.get(key) ?? { lines: 0, words: 0 };
+      it.lines += 1;
+      it.words += row.text.split(/\s+/).filter((word) => /\w/.test(word)).length;
+      stats.set(key, it);
+    }
+    return stats;
+  }
+  const statText = (s?: { lines: number; words: number }) =>
+    s
+      ? `${s.lines} line${s.lines === 1 ? "" : "s"} · ${s.words} word${s.words === 1 ? "" : "s"}`
+      : "No lines yet";
+  function outputs(): { book: string; script: string; lines: string } {
+    const story = parse(mockText(STEPS));
     // The lines of whoever has "Could you not?" (Gerald's, if it went to the narrator).
-    const whose = handle === "Narrator" ? G : handle;
+    const whose = !who || who === "Narrator" ? G : who;
     const said = (textByCharacter(story).get(whose) ?? "").trim().split("\n").filter(Boolean);
     return {
       book: `<div class="book-page" data-vxd-theme="light"><p class="book-run">The Dragon Who Would Not Roar</p>${(render as Render).renderBook(story, { header: false })}<p class="book-folio">12</p></div>`,
       script: `<div class="script-page" data-vxd-theme="light">${(render as Render).renderScript(story, { header: false })}</div>`,
-      lines: `<div class="sides-page"><p class="sides-head"><span style="--sp:${colorFor(whose)}">${escapeHtml(nameFor(whose))}</span> · each character’s lines · The mountain</p>${said
+      lines: `<div class="sides-page"><p class="sides-head"><span style="--sp:${colorFor(whose)}">${escapeHtml(nameFor(whose))}</span> · each character’s lines</p>${said
         .map(
           (row) => `<p class="said">${escapeHtml(row).replace(/^\(([^)]*)\)/, "<i>($1)</i>")}</p>`,
         )
         .join("")}</div>`,
     };
   }
-  const FIRST_OUT = outputs(G);
+  let who = "";
+  let battleFirst = false;
+  const FIRST_OUT = outputs();
   const BOOK = FIRST_OUT.book;
   const SCRIPT = FIRST_OUT.script;
   const LINES_OF = FIRST_OUT.lines;
@@ -860,23 +898,23 @@ function initSpine(): void {
       handle: "Narrator",
       name: "Narrator",
       about: "Warm and unhurried, enjoying the joke.",
-      stats: "6 lines · 45 words",
+      stats: "",
     },
     {
       handle: G,
       name: "Gerald",
       about: "An old dragon. Deep, polite and utterly unbothered.",
-      stats: "4 lines · 31 words",
+      stats: "",
     },
     {
       handle: P,
       name: "Sir Percival",
       about: "A young knight. Brave in theory, nervous in practice.",
-      stats: "1 line · 2 words",
+      stats: "",
     },
   ];
   const castCard = (member: (typeof CAST)[number]) =>
-    `<div class="cc" data-cast="${member.handle}" style="--sp:${colorFor(member.handle)}"><p class="cc-h"><span class="dot"></span><span class="cc-at">@</span>${member.handle}<i>→</i></p><p class="cc-s">${member.stats}</p><p class="cc-a">${member.about}</p></div>`;
+    `<div class="cc" data-cast="${member.handle}" style="--sp:${colorFor(member.handle)}"><p class="cc-h"><span class="dot"></span><span class="cc-at">@</span>${member.handle}<i>→</i></p><p class="cc-s">${statText(castStats(2).get(member.handle))}</p><p class="cc-a">${member.about}</p></div>`;
 
   /* The picker "Who says this?", as the Writer's: the cast, each in their colour. */
   const pickerHtml = (
@@ -1014,7 +1052,7 @@ function initSpine(): void {
          ${pickerHtml("picker-phone")}
          <div class="mini-cast who-card"></div>`,
           "",
-          `<div class="mini-tools live"><button type="button" class="tb tb-live" data-who-open="picker-phone" aria-haspopup="dialog" aria-expanded="false">${icon("who")}Who says this…</button><span class="mini-hint">Ctrl+K in the Writer</span></div>`,
+          `<div class="mini-tools live"><button type="button" class="tb tb-live" data-who-open="picker-phone" aria-haspopup="dialog" aria-expanded="false">${icon("who")}Who says this…</button></div>`,
         );
       case 3:
         return mini(
@@ -1073,7 +1111,7 @@ function initSpine(): void {
     const n = Number(step.dataset.step);
     const example = document.createElement("div");
     example.className = "step-example";
-    example.innerHTML = `<p class="sr-only">In the Writer:</p>${exampleHtml(n)}`;
+    example.innerHTML = `<p class="sr-only phone-only">In the Writer:</p>${exampleHtml(n)}`;
     const button = step.querySelector(".step-play");
     if (button) step.insertBefore(example, button);
     else step.append(example);
@@ -1085,7 +1123,9 @@ function initSpine(): void {
     }
     const label = document.createElement("p");
     label.className = "step-label";
-    label.innerHTML = `<span>${n}</span> ${escapeHtml(step.dataset.label ?? "")} <em>${escapeHtml(step.dataset.feature ?? "")}</em>`;
+    // The phone's label: the feature, without keyboard shortcuts.
+    const feature = (step.dataset.feature ?? "").replace(/ · (Ctrl|Alt)\+\S+/g, "");
+    label.innerHTML = `<span>${n}</span> ${escapeHtml(step.dataset.label ?? "")} <em>${escapeHtml(feature)}</em>`;
     step.prepend(label);
     const li = document.createElement("li");
     li.innerHTML = `<button type="button" data-go="${n}"><span aria-hidden="true">${n}</span>${escapeHtml(step.dataset.label ?? "")}</button>`;
@@ -1116,24 +1156,29 @@ function initSpine(): void {
 
   /* ------------------------------------------------------------------ "Who says this?", live */
 
-  let who = "";
   function giveWho(handle: string, quietly = false): void {
     who = handle;
     const color = colorFor(handle);
     for (const slot of $$(".who-slot")) {
       slot.textContent = `@${handle} `;
       slot.style.setProperty("--sp", color);
+      // The reader's own answer shows at once: a short flash, no waiting on the scroll's set-in.
+      slot.classList.remove("new");
+      if (!quietly && !calm.matches) {
+        slot.classList.remove("flash");
+        void slot.offsetWidth;
+        slot.classList.add("flash");
+      }
     }
     for (const speech of $$('[data-id="could"] .k-speech')) speech.style.setProperty("--sp", color);
     for (const host of [wr, ...$$(".step-example")]) host.classList.add("who-set");
     for (const card of $$(".cc")) card.classList.toggle("cc-new", card.dataset.cast === handle);
     const member = CAST.find((m) => m.handle === handle);
     for (const holder of $$(".who-card")) holder.innerHTML = member ? castCard(member) : "";
-    // The script, the book and the lines, made again from the scene as now marked.
-    const made = outputs(handle);
-    for (const panel of $$(".pv-p-script")) panel.innerHTML = made.script;
-    for (const panel of $$(".pv-p-book")) panel.innerHTML = made.book;
-    for (const panel of $$(".pv-p-lines")) panel.innerHTML = made.lines;
+    refresh();
+    // On the phone's page, the pencilled question answered.
+    for (const note of $$('.step-example [data-id="could"] .note'))
+      note.innerHTML = `<s>who?</s><br>${escapeHtml(shortName(handle))}${TICK}`;
     for (const note of $$(".ab-recast")) note.hidden = handle === G;
     if (!quietly) {
       const name = handle === "Narrator" ? "the narrator" : (member?.name ?? handle);
@@ -1141,9 +1186,24 @@ function initSpine(): void {
         `“Could you not?” is now ${name}’s${handle === "Narrator" ? "" : ", and his card is in the Cast"}.${handle === G ? "" : " The recording gave it to Gerald."}`,
       );
     }
-    // The pen's ring and note were measured with no name before the quote: measure again.
-    if (active === 2 && wr.offsetParent) requestAnimationFrame(() => drawPen(2));
+    // The pen's ring was measured with no name before the quote: measured again, and answered.
+    if (active === 2 && window.innerWidth > 860) drawPen(2, true);
   }
+
+  /** Everything that comes from the story as it stands: the cast's counts and the handouts. */
+  function refresh(): void {
+    const stats = castStats(Math.max(2, Math.min(active, STEPS)));
+    for (const line of $$<HTMLElement>(".cc[data-cast]"))
+      $(".cc-s", line).textContent = statText(stats.get(line.dataset.cast as string));
+    if (!render) return;
+    const made = outputs();
+    for (const panel of $$(".pv-p-script")) panel.innerHTML = made.script;
+    for (const panel of $$(".pv-p-book")) panel.innerHTML = made.book;
+    for (const panel of $$(".pv-p-lines")) panel.innerHTML = made.lines;
+  }
+  const shortName = (handle: string) => (handle === "Narrator" ? "narrator" : handle);
+  const TICK =
+    '<svg class="tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l5 5L20 6"/></svg>';
 
   function openPicker(picker: HTMLElement, opener: HTMLButtonElement): void {
     if (picker.id === "picker") {
@@ -1259,7 +1319,6 @@ function initSpine(): void {
 
   /* ------------------------------------------------------------------ the scene board, live */
 
-  let battleFirst = false;
   function moveScene(scene: string, way: "up" | "down", from?: HTMLElement): void {
     const title = scene === "battle" ? "The battle" : "The mountain";
     const first = scene === "battle" ? way === "up" : way === "down";
@@ -1278,6 +1337,7 @@ function initSpine(): void {
         if (card) list.append(card);
       }
     }
+    refresh();
     const other = scene === "battle" ? "The mountain" : "The battle";
     announce(
       `${title} moved ${way === "up" ? "before" : "after"} ${other}. Its text moved with it.`,
@@ -1340,6 +1400,7 @@ function initSpine(): void {
     // Moving on from "who?" untried: the line is Gerald's, as written.
     if (n > 2 && !who && window.innerWidth > 860) giveWho(G, true);
     active = n;
+    refresh();
     wr.dataset.step = String(n);
     for (let k = 1; k <= STEPS; k++) wr.classList.toggle(`s${k}`, k <= n);
     wr.dataset.tab = TAB_OF[n] ?? "";
@@ -1412,7 +1473,7 @@ function initSpine(): void {
     doc.style.transform = `translateY(${-y}px)`;
   }
 
-  function drawPen(n: number): void {
+  function drawPen(n: number, answered = false): void {
     annot.replaceChildren();
     const marks = PEN[n];
     if (!marks) return;
@@ -1441,7 +1502,9 @@ function initSpine(): void {
           .map((r) => r.right - base.left),
       );
       const group = document.createElement("div");
-      group.className = `pen pen-${mark.shape}`;
+      // "who?" answered: struck through, the speaker named, a tick; the pen itself stays away.
+      const done = mark.word === "who?" && Boolean(who);
+      group.className = `pen pen-${mark.shape}${done ? " pen-done" : ""}${answered ? " pen-now" : ""}`;
       group.style.setProperty("--d", `${i * 0.6}s`);
       const shape =
         mark.shape === "circle"
@@ -1454,8 +1517,18 @@ function initSpine(): void {
         lead >= 40
           ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom}px;top:${y + h / 2 - 9}px;width:${lead}px;height:18px">`
           : "";
-      group.innerHTML = `${shape}${leader}<span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px"><i>${escapeHtml(mark.word)}</i></span>
-      <img class="nib" src="../../landing/studio/pen/fountain-pen.webp" alt="" style="left:${margin - 8}px;top:${y + h / 2 - 50}px">`;
+      const words = done
+        ? `<i><s>who?</s><br>${escapeHtml(shortName(who))}</i>${TICK}`
+        : `<i>${escapeHtml(mark.word)}</i>`;
+      group.innerHTML = `${shape}${leader}<span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px">${words}</span>${
+        done || calm.matches
+          ? ""
+          : `<img class="nib" src="../../landing/studio/pen/fountain-pen.webp" alt="" style="left:${margin - 8}px;top:${y + h / 2 - 50}px">`
+      }`;
+      // The moving pen leaves once it has written: never a pen left hanging over the page.
+      group
+        .querySelector(".nib")
+        ?.addEventListener("animationend", (event) => (event.target as HTMLElement).remove());
       annot.append(group);
     }
   }
@@ -1480,6 +1553,8 @@ function initSpine(): void {
             Number(bit.dataset.start) <= seconds && seconds < Number(bit.dataset.end) + 0.15,
           );
       }
+      for (const el of $$("[data-finale-play] .btn-time"))
+        el.textContent = clock(Math.max(0, SEG_TO - Math.max(seconds, SEG_FROM)));
       for (const el of $$("[data-seg-clock]"))
         el.textContent = `${clock(Math.max(0, seconds - SEG_FROM))} / ${clock(span)}`;
       if (index !== finaleCue && cue) {
@@ -1511,6 +1586,9 @@ function initSpine(): void {
             ? "Hear it voiced"
             : "Play the scene";
       }
+      if (!on && (!player.audio || player.audio.currentTime >= SEG_TO - 0.3))
+        for (const el of $$("[data-finale-play] .btn-time"))
+          el.textContent = clock(SEG_TO - SEG_FROM);
       wr.classList.toggle("voicing", on);
       for (const root of lanesRoots()) root.classList.toggle("playing", on);
     },
@@ -1599,7 +1677,8 @@ function initSpine(): void {
 
 /* ================================================================== the cast */
 
-{
+/* Built when the page is idle, or as the reader nears it. */
+function initCast(): void {
   const story = dragon.story;
   const manifest = dragon.manifest;
   const auditions: Record<string, [number, number]> = {
@@ -1673,6 +1752,28 @@ function initSpine(): void {
     }
   }
 }
+{
+  let built = false;
+  const build = () => {
+    if (built) return;
+    built = true;
+    near.disconnect();
+    initCast();
+  };
+  const near = new IntersectionObserver(
+    (entries) => entries.some((e) => e.isIntersecting) && build(),
+    {
+      rootMargin: "600px 0px",
+    },
+  );
+  near.observe($("#cast-list"));
+  const idle = () =>
+    "requestIdleCallback" in window
+      ? window.requestIdleCallback(build, { timeout: 5000 })
+      : globalThis.setTimeout(build, 2000);
+  if (document.readyState === "complete") idle();
+  else window.addEventListener("load", idle, { once: true });
+}
 
 /* Section 03: the battle's script with its note to the performer, and the lines as CSV. Built
    when it nears the screen. */
@@ -1681,7 +1782,7 @@ function initSpine(): void {
     const full = dragon.story.source;
     const front = full.slice(0, full.indexOf("---", 4) + 3);
     const from = full.indexOf("%% Percival talks");
-    const to = full.indexOf("nap at four.”") + "nap at four.”".length;
+    const to = full.indexOf("I’ve been practicing.”") + "I’ve been practicing.”".length;
     const battle = parse(`${front}\n\n${full.slice(from, to)}\n`);
     $("#route-script").innerHTML =
       `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${(render as Render).renderScript(battle, { header: false })}</div>`;
@@ -1691,7 +1792,7 @@ function initSpine(): void {
       0,
       all.findIndex((row) => row.text.startsWith("Then he heard")),
     );
-    $("#route-csv").textContent = linesToCsv(all.slice(start, start + 8), [
+    $("#route-csv").textContent = linesToCsv(all.slice(start, start + 16), [
       "kind",
       "speaker",
       "direction",
@@ -1759,6 +1860,10 @@ function initSpine(): void {
     if (event.target === box) box.close();
   });
 }
+
+/* On a phone, the secondary screens and the toolbox start folded: one tap opens them. */
+if (window.matchMedia("(max-width: 860px)").matches)
+  for (const fold of $$<HTMLDetailsElement>("details[data-fold]")) fold.open = false;
 
 /* ================================================================== pictures */
 

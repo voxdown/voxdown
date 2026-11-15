@@ -4315,3 +4315,437 @@ button {
 .pv .vxd-chip-vocal {
   color: color-mix(in oklab, var(--vxd-c, #0f766e) 78%, #000);
 }
+
+/* ------------------------------------------------------------------ round 5 */
+
+/* Wide screens: the per-beat examples are the phone's; only each beat's words (and step 6's text
+   alternative) stay, for screen readers. Nothing hidden can take the focus. */
+@media (min-width: 861px) {
+  .step .step-example .mini,
+  .step .phone-only {
+    display: none !important;
+  }
+}
+
+/* The reader's answer: at once, with a short flash of its colour. */
+.wr .who-slot.flash,
+.step-example .who-slot.flash {
+  animation: who-flash 0.7s ease-out both !important;
+}
+@keyframes who-flash {
+  from {
+    background-color: color-mix(in srgb, var(--sp) 30%, transparent);
+    border-radius: 3px;
+  }
+}
+/* The ring stays around the words, however the line wraps. */
+.ink-ring {
+  white-space: nowrap;
+}
+/* The pen, answered: "who?" struck through, the speaker named, a tick. */
+.hand s,
+.note s {
+  text-decoration: line-through 2px #c62f1b;
+  margin-right: 0.15em;
+}
+.hand .tick,
+.note .tick {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-left: 0.15em;
+  vertical-align: -0.05em;
+  fill: none;
+  stroke: #c62f1b;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pen-done .hand {
+  max-width: 7rem;
+  white-space: nowrap;
+  line-height: 1.1;
+  translate: 0 -0.55em;
+}
+.pen-now .ring,
+.pen-now .lead,
+.pen-now .under {
+  animation: none;
+}
+.pen-now .hand {
+  animation: hand-in 0.35s ease both;
+}
+.mini-paper .ln.noted {
+  padding-right: 6.4rem;
+}
+.note {
+  width: 6.2rem;
+}
+
+/* The handouts: room to read them, and labels no smaller than 11 px. */
+.wr[data-step="6"] {
+  --pv: 27rem;
+}
+.pv {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.pv .vxd {
+  --vxd-size: 14px;
+}
+.pv .vxd-name,
+.step-example .vxd-name {
+  font-size: 11px !important;
+  vertical-align: 0.1em;
+}
+.pv .vxd-chip,
+.step-example .vxd-chip,
+.route .vxd-chip {
+  font-size: 11px !important;
+}
+.pv .vxd-direction > span,
+.step-example .vxd-direction > span {
+  font-size: 11px;
+}
+.pv .book-run,
+.pv .book-folio,
+.pv .sides-head {
+  font-size: 11px;
+}
+
+/* Production: two cards of a height, and the connector beneath both. */
+.routes {
+  align-items: stretch;
+}
+.route .route-viz:last-child,
+.route .csv:last-child {
+  margin-bottom: 0;
+}
+.route-viz#route-script {
+  flex: 1;
+  display: flex;
+}
+.route-viz#route-script .script-page {
+  flex: 1;
+  max-width: none;
+}
+.route-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.4rem;
+  margin-top: 1rem;
+  padding: 1rem 1.2rem;
+  border-radius: 18px;
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+}
+.route-foot .term {
+  margin: 0;
+  flex: none;
+}
+.route-foot .route-note {
+  flex: 1 1 22rem;
+  margin: 0 !important;
+  color: #c9c4dc;
+  font-size: 0.92rem;
+}
+
+/* The final pen: its nib at the end of the line it has just drawn under "waiting." */
+.final-band .pen-final {
+  left: 100%;
+  bottom: -0.32em;
+  width: 1.5em;
+  translate: -0.12em 0;
+  rotate: 0deg;
+  transform-origin: 0 100%;
+}
+
+/* Privacy: its vows at the foot, so the card is as full as the two beside it. */
+.fact-private {
+  display: flex;
+  flex-direction: column;
+}
+.fact-private > p:not(.fact-kicker) {
+  margin-top: 0.7rem;
+  color: rgb(255 255 255 / 0.88);
+}
+.vows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 1.1rem;
+}
+.vows li {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16) inset;
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 550;
+}
+.facts > li:not(.fact-private) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Folds: open (and their summary hidden) on wide screens; one tap to open on a phone. */
+.fold > summary {
+  display: none;
+}
+@media (max-width: 860px) {
+  .fold {
+    margin-top: 1rem;
+  }
+  .fold > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    min-height: 3.2rem;
+    padding: 0.8rem 1.1rem;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--line-2) inset;
+    font: 650 1rem / 1.3 var(--display);
+    color: var(--ink);
+    cursor: pointer;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker {
+    display: none;
+  }
+  .fold > summary::after {
+    content: "+";
+    flex: none;
+    font-size: 1.3rem;
+    color: var(--violet-d);
+  }
+  .fold[open] > summary::after {
+    content: "−";
+  }
+  .fold > summary:focus-visible {
+    outline: 3px solid var(--violet);
+    outline-offset: 2px;
+  }
+  .fold[open] .proof-grid,
+  .fold[open] .index {
+    margin-top: 0.8rem;
+  }
+  .fold .index-title {
+    display: none;
+  }
+  /* The board picture without the dead space under it. */
+  .proof-card .zoom {
+    padding-bottom: 2.4rem;
+  }
+  .proof-card .zoom img {
+    max-height: 22rem;
+    width: auto;
+    margin-inline: auto;
+    background: none;
+  }
+  .proof-card h3 {
+    margin-top: 0.4rem;
+  }
+  /* Production, said once: the engines are in the spine's last beat. */
+  .route .engines,
+  .route-foot .route-note {
+    display: none;
+  }
+}
+
+/* Below the fold, the browser lays out a section only as it comes near. */
+.cast,
+.dark,
+.proof,
+.free,
+.final,
+.foot {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
+
+/* ------------------------------------------------------------------ the phone, shorter */
+@media (max-width: 860px) {
+  /* Who it's for: one swipeable row. */
+  .for {
+    flex-wrap: nowrap;
+    padding-bottom: 2.2rem;
+  }
+  .for ul {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 0.2rem;
+  }
+  .for li {
+    flex: none;
+  }
+  .sheet {
+    height: 16rem;
+  }
+  .spine {
+    padding-top: 2.5rem;
+  }
+  .step,
+  .step:first-child {
+    padding: 1.1rem 0 1.3rem;
+  }
+  .step-example {
+    margin-top: 0.75rem;
+  }
+  .mini-tabs .pv {
+    max-height: 16rem;
+  }
+  .mini-board .bcard i {
+    display: none;
+  }
+  .mini-body {
+    gap: 0.45rem;
+    padding: 0.55rem;
+  }
+  .band,
+  .dark {
+    padding-block: 3rem;
+  }
+  .sec-head {
+    margin-bottom: 1.4rem;
+  }
+  /* Production: the two outputs as short windows. */
+  .route {
+    padding: 1.2rem;
+  }
+  .route-viz#route-script {
+    max-height: 15rem;
+    overflow: hidden;
+    mask-image: linear-gradient(#000 80%, transparent);
+  }
+  .route .csv pre {
+    max-height: 8.5rem;
+    overflow: auto;
+  }
+  .route .csv {
+    margin: 0.8rem 0 0;
+  }
+  .dark-dev .fold > summary {
+    background: rgb(255 255 255 / 0.06);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14) inset;
+    color: #fff;
+  }
+  .dark-dev .fold > summary::after {
+    color: #c4b5fd;
+  }
+  .dark-dev .devs {
+    gap: 1.2rem;
+  }
+  /* Free and MIT side by side. */
+  .facts {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.7rem;
+  }
+  .fact-private {
+    grid-column: 1 / -1;
+  }
+  .facts > li:not(.fact-private) {
+    padding: 1.1rem 1.1rem 1.2rem;
+  }
+  .facts .big {
+    font-size: 2.3rem;
+  }
+  .facts > li:not(.fact-private) p:last-child {
+    font-size: 0.9rem;
+  }
+  .free {
+    padding-top: 2.5rem;
+  }
+  .final {
+    padding-bottom: 2.5rem;
+  }
+  .final-band {
+    padding-bottom: 3rem !important;
+  }
+}
+/* The nib (at 11% and 94% of the pen's picture) exactly where the underline ends. */
+.final-band .pen-final {
+  left: calc(100% - 0.168em);
+  bottom: -0.06em;
+  width: 1.5em;
+  translate: none;
+}
+.final-band .pen-final {
+  animation: none;
+  height: auto;
+  object-fit: contain;
+}
+/* The CSV fills whatever room its card has, its rows scrolling inside. */
+.route .csv {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.route .csv pre {
+  flex: 1 1 0;
+  min-height: 9.5rem;
+  overflow: auto;
+}
+@media (max-width: 860px) {
+  .route .csv pre {
+    flex: none;
+    min-height: 0;
+  }
+}
+
+.fact-private .fact-kicker {
+  align-self: flex-start;
+}
+/* Their measured heights, so the page is its true length before they are laid out. */
+.cast {
+  contain-intrinsic-size: auto 870px;
+}
+.dark {
+  contain-intrinsic-size: auto 1300px;
+}
+.proof {
+  contain-intrinsic-size: auto 2260px;
+}
+.dark-dev {
+  contain-intrinsic-size: auto 520px;
+}
+.free {
+  contain-intrinsic-size: auto 515px;
+}
+.final {
+  contain-intrinsic-size: auto 685px;
+}
+.foot {
+  contain-intrinsic-size: auto 205px;
+}
+@media (max-width: 860px) {
+  .cast {
+    contain-intrinsic-size: auto 756px;
+  }
+  .dark {
+    contain-intrinsic-size: auto 732px;
+  }
+  .proof {
+    contain-intrinsic-size: auto 603px;
+  }
+  .dark-dev {
+    contain-intrinsic-size: auto 590px;
+  }
+  .free {
+    contain-intrinsic-size: auto 709px;
+  }
+  .final {
+    contain-intrinsic-size: auto 610px;
+  }
+  .foot {
+    contain-intrinsic-size: auto 305px;
+  }
+}

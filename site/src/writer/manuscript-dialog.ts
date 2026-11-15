@@ -62,7 +62,9 @@ export function openManuscript(host: ManuscriptHost): void {
       // Kept for this visit only.
     }
     dialog.close();
-    const name = byline.value.trim() || lastWord(contact.value.split("\n")[0] ?? "");
+    // The name it is published under: given, or the whole first line of the contact (a name),
+    // never only its surname.
+    const name = byline.value.trim() || (contact.value.split("\n")[0] ?? "").trim();
     void exportManuscript(host, {
       contact: contact.value,
       byline: name,

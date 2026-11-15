@@ -247,7 +247,6 @@ function leftOut(xml: string): string[] {
   if (/<w:tbl\b/.test(xml)) left.push("tables (their text is kept, as paragraphs)");
   if (/<w:drawing\b|<w:pict\b/.test(xml)) left.push("pictures");
   if (/<w:footnoteReference\b|<w:endnoteReference\b/.test(xml)) left.push("footnotes");
-  if (/<w:commentReference\b/.test(xml)) left.push("comments");
   if (/<w:numPr\b/.test(xml)) left.push("list numbering");
   if (/<w:sym\b/.test(xml)) left.push("symbols from symbol fonts");
   return left;
@@ -268,6 +267,19 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
     .replace(/<w:txbxContent\b[\s\S]*?<\/w:txbxContent>/g, "");
   const stylesFile = files.get("word/styles.xml");
   const styles = stylesOf(stylesFile ? decoder.decode(stylesFile) : "");
+  // An editor's comments, by their number: each comes back as the writer's comment where it was.
+  const commentsFile = files.get("word/comments.xml");
+  const notes = new Map<string, string>();
+  for (const [, id, body] of (commentsFile ? decoder.decode(commentsFile) : "").matchAll(
+    /<w:comment\b[^>]*w:id="([^"]+)"[^>]*>([\s\S]*?)<\/w:comment>/g,
+  ))
+    notes.set(
+      id ?? "",
+      [...(body ?? "").matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)]
+        .map((found) => fromXml(found[1] ?? ""))
+        .join(" ")
+        .trim(),
+    );
   const paragraphs: Paragraph[] = [];
   /** A title page before the story: its Title, then a Subtitle and an Author, if it has them. */
   const page: { title?: string; subtitle?: string; author?: string } = {};
@@ -296,6 +308,9 @@ export async function storyOfDocx(bytes: ArrayBuffer): Promise<{ story: string; 
         false;
       const italic = emphasis("i", "italic");
       const bold = emphasis("b", "bold");
+      const reference = /<w:commentReference\b[^>]*w:id="([^"]+)"/.exec(r)?.[1];
+      const note = reference === undefined ? undefined : notes.get(reference);
+      if (note) runs.push({ text: "", italic: false, bold: false, comment: note });
       // Text, tabs and breaks, in their order.
       for (const [piece, text] of r.matchAll(
         /<w:t\b[^>]*>([\s\S]*?)<\/w:t>|<w:t\b[^>]*\/>|<w:tab\b[^>]*\/>|<w:br\b[^>]*\/>|<w:cr\b[^>]*\/>|<w:noBreakHyphen\b[^>]*\/>|<w:softHyphen\b[^>]*\/>/g,

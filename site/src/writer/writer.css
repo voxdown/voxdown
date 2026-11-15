@@ -3648,13 +3648,19 @@ dialog:has(> .dialog-close) #ask-message {
 
 /* The story's details folded into one line as it opens (details-fold.ts): a quiet bar, a click or
    the cursor away from the title, author and cast. */
+/* Its width the page's, never its words': a long title is cut short, the story never pushed
+   past the page's edge. */
 .manuscript .story-details {
   padding: 0.2rem 0 0.6rem;
+  min-width: 0;
+  overflow: hidden;
+  contain: inline-size;
 }
 .manuscript .story-details-open {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.4rem;
+  width: fit-content;
   max-width: 100%;
   padding: 0.25rem 0.6rem;
   border: 1px dashed var(--desk-edge);
@@ -3667,6 +3673,11 @@ dialog:has(> .dialog-close) #ask-message {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.manuscript .story-details-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .manuscript .story-details-open::before {
   content: "›";

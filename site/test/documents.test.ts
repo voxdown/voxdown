@@ -175,9 +175,13 @@ describe("Word documents for an editor", () => {
     expect(comments).toContain("Too short?");
     expect(decoder.decode(files.get("[Content_Types].xml"))).toContain("/word/comments.xml");
     expect(decoder.decode(files.get("word/_rels/document.xml.rels"))).toContain("comments.xml");
-    // Read back, the words are the story's, its comments left to Word.
-    const { story: back } = await storyOfDocx(docxOf(paragraphs, {}).buffer as ArrayBuffer);
-    expect(back).toContain("Night fell. The end.");
+    // Read back, the words are the story's, and its comments (an editor's too) the writer's own,
+    // where they were.
+    const { story: back, left } = await storyOfDocx(docxOf(paragraphs, {}).buffer as ArrayBuffer);
+    expect(back).toContain("Night fell. <!-- Was it raining? --> The end.");
+    expect(back).toContain("<!-- Too short? -->");
+    expect(left).not.toContain("comments");
+    expect(parse(back).warnings).toEqual([]);
     // Without comments, the parts for them aren't written.
     expect((await unzip(docxOf(book("Hi."), {}))).has("word/comments.xml")).toBe(false);
   });

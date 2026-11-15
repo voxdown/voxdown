@@ -1034,6 +1034,8 @@ async function load(
   // The side shows another story: drawn afresh, from its start.
   sideShows = "";
   benchRead = false;
+  // Saving stopped for the story before (its file changed on disk): nothing to do with this one.
+  saving.stopped = false;
   sinceShown = undefined;
   sinceAsked = undefined;
   file.id = id;
@@ -1315,8 +1317,16 @@ function persistOnce(): void {
 let keptAt = 0;
 let keptVersion = 0;
 
-/** A new story no one has written in: nothing in it to keep, or to ask about. */
-const untouched = () => !file.handle && file.saved === "" && sameText(text(), NEW_STORY);
+/**
+ * A new story no one has written in: nothing in it to keep, or to ask about. One whose words
+ * went to Scraps (or were deleted from them) is written in: kept, to come back to with them.
+ */
+const untouched = () =>
+  !file.handle &&
+  file.saved === "" &&
+  sameText(text(), NEW_STORY) &&
+  !scrapsOf(localStorage, file.id).length &&
+  !deletedScraps(localStorage, file.id).length;
 
 async function keep(): Promise<void> {
   clearTimeout(keepTimer);
@@ -1485,6 +1495,8 @@ let nudged = "";
 
 /** The story's words as last counted, and the day its goal was last said to be reached. */
 const counted = { story: "", words: 0, reached: "" };
+/** Each story's words as last counted this visit: a sprint ends on its own story's, whatever is open. */
+const lastWords = new Map<string, number>();
 
 function showCounts({ words, said, voices, heard }: Counts): void {
   // As the rail shows them: chapters, and the scenes in them (headings under a chapter, breaks).
@@ -1495,6 +1507,7 @@ function showCounts({ words, said, voices, heard }: Counts): void {
   const now = Date.now();
   const since = writtenToday(localStorage, file.id, words, now);
   Object.assign(counted, { story: file.id, words });
+  lastWords.set(file.id, words);
   const signed = `${since > 0 ? "+" : since < 0 ? "−" : ""}${Math.abs(since).toLocaleString()}`;
   const goal = prefs.goal > 0 ? ` of ${prefs.goal.toLocaleString()}` : "";
   const today = `${file.id}:${dayOf(now)}`;
@@ -1733,7 +1746,7 @@ function showSprint(): void {
     return;
   }
   const left = sprint.startedAt + sprint.minutes * 60_000 - Date.now();
-  const words = sprint.story === counted.story ? counted.words - sprint.startWords : 0;
+  const words = (lastWords.get(sprint.story) ?? sprint.startWords) - sprint.startWords;
   state.hidden = false;
   state.textContent = `Sprint ${clock(left / 1000)} · ${words.toLocaleString()} ${Math.abs(words) === 1 ? "word" : "words"}`;
   state.title = "The sprint: its time left, and the words written in it";
@@ -1765,8 +1778,8 @@ function runSprintTimer(): void {
 
 function finishSprint(ranItsTime: boolean): void {
   const sprint = sprintNow(localStorage);
-  const words =
-    sprint && sprint.story === counted.story ? counted.words : (sprint?.startWords ?? 0);
+  // The sprint's own story's words, as last counted, though another story is open now.
+  const words = sprint ? (lastWords.get(sprint.story) ?? sprint.startWords) : 0;
   const done = endSprint(localStorage, words, Date.now());
   clearInterval(sprintTimer);
   sprintTimer = undefined;

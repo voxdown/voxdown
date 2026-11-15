@@ -46,7 +46,10 @@ class DetailsLine extends WidgetType {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "story-details-open";
-    button.textContent = `Story details${this.summary ? `: ${this.summary}` : ""}`;
+    const words = document.createElement("span");
+    words.className = "story-details-words";
+    words.textContent = `Story details${this.summary ? `: ${this.summary}` : ""}`;
+    button.append(words);
     button.title = "Show the story's details: its title, author and cast";
     button.setAttribute("aria-expanded", "false");
     button.addEventListener("mousedown", (event) => event.preventDefault());
@@ -95,13 +98,34 @@ const foldedLine = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
-/** The cursor going into the details unfolds them. */
-const unfoldOnEntry = EditorState.transactionExtender.of((tr) => {
-  if (!tr.selection || !tr.startState.field(folded, false)) return null;
+/**
+ * The cursor going into the details unfolds them; coming up into them from the story (↑, ←), it
+ * is at the end of their last line, as if they had been there all along.
+ */
+const unfoldOnEntry = EditorState.transactionFilter.of((tr) => {
+  if (!tr.selection || !tr.startState.field(folded, false)) return tr;
   const range = detailsRange(tr.newDoc);
-  if (!range) return null;
-  const inside = tr.selection.ranges.some((each) => each.from <= range.to);
-  return inside ? { effects: unfold.of(null) } : null;
+  if (!range) return tr;
+  if (!tr.selection.ranges.some((each) => each.from <= range.to)) return tr;
+  const head = tr.selection.main.head;
+  // The line above the closing `---`: the details' last.
+  const closing = tr.newDoc.lineAt(range.to);
+  // Up from the line just under them (not Ctrl+Home from further down, which goes to the start).
+  const was = tr.startState.selection.main.head;
+  const fromBelow =
+    tr.isUserEvent("select") &&
+    was > range.to &&
+    tr.startState.doc.lineAt(was).number <= closing.number + 1 &&
+    head < range.to;
+  const last = closing.number > 1 ? tr.newDoc.line(closing.number - 1).to : range.to;
+  return [
+    tr,
+    {
+      effects: unfold.of(null),
+      ...(fromBelow && tr.selection.main.empty ? { selection: { anchor: last } } : {}),
+      sequential: true,
+    },
+  ];
 });
 
 export function detailsFold(): Extension {

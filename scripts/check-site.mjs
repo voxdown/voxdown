@@ -575,6 +575,30 @@ const draftIn = (page) =>
     problems.push("writer: words cut to Scraps were taken out though no scrap could be kept");
   if (!(await keeper.textContent("#notice"))?.includes("stay in the story"))
     problems.push(`writer: a scrap not kept says ${await keeper.textContent("#notice")}`);
+  // A new story whose words all went to Scraps is kept: after a reload it is there, its scrap too.
+  {
+    const fresh = await context.newPage();
+    await fresh.goto(`${base}/writer/`);
+    await fresh.waitForSelector(".cm-content");
+    await fresh.click("#file-menu-button");
+    await fresh.click('[data-command="new"]');
+    if (await fresh.isVisible("#ask[open]"))
+      await fresh.click('#ask-buttons button[value="discard"]');
+    await fresh.waitForTimeout(400);
+    await fresh.click(".cm-content");
+    await fresh.keyboard.press("Control+End");
+    await fresh.keyboard.type("\n\nOnly this, set aside.");
+    await fresh.keyboard.press("Shift+Home");
+    await fresh.keyboard.press("Control+Shift+X");
+    await fresh.waitForTimeout(1500);
+    await fresh.reload();
+    await fresh.waitForSelector(".cm-content");
+    await fresh.waitForTimeout(800);
+    await benchTab(fresh, "scraps");
+    if (!(await fresh.locator('.scrap-text:has-text("Only this, set aside.")').count()))
+      problems.push("writer: a new story whose words all went to Scraps was let go on a reload");
+    await fresh.close();
+  }
   // Words holding a comment, commented out: around it, none of them left to be read.
   await keeper.keyboard.press("End");
   await keeper.keyboard.type("\n\nNight fell. <!-- rain? --> The harbour was quiet.");
@@ -980,6 +1004,18 @@ const draftIn = (page) =>
   );
   if (welcomeWidth < 360)
     problems.push(`writer: on a phone, the welcome is ${welcomeWidth} px wide`);
+  // A story opened on a phone, its details folded: nothing runs past the page's edge.
+  await welcomer.goto(`${base}/writer/#example=the-dragon-who-would-not-roar`);
+  await welcomer.waitForSelector(".story-details");
+  await welcomer.waitForTimeout(400);
+  const widths = await welcomer.evaluate(() => {
+    const scroller = document.querySelector(".cm-scroller");
+    return [scroller?.clientWidth ?? 0, scroller?.scrollWidth ?? 0];
+  });
+  if (widths[1] > widths[0] + 1)
+    problems.push(
+      `writer: on a phone, the story runs past the page: ${widths[1]} of ${widths[0]} px`,
+    );
   await welcomer.close();
   const phone = await context.newPage();
   watch(phone, "writer phone menus");

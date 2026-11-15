@@ -245,6 +245,14 @@ export function writeRuns(runs: readonly Run[]): string {
       out = `${out.trimEnd()}\n`;
       continue;
     }
+    // A comment (an editor's, from Word): the writer's own comment there, never read or printed.
+    if (run.comment) {
+      const words = run.comment.replace(/\s+/g, " ").replace(/-->/g, "-- >").trim();
+      // A space each side, as it sat between words: doubled ones and those at a line's end go.
+      if (words) out += `${out && !/\s$/.test(out) ? " " : ""}<!-- ${words} --> `;
+      if (run.text) out += escapeText(run.text);
+      continue;
+    }
     const sign = run.bold && run.italic ? "***" : run.bold ? "**" : run.italic ? "*" : "";
     const escaped = escapeText(run.text);
     if (!sign || !escaped.trim()) {

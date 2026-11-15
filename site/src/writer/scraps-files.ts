@@ -7,6 +7,7 @@
  */
 import {
   type Keeper,
+  deletedScraps,
   joinScraps,
   keepScraps,
   markScrapsSaved,
@@ -133,6 +134,42 @@ export class ScrapsFiles {
         }
       }
     }
+    // A file not written here this visit (after a reload, or chosen afresh) that holds scraps
+    // this browser has never had: theirs to join, never written over unasked.
+    if (written === undefined) {
+      let there: ReturnType<typeof readScrapsFile> = [];
+      try {
+        there = readScrapsFile(await (await handle.getFile()).text());
+      } catch {
+        there = [];
+      }
+      const knownIds = new Set([
+        ...scraps.map((scrap) => scrap.id),
+        ...deletedScraps(this.keeper, id).map((scrap) => scrap.id),
+      ]);
+      const unknown = there.filter((scrap) => !knownIds.has(scrap.id));
+      if (unknown.length) {
+        const answer = await this.host.ask(
+          `${handle.name} holds ${unknown.length === 1 ? "a scrap" : `${unknown.length} scraps`} this browser hasn’t got. Join ${unknown.length === 1 ? "it" : "them"} with these, or save these over ${unknown.length === 1 ? "it" : "them"}?`,
+          [
+            { label: "Leave it", value: "cancel" },
+            { label: "Save over it", value: "over" },
+            { label: "Join them", value: "join", main: true },
+          ],
+        );
+        if (answer !== "over" && answer !== "join") {
+          this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
+          return;
+        }
+        if (answer === "join") {
+          scraps = mergeScraps(scraps, unknown).scraps;
+          keepScraps(this.keeper, id, scraps, storyName);
+          this.host.notice(
+            `${unknown.length} ${unknown.length === 1 ? "scrap" : "scraps"} from ${handle.name} joined these.`,
+          );
+        }
+      }
+    }
     const text = scrapsFile(scraps, title);
     try {
       const writable = await handle.createWritable();
@@ -160,6 +197,14 @@ export class ScrapsFiles {
     if (this.told.has(id)) return;
     this.told.add(id);
     const file = scrapsFileName(name);
+    // Saved there before, changed since: said so, not as if the file had none of them.
+    if (standing === "changed" && scraps.length) {
+      this.host.notice(`Saved. Its scraps changed since they were saved in ${file}.`, {
+        label: `Save in ${file}`,
+        run: () => void this.save(true),
+      });
+      return;
+    }
     if (!scraps.length) {
       this.host.notice(`Saved. Its scraps are all deleted, but ${file} still holds them.`, {
         label: `Empty ${file}`,

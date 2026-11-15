@@ -2136,6 +2136,16 @@ body[data-welcome] #draft-state {
   }
 }
 
+/* A phone's status line: the words alone, all of it a click away (and in the button's name). */
+@media (max-width: 600px) {
+  #counts-text[data-short] {
+    font-size: 0;
+  }
+  #counts-text[data-short]::after {
+    content: attr(data-short);
+    font-size: 0.78rem;
+  }
+}
 /* A phone: the menus on one row, the story's name and its buttons on the next; the rail away,
    its room the text's (the outline, Ctrl+Shift+O, goes to a scene). */
 @media (max-width: 600px) {
@@ -3331,6 +3341,12 @@ dialog:has(> .dialog-close) #ask-message {
 }
 .board-column.before {
   box-shadow: -4px 0 0 var(--brand);
+}
+/* A phone: a column a little narrower than the screen, the next one showing beside it. */
+@media (max-width: 600px) {
+  .board-column {
+    flex-basis: min(17rem, 78vw);
+  }
 }
 .board-column.dragging {
   opacity: 0.5;

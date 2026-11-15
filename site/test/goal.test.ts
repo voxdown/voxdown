@@ -5,7 +5,9 @@ import {
   dayOf,
   daysWritten,
   endSprint,
+  noteSprintWords,
   sprintNow,
+  sprintWords,
   sprintsDone,
   startSprint,
   writtenToday,
@@ -69,6 +71,22 @@ describe("sprints", () => {
     expect(done).toMatchObject({ minutes: 25, words: 412, title: "The Owl" });
     expect(sprintNow(store)).toBeUndefined();
     expect(sprintsDone(store)).toHaveLength(1);
+  });
+
+  it("keep their own story's words, as last counted, while another story is open", () => {
+    const store = keeper();
+    startSprint(store, {
+      startedAt: morning,
+      minutes: 25,
+      story: "owl",
+      title: "",
+      startWords: 100,
+    });
+    noteSprintWords(store, "owl", 107);
+    // Another story counted: the sprint's is kept as it was.
+    noteSprintWords(store, "fox", 9);
+    const sprint = sprintNow(store);
+    expect(sprint && sprintWords(sprint)).toBe(107);
   });
 
   it("stopped at once with nothing written, leave nothing in the log", () => {

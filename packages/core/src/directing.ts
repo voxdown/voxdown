@@ -187,7 +187,12 @@ export function directingPrompt(story: Story, passage: DirectingPassage): string
   const meta = story.meta;
   const about = [
     meta.title ? `“${meta.title}”` : "A story",
-    meta.author ? `by ${meta.author}` : "",
+    // An author field that already says how ("Retold by…") isn't said "by" again.
+    meta.author
+      ? /^(?:by|retold|written|adapted|translated|told)\b/i.test(meta.author.trim())
+        ? meta.author.trim()
+        : `by ${meta.author}`
+      : "",
     meta.language ? `(language: ${meta.language})` : "",
   ]
     .filter(Boolean)
@@ -199,7 +204,10 @@ export function directingPrompt(story: Story, passage: DirectingPassage): string
     )
     .join("\n");
   return [
-    `${about}. The narrator is ${meta.narrator}.`,
+    // A narrator of the story's own named; the plain one goes without saying.
+    meta.narrator && meta.narrator !== "Narrator"
+      ? `${about}. The narrator is ${meta.narrator}.`
+      : `${about}.`,
     ...(cast ? ["", "Cast:", cast] : []),
     "",
     ...(passage.before ? ["Just before the passage, for context only:", passage.before, ""] : []),
@@ -477,6 +485,15 @@ export function readDirected(
   // never counted as not given back.
   const matched = new Set<number>(keys.flatMap((key, index) => (key === "" ? [index] : [])));
   let cursor = 0;
+  // Paragraphs the passage holds but that aren't directed (for the book alone, or the context
+  // before it): given back as they are, they are known for what they are, never taken for another.
+  const elsewhere = new Set(
+    story.blocks.flatMap((block) =>
+      block.kind === "paragraph" && !paragraphs.includes(block as Paragraph)
+        ? [keyOf(source.slice(block.range.from, block.range.to))]
+        : [],
+    ),
+  );
   for (const answered of paragraphsOf(answer)) {
     const given = givenParagraph(answered);
     const key = keyOf(given);
@@ -484,6 +501,7 @@ export function readDirected(
     let index = keys.indexOf(key, cursor);
     // Not there in order: a paragraph the model gave back earlier than it is.
     if (index < 0) index = keys.findIndex((other, at) => other === key && !matched.has(at));
+    if (index < 0 && elsewhere.has(key)) continue;
     // Not there at all: its words changed. The next paragraphs not yet given back, if one is
     // mostly the same words, is the one it is, refused below and listed, not counted missing.
     if (index < 0) {
@@ -510,7 +528,15 @@ export function readDirected(
     const refuse = (why: string) => result.refused.push(said(from, written, why));
     const added = addedMarks(written, given);
     if (!added) {
-      if (bare(given) !== bare(written)) refuse("its words weren’t given back as written");
+      if (bare(given) === bare(written)) continue;
+      // The words as they were, the marks not: why, as for marks added (a speaker, a direction).
+      const same = wordsOf(given).join(" ") === wordsOf(written).join(" ");
+      const why = same ? whyNot(written, given) : undefined;
+      refuse(
+        why && why !== "it would change the printed words"
+          ? why
+          : "its words weren’t given back as written",
+      );
       continue;
     }
     if (added.length === 0) continue;

@@ -927,6 +927,27 @@ const draftIn = (page) =>
     (await filer.locator(".scraps-deleted").count())
   )
     problems.push("writer: a deleted scrap isn't brought back after a reload");
+  // A scrap known here, its words changed in the file elsewhere; then a reload: Save… asks.
+  await filer.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+    all["fable.scraps.md"].text = all["fable.scraps.md"].text.replace(
+      "A hare, from",
+      "A grey hare, from",
+    );
+    localStorage.setItem("__disk", JSON.stringify(all));
+  });
+  await filer.reload();
+  await filer.waitForSelector(".cm-content");
+  await filer.waitForTimeout(600);
+  await benchTab(filer, "scraps");
+  await filer.click('.scraps-files button:has-text("Save")');
+  await filer.waitForSelector("#ask[open]", { timeout: 5000 }).catch(() => {});
+  if (!(await filer.isVisible("#ask[open]")))
+    problems.push("writer: after a reload, Save… wrote over a scrap changed in its file");
+  else await filer.click('#ask-buttons button[value="cancel"]');
+  await filer.waitForTimeout(300);
+  if (!(await disk())["fable.scraps.md"]?.text.includes("A grey hare"))
+    problems.push("writer: a scrap changed in its file elsewhere was lost");
   await context.close();
   console.log(
     "writer: a scraps file changed elsewhere, asked and joined; a deleted scrap back: ok",

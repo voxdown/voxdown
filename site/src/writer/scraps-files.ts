@@ -17,6 +17,7 @@ import {
   scrapsFile,
   scrapsFileName,
   scrapsOf,
+  scrapsSignature,
   scrapsStanding,
 } from "./scraps";
 
@@ -37,6 +38,27 @@ export type ScrapsFilesHost = {
 
 /** A file the browser can write, as the File System Access API gives one. */
 type Handle = FileSystemFileHandle;
+
+/** What the Writer last wrote in each story's scraps file, kept through a reload. */
+const WRITTEN = "vxd-writer-scraps-written";
+
+function writtenBefore(keeper: Keeper, story: string): string | undefined {
+  try {
+    return (JSON.parse(keeper.getItem(WRITTEN) ?? "{}") as Record<string, string>)[story];
+  } catch {
+    return undefined;
+  }
+}
+
+function keepWritten(keeper: Keeper, story: string, text: string): void {
+  try {
+    const all = JSON.parse(keeper.getItem(WRITTEN) ?? "{}") as Record<string, string>;
+    all[story] = text;
+    keeper.setItem(WRITTEN, JSON.stringify(all));
+  } catch {
+    // Short of room: the check falls back to asking about any difference.
+  }
+}
 
 export class ScrapsFiles {
   /** The file each story's scraps were saved to this visit, to save them there again. */
@@ -87,85 +109,56 @@ export class ScrapsFiles {
         this.host.notice("The scraps couldn’t be saved there.");
       return;
     }
-    // The file written before (chosen again, or saved to with the story): checked first.
-    const same =
-      known !== undefined &&
-      (handle === known || (await handle.isSameEntry(known).catch(() => false)));
-    const written = same ? this.written.get(id) : undefined;
-    if (written !== undefined) {
-      let onDisk: string | undefined;
-      try {
-        onDisk = await (await handle.getFile()).text();
-      } catch {
-        onDisk = undefined;
+    // Before any write, the file as it is now. Written as it stands only when it is what the
+    // Writer last wrote there (this visit or before a reload), what it is about to write, or
+    // empty; otherwise asked about, never written over unasked.
+    let onDisk = "";
+    let unreadable = false;
+    try {
+      onDisk = await (await handle.getFile()).text();
+    } catch (error) {
+      // A file just chosen that isn't there yet is empty; one that can't be read is asked about.
+      unreadable = (error as Error).name !== "NotFoundError";
+    }
+    const baseline = this.written.get(id) ?? writtenBefore(this.keeper, id);
+    const about = scrapsFile(scraps, title);
+    if (unreadable) {
+      const answer = await this.host.ask(
+        `${handle.name} couldn’t be read to see whether it changed outside the Writer. Save these scraps over it?`,
+        [
+          { label: "Leave it", value: "cancel", main: true },
+          { label: "Save over it", value: "over" },
+        ],
+      );
+      if (answer !== "over") {
+        this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
+        return;
       }
-      if (onDisk === undefined) {
+    } else if (onDisk.trim() && onDisk !== baseline && onDisk !== about) {
+      const gone = new Set(deletedScraps(this.keeper, id).map((scrap) => scrap.id));
+      const there = readScrapsFile(onDisk).filter((scrap) => !gone.has(scrap.id));
+      // The same scraps there as here, however written: nothing of theirs to lose.
+      if (scrapsSignature(there) !== scrapsSignature(scraps)) {
         const answer = await this.host.ask(
-          `${handle.name} couldn’t be read to see whether it changed outside the Writer. Save these scraps over it?`,
-          [
-            { label: "Leave it", value: "cancel", main: true },
-            { label: "Save over it", value: "over" },
-          ],
-        );
-        if (answer !== "over") {
-          this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
-          return;
-        }
-      } else if (onDisk !== written) {
-        const answer = await this.host.ask(
-          `${handle.name} changed outside the Writer since it was saved here. Join its scraps with these, or save these over it?`,
+          there.length
+            ? `${handle.name} has scraps that aren’t as they are here: changed outside the Writer, or saved from another browser. Join them with these, or save these over them?`
+            : `${handle.name} holds something other than these scraps. Save these over it?`,
           [
             { label: "Leave it", value: "cancel" },
             { label: "Save over it", value: "over" },
-            { label: "Join them", value: "join", main: true },
+            ...(there.length ? [{ label: "Join them", value: "join", main: true }] : []),
           ],
         );
         if (answer !== "over" && answer !== "join") {
-          this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was changed.`);
+          this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
           return;
         }
         if (answer === "join") {
-          const joined = joinScraps(scraps, readScrapsFile(onDisk), readScrapsFile(written));
+          const joined = joinScraps(scraps, there, baseline ? readScrapsFile(baseline) : []);
           scraps = joined.scraps;
           keepScraps(this.keeper, id, scraps, storyName);
           this.host.notice(
             `${joined.fromThere ? `${joined.fromThere} ${joined.fromThere === 1 ? "scrap" : "scraps"} from ${handle.name} joined these;` : "Joined:"} both are the same now.`,
-          );
-        }
-      }
-    }
-    // A file not written here this visit (after a reload, or chosen afresh) that holds scraps
-    // this browser has never had: theirs to join, never written over unasked.
-    if (written === undefined) {
-      let there: ReturnType<typeof readScrapsFile> = [];
-      try {
-        there = readScrapsFile(await (await handle.getFile()).text());
-      } catch {
-        there = [];
-      }
-      const knownIds = new Set([
-        ...scraps.map((scrap) => scrap.id),
-        ...deletedScraps(this.keeper, id).map((scrap) => scrap.id),
-      ]);
-      const unknown = there.filter((scrap) => !knownIds.has(scrap.id));
-      if (unknown.length) {
-        const answer = await this.host.ask(
-          `${handle.name} holds ${unknown.length === 1 ? "a scrap" : `${unknown.length} scraps`} this browser hasn’t got. Join ${unknown.length === 1 ? "it" : "them"} with these, or save these over ${unknown.length === 1 ? "it" : "them"}?`,
-          [
-            { label: "Leave it", value: "cancel" },
-            { label: "Save over it", value: "over" },
-            { label: "Join them", value: "join", main: true },
-          ],
-        );
-        if (answer !== "over" && answer !== "join") {
-          this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
-          return;
-        }
-        if (answer === "join") {
-          scraps = mergeScraps(scraps, unknown).scraps;
-          keepScraps(this.keeper, id, scraps, storyName);
-          this.host.notice(
-            `${unknown.length} ${unknown.length === 1 ? "scrap" : "scraps"} from ${handle.name} joined these.`,
           );
         }
       }
@@ -177,6 +170,7 @@ export class ScrapsFiles {
       await writable.close();
       this.files.set(id, handle);
       this.written.set(id, text);
+      keepWritten(this.keeper, id, text);
       markScrapsSaved(this.keeper, id, scraps);
       this.host.redraw();
       if (asked) this.host.notice(`Scraps saved in ${handle.name}.`);

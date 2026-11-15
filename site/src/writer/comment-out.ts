@@ -44,6 +44,15 @@ export function commentOut(
     if (comment.from < from && from < comment.to) from = comment.from;
     if (comment.from < to && to < comment.to) to = comment.to;
   }
+  // A whole quote commented out takes its speaker's name (and direction) before it, never left
+  // to give the words after it to someone.
+  if (/^[“"«„]/u.test(source.slice(from, to)) && /[”"»]/u.test(source.slice(from + 1, to))) {
+    const lineStart = source.lastIndexOf("\n", from - 1) + 1;
+    const name = /@[\p{L}][\p{L}\p{M}\p{N}_'’-]*(?:[ \t]*\([^)\n]*\))?[ \t]*$/u.exec(
+      source.slice(lineStart, from),
+    );
+    if (name) from = lineStart + name.index;
+  }
   const text = source.slice(from, to);
   const inside = all.filter((comment) => comment.from >= from && comment.to <= to);
   if (!text.replace(/<!--[\s\S]*?-->/g, "").trim()) return undefined;

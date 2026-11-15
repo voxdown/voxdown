@@ -130,7 +130,9 @@ import {
   dayOf,
   daysWritten,
   endSprint,
+  noteSprintWords,
   sprintNow,
+  sprintWords,
   sprintsDone,
   startSprint,
   writtenToday,
@@ -1508,6 +1510,7 @@ function showCounts({ words, said, voices, heard }: Counts): void {
   const since = writtenToday(localStorage, file.id, words, now);
   Object.assign(counted, { story: file.id, words });
   lastWords.set(file.id, words);
+  noteSprintWords(localStorage, file.id, words);
   const signed = `${since > 0 ? "+" : since < 0 ? "−" : ""}${Math.abs(since).toLocaleString()}`;
   const goal = prefs.goal > 0 ? ` of ${prefs.goal.toLocaleString()}` : "";
   const today = `${file.id}:${dayOf(now)}`;
@@ -1531,6 +1534,9 @@ function showCounts({ words, said, voices, heard }: Counts): void {
     ...(heard > 0 ? [timeToHear(heard)] : []),
   ].join(" · ");
   $("#counts-text").textContent = counts;
+  // A phone shows the words alone, with the day's progress.
+  $("#counts-text").dataset.short = counts.split(" · ")[0] ?? counts;
+  $("#counts").setAttribute("aria-label", counts);
   // All of it, where a narrow window cuts it short, and what a click does.
   $("#counts").title = `${counts}\nA goal for the day, and sprints`;
 }
@@ -1564,6 +1570,40 @@ function setAside(text: string): Scrap | undefined {
     return undefined;
   }
   return scrap;
+}
+
+/**
+ * A scrap as it goes back in at `from`–`to`: within a line, a space where it meets words on either
+ * side; a passage of paragraphs, or at a blank line, its own paragraphs, a blank line around them.
+ */
+function scrapPlaced(
+  doc: Text,
+  from: number,
+  to: number,
+  scrap: string,
+): { text: string; cursor: number } {
+  const words = scrap.trim();
+  const line = doc.lineAt(from);
+  const before = doc.sliceString(line.from, from);
+  const after = doc.sliceString(to, doc.lineAt(to).to);
+  if (words.includes("\n\n") || (!before.trim() && !after.trim())) {
+    // Its own paragraphs: a blank line before and after, never three line breaks.
+    const lead = !before.trim()
+      ? doc.sliceString(Math.max(0, line.from - 2), line.from) === "\n\n" || line.from === 0
+        ? ""
+        : "\n"
+      : "\n\n";
+    // Words on the line after a blank one it went in on: a blank line between them too.
+    const next = line.number < doc.lines ? doc.line(line.number + 1).text : "";
+    const tail = after.trim() ? "\n\n" : next.trim() ? "\n" : "";
+    const text = `${lead}${words}${tail}`;
+    return { text, cursor: lead.length + words.length };
+  }
+  const space = (char: string | undefined) =>
+    char !== undefined && /[\p{L}\p{N}.,;:!?…”’"')\]*]/u.test(char);
+  const lead = space(before.at(-1)) ? " " : "";
+  const tail = after && /^[\p{L}\p{N}“"‘(@*\[{]/u.test(after) ? " " : "";
+  return { text: `${lead}${words}${tail}`, cursor: lead.length + words.length };
 }
 
 /**
@@ -1659,9 +1699,10 @@ const scrapsHost: ScrapsHost = {
   insert: (scrap) => {
     if (lockedOut) return;
     const { from, to } = view.state.selection.main;
+    const insert = scrapPlaced(view.state.doc, from, to, scrap.text);
     view.dispatch({
-      changes: { from, to, insert: scrap.text },
-      selection: EditorSelection.cursor(from + scrap.text.length),
+      changes: { from, to, insert: insert.text },
+      selection: EditorSelection.cursor(from + insert.cursor),
       scrollIntoView: true,
       userEvent: "input.paste",
     });
@@ -1746,7 +1787,7 @@ function showSprint(): void {
     return;
   }
   const left = sprint.startedAt + sprint.minutes * 60_000 - Date.now();
-  const words = (lastWords.get(sprint.story) ?? sprint.startWords) - sprint.startWords;
+  const words = (lastWords.get(sprint.story) ?? sprintWords(sprint)) - sprint.startWords;
   state.hidden = false;
   state.textContent = `Sprint ${clock(left / 1000)} · ${words.toLocaleString()} ${Math.abs(words) === 1 ? "word" : "words"}`;
   state.title = "The sprint: its time left, and the words written in it";
@@ -1779,7 +1820,7 @@ function runSprintTimer(): void {
 function finishSprint(ranItsTime: boolean): void {
   const sprint = sprintNow(localStorage);
   // The sprint's own story's words, as last counted, though another story is open now.
-  const words = sprint ? (lastWords.get(sprint.story) ?? sprint.startWords) : 0;
+  const words = sprint ? (lastWords.get(sprint.story) ?? sprintWords(sprint)) : 0;
   const done = endSprint(localStorage, words, Date.now());
   clearInterval(sprintTimer);
   sprintTimer = undefined;
@@ -2799,6 +2840,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "F6" || event.ctrlKey || event.metaKey || event.altKey || onWelcome()) return;
   if (document.querySelector("dialog[open]")) return;
   event.preventDefault();
+  const toolbar = $("#toolbar");
   const regions: Array<{ in: Element; go: () => void }> = [
     { in: $(".manuscript"), go: () => view.focus() },
     ...(prefs.bench && !prefs.focus
@@ -2818,6 +2860,20 @@ document.addEventListener("keydown", (event) => {
             in: $("#side"),
             go: () =>
               document.querySelector<HTMLElement>('#side .side-tab[aria-selected="true"]')?.focus(),
+          },
+        ]
+      : []),
+    // The status line's words (the day's goal, sprints), then the toolbar, round to the text.
+    { in: $(".statusbar"), go: () => $("#counts").focus() },
+    ...(toolbar.offsetParent
+      ? [
+          {
+            in: toolbar,
+            go: () =>
+              (
+                toolbar.querySelector<HTMLElement>('[tabindex="0"]') ??
+                toolbar.querySelector<HTMLElement>("button")
+              )?.focus(),
           },
         ]
       : []),
@@ -4404,7 +4460,10 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Mod+Shift+X", "Cut the words selected to Scraps, to bring back later"],
   ["Mod+\\", "The preview: the script or the book"],
   ["Mod+Shift+\\", "The workbench: scenes, cast, scraps, comments and warnings"],
-  ["F6", "From the text to the workbench to the preview, and back (Shift+F6)"],
+  [
+    "F6",
+    "From the text to the workbench, the preview, the status line and the tools (Shift+F6: back)",
+  ],
   ["Alt+↑ / Alt+↓", "Move the paragraph up or down"],
   ["Enter", "In a quote: close it, and open it again on a new line for the same speaker"],
   ["Mod+Shift+M", "Every mark raw, or drawn"],

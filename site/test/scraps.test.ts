@@ -151,6 +151,12 @@ describe("scraps kept safe", () => {
     // Only its note changed on both sides: one scrap, both notes.
     const notes = joinScraps([{ ...fox, note: "mine" }], [{ ...fox, note: "theirs" }], [fox]);
     expect(notes.scraps).toEqual([{ ...fox, note: "mine / from the file: theirs" }]);
+    // Not known how it was: a scrap differing on the two sides is kept twice, never lost.
+    const unknown = joinScraps([fox], [{ ...fox, text: "The fox ran far." }], [], () => "f2");
+    expect(unknown.scraps.map((each) => [each.id, each.text])).toEqual([
+      [fox.id, fox.text],
+      ["f2", "The fox ran far."],
+    ]);
     // Deleted here since: stays deleted, though the file still has it.
     expect(joinScraps([owl], [owl, fox], written).scraps).toEqual([owl]);
   });

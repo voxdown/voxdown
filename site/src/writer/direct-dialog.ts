@@ -85,9 +85,12 @@ function sayReaches(context: AiContext): void {
   for (const option of options) {
     if (option.value === "story")
       option.textContent = `The whole story (${plural(words(0, story.source.length), "word")})`;
-    else if (option.value === "chapter")
-      option.textContent = `This chapter${chapter.name ? `, “${chapter.name}”` : ""} (${plural(words(chapter.from, chapter.to), "word")})`;
-    else if (option.value === "selection") {
+    else if (option.value === "chapter") {
+      const count = words(chapter.from, chapter.to);
+      option.textContent = `This chapter${chapter.name ? `, “${chapter.name}”` : ""} (${plural(count, "word")})`;
+      // No words of its own (the cursor in the story's details, say): not offered.
+      option.disabled = count === 0;
+    } else if (option.value === "selection") {
       option.disabled = from === to;
       option.textContent =
         from === to ? "The selection" : `The selection (${plural(words(from, to), "word")})`;
@@ -95,6 +98,7 @@ function sayReaches(context: AiContext): void {
   }
   const scope = $<HTMLSelectElement>("#direct-scope");
   if (scope.selectedOptions[0]?.disabled) scope.value = "chapter";
+  if (scope.selectedOptions[0]?.disabled) scope.value = "story";
 }
 
 /** Opens the dialog. */

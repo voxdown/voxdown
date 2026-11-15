@@ -26,6 +26,8 @@ export type Sprint = {
   story: string;
   title: string;
   startWords: number;
+  /** Its story's words as last counted: kept through a reload while another story is open. */
+  lastWords?: number;
 };
 
 export type SprintDone = {
@@ -102,6 +104,18 @@ export function sprintNow(keeper: Keeper): Sprint | undefined {
 
 export function startSprint(keeper: Keeper, sprint: Sprint): void {
   write(keeper, SPRINT, sprint);
+}
+
+/** A story's words counted: kept with the sprint running on it, if one is. */
+export function noteSprintWords(keeper: Keeper, story: string, words: number): void {
+  const sprint = sprintNow(keeper);
+  if (!sprint || sprint.story !== story || sprint.lastWords === words) return;
+  write(keeper, SPRINT, { ...sprint, lastWords: words });
+}
+
+/** The words a sprint's story has now, as last counted (its start's, if never since). */
+export function sprintWords(sprint: Sprint): number {
+  return sprint.lastWords ?? sprint.startWords;
 }
 
 /** Ends the sprint running: kept in the log if it wrote anything or ran its time. */

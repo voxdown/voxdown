@@ -215,8 +215,30 @@ export function joinScraps(
   for (const scrap of here) {
     const was = then.get(scrap.id);
     const outside = now.get(scrap.id);
-    if (!was || !outside) {
+    if (!outside) {
       scraps.push(scrap);
+      continue;
+    }
+    // Not known how it was (the file not written here, or before this browser kept that): where
+    // they differ, both kept, the file's beside this one.
+    if (!was) {
+      if (outside.text === scrap.text) {
+        const note =
+          outside.note && outside.note !== scrap.note
+            ? scrap.note
+              ? `${scrap.note} / from the file: ${outside.note}`
+              : outside.note
+            : scrap.note;
+        if (note !== scrap.note) fromThere++;
+        scraps.push({ ...scrap, note });
+      } else {
+        scraps.push(scrap, {
+          ...outside,
+          id: newId(),
+          note: outside.note ? `${outside.note} (from the file)` : "From the file",
+        });
+        fromThere++;
+      }
       continue;
     }
     // Each field: as the side that changed it has it; changed on both sides, a conflict.

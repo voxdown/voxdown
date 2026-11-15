@@ -174,4 +174,21 @@ Night fell over the harbour. {pause} Somewhere a door slammed. [door slams]
     expect(paused.suggestions.map((each) => each.label)).toEqual(["{pause}"]);
     expect(paused.suggestions[0]?.line).toBe(9);
   });
+
+  it("knows a paragraph given back that isn't directed, and says why marks were refused", () => {
+    const story = parse(
+      "@Sun (mildly) “Take off your coat.”\n\n{book only} *Moral: Persuasion is better than force.*\n\n{audio only} And that is the moral.\n",
+    );
+    const back = readDirected(
+      story,
+      "@Sun (mildly) “Take off your coat.”\n\n{book only} *Moral: Persuasion is better than force.*\n\n{audio only} And that is the moral.",
+    );
+    expect([back.refused, back.missing]).toEqual([[], 0]);
+    const direction = readDirected(story, "@Sun (mildly, with a smile) “Take off your coat.”");
+    expect(direction.refused.map((each) => each.why)).toEqual([
+      "it would change a direction you wrote",
+    ]);
+    const speaker = readDirected(story, "@Moon (mildly) “Take off your coat.”");
+    expect(speaker.refused.map((each) => each.why)).toEqual(["it would change who says what"]);
+  });
 });

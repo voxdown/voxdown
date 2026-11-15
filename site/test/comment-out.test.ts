@@ -28,6 +28,13 @@ describe("commenting words out", () => {
     expect(commentOut(source, 4, 10)).toBeUndefined();
   });
 
+  it("takes a whole quote's speaker with it", () => {
+    const source = "@Percival (quietly) “All of them?” said Sir Percival.";
+    expect(apply(source, source.indexOf("“"), source.indexOf("?”") + 2)).toBe(
+      "<!-- @Percival (quietly) “All of them?” --> said Sir Percival.",
+    );
+  });
+
   it("spaces a stray --> in the words so it can't end their comment", () => {
     expect(apply("A --> B", 0, 7)).toBe("<!-- A -- > B -->");
   });

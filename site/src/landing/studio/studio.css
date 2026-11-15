@@ -4928,3 +4928,63 @@ button {
     contain-intrinsic-size: auto 1003px;
   }
 }
+
+/* ------------------------------------------------------------------ owner additions */
+
+/* "$0", struck through by the red pencil, "Free" written beside it in the pen's hand. Both are
+   placed over the same box, so nothing around them moves. */
+.big-edit {
+  position: relative;
+  display: inline-block;
+}
+.big-edit .struck {
+  position: relative;
+  text-decoration: none;
+}
+.big-edit .struck::after {
+  content: "";
+  position: absolute;
+  left: -0.12em;
+  right: -0.12em;
+  top: 50%;
+  height: 0.3em;
+  translate: 0 -40%;
+  rotate: -8deg;
+  background: url("/landing/studio/pen/pencil-underline.webp") center / 100% 100% no-repeat;
+  transform-origin: left center;
+  transition: transform 0.45s cubic-bezier(0.6, 0, 0.3, 1);
+}
+.big-edit .hand-free {
+  position: absolute;
+  left: calc(100% + 0.18em);
+  bottom: 0.38em;
+  font: 400 0.62em / 1 "Rec Hand", "Comic Sans MS", cursive;
+  letter-spacing: 0;
+  color: #c62f1b;
+  -webkit-text-fill-color: #c62f1b;
+  white-space: nowrap;
+  transform: skewX(-11deg) rotate(-6deg);
+  transition: opacity 0.4s ease 0.4s, translate 0.4s ease 0.4s;
+}
+/* Before the pen reaches it: "$0" whole, "Free" not yet written. */
+.js .big-edit:not(.corrected) .struck::after {
+  transform: scaleX(0);
+}
+.js .big-edit:not(.corrected) .hand-free {
+  opacity: 0;
+  translate: 0 0.15em;
+}
+.facts .big-edit {
+  align-self: flex-start;
+  width: fit-content;
+}
+.big-edit .struck::after {
+  height: 0.38em;
+}
+.big-edit .struck::after {
+  height: 0.5em;
+  filter: brightness(0.5) saturate(1.4);
+}
+.big-edit .hand-free {
+  left: calc(100% + 0.28em);
+}

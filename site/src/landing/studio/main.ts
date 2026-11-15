@@ -49,6 +49,12 @@ const $ = <T extends HTMLElement = HTMLElement>(
 const $$ = <T extends HTMLElement = HTMLElement>(selector: string, root: ParentNode = document) => [
   ...root.querySelectorAll<T>(selector),
 ];
+/**
+ * Where the footer's "support it" link goes. Empty: the line isn't shown at all (no dead link).
+ * Set it to the support page's https:// address to show it.
+ */
+const SUPPORT_URL = "";
+
 const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
@@ -1924,6 +1930,35 @@ function initCast(): void {
 /* On a phone, the secondary screens and the toolbox start folded: one tap opens them. */
 if (window.matchMedia("(max-width: 860px)").matches)
   for (const fold of $$<HTMLDetailsElement>("details[data-fold]")) fold.open = false;
+
+/* The footer's supporter line: only with a real address. */
+if (/^https:\/\/\S+$/.test(SUPPORT_URL)) {
+  const line = document.createElement("p");
+  line.className = "support";
+  line.append("VoxDown is free and stays free. If it helps your work, ");
+  const link = document.createElement("a");
+  link.href = SUPPORT_URL;
+  link.textContent = "you can support it";
+  line.append(link, ".");
+  $(".foot-brand").append(line);
+}
+
+/* "$0" corrected to "Free" by the editor's pen, as the card comes into view. */
+{
+  const edit = $(".big-edit");
+  if (calm.matches || !("IntersectionObserver" in window)) edit.classList.add("corrected");
+  else {
+    const seen = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        seen.disconnect();
+        edit.classList.add("corrected");
+      },
+      { threshold: 0.6 },
+    );
+    seen.observe(edit);
+  }
+}
 
 /* ================================================================== pictures */
 

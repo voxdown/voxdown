@@ -59,7 +59,7 @@
       </div>
 
       <div class="hero-demo">
-        <img class="pen-hero" data-clay src="../../landing/studio/pen/fountain-pen.webp" alt="" width="520" height="347" decoding="async">
+        <img class="pen-hero" data-clay src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" decoding="async">
         <figure class="demo" id="demo" aria-label="A recorded scene, as written in VoxDown and as heard">
           <div class="demo-head">
             <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -69,10 +69,11 @@
           <p class="sr-only" id="sheet-summary">The dragon story as written in VoxDown, from its first heading: each line marked with who says it and how, with the sounds and pauses, ready to be read aloud. Press play to hear it, voiced from this very text.</p>
           <div class="legend" role="group" aria-label="Spot a kind of mark in the scene">
             <span class="legend-label">Spot the marks</span>
-            <button type="button" class="chip-k" data-spot="who" aria-pressed="false"><b class="k-who">@</b> who</button>
-            <button type="button" class="chip-k" data-spot="how" aria-pressed="false"><b class="k-how">( )</b> how</button>
-            <button type="button" class="chip-k" data-spot="sound" aria-pressed="false"><b class="k-sound">[ ]</b> sounds</button>
-            <button type="button" class="chip-k" data-spot="time" aria-pressed="false"><b class="k-time">{ }</b> timing</button>
+            <button type="button" class="chip-k" data-spot="who" aria-pressed="false" aria-describedby="spot-say"><b class="k-who">@</b> who</button>
+            <button type="button" class="chip-k" data-spot="how" aria-pressed="false" aria-describedby="spot-say"><b class="k-how">( )</b> how</button>
+            <button type="button" class="chip-k" data-spot="sound" aria-pressed="false" aria-describedby="spot-say"><b class="k-sound">[ ]</b> sounds</button>
+            <button type="button" class="chip-k" data-spot="time" aria-pressed="false" aria-describedby="spot-say"><b class="k-time">{ }</b> timing</button>
+            <p class="spot-say" id="spot-say" aria-live="polite">Pick a kind of mark to see where it is, and what it does.</p>
           </div>
           <div class="player">
             <button class="play-round" type="button" id="demo-play" aria-label="Play the scene">
@@ -87,7 +88,7 @@
           </div>
           <div class="tip" id="tip" aria-hidden="true"></div>
         </figure>
-        <p class="demo-cap">Voiced with ElevenLabs from this exact file, marks and all. <a id="demo-open" href="../../writer/#example=the-dragon-who-would-not-roar" target="_blank" rel="noopener">Open this scene in the Writer<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
+        <p class="demo-cap">It’s Markdown with a few marks for who and how: any text editor opens it, and it still reads like a story. Voiced with ElevenLabs from this exact file, marks and all. <a id="demo-open" href="../../writer/#example=the-dragon-who-would-not-roar" target="_blank" rel="noopener">Open this scene in the Writer<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
       </div>
     </div>
 
@@ -132,7 +133,7 @@
       </div>
 
       <ol class="steps wrap" id="steps">
-        <li class="step" data-step="1" data-label="Type" data-feature="Plain text, smart quotes and dashes">
+        <li class="step" data-step="1" data-label="Type" data-feature="Plain text, smart quotes">
           <h3>A blank page. A sleepy dragon.</h3>
           <p>Start the way you always do: type. It’s plain text, so there’s nothing to learn before the first sentence.</p>
         </li>
@@ -241,13 +242,12 @@
             <button type="button" data-look="sepia" aria-pressed="false">Sepia</button>
             <button type="button" data-look="dark" aria-pressed="false">Night</button>
             <button type="button" data-look="slate" aria-pressed="false">Slate</button>
-            <button type="button" data-look="contrast" aria-pressed="false">High contrast</button>
           </div>
         </div>
         <button type="button" class="zoom" data-zoom="look" aria-label="View the whole window, full size">
           <picture>
-            <source media="(max-width: 600px)" srcset="../../landing/studio/app/calm-focus-light-phone.webp" width="800" height="480" id="shot-phone">
-            <img class="shot" id="shot" src="../../landing/studio/app/calm-focus-light.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="The VoxDown Writer in focus mode, in the Paper look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.">
+            <source media="(max-width: 600px)" srcset="../../landing/studio/app/calm2-focus-light-phone.webp" width="780" height="740" id="shot-phone">
+            <img class="shot" id="shot" src="../../landing/studio/app/calm2-focus-light.webp" width="2560" height="1600" loading="lazy" decoding="async" alt="The VoxDown Writer in focus mode, in the Paper look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.">
           </picture>
           <span class="zoom-hint" aria-hidden="true">View the whole window</span>
         </button>
@@ -352,7 +352,7 @@
           <p>Nothing is sent to us; there’s no VoxDown server to send it to. Files open from your computer and save back there: in place in Chrome and Edge, as a downloaded copy elsewhere.</p>
           <ul class="vows"><li>No account</li><li>No analytics</li><li>No ads</li><li>AI and voices only if you choose them</li></ul>
         </li>
-        <li><p class="big big-edit"><s class="struck" aria-hidden="true">$0</s> <span class="hand-free">Free</span></p><p>No subscription and no sign-up. Audiobooks can be free too, with Kokoro on your own computer.</p></li>
+        <li><p class="big big-edit"><s class="struck" aria-hidden="true">$0</s> <span class="hand-free">Free<img class="pen-free" src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></p><p>No subscription and no sign-up. Audiobooks can be free too, with Kokoro on your own computer.</p></li>
         <li><p class="big">MIT</p><p>The Writer and every tool are open source, and the spec is CC BY 4.0. Once loaded, the Writer works offline.</p></li>
       </ul>
     </div>
@@ -361,13 +361,13 @@
   <section class="final" aria-labelledby="final-title">
     <div class="wrap">
       <div class="final-band">
-                        <h2 id="final-title">Your cast is <span class="pen-under pen-final-word">waiting.<img class="under-img" src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" loading="lazy" decoding="async"><img class="pen-final" data-clay src="../../landing/studio/pen/fountain-pen.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></h2>
+                        <h2 id="final-title">Your cast is <span class="pen-under pen-final-word">waiting.<img class="under-img" src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" loading="lazy" decoding="async"><img class="pen-final" data-clay src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></h2>
         <p>Open the Writer and start typing. Or open the dragon story and see every mark at work.</p>
         <div class="cta-row cta-center">
           <a class="btn btn-white btn-lg" href="../../writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span> <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
           <a class="btn btn-clear btn-lg" href="../../writer/#example=the-dragon-who-would-not-roar">Open the dragon story</a>
         </div>
-        <p class="final-fine">Runs in your browser. Your story stays on your computer; there’s no VoxDown server to send it to.</p>
+        <p class="final-fine">Runs in your browser. No account, nothing to install.</p>
       </div>
     </div>
   </section>

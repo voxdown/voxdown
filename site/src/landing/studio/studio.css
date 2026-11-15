@@ -25,13 +25,13 @@
     local("Helvetica Bold");
   size-adjust: 106.7%;
 }
-/* VoxDown, the studio direction: a bright launch page whose one idea is the editor's pen and the
-   speaker's colour. A pen marks a passage; the marks set into VoxDown in each speaker's colour; and
+/* VoxDown, the studio direction: a bright launch page whose one idea is the editor's pencil and the
+   speaker's colour. A pencil marks a passage; the marks set into VoxDown in each speaker's colour; and
    those colours run through everything after: lanes, underlines, cards and the app's own screens.
 
    Faces: Bricolage Grotesque for display, Inter for reading, Literata for story text, and the
    Writer's own Recursive (one file; its MONO axis gives the code) for the app and the code. The
-   pen's few handwritten words come from a 3 KB subset of Recursive's casual style. */
+   pencil's few handwritten words come from a 3 KB subset of Recursive's casual style. */
 @font-face {
   font-family: "Rec";
   font-style: normal;
@@ -518,6 +518,7 @@ button {
   font-variation-settings: "opsz" 96, "wdth" 92;
   letter-spacing: -0.045em;
   text-wrap: balance;
+  color: var(--ink);
 }
 
 .keep {
@@ -666,6 +667,8 @@ button {
   scrollbar-width: thin;
   scrollbar-color: rgb(255 255 255 / 0.2) transparent;
   mask-image: linear-gradient(transparent, #000 1.2rem, #000 calc(100% - 2.4rem), transparent);
+  font-size: 0.95rem;
+  line-height: 1.75;
 }
 
 .sheet:focus-visible {
@@ -970,6 +973,7 @@ button {
   margin-top: 0.9rem;
   padding-inline: 0.4rem;
   font-size: 0.88rem;
+  color: var(--ink-2);
 }
 
 .demo-cap a {
@@ -1205,6 +1209,7 @@ button {
 .facts {
   display: grid;
   gap: 1rem;
+  grid-template-columns: 1.3fr 1fr;
 }
 
 .facts li {
@@ -1287,6 +1292,7 @@ button {
 .final-fine {
   font-size: 0.92rem !important;
   margin-top: 1.5rem !important;
+  color: rgb(255 255 255 / 0.9) !important;
 }
 
 /* ------------------------------------------------------------------ footer */
@@ -1356,6 +1362,12 @@ button {
 @media (max-width: 600px) {
   .btn-lg {
     padding-inline: 1.1rem;
+    display: flex;
+    white-space: normal;
+    text-align: center;
+    padding: 0.6rem 1.1rem;
+    font-size: 1rem;
+    --h: 3.1rem;
   }
 }
 /* ------------------------------------------------------------------ hero additions */
@@ -1372,6 +1384,7 @@ button {
   pointer-events: none;
   transform-origin: left center;
   animation: underline-in 0.9s cubic-bezier(0.6, 0, 0.3, 1) 0.5s both;
+  bottom: -0.28em;
 }
 
 @keyframes underline-in {
@@ -1401,11 +1414,6 @@ button {
 .pen-final.missing,
 .lock.missing {
   display: none;
-}
-
-.sheet {
-  font-size: 0.95rem;
-  line-height: 1.75;
 }
 
 .mesh.idle i {
@@ -1506,6 +1514,7 @@ button {
   display: flex;
   gap: 1.5rem;
   min-height: 5.6rem;
+  align-items: flex-start;
 }
 
 .caption-words {
@@ -2227,6 +2236,11 @@ button {
 }
 .mini-paper {
   position: relative;
+  padding: 0.9rem 1rem;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(30 40 60 / 0.08);
+  font: 400 14.5px / 1.65 var(--serif);
 }
 
 /* Heard, in the finale. */
@@ -2239,7 +2253,7 @@ button {
   box-shadow: inset 3px 0 0 #7c3aed;
 }
 
-/* The pen: it rings the words and writes in the margin; the notes stay, only the pen lifts. */
+/* The pencil: it rings the words and writes in the margin; the notes stay, only the pencil lifts. */
 .annot {
   position: absolute;
   inset: 0;
@@ -2298,15 +2312,15 @@ button {
     transform: translateY(4px);
   }
 }
-.nib {
+.pencil-tip {
   width: 5.6rem;
   height: auto;
   opacity: 0;
   filter: drop-shadow(0 8px 10px rgb(21 17 42 / 0.25));
-  animation: nib-move 1.7s ease var(--d) both;
+  animation: pencil-move 1.7s ease var(--d) both;
 }
 
-@keyframes nib-move {
+@keyframes pencil-move {
   0% {
     opacity: 0;
     transform: translate(50px, -30px);
@@ -2454,6 +2468,7 @@ button {
   min-height: 0;
   padding: 0.9rem;
   background: #f6f7f9;
+  scrollbar-width: thin;
 }
 
 .pv:focus-visible {
@@ -2808,6 +2823,7 @@ button {
 .sides-page .said {
   padding-left: 0.6rem;
   border-left: 3px solid #c2410c;
+  border-left-color: color-mix(in oklab, var(--sp, #c2410c) 85%, #000);
 }
 
 .sides-page .said b {
@@ -2957,6 +2973,7 @@ button {
 .routes {
   display: grid;
   gap: 1rem;
+  align-items: stretch;
 }
 
 .route {
@@ -2966,6 +2983,7 @@ button {
   border-radius: 24px;
   background: rgb(255 255 255 / 0.05);
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+  min-width: 0;
 }
 
 .route-kicker {
@@ -3077,6 +3095,7 @@ button {
   padding: 0.65rem 1rem;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
+  justify-content: space-between;
 }
 
 .seg {
@@ -3228,10 +3247,23 @@ button {
     linear-gradient(160deg, #1d1638, #0f0b1d) !important;
   color: #fff;
   overflow: hidden;
+  grid-row: span 2;
+  display: flex;
+  flex-direction: column;
 }
 
 .fact-private .lock {
   position: absolute;
+  width: 3.4rem;
+  height: 3.4rem;
+  right: 1.4rem;
+  top: 1.4rem;
+  fill: none;
+  stroke: #5eead4;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: none;
 }
 
 .fact-kicker {
@@ -3485,6 +3517,7 @@ button {
   .step,
   .step:first-child {
     height: auto;
+    padding: 1.1rem 0 1.3rem;
   }
 
   .step + .step {
@@ -3544,14 +3577,6 @@ button {
     width: 100%;
   }
 
-  .btn-lg {
-    display: flex;
-    white-space: normal;
-    text-align: center;
-    padding: 0.6rem 1.1rem;
-    font-size: 1rem;
-  }
-
   .sheet {
     height: 19rem;
     font-size: 0.86rem;
@@ -3596,6 +3621,8 @@ button {
 
   .shot {
     object-position: 42% 50%;
+    object-fit: initial !important;
+    aspect-ratio: 780 / 740 !important;
   }
 
   .index {
@@ -3667,7 +3694,6 @@ button {
   transform: skewX(-11deg);
 }
 
-/* ------------------------------------------------------------------ round 3 */
 /* Code: Recursive with its MONO axis on, ligatures off. */
 :is(
     code,
@@ -3689,21 +3715,9 @@ button {
   font-variant-ligatures: none;
 }
 
-.hero h1 {
-  color: var(--ink);
-}
-
-.pen-under img {
-  bottom: -0.28em;
-}
-
 .final-band .btn-clear {
   background: rgb(255 255 255 / 0.1);
   box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.7) inset;
-}
-
-.final-fine {
-  color: rgb(255 255 255 / 0.9) !important;
 }
 
 /* The beat's "try it" line, in the caption. */
@@ -3779,6 +3793,8 @@ button {
   box-shadow: 0 0 0 1.5px #7c3aed inset;
   color: #5b21b6;
   font-weight: 650;
+  gap: 0.35rem;
+  font-size: 13px !important;
 }
 
 .mini-tools .tb-live svg {
@@ -3794,14 +3810,6 @@ button {
   display: grid;
   gap: 0.6rem;
   padding: 0.7rem;
-}
-
-.mini-paper {
-  padding: 0.9rem 1rem;
-  border-radius: 6px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(30 40 60 / 0.08);
-  font: 400 14.5px / 1.65 var(--serif);
 }
 
 .mini-paper .ln {
@@ -3831,12 +3839,15 @@ button {
   top: 0.05em;
   font-size: 17px;
   line-height: 1.05;
+  width: 6.2rem;
 }
 
 /* The pencil, placed by hand: a ring around the words, or a line under them. */
 .ink-ring {
   padding: 0.12em 0.4em;
   background: url("/landing/studio/pen/pencil-circle.webp") center / 100% 100% no-repeat;
+  margin: 0 -0.4em;
+  white-space: nowrap;
 }
 
 .k-speech.ink-ring {
@@ -4004,10 +4015,11 @@ button {
 /* ------------------------------------------------------------------ section 04, new */
 .seg-looks {
   flex-wrap: wrap;
-}
-
-.shot-bar {
-  justify-content: space-between;
+  align-items: center;
+  margin-left: 0;
+  background: none;
+  box-shadow: none;
+  gap: 0.15rem;
 }
 
 .zoom {
@@ -4061,6 +4073,7 @@ button {
 .outcomes {
   display: grid;
   margin-top: 1rem;
+  gap: 0.6rem 1.4rem;
 }
 
 .outcomes li {
@@ -4072,6 +4085,7 @@ button {
   color: var(--ink);
   font: 700 1.05rem / 1.3 var(--display);
   letter-spacing: -0.01em;
+  font-size: 1rem;
 }
 
 .more {
@@ -4155,14 +4169,11 @@ button {
   }
 }
 @media (max-width: 600px) {
-  .shot {
-    object-fit: initial !important;
-  }
-
   .proof-card .zoom img {
     max-height: 26rem;
     object-fit: contain;
     background: #e7eaee;
+    aspect-ratio: auto 292 / 640;
   }
 
   .seg-looks button {
@@ -4177,19 +4188,16 @@ button {
   .zoom-hint {
     opacity: 1;
     font-size: 0.74rem;
+    padding: 0.3rem 0.6rem;
+    top: auto;
+    right: 50%;
+    bottom: 0.45rem;
+    translate: 50% 0;
+    background: var(--ink);
   }
 }
 .routes {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-}
-
-.route {
-  min-width: 0;
-}
-
-.mini-tools .tb-live {
-  gap: 0.35rem;
-  font-size: 13px !important;
 }
 
 .step[data-step="2"] .step-example:not(.who-set) .who-slot {
@@ -4202,23 +4210,9 @@ button {
   box-decoration-break: clone;
 }
 
-@media (max-width: 600px) {
-  .zoom-hint {
-    padding: 0.3rem 0.6rem;
-  }
-}
 .step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech.ink-ring {
   background: url("/landing/studio/pen/pencil-circle.webp") center / 100% 100% no-repeat;
 }
-
-/* While the pill shows, the beat's caption keeps clear of it. */
-@media (min-width: 861px) {
-  .np-on .caption {
-    padding-right: min(27rem, 34vw);
-  }
-}
-
-/* ------------------------------------------------------------------ round 4 */
 
 /* Beat 1 starts only once the frame is pinned, so its caption is on screen. */
 @media (min-width: 861px) {
@@ -4258,6 +4252,7 @@ button {
   margin: 0;
   cursor: grab;
   transition: box-shadow 0.2s ease;
+  padding-right: 2.7rem;
 }
 
 .board-list .bcard:focus-visible {
@@ -4279,6 +4274,10 @@ button {
   position: absolute;
   display: flex;
   gap: 0.2rem;
+  top: 50%;
+  right: 0.4rem;
+  translate: 0 -50%;
+  flex-direction: column;
 }
 
 .moves button {
@@ -4374,11 +4373,7 @@ button {
     display: grid;
   }
 }
-.ink-ring {
-  margin: 0 -0.4em;
-}
-
-/* The final band: the pen underlines "waiting." and rests at its end. */
+/* The final band: the pencil underlines "waiting." and rests at its end. */
 .final-band .pen-final-word {
   position: relative;
   display: inline-block;
@@ -4397,28 +4392,16 @@ button {
 .final-band .pen-final {
   position: absolute;
   filter: drop-shadow(0 10px 14px rgb(0 0 0 / 0.4));
-}
-
-/* Free, open, yours: the privacy card beside the two short ones. */
-.facts {
-  grid-template-columns: 1.3fr 1fr;
-}
-
-.fact-private {
-  grid-row: span 2;
-}
-
-.fact-private .lock {
-  width: 3.4rem;
-  height: 3.4rem;
-  right: 1.4rem;
-  top: 1.4rem;
-  fill: none;
-  stroke: #5eead4;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: none;
+  rotate: 0deg;
+  transform-origin: 0 100%;
+  /* The lead (4.9% across, 96.2% down the picture) on the end of the line it has just drawn. */
+  left: calc(96% - 0.0735em);
+  bottom: -0.038em;
+  width: 1.5em;
+  translate: none;
+  animation: none;
+  height: auto;
+  object-fit: contain;
 }
 
 .fact-private .lock path:last-child {
@@ -4428,6 +4411,7 @@ button {
 @media (max-width: 860px) {
   .fact-private {
     grid-row: auto;
+    grid-column: 1 / -1;
   }
 }
 /* The cast: on a phone, chips and the chosen voice. */
@@ -4480,14 +4464,6 @@ button {
     padding-bottom: 2.4rem;
   }
 
-  .zoom-hint {
-    top: auto;
-    right: 50%;
-    bottom: 0.45rem;
-    translate: 50% 0;
-    background: var(--ink);
-  }
-
   .proof-card .zoom {
     padding-bottom: 2.6rem;
   }
@@ -4512,19 +4488,8 @@ button {
     margin: 0;
   }
 }
-.board-list .bcard {
-  padding-right: 2.7rem;
-}
-
 .board-list .bcard b {
   padding-right: 0;
-}
-
-.moves {
-  top: 50%;
-  right: 0.4rem;
-  translate: 0 -50%;
-  flex-direction: column;
 }
 
 /* Phone: the handouts in a window of their own, scrolled inside, not the whole page long. */
@@ -4532,13 +4497,11 @@ button {
   .mini-tabs .pv {
     overflow: auto;
     overscroll-behavior: contain;
+    max-height: 16rem;
+    mask-image: linear-gradient(#000 calc(100% - 3rem), transparent);
+    padding-bottom: 1.5rem;
   }
 }
-/* Contrast, measured over the real backgrounds. */
-.demo-cap {
-  color: var(--ink-2);
-}
-
 .btn-grad .btn-time {
   color: #fff;
 }
@@ -4551,8 +4514,6 @@ button {
 .pv .vxd-chip-vocal {
   color: color-mix(in oklab, var(--vxd-c, #0f766e) 78%, #000);
 }
-
-/* ------------------------------------------------------------------ round 5 */
 
 /* Wide screens: the per-beat examples are the phone's; only each beat's words (and step 6's text
    alternative) stay, for screen readers. Nothing hidden can take the focus. */
@@ -4574,12 +4535,7 @@ button {
     border-radius: 3px;
   }
 }
-/* The ring stays around the words, however the line wraps. */
-.ink-ring {
-  white-space: nowrap;
-}
-
-/* The pen, answered: "who?" struck through, the speaker named, a tick. */
+/* The pencil, answered: "who?" struck through, the speaker named, a tick. */
 .hand s,
 .note s {
   text-decoration: line-through 2px #c62f1b;
@@ -4617,14 +4573,9 @@ button {
   animation: hand-in 0.35s ease both;
 }
 
-.note {
-  width: 6.2rem;
-}
-
 .pv {
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
 }
 
 .pv .vxd {
@@ -4646,11 +4597,6 @@ button {
 .pv .vxd-direction > span,
 .step-example .vxd-direction > span {
   font-size: 11px;
-}
-
-/* Production: two cards of a height, and the connector beneath both. */
-.routes {
-  align-items: stretch;
 }
 
 .route .route-viz:last-child,
@@ -4690,18 +4636,6 @@ button {
   margin: 0 !important;
   color: #c9c4dc;
   font-size: 0.92rem;
-}
-
-/* The final pen: its nib at the end of the line it has just drawn under "waiting." */
-.final-band .pen-final {
-  rotate: 0deg;
-  transform-origin: 0 100%;
-}
-
-/* Privacy: its vows at the foot, so the card is as full as the two beside it. */
-.fact-private {
-  display: flex;
-  flex-direction: column;
 }
 
 .fact-private > p:not(.fact-kicker) {
@@ -4815,16 +4749,26 @@ button {
   /* Who it's for: one swipeable row. */
   .for {
     padding-bottom: 2.2rem;
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
   }
 
   .for ul {
     overflow-x: auto;
     scrollbar-width: none;
     padding-bottom: 0.2rem;
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 0.35rem;
   }
 
   .for li {
     flex: none;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.84rem;
+    gap: 0.4rem;
   }
 
   .sheet {
@@ -4835,17 +4779,8 @@ button {
     padding-top: 2.5rem;
   }
 
-  .step,
-  .step:first-child {
-    padding: 1.1rem 0 1.3rem;
-  }
-
   .step-example {
     margin-top: 0.75rem;
-  }
-
-  .mini-tabs .pv {
-    max-height: 16rem;
   }
 
   .mini-board .bcard i {
@@ -4880,10 +4815,12 @@ button {
   .route .csv pre {
     max-height: 8.5rem;
     overflow: auto;
+    mask-image: linear-gradient(90deg, #000 78%, transparent);
   }
 
   .route .csv {
     margin: 0.8rem 0 0;
+    position: relative;
   }
 
   .dark-dev .fold > summary {
@@ -4904,10 +4841,6 @@ button {
   .facts {
     grid-template-columns: 1fr 1fr;
     gap: 0.7rem;
-  }
-
-  .fact-private {
-    grid-column: 1 / -1;
   }
 
   .facts > li:not(.fact-private) {
@@ -4934,20 +4867,6 @@ button {
     padding-bottom: 3rem !important;
   }
 }
-/* The nib (at 11% and 94% of the pen's picture) exactly where the underline ends. */
-.final-band .pen-final {
-  left: calc(100% - 0.168em);
-  bottom: -0.06em;
-  width: 1.5em;
-  translate: none;
-}
-
-.final-band .pen-final {
-  animation: none;
-  height: auto;
-  object-fit: contain;
-}
-
 /* The CSV fills whatever room its card has, its rows scrolling inside. */
 .route .csv {
   flex: 1;
@@ -4973,7 +4892,6 @@ button {
 }
 
 /* Their measured heights, so the page is its true length before they are laid out. */
-/* ------------------------------------------------------------------ round 6 */
 /* Lines wrap without leaving a lone word or letter at an edge. */
 .doc .ln,
 .mini-paper .ln {
@@ -4988,11 +4906,6 @@ button {
 
 :is(.route-viz, #wr, .step-example) .vxd-group-label {
   line-height: 1.4;
-}
-
-/* Each character's lines, in their own colour. */
-.sides-page .said {
-  border-left-color: color-mix(in oklab, var(--sp, #c2410c) 85%, #000);
 }
 
 .sides-page .said b {
@@ -5029,7 +4942,7 @@ button {
     display: inline;
   }
 }
-/* Pen notes keep their distance from the words. */
+/* Pencil notes keep their distance from the words. */
 .mini-paper .ln.noted {
   padding-right: 7rem;
 }
@@ -5082,6 +4995,13 @@ button {
   --m-direction: #c4b5fd;
   --m-sound: #5eead4;
   --m-quiet: #b9b3cf;
+  flex: none;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: none;
+  height: auto;
+  mask-image: none;
+  overflow: visible;
+  display: block;
 }
 
 .prod .cast-line .t-name,
@@ -5098,6 +5018,7 @@ button {
   background: color-mix(in srgb, var(--sp) 22%, #1d1638);
   box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--sp) 55%, #fff) inset;
   color: #fff;
+  margin-top: auto;
 }
 
 .prod .audition:hover {
@@ -5122,14 +5043,10 @@ button {
   flex-direction: column;
 }
 
-/* The caption: top-aligned, its button a fixed width, its height set to its tallest beat. */
-.caption {
-  align-items: flex-start;
-}
-
 .caption .finale-play {
   width: 13.5rem;
   margin-top: 0.3rem;
+  justify-content: flex-start;
 }
 
 /* One preview width throughout (no beat changes it). */
@@ -5144,11 +5061,6 @@ button {
     --pv: 22rem;
   }
 }
-/* The button's glyph and time stay put whatever its label says. */
-.caption .finale-play {
-  justify-content: flex-start;
-}
-
 .caption .finale-play .btn-time {
   margin-left: auto;
 }
@@ -5216,7 +5128,7 @@ button {
   transition: opacity 0.4s ease 0.4s, translate 0.4s ease 0.4s;
 }
 
-/* Before the pen reaches it: "$0" whole, "Free" not yet written. */
+/* Before the pencil reaches it: "$0" whole, "Free" not yet written. */
 .js .big-edit:not(.corrected) .struck::after {
   transform: scaleX(0);
 }
@@ -5231,12 +5143,14 @@ html:not(.js) .big-edit .struck {
   -webkit-text-fill-color: #8f8a9f;
 }
 
-/* ------------------------------------------------------------------ round 7 */
-
 /* The phone's scene board: ↑ and ↓ side by side inside each card, 40 px targets, no overlap. */
 @media (max-width: 860px) {
   .board-list .bcard {
     padding-right: 0.65rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 0.6rem;
   }
 
   .moves {
@@ -5266,27 +5180,8 @@ html:not(.js) .big-edit .struck {
 
 /* "Made for" on the phone: the label on one line, the chips wrapping onto rows. */
 @media (max-width: 860px) {
-  .for {
-    flex-direction: column;
-    align-items: flex-start;
-    flex-wrap: nowrap;
-    gap: 0.5rem;
-  }
-
   .for-label {
     white-space: nowrap;
-  }
-
-  .for ul {
-    flex-wrap: wrap;
-    overflow: visible;
-    gap: 0.35rem;
-  }
-
-  .for li {
-    padding: 0.3rem 0.65rem;
-    font-size: 0.84rem;
-    gap: 0.4rem;
   }
 }
 
@@ -5310,10 +5205,6 @@ html:not(.js) .big-edit .struck {
   .cta-row {
     margin-top: 1.2rem;
     gap: 0.55rem;
-  }
-
-  .btn-lg {
-    --h: 3.1rem;
   }
 
   .fine {
@@ -5344,16 +5235,6 @@ html:not(.js) .big-edit .struck {
   text-wrap: balance;
 }
 
-/* The cast's lines: one height for all four, the long one trimmed. */
-.prod .cast-line {
-  flex: none;
-  -webkit-box-orient: vertical;
-}
-
-.prod .audition {
-  margin-top: auto;
-}
-
 /* Step 7: the current line fills the panel's room. */
 .pv-p-audio .ab {
   display: flex;
@@ -5371,15 +5252,10 @@ html:not(.js) .big-edit .struck {
 /* After the screenshots: four short outcomes, the inventory behind one closed link. */
 .outcomes {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.6rem 1.4rem;
 }
 
 .outcomes li {
   font-size: 0.92rem;
-}
-
-.outcomes b {
-  font-size: 1rem;
 }
 
 @media (max-width: 1100px) {
@@ -5414,7 +5290,7 @@ html:not(.js) .big-edit .struck {
   display: none;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 1100px) {
   .for .wide-txt {
     display: none;
   }
@@ -5426,18 +5302,18 @@ html:not(.js) .big-edit .struck {
 @media (max-width: 860px) {
   .board-list .bcard .moves {
     justify-content: flex-end;
+    grid-row: 1 / span 3;
+    margin-top: 0;
   }
 }
-.prod .cast-line {
-  -webkit-line-clamp: none;
-}
 
-/* Measured heights, round 7. */
+/* The four outcomes, on a phone. */
 @media (max-width: 600px) {
   .outcomes {
     grid-template-columns: 1fr;
     gap: 0.6rem;
   }
+
   .outcomes li {
     font-size: 0.9rem;
   }
@@ -5447,14 +5323,6 @@ html:not(.js) .big-edit .struck {
   }
 }
 @media (max-width: 860px) {
-  /* Each card: its title and state on the left, ↑ ↓ side by side on the right. */
-  .board-list .bcard {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    column-gap: 0.6rem;
-  }
-
   .board-list .bcard > b,
   .board-list .bcard > span:not(.moves) {
     grid-column: 1;
@@ -5462,11 +5330,8 @@ html:not(.js) .big-edit .struck {
 
   .board-list .bcard .moves {
     grid-column: 2;
-    grid-row: 1 / span 3;
-    margin-top: 0;
   }
 }
-/* ------------------------------------------------------------------ round 8 */
 /* Wide and narrow wording, as blocks. */
 .narrow-only-block {
   display: none;
@@ -5492,13 +5357,6 @@ html:not(.js) .big-edit .struck {
   .route > p:not(.route-kicker) {
     font-size: 0.95rem;
   }
-}
-/* The cast's lines: each its own size; on wide screens the panels share a height, text at top. */
-.prod .cast-line {
-  height: auto;
-  mask-image: none;
-  overflow: visible;
-  display: block;
 }
 
 @media (min-width: 861px) {
@@ -5528,14 +5386,6 @@ html:not(.js) .big-edit .struck {
 }
 /* The phone's screenshot keeps its own shape before it loads. */
 @media (max-width: 600px) {
-  .shot {
-    aspect-ratio: 800 / 480 !important;
-  }
-
-  .proof-card .zoom img {
-    aspect-ratio: auto 292 / 640;
-  }
-
   .proof-card:nth-child(2) .zoom img {
     aspect-ratio: auto 704 / 540;
   }
@@ -5561,14 +5411,6 @@ html:not(.js) .big-edit .struck {
   min-height: 1.5em;
   color: var(--ink-2);
   font-size: 0.95rem;
-}
-
-.seg-looks {
-  align-items: center;
-  margin-left: 0;
-  background: none;
-  box-shadow: none;
-  gap: 0.15rem;
 }
 
 .seg-looks .seg-label {
@@ -5632,4 +5474,78 @@ html:not(.js) .big-edit .struck {
 .step[data-step="1"] .mini-paper .ln.g1 {
   box-shadow: none;
   padding-left: 0;
+}
+
+/* Spot the marks: what the chosen kind does, said beside the chips. */
+.spot-say {
+  flex-basis: 100%;
+  min-height: 1.45em;
+  margin-top: 0.15rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: #d9d5ea;
+}
+
+/* The caption under the floating player: its words never reach where the pill sits, so its
+   layout is the same whether the pill shows or not; the beat's own play button gives way to it. */
+@media (min-width: 861px) {
+  .caption-words {
+    max-width: min(48rem, calc(100% - 29rem));
+  }
+
+  .np-on .caption .finale-play {
+    visibility: hidden;
+  }
+
+  .caption {
+    justify-content: space-between;
+  }
+}
+
+/* Phone: the CSV scrolls sideways, and says so; the handouts end on a fade. */
+@media (max-width: 860px) {
+  .route .csv figcaption::after {
+    content: "scroll →";
+    float: right;
+    color: #b9b3cf;
+  }
+}
+
+/* ------------------------------------------------------------------ the red pencil */
+
+/* After the correction: the pencil at rest, its lead on the end of "Free". */
+.big-edit .hand-free {
+  position: absolute;
+}
+.big-edit .pen-free {
+  position: absolute;
+  /* The lead at (4.9%, 96.2%) of the picture, set on the end of the word's baseline. */
+  width: 2.2em;
+  height: auto;
+  left: calc(100% - 0.008em);
+  top: -0.31em;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 8px rgb(21 17 42 / 0.2));
+  -webkit-text-fill-color: initial;
+  transition: opacity 0.4s ease 0.9s;
+}
+.js .big-edit:not(.corrected) .pen-free {
+  opacity: 0;
+}
+/* The hero's pencil, resting on the scene: a little smaller than the pen it replaces. */
+.pen-hero {
+  width: clamp(7rem, 11vw, 10rem);
+}
+@media (max-width: 600px) {
+  .pen-hero {
+    width: 5.6rem;
+  }
+}
+@media (max-width: 860px) {
+  /* A shorter pencil in the narrow card; its lead in the same place. */
+  .big-edit .pen-free {
+    width: 1.7em;
+    left: calc(100% + 0.016em);
+    top: 0.011em;
+  }
 }

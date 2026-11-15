@@ -493,8 +493,23 @@ function seekHero(share: number): void {
   homes.observe($("#demo"));
 }
 
+/** What each kind of mark does, said beside the chips. */
+function spotSays(kind: string): string {
+  switch (kind) {
+    case "who":
+      return "@Name before a quote says who says it.";
+    case "how":
+      return "A direction in round brackets says how it’s said.";
+    case "sound":
+      return "Square brackets are a sound: of the world, or, after a name, the speaker’s own.";
+    case "time":
+      return "Braces set the timing: a {pause}, or a {page} turn.";
+  }
+  return "Pick a kind of mark to see where it is, and what it does.";
+}
 function applySpot(): void {
   sheet.dataset.spot = spot;
+  $("#spot-say").textContent = spotSays(spot);
   for (const button of $$<HTMLButtonElement>(".chip-k"))
     button.setAttribute("aria-pressed", String(button.dataset.spot === spot));
   if (!spot || playing()) return;
@@ -566,7 +581,11 @@ sheet.addEventListener("scroll", () => tip.classList.remove("on"), { passive: tr
  * character is laid out from the start and only made visible in turn, so no line re-wraps.
  * Returns a function that finishes the typing at once.
  */
-function typewrite(root: HTMLElement, caret: HTMLElement | null): () => void {
+function typewrite(
+  root: HTMLElement,
+  caret: HTMLElement | null,
+  onType?: (typed: string) => void,
+): () => void {
   const nodes: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode())
@@ -578,7 +597,9 @@ function typewrite(root: HTMLElement, caret: HTMLElement | null): () => void {
     for (const ch of node.data) {
       const span = document.createElement("span");
       span.className = "tw";
-      span.textContent = ch;
+      // Quotes are typed straight and curl a beat later, as smart quotes do.
+      span.textContent = ch === "“" || ch === "”" ? '"' : ch;
+      if (ch === "“" || ch === "”") span.dataset.curl = ch;
       frag.append(span);
       chars.push(span);
     }
@@ -598,9 +619,25 @@ function typewrite(root: HTMLElement, caret: HTMLElement | null): () => void {
     caret.style.transform = `translate(${x.toFixed(1)}px, ${(box.top - base.top).toFixed(1)}px)`;
     caret.style.height = `${box.height}px`;
   };
+  const report = () => {
+    if (!onType) return;
+    const lines = [...root.querySelectorAll(".ln")].filter((l) => !l.textContent?.startsWith("##"));
+    onType(
+      lines
+        .map((l) => [...l.querySelectorAll(".tw.on")].map((c) => c.textContent).join(""))
+        .join(" "),
+    );
+  };
+  const curl = (ch: HTMLElement) => {
+    if (ch.dataset.curl) ch.textContent = ch.dataset.curl;
+  };
   const finish = () => {
     clearTimeout(timer);
-    for (const ch of chars) ch.classList.add("on");
+    for (const ch of chars) {
+      ch.classList.add("on");
+      curl(ch);
+    }
+    report();
     at = chars.length;
     place();
     root.classList.remove("typing-on");
@@ -613,8 +650,10 @@ function typewrite(root: HTMLElement, caret: HTMLElement | null): () => void {
       return;
     }
     ch.classList.add("on");
+    if (ch.dataset.curl) window.setTimeout(() => curl(ch), 160);
     at += 1;
     place();
+    report();
     const following = chars[at];
     const lineEnd = following && following.closest("p") !== ch.closest("p");
     const pause = lineEnd
@@ -759,6 +798,14 @@ function initSpine(): void {
     }
   }
   const STEPS = 7;
+  /** Step 1's opening: the scene's first lines, and the dragon's line before anyone has said it. */
+  const OPENING: Line[] = [
+    LINES[0] as Line,
+    LINES[1] as Line,
+    LINES[2] as Line,
+    { segs: [{ t: "Sir Percival crept inside." }] },
+    { segs: [{ t: "“Could you not?”" }] },
+  ];
   const CUT_AT = 5;
   const SEG_FROM = 50.2;
   const SEG_TO = 84.5;
@@ -767,7 +814,7 @@ function initSpine(): void {
     who === "Narrator" ? NARRATOR_COLOR : who ? (dragonColors.get(who) ?? "#555") : "#555";
 
   /** A line's HTML. In the mock every mark is there and CSS shows it at its beat; in an example,
-   * only what's set by `upTo` is drawn. `pen`: the words a pencil rings in an example. */
+   * only what's set by `upTo` is drawn. `pencil`: the words a pencil rings in an example. */
   function lineHtml(
     line: Line,
     upTo?: number,
@@ -1147,7 +1194,7 @@ function initSpine(): void {
   function exampleHtml(step: number): string {
     switch (step) {
       case 1:
-        return mini(paper(linesHtml(LINES.slice(0, 5), 1)));
+        return mini(paper(linesHtml(OPENING, 1)));
       case 2:
         return mini(
           `${paper(linesHtml(byId("could"), 2, { could: { seg: 2, mark: "ring", note: "who?" } }))}
@@ -1188,7 +1235,7 @@ function initSpine(): void {
     return "";
   }
 
-  /* The pen: it rings or underlines the words, and writes its question in the margin. */
+  /* The pencil: it rings or underlines the words, and writes its question in the margin. */
   const PEN: Record<number, Array<{ at: string; word: string; shape: "circle" | "under" }>> = {
     2: [{ at: "could .k-speech", word: "who?", shape: "circle" }],
     3: [
@@ -1246,6 +1293,15 @@ function initSpine(): void {
   };
   const FOCUS_OF: Record<number, string> = { 2: "could", 3: "rumble", 4: "battle", 5: "imaginary" };
 
+  const countWords = (text: string) => text.split(/\s+/).filter((word) => /\w/.test(word)).length;
+  const OPENING_WORDS = countWords(
+    OPENING.slice(1)
+      .flatMap((line) =>
+        line.segs.filter((seg) => !seg.k || seg.k === "speech").map((seg) => seg.t),
+      )
+      .join(" "),
+  );
+
   function wordCount(upTo: number): number {
     return LINES.filter((line) => (line.s ?? 0) <= upTo && !(line.cut && upTo >= CUT_AT))
       .flatMap((line) =>
@@ -1294,7 +1350,7 @@ function initSpine(): void {
         `“Could you not?” is now ${name}’s${handle === "Narrator" ? "" : ", and his card is in the Cast"}.${handle === G ? "" : " The recording gave it to Gerald."}`,
       );
     }
-    // The pen's ring was measured with no name before the quote: measured again, and answered.
+    // The pencil's ring was measured with no name before the quote: measured again, and answered.
     if (active === 2 && window.innerWidth > 860) drawPen(2, true);
   }
 
@@ -1521,13 +1577,13 @@ function initSpine(): void {
     if (n === 5) scrapTimer = window.setTimeout(() => setTab("scraps"), calm.matches ? 0 : 1800);
     // The page drawn afresh for the beat: its new marks and lines arrive, nothing already there moves.
     $("#wr-lines-doc").innerHTML =
-      n === 1 ? linesHtml(LINES.slice(0, 5), 1) : linesHtml(LINES, Math.max(n, 0), {}, n);
+      n === 1 ? linesHtml(OPENING, 1) : linesHtml(LINES, Math.max(n, 0), {}, n);
     // Step 1 types its opening a character at a time; moving on finishes it at once.
     finishTyping?.();
     finishTyping = undefined;
     const caret = $(".caret", wr);
     caret.style.transform = "";
-    if (n === 1 && !calm.matches) finishTyping = typewrite($("#wr-lines-doc"), caret);
+    const typeNow = n === 1 && !calm.matches;
     for (const [i, button] of $$<HTMLButtonElement>("[data-go]").entries()) {
       if (i + 1 === n) button.setAttribute("aria-current", "step");
       else button.removeAttribute("aria-current");
@@ -1546,8 +1602,16 @@ function initSpine(): void {
         : n === STEPS
           ? "Play the scene"
           : "Hear it voiced";
-    $("[data-status]", wr).textContent =
-      `${wordCount(n)} words · ${n >= 2 ? "3 voices" : "1 voice"} · ${n >= 4 ? "2 scenes" : "1 scene"}`;
+    const status = (words: number) =>
+      `${words} word${words === 1 ? "" : "s"} · ${n >= 2 ? "3 voices" : "1 voice"} · ${n >= 4 ? "2 scenes" : "1 scene"}`;
+    $("[data-status]", wr).textContent = status(n === 1 ? OPENING_WORDS : wordCount(n));
+    if (typeNow) {
+      // The status bar counts only what has been typed.
+      $("[data-status]", wr).textContent = status(0);
+      finishTyping = typewrite($("#wr-lines-doc"), caret, (typed) => {
+        $("[data-status]", wr).textContent = status(countWords(typed));
+      });
+    }
     if (n < STEPS - 1 && player.owner === finaleOwner && playing() && window.innerWidth > 860)
       player.audio?.pause();
     const picker = $("#picker");
@@ -1555,7 +1619,7 @@ function initSpine(): void {
     if (window.innerWidth <= 860) return;
     scrollDoc(FOCUS_OF[n]);
     annot.replaceChildren();
-    // The pen measures the words once they're laid out, in their fonts, and the page has moved.
+    // The pencil measures the words once they're laid out, in their fonts, and the page has moved.
     const draw = () => {
       if (active === n) drawPen(n);
     };
@@ -1641,7 +1705,7 @@ function initSpine(): void {
           .map((r) => r.right - base.left),
       );
       const group = document.createElement("div");
-      // "who?" answered: struck through, the speaker named, a tick; the pen itself stays away.
+      // "who?" answered: struck through, the speaker named, a tick; the pencil itself stays away.
       const done = mark.word === "who?" && Boolean(who);
       group.className = `pen mark-${mark.shape}${done ? " pen-done" : ""}${answered ? " pen-now" : ""}`;
       group.style.setProperty("--d", `${i * 0.6}s`);
@@ -1662,11 +1726,12 @@ function initSpine(): void {
       group.innerHTML = `${shape}${leader}<span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px">${words}</span>${
         done || calm.matches
           ? ""
-          : `<img class="nib" src="../../landing/studio/pen/fountain-pen.webp" alt="" style="left:${margin - 8}px;top:${y + h / 2 - 50}px">`
+          : // The pencil's lead (at 4.9% and 96.2% of its picture) where the note's first letter sits.
+            `<img class="pencil-tip" src="../../landing/studio/pen/red-pencil.webp" alt="" style="left:${margin - 6}px;top:${y + h / 2 - 48}px">`
       }`;
-      // The moving pen leaves once it has written: never a pen left hanging over the page.
+      // The moving pencil leaves once it has written: never a pencil left hanging over the page.
       group
-        .querySelector(".nib")
+        .querySelector(".pencil-tip")
         ?.addEventListener("animationend", (event) => (event.target as HTMLElement).remove());
       annot.append(group);
     }
@@ -1975,22 +2040,22 @@ initCast();
   // The window: one view (focus, workbench, marks as written or drawn) in one look.
   const VIEWS: Record<string, { file: (look: string) => string; cap: string; alt: string }> = {
     focus: {
-      file: (look) => `calm-focus-${look}`,
+      file: (look) => `calm2-focus-${look}`,
       cap: "Focus mode: the toolbar and panels step away, and every paragraph but yours fades back.",
       alt: "The VoxDown Writer in focus mode, in the LOOK look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.",
     },
     workbench: {
-      file: (look) => `full-${look}`,
+      file: (look) => `calm2-workbench-${look}`,
       cap: 'The workbench and the preview open: the cast beside the story<span class="wide-only">, and its script on the right</span><span class="narrow-only">; tap for the script beside them</span>.',
       alt: "The VoxDown Writer with the workbench and the preview open, in the LOOK look: the cast on the left, the dragon story in the middle, its script on the right.",
     },
     written: {
-      file: (look) => `calm-written-${look}`,
+      file: (look) => `calm2-written-${look}`,
       cap: "Marks as written: every @, ( ), [ ] and { } exactly as you typed it.",
       alt: "The dragon story with its marks as written, in the LOOK look: @Gerald, (deep, polite and utterly unbothered), [snores] and {pause} in the text, each in its colour.",
     },
     drawn: {
-      file: (look) => `calm-drawn-${look}`,
+      file: (look) => `calm2-drawn-${look}`,
       cap: "Marks drawn: names as tags, directions as small notes above the words.",
       alt: "The same passage with its marks drawn, in the LOOK look: “Gerald the Dragon” as a tag before his lines, his direction as a small note above “Could you not?”, sounds and the pause as chips.",
     },
@@ -2001,7 +2066,7 @@ initCast();
   const showWindow = () => {
     const view = VIEWS[state.view] as (typeof VIEWS)[string];
     const name = view.file(state.look);
-    const phoneName = state.view === "workbench" ? `phone-${state.look}` : `${name}-phone`;
+    const phoneName = `${name}-phone`;
     shot.src = `../../landing/studio/app/${name}.webp`;
     phone.srcset = `../../landing/studio/app/${phoneName}.webp`;
     shot.alt = view.alt.replace("LOOK", LOOK_NAMES[state.look] ?? "");
@@ -2030,15 +2095,27 @@ initCast();
       const img = $<HTMLImageElement>("img", zoom);
       const look = zoom.dataset.zoom === "look";
       big.src = look ? shot.src : (zoom.dataset.zoom as string);
-      big.width = look ? 1600 : Number(zoom.dataset.zoomW);
-      big.height = look ? 1000 : Number(zoom.dataset.zoomH);
+      big.width = look ? 1280 : Number(zoom.dataset.zoomW);
+      big.height = look ? 800 : Number(zoom.dataset.zoomH);
+      // On a phone it shows at half its pixel width: sharp on a 2× screen, and panned.
+      big.style.width = window.innerWidth <= 600 ? `${big.width}px` : "";
       big.alt = img.alt;
       box.showModal();
       // On a phone the screenshot shows at its own size, to pan; it opens on the story.
       if (window.innerWidth <= 600) {
         const fit = () => {
-          box.scrollLeft = look ? 380 : Math.max(0, (big.width - box.clientWidth) / 2);
-          box.scrollTop = look ? 120 : 0;
+          // It opens on the passage: the story column, near "Could you not?".
+          const spots: Record<string, number[]> = {
+            focus: [270, 150],
+            workbench: [110, 160],
+            written: [290, 280],
+            drawn: [290, 280],
+          };
+          const at = spots[state.view] ?? [0, 0];
+          box.scrollLeft = look
+            ? (at[0] as number)
+            : Math.max(0, (big.width - box.clientWidth) / 2);
+          box.scrollTop = look ? (at[1] as number) : 0;
         };
         if (big.complete) fit();
         else big.addEventListener("load", fit, { once: true });
@@ -2065,7 +2142,7 @@ if (/^https:\/\/\S+$/.test(SUPPORT_URL)) {
   $(".foot-brand").append(line);
 }
 
-/* "$0" corrected to "Free" by the editor's pen, as the card comes into view. */
+/* "$0" corrected to "Free" by the editor's pencil, as the card comes into view. */
 {
   const edit = $(".big-edit");
   if (calm.matches || !("IntersectionObserver" in window)) edit.classList.add("corrected");
@@ -2133,7 +2210,7 @@ for (const image of $$<HTMLImageElement>("img[data-clay], img[data-shot]")) {
   update();
 }
 
-// After a resize, the doc's scroll and the pen are measured again.
+// After a resize, the doc's scroll and the pencil are measured again.
 {
   let timer = 0;
   window.addEventListener("resize", () => {

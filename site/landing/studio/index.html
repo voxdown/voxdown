@@ -65,7 +65,8 @@
             <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
             <div class="demo-tabs" role="tablist" aria-label="Choose a recorded scene" id="demo-tabs"><button type="button" class="demo-tab" role="tab" aria-controls="sheet" aria-selected="true" title="The Dragon Who Would Not Roar">The Dragon</button><button type="button" class="demo-tab" role="tab" aria-controls="sheet" aria-selected="false" tabindex="-1" title="The North Wind and the Sun">The North Wind</button></div>
           </div>
-          <div class="sheet" id="sheet" tabindex="0" role="region" aria-label="The scene as written in VoxDown"></div>
+          <div class="sheet" id="sheet" tabindex="0" role="region" aria-label="The scene as written in VoxDown" aria-describedby="sheet-summary"></div>
+          <p class="sr-only" id="sheet-summary">The dragon story as written in VoxDown, from its first heading: each line marked with who says it and how, with the sounds and pauses, ready to be read aloud. Press play to hear it, voiced from this very text.</p>
           <div class="legend" role="group" aria-label="Spot a kind of mark in the scene">
             <span class="legend-label">Spot the marks</span>
             <button type="button" class="chip-k" data-spot="who" aria-pressed="false"><b class="k-who">@</b> who</button>
@@ -122,7 +123,7 @@
           <div class="wr-holder"><div class="wr" id="wr" role="group" aria-label="A likeness of the VoxDown Writer" data-step="0"></div></div>
           <div class="caption" id="caption">
             <div class="caption-words" aria-hidden="true" id="caption-words"></div>
-            <button class="btn btn-grad finale-play" type="button" data-finale-play hidden>
+            <button class="btn btn-grad finale-play" type="button" data-finale-play>
               <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></span>
               <span class="finale-label">Play the scene</span> <span class="btn-time">0:34</span>
             </button>
@@ -135,17 +136,17 @@
           <h3>A blank page. A sleepy dragon.</h3>
           <p>Start the way you always do: type. It’s plain text, so there’s nothing to learn before the first sentence.</p>
         </li>
-        <li class="step" data-step="2" data-label="Who" data-feature="Who says this… · Ctrl+K" data-try="Try it: press Who, or Ctrl+K, and pick the speaker.">
+        <li class="step" data-step="2" data-label="Who" data-feature="Who says this… · Ctrl+K" data-try="Try it: press Who, or Ctrl+K, and pick the speaker." data-try-phone="Try it: tap Who.">
           <h3>Who said that? You tell it.</h3>
           <p>Put the cursor in a quote and give it its speaker. The name goes before the quote, the line takes their colour, and they get a card in the Cast.</p>
         </li>
         <li class="step" data-step="3" data-label="How" data-feature="How it’s said… · Sound · Pause">
           <h3>Deep, polite and utterly unbothered.</h3>
-          <p>Directions in brackets say how a line lands. Square brackets hold what the world sounds like, and braces hold a beat of silence.</p>
+          <p>Directions in round brackets say how a line lands. Square brackets hold what the world sounds like, and braces hold a beat of silence.</p>
         </li>
-        <li class="step" data-step="4" data-label="Scenes" data-feature="Scenes · the scene board">
+        <li class="step" data-step="4" data-label="Scenes" data-feature="Scenes · the scene board · Alt+↑/↓" data-try="Try it: move The battle with Alt+↑, or drag it." data-try-phone="Try it: tap ↑ on The battle.">
           <h3>Then the knight gets brave.</h3>
-          <p>A second scene, and the board steps in: scenes as cards, each with a line and a state. Drag a card, or press Alt+↑/↓, and its text moves with it.</p>
+          <p>A second scene, and the scene board opens beside the page: each scene a card, with a line and a state. Move a card and its text moves with it.</p>
         </li>
         <li class="step" data-step="5" data-label="Notes" data-feature="Comments · Scraps">
           <h3>Notes to self. Lines on ice.</h3>
@@ -176,8 +177,9 @@
       <header class="sec-head">
         <p class="eyebrow"><span>02</span> Meet the cast</p>
         <h2 id="cast-title">Four voices, cast from one file.</h2>
-        <p class="sec-lede">The cast list sits at the top of the story. Give each character a voice once, and every line they say goes to it. Press a card to hear who got the part.</p>
+        <p class="sec-lede">The cast list sits at the top of the story. Give each character a voice once, and every line they say goes to it. Press play on any of them to hear who got the part.</p>
       </header>
+      <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"></div>
       <ul class="cast-list" id="cast-list"></ul>
     </div>
   </section>
@@ -260,7 +262,7 @@
         <li class="proof-card">
           <button type="button" class="zoom" data-zoom="../../landing/studio/app/ai-direct.webp" data-zoom-w="1280" data-zoom-h="914" aria-label="View the Direct the reading with AI dialog, full size">
             <picture>
-              <source media="(max-width: 600px)" srcset="../../landing/studio/app/phone-ai.webp" width="800" height="312">
+              <source media="(max-width: 600px)" srcset="../../landing/studio/app/phone-ai.webp" width="704" height="540">
               <img data-shot src="../../landing/studio/app/ai-direct.webp" alt="The “Direct the reading with AI” dialog: copy a request into any AI chat, then paste its answer back to check each suggestion." loading="lazy" decoding="async" width="1280" height="914">
             </picture>
           </button>
@@ -333,7 +335,7 @@
       <h2 id="free-title" class="sr-only">Free, open and yours</h2>
       <ul class="facts">
         <li class="fact-private">
-          <img class="lock" data-clay src="../../landing/studio/lock-3d.webp" srcset="../../landing/studio/lock-3d-480.webp 480w, ../../landing/studio/lock-3d.webp 1258w" sizes="160px" alt="" width="160" height="160" loading="lazy" decoding="async">
+          <svg class="lock" viewBox="0 0 48 48" aria-hidden="true"><path d="M15 21v-6a9 9 0 0 1 18 0v6"/><rect x="9" y="21" width="30" height="21" rx="5"/><path d="M24 36.5s-5.5-3.3-5.5-6.9a3 3 0 0 1 5.5-1.6 3 3 0 0 1 5.5 1.6c0 3.6-5.5 6.9-5.5 6.9z"/></svg>
           <p class="fact-kicker">Private by design</p>
           <h3>Your story, your computer.</h3>
           <p>Nothing is sent to us; there’s no VoxDown server to send it to. Files open from your computer and save back there: in place in Chrome and Edge, as a downloaded copy elsewhere. No account, no analytics, no ads.</p>
@@ -347,8 +349,7 @@
   <section class="final" aria-labelledby="final-title">
     <div class="wrap">
       <div class="final-band">
-                <img class="pen-final" data-clay src="../../landing/studio/pen/fountain-pen.webp" alt="" width="520" height="347" loading="lazy" decoding="async">
-        <h2 id="final-title">Your cast is waiting.</h2>
+                        <h2 id="final-title">Your cast is <span class="pen-under pen-final-word">waiting.<img class="under-img" src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" loading="lazy" decoding="async"><img class="pen-final" data-clay src="../../landing/studio/pen/fountain-pen.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></h2>
         <p>Open the Writer and start typing. Or open the dragon story and see every mark at work.</p>
         <div class="cta-row cta-center">
           <a class="btn btn-white btn-lg" href="../../writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span> <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>

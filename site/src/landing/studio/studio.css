@@ -2001,7 +2001,7 @@ button {
   transition: background-color 0.5s ease;
 }
 .wr:not(.who-set) [data-id="could"] .k-speech,
-.step-example:not(.who-set) [data-id="could"] .k-speech {
+.step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech {
   background: none;
 }
 .wr.s3 .ln.g1,
@@ -3969,7 +3969,7 @@ button {
   gap: 0.35rem;
   font-size: 13px !important;
 }
-.step-example:not(.who-set) .who-slot {
+.step[data-step="2"] .step-example:not(.who-set) .who-slot {
   display: none;
 }
 .ink-ring,
@@ -3986,7 +3986,7 @@ button {
   }
 }
 
-.step-example:not(.who-set) [data-id="could"] .k-speech.ink-ring {
+.step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech.ink-ring {
   background: url("/landing/studio/pen/pencil-circle.webp") center / 100% 100% no-repeat;
 }
 
@@ -3999,4 +3999,319 @@ button {
   .np-on .caption {
     padding-right: min(27rem, 34vw);
   }
+}
+
+/* ------------------------------------------------------------------ round 4 */
+
+/* Beat 1 starts only once the frame is pinned, so its caption is on screen. */
+@media (min-width: 861px) {
+  .steps {
+    padding-top: calc(50vh - 4.5rem);
+  }
+}
+
+/* The scene board, in the workbench beside the page. */
+.pane-scenes {
+  padding: 0.75rem;
+}
+.pane-scenes .board-h,
+.mini-board .board-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+  font-weight: 700;
+  font-size: 13px;
+}
+.board-h small {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: #5c6370;
+}
+.board-list {
+  display: grid;
+  gap: 0.45rem;
+}
+.board-list .bcard {
+  position: relative;
+  margin: 0;
+  cursor: grab;
+  transition: box-shadow 0.2s ease;
+}
+.board-list .bcard:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+.board-list .bcard.dragging {
+  z-index: 2;
+  cursor: grabbing;
+  box-shadow: 0 0 0 1px #e1e4e8, 0 16px 30px -10px rgb(21 17 42 / 0.4);
+}
+.wr[data-step="4"] .pane-scenes .bcard-new {
+  animation: card-new 0.6s ease 0.4s both;
+}
+.moves {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: flex;
+  gap: 0.2rem;
+}
+.moves button {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid #d5dae1;
+  border-radius: 6px;
+  background: #fff;
+  color: #25282d;
+  font: 600 14px / 1 "Rec", system-ui, sans-serif;
+  cursor: pointer;
+}
+.moves button:hover {
+  background: #f1eefc;
+}
+.moves button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 1px;
+}
+.board-list .bcard b {
+  padding-right: 4.2rem;
+}
+/* The page follows the board: a moved scene's text moves with it. */
+.doc,
+.scene-page {
+  display: flex;
+  flex-direction: column;
+}
+.battle-first .ln[data-scene="battle"] {
+  order: -1;
+}
+.wr.battle-first .ln[data-id="battle"] {
+  margin-top: 0;
+}
+.scene-page .ln[data-scene="mountain"]:first-child,
+.battle-first .scene-page .ln[data-scene="battle"]:first-of-type {
+  margin-top: 0;
+}
+.scene-page .ln[data-id="battle"] {
+  margin-top: 0.4em;
+}
+
+/* The recording's casting, said plainly when the reader changed it. */
+.ab-recast {
+  margin: 0.7rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #7c2d12;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.ab-recast[hidden] {
+  display: none;
+}
+.ab-recast button {
+  margin-top: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid #c2410c;
+  border-radius: 6px;
+  background: #fff;
+  color: #9a3412;
+  font: 600 12px / 1.2 "Rec", system-ui, sans-serif;
+  cursor: pointer;
+}
+.ab-recast button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 1px;
+}
+
+/* The phone's own words and room. */
+.desk-alt {
+  display: none;
+}
+@media (min-width: 861px) {
+  .step .desk-alt {
+    display: block;
+  }
+  .step .mini-board.desk-alt {
+    display: grid;
+  }
+}
+.ink-ring {
+  margin: 0 -0.4em;
+}
+
+/* The final band: the pen underlines "waiting." and rests at its end. */
+.final-band .pen-final-word {
+  position: relative;
+  display: inline-block;
+}
+.final-band .pen-final-word .under-img {
+  position: absolute;
+  left: -2%;
+  bottom: -0.2em;
+  width: 104%;
+  height: 0.4em;
+  object-fit: fill;
+  filter: brightness(1.15) saturate(1.1);
+}
+.final-band .pen-final {
+  position: absolute;
+  left: calc(100% - 0.2em);
+  bottom: -0.55em;
+  width: 1.9em;
+  rotate: 0deg;
+  filter: drop-shadow(0 10px 14px rgb(0 0 0 / 0.4));
+}
+
+/* Free, open, yours: the privacy card beside the two short ones. */
+.facts {
+  grid-template-columns: 1.3fr 1fr;
+}
+.fact-private {
+  grid-row: span 2;
+}
+.fact-private .lock {
+  width: 3.4rem;
+  height: 3.4rem;
+  right: 1.4rem;
+  top: 1.4rem;
+  fill: none;
+  stroke: #5eead4;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: none;
+}
+.fact-private .lock path:last-child {
+  fill: rgb(94 234 212 / 0.25);
+}
+@media (max-width: 860px) {
+  .facts {
+    grid-template-columns: 1fr;
+  }
+  .fact-private {
+    grid-row: auto;
+  }
+}
+
+/* The cast: on a phone, chips and the chosen voice. */
+.cast-chips {
+  display: none;
+}
+@media (max-width: 860px) {
+  .cast-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 0.9rem;
+  }
+  .cast-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.75rem;
+    padding: 0.3rem 0.85rem 0.3rem 0.3rem;
+    border: 0;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--sp) 40%, transparent) inset;
+    color: var(--ink);
+    font: 600 0.92rem / 1 var(--body);
+    cursor: pointer;
+  }
+  .cast-chip .medal {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.9rem;
+  }
+  .cast-chip[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--sp) 14%, #fff);
+    box-shadow: 0 0 0 2px var(--sp) inset;
+  }
+  .cast-list .cast-card:not(.chosen) {
+    display: none;
+  }
+  /* Production, said shorter. */
+  .route > p:not(.route-kicker),
+  .route-note,
+  .also-out,
+  .sec-head-dark .sec-lede {
+    display: none;
+  }
+}
+
+/* Phone: the hint under the picture, and the full view at its own size, to pan. */
+@media (max-width: 600px) {
+  .zoom {
+    padding-bottom: 2.4rem;
+  }
+  .zoom-hint {
+    top: auto;
+    right: 50%;
+    bottom: 0.45rem;
+    translate: 50% 0;
+    background: var(--ink);
+  }
+  .proof-card .zoom {
+    padding-bottom: 2.6rem;
+  }
+  .lightbox {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+  .lightbox img {
+    width: auto;
+    max-width: none;
+  }
+  .lb-close {
+    position: fixed;
+    top: 0.7rem;
+    right: 0.7rem;
+    float: none;
+    margin: 0;
+  }
+}
+.board-list .bcard {
+  padding-right: 2.7rem;
+}
+.board-list .bcard b {
+  padding-right: 0;
+}
+.moves {
+  top: 50%;
+  right: 0.4rem;
+  translate: 0 -50%;
+  flex-direction: column;
+}
+
+/* Phone: the handouts in a window of their own, scrolled inside, not the whole page long. */
+@media (max-width: 860px) {
+  .mini-tabs .pv {
+    max-height: 22rem;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Contrast, measured over the real backgrounds. */
+.demo-cap {
+  color: var(--ink-2);
+}
+.btn-grad .btn-time {
+  color: #fff;
+}
+.cast-line .t-quote {
+  color: #565b66;
+}
+.script-page .vxd-chip-vocal,
+.pv .vxd-chip-vocal {
+  color: color-mix(in oklab, var(--vxd-c, #0f766e) 78%, #000);
 }

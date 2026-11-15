@@ -198,8 +198,8 @@ export function forgetDeleted(keeper: Keeper, story: string, id: string): void {
  * The scraps here joined with their file as it is now, changed outside the Writer since it was
  * last written (`written`), losing nothing. A scrap added there joins. A scrap changed on one side
  * only is as that side has it, its words and its note each on their own; where both sides changed
- * the same one, the version there joins as a scrap of its own, beside this one, noted as from the
- * file. One deleted here stays deleted; one deleted there stays here. How many came from the file
+ * its words, the version there joins as a scrap of its own, beside this one, noted as from the
+ * file, and where both changed only its note, the notes are joined. One deleted here stays deleted; one deleted there stays here. How many came from the file
  * is said.
  */
 export function joinScraps(
@@ -232,7 +232,17 @@ export function joinScraps(
     };
     const text = field("text");
     const note = field("note");
-    if (text.clash || note.clash) {
+    // Only the note changed on both sides: one scrap, both notes.
+    if (note.clash && !text.clash) {
+      scraps.push({
+        ...scrap,
+        text: text.value,
+        note: `${scrap.note} / from the file: ${outside.note}`,
+      });
+      fromThere++;
+      continue;
+    }
+    if (text.clash) {
       // Both kept: this one as it is here, the file's beside it.
       scraps.push(scrap, {
         ...outside,

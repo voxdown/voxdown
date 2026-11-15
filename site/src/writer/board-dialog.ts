@@ -25,6 +25,8 @@ export type BoardHost = {
   readOnly(): boolean;
   /** Said to a screen reader, as a change's words are. */
   announce(said: string): void;
+  /** The story's last change taken back, or made again; whether there was one. */
+  undo(again: boolean): boolean;
 };
 
 const CARD = "application/x-vxd-scene";
@@ -353,6 +355,35 @@ export function openBoard(host: BoardHost): void {
       item.addEventListener("dragend", () => item.classList.remove("dragging"));
     }
     return item;
+  };
+
+  // Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y) here as in the story, as the board's line says: a move
+  // or a note taken back, the board drawn again, the keys on the name they were on.
+  dialog.onkeydown = (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key !== "z" && key !== "y") return;
+    // A line being typed undoes its own words.
+    const field = event.target;
+    if (field instanceof HTMLTextAreaElement && field.value !== field.defaultValue) return;
+    event.preventDefault();
+    if (host.readOnly()) return;
+    const on =
+      document.activeElement instanceof HTMLElement && columns.contains(document.activeElement)
+        ? document.activeElement
+        : undefined;
+    const name = on?.classList.contains("board-name") ? on.textContent : undefined;
+    const selector = on?.closest(".board-card")
+      ? ".board-card .board-name"
+      : ".board-chapter .board-name";
+    const place = on ? [...columns.querySelectorAll(selector)].indexOf(on) : -1;
+    const again = key === "y" || event.shiftKey;
+    if (!host.undo(again)) {
+      host.announce(again ? "Nothing to redo." : "Nothing to undo.");
+      return;
+    }
+    draw();
+    if (name) focusName(name, place, selector);
   };
 
   draw();

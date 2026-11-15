@@ -474,6 +474,9 @@ const draftIn = (page) =>
     problems.push(`writer: a scraps file opened gives ${JSON.stringify(merged)}`);
   if (!(await scrapper.textContent("#notice"))?.includes("1 scrap added"))
     problems.push(`writer: opening scraps says ${await scrapper.textContent("#notice")}`);
+  // The file holds them, but not as they are here (a note added here): still this browser's only.
+  if (!(await scrapper.textContent(".scraps-standing"))?.includes("Kept in this browser only"))
+    problems.push("writer: scraps opened from a file made those only here count as saved");
   await scrapper
     // Taken by its words: the note's field is for typing, never a handle.
     .locator(".scrap-text")
@@ -485,6 +488,31 @@ const draftIn = (page) =>
   const order = await scrapper.$$eval(".scrap-text", (texts) => texts.map((t) => t.textContent));
   if (order[0] !== "A fox, far off.")
     problems.push(`writer: a scrap dragged above another stays below: ${JSON.stringify(order)}`);
+  // A file of scraps still being read when another story opens: they go to the story they were
+  // opened for, never the new one.
+  await scrapper.evaluate(() => {
+    const read = File.prototype.text;
+    File.prototype.text = function () {
+      return new Promise((done) => setTimeout(() => done(read.call(this)), 1500));
+    };
+  });
+  const slowChooser = scrapper.waitForEvent("filechooser");
+  await scrapper.click('.scraps-files button:has-text("Open")');
+  await (await slowChooser).setFiles({
+    name: "Late.scraps.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      '# Scraps\n\n<!-- scrap id="late1" at="2026-11-14T13:00:00.000Z" -->\nA late owl.\n',
+    ),
+  });
+  await scrapper.click("#file-menu-button");
+  await scrapper.click('[data-command="new"]');
+  if (await scrapper.isVisible("#ask[open]"))
+    await scrapper.click('#ask-buttons button[value="discard"]');
+  await scrapper.waitForTimeout(2200);
+  await benchTab(scrapper, "scraps");
+  if (await scrapper.locator('.scrap-text:has-text("A late owl.")').count())
+    problems.push("writer: scraps read late went to the story opened meanwhile");
   await context.close();
   console.log("writer: scraps cut, noted, found, put back, opened from a file and moved: ok");
 }
@@ -914,6 +942,16 @@ const draftIn = (page) =>
     isMobile: true,
     hasTouch: true,
   });
+  // The welcome, the first thing a phone shows, the screen's width.
+  const welcomer = await context.newPage();
+  await welcomer.goto(`${base}/writer/`);
+  await welcomer.waitForSelector("#welcome:not([hidden])");
+  const welcomeWidth = await welcomer.evaluate(
+    () => document.querySelector(".manuscript")?.getBoundingClientRect().width ?? 0,
+  );
+  if (welcomeWidth < 360)
+    problems.push(`writer: on a phone, the welcome is ${welcomeWidth} px wide`);
+  await welcomer.close();
   const phone = await context.newPage();
   watch(phone, "writer phone menus");
   await phone.goto(`${base}/writer/#example=the-dragon-who-would-not-roar`);
@@ -1025,6 +1063,11 @@ const draftIn = (page) =>
   const after = await draftIn(planner);
   if (after.indexOf("## The proclamation") < after.indexOf("## The mountain"))
     problems.push("writer: a scene moved by Alt+↓ didn't move in the story");
+  // Ctrl+Z on the board, as its line says: the move taken back, the board drawn again.
+  await planner.keyboard.press("Control+z");
+  await planner.waitForTimeout(300);
+  if ((await names())[0] !== "The proclamation")
+    problems.push(`writer: Ctrl+Z on the board gives ${JSON.stringify(await names())}`);
   await context.close();
   // An example opened again, untouched, as it came: nothing to save first.
   const fresh = await browser.newContext({ viewport: { width: 1360, height: 860 } });

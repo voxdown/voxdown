@@ -2142,6 +2142,10 @@ body[data-welcome] #draft-state {
   .scene-rail {
     display: none;
   }
+  /* The rail's track left empty: the manuscript (and the welcome on it) takes the whole row. */
+  .workspace > .manuscript {
+    grid-column: 1 / -1;
+  }
   .statusbar {
     flex-wrap: wrap;
     row-gap: 0;

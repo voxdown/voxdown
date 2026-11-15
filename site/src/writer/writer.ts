@@ -138,6 +138,7 @@ import { keepPairing, pairingIn } from "./helper";
 import { paragraphScope } from "./local";
 import { DraftLock } from "./lock";
 import { LOOKS, type Look, SWATCH_INK, chooseLook, lookLabel, savedLook } from "./looks";
+import { openManuscript } from "./manuscript-dialog";
 import { keys, menus } from "./menu";
 import { rankScenes } from "./outline";
 import { afterParagraph, moveParagraph } from "./paragraphs";
@@ -164,6 +165,7 @@ import {
   scrapsFile,
   scrapsFileName,
   scrapsOf,
+  scrapsSignature,
   scrapsStanding,
 } from "./scraps";
 import { ScrapsFiles } from "./scraps-files";
@@ -1655,21 +1657,29 @@ const scrapsHost: ScrapsHost = {
     input.addEventListener("change", () => {
       const chosen = input.files?.[0];
       if (!chosen) return;
+      // The story they were opened for, whatever is open by the time the file is read.
+      const id = file.id;
+      const name = file.name;
       void chosen.text().then((text) => {
         const found = readScrapsFile(text);
         if (!found.length) {
           notice(`${chosen.name} holds no scraps.`);
           return;
         }
-        if (scrapsReadOnly()) return;
-        const { scraps, added } = mergeScraps(scrapsOf(localStorage, file.id), found);
-        keepScraps(localStorage, file.id, scraps, file.name);
-        // Read from the file just opened: as it is there.
-        if (added === found.length) markScrapsSaved(localStorage, file.id, scraps);
-        showBench();
+        if (file.id === id && scrapsReadOnly()) return;
+        const { scraps, added } = mergeScraps(scrapsOf(localStorage, id), found);
+        if (!keepScraps(localStorage, id, scraps, name)) {
+          notice(`This browser is short of room: the scraps in ${chosen.name} couldn’t be added.`);
+          return;
+        }
+        // Saved beside the story only when they are just what the file holds: scraps this browser
+        // alone had before stay said to be.
+        if (scrapsSignature(scraps) === scrapsSignature(found))
+          markScrapsSaved(localStorage, id, scraps);
+        if (file.id === id) showBench();
         notice(
           added
-            ? `${added} ${added === 1 ? "scrap" : "scraps"} added from ${chosen.name}.`
+            ? `${added} ${added === 1 ? "scrap" : "scraps"} added from ${chosen.name}${file.id === id ? "" : ` to ${name}’s scraps`}.`
             : `Every scrap in ${chosen.name} is here already.`,
         );
       });
@@ -3771,87 +3781,11 @@ function insertAfterParagraph(line: string, select?: string): void {
 
 /** Export › A manuscript to submit: the writer's name and contact, then the Word document. */
 function showManuscript(): void {
-  const dialog = $<HTMLDialogElement>("#manuscript");
-  const story = current();
-  const kept = (() => {
-    try {
-      return JSON.parse(localStorage.getItem("vxd-writer-contact") ?? "{}") as {
-        contact?: string;
-        surname?: string;
-      };
-    } catch {
-      return {};
-    }
-  })();
-  const contact = $<HTMLTextAreaElement>("#manuscript-contact");
-  const byline = $<HTMLInputElement>("#manuscript-byline");
-  const surname = $<HTMLInputElement>("#manuscript-surname");
-  contact.value = kept.contact ?? "";
-  byline.value = story.meta.author ?? kept.contact?.split("\n")[0]?.trim() ?? "";
-  const lastWord = (name: string) => name.trim().split(/\s+/).at(-1) ?? "";
-  surname.value = kept.surname ?? lastWord(contact.value.split("\n")[0] ?? "") ?? "";
-  // The surname follows the name until the writer gives one.
-  contact.oninput = () => {
-    if (!kept.surname) surname.value = lastWord(contact.value.split("\n")[0] ?? "");
-  };
-  $("#manuscript-go").onclick = () => {
-    try {
-      localStorage.setItem(
-        "vxd-writer-contact",
-        JSON.stringify({ contact: contact.value, surname: surname.value }),
-      );
-    } catch {
-      // Kept for this visit only.
-    }
-    dialog.close();
-    void exportManuscript({
-      contact: contact.value,
-      byline: byline.value.trim() || lastWord(contact.value.split("\n")[0] ?? ""),
-      surname: surname.value.trim(),
-    });
-  };
-  dialog.showModal();
-  contact.focus();
-}
-
-async function exportManuscript(who: {
-  contact: string;
-  byline: string;
-  surname: string;
-}): Promise<void> {
-  const story = current();
-  const level = chapterLevelIn(story);
-  // A chapter's or a scene's heading the book never prints (hidden, or for the audio) still
-  // starts one: a break, where the manuscript has one (a short story's sections are set apart
-  // that way, never each on a page of its own).
-  let source = story.source;
-  for (const block of [...story.blocks].reverse())
-    if (
-      block.kind === "heading" &&
-      block.level >= level &&
-      (block.visibility === "hidden" || block.visibility === "audio")
-    )
-      source = `${source.slice(0, block.range.from)}* * *${source.slice(block.range.to)}`;
-  const printed = source === story.source ? story : parse(source);
-  const body = new DOMParser().parseFromString(
-    renderBook(printed, { header: false }),
-    "text/html",
-  ).body;
-  const paragraphs = paragraphsOf(body);
-  const { manuscriptDocx } = await import("./manuscript");
-  const title = story.meta.title ?? baseName();
-  download(
-    manuscriptDocx(paragraphs, {
-      ...who,
-      chapterLevel: level,
-      title,
-      words: countsOf(story).words,
-      ...(story.meta.language ? { language: story.meta.language } : {}),
-    }),
-    `${baseName()} (manuscript).docx`,
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  );
-  notice("The manuscript is in your downloads.");
+  openManuscript({
+    story: () => current(),
+    baseName,
+    notice: (message) => notice(message),
+  });
 }
 
 /** The book as a Word document or an ebook: its headings, paragraphs and emphasis. */
@@ -4457,6 +4391,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Mod+Shift+M", "Every mark raw, or drawn"],
   ["Mod+Shift+F", "Focus: the paragraph being written, in the middle of the page"],
   ["Ctrl+Space", "Suggest names, directions, sounds and instructions"],
+  ["F10", "The menus, from the keyboard"],
   ["Mod+/", "These shortcuts"],
 ];
 
@@ -4475,7 +4410,14 @@ function showShortcuts(): void {
       return [term, detail];
     }),
   );
-  $<HTMLDialogElement>("#shortcuts").showModal();
+  const dialog = $<HTMLDialogElement>("#shortcuts");
+  dialog.showModal();
+  // From the top: the title and the first rows in view, the list read from its start.
+  const list = $("#shortcut-list");
+  list.tabIndex = -1;
+  list.focus({ preventScroll: true });
+  dialog.scrollTop = 0;
+  list.scrollTop = 0;
 }
 
 // Commands, from the menus, the buttons and the keys.
@@ -4550,6 +4492,11 @@ const COMMANDS: Record<string, () => unknown> = {
     openBoard({
       story: () => current(),
       announce,
+      undo: (again) => {
+        const done = (again ? redo : undo)(view);
+        if (done) announce(again ? "Done again." : "Taken back.");
+        return done;
+      },
       change: (changes, said) => {
         if (lockedOut) return;
         view.dispatch({ changes, userEvent: "input" });
@@ -5020,6 +4967,16 @@ async function openExample(example: (typeof examples)[number]): Promise<void> {
   await load({ name: example.name, text: example.text }, { saved: "" });
   view.focus();
 }
+
+// An example asked for while the Writer is already open (`#example=…` followed to this page): opened
+// as on arriving, the address put back as it was.
+window.addEventListener("hashchange", () => {
+  const asked = /^#example=([\w-]+)$/.exec(location.hash)?.[1];
+  if (!asked) return;
+  const example = examples.find((each) => each.name === `${asked}.vxd`);
+  window.history.replaceState(null, "", location.href.split("#")[0]);
+  if (example && !lockedOut) void openExample(example);
+});
 
 /** File › Open an example: the stories the welcome offers, each by its title. */
 function showExamples(): void {

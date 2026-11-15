@@ -544,7 +544,7 @@ async function nameSpeakers(
     sayScopes(context);
     progress.textContent = [
       changes.length
-        ? `${plural(givenNow, "speaker")} given${joined.length ? `, and ${joined.join(", ")} joined the cast` : ""}: Ctrl+Z takes them back.`
+        ? `${plural(givenNow, "speaker")} given${joined.length ? `, and ${joined.join(", ")} joined the cast` : ""}: Ctrl+Z takes ${givenNow === 1 && !joined.length ? "it" : "them"} back.`
         : ai === "tags"
           ? "Nothing to give: no quote waiting for a speaker has a dialogue tag naming someone (“…” asked Mara)."
           : "Nothing to give: every quote the AI was asked about stayed as it was.",

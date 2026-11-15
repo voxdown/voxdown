@@ -3645,3 +3645,40 @@ dialog:has(> .dialog-close) #ask-message {
   font-size: 0.8rem;
   line-height: 1.4;
 }
+
+/* The story's details folded into one line as it opens (details-fold.ts): a quiet bar, a click or
+   the cursor away from the title, author and cast. */
+.manuscript .story-details {
+  padding: 0.2rem 0 0.6rem;
+}
+.manuscript .story-details-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.25rem 0.6rem;
+  border: 1px dashed var(--desk-edge);
+  border-radius: 6px;
+  background: none;
+  color: var(--quiet);
+  font: 0.8rem / 1.4 var(--ui);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manuscript .story-details-open::before {
+  content: "›";
+  font-size: 1rem;
+  line-height: 1;
+}
+.manuscript .story-details-open:hover,
+.manuscript .story-details-open:focus-visible {
+  color: var(--ink);
+  border-color: var(--quiet);
+}
+.manuscript .story-details-open:focus-visible {
+  outline: 2px solid var(--pencil);
+  outline-offset: 1px;
+}

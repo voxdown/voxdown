@@ -7,6 +7,7 @@ import {
   defaultKeymap,
   history,
   historyKeymap,
+  isolateHistory,
   redo,
   redoDepth,
   undo,
@@ -98,6 +99,7 @@ import { castPanel } from "./cast";
 import { commentsPanel } from "./comments-panel";
 import { paragraphsOf } from "./convert";
 import { type Counts, countsOf } from "./counts";
+import { detailsFold } from "./details-fold";
 import { addCloseButton, closeOnClickOutside } from "./dialogs";
 import { changesOnly, diffLines, withWords } from "./diff";
 import { openDirect } from "./direct-dialog";
@@ -627,6 +629,8 @@ function editorState(source: string, cursor: number): EditorState {
       dropCursor(),
       bookLines,
       styleLines,
+      // The story's details folded into a line as it opens.
+      detailsFold(),
       // The browser's spelling check, in the story's own language.
       // Coming back to the story (from the rail, a warning, the side) marks the place on the side.
       EditorView.domEventHandlers({
@@ -3817,6 +3821,8 @@ async function exportDocument(kind: "docx" | "epub"): Promise<void> {
       "application/epub+zip",
     );
   }
+  // Said as the manuscript says it: where it went.
+  notice(`${kind === "docx" ? "The Word document" : "The ebook"} is in your downloads.`);
 }
 
 /**
@@ -4488,18 +4494,32 @@ const COMMANDS: Record<string, () => unknown> = {
   "insert-comment": insertComment,
   "export-manuscript": showManuscript,
   overused: showOverused,
-  board: () =>
+  board: () => {
+    // Undo on the board takes back the board's own moves and notes, never what was typed in the
+    // story before it opened: the history's depth then, and the board's steps taken back since.
+    const before = undoDepth(view.state);
+    let takenBack = 0;
     openBoard({
       story: () => current(),
       announce,
       undo: (again) => {
+        if (again ? takenBack === 0 : undoDepth(view.state) <= before) return false;
         const done = (again ? redo : undo)(view);
-        if (done) announce(again ? "Done again." : "Taken back.");
+        if (done) {
+          takenBack += again ? -1 : 1;
+          announce(again ? "Done again." : "Taken back.");
+        }
         return done;
       },
       change: (changes, said) => {
         if (lockedOut) return;
-        view.dispatch({ changes, userEvent: "input" });
+        // A step of its own: never joined with what was typed just before.
+        view.dispatch({
+          changes,
+          userEvent: "input.board",
+          annotations: isolateHistory.of("full"),
+        });
+        takenBack = 0;
         announce(said);
       },
       goTo: (at) => {
@@ -4510,7 +4530,8 @@ const COMMANDS: Record<string, () => unknown> = {
         view.focus();
       },
       readOnly: () => lockedOut,
-    }),
+    });
+  },
   "cut-to-scraps": () => {
     cutToScraps();
   },

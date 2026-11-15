@@ -404,7 +404,7 @@ function add(context: AiContext): void {
   $<HTMLDialogElement>("#direct").close();
   context.notice(
     [
-      `${plural(added, "mark")} added: Ctrl+Z takes them back.`,
+      `${plural(added, "mark")} added: Ctrl+Z takes ${added === 1 ? "it" : "them"} back.`,
       gone ? `${plural(gone, "suggestion")} left out: their paragraphs changed meanwhile.` : "",
     ]
       .filter(Boolean)

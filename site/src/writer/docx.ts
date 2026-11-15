@@ -21,6 +21,45 @@ function runXml(run: Run, comments: Comments): string {
   return `<w:r>${style ? `<w:rPr>${style}</w:rPr>` : ""}<w:t xml:space="preserve">${xmlText(run.text)}</w:t></w:r>`;
 }
 
+/**
+ * The writer's comments placed as an editor's copy wants them: a paragraph that is only comments
+ * (words commented out) gives them to the start of the paragraph after it, or the end of the one
+ * before, never a blank paragraph of its own; and a comment at a paragraph's end takes the space
+ * before it away.
+ */
+export function anchorComments(paragraphs: readonly Paragraph[]): Paragraph[] {
+  const only = (paragraph: Paragraph) =>
+    paragraph.kind === "text" &&
+    paragraph.runs.length > 0 &&
+    paragraph.runs.every((run) => "text" in run && !run.text.trim() && run.comment);
+  const out: Paragraph[] = paragraphs.map((paragraph) =>
+    paragraph.kind === "break" ? paragraph : { ...paragraph, runs: [...paragraph.runs] },
+  );
+  for (let index = 0; index < out.length; index++) {
+    const paragraph = out[index] as Paragraph;
+    if (paragraph.kind === "break" || !only(paragraph)) continue;
+    type Words = Exclude<Paragraph, { kind: "break" }>;
+    const words = (each: Paragraph): each is Words => each.kind !== "break";
+    const after = out.slice(index + 1).find((each): each is Words => words(each) && !only(each));
+    const before = [...out.slice(0, index)].reverse().find(words);
+    if (after) after.runs.unshift(...paragraph.runs);
+    else if (before) before.runs.push(...paragraph.runs);
+    else continue;
+    out.splice(index, 1);
+    index--;
+  }
+  for (const paragraph of out) {
+    if (paragraph.kind === "break") continue;
+    // The text just before the comments at its end: its spaces taken away.
+    let end = paragraph.runs.length;
+    while (end > 0 && (paragraph.runs[end - 1] as { comment?: string }).comment) end--;
+    const last = paragraph.runs[end - 1];
+    if (end < paragraph.runs.length && last && "text" in last)
+      paragraph.runs[end - 1] = { ...last, text: last.text.trimEnd() };
+  }
+  return out;
+}
+
 function paragraphXml(paragraph: Paragraph, comments: Comments): string {
   if (paragraph.kind === "break")
     return `<w:p><w:pPr><w:pStyle w:val="SceneBreak"/></w:pPr><w:r><w:t>* * *</w:t></w:r></w:p>`;
@@ -64,7 +103,10 @@ export function docxOf(
     : "";
   const comments: Comments = [];
   const body =
-    titlePage + paragraphs.map((paragraph) => paragraphXml(paragraph, comments)).join("");
+    titlePage +
+    anchorComments(paragraphs)
+      .map((paragraph) => paragraphXml(paragraph, comments))
+      .join("");
   // The writer's comments, as Word's own, by the book's author (or the writer).
   const who = xmlText(details.author ?? "The writer");
   const commentsXml = comments.length

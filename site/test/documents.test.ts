@@ -4,7 +4,7 @@ import { renderBook } from "@voxdown/render";
 import { describe, expect, it } from "vitest";
 import { parse } from "voxdown";
 import { escapeText, paragraphsOf, writeRuns, writeStory } from "../src/writer/convert";
-import { docxOf, storyOfDocx } from "../src/writer/docx";
+import { anchorComments, docxOf, storyOfDocx } from "../src/writer/docx";
 import { epubOf, storyOfEpub } from "../src/writer/epub";
 import { crc32, unzip, zip } from "../src/writer/zip";
 
@@ -528,5 +528,23 @@ describe("imports, written as a story", () => {
     expect(story).toContain("# Chapter One\n");
     expect(story).toContain("A symbol.");
     expect(left).toEqual(["list numbering", "symbols from symbol fonts"]);
+  });
+
+  it("gives a paragraph of comments alone to its neighbour, and a comment at an end no space", () => {
+    const run = (text: string, comment?: string) => ({
+      text,
+      italic: false,
+      bold: false,
+      ...(comment ? { comment } : {}),
+    });
+    const anchored = anchorComments([
+      { kind: "text", runs: [run("The rain fell all night. "), run("", "check")] },
+      { kind: "text", runs: [run("", "a whole paragraph out")] },
+      { kind: "text", runs: [run("Morning.")] },
+    ]);
+    expect(anchored).toEqual([
+      { kind: "text", runs: [run("The rain fell all night."), run("", "check")] },
+      { kind: "text", runs: [run("", "a whole paragraph out"), run("Morning.")] },
+    ]);
   });
 });

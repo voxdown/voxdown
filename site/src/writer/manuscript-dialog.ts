@@ -44,9 +44,13 @@ export function openManuscript(host: ManuscriptHost): void {
   byline.value = story.meta.author ?? kept.contact?.split("\n")[0]?.trim() ?? "";
   surname.value =
     kept.surname || lastWord(contact.value.split("\n")[0] ?? "") || lastWord(byline.value) || "";
-  // The surname follows the name until the writer gives one.
+  // The surname follows the name until the writer gives one: kept from before, or typed here.
+  let given = Boolean(kept.surname);
+  surname.oninput = () => {
+    given = surname.value.trim() !== "";
+  };
   contact.oninput = () => {
-    if (!kept.surname) surname.value = lastWord(contact.value.split("\n")[0] ?? "");
+    if (!given) surname.value = lastWord(contact.value.split("\n")[0] ?? "");
   };
   $("#manuscript-go").onclick = () => {
     try {

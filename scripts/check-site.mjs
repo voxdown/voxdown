@@ -621,6 +621,14 @@ const draftIn = (page) =>
     })
   )
     problems.push(`writer: a first visit looks like ${JSON.stringify(look)}`);
+  // The story's details folded into a line as it opens: the story first.
+  if (!(await first.textContent(".story-details-open"))?.includes("Story details"))
+    problems.push("writer: a story's details aren't folded into a line as it opens");
+  await first.click(".cm-content");
+  await first.keyboard.press("Control+Home");
+  await first.waitForTimeout(150);
+  if (await first.locator(".story-details").count())
+    problems.push("writer: the cursor going into a story's details doesn't unfold them");
   // Names, instructions and the front matter aren't checked for spelling; directions are words.
   const spelling = await first.evaluate(() => ({
     name: document.querySelector(".cm-content .vxd-name")?.getAttribute("spellcheck"),
@@ -673,6 +681,13 @@ const draftIn = (page) =>
   await submitter.dispatchEvent("#manuscript-contact", "input");
   if ((await submitter.inputValue("#manuscript-surname")) !== "Teller")
     problems.push("writer: the manuscript's surname doesn't follow the name");
+  // A surname typed (a pen name) stays as typed while the contact changes.
+  await submitter.fill("#manuscript-surname", "Penname");
+  await submitter.dispatchEvent("#manuscript-surname", "input");
+  await submitter.fill("#manuscript-contact", "Ann Legalname\nann@example.com");
+  await submitter.dispatchEvent("#manuscript-contact", "input");
+  if ((await submitter.inputValue("#manuscript-surname")) !== "Penname")
+    problems.push("writer: a surname typed for the manuscript was changed by the contact");
   const downloading = submitter.waitForEvent("download");
   await submitter.click("#manuscript-go");
   const file = await downloading;
@@ -680,7 +695,7 @@ const draftIn = (page) =>
     problems.push(`writer: the manuscript downloads as ${file.suggestedFilename()}`);
   if (
     !(await submitter.evaluate(() => localStorage.getItem("vxd-writer-contact")))?.includes(
-      "Teller",
+      '"surname":"Penname"',
     )
   )
     problems.push("writer: the manuscript's contact isn't kept for the next one");
@@ -837,6 +852,20 @@ const draftIn = (page) =>
   const joined = (await disk())["fable.scraps.md"]?.text ?? "";
   if (!joined.includes("A hare, from the laptop.") || !joined.includes('note="Ending?"'))
     problems.push(`writer: joining a scraps file gives ${JSON.stringify(joined)}`);
+  // Changed elsewhere again, then Save… to the same file: asked first, never written over.
+  await filer.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem("__disk") ?? "{}");
+    all["fable.scraps.md"].text +=
+      '\n<!-- scrap id="out2" at="2026-11-14T11:00:00.000Z" -->\nA badger.\n';
+    localStorage.setItem("__disk", JSON.stringify(all));
+  });
+  await benchTab(filer, "scraps");
+  await filer.click('.scraps-files button:has-text("Save")');
+  await filer.waitForSelector("#ask[open]");
+  await filer.click('#ask-buttons button[value="cancel"]');
+  await filer.waitForTimeout(300);
+  if (!(await disk())["fable.scraps.md"]?.text.includes("A badger."))
+    problems.push("writer: Save… in Scraps wrote over a file changed elsewhere");
   // Deleted, reloaded, brought back.
   await benchTab(filer, "scraps");
   await filer.hover(".scrap >> nth=0");
@@ -1063,11 +1092,21 @@ const draftIn = (page) =>
   const after = await draftIn(planner);
   if (after.indexOf("## The proclamation") < after.indexOf("## The mountain"))
     problems.push("writer: a scene moved by Alt+↓ didn't move in the story");
-  // Ctrl+Z on the board, as its line says: the move taken back, the board drawn again.
+  // Ctrl+Z on the board, as its line says: the move taken back, the board drawn again; and only
+  // the board's own: a second Ctrl+Z leaves what was typed before the board opened.
   await planner.keyboard.press("Control+z");
   await planner.waitForTimeout(300);
   if ((await names())[0] !== "The proclamation")
     problems.push(`writer: Ctrl+Z on the board gives ${JSON.stringify(await names())}`);
+  // Twice more: the note written on this board taken back, and nothing before it opened.
+  await planner.keyboard.press("Control+z");
+  await planner.keyboard.press("Control+z");
+  await planner.waitForTimeout(1200);
+  const kept = await draftIn(planner);
+  if (kept.includes("<!-- idea: Gerald wakes. -->"))
+    problems.push("writer: Ctrl+Z on the board didn't take back its own note");
+  if (!kept.includes("<!-- draft: Percival meets a sleepy dragon. -->"))
+    problems.push("writer: Ctrl+Z on the board took back a change made before it opened");
   await context.close();
   // An example opened again, untouched, as it came: nothing to save first.
   const fresh = await browser.newContext({ viewport: { width: 1360, height: 860 } });

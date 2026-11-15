@@ -281,6 +281,7 @@ export function openBoard(host: BoardHost): void {
     line.rows = 2;
     line.placeholder = "What happens, in a line";
     line.value = scene.summary;
+    line.defaultValue = scene.summary;
     line.setAttribute("aria-label", `What happens in ${scene.name}`);
     const state = document.createElement("select");
     state.className = "board-state";
@@ -318,6 +319,8 @@ export function openBoard(host: BoardHost): void {
           : undefined;
       if (!change) return;
       host.change([change], `${scene.name}: ${comment ? "noted" : "note taken out"}.`);
+      // Written: Ctrl+Z in the box now takes back the note in the story, not the box's words.
+      line.defaultValue = line.value;
       const shown = (state.value || undefined) as SceneState | undefined;
       if (shown) item.dataset.state = shown;
       else delete item.dataset.state;
@@ -379,7 +382,11 @@ export function openBoard(host: BoardHost): void {
     const place = on ? [...columns.querySelectorAll(selector)].indexOf(on) : -1;
     const again = key === "y" || event.shiftKey;
     if (!host.undo(again)) {
-      host.announce(again ? "Nothing to redo." : "Nothing to undo.");
+      host.announce(
+        again
+          ? "Nothing taken back here to do again."
+          : "Nothing moved or noted here to take back.",
+      );
       return;
     }
     draw();

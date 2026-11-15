@@ -52,7 +52,9 @@ export class ScrapsFiles {
 
   /**
    * The story's scraps in their file. Asked where the first time (or always, `asked`), and
-   * written there again with the story after that.
+   * written there again with the story after that. A file the Writer wrote before, chosen again
+   * or saved to with the story, is read first: changed outside since, or not to be read, it is
+   * asked about, never written over unasked.
    */
   async save(asked: boolean): Promise<void> {
     const { id, name: storyName, title } = this.host.story();
@@ -63,20 +65,52 @@ export class ScrapsFiles {
     if (!scraps.length && standing !== "changed") return;
     // Saved with the story: only when they changed, so a file changed elsewhere is left alone.
     if (!asked && standing === "saved") return;
-    let text = scrapsFile(scraps, title);
     const name = scrapsFileName(storyName);
-    let handle = this.files.get(id);
-    if (!handle && !asked) return;
-    // The file changed outside the Writer since it last wrote it: asked, never written over.
-    if (handle && !asked) {
-      const written = this.written.get(id);
+    const known = this.files.get(id);
+    if (!known && !asked) return;
+    if (!window.showSaveFilePicker) {
+      this.host.download(scrapsFile(scraps, title), name);
+      markScrapsSaved(this.keeper, id, scraps);
+      this.host.redraw();
+      return;
+    }
+    let handle = known;
+    try {
+      if (!handle || asked)
+        handle = await window.showSaveFilePicker({
+          suggestedName: name,
+          types: [{ description: "Scraps", accept: { "text/markdown": [".md"] } }],
+        });
+    } catch (error) {
+      if ((error as Error).name !== "AbortError")
+        this.host.notice("The scraps couldn’t be saved there.");
+      return;
+    }
+    // The file written before (chosen again, or saved to with the story): checked first.
+    const same =
+      known !== undefined &&
+      (handle === known || (await handle.isSameEntry(known).catch(() => false)));
+    const written = same ? this.written.get(id) : undefined;
+    if (written !== undefined) {
       let onDisk: string | undefined;
       try {
         onDisk = await (await handle.getFile()).text();
       } catch {
         onDisk = undefined;
       }
-      if (written !== undefined && onDisk !== undefined && onDisk !== written) {
+      if (onDisk === undefined) {
+        const answer = await this.host.ask(
+          `${handle.name} couldn’t be read to see whether it changed outside the Writer. Save these scraps over it?`,
+          [
+            { label: "Leave it", value: "cancel", main: true },
+            { label: "Save over it", value: "over" },
+          ],
+        );
+        if (answer !== "over") {
+          this.host.notice(`The scraps weren’t saved: ${handle.name} is as it was.`);
+          return;
+        }
+      } else if (onDisk !== written) {
         const answer = await this.host.ask(
           `${handle.name} changed outside the Writer since it was saved here. Join its scraps with these, or save these over it?`,
           [
@@ -93,37 +127,24 @@ export class ScrapsFiles {
           const joined = joinScraps(scraps, readScrapsFile(onDisk), readScrapsFile(written));
           scraps = joined.scraps;
           keepScraps(this.keeper, id, scraps, storyName);
-          text = scrapsFile(scraps, title);
           this.host.notice(
             `${joined.fromThere ? `${joined.fromThere} ${joined.fromThere === 1 ? "scrap" : "scraps"} from ${handle.name} joined these;` : "Joined:"} both are the same now.`,
           );
         }
       }
     }
-    if (!window.showSaveFilePicker) {
-      this.host.download(text, name);
-      markScrapsSaved(this.keeper, id, scraps);
-      this.host.redraw();
-      return;
-    }
+    const text = scrapsFile(scraps, title);
     try {
-      if (!handle || asked) {
-        handle = await window.showSaveFilePicker({
-          suggestedName: name,
-          types: [{ description: "Scraps", accept: { "text/markdown": [".md"] } }],
-        });
-        this.files.set(id, handle);
-      }
       const writable = await handle.createWritable();
       await writable.write(text);
       await writable.close();
+      this.files.set(id, handle);
       this.written.set(id, text);
       markScrapsSaved(this.keeper, id, scraps);
       this.host.redraw();
       if (asked) this.host.notice(`Scraps saved in ${handle.name}.`);
-    } catch (error) {
-      if ((error as Error).name !== "AbortError")
-        this.host.notice("The scraps couldn’t be saved there.");
+    } catch {
+      this.host.notice("The scraps couldn’t be saved there.");
     }
   }
 

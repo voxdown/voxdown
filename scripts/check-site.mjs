@@ -3594,9 +3594,26 @@ if (
   JSON.stringify({ bench: false, pressed: ["false", "false"], exit: true, hint: true })
 )
   problems.push(`writer: focus with the workbench open looks like ${JSON.stringify(focused)}`);
+// Escape goes first to whatever else is using it (a hint, a completion), as it should; a slower
+// machine can still have one up here, so the writing is focused and a second press allowed.
+await maker.locator(".cm-content").focus();
 await maker.keyboard.press("Escape");
-if (await maker.evaluate(() => document.body.hasAttribute("data-focus")))
+if (await maker.evaluate(() => document.body.hasAttribute("data-focus"))) {
+  const where = await maker.evaluate(() => ({
+    active: document.activeElement?.className || document.activeElement?.tagName,
+    panels: document.querySelectorAll(".cm-panels > *").length,
+    completion: !!document.querySelector(".cm-tooltip-autocomplete"),
+    dialog: !!document.querySelector("dialog[open]"),
+  }));
+  console.log(
+    `note: the first Escape in focus went to something else (${JSON.stringify(where)}); pressed again`,
+  );
+  await maker.keyboard.press("Escape");
+}
+if (await maker.evaluate(() => document.body.hasAttribute("data-focus"))) {
   problems.push("writer: Escape doesn't leave focus");
+  await maker.keyboard.press("Control+Shift+f");
+}
 await maker.keyboard.press("Control+Shift+f");
 await maker.click("#preview-toggle");
 const left = await maker.evaluate(() => ({

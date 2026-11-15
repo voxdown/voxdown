@@ -882,8 +882,8 @@ body.writer > .statusbar {
   content-visibility: auto;
   contain-intrinsic-size: auto 2.6em;
   /* What such a part paints is clipped to it: a direction's label over its first line rises a
-     little above it. */
-  overflow-clip-margin: 0.75em;
+     little above it, and a page number in the book's margin hangs out to the right of it. */
+  overflow-clip-margin: 3.5em;
 }
 .side-sheet .side-chunk {
   contain-intrinsic-size: auto calc(var(--parts, 40) * 2.6em);

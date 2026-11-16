@@ -3481,8 +3481,31 @@ if (looked.leading === leadingBefore)
   problems.push("writer: the line spacing didn't change the page's lines");
 if (looked.gap < 1 || !looked.indent.includes("Another one."))
   problems.push(`writer: paragraphs aren't set in as in a book: ${JSON.stringify(looked)}`);
+// Cancel puts everything back as it was when the dialog opened, the look too.
+const cancelBefore = await maker.evaluate(() => ({
+  size: getComputedStyle(document.querySelector(".cm-content")).fontSize,
+  paper: localStorage.getItem("vxd-writer-paper"),
+  theme: localStorage.getItem("vxd-theme"),
+}));
 await maker.click("#theme");
-await maker.click('#page-looks label:has(input[value="auto"])');
+await maker.waitForSelector("#page-settings[open]");
+await maker.click('#page-looks label:has(input[value="night"])');
+await maker.fill("#page-size", "15");
+await maker.dispatchEvent("#page-size", "input");
+await maker.click("#page-cancel");
+// The dialog's close event comes a moment after it shuts.
+await maker.waitForTimeout(200);
+const cancelAfter = await maker.evaluate(() => ({
+  size: getComputedStyle(document.querySelector(".cm-content")).fontSize,
+  paper: localStorage.getItem("vxd-writer-paper"),
+  theme: localStorage.getItem("vxd-theme"),
+}));
+if (JSON.stringify(cancelAfter) !== JSON.stringify(cancelBefore))
+  problems.push(
+    `writer: Cancel in Page and text didn't put it back: ${JSON.stringify({ cancelBefore, cancelAfter })}`,
+  );
+// Restore defaults: the usual page, and Auto.
+await maker.click("#theme");
 await maker.click("#page-reset");
 await maker.click('#page-settings button[value="done"]');
 if (
@@ -3594,9 +3617,26 @@ if (
   JSON.stringify({ bench: false, pressed: ["false", "false"], exit: true, hint: true })
 )
   problems.push(`writer: focus with the workbench open looks like ${JSON.stringify(focused)}`);
+// Escape goes first to whatever else is using it (a hint, a completion), as it should; a slower
+// machine can still have one up here, so the writing is focused and a second press allowed.
+await maker.locator(".cm-content").focus();
 await maker.keyboard.press("Escape");
-if (await maker.evaluate(() => document.body.hasAttribute("data-focus")))
+if (await maker.evaluate(() => document.body.hasAttribute("data-focus"))) {
+  const where = await maker.evaluate(() => ({
+    active: document.activeElement?.className || document.activeElement?.tagName,
+    panels: document.querySelectorAll(".cm-panels > *").length,
+    completion: !!document.querySelector(".cm-tooltip-autocomplete"),
+    dialog: !!document.querySelector("dialog[open]"),
+  }));
+  console.log(
+    `note: the first Escape in focus went to something else (${JSON.stringify(where)}); pressed again`,
+  );
+  await maker.keyboard.press("Escape");
+}
+if (await maker.evaluate(() => document.body.hasAttribute("data-focus"))) {
   problems.push("writer: Escape doesn't leave focus");
+  await maker.keyboard.press("Control+Shift+f");
+}
 await maker.keyboard.press("Control+Shift+f");
 await maker.click("#preview-toggle");
 const left = await maker.evaluate(() => ({

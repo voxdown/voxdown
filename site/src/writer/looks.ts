@@ -9,22 +9,55 @@
 
 export type Look = "auto" | "paper" | "sepia" | "night" | "slate" | "contrast";
 
-/** Each look, with its paper and ink for its swatch (the same as in writer.css). */
-export const LOOKS: ReadonlyArray<{ id: Look; label: string; about: string; swatch: string }> = [
+/** Each look, with its paper and ink for its swatch (the same as in writer.css), and whether it is
+ * light or dark, said beside its name: the site's own switch calls them Light and Dark. */
+export const LOOKS: ReadonlyArray<{
+  id: Look;
+  label: string;
+  tone: string;
+  about: string;
+  swatch: string;
+}> = [
   {
     id: "auto",
     label: "Auto",
+    tone: "System",
     about: "Paper, or Night when the computer is set dark",
     swatch: "linear-gradient(135deg, #ffffff 50%, #1b1d21 50%)",
   },
-  { id: "paper", label: "Paper", about: "White, and soft black ink", swatch: "#ffffff" },
-  { id: "sepia", label: "Sepia", about: "Warm cream, and brown ink", swatch: "#f7f0e1" },
-  { id: "night", label: "Night", about: "Dark grey, and pale ink", swatch: "#1b1d21" },
-  { id: "slate", label: "Slate", about: "Blue-grey: softer than Night", swatch: "#262c35" },
+  {
+    id: "paper",
+    label: "Paper",
+    tone: "Light",
+    about: "Light: white, and soft black ink",
+    swatch: "#ffffff",
+  },
+  {
+    id: "sepia",
+    label: "Sepia",
+    tone: "Light",
+    about: "Light: warm cream, and brown ink",
+    swatch: "#f7f0e1",
+  },
+  {
+    id: "night",
+    label: "Night",
+    tone: "Dark",
+    about: "Dark: dark grey, and pale ink",
+    swatch: "#1b1d21",
+  },
+  {
+    id: "slate",
+    label: "Slate",
+    tone: "Dark",
+    about: "Dark: blue-grey, softer than Night",
+    swatch: "#262c35",
+  },
   {
     id: "contrast",
     label: "High contrast",
-    about: "Black on white, every mark darker",
+    tone: "Light",
+    about: "Light: black on white, every mark darker",
     swatch: "#ffffff",
   },
 ];

@@ -882,8 +882,8 @@ body.writer > .statusbar {
   content-visibility: auto;
   contain-intrinsic-size: auto 2.6em;
   /* What such a part paints is clipped to it: a direction's label over its first line rises a
-     little above it. */
-  overflow-clip-margin: 0.75em;
+     little above it, and a page number in the book's margin hangs out to the right of it. */
+  overflow-clip-margin: 3.5em;
 }
 .side-sheet .side-chunk {
   contain-intrinsic-size: auto calc(var(--parts, 40) * 2.6em);
@@ -2273,7 +2273,7 @@ body[data-welcome] #draft-state {
   padding: 1rem 1.2rem;
   background: var(--paper);
   color: var(--ink);
-  width: min(26rem, 94vw);
+  width: min(29rem, 94vw);
   box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
 }
 .page-settings::backdrop {
@@ -3123,6 +3123,26 @@ dialog:has(> .dialog-close) #ask-message {
 .page-settings .look:has(input:focus-visible) {
   outline: 2px solid var(--pencil);
   outline-offset: 2px;
+}
+.page-settings .look-name {
+  display: grid;
+}
+.page-settings .look-name small {
+  color: var(--quiet);
+  font-size: 0.72rem;
+}
+/* Restore defaults: quiet, at the left, apart from Cancel and Done. */
+.page-settings .page-defaults {
+  margin-right: auto;
+  border-color: transparent;
+  background: none;
+  color: var(--quiet);
+  padding-inline: 0.2rem;
+}
+.page-settings .page-defaults:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .page-settings .look-swatch {
   display: grid;

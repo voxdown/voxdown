@@ -5176,7 +5176,12 @@ function showPageSettings(): void {
       swatch.style.background = look.swatch;
       swatch.style.color = SWATCH_INK[look.id];
       swatch.textContent = look.id === "auto" ? "" : "Aa";
-      label.append(input, swatch, look.label);
+      const name = document.createElement("span");
+      name.className = "look-name";
+      const tone = document.createElement("small");
+      tone.textContent = look.tone;
+      name.append(look.label, tone);
+      label.append(input, swatch, name);
       looks.append(label);
     }
   }
@@ -5212,18 +5217,34 @@ function showPageSettings(): void {
       showLook();
       show();
     };
-  $("#page-reset").onclick = () => {
-    Object.assign(prefs, {
-      font: "story",
-      size: 17,
-      measure: 52,
-      leading: 1.65,
-      paragraphs: "spaced",
-    });
+  // Done keeps what was changed; Cancel, Escape and the × put it all back as it was when the
+  // dialog opened, the look too. Restore defaults sets the usual page and Auto, still cancellable.
+  const before = {
+    look: savedLook(),
+    font: prefs.font,
+    size: prefs.size,
+    measure: prefs.measure,
+    leading: prefs.leading,
+    paragraphs: prefs.paragraphs,
+  };
+  const take = (look: Look, page: Partial<Prefs>) => {
+    Object.assign(prefs, page);
     keepPrefs();
     applyPage();
+    if (savedLook() !== look) chooseLook(look);
+    showLook();
+  };
+  $("#page-reset").onclick = () => {
+    take("auto", { font: "story", size: 17, measure: 52, leading: 1.65, paragraphs: "spaced" });
     show();
   };
+  $("#page-cancel").onclick = () => dialog.close("cancel");
+  dialog.onclose = () => {
+    if (dialog.returnValue === "done") return;
+    const { look, ...page } = before;
+    take(look, page);
+  };
+  dialog.returnValue = "";
   show();
   dialog.showModal();
 }

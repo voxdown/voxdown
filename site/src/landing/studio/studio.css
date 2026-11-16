@@ -5666,9 +5666,10 @@ html:not(.js) .big-edit .struck {
 .annot .hand {
   animation: none !important;
 }
+/* What's still to come isn't there until it sets in (its room kept, so nothing moves). */
 .wr .new {
   animation: none !important;
-  opacity: calc(0.22 + 0.78 * var(--set, 1));
+  opacity: var(--set, 1);
 }
 /* The reader's own choice is never faded. */
 .wr.who-set .who-slot.new {
@@ -5679,10 +5680,15 @@ html:not(.js) .big-edit .struck {
 .js .step-example .mk,
 .js .step-example .is-new {
   transition: none;
-  opacity: calc(0.22 + 0.78 * var(--set, 1));
+  opacity: var(--set, 1);
 }
 .js .step-example .is-new {
   transform: translateX(calc((1 - var(--set, 1)) * 24px));
+}
+/* Marks an earlier step already set are simply there. */
+.js .step-example .mk.held {
+  opacity: 1;
+  transform: none;
 }
 .step-example .note .nl {
   display: inline-block;
@@ -5756,6 +5762,11 @@ html:not(.js) .big-edit .struck {
   animation: none;
   translate: var(--px, 0px) var(--py, 0px);
 }
+/* It comes in as the line starts, never resting across the word before. */
+.final-band .pen-final.loaded {
+  opacity: calc(0.95 * var(--rest, 1));
+  transition: none;
+}
 
 /* The hero: on every screen it sits in the top half at the top of the page, so by the same rule its
    underline is simply drawn, with the pencil at rest at its end. No timed fade. */
@@ -5812,6 +5823,7 @@ html:not(.js) .big-edit .struck {
 }
 .hero .pen-under .pen-rest {
   translate: var(--px, 0px) var(--py, 0px);
+  opacity: var(--rest, 1);
 }
 @media (prefers-reduced-motion: no-preference) {
   .js .hero .pen-under {
@@ -5835,7 +5847,7 @@ html:not(.js) .big-edit .struck {
   z-index: 1;
 }
 .views-run {
-  height: 200vh;
+  height: 130vh;
 }
 /* Small enough that the whole window, its bar and its caption fit on the screen while pinned. */
 .views-pin .shot-tile {
@@ -5899,7 +5911,7 @@ html:not(.js) .big-edit .struck {
     top: 4.1rem;
   }
   .views-run {
-    height: 170vh;
+    height: 110vh;
   }
   .shot-stack {
     aspect-ratio: 780 / 740;
@@ -5912,4 +5924,10 @@ html:not(.js) .big-edit .struck {
   .seg-run {
     bottom: -0.35rem;
   }
+}
+
+/* The step buttons ride in the pinned frame, 70px down, under the page's 80px scroll padding: a
+   keyboard focus there must never scroll the page (and undraw a step's marks). */
+.jump button {
+  scroll-margin-top: -1rem;
 }

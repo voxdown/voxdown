@@ -6,30 +6,16 @@
  */
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/inter";
-import * as renderLib from "@voxdown/render";
-/** Text made safe for HTML (the renderer's own rule; the renderer itself loads with the spine). */
+/** Text made safe for HTML (the renderer's own rule; the renderer itself loads with the parser). */
 const escapeHtml = (text: string) =>
   text.replace(
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
   );
-/** The renderer, for the book and the script, and its stylesheet. */
-type Render = typeof renderLib;
-const render: Render = renderLib;
-{
-  const style = document.createElement("style");
-  style.textContent = render.stylesheet;
-  document.head.prepend(style);
-}
-import {
-  type Story,
-  characterColors,
-  lines,
-  linesToCsv,
-  parse,
-  textByCharacter,
-  tokens,
-} from "voxdown";
+/** The renderer, for the book and the script, and its stylesheet: loaded at boot, with the parser. */
+type Render = Pick<typeof import("./vox"), "renderBook" | "renderScript" | "stylesheet">;
+let render: Render;
+import type { Story } from "voxdown";
 // Only the two recorded stories, read as they are: nothing else to parse at load.
 import dragonText from "../../../../examples/the-dragon-who-would-not-roar.vxd?raw";
 import windText from "../../../../examples/the-north-wind-and-the-sun.vxd?raw";
@@ -54,6 +40,64 @@ const $$ = <T extends HTMLElement = HTMLElement>(selector: string, root: ParentN
 const SUPPORT_URL = "";
 
 const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+/*
+ * The parser, fetched once the page has loaded and is idle (or at the reader's first sign of
+ * intent): the first view needs none of it, the hero's scene, the cast and the route's script being
+ * in the page already. Everything that reads the stories waits for it: see "boot" below.
+ */
+type Vox = typeof import("./vox");
+let vox: Vox | undefined;
+const need = (): Vox => {
+  if (!vox) throw new Error("The parser is needed before it has loaded");
+  return vox;
+};
+const parse = (...args: Parameters<Vox["parse"]>) => need().parse(...args);
+const tokens = (...args: Parameters<Vox["tokens"]>) => need().tokens(...args);
+const characterColors = (...args: Parameters<Vox["characterColors"]>) =>
+  need().characterColors(...args);
+const lines = (...args: Parameters<Vox["lines"]>) => need().lines(...args);
+const linesToCsv = (...args: Parameters<Vox["linesToCsv"]>) => need().linesToCsv(...args);
+const textByCharacter = (...args: Parameters<Vox["textByCharacter"]>) =>
+  need().textByCharacter(...args);
+
+/** Set once the parser has loaded and the stories are read. */
+let booted = false;
+const waiting: Array<() => void> = [];
+let loading: Promise<void> | undefined;
+/** Loads the parser (once), reads the stories, and runs everything that was waiting for them. */
+function boot(): Promise<void> {
+  loading ??= import("./vox").then((module) => {
+    vox = module;
+    render = module;
+    // The renderer's styles are in the page already (for the script laid out there); kept in step.
+    let style = document.querySelector<HTMLStyleElement>("#vxd-render");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "vxd-render";
+      document.head.prepend(style);
+    }
+    if (style.textContent !== render.stylesheet) style.textContent = render.stylesheet;
+    readStories();
+    booted = true;
+    // Each waiting part in a task of its own, so none of them holds up the scroll for long.
+    for (const run of waiting.splice(0)) globalThis.setTimeout(run, 0);
+  });
+  return loading;
+}
+/** Runs `run` with the stories read: at once, or once the parser is in (asking for it now). */
+function afterBoot(run: () => void): void {
+  if (booted) run();
+  else {
+    waiting.push(run);
+    void boot();
+  }
+}
+/** Runs `run` once the stories are read, without asking for the parser itself. */
+function whenBooted(run: () => void): void {
+  if (booted) run();
+  else waiting.push(run);
+}
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 const announce = (words: string) => {
@@ -89,14 +133,33 @@ const recordings = import.meta.glob<Manifest>("../../recordings/*.json", {
 const manifestOf = (name: string) =>
   recordings[`../../recordings/${name.replace(/\.vxd$/, "")}.json`];
 
+/** The two recorded stories, parsed at boot. */
+/** The two recorded stories: their recordings are there from the start (a press on play needs
+ *  nothing more), their text is parsed when first read, once the parser is in. */
+const parsedStories = new Map<string, Story>();
 const scenes: Scene[] = examples
-  .map((example) => ({ example, manifest: manifestOf(example.name), story: parse(example.text) }))
-  .filter((s): s is Scene => Boolean(s.manifest))
+  .filter((example) => Boolean(manifestOf(example.name)))
+  .map((example) => ({
+    example,
+    manifest: manifestOf(example.name) as Manifest,
+    get story(): Story {
+      let story = parsedStories.get(example.name);
+      if (!story) {
+        story = parse(example.text);
+        parsedStories.set(example.name, story);
+      }
+      return story;
+    },
+  }))
   .sort(
     (a, b) => Number(b.example.name.includes("dragon")) - Number(a.example.name.includes("dragon")),
   );
 const dragon = scenes.find((scene) => scene.example.name.includes("dragon")) as Scene;
-const dragonColors = characterColors(dragon.story);
+let dragonColors: Map<string, string>;
+function readStories(): void {
+  for (const scene of scenes) void scene.story;
+  dragonColors = characterColors(dragon.story);
+}
 const colorOf = (story: Story, who: string | null) =>
   who && who !== story.meta.narrator ? characterColors(story).get(who) : undefined;
 
@@ -136,7 +199,7 @@ type Owner = {
 const player = {
   audio: undefined as HTMLAudioElement | undefined,
   file: "",
-  scene: dragon,
+  scene: undefined as Scene | undefined,
   owner: undefined as Owner | undefined,
   stopAt: Number.POSITIVE_INFINITY,
 };
@@ -231,12 +294,13 @@ function showPill(): void {
   if (!pill.hidden && player.audio) updatePill(player.audio.currentTime);
 }
 function updatePill(seconds: number): void {
-  if (pill.hidden) return;
-  const cue = player.scene.manifest.cues[cueAt(player.scene.manifest, seconds)];
-  const words = described(player.scene.story, cue) || player.owner?.label || "";
+  const scene = player.scene;
+  if (pill.hidden || !scene || !booted) return;
+  const cue = scene.manifest.cues[cueAt(scene.manifest, seconds)];
+  const words = described(scene.story, cue) || player.owner?.label || "";
   const who = $("#np-who");
   if (who.textContent !== words) who.textContent = words;
-  const color = colorOf(player.scene.story, cue?.speaker ?? null);
+  const color = colorOf(scene.story, cue?.speaker ?? null);
   $("#np-dot").style.setProperty("--c", color ?? "#a78bfa");
 }
 $("#np-toggle").addEventListener("click", () => {
@@ -327,14 +391,18 @@ const heroOwner: Owner = {
   state: () => showHeroPlaying(),
 };
 
-function showScene(index: number): void {
+function showScene(index: number, adopt = false): void {
   const scene = scenes[index];
   if (!scene) return;
-  if (player.owner === heroOwner) player.audio?.pause();
+  const place = sheet.scrollTop;
+  // At boot (`adopt`), the scene in the page is drawn again from the file, in place: the sheet's
+  // box has a fixed height, so nothing outside it moves; the reader's place in it and anything
+  // already playing are kept.
+  if (!adopt && player.owner === heroOwner) player.audio?.pause();
   hero.index = index;
   hero.current = -1;
   hero.row = -1;
-  hero.at = 0;
+  if (!adopt) hero.at = 0;
   heroOwner.label = scene.example.name.includes("dragon") ? "the dragon scene" : "the fable";
   const story = scene.story;
   const colors = characterColors(story);
@@ -364,9 +432,15 @@ function showScene(index: number): void {
     ? "Could you not?"
     : "Strength is not always loud";
   const first = hero.rows.find((row) => row.element.textContent?.includes(opening));
-  requestAnimationFrame(() => {
-    sheet.scrollTop = first ? Math.max(0, first.element.offsetTop - 16) : 0;
-  });
+  if (adopt) sheet.scrollTop = place;
+  else
+    requestAnimationFrame(() => {
+      sheet.scrollTop = first ? Math.max(0, first.element.offsetTop - 16) : 0;
+    });
+  if (adopt) {
+    applySpot();
+    return;
+  }
   for (const [i, tab] of $$<HTMLButtonElement>(".demo-tab").entries()) {
     tab.setAttribute("aria-selected", String(i === index));
     tab.tabIndex = i === index ? 0 : -1;
@@ -402,10 +476,11 @@ function heroTick(seconds: number): void {
   const speaking = heard && cue !== hero.current;
   if (speaking || second !== hero.second) {
     hero.second = second;
-    const now = heard ? described(scene.story, heard) : "";
+    const now = heard && booted ? described(scene.story, heard) : "";
     track.setAttribute("aria-valuetext", now ? `${clock(seconds)}, ${now}` : clock(seconds));
   }
-  if (heard && cue !== hero.current) {
+  // The words heard, once the parser is in (the recording may have started before it).
+  if (heard && booted && cue !== hero.current) {
     hero.current = cue;
     const words = described(scene.story, heard);
     nowText.textContent = words;
@@ -463,16 +538,18 @@ function seekHero(share: number): void {
 {
   const tabs = $("#demo-tabs");
   for (const [index, tab] of $$<HTMLButtonElement>(".demo-tab", tabs).entries()) {
-    tab.addEventListener("click", () => showScene(index));
+    tab.addEventListener("click", () => afterBoot(() => showScene(index)));
     tab.addEventListener("keydown", (event) => {
       const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
       if (!step) return;
       event.preventDefault();
-      const next = (index + step + scenes.length) % scenes.length;
-      showScene(next);
+      const count = $$(".demo-tab", tabs).length;
+      const next = (index + step + count) % count;
       $$<HTMLButtonElement>(".demo-tab", tabs)[next]?.focus();
+      afterBoot(() => showScene(next));
     });
   }
+  // Play starts inside the press itself, parser or not: only the recording is needed.
   demoPlay.addEventListener("click", toggleHero);
   heroPlay.addEventListener("click", () => {
     toggleHero();
@@ -513,8 +590,15 @@ function seekHero(share: number): void {
     event.preventDefault();
     seekHero((hero.at + step) / duration);
   });
-  showScene(0);
+  // The scene is in the page already: open it on the best exchange; the parser takes over at boot.
+  {
+    const first = $$(".row", sheet).find((row) => row.textContent?.includes("Could you not?"));
+    requestAnimationFrame(() => {
+      sheet.scrollTop = first ? Math.max(0, first.offsetTop - 16) : 0;
+    });
+  }
   homes.observe($("#demo"));
+  whenBooted(() => showScene(0, true));
 }
 
 /** What each kind of mark does, said beside the chips. */
@@ -557,7 +641,10 @@ for (const button of $$<HTMLButtonElement>(".chip-k"))
 function explain(element: HTMLElement): string {
   const kind = element.className.replace(/^t-/, "");
   const text = element.textContent ?? "";
-  const who = element.dataset.who ? nameOf(heroScene().story, element.dataset.who) : "";
+  const who =
+    element.dataset.who && booted
+      ? nameOf(heroScene().story, element.dataset.who)
+      : (element.dataset.who ?? "");
   if (kind === "mark" || kind === "name") return `Who speaks: ${who}`;
   if (kind === "direction") return "How it’s said: a direction for the voice";
   if (kind === "group") return "A passage grouped under one voice or direction";
@@ -876,6 +963,39 @@ function scrub(
   };
 }
 
+/** A step's caption, as the pinned frame shows it (step 0: the blank page). */
+function captionHtmlOf(steps: HTMLElement[], n: number): string {
+  const step = steps[n - 1];
+  return step
+    ? `<p class="cap-n"><span>${n}</span>${escapeHtml(step.dataset.feature ?? "")}</p><p class="cap-h">${escapeHtml($("h3", step).textContent ?? "")}</p><p class="cap-p">${escapeHtml($("h3 + p", step).textContent ?? "")}${step.dataset.try ? ` <b class="cap-try">${escapeHtml(step.dataset.try)}</b>` : ""}</p>`
+    : `<p class="cap-n"><span>0</span>A new story</p><p class="cap-h">A blank page.</p><p class="cap-p">Scroll, or pick a step above, and the scene begins.</p>`;
+}
+/** The caption is as tall as its tallest beat at this width, so nothing below it ever moves. */
+function sizeCaptionOf(caption: HTMLElement, steps: HTMLElement[]): void {
+  const box = caption.parentElement as HTMLElement;
+  const probe = caption.cloneNode() as HTMLElement;
+  probe.removeAttribute("id");
+  probe.style.cssText = `position:absolute;visibility:hidden;left:0;top:0;width:${caption.getBoundingClientRect().width}px`;
+  box.append(probe);
+  let tallest = 0;
+  for (let n = 0; n <= steps.length; n++) {
+    probe.innerHTML = captionHtmlOf(steps, n);
+    tallest = Math.max(tallest, probe.getBoundingClientRect().height);
+  }
+  probe.remove();
+  box.style.minHeight = `${Math.ceil(tallest)}px`;
+}
+// Sized with the page, before the spine is built, so its caption never grows under the reader.
+{
+  const caption = document.querySelector<HTMLElement>("#caption-words");
+  if (caption) {
+    const size = () => sizeCaptionOf(caption, $$("#steps .step"));
+    // In a task of its own, not the page's first.
+    globalThis.setTimeout(size, 0);
+    void document.fonts.ready.then(size);
+  }
+}
+
 /* ================================================================== the spine */
 
 /* Built when it nears the screen: nothing of it costs the first view. */
@@ -1041,7 +1161,9 @@ function initSpine(): void {
         // "Could you not?" and its name take the colour of whoever the reader gave it to.
         const owner = seg.slot || (line.id === "could" && k === "speech") ? who || G : seg.who;
         const style = owner ? ` style="--sp:${colorFor(owner)}"` : "";
-        const step = seg.s && upTo === undefined ? ` data-s="${seg.s}"` : "";
+        // The step each mark belongs to (the phone's examples keep earlier steps' marks set).
+        const markStep = seg.s ?? line.s;
+        const step = markStep ? ` data-s="${markStep}"` : "";
         if (k === "speech") {
           // The Writer underlines the words, not the quotation marks around them.
           const open = seg.t.startsWith("“") ? "“" : "";
@@ -1447,23 +1569,40 @@ function initSpine(): void {
   const PEN: Record<number, Array<{ at: string; word: string; shape: "circle" | "under" }>> = {
     2: [{ at: "could .k-speech", word: "who?", shape: "circle" }],
     3: [
-      { at: "could .k-dir", word: "how?", shape: "under" },
+      { at: "could .k-speech", word: "how?", shape: "under" },
       { at: "rumble", word: "what do we hear?", shape: "circle" },
       { at: "pause", word: "a beat", shape: "circle" },
     ],
   };
 
-  // The marks' own ink, read once, for the pencil's lead.
+  // The marks' own ink, read once, for the pencil's lead: fetched only as the walkthrough nears
+  // (or a step is drawn), never with the first view.
   const inks: { ring?: Ink; under?: Ink; arrow?: Ink } = {};
-  const inksReady = Promise.all(
-    (["ring", "under", "arrow"] as const).map(async (name) => {
-      const file = { ring: "pencil-circle", under: "pencil-underline", arrow: "pencil-arrow" }[
-        name
-      ];
-      const ink = await inkOf(`../../landing/studio/pen/${file}.webp`);
-      if (ink) inks[name] = ink;
-    }),
-  );
+  let inksReady: Promise<unknown> | undefined;
+  const loadInks = () => {
+    inksReady ??= Promise.all(
+      (["ring", "under", "arrow"] as const).map(async (name) => {
+        const file = { ring: "pencil-circle", under: "pencil-underline", arrow: "pencil-arrow" }[
+          name
+        ];
+        const ink = await inkOf(`../../landing/studio/pen/${file}.webp`);
+        if (ink) inks[name] = ink;
+      }),
+    );
+    return inksReady;
+  };
+  {
+    const nearing = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        nearing.disconnect();
+        void loadInks();
+      },
+      { rootMargin: "50% 0px" },
+    );
+    // The first step the pencil marks.
+    nearing.observe($('#steps .step[data-step="2"]'));
+  }
   const wr = $("#wr");
   buildMock(wr);
   const doc = $("#wr-doc");
@@ -1475,6 +1614,9 @@ function initSpine(): void {
   let active = -1;
 
   // The step buttons, and each beat's example.
+  // The step buttons are in the page already (so the frame never grows under the reader); they
+  // are checked against the steps here (see redraw).
+  let buttons = "";
   for (const step of steps) {
     const n = Number(step.dataset.step);
     const example = document.createElement("div");
@@ -1495,10 +1637,10 @@ function initSpine(): void {
     const feature = (step.dataset.feature ?? "").replace(/ · (Ctrl|Alt)\+\S+/g, "");
     label.innerHTML = `<span>${n}</span> ${escapeHtml(step.dataset.label ?? "")} <em>${escapeHtml(feature)}</em>`;
     step.prepend(label);
-    const li = document.createElement("li");
-    li.innerHTML = `<button type="button" data-go="${n}"><span aria-hidden="true">${n}</span>${escapeHtml(step.dataset.label ?? "")}</button>`;
-    jump.append(li);
+    buttons += `<li><button type="button" data-go="${n}"><span aria-hidden="true">${n}</span>${escapeHtml(step.dataset.label ?? "")}</button></li>`;
   }
+  redraw(jump, buttons);
+
   const lanesRoots = () => $$(".lanes");
 
   const TAB_OF: Record<number, string> = { 2: "cast", 3: "cast", 4: "scenes", 5: "comments" };
@@ -1876,7 +2018,7 @@ function initSpine(): void {
     const draw = () => {
       if (active === n) drawPen(n);
     };
-    Promise.all([document.fonts.ready, inksReady]).then(() =>
+    Promise.all([document.fonts.ready, PEN[n] ? loadInks() : undefined]).then(() =>
       requestAnimationFrame(() => requestAnimationFrame(draw)),
     );
   }
@@ -1903,27 +2045,8 @@ function initSpine(): void {
       { passive: true },
     );
 
-  function captionHtml(n: number): string {
-    const step = steps[n - 1];
-    return step
-      ? `<p class="cap-n"><span>${n}</span>${escapeHtml(step.dataset.feature ?? "")}</p><p class="cap-h">${escapeHtml($("h3", step).textContent ?? "")}</p><p class="cap-p">${escapeHtml($("h3 + p", step).textContent ?? "")}${step.dataset.try ? ` <b class="cap-try">${escapeHtml(step.dataset.try)}</b>` : ""}</p>`
-      : `<p class="cap-n"><span>0</span>A new story</p><p class="cap-h">A blank page.</p><p class="cap-p">Scroll, or pick a step above, and the scene begins.</p>`;
-  }
-  /** The caption is as tall as its tallest beat at this width, so nothing below it ever moves. */
-  function sizeCaption(): void {
-    const box = caption.parentElement as HTMLElement;
-    const probe = caption.cloneNode() as HTMLElement;
-    probe.removeAttribute("id");
-    probe.style.cssText = `position:absolute;visibility:hidden;left:0;top:0;width:${caption.getBoundingClientRect().width}px`;
-    box.append(probe);
-    let tallest = 0;
-    for (let n = 0; n <= STEPS; n++) {
-      probe.innerHTML = captionHtml(n);
-      tallest = Math.max(tallest, probe.getBoundingClientRect().height);
-    }
-    probe.remove();
-    box.style.minHeight = `${Math.ceil(tallest)}px`;
-  }
+  const captionHtml = (n: number) => captionHtmlOf(steps, n);
+  const sizeCaption = () => sizeCaptionOf(caption, steps);
 
   /** A workbench tab, its row drawn afresh so a label appearing moves nothing that was there. */
   function setTab(tab: string): void {
@@ -1976,8 +2099,27 @@ function initSpine(): void {
    * The words a mark is about: a quote with its quotation marks, or a line's own sentence (not the
    * sound tag after it). Rings and underlines are sized from these.
    */
-  function circled(line: HTMLElement, target: HTMLElement, inner: boolean): Range {
+  function circled(
+    line: HTMLElement,
+    target: HTMLElement,
+    inner: boolean,
+    shape: "circle" | "under" = "circle",
+  ): Range {
     const range = document.createRange();
+    // Underlined, a spoken line's first word: where an editor puts the line and asks how.
+    const words = target.firstChild;
+    if (
+      inner &&
+      shape === "under" &&
+      target.classList.contains("k-speech") &&
+      words?.nodeType === Node.TEXT_NODE
+    ) {
+      const text = (words as Text).data;
+      const space = text.search(/[\s\u00a0]/);
+      range.setStart(words, 0);
+      range.setEnd(words, space > 0 ? space : text.length);
+      return range;
+    }
     if (inner && target.classList.contains("k-speech")) {
       range.selectNodeContents(target);
       const before = target.previousSibling;
@@ -2027,7 +2169,7 @@ function initSpine(): void {
       const line = doc.querySelector<HTMLElement>(`[data-id="${id}"]`);
       const target = inner ? line?.querySelector<HTMLElement>(inner) : line;
       if (!line || !target || !target.offsetParent) continue;
-      const range = circled(line, target, Boolean(inner));
+      const range = circled(line, target, Boolean(inner), mark.shape);
       const first = range.getBoundingClientRect();
       const x = first.left - base.left;
       const y = first.top - base.top;
@@ -2424,13 +2566,17 @@ function initSpine(): void {
   }
 
   // On a phone, each small Writer's change follows its place on the screen, both ways, at a hand's
-  // pace, over the whole time it is on screen.
+  // pace, complete by the time it reaches the middle of the screen.
   for (const example of $$(".step-example")) example.classList.add("seen");
   // Set up in a task of their own, after the beats are built.
   globalThis.setTimeout(() => {
     if (!calm.matches && window.innerWidth <= 860)
       for (const example of $$(".step-example")) {
         if (example.closest('.step[data-step="1"]')) continue;
+        // Marks an earlier step set are simply there; only this step's set in.
+        const own = example.closest<HTMLElement>(".step")?.dataset.step;
+        for (const mark of $$(".mk", example))
+          if (mark.dataset.s !== own) mark.classList.add("held");
         const paper = example.querySelector<HTMLElement>(".mini") ?? example;
         type Mark = { el: HTMLElement; kind: "ink" | "line" };
         let marks: Mark[] = [];
@@ -2470,7 +2616,10 @@ function initSpine(): void {
         // pause, then the tags set in; and each part's stretch of the crossing.
         type Part = { mark?: Mark; time: number; weight: number };
         let parts: Part[] = [];
-        const pace: Pace = { ...HAND, scale: 1, map: (share) => share };
+        // These are strokes alone, no pencil: they follow the example's place directly (with the
+        // light easing), each stroke given its stretch by its length, so the example is set by
+        // the time it reaches the middle of the screen whatever the speed of the scroll.
+        const pace: Pace = { scale: 1, map: (share) => share };
         const plan = () => {
           parts = [];
           for (const [i, mark] of marks.entries()) {
@@ -2520,7 +2669,7 @@ function initSpine(): void {
           {
             to: (share) => {
               // Each stroke from its own start in the hand's time; the set-in last.
-              let t = share * pace.scale;
+              let t = (pace.map?.(Math.max(0, Math.min(1, share))) ?? share) * pace.scale;
               for (const [i, part] of parts.entries()) {
                 const k = Math.max(0, Math.min(1, t / part.time));
                 const mark = part.mark;
@@ -2536,18 +2685,17 @@ function initSpine(): void {
             },
           },
           () => {
-            // All the while it's on screen: from its top entering near the bottom to its bottom
-            // reaching near the top. A long stretch of scroll, the taller the longer.
+            // From its top entering near the bottom to its middle a little below the screen's:
+            // complete by the time it's read, and it stays so as it leaves (undone only below).
             const box = paper.getBoundingClientRect();
             const share =
-              (window.innerHeight * 0.9 - box.top) / (window.innerHeight * 0.75 + box.height);
+              (window.innerHeight * 0.95 - box.top) / (window.innerHeight * 0.33 + box.height / 2);
             // The pictures it draws with are fetched only as it comes near.
             if (share > -1) example.classList.add("near");
             // A jump to this step lands with its example complete.
             if (landing === Number(example.closest<HTMLElement>(".step")?.dataset.step)) return 1;
             return share;
           },
-          pace,
         );
       }
     // The phone's first beat is typed by the scroll too, as it crosses the screen: from entering its
@@ -2574,57 +2722,128 @@ function initSpine(): void {
     }
   }, 0);
 }
-{
-  // Once, when the page is idle after loading, or sooner if the reader gets near it.
-  let built = false;
-  const build = () => {
-    if (built) return;
-    built = true;
-    near.disconnect();
-    initSpine();
-  };
-  const near = new IntersectionObserver(
-    (entries) => entries.some((e) => e.isIntersecting) && build(),
-    {
-      rootMargin: "300px 0px",
-    },
-  );
-  near.observe($("#spine"));
-  // On a phone the beats' examples are part of the page's length: built in the very next task (its
-  // own, not the page's first), before anything below can be reached.
-  if (window.matchMedia("(max-width: 860px)").matches) globalThis.setTimeout(build, 0);
-  const idle = () =>
-    "requestIdleCallback" in window
-      ? window.requestIdleCallback(build, { timeout: 4000 })
-      : globalThis.setTimeout(build, 1500);
-  if (document.readyState === "complete") idle();
-  else window.addEventListener("load", idle, { once: true });
-}
+// The spine, once the stories are read: on a phone at once, in a task of its own (its examples are
+// part of the page's length); on a wide screen in the idle time after that.
+// It also waits for the page's fonts: built in a fallback face, its top bar would shift as they
+// arrived.
+whenBooted(
+  () =>
+    void document.fonts.ready.then(() =>
+      window.innerWidth <= 860 || !("requestIdleCallback" in window)
+        ? initSpine()
+        : window.requestIdleCallback(initSpine, { timeout: 1500 }),
+    ),
+);
 
 /* ================================================================== the cast */
 
-/* Built with the page, so the section is its full height from the start. */
+/** Each character's audition: the recording's cues they're heard in. */
+const AUDITIONS: Record<string, [number, number]> = {
+  Narrator: [1, 1],
+  King: [10, 10],
+  Percival: [40, 40],
+  Gerald: [35, 36],
+};
+/** A character's card and its parts, as they are now (the card may be drawn again at boot). */
+const castCard = (handle: string) =>
+  document.querySelector<HTMLElement>(`.cast-card[data-cast="${CSS.escape(handle)}"]`);
+const castOwners = new Map<string, Owner>();
+/** One player owner per character, found by its card: the same before and after boot. */
+function castOwner(handle: string): Owner {
+  let owner = castOwners.get(handle);
+  if (owner) return owner;
+  const [first, last] = AUDITIONS[handle] ?? [0, 0];
+  const from = dragon.manifest.cues[first] as Cue;
+  const to = dragon.manifest.cues[last] as Cue;
+  const stopAt = to.start + to.duration + 0.25;
+  owner = {
+    label: `${castCard(handle)?.querySelector("h3")?.textContent ?? handle}’s line`,
+    home: () => castCard(handle) ?? $("#cast-list"),
+    tick: (seconds) => {
+      const meter = castCard(handle)?.querySelector<HTMLElement>(".cast-meter i");
+      if (meter)
+        meter.style.transform = `scaleX(${Math.max(0, Math.min(1, (seconds - from.start) / (stopAt - from.start)))})`;
+    },
+    state: (on) => {
+      const card = castCard(handle);
+      const button = card?.querySelector<HTMLButtonElement>(".audition");
+      button?.classList.toggle("playing", on);
+      button?.setAttribute("aria-pressed", String(on));
+      card?.classList.toggle("on", on);
+      const meter = card?.querySelector<HTMLElement>(".cast-meter i");
+      if (!on && meter) meter.style.transform = "scaleX(0)";
+    },
+  };
+  castOwners.set(handle, owner);
+  return owner;
+}
+/* The cards are in the page from the start; their buttons work from the start too, inside the press
+   (the recording is all a press needs). */
+$("#cast-list").addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest(".audition");
+  const handle = button?.closest<HTMLElement>(".cast-card")?.dataset.cast;
+  if (!handle || !AUDITIONS[handle]) return;
+  const owner = castOwner(handle);
+  if (playing() && player.owner === owner) {
+    player.audio?.pause();
+    return;
+  }
+  const from = dragon.manifest.cues[(AUDITIONS[handle] as [number, number])[0]] as Cue;
+  const to = dragon.manifest.cues[(AUDITIONS[handle] as [number, number])[1]] as Cue;
+  play(owner, dragon, Math.max(0, from.start - 0.05), to.start + to.duration + 0.25);
+});
+// On a phone: a chip for each character, and the chosen one's card.
+$("#cast-chips").addEventListener("click", (event) => {
+  const chip = (event.target as HTMLElement).closest<HTMLElement>(".cast-chip");
+  if (!chip) return;
+  for (const other of $$(".cast-chip")) other.setAttribute("aria-pressed", String(other === chip));
+  for (const card of $$(".cast-card"))
+    card.classList.toggle("chosen", card.dataset.cast === chip.dataset.cast);
+});
+for (const card of $$(".cast-card")) homes.observe(card);
+
+/**
+ * Puts what the file says into a part of the page that holds a copy of it already. Nothing happens
+ * when the copy matches (the usual case); if the file has changed since, the part is drawn again,
+ * at once if it's out of sight, or else as soon as it is, so nothing ever moves under the reader.
+ */
+function redraw(el: HTMLElement, html: string, after?: () => void): void {
+  const probe = document.createElement(el.tagName);
+  probe.innerHTML = html;
+  if (probe.innerHTML === el.innerHTML) return;
+  const apply = () => {
+    el.innerHTML = html;
+    after?.();
+  };
+  const box = el.getBoundingClientRect();
+  if (box.bottom < 0 || box.top > window.innerHeight) {
+    apply();
+    return;
+  }
+  const watch = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => !entry.isIntersecting)) {
+      watch.disconnect();
+      apply();
+    }
+  });
+  watch.observe(el);
+}
+
+/* The cast as the file has it (the page holds a copy; see redraw). */
 function initCast(): void {
   const story = dragon.story;
   const manifest = dragon.manifest;
-  const auditions: Record<string, [number, number]> = {
-    Narrator: [1, 1],
-    King: [10, 10],
-    Percival: [40, 40],
-    Gerald: [35, 36],
-  };
-  const list = $("#cast-list");
-  for (const member of story.cast.filter((m) => auditions[m.handle])) {
-    const [first, last] = auditions[member.handle] as [number, number];
+  let cards = "";
+  let chips = "";
+  for (const member of story.cast.filter((m) => AUDITIONS[m.handle])) {
+    const [first] = AUDITIONS[member.handle] as [number, number];
     const from = manifest.cues[first] as Cue;
-    const to = manifest.cues[last] as Cue;
     const name = member.handle === story.meta.narrator ? "The Narrator" : member.name;
     const color = colorOf(story, member.handle) ?? "#6b5d9c";
     const voice = manifest.voices[member.handle];
-    const item = document.createElement("li");
-    item.className = "cast-card";
-    item.style.setProperty("--sp", color);
-    item.innerHTML = `
+    const chosen = member.handle === "Gerald";
+    const handle = escapeHtml(member.handle);
+    cards += `<li class="cast-card${chosen ? " chosen" : ""}" data-cast="${handle}" style="--sp: ${color};">
       <div class="cast-top"><span class="medal" aria-hidden="true">${escapeHtml(name.replace(/^(The|Sir) /, "").slice(0, 1))}</span>
         <div><h3>${escapeHtml(name)}</h3><p class="cast-voice">${voice ? `In the recording: ${escapeHtml(voice)}, on ElevenLabs` : ""}</p></div></div>
       <p class="cast-about">${escapeHtml(member.about ?? "")}</p>
@@ -2633,55 +2852,21 @@ function initCast(): void {
         <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></span>
         <span>Hear ${escapeHtml(name.replace(/^The /, "the "))}</span>
       </button>
-      <div class="cast-meter" aria-hidden="true"><i></i></div>`;
-    const button = $<HTMLButtonElement>(".audition", item);
-    const meter = $(".cast-meter i", item);
-    const stopAt = to.start + to.duration + 0.25;
-    const owner: Owner = {
-      label: `${name}’s line`,
-      home: () => item,
-      tick: (seconds) => {
-        meter.style.transform = `scaleX(${Math.max(0, Math.min(1, (seconds - from.start) / (stopAt - from.start)))})`;
-      },
-      state: (on) => {
-        button.classList.toggle("playing", on);
-        button.setAttribute("aria-pressed", String(on));
-        item.classList.toggle("on", on);
-        if (!on) meter.style.transform = "scaleX(0)";
-      },
-    };
-    button.addEventListener("click", () => {
-      if (playing() && player.owner === owner) {
-        player.audio?.pause();
-        return;
-      }
-      play(owner, dragon, Math.max(0, from.start - 0.05), stopAt);
-    });
-    list.append(item);
-    homes.observe(item);
-    // On a phone: a chip for each character, and the chosen one's card.
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "cast-chip";
-    chip.style.setProperty("--sp", color);
-    chip.setAttribute("aria-pressed", "false");
-    chip.innerHTML = `<span class="medal" aria-hidden="true">${escapeHtml(name.replace(/^(The|Sir) /, "").slice(0, 1))}</span>${escapeHtml(name.replace(/^The /, ""))}`;
-    chip.addEventListener("click", () => {
-      for (const other of $$<HTMLButtonElement>(".cast-chip"))
-        other.setAttribute("aria-pressed", String(other === chip));
-      for (const card of $$(".cast-card")) card.classList.toggle("chosen", card === item);
-    });
-    $("#cast-chips").append(chip);
-    if (member.handle === "Gerald") {
-      chip.setAttribute("aria-pressed", "true");
-      item.classList.add("chosen");
-    }
+      <div class="cast-meter" aria-hidden="true"><i></i></div></li>`;
+    chips += `<button type="button" class="cast-chip" data-cast="${handle}" style="--sp: ${color};" aria-pressed="${chosen}"><span class="medal" aria-hidden="true">${escapeHtml(name.replace(/^(The|Sir) /, "").slice(0, 1))}</span>${escapeHtml(name.replace(/^The /, ""))}</button>`;
   }
+  redraw($("#cast-list"), cards, () => {
+    for (const card of $$(".cast-card")) homes.observe(card);
+    // Whatever was playing shows on its card again.
+    if (player.owner && [...castOwners.values()].includes(player.owner))
+      player.owner.state(playing());
+  });
+  redraw($("#cast-chips"), chips);
 }
-initCast();
+whenBooted(initCast);
 
-/* Section 02: the battle's script with its note to the performer, and the lines as CSV. Built
-   when it nears the screen. */
+/* Section 02: the battle's script with its note to the performer, and the lines as CSV, as the
+   file has them (the page holds a copy; see redraw). */
 {
   const build = () => {
     const full = dragon.story.source;
@@ -2689,15 +2874,17 @@ initCast();
     const from = full.indexOf("%% Percival talks");
     const to = full.indexOf("I’ve been practicing.”") + "I’ve been practicing.”".length;
     const battle = parse(`${front}\n\n${full.slice(from, to)}\n`);
-    $("#route-script").innerHTML =
-      `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${render.renderScript(battle, { header: false })}</div>`;
+    redraw(
+      $("#route-script"),
+      `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${render.renderScript(battle, { header: false })}</div>`,
+    );
     // The rows as the Writer's Export › Lines as CSV writes them: who, how, what, and where.
     const all = lines(dragon.story);
     const start = Math.max(
       0,
       all.findIndex((row) => row.text.startsWith("Then he heard")),
     );
-    $("#route-csv").textContent = linesToCsv(all.slice(start, start + 16), [
+    const csv = linesToCsv(all.slice(start, start + 16), [
       "kind",
       "speaker",
       "direction",
@@ -2705,8 +2892,9 @@ initCast();
       "scene",
       "page",
     ]).trimEnd();
+    redraw($("#route-csv"), escapeHtml(csv));
   };
-  build();
+  whenBooted(build);
 }
 
 /* ================================================================== the real Writer */
@@ -2728,7 +2916,7 @@ initCast();
     },
     workbench: {
       file: (look) => `calm2-workbench-${look}`,
-      cap: 'The workbench and the preview open: the cast beside the story<span class="wide-only">, and its script on the right</span><span class="narrow-only">; tap for the script beside them</span>.',
+      cap: 'Everything to hand: the cast beside the story<span class="wide-only">, its script on the right</span><span class="narrow-only">; tap for the script beside them</span>.',
       alt: "The VoxDown Writer with the workbench and the preview open, in the LOOK look: the cast on the left, the dragon story in the middle, its script on the right.",
     },
     written: {
@@ -2944,13 +3132,13 @@ initCast();
       // On a phone the screenshot shows at its own size, to pan; it opens on the story.
       if (window.innerWidth <= 600) {
         const fit = () => {
-          // It opens on the view's key line: [where the line starts, where its ink ends], in the
-          // window's own 1280-pixel width. A line wider than the phone shows its end, the quote.
-          const lines: Record<string, number[]> = {
-            focus: [288, 776],
-            written: [307, 795],
-            drawn: [307, 650],
-            workbench: [48, 48],
+          // It opens on the view's key line from where it starts ("@Gerald…"), in the window's own
+          // 1280-pixel width; a quote too long for the phone runs off the right, to pan to.
+          const lines: Record<string, number> = {
+            focus: 288,
+            written: 307,
+            drawn: 307,
+            workbench: 48,
           };
           if (!phoneLook) {
             box.scrollLeft = Math.max(0, (w - box.clientWidth) / 2);
@@ -2958,13 +3146,7 @@ initCast();
             return;
           }
           const scale = Number.parseFloat(big.style.width) / 1280;
-          const [from, to] = (lines[state.view] ?? [0, 0]) as [number, number];
-          const left = from * scale - 16;
-          const right = to * scale + 24;
-          box.scrollLeft = Math.max(
-            0,
-            right - left > box.clientWidth ? right - box.clientWidth : left,
-          );
+          box.scrollLeft = Math.max(0, (lines[state.view] ?? 0) * scale - 16);
           box.scrollTop = 0;
         };
         if (big.complete) fit();
@@ -3161,13 +3343,15 @@ if (/^https:\/\/\S+$/.test(SUPPORT_URL)) {
         to: (share) => {
           const u = clamp(share / 0.85);
           finalWord.style.setProperty("--u", u.toFixed(3));
+          finalWord.style.setProperty("--rest", clamp(share * 8).toFixed(3));
           setMove(finalWord, underEnd(finalUnder, u), leadOf(finalPen));
         },
       },
       () => crossing(finalWord),
     );
-    // The hero's "whole cast.": the top of the page is past its crossing, so the pencil draws the
-    // line there at its own pace as the page opens, and comes to rest on its end.
+    // The hero's "whole cast.": drawn by the pencil at its own pace as the page opens (the top of
+    // the page is past its crossing), then tied to the scroll: as the headline leaves the top of
+    // the screen the line is undrawn, and drawn again as it comes back.
     const heroWord = document.querySelector<HTMLElement>(".hero .pen-under");
     const heroUnder = heroWord?.querySelector<HTMLElement>("img:not(.pen-rest)");
     const heroPen = heroWord?.querySelector<HTMLElement>(".pen-rest");
@@ -3177,10 +3361,17 @@ if (/^https:\/\/\S+$/.test(SUPPORT_URL)) {
           to: (share) => {
             const u = clamp(share);
             heroWord.style.setProperty("--u", u.toFixed(3));
+            heroWord.style.setProperty("--rest", clamp(u * 8).toFixed(3));
             setMove(heroWord, underEnd(heroUnder, u), leadOf(heroPen));
           },
         },
-        () => 1,
+        () => {
+          const box = heroWord.getBoundingClientRect();
+          const middle = box.top + box.height / 2;
+          // Whole while its middle is below 30% of the screen (or where it starts, if higher).
+          const whole = Math.min(window.innerHeight * 0.3, middle + window.scrollY);
+          return middle / Math.max(1, whole);
+        },
         { ...HAND, scale: 1300, max: 1300, from0: true },
       );
   }
@@ -3245,4 +3436,21 @@ for (const image of $$<HTMLImageElement>("img[data-clay], img[data-shot]")) {
     clearTimeout(timer);
     timer = window.setTimeout(() => respine?.(), 200);
   });
+}
+
+/* The parser comes in once the page has loaded and is idle (or at the reader's first sign of
+   intent, if sooner): never on the first view's path, and always before the spine is reached. */
+{
+  const intents = ["pointermove", "pointerdown", "touchstart", "keydown", "wheel", "scroll"];
+  const go = () => {
+    for (const kind of intents) window.removeEventListener(kind, go);
+    void boot();
+  };
+  for (const kind of intents) window.addEventListener(kind, go, { passive: true, once: true });
+  const later = () =>
+    "requestIdleCallback" in window
+      ? window.requestIdleCallback(go, { timeout: 1500 })
+      : globalThis.setTimeout(go, 800);
+  if (document.readyState === "complete") later();
+  else window.addEventListener("load", later, { once: true });
 }

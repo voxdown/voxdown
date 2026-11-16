@@ -232,7 +232,7 @@ const playing = () => Boolean(player.audio && !player.audio.paused && !player.au
 function audioFor(scene: Scene): HTMLAudioElement {
   if (player.audio && player.file === scene.manifest.audio) return player.audio;
   player.audio?.pause();
-  const audio = new Audio(`../../listen/${scene.manifest.audio}`);
+  const audio = new Audio(`./listen/${scene.manifest.audio}`);
   audio.preload = "auto";
   audio.addEventListener("play", () => {
     if (player.audio !== audio) return;
@@ -471,7 +471,7 @@ function showScene(index: number, adopt = false): void {
   }
   sheet.setAttribute("aria-labelledby", `demo-tab-${index}`);
   $<HTMLAnchorElement>("#demo-open").href =
-    `../../writer/#example=${scene.example.name.replace(/\.vxd$/, "")}`;
+    `./writer/#example=${scene.example.name.replace(/\.vxd$/, "")}`;
   nowText.textContent = "Press play to follow along.";
   nowDot.style.removeProperty("--c");
   time.textContent = clock(scene.manifest.duration);
@@ -1531,7 +1531,7 @@ function initSpine(): void {
   function buildMock(wr: HTMLElement): void {
     wr.innerHTML = `
   <div class="wr-top" aria-hidden="true">
-    <span class="wr-logo"><img src="../../icon.svg" alt="" width="18" height="18"><b>VoxDown</b> <em>Writer</em></span>
+    <span class="wr-logo"><img src="./icon.svg" alt="" width="18" height="18"><b>VoxDown</b> <em>Writer</em></span>
     <span class="wr-menus"><span data-hl="audio">File</span><span>Edit</span><span data-hl="insert">Insert</span><span>View</span><span>Help</span></span>
     <span class="wr-file">the-dragon-who-would-not-roar.vxd <i class="wr-saved"></i><small>Kept in this browser</small></span>
     <span class="wr-sp"></span>
@@ -1578,7 +1578,7 @@ function initSpine(): void {
   /* ------------------------------------------------------------------ each beat, as a small Writer */
 
   const miniBar = (pane = "") =>
-    `<div class="mini-bar" aria-hidden="true"><img src="../../icon.svg" alt="" width="14" height="14"><b>VoxDown</b><em>Writer</em><span>${pane || "the-dragon-who-would-not-roar.vxd"}</span></div>`;
+    `<div class="mini-bar" aria-hidden="true"><img src="./icon.svg" alt="" width="14" height="14"><b>VoxDown</b><em>Writer</em><span>${pane || "the-dragon-who-would-not-roar.vxd"}</span></div>`;
   const mini = (body: string, pane = "", tools = "") =>
     `<div class="mini">${miniBar(pane)}${tools}<div class="mini-body">${body}</div></div>`;
   const paper = (html: string) => `<div class="mini-paper">${html}</div>`;
@@ -1653,7 +1653,7 @@ function initSpine(): void {
         const file = { ring: "pencil-circle", under: "pencil-underline", arrow: "pencil-arrow" }[
           name
         ];
-        const ink = await inkOf(`../../landing/studio/pen/${file}.webp`);
+        const ink = await inkOf(`./landing/studio/pen/${file}.webp`);
         if (ink) inks[name] = ink;
       }),
     );
@@ -2283,8 +2283,8 @@ function initSpine(): void {
         mark.shape === "caret"
           ? `<svg class="caret-mark" viewBox="0 0 16 12" aria-hidden="true" style="left:${(x - 8).toFixed(1)}px;top:${(y + h - 8).toFixed(1)}px;width:16px;height:12px"><path d="M1.5 11 L8 1.5 L14.5 11"/></svg>`
           : mark.shape === "circle"
-            ? `<img class="ring" src="../../landing/studio/pen/pencil-circle.webp" alt="" style="left:${ringLeft.toFixed(1)}px;top:${y - 14}px;width:${ringW.toFixed(1)}px;height:${ringH}px">`
-            : `<img class="under" src="../../landing/studio/pen/pencil-underline.webp" alt="" style="left:${x - 4}px;top:${y + h - 9}px;width:${w + 8}px;height:20px">`;
+            ? `<img class="ring" src="./landing/studio/pen/pencil-circle.webp" alt="" style="left:${ringLeft.toFixed(1)}px;top:${y - 14}px;width:${ringW.toFixed(1)}px;height:${ringH}px">`
+            : `<img class="under" src="./landing/studio/pen/pencil-underline.webp" alt="" style="left:${x - 4}px;top:${y + h - 9}px;width:${w + 8}px;height:20px">`;
       // From a caret the leader runs straight across its empty slot; else from past the row's ink.
       const reach =
         mark.shape === "caret"
@@ -2314,7 +2314,7 @@ function initSpine(): void {
         mark.shape === "caret"
           ? `<svg class="lead lead-arc" viewBox="0 0 ${arcW.toFixed(1)} ${arcH.toFixed(1)}" aria-hidden="true" style="left:${arcLeft.toFixed(1)}px;top:${arcTop.toFixed(1)}px;width:${arcW.toFixed(1)}px;height:${arcH.toFixed(1)}px"><path d="M${at(noteX - 6, y + h / 2)} C ${at(noteX - 70, y - 20)}, ${at(x + 50, y - 22)}, ${at(x, tipY)}"/><path d="M${at(x, tipY)} L ${at(x - 4.5, tipY - 6)}"/><path d="M${at(x, tipY)} L ${at(x + 4.5, tipY - 6)}"/></svg>`
           : lead >= 40
-            ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${(leadY - 9).toFixed(1)}px;width:${lead.toFixed(1)}px;height:18px">`
+            ? `<img class="lead" src="./landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${(leadY - 9).toFixed(1)}px;width:${lead.toFixed(1)}px;height:18px">`
             : hookW >= 12
               ? `<svg class="lead hook" viewBox="0 0 ${hookW.toFixed(1)} 20" aria-hidden="true" style="left:${(noteX - 4 - hookW).toFixed(1)}px;top:${y + h / 2 - 12}px;width:${hookW.toFixed(1)}px;height:20px">${hookPath(hookW / 30)}</svg>`
               : "";
@@ -2392,7 +2392,7 @@ function initSpine(): void {
     // One pencil, its lead (at 4.9% and 96.2% of its picture) at the point it is drawing.
     const pencil = document.createElement("img");
     pencil.className = "pencil-tip";
-    pencil.src = "../../landing/studio/pen/red-pencil.webp";
+    pencil.src = "./landing/studio/pen/red-pencil.webp";
     pencil.alt = "";
     annot.classList.add("drawing");
     annot.append(pencil);
@@ -3094,7 +3094,7 @@ whenBooted(initCast);
   const small = window.matchMedia("(max-width: 600px)");
   /** The picture for a view in a look: the whole window, or on a phone its readable crop. */
   const urlOf = (view: string, look: string, whole = false) =>
-    `../../landing/studio/app/${(VIEWS[view] as (typeof VIEWS)[string]).file(look)}${!whole && small.matches ? "-phone" : ""}.webp`;
+    `./landing/studio/app/${(VIEWS[view] as (typeof VIEWS)[string]).file(look)}${!whole && small.matches ? "-phone" : ""}.webp`;
   const altOf = (view: string, look: string) =>
     (VIEWS[view] as (typeof VIEWS)[string]).alt.replace("LOOK", LOOK_NAMES[look] ?? "");
   // Fetched and decoded ahead of need: the views either side, in the look being shown.
@@ -3421,7 +3421,7 @@ if (/^https:\/\/\S+$/.test(SUPPORT_URL)) {
   };
   // The underline's own ink, for its pencil's lead.
   let underInk: Ink | undefined;
-  void inkOf("../../landing/studio/pen/pencil-underline.webp").then((ink) => {
+  void inkOf("./landing/studio/pen/pencil-underline.webp").then((ink) => {
     underInk = ink;
   });
   /** An underline shown from the left up to `u`: the end of its ink, in its parent's px. */

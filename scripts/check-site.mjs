@@ -253,46 +253,58 @@ for (const [width, height] of [
 await page.setViewportSize({ width: 1440, height: 900 });
 console.log("layout: the pages never cover the colophon: ok");
 
-// The front page: a recorded scene, lit as it plays; each scene opens in the Writer; and the
-// playground's shared links, made when it was the front page, still reach it.
-const front = await browser.newPage({ viewport: { width: 1360, height: 860 } });
+// The front page: no console errors, its recorded scene lit as it plays, "Start writing" into
+// the Writer, the scene opened in the Writer (in a new tab), and the playground's shared links,
+// made when it was the front page, still reaching it.
+const front = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 watch(front, "front page");
 await front.goto(`${base}/`);
-await front.waitForSelector(".sheet .row");
-const sceneTabs = await front.$$eval(".scene-tab", (buttons) => buttons.map((b) => b.textContent));
-if (sceneTabs.length < 2) problems.push(`front page: ${sceneTabs.length} scenes to hear, not 2`);
-await front.click("#scene-play");
+await front.waitForSelector("#sheet");
+await front.click("#demo-play");
 await front.waitForTimeout(2500);
 const heard = await front.evaluate(() => ({
-  lit: document.querySelectorAll(".sheet .row.heard").length,
-  who: document.querySelector("#scene-who")?.textContent,
+  lit: document.querySelectorAll("#sheet .heard").length,
+  now: document.querySelector("#now-text")?.textContent,
+  playing: document.querySelector("#demo-play")?.classList.contains("playing"),
 }));
-if (heard.lit !== 1 || heard.who?.startsWith("Press play"))
+if (heard.lit !== 1 || !heard.playing || heard.now?.startsWith("Press play"))
   problems.push(
     `front page: the scene doesn't light its lines as it plays: ${JSON.stringify(heard)}`,
   );
-await front.click("#scene-play");
-const firstScene = await front.getAttribute("#scene-open", "href");
-await front.click(".scene-tab >> nth=1");
-const secondScene = await front.getAttribute("#scene-open", "href");
-if (firstScene === secondScene || !secondScene?.startsWith("./writer/#example="))
-  problems.push(`front page: the scenes open ${firstScene} and ${secondScene} in the Writer`);
+await front.click("#demo-play");
+const sceneOpen = await front.$eval("#demo-open", (link) => [
+  link.getAttribute("href"),
+  link.target,
+]);
+if (sceneOpen.join(" ") !== "./writer/#example=the-dragon-who-would-not-roar _blank")
+  problems.push(`front page: "Open this scene in the Writer" goes to ${sceneOpen.join(", in ")}`);
+// Opened as the reader's new tab would be: its address, in a page of its own.
 const opened = await browser.newPage();
 watch(opened, "writer from the front page");
-await opened.goto(`${base}/writer/${secondScene?.slice("./writer/".length)}`);
+await opened.goto(`${base}/${sceneOpen[0]?.slice(2)}`);
 await opened.waitForSelector(".cm-content");
 await opened.waitForTimeout(600);
 const openedName = await opened.textContent("#file-name");
-if (!openedName?.includes("north-wind") || opened.url().includes("#"))
-  problems.push(`writer: a scene from the front page opened as ${openedName}, at ${opened.url()}`);
+if (!openedName?.includes("dragon") || opened.url().includes("#"))
+  problems.push(`writer: the front page's scene opened as ${openedName}, at ${opened.url()}`);
 await opened.close();
+await front
+  .getByRole("link", { name: /^Start writing/ })
+  .first()
+  .click();
+await front.waitForURL(/\/writer\/$/);
+await front.waitForSelector(".cm-content");
 await front.close();
 const shared = await browser.newPage();
 await shared.goto(`${base}/#story=abc`);
 await shared.waitForURL(/playground\.html#story=abc$/);
 await shared.close();
+const oldStudio = await browser.newPage();
+await oldStudio.goto(`${base}/landing/studio/#spine`);
+await oldStudio.waitForURL((url) => url.href === `${base}/#spine`);
+await oldStudio.close();
 console.log(
-  "front page: a scene lit as it plays, each opened in the Writer, old links sent on: ok",
+  "front page: a scene lit as it plays, Start writing, the scene in the Writer, old links sent on: ok",
 );
 
 // The listening page: each recording was made from the story as it is now, and every part it

@@ -56,9 +56,10 @@ export default defineConfig({
         cheatsheet: resolve(here, "cheatsheet.html"),
         listen: resolve(here, "listen.html"),
         writer: resolve(here, "writer/index.html"),
-        // Landing page directions, side by side while one is chosen (site/landing/*).
+        // The landing page directions not chosen, built but not linked (site/landing/*).
         stage: resolve(here, "landing/stage/index.html"),
         manuscript: resolve(here, "landing/manuscript/index.html"),
+        // The chosen one is the front page; its old address sends links shared to it there.
         studio: resolve(here, "landing/studio/index.html"),
       },
     },

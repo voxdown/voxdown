@@ -1,154 +1,656 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- A story shared from the playground when it was the front page (./#story=…): sent on to the playground, before anything else loads. -->
+<script>if(/^#story=/.test(location.hash))location.replace("./playground.html"+location.hash)</script>
+<!-- The renderer's styles, for the script laid out below before the renderer itself loads; it keeps them in step once it does. -->
+<style id="vxd-render">
+.vxd {
+  --vxd-font: var(--vxd-story-font, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif);
+  --vxd-ui-font: var(--vxd-interface-font, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --vxd-ink: #1f2328;
+  --vxd-muted: #6b7280;
+  --vxd-paper: #ffffff;
+  --vxd-line: #e5e7eb;
+  --vxd-direction: #7c3aed;
+  --vxd-sound: #0f766e;
+  --vxd-page: #b45309;
+  --vxd-note: #a16207;
+  --vxd-note-paper: #fefce8;
+  color: var(--vxd-ink);
+  font-family: var(--vxd-font);
+  font-size: var(--vxd-size, 1.125rem);
+  line-height: 1.65;
+  max-width: var(--vxd-measure, 36em);
+  margin: 0 auto;
+  overflow-wrap: break-word;
+}
+@media (prefers-color-scheme: dark) {
+  :where(:not([data-vxd-theme="light"])) > .vxd:not([data-vxd-theme="light"]) {
+    --vxd-ink: #e6e6e3; --vxd-muted: #9ca3af; --vxd-paper: #17181a; --vxd-line: #2f3236;
+    --vxd-direction: #c4b5fd; --vxd-sound: #5eead4; --vxd-page: #fbbf24; --vxd-note: #fde68a;
+    --vxd-note-paper: #2a2615;
+  }
+}
+[data-vxd-theme="dark"] .vxd, .vxd[data-vxd-theme="dark"] {
+  --vxd-ink: #e6e6e3; --vxd-muted: #9ca3af; --vxd-paper: #17181a; --vxd-line: #2f3236;
+  --vxd-direction: #c4b5fd; --vxd-sound: #5eead4; --vxd-page: #fbbf24; --vxd-note: #fde68a;
+  --vxd-note-paper: #2a2615;
+}
+.vxd *, .vxd *::before, .vxd *::after { box-sizing: border-box; }
+
+:where(.vxd) .vxd-header { text-align: center; margin: 0 0 2.5em; }
+:where(.vxd) .vxd-title { font-size: 1.9em; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; }
+:where(.vxd) .vxd-subtitle { font-size: 1.15em; color: var(--vxd-muted); margin-top: 0.2em; }
+:where(.vxd) .vxd-author { font-style: italic; color: var(--vxd-muted); margin-top: 0.6em; }
+/* Under a title the story opens with as its heading (centred, as an h1 is). */
+:where(.vxd) .vxd-byline { margin: -0.2em 0 2.5em; }
+:where(.vxd) .vxd-cast { list-style: none; padding: 0; margin: 1.4em 0 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35em 1.1em; font: 0.8em/1.4 var(--vxd-ui-font); color: var(--vxd-muted); }
+:where(.vxd) .vxd-cast li { display: inline-flex; align-items: center; gap: 0.4em; }
+:where(.vxd) .vxd-cast-dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--vxd-c); }
+
+:where(.vxd) .vxd-p { margin: 0 0 1em; }
+:where(.vxd) .vxd-heading { font-weight: 600; line-height: 1.3; margin: 1.8em 0 0.8em; }
+:where(.vxd) h1.vxd-heading { font-size: 1.6em; text-align: center; }
+:where(.vxd) h2.vxd-heading { font-size: 1.25em; }
+:where(.vxd) h3.vxd-heading, :where(.vxd) h4.vxd-heading, :where(.vxd) h5.vxd-heading, :where(.vxd) h6.vxd-heading { font-size: 1.05em; }
+:where(.vxd) .vxd-break { border: 0; text-align: center; margin: 2em 0; height: 1em; }
+:where(.vxd) .vxd-break::before { content: "\2042"; color: var(--vxd-muted); }
+.vxd img { max-width: 100%; height: auto; }
+.vxd a { color: inherit; text-decoration-color: var(--vxd-muted); }
+
+.vxd-book .vxd-p + .vxd-p { text-indent: 1.4em; margin-top: -0.6em; }
+:where(.vxd) .vxd-page-number { float: right; margin-right: -3.2em; width: 2.4em; text-align: left; font: 0.7em/2.4 var(--vxd-ui-font); color: var(--vxd-muted); text-indent: 0; }
+
+/* The script view */
+/* Room above a line for a direction's label only where a paragraph has one: the rest reads close. */
+.vxd-script { line-height: 1.75; }
+.vxd-script .vxd-p:has(.vxd-direction:not(.vxd-direction-long)) { line-height: 2.35; }
+.vxd-script .vxd-p { margin-bottom: 0.9em; }
+/* Two lanes under the words: the speaker's solid line just below them, a direction's dashes below that. */
+:where(.vxd) .vxd-speech {
+  --vxd-speaker-line: linear-gradient(color-mix(in srgb, var(--vxd-c, currentColor) 55%, transparent), color-mix(in srgb, var(--vxd-c, currentColor) 55%, transparent));
+  --vxd-direction-line: linear-gradient(to right, color-mix(in srgb, var(--vxd-direction) 60%, transparent) 50%, transparent 50%);
+  --vxd-tint: linear-gradient(color-mix(in srgb, var(--vxd-c, currentColor) 11%, transparent), color-mix(in srgb, var(--vxd-c, currentColor) 11%, transparent));
+  border-radius: 0.2em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+:where(.vxd) .vxd-speech:not(.vxd-narration) {
+  padding: 0.08em 0.05em 0.14em;
+  background: var(--vxd-speaker-line) 0 100% / 100% 0.1em no-repeat, var(--vxd-tint) content-box;
+}
+:where(.vxd) .vxd-speech.vxd-directed {
+  padding-bottom: 0.42em;
+  background: var(--vxd-direction-line) 0 100% / 0.36em 0.09em repeat-x;
+}
+:where(.vxd) .vxd-speech.vxd-directed:not(.vxd-narration) {
+  background:
+    var(--vxd-speaker-line) 0 calc(100% - 0.28em) / 100% 0.1em no-repeat,
+    var(--vxd-direction-line) 0 100% / 0.36em 0.09em repeat-x,
+    var(--vxd-tint) content-box;
+}
+/* Labels are inline, not inline blocks: a line breaks around an inline block, which left a label
+   at the end of one line and its words at the start of the next. */
+:where(.vxd) .vxd-name {
+  display: inline;
+  font: 600 0.62em/1 var(--vxd-ui-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--vxd-c, var(--vxd-muted));
+  margin-right: 0.45em;
+  vertical-align: 0.18em;
+}
+:where(.vxd) .vxd-name:has(+ .vxd-narration) { color: var(--vxd-muted); }
+:where(.vxd) .vxd-direction { display: inline; position: relative; vertical-align: baseline; }
+:where(.vxd) .vxd-direction.vxd-direction-long { display: inline; position: static; width: auto; height: auto; }
+:where(.vxd) .vxd-direction.vxd-direction-long > span { position: static; white-space: normal; font-size: 0.8em; line-height: inherit; margin-right: 0.35em; }
+:where(.vxd) .vxd-direction.vxd-direction-long > span::before { content: "("; }
+:where(.vxd) .vxd-direction.vxd-direction-long > span::after { content: ")"; }
+:where(.vxd) .vxd-direction > span {
+  position: absolute;
+  left: 0;
+  /* Just over the line's capitals, from the top of the inline's box (whatever the typeface's
+     height), and inside the line's own room: a paragraph's first line clips what rises above it. */
+  bottom: calc(100% - 0.15em);
+  font: italic 0.66em/1 var(--vxd-ui-font);
+  color: var(--vxd-direction);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+:where(.vxd) .vxd-chip {
+  display: inline-block;
+  font: 500 0.66em/1.5 var(--vxd-ui-font);
+  padding: 0 0.6em;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  vertical-align: 0.15em;
+  white-space: nowrap;
+  margin: 0 0.1em;
+}
+:where(.vxd) .vxd-chip-sound { color: var(--vxd-sound); background: color-mix(in srgb, var(--vxd-sound) 9%, transparent); }
+:where(.vxd) .vxd-chip-sound::before { content: ""; display: inline-block; width: 0.45em; height: 0.45em; margin-right: 0.4em; border-radius: 50%; background: currentColor; vertical-align: 0.05em; }
+:where(.vxd) .vxd-chip-vocal { color: var(--vxd-c, var(--vxd-sound)); background: color-mix(in srgb, var(--vxd-c, var(--vxd-sound)) 10%, transparent); }
+:where(.vxd) .vxd-chip-who { font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+:where(.vxd) .vxd-chip-direction { font-style: italic; opacity: 0.85; }
+:where(.vxd) .vxd-chip-pause { color: var(--vxd-muted); border-style: dashed; }
+:where(.vxd) .vxd-chip-pause::before { content: "\2016\2009"; }
+:where(.vxd) .vxd-chip-page { color: var(--vxd-page); }
+:where(.vxd) .vxd-chip-instruction, :where(.vxd) .vxd-chip-label { color: var(--vxd-muted); border-color: var(--vxd-line); }
+:where(.vxd) .vxd-chip-label { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.58em; }
+:where(.vxd) .vxd-turn { display: flex; width: 100%; align-items: center; gap: 0.8em; margin: 0.2em 0; font: 500 0.66em/2 var(--vxd-ui-font); color: var(--vxd-page); text-transform: uppercase; letter-spacing: 0.08em; }
+:where(.vxd) .vxd-turn::before, :where(.vxd) .vxd-turn::after { content: ""; flex: 1; border-top: 1px dashed color-mix(in srgb, var(--vxd-page) 55%, transparent); }
+:where(.vxd) .vxd-note {
+  display: inline-block;
+  font: italic 0.72em/1.45 var(--vxd-ui-font);
+  color: var(--vxd-note);
+  background: var(--vxd-note-paper);
+  border-left: 2px solid var(--vxd-note);
+  padding: 0.25em 0.6em;
+  margin: 0 0.2em;
+  vertical-align: 0.1em;
+  max-width: 100%;
+  white-space: normal;
+}
+@media (min-width: 72rem) {
+  .vxd-script .vxd-note { float: right; clear: right; width: 13rem; margin: 0.4em -15rem 0.4em 0; vertical-align: baseline; }
+}
+.vxd-script [data-visibility="book"], .vxd-script [data-visibility="hidden"] { opacity: 0.6; }
+:where(.vxd) .vxd-heading-label { font: 0.8em/2 var(--vxd-ui-font); color: var(--vxd-muted); margin: 1.4em 0 0.4em; }
+:where(.vxd) .vxd-heading-label.vxd-h1, :where(.vxd) .vxd-heading-label.vxd-h2 { font-weight: 600; }
+:where(.vxd) .vxd-image { display: block; margin: 0.6em auto; }
+
+:where(.vxd) .vxd-group { position: relative; margin: 0.4em 0 1em; padding-left: 1.1em; }
+:where(.vxd) .vxd-group::before { content: ""; position: absolute; left: 0; top: 0.3em; bottom: 0.3em; width: 3px; border-radius: 3px; background: color-mix(in srgb, var(--vxd-c, var(--vxd-direction)) 60%, transparent); }
+:where(.vxd) .vxd-group-label { font: italic 0.68em/1.6 var(--vxd-ui-font); color: var(--vxd-c, var(--vxd-direction)); margin-bottom: 0.1em; }
+:where(.vxd) .vxd-group-direction { font-style: italic; }
+:where(.vxd) .vxd-group-body > .vxd-p:last-child { margin-bottom: 0; }
+:where(.vxd) .vxd-group-name { font-style: normal; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 0.4em; }
+
+@media print {
+  .vxd { max-width: none; }
+  .vxd-script .vxd-note { float: none; margin: 0 0.2em; width: auto; }
+}
+</style>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VoxDown: write stories to be read aloud</title>
-<meta name="description" content="VoxDown is plain text that marks who says each line and how. Write in the free VoxDown Writer, hear it as you go, and make an audiobook with a voice for every character. Runs in your browser; your story stays on your computer.">
-<meta property="og:title" content="VoxDown: write stories to be read aloud">
-<meta property="og:description" content="Plain text that marks who says each line and how. A free writing app that runs in your browser, and audiobooks with a voice for every character.">
+<title>VoxDown: write it once, hand it to the whole cast</title>
+<meta name="description" content="VoxDown is Markdown that knows who says every line, and how. Write in the free VoxDown Writer, then send the same file to a narrator, to voice actors, or to an AI voice engine with a voice for every character. No account; your story stays on your computer.">
+<meta name="theme-color" content="#7c3aed">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="VoxDown">
+<meta property="og:title" content="VoxDown: write it once, hand it to the whole cast">
+<meta property="og:description" content="Markdown that knows who says every line, and how. A free writing app in your browser, and a file that's ready for actors in the booth or an AI voice engine.">
+<meta property="og:image" content="./landing/studio/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="VoxDown: “Write it once. Hand it to the whole cast.” beside the dragon story written in VoxDown, each speaker in their colour.">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="./icon.svg">
-<!-- A story shared from the playground when it was the front page: sent on to the playground. -->
-<script>if(/^#story=/.test(location.hash))location.replace("./playground.html"+location.hash)</script>
-<script>try{var t=localStorage.getItem("vxd-theme");if(t==="light"||t==="dark")document.documentElement.dataset.vxdTheme=t}catch(e){}</script>
+<script>document.documentElement.classList.add("js")</script>
 </head>
-<body class="front">
-<header class="masthead">
-  <a class="wordmark" href="./"><img class="logo" src="./icon.svg" alt="" width="30" height="30">VoxDown</a>
-  <nav aria-label="Site">
-    <a href="./writer/">Writer</a>
-    <a href="./listen.html">Listen</a>
-    <a href="./playground.html">Playground</a>
-    <a href="./spec.html">Spec</a>
-    <a href="https://github.com/voxdown/voxdown">GitHub</a>
-    <button class="theme-switch" type="button" id="theme" hidden>Auto</button>
-  </nav>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<header class="top" id="top">
+  <div class="top-in">
+    <a class="brand" href="./" aria-label="VoxDown, home">
+      <img src="./icon.svg" alt="" width="28" height="28">
+      <span>VoxDown</span>
+    </a>
+    <nav class="top-nav" aria-label="Site">
+      <a href="./writer/">Writer</a>
+      <a href="./listen.html">Listen</a>
+      <a href="./spec.html">Spec</a>
+      <a href="https://github.com/voxdown/voxdown">GitHub</a>
+    </nav>
+    <a class="btn btn-ink btn-sm" href="./writer/">Open the Writer</a>
+  </div>
 </header>
 
-<main>
+<main id="main">
+
+  <!-- The hook: the promise, the action, and the scene that proves it. -->
   <section class="hero" aria-labelledby="hero-title">
-    <div class="hero-words">
-      <h1 id="hero-title">Write stories to be read aloud.</h1>
-      <p class="hero-lede">VoxDown is plain text that marks who says each line, and how. Write in the free VoxDown Writer, hear it as you go, and make it an audiobook with a voice for every character.</p>
-      <div class="hero-actions">
-        <a class="action main" href="./writer/">Open the Writer</a>
-        <button class="action" type="button" id="hero-play" aria-controls="scene">
-          <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
-          <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
-          <span>Hear a scene</span>
-        </button>
-      </div>
-      <p class="hero-small">Free and open source. No account. Your story never leaves your computer.</p>
-    </div>
-
-    <figure class="scene" id="scene" aria-label="A scene, as written and as heard">
-      <div class="scene-pick" role="tablist" aria-label="Scene" id="scene-pick"></div>
-      <div class="sheet" id="sheet" tabindex="0" aria-label="The scene as written in VoxDown"></div>
-      <div class="scene-bar">
-        <button class="scene-play" type="button" id="scene-play" aria-label="Play">
-          <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
-          <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
-        </button>
-        <div class="scene-now">
-          <p id="scene-who" aria-live="polite">Press play: the line being heard lights up.</p>
-          <div class="scene-track" id="scene-track" role="slider" tabindex="0" aria-label="Position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="scene-fill" id="scene-fill"></div></div>
+    <div class="mesh" aria-hidden="true"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></div>
+    <div class="hero-in wrap">
+      <div class="hero-words">
+        <p class="pill-note"><span class="dot-live" aria-hidden="true"></span>Free · open source · runs in your browser</p>
+        <h1 id="hero-title">Write it once.<br>Hand it to the <span class="keep pen-under">whole cast.<img src="./landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" decoding="async"><img class="pen-rest" data-clay src="./landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" decoding="async"></span></h1>
+        <p class="lede">VoxDown is Markdown that knows who says every line, and how. Write in the free Writer, then hand the very same file to actors in the booth or to an AI voice engine.</p>
+        <div class="cta-row">
+          <a class="btn btn-grad btn-lg" href="./writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+          <button class="btn btn-glass btn-lg" type="button" id="hero-play" aria-controls="demo">
+            <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></span>
+            <span class="hero-play-label">Hear the dragon scene</span> <span class="btn-time" id="hero-time">2:28</span>
+          </button>
         </div>
-        <span class="scene-time" id="scene-time">0:00</span>
+        <p class="fine"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>No account. Your story stays on your computer.</p>
       </div>
-      <figcaption>Recorded with ElevenLabs voices from this text, marks and all. <a id="scene-open" href="./writer/">Open this scene in the Writer</a></figcaption>
-    </figure>
-  </section>
 
-  <section class="part writer-part" aria-labelledby="writer-title">
-    <div class="part-head">
-      <h2 id="writer-title">A writing app that knows who is speaking</h2>
-      <p>The VoxDown Writer is a calm page for writing fiction, scripts and audio drama, with the cast and the reading beside you.</p>
+      <div class="hero-demo">
+        <figure class="demo" id="demo" aria-label="A recorded scene, as written in VoxDown and as heard">
+          <div class="demo-head">
+            <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="demo-tabs" role="tablist" aria-label="Choose a recorded scene" id="demo-tabs"><button type="button" class="demo-tab" role="tab" id="demo-tab-0" aria-controls="sheet" aria-selected="true" title="The Dragon Who Would Not Roar">The Dragon</button><button type="button" class="demo-tab" role="tab" id="demo-tab-1" aria-controls="sheet" aria-selected="false" tabindex="-1" title="The North Wind and the Sun">The North Wind</button></div>
+          </div>
+          <div class="sheet" id="sheet" tabindex="0" role="tabpanel" aria-labelledby="demo-tab-0" aria-describedby="sheet-summary"><!-- The dragon scene as the parser marks it, so the first view needs no parser; checked against the file once it loads, and redrawn if they differ. --><div class="row" aria-hidden="true">---</div><div class="row" aria-hidden="true">voxdown: 1.0</div><div class="row" aria-hidden="true">title: The Dragon Who Would Not Roar</div><div class="row" aria-hidden="true">author: The VoxDown authors</div><div class="row" aria-hidden="true">language: en-US</div><div class="row" aria-hidden="true">cast:</div><div class="row" aria-hidden="true">  Narrator:</div><div class="row" aria-hidden="true">    about: Warm and unhurried, enjoying the joke.</div><div class="row" aria-hidden="true">  Percival:</div><div class="row" aria-hidden="true">    name: Sir Percival</div><div class="row" aria-hidden="true">    about: A young knight. Brave in theory, nervous in practice.</div><div class="row" aria-hidden="true">  Gerald:</div><div class="row" aria-hidden="true">    about: An old dragon. Deep, polite and utterly unbothered.</div><div class="row" aria-hidden="true">  King:</div><div class="row" aria-hidden="true">    name: The King</div><div class="row" aria-hidden="true">    about: Fond of proclamations.</div><div class="row" aria-hidden="true">---</div><div class="row gap" aria-hidden="true"></div><div class="row" aria-hidden="true"><span class="t-note">%% A fresh story for the VoxDown examples, free to copy (CC0). %%</span></div><div class="row gap" aria-hidden="true"></div><div class="row"><span class="t-heading">#</span> The Dragon Who Would Not Roar</div><div class="row gap"></div><div class="row"><span class="t-instruction" data-spot="time">{book only}</span> For everyone who has ever been woken up too early.</div><div class="row gap"></div><div class="row"><span class="t-heading">##</span> The proclamation <span class="t-instruction" data-spot="time">{hidden}</span></div><div class="row gap"></div><div class="row"><span class="t-mark" data-spot="who">@</span><span class="t-direction" data-spot="how">(warmly)</span> Sir Percival had been training his entire life for this day.</div><div class="row gap"></div><div class="row">He had polished his armor until it squeaked. <span class="t-sound" data-spot="sound">[armor squeaking]</span> He had practiced his battle cry in front of the mirror. He had even read a book about dragons, although he had skipped the chapter called *Things Dragons Find Annoying*.</div><div class="row gap"></div><div class="row" style="--c: #15803d;"><span class="t-mark" data-spot="who" data-who="King" style="--c: #15803d">@</span><span class="t-name" data-spot="who" data-who="King" style="--c: #15803d">King</span> <span class="t-direction" data-spot="how" data-who="King" style="--c: #15803d">(grandly, to a crowded hall)</span> <span class="t-quote" data-who="King" style="--c: #15803d">“</span>Whoever brings back the dragon of Mount Mumble,<span class="t-quote" data-who="King" style="--c: #15803d">”</span> proclaimed the King, <span class="t-quote" data-who="King" style="--c: #15803d">“</span>shall have half my kingdom and all of my biscuits.<span class="t-quote" data-who="King" style="--c: #15803d">”</span></div><div class="row gap"></div><div class="row" style="--c: #2563eb;"><span class="t-mark" data-spot="who" data-who="Percival" style="--c: #2563eb">@</span><span class="t-name" data-spot="who" data-who="Percival" style="--c: #2563eb">Percival</span> <span class="t-quote" data-who="Percival" style="--c: #2563eb">“</span>All of them?<span class="t-quote" data-who="Percival" style="--c: #2563eb">”</span> said Sir Percival.</div><div class="row gap"></div><div class="row" style="--c: #15803d;"><span class="t-mark" data-spot="who" data-who="King" style="--c: #15803d">@</span><span class="t-name" data-spot="who" data-who="King" style="--c: #15803d">King</span> <span class="t-direction" data-spot="how" data-who="King" style="--c: #15803d">(less grandly)</span> <span class="t-quote" data-who="King" style="--c: #15803d">“</span>Most of them.<span class="t-quote" data-who="King" style="--c: #15803d">”</span></div><div class="row gap"></div><div class="row"><span class="t-instruction" data-spot="time">{page}</span></div><div class="row gap"></div><div class="row"><span class="t-heading">##</span> The mountain <span class="t-instruction" data-spot="time">{hidden}</span></div><div class="row gap"></div><div class="row">Mount Mumble was very tall, and very quiet. <span class="t-sound" data-spot="sound">[wind across rocks]</span> Sir Percival climbed it all morning. Clank, clank, clank.</div><div class="row gap"></div><div class="row">Then he heard a deep rumble. <span class="t-sound" data-spot="sound">[deep rumbling, from inside a cave]</span></div><div class="row gap"></div><div class="row">The dragon was snoring. <span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-vocal" data-spot="sound" data-who="Gerald" style="--c: #c2410c">[snores]</span></div><div class="row gap"></div><div class="row"><span class="t-group" data-spot="how">:::</span> <span class="t-direction" data-spot="how">whispering</span></div><div class="row">Sir Percival crept inside.</div><div class="row">Clank.</div><div class="row">Clank.</div><div class="row"><span class="t-instruction" data-spot="time">{pause}</span></div><div class="row">The dragon opened one eye.</div><div class="row"><span class="t-group" data-spot="how">:::</span></div><div class="row gap"></div><div class="row" style="--c: #c2410c;"><span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-direction" data-spot="how" data-who="Gerald" style="--c: #c2410c">(deep, polite and utterly unbothered)</span> <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>Could you not?<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span></div><div class="row gap"></div><div class="row">Sir Percival stopped.</div><div class="row gap"></div><div class="row" style="--c: #c2410c;"><span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>I’ve only just got to sleep,<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span> said the dragon. <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>I was up all night counting sheep.<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span></div><div class="row gap"></div><div class="row" style="--c: #2563eb;"><span class="t-mark" data-spot="who" data-who="Percival" style="--c: #2563eb">@</span><span class="t-name" data-spot="who" data-who="Percival" style="--c: #2563eb">Percival</span> <span class="t-quote" data-who="Percival" style="--c: #2563eb">“</span>Real sheep?<span class="t-quote" data-who="Percival" style="--c: #2563eb">”</span></div><div class="row gap"></div><div class="row" style="--c: #c2410c;"><span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>Imaginary ones. They were very difficult to catch.<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span></div><div class="row gap"></div><div class="row"><span class="t-instruction" data-spot="time">{page}</span></div><div class="row gap"></div><div class="row"><span class="t-heading">##</span> The battle <span class="t-instruction" data-spot="time">{hidden}</span></div><div class="row gap"></div><div class="row"><span class="t-note">%% Percival talks himself up here. Let him get louder line by line. %%</span></div><div class="row gap"></div><div class="row"><span class="t-group" data-spot="how">:::</span> <span class="t-mark" data-spot="who" data-who="Percival" style="--c: #2563eb">@</span><span class="t-name" data-spot="who" data-who="Percival" style="--c: #2563eb">Percival</span> <span class="t-direction" data-spot="how" data-who="Percival" style="--c: #2563eb">trying to sound brave</span></div><div class="row" style="--c: #2563eb;">I am Sir Percival of the Shining Shield!</div><div class="row" style="--c: #2563eb;">I have come to defeat you!</div><div class="row" style="--c: #2563eb;">Prepare to meet thy doom!</div><div class="row"><span class="t-group" data-spot="how">:::</span></div><div class="row gap"></div><div class="row" style="--c: #c2410c;"><span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-vocal" data-spot="sound" data-who="Gerald" style="--c: #c2410c">[yawns]</span> <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>Is it a long doom? Only I’ve got a nap at four.<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span></div><div class="row gap"></div><div class="row" style="--c: #2563eb;"><span class="t-mark" data-spot="who" data-who="Percival" style="--c: #2563eb">@</span><span class="t-name" data-spot="who" data-who="Percival" style="--c: #2563eb">Percival</span> <span class="t-quote" data-who="Percival" style="--c: #2563eb">“</span>Aren’t you going to roar?<span class="t-quote" data-who="Percival" style="--c: #2563eb">”</span></div><div class="row gap"></div><div class="row">The dragon sighed.</div><div class="row gap"></div><div class="row" style="--c: #c2410c;"><span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-direction" data-spot="how" data-who="Gerald" style="--c: #c2410c">(with no enthusiasm whatsoever)</span> <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>Rooooar.<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span></div><div class="row gap"></div><div class="row" style="--c: #2563eb;"><span class="t-mark" data-spot="who" data-who="Percival" style="--c: #2563eb">@</span><span class="t-name" data-spot="who" data-who="Percival" style="--c: #2563eb">Percival</span> <span class="t-quote" data-who="Percival" style="--c: #2563eb">“</span>That was the worst roar I have ever heard.<span class="t-quote" data-who="Percival" style="--c: #2563eb">”</span></div><div class="row gap"></div><div class="row" style="--c: #c2410c;"><span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>Thank you,<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span> said the dragon. <span class="t-mark" data-spot="who">@</span><span class="t-direction" data-spot="how">(proudly)</span> <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>I’ve been practicing.<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span></div><div class="row gap"></div><div class="row"><span class="t-instruction" data-spot="time">{pause 2s}</span></div><div class="row gap"></div><div class="row"><span class="t-instruction" data-spot="time">{page}</span></div><div class="row gap"></div><div class="row"><span class="t-heading">##</span> Home <span class="t-instruction" data-spot="time">{hidden}</span></div><div class="row gap"></div><div class="row">So Sir Percival went home without a dragon, but with a jar of the dragon’s very best soup, which is better than half a kingdom on a cold night. <span class="t-sound" data-spot="sound">[door closes; a fire crackling]</span></div><div class="row gap"></div><div class="row" style="--c: #15803d;"><span class="t-mark" data-spot="who" data-who="King" style="--c: #15803d">@</span><span class="t-name" data-spot="who" data-who="King" style="--c: #15803d">King</span> <span class="t-direction" data-spot="how" data-who="King" style="--c: #15803d">(suspicious)</span> <span class="t-quote" data-who="King" style="--c: #15803d">“</span>Where is the dragon?<span class="t-quote" data-who="King" style="--c: #15803d">”</span></div><div class="row gap"></div><div class="row" style="--c: #2563eb;"><span class="t-mark" data-spot="who" data-who="Percival" style="--c: #2563eb">@</span><span class="t-name" data-spot="who" data-who="Percival" style="--c: #2563eb">Percival</span> <span class="t-quote" data-who="Percival" style="--c: #2563eb">“</span>Asleep,<span class="t-quote" data-who="Percival" style="--c: #2563eb">”</span> said Sir Percival. <span class="t-quote" data-who="Percival" style="--c: #2563eb">“</span>I thought it best not to wake him.<span class="t-quote" data-who="Percival" style="--c: #2563eb">”</span></div><div class="row gap"></div><div class="row"><span class="t-mark" data-spot="who">@</span><span class="t-direction" data-spot="how">(fondly)</span> And to this day, if you climb Mount Mumble very quietly, you can hear the dragon snoring. <span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-vocal" data-spot="sound" data-who="Gerald" style="--c: #c2410c">[snores, contentedly]</span></div><div class="row gap"></div><div class="row"><span class="t-instruction" data-spot="time">{audio only}</span> Thank you for listening.</div><div class="row gap"></div><div class="row"><span class="t-instruction" data-spot="time">{book only}</span> The End</div></div>
+          <p class="sr-only" id="sheet-summary">The dragon story as written in VoxDown, from its first heading: each line marked with who says it and how, with the sounds and pauses, ready to be read aloud. Press play to hear it, voiced from this very text.</p>
+          <div class="legend" role="group" aria-label="Spot a kind of mark in the scene">
+            <span class="legend-label">Spot the marks</span>
+            <button type="button" class="chip-k" data-spot="who" aria-pressed="false" aria-describedby="spot-say"><b class="k-who">@</b> who</button>
+            <button type="button" class="chip-k" data-spot="how" aria-pressed="false" aria-describedby="spot-say"><b class="k-how">( )</b> how</button>
+            <button type="button" class="chip-k" data-spot="sound" aria-pressed="false" aria-describedby="spot-say"><b class="k-sound">[ ]</b> sounds</button>
+            <button type="button" class="chip-k" data-spot="time" aria-pressed="false" aria-describedby="spot-say"><b class="k-time">{ }</b> timing</button>
+            <p class="spot-say" id="spot-say" aria-live="polite">Pick a kind of mark to see where it is, and what it does.</p>
+          </div>
+          <div class="player">
+            <button class="play-round" type="button" id="demo-play" aria-label="Play the scene">
+              <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+              <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+            </button>
+            <div class="player-mid">
+              <p class="now" id="now"><span class="now-dot" id="now-dot" aria-hidden="true"></span><span id="now-text">Press play to follow along.</span></p>
+              <div class="track" id="track" role="slider" tabindex="0" aria-label="Position in the scene" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0:00"><div class="track-fill" id="track-fill"></div></div>
+            </div>
+            <span class="time" id="time">2:28</span>
+          </div>
+          <div class="tip" id="tip" aria-hidden="true"></div>
+        </figure>
+        <p class="demo-cap">It’s Markdown with a few marks for who and how: any text editor opens it, and it still reads like a story. Voiced with ElevenLabs from this exact file, marks and all. <a id="demo-open" href="./writer/#example=the-dragon-who-would-not-roar" target="_blank" rel="noopener">Open this scene in the Writer<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
+      </div>
     </div>
-    <dl class="abilities">
-      <div>
-        <dt><code class="mark-sample"><span class="t-mark" style="--c: #2563eb">@</span><span class="t-name" style="--c: #2563eb">Mara</span></code>Who says this</dt>
-        <dd>Give each line its speaker with Ctrl+K, or let an AI you already use make a first pass for you to check.</dd>
-      </div>
-      <div>
-        <dt><code class="mark-sample"><span class="t-direction">(whispering)</span> <span class="t-instruction">{pause}</span></code>How it’s said</dt>
-        <dd>Directions like <em>whispering</em>, pauses, sounds and stressed words, each in its own colour and never in the way of the words.</dd>
-      </div>
-      <div>
-        <dt><code class="mark-sample"><kbd>F9</kbd></code>Hear it as you write</dt>
-        <dd>Press F9 and the scene is read from the cursor by your computer’s voices, a different one for each character where it has them.</dd>
-      </div>
-      <div>
-        <dt><code class="mark-sample"><span class="t-sound">[door slams]</span></code>From draft to audiobook</dt>
-        <dd>Print the book, the script or each performer’s lines, or make an audiobook with the voices you choose.</dd>
-      </div>
-    </dl>
-    <picture class="shot">
-      <img src="./front/writer-light.jpg" width="1440" height="864" loading="lazy" alt="The VoxDown Writer: a story on the left with each speaker’s lines underlined in their colour and directions above the words, and the script on the right." id="shot">
-    </picture>
-    <p class="also">Also: Word, EPUB and Fountain in and out, named versions to go back to, focus mode, designed themes, and it keeps working offline.</p>
-    <p><a class="action main" href="./writer/">Open the Writer</a></p>
-  </section>
 
-  <section class="part private-part" aria-labelledby="private-title">
-    <h2 id="private-title">Your story stays with you</h2>
-    <dl class="promises">
-      <div>
-        <dt>No account</dt>
-        <dd>Open the Writer and start. There is nothing to sign up for.</dd>
-      </div>
-      <div>
-        <dt>Nothing uploaded</dt>
-        <dd>The Writer runs in your browser. It opens files from your computer, saves them back there, and keeps working offline.</dd>
-      </div>
-      <div>
-        <dt>AI only when you ask</dt>
-        <dd>Paste a request into any AI chat you like, or connect the AI already on your computer. Nothing is sent until you press the button.</dd>
-      </div>
-      <div>
-        <dt>Voices on your computer</dt>
-        <dd>Hearing a scene uses your computer’s own voices. Online voices only if you say yes.</dd>
-      </div>
-    </dl>
-  </section>
-
-  <section class="part free-part" aria-labelledby="free-title">
-    <h2 id="free-title">Free, with nothing held back</h2>
-    <div>
-    <p>The Writer, the format and every tool are open source under the MIT license, and the specification is CC BY 4.0. No subscription, no ads, no analytics.</p>
-    <p>Audiobooks cost nothing with Kokoro, which runs on your own computer. Or use ElevenLabs, OpenAI or Azure voices with your own account, at their prices.</p>
-    </div>
-  </section>
-
-  <section class="part code-part" aria-labelledby="code-title">
-    <div class="code-words">
-      <h2 id="code-title">Plain text underneath</h2>
-      <p>A <code>.vxd</code> file is Markdown with a few marks. Any editor opens it, Git diffs it, and a Markdown viewer still shows a readable story.</p>
-      <ul class="links">
-        <li><a href="./spec.html">The specification</a>, and <a href="./cheatsheet.html">every mark on one page</a></li>
-        <li><a href="./playground.html">The playground</a>, to see a story become a script, a book and lines</li>
-        <li><a href="https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown">VoxDown for VS Code</a>, with colours, warnings and a preview</li>
-        <li><a href="https://github.com/voxdown/voxdown">The source on GitHub</a></li>
+    <div class="for wrap">
+      <span class="for-label" id="for-label">Made for</span>
+      <ul aria-labelledby="for-label">
+        <li><i style="--d:#7c3aed"></i><span class="wide-txt">Fiction writers</span><span class="short-txt">Fiction</span></li>
+        <li><i style="--d:#fb7185"></i><span class="wide-txt">Audio drama</span><span class="short-txt">Audio drama</span></li>
+        <li><i style="--d:#f59e0b"></i><span class="wide-txt">Podcasts</span><span class="short-txt">Podcasts</span></li>
+        <li><i style="--d:#14b8a6"></i><span class="wide-txt">Audiobook makers</span><span class="short-txt">Audiobooks</span></li>
+        <li><i style="--d:#7c3aed"></i><span class="wide-txt">AI-voice and TTS tinkerers</span><span class="short-txt">TTS tinkerers</span></li>
+        <li><i style="--d:#fb7185"></i><span class="wide-txt">Curious developers</span><span class="short-txt">Developers</span></li>
       </ul>
     </div>
-    <div class="code-sample">
-      <pre class="vxd-sample" id="sample" aria-label="A VoxDown story"></pre>
-      <pre class="shell"><code>npm install voxdown
-npx @voxdown/cli check story.vxd</code></pre>
+  </section>
+
+  <!-- 01. The spine: one scene written, marked, organised and voiced, in the Writer. -->
+  <section class="spine" id="spine" aria-labelledby="spine-title">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow"><span>01</span> The Writer, at work</p>
+        <h2 id="spine-title">From blank page to booth.</h2>
+        <p class="sec-lede">One dragon, one knight, one very bad night’s sleep. Scroll, and watch a scene get written, marked, organised and voiced in the VoxDown Writer.</p>
+      </header>
+    </div>
+
+    <div class="spine-track" id="spine-track">
+      <div class="spine-stick" id="spine-stick">
+        <div class="wrap spine-frame">
+          <nav class="jump" aria-label="Jump to a step">
+            <ol id="jump"><li><button type="button" data-go="1"><span aria-hidden="true">1</span>Type</button></li><li><button type="button" data-go="2"><span aria-hidden="true">2</span>Who</button></li><li><button type="button" data-go="3"><span aria-hidden="true">3</span>How</button></li><li><button type="button" data-go="4"><span aria-hidden="true">4</span>Scenes</button></li><li><button type="button" data-go="5"><span aria-hidden="true">5</span>Notes</button></li><li><button type="button" data-go="6"><span aria-hidden="true">6</span>Hand over</button></li><li><button type="button" data-go="7"><span aria-hidden="true">7</span>Audio</button></li></ol>
+          </nav>
+          <div class="wr-holder"><div class="wr" id="wr" role="group" aria-label="A likeness of the VoxDown Writer" data-step="0"></div></div>
+          <div class="caption" id="caption">
+            <div class="caption-words" aria-hidden="true" id="caption-words"></div>
+            <button class="btn btn-grad finale-play" type="button" data-finale-play>
+              <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></span>
+              <span class="finale-label">Play the scene</span> <span class="btn-time">0:34</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ol class="steps wrap" id="steps">
+        <li class="step" data-step="1" data-label="Type" data-feature="Plain text, smart quotes">
+          <h3>A blank page. A sleepy dragon.</h3>
+          <p>Start the way you always do: type. It’s plain text, so there’s nothing to learn before the first sentence.</p>
+        </li>
+        <li class="step" data-step="2" data-label="Who" data-feature="Who says this… · Ctrl+K" data-try="Try it: press Who, or Ctrl+K, and pick the speaker." data-try-phone="Try it: tap Who.">
+          <h3>Who said that? You tell it.</h3>
+          <p>Put the cursor in a quote and give it its speaker. The name goes before the quote, the line takes their colour, and they get a card in the Cast.</p>
+        </li>
+        <li class="step" data-step="3" data-label="How" data-feature="How it’s said… · Sound · Pause">
+          <h3>Deep, polite and utterly unbothered.</h3>
+          <p>Directions in round brackets say how a line lands. Square brackets hold what the world sounds like, and braces hold a beat of silence.</p>
+        </li>
+        <li class="step" data-step="4" data-label="Scenes" data-feature="Scenes · the scene board · Alt+↑/↓" data-try="Try it: move The battle with Alt+↑, or drag it." data-try-phone="Try it: tap ↑ on The battle.">
+          <h3>Then the knight gets brave.</h3>
+          <p>A second scene, and the scene board opens beside the page: each scene a card, with a line and a state. Move a card and its text moves with it.</p>
+        </li>
+        <li class="step" data-step="5" data-label="Notes" data-feature="Comments · Scraps">
+          <h3>Notes to self. Lines on ice.</h3>
+          <p>Leave yourself a comment that’s never read aloud or printed. Not sure about “smite”? Cut it to Scraps, where it waits in a file beside the story.</p>
+        </li>
+        <li class="step" data-step="6" data-label="Hand over" data-feature="Preview › Script, Book · Export › Each character’s lines" data-try="Try the tabs: Script, Book, Each character’s lines.">
+          <h3>Three handouts, zero retyping.</h3>
+          <p>The script for the table read, the book for readers, and each character’s lines for the booth, with the cue before each one.</p>
+        </li>
+        <li class="step" data-step="7" data-label="Audio" data-feature="File › Make an audiobook…">
+          <h3>Press play. That’s the file talking.</h3>
+          <p>Make an audiobook… gives each character a voice: ElevenLabs, OpenAI or Azure on your own account, or Kokoro, free on your computer. This scene was voiced from this very file.</p>
+          <button class="btn btn-ink finale-play step-play" type="button" data-finale-play>
+            <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></span>
+            <span class="finale-label">Play the scene</span> <span class="btn-time">0:34</span>
+          </button>
+        </li>
+      </ol>
+    </div>
+    <div class="wrap">
+      <p class="spine-after"><a class="btn btn-grad btn-lg" href="./writer/#example=the-dragon-who-would-not-roar" target="_blank" rel="noopener">Open this story in the Writer<span class="sr-only"> (opens in a new tab)</span> <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></p>
+    </div>
+  </section>
+
+  <!-- 02. The payoff: the cast heard, then the file handed to people or to an engine. -->
+  <section class="dark prod" aria-labelledby="prod-title">
+    <div class="dark-glow" aria-hidden="true"></div>
+    <div class="wrap">
+      <header class="sec-head sec-head-dark">
+        <p class="eyebrow eyebrow-dark"><span>02</span> Production-ready</p>
+        <h2 id="prod-title">Every voice, one file.</h2>
+        <p class="sec-lede">Hear who got each part, then choose who gets the file: the people who perform it, or an engine that voices it.</p>
+      </header>
+      <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"><button type="button" class="cast-chip" data-cast="Narrator" style="--sp: #6b5d9c;" aria-pressed="false"><span class="medal" aria-hidden="true">N</span>Narrator</button><button type="button" class="cast-chip" data-cast="Percival" style="--sp: #2563eb;" aria-pressed="false"><span class="medal" aria-hidden="true">P</span>Sir Percival</button><button type="button" class="cast-chip" data-cast="Gerald" style="--sp: #c2410c;" aria-pressed="true"><span class="medal" aria-hidden="true">G</span>Gerald</button><button type="button" class="cast-chip" data-cast="King" style="--sp: #15803d;" aria-pressed="false"><span class="medal" aria-hidden="true">K</span>King</button></div>
+      <!-- The cast and the route below are drawn from the story file; they are in the page as the script draws them, so nothing moves when it takes over. -->
+      <ul class="cast-list" id="cast-list" aria-label="The cast, each with a line from the recording"><li class="cast-card" data-cast="Narrator" style="--sp: #6b5d9c;">
+      <div class="cast-top"><span class="medal" aria-hidden="true">N</span>
+        <div><h3>The Narrator</h3><p class="cast-voice">In the recording: George, on ElevenLabs</p></div></div>
+      <p class="cast-about">Warm and unhurried, enjoying the joke.</p>
+      <p class="cast-line"><code><span class="t-mark" data-spot="who">@</span><span class="t-direction" data-spot="how">(warmly)</span> Sir Percival had been training his entire life for this day.</code></p>
+      <button class="audition" type="button" aria-pressed="false">
+        <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"></path></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"></path></svg></span>
+        <span>Hear the Narrator</span>
+      </button>
+      <div class="cast-meter" aria-hidden="true"><i></i></div></li><li class="cast-card" data-cast="Percival" style="--sp: #2563eb;">
+      <div class="cast-top"><span class="medal" aria-hidden="true">P</span>
+        <div><h3>Sir Percival</h3><p class="cast-voice">In the recording: Harry, on ElevenLabs</p></div></div>
+      <p class="cast-about">A young knight. Brave in theory, nervous in practice.</p>
+      <p class="cast-line"><code><span class="t-mark" data-spot="who" data-who="Percival" style="--c: #2563eb">@</span><span class="t-name" data-spot="who" data-who="Percival" style="--c: #2563eb">Percival</span> <span class="t-quote" data-who="Percival" style="--c: #2563eb">“</span>That was the worst roar I have ever heard.<span class="t-quote" data-who="Percival" style="--c: #2563eb">”</span></code></p>
+      <button class="audition" type="button" aria-pressed="false">
+        <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"></path></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"></path></svg></span>
+        <span>Hear Sir Percival</span>
+      </button>
+      <div class="cast-meter" aria-hidden="true"><i></i></div></li><li class="cast-card chosen" data-cast="Gerald" style="--sp: #c2410c;">
+      <div class="cast-top"><span class="medal" aria-hidden="true">G</span>
+        <div><h3>Gerald</h3><p class="cast-voice">In the recording: Gerald, on ElevenLabs</p></div></div>
+      <p class="cast-about">An old dragon. Deep, polite and utterly unbothered.</p>
+      <p class="cast-line"><code><span class="t-mark" data-spot="who" data-who="Gerald" style="--c: #c2410c">@</span><span class="t-name" data-spot="who" data-who="Gerald" style="--c: #c2410c">Gerald</span> <span class="t-vocal" data-spot="sound" data-who="Gerald" style="--c: #c2410c">[yawns]</span> <span class="t-quote" data-who="Gerald" style="--c: #c2410c">“</span>Is it a long doom? Only I’ve got a nap at four.<span class="t-quote" data-who="Gerald" style="--c: #c2410c">”</span></code></p>
+      <button class="audition" type="button" aria-pressed="false">
+        <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"></path></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"></path></svg></span>
+        <span>Hear Gerald</span>
+      </button>
+      <div class="cast-meter" aria-hidden="true"><i></i></div></li><li class="cast-card" data-cast="King" style="--sp: #15803d;">
+      <div class="cast-top"><span class="medal" aria-hidden="true">K</span>
+        <div><h3>The King</h3><p class="cast-voice">In the recording: Daniel, on ElevenLabs</p></div></div>
+      <p class="cast-about">Fond of proclamations.</p>
+      <p class="cast-line"><code><span class="t-mark" data-spot="who" data-who="King" style="--c: #15803d">@</span><span class="t-name" data-spot="who" data-who="King" style="--c: #15803d">King</span> <span class="t-direction" data-spot="how" data-who="King" style="--c: #15803d">(less grandly)</span> <span class="t-quote" data-who="King" style="--c: #15803d">“</span>Most of them.<span class="t-quote" data-who="King" style="--c: #15803d">”</span></code></p>
+      <button class="audition" type="button" aria-pressed="false">
+        <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"></path></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"></path></svg></span>
+        <span>Hear the King</span>
+      </button>
+      <div class="cast-meter" aria-hidden="true"><i></i></div></li></ul>
+      <div class="routes">
+        <article class="route">
+          <p class="route-kicker">To people</p>
+          <h3>Notes that ride along, and never get read out</h3>
+          <p><span class="narrow-only">A script with notes the narrator sees and the listener never hears.</span><span class="wide-only">A note to the performer goes in the script right where it matters. The narrator sees it; the listener never hears it.</span></p>
+          <div class="route-viz" id="route-script"><div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p><article class="vxd vxd-script" lang="en-US">
+<p class="vxd-p on-phone"><span class="vxd-line"><span class="vxd-note" role="note">Percival talks himself up here. Let him get louder line by line.</span></span></p>
+<div class="vxd-group on-phone" data-speaker="Percival" style="--vxd-c: #2563eb"><div class="vxd-group-label"><span class="vxd-group-name">Sir Percival</span> <span class="vxd-group-direction">trying to sound brave</span></div><div class="vxd-group-body">
+<p class="vxd-p"><span class="vxd-line"><span class="vxd-speech vxd-directed" data-speaker="Percival" style="--vxd-c: #2563eb">I am Sir Percival of the Shining Shield!</span></span><br>
+<span class="vxd-line"><span class="vxd-speech vxd-directed" data-speaker="Percival" style="--vxd-c: #2563eb">I have come to defeat you!</span></span><br class="off-phone">
+<span class="vxd-line off-phone"><span class="vxd-speech vxd-directed" data-speaker="Percival" style="--vxd-c: #2563eb">Prepare to meet thy doom!</span></span></p>
+</div></div>
+<p class="vxd-p"><span class="vxd-line"><span class="vxd-chip vxd-chip-vocal" data-speaker="Gerald" style="--vxd-c: #c2410c"><span class="vxd-chip-who">Gerald</span> yawns</span> <span class="vxd-speech" data-speaker="Gerald" style="--vxd-c: #c2410c">“Is it a long doom? Only I’ve got a nap at four.”</span></span></p>
+<p class="vxd-p"><span class="vxd-line"><span class="vxd-name" style="--vxd-c: #2563eb">Sir Percival</span><span class="vxd-speech" data-speaker="Percival" style="--vxd-c: #2563eb">“Aren’t you going to roar?”</span></span></p>
+<p class="vxd-p on-phone"><span class="vxd-line"><span class="vxd-speech vxd-narration" data-speaker="Narrator">The dragon sighed.</span></span></p>
+<p class="vxd-p on-phone"><span class="vxd-line"><span class="vxd-name" style="--vxd-c: #c2410c">Gerald</span><span class="vxd-speech vxd-directed" data-speaker="Gerald" style="--vxd-c: #c2410c"><span class="vxd-direction vxd-direction-long" aria-label="(with no enthusiasm whatsoever)"><span>with no enthusiasm whatsoever</span></span>“Rooooar.”</span></span></p>
+<p class="vxd-p"><span class="vxd-line"><span class="vxd-name" style="--vxd-c: #2563eb">Sir Percival</span><span class="vxd-speech" data-speaker="Percival" style="--vxd-c: #2563eb">“That was the worst roar I have ever heard.”</span></span></p>
+<p class="vxd-p"><span class="vxd-line"><span class="vxd-name" style="--vxd-c: #c2410c">Gerald</span><span class="vxd-speech" data-speaker="Gerald" style="--vxd-c: #c2410c">“Thank you,”</span> <span class="vxd-speech vxd-narration" data-speaker="Narrator">said the dragon.</span>  <span class="vxd-speech vxd-directed" data-speaker="Gerald" style="--vxd-c: #c2410c"><span class="vxd-direction" aria-label="(proudly)"><span>proudly</span></span>“I’ve been practicing.”</span></span></p>
+</article></div></div>
+        </article>
+        <article class="route">
+          <p class="route-kicker">To engines and tools</p>
+          <h3>Every line, a row</h3>
+          <p><span class="narrow-only">A voice per character, or every line as CSV or JSON for your own tools.</span><span class="wide-only">A voice per character through <b>Make an audiobook…</b>, or every line as CSV or JSON for your own pipeline: who, how, what, and where in the story.</span></p>
+          <div class="route-viz engines" aria-hidden="true">
+            <span class="eng"><b>ElevenLabs</b><i>your account</i></span>
+            <span class="eng"><b>OpenAI</b><i>your account</i></span>
+            <span class="eng"><b>Azure</b><i>your account</i></span>
+            <span class="eng eng-free"><b>Kokoro</b><i>free, on your computer</i></span>
+          </div>
+          <figure class="csv"><figcaption>the-dragon-who-would-not-roar.csv</figcaption><pre id="route-csv" tabindex="0" aria-label="The scene’s lines as CSV">kind,speaker,direction,text,scene,page
+speech,Narrator,,Then he heard a deep rumble.,3,2
+sound,,,"deep rumbling, from inside a cave",3,2
+speech,Narrator,,The dragon was snoring.,3,2
+vocal,Gerald,,snores,3,2
+speech,Narrator,whispering,Sir Percival crept inside.,3,2
+speech,Narrator,whispering,Clank.,3,2
+speech,Narrator,whispering,Clank.,3,2
+pause,,,,3,2
+speech,Narrator,whispering,The dragon opened one eye.,3,2
+speech,Gerald,"deep, polite and utterly unbothered",Could you not?,3,2
+speech,Narrator,,Sir Percival stopped.,3,2
+speech,Gerald,,"I’ve only just got to sleep,",3,2
+speech,Narrator,,said the dragon.,3,2
+speech,Gerald,,I was up all night counting sheep.,3,2
+speech,Percival,,Real sheep?,3,2
+speech,Gerald,,Imaginary ones. They were very difficult to catch.,3,2</pre></figure>
+        </article>
+      </div>
+      <div class="route-foot" id="connect">
+        <pre class="term wide-only-block"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
+        <p class="route-note"><span class="wide-only">The Writer reaches your voice engine through this small connector, on your own computer. VoxDown never sees your story or your keys.</span><span class="narrow-only">The Writer reaches your voice engine through a small connector on your computer. VoxDown never sees your story or your keys.</span></p>
+        <details class="more more-dark narrow-only-block">
+          <summary>The command</summary>
+          <pre class="term"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
+        </details>
+      </div>
+      <p class="also-out">Also: a Word document with your comments as Word comments, an EPUB, a standard manuscript to submit, and a production file for audio tools.</p>
+    </div>
+  </section>
+
+  <!-- 04. The real app, as proof. -->
+  <section class="proof band" aria-labelledby="proof-title">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow"><span>03</span> The real thing</p>
+        <h2 id="proof-title">A whole book, in one calm window.</h2>
+        <p class="sec-lede">The Writer’s own screens, with the dragon story open. <span class="narrow-only">Tap the picture for the whole window.</span></p>
+      </header>
+
+      <div class="views-track" id="views-track">
+      <div class="views-pin">
+      <figure class="shot-tile" aria-labelledby="view-cap">
+        <div class="shot-bar">
+          <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="seg seg-views" role="group" aria-label="What the window shows">
+            <button type="button" data-view="focus" aria-pressed="true">Focus</button>
+            <button type="button" data-view="workbench" aria-pressed="false">Workbench</button>
+            <button type="button" data-view="written" aria-pressed="false">As written</button>
+            <button type="button" data-view="drawn" aria-pressed="false">Drawn</button>
+            <span class="seg-run" aria-hidden="true"><i></i></span>
+          </div>
+        </div>
+        <div class="shot-sub">
+          <p class="view-cap" id="view-cap">Focus mode: the toolbar and panels step away, and every paragraph but yours fades back.</p>
+          <div class="seg seg-looks" role="group" aria-label="Look">
+            <span class="seg-label" aria-hidden="true">Look</span>
+            <button type="button" data-look="light" aria-pressed="true">Paper</button>
+            <button type="button" data-look="sepia" aria-pressed="false">Sepia</button>
+            <button type="button" data-look="dark" aria-pressed="false">Night</button>
+            <button type="button" data-look="slate" aria-pressed="false">Slate</button>
+          </div>
+        </div>
+        <button type="button" class="zoom" data-zoom="look" aria-label="View the whole window, full size">
+          <span class="shot-stack">
+            <img class="shot shot-front" id="shot" width="2560" height="1600" decoding="async" alt="The VoxDown Writer in focus mode, in the Paper look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.">
+            <img class="shot shot-back" width="2560" height="1600" decoding="async" alt="" aria-hidden="true">
+          </span>
+          <span class="zoom-hint" aria-hidden="true">View the whole window</span>
+        </button>
+      </figure>
+      </div>
+      <div class="views-run" aria-hidden="true"></div>
+      </div>
+
+      <details class="fold" data-fold open>
+      <summary>Two more screens: the scene board, and bring your own AI</summary>
+      <ul class="proof-grid">
+        <li class="proof-card">
+          <button type="button" class="zoom" data-zoom="./landing/studio/app/board.webp" data-zoom-w="1192" data-zoom-h="1232" aria-label="View the scene board, full size">
+            <picture>
+              <source media="(max-width: 600px)" srcset="./landing/studio/app/phone-board.webp" width="292" height="640">
+              <img data-shot src="./landing/studio/app/board.webp" alt="The scene board: the dragon story’s scenes as cards, each with a one-line summary, a state (Done, Revised, Draft, Idea) and a word count." loading="lazy" decoding="async" width="1192" height="1232">
+            </picture>
+          </button>
+          <h3>The scene board</h3>
+          <p>The whole book at a glance: every scene with its state and its words.</p>
+        </li>
+        <li class="proof-card">
+          <button type="button" class="zoom" data-zoom="./landing/studio/app/ai-direct.webp" data-zoom-w="1280" data-zoom-h="914" aria-label="View the Direct the reading with AI dialog, full size">
+            <picture>
+              <source media="(max-width: 600px)" srcset="./landing/studio/app/phone-ai.webp" width="704" height="540">
+              <img data-shot src="./landing/studio/app/ai-direct.webp" alt="The “Direct the reading with AI” dialog: copy a request into any AI chat, then paste its answer back to check each suggestion." loading="lazy" decoding="async" width="1280" height="914">
+            </picture>
+          </button>
+          <h3>Bring your own AI, if you like</h3>
+          <p>A first pass of speakers or directions from the AI you already use, every suggestion yours to keep or drop. Nothing is sent until you press the button.</p>
+        </li>
+      </ul>
+      </details>
+
+      <div class="index">
+        <h3 class="index-title">And it quietly takes care of the rest</h3>
+        <ul class="outcomes">
+          <li><b>Warnings with fixes.</b> <span class="out-d">Odd marks get a warning and a fix; “Next quote with no speaker” finds each unnamed line.</span></li>
+          <li><b>Autosaved drafts and versions.</b> <span class="out-d">Drafts kept as you type, so a closed tab loses nothing; name versions to go back to.</span></li>
+          <li><b>Import Word and EPUB.</b> <span class="out-d">Or Fountain, Markdown, or a paste from Google Docs with the formatting kept.</span></li>
+          <li><b>Built for long books.</b> <span class="out-d">150,000 words open in about a quarter of a second.</span></li>
+        </ul>
+        <details class="more">
+          <summary>Everything it does</summary>
+          <ul class="index-list">
+            <li>Warnings, each with a fix</li>
+            <li>Next quote with no speaker <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>K</kbd></li>
+            <li>Go to a chapter or scene <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>O</kbd></li>
+            <li>Move a paragraph, scene or chapter</li>
+            <li>Focus mode and typewriter scrolling</li>
+            <li>Style hints and “Words leaned on…”</li>
+            <li>A daily goal and timed sprints</li>
+            <li>Named versions to go back to</li>
+            <li>Drafts kept as you type</li>
+            <li>Works offline once loaded</li>
+            <li>Opens .vxd, .md, .txt, Fountain, Word and EPUB</li>
+            <li>Paste from Google Docs, formatting kept</li>
+            <li>A quick, rough read-through <kbd>F9</kbd></li>
+            <li>Every command on the keyboard <kbd>Ctrl</kbd><kbd>/</kbd></li>
+            <li>Screen-reader labels, and a phone layout</li>
+            <li>Six looks, your font, size and spacing</li>
+          </ul>
+          <p class="index-more"><a href="./cheatsheet.html" target="_blank" rel="noopener">Every mark on one page<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05. Developers. -->
+  <section class="dark dark-dev" aria-labelledby="devs-title">
+    <div class="dark-glow" aria-hidden="true"></div>
+    <div class="wrap devs">
+      <div class="devs-words">
+        <p class="eyebrow eyebrow-dark"><span>04</span> For developers</p>
+        <h2 id="devs-title">Open all the way down.</h2>
+        <p class="sec-lede">A published spec, a parser, renderers, an editor component and a command line.</p>
+        <p class="dev-links"><a href="./spec.html" target="_blank" rel="noopener">The spec<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="./cheatsheet.html" target="_blank" rel="noopener">Cheat sheet<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="./playground.html" target="_blank" rel="noopener">Playground<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="https://github.com/voxdown/voxdown" target="_blank" rel="noopener">GitHub<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
+      </div>
+      <div class="devs-code">
+        <pre class="term"><code><span class="prompt">$</span> npm install voxdown
+<span class="prompt">$</span> npx @voxdown/cli check story.vxd</code></pre>
+        <details class="fold fold-dark" data-fold open>
+        <summary>The packages</summary>
+        <ul class="pkgs">
+          <li><code>voxdown</code><span>Parse a story: its cast, lines and marks.</span></li>
+          <li><code>@voxdown/render</code><span>The book and the script, as HTML.</span></li>
+          <li><code>@voxdown/editor</code><span>An editor as a web component.</span></li>
+          <li><code>@voxdown/cli</code><span><code>vxd</code> check · convert · connect · tag · produce · mcp</span></li>
+          <li><code>VS Code</code><span>Colours, warnings and a preview.</span></li>
+        </ul>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06. Free, open, yours. -->
+  <section class="free" aria-labelledby="free-title">
+    <div class="wrap">
+      <h2 id="free-title" class="sr-only">Free, open and yours</h2>
+      <ul class="facts">
+        <li class="fact-private">
+          <svg class="lock" viewBox="0 0 48 48" aria-hidden="true"><path d="M15 21v-6a9 9 0 0 1 18 0v6"/><rect x="9" y="21" width="30" height="21" rx="5"/><path d="M24 36.5s-5.5-3.3-5.5-6.9a3 3 0 0 1 5.5-1.6 3 3 0 0 1 5.5 1.6c0 3.6-5.5 6.9-5.5 6.9z"/></svg>
+          <p class="fact-kicker">Private by design</p>
+          <h3>Your story, your computer.</h3>
+          <p>Nothing is sent to us; there’s no VoxDown server to send it to. Files open from your computer and save back there: in place in Chrome and Edge, as a downloaded copy elsewhere.</p>
+          <ul class="vows"><li>No account</li><li>No analytics</li><li>No ads</li><li>AI and voices only if you choose them</li></ul>
+        </li>
+        <li><p class="big big-edit"><s class="struck" aria-hidden="true">$0</s> <span class="hand-free"><span class="free-word">Free</span><img class="pen-free" src="./landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></p><p>No subscription and no sign-up. Audiobooks can be free too, with Kokoro on your own computer.</p></li>
+        <li><p class="big">MIT</p><p>The Writer and every tool are open source, and the spec is CC BY 4.0. Once loaded, the Writer works offline.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="final" aria-labelledby="final-title">
+    <div class="wrap">
+      <div class="final-band">
+                        <h2 id="final-title">Your cast is <span class="pen-under pen-final-word">waiting.<img class="under-img" src="./landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" loading="lazy" decoding="async"><img class="pen-final" data-clay src="./landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></h2>
+        <p>Open the Writer and start typing. Or open the dragon story and see every mark at work.</p>
+        <div class="cta-row cta-center">
+          <a class="btn btn-white btn-lg" href="./writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span> <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+          <a class="btn btn-clear btn-lg" href="./writer/#example=the-dragon-who-would-not-roar">Open the dragon story</a>
+        </div>
+        <p class="final-fine">Runs in your browser. No account, nothing to install.</p>
+      </div>
     </div>
   </section>
 </main>
 
-<footer class="front-foot">
-  <p>VoxDown is open source under the MIT license. The example stories are free to copy (CC0). The recordings were voiced with ElevenLabs.</p>
-  <nav aria-label="More">
-    <a href="./writer/">Writer</a>
-    <a href="./listen.html">Listen</a>
-    <a href="./playground.html">Playground</a>
-    <a href="./spec.html">Spec</a>
-    <a href="./cheatsheet.html">Cheat sheet</a>
-    <a href="https://github.com/voxdown/voxdown">GitHub</a>
-  </nav>
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-brand">
+      <a class="brand" href="./"><img src="./icon.svg" alt="" width="26" height="26"><span>VoxDown</span></a>
+      <p>VoxDown is open source under the MIT license; the spec is CC BY 4.0. The example stories are free to copy (CC0). The recordings were voiced with ElevenLabs.</p>
+      <!-- The supporter line is added here by main.ts, only once SUPPORT_URL is set. -->
+    </div>
+    <nav aria-label="More">
+      <a href="./writer/">Writer</a>
+      <a href="./listen.html">Listen</a>
+      <a href="./playground.html">Playground</a>
+      <a href="./spec.html">Spec</a>
+      <a href="./cheatsheet.html">Cheat sheet</a>
+      <a href="https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown">VS Code</a>
+      <a href="https://github.com/voxdown/voxdown">GitHub</a>
+    </nav>
+  </div>
 </footer>
-<script type="module" src="./src/front.ts"></script>
+
+<!-- What's playing, when its scene is out of view. -->
+<div class="np" id="np" hidden>
+  <span class="np-dot" id="np-dot" aria-hidden="true"></span>
+  <span class="np-text"><span class="np-k">Now</span> <span id="np-who">The narrator</span></span>
+  <button type="button" class="np-btn" id="np-toggle" aria-label="Pause">
+    <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+    <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+  </button>
+  <button type="button" class="np-back" id="np-back">Back to the scene</button>
+</div>
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot, full size">
+  <form method="dialog"><button class="lb-close" type="submit" aria-label="Close">×</button></form>
+  <img id="lightbox-img" alt="" width="1600" height="1000">
+  <p class="lb-hint" id="lb-hint" aria-hidden="true">Drag to look around</p>
+</dialog>
+<p class="sr-only" aria-live="polite" id="announce"></p>
+<script type="module" src="./src/landing/studio/main.ts"></script>
 </body>
 </html>

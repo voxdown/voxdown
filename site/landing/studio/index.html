@@ -322,7 +322,7 @@
           <h3>Notes to self. Lines on ice.</h3>
           <p>Leave yourself a comment that’s never read aloud or printed. Not sure about “smite”? Cut it to Scraps, where it waits in a file beside the story.</p>
         </li>
-        <li class="step" data-step="6" data-label="Hand over" data-feature="Preview › Script, Book · Export › Each character’s lines" data-try="Try the tabs: Script, Book, Lines.">
+        <li class="step" data-step="6" data-label="Hand over" data-feature="Preview › Script, Book · Export › Each character’s lines" data-try="Try the tabs: Script, Book, Each character’s lines.">
           <h3>Three handouts, zero retyping.</h3>
           <p>The script for the table read, the book for readers, and each character’s lines for the booth, with the cue before each one.</p>
         </li>
@@ -348,7 +348,7 @@
       <header class="sec-head sec-head-dark">
         <p class="eyebrow eyebrow-dark"><span>02</span> Production-ready</p>
         <h2 id="prod-title">Every voice, one file.</h2>
-        <p class="sec-lede">Pick each character’s voice once in Make an audiobook…, and every line they say goes to it. Hear who got the part, then choose who gets the file: the people who perform it, or an engine that voices it.</p>
+        <p class="sec-lede">Hear who got each part, then choose who gets the file: the people who perform it, or an engine that voices it.</p>
       </header>
       <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"><button type="button" class="cast-chip" data-cast="Narrator" style="--sp: #6b5d9c;" aria-pressed="false"><span class="medal" aria-hidden="true">N</span>Narrator</button><button type="button" class="cast-chip" data-cast="Percival" style="--sp: #2563eb;" aria-pressed="false"><span class="medal" aria-hidden="true">P</span>Sir Percival</button><button type="button" class="cast-chip" data-cast="Gerald" style="--sp: #c2410c;" aria-pressed="true"><span class="medal" aria-hidden="true">G</span>Gerald</button><button type="button" class="cast-chip" data-cast="King" style="--sp: #15803d;" aria-pressed="false"><span class="medal" aria-hidden="true">K</span>King</button></div>
       <!-- The cast and the route below are drawn from the story file; they are in the page as the script draws them, so nothing moves when it takes over. -->
@@ -419,6 +419,7 @@
             <span class="eng"><b>Azure</b><i>your account</i></span>
             <span class="eng eng-free"><b>Kokoro</b><i>free, on your computer</i></span>
           </div>
+          <p class="eng-note">The Writer reaches your voice engine through <a href="#connect"><code>vxd connect</code></a>, on your own computer.</p>
           <figure class="csv"><figcaption>the-dragon-who-would-not-roar.csv</figcaption><pre id="route-csv" tabindex="0" aria-label="The scene’s lines as CSV">kind,speaker,direction,text,scene,page
 speech,Narrator,,Then he heard a deep rumble.,3,2
 sound,,,"deep rumbling, from inside a cave",3,2
@@ -438,7 +439,7 @@ speech,Percival,,Real sheep?,3,2
 speech,Gerald,,Imaginary ones. They were very difficult to catch.,3,2</pre></figure>
         </article>
       </div>
-      <div class="route-foot">
+      <div class="route-foot" id="connect">
         <pre class="term wide-only-block"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
         <p class="route-note"><span class="wide-only">The small connector the Writer reaches your voices through. VoxDown never sees your story or your keys.</span><span class="narrow-only">Voices come through a small connector on your computer. VoxDown never sees your story or your keys.</span></p>
         <details class="more more-dark narrow-only-block">

@@ -148,6 +148,16 @@ function farOff(el: Element): -1 | 0 | 1 {
   return 0;
 }
 
+/** Whether `el`'s step (on a phone, laid out only near the screen) is far below (1), above (-1). */
+function stepFar(el: Element): -1 | 0 | 1 {
+  const step = el.closest(".step");
+  if (!step) return 0;
+  const box = step.getBoundingClientRect();
+  if (box.top > window.innerHeight * 2) return 1;
+  if (box.bottom < -window.innerHeight) return -1;
+  return 0;
+}
+
 /** The two recorded stories: their recordings are there from the start (a press on play needs
  *  nothing more), their text is parsed when first read, once the parser is in. */
 const parsedStories = new Map<string, Story>();
@@ -1205,7 +1215,12 @@ function initSpine(): void {
           return `${open}<span class="k-speech${inked}"${style}>${escapeHtml(words)}</span>${close}`;
         }
         const slot = seg.slot ? " who-slot" : seg.dirSlot ? " dir-slot" : "";
-        const isNew = fresh !== undefined && seg.s === fresh ? " new" : "";
+        // Step 2's other names are there from its start (the lines are already attributed and
+        // counted); only "Could you not?" waits for its speaker.
+        const isNew =
+          fresh !== undefined && seg.s === fresh && !(fresh === 2 && k === "name" && !seg.slot)
+            ? " new"
+            : "";
         const text = seg.slot ? `@${who || G} ` : seg.dirSlot ? `(${dirOf(who)}) ` : seg.t;
         return `<span class="mk k-${k}${slot}${inked}${isNew}"${step}${style}>${escapeHtml(text)}</span>`;
       })
@@ -1309,14 +1324,26 @@ function initSpine(): void {
     s
       ? `${s.lines} line${s.lines === 1 ? "" : "s"} · ${s.words} word${s.words === 1 ? "" : "s"}`
       : "No lines yet";
+  /** A short quote in a preview is never broken across lines ("Could you / not?"). */
+  function keepShortQuotesWhole(html: string): string {
+    const box = document.createElement("template");
+    box.innerHTML = html;
+    for (const speech of box.content.querySelectorAll(".vxd-speech:not(.vxd-narration)"))
+      for (const node of speech.childNodes)
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent ?? "";
+          if (text.trim().split(/\s+/).length <= 3) node.textContent = text.replace(/ /g, "\u00a0");
+        }
+    return box.innerHTML;
+  }
   function outputs(): { book: string; script: string; lines: string } {
     const story = parse(mockText(STEPS));
     // The lines of whoever has "Could you not?" (Gerald's, if it went to the narrator).
     const whose = !who || who === "Narrator" ? G : who;
     const said = (textByCharacter(story).get(whose) ?? "").trim().split("\n").filter(Boolean);
     return {
-      book: `<div class="book-page" data-vxd-theme="light"><p class="book-run">The Dragon Who Would Not Roar</p>${render.renderBook(story, { header: false })}<p class="book-folio">12</p></div>`,
-      script: `<div class="script-page" data-vxd-theme="light">${render.renderScript(story, { header: false })}</div>`,
+      book: `<div class="book-page" data-vxd-theme="light"><p class="book-run">The Dragon Who Would Not Roar</p>${keepShortQuotesWhole(render.renderBook(story, { header: false }))}<p class="book-folio">12</p></div>`,
+      script: `<div class="script-page" data-vxd-theme="light">${keepShortQuotesWhole(render.renderScript(story, { header: false }))}</div>`,
       lines: `<div class="sides-page" style="--sp:${colorFor(whose)}"><p class="sides-head"><span style="--sp:${colorFor(whose)}">${escapeHtml(nameFor(whose))}</span> · each character’s lines</p>${said
         .map(
           (row) => `<p class="said">${escapeHtml(row).replace(/^\(([^)]*)\)/, "<i>($1)</i>")}</p>`,
@@ -2261,12 +2288,23 @@ function initSpine(): void {
       const lead = margin - 8 - leadFrom;
       // Every note points back at its mark: an arrow where there's room, a short hooked tick where not.
       const hookW = Math.max(0, Math.min(30, margin - 4 - (end + 6)));
+      // To a caret, an arc from the note that comes down onto it from above, clear of the line
+      // (the direction will be written beside the caret, and a line through words means delete).
+      const arcLeft = x - 10;
+      const arcTop = y - 26;
+      const arcW = margin - 6 - arcLeft + 4;
+      const arcH = h / 2 + 30;
+      const at = (px: number, py: number) =>
+        `${(px - arcLeft).toFixed(1)} ${(py - arcTop).toFixed(1)}`;
+      const tipY = y + 4;
       const leader =
-        lead >= 40
-          ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${(leadY - 9).toFixed(1)}px;width:${lead.toFixed(1)}px;height:18px">`
-          : hookW >= 12
-            ? `<svg class="lead hook" viewBox="0 0 ${hookW.toFixed(1)} 20" aria-hidden="true" style="left:${(margin - 4 - hookW).toFixed(1)}px;top:${y + h / 2 - 12}px;width:${hookW.toFixed(1)}px;height:20px">${hookPath(hookW / 30)}</svg>`
-            : "";
+        mark.shape === "caret"
+          ? `<svg class="lead lead-arc" viewBox="0 0 ${arcW.toFixed(1)} ${arcH.toFixed(1)}" aria-hidden="true" style="left:${arcLeft.toFixed(1)}px;top:${arcTop.toFixed(1)}px;width:${arcW.toFixed(1)}px;height:${arcH.toFixed(1)}px"><path d="M${at(margin - 6, y + h / 2)} C ${at(margin - 70, y - 20)}, ${at(x + 50, y - 22)}, ${at(x, tipY)}"/><path d="M${at(x, tipY)} L ${at(x - 4.5, tipY - 6)}"/><path d="M${at(x, tipY)} L ${at(x + 4.5, tipY - 6)}"/></svg>`
+          : lead >= 40
+            ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${(leadY - 9).toFixed(1)}px;width:${lead.toFixed(1)}px;height:18px">`
+            : hookW >= 12
+              ? `<svg class="lead hook" viewBox="0 0 ${hookW.toFixed(1)} 20" aria-hidden="true" style="left:${(margin - 4 - hookW).toFixed(1)}px;top:${y + h / 2 - 12}px;width:${hookW.toFixed(1)}px;height:20px">${hookPath(hookW / 30)}</svg>`
+              : "";
       const words = done
         ? `<i><s>who?</s><br>${escapeHtml(shortName(who))}</i>${TICK}`
         : `<i>${escapeHtml(mark.word)}</i>`;
@@ -2755,6 +2793,9 @@ function initSpine(): void {
           () => {
             // From its top entering near the bottom to its middle a little below the screen's:
             // complete by the time it's read, and it stays so as it leaves (undone only below).
+            // A step far off isn't laid out: only its own box is read then.
+            const far = stepFar(example);
+            if (far) return far > 0 ? -1 : 2;
             const box = paper.getBoundingClientRect();
             const share =
               (window.innerHeight * 0.95 - box.top) / (window.innerHeight * 0.33 + box.height / 2);
@@ -2782,6 +2823,8 @@ function initSpine(): void {
         first.innerHTML = `${html}<span class="caret tw-caret"></span>`;
         const type = typer(first, $(".tw-caret", first));
         scrub(type, () => {
+          const far = stepFar(first);
+          if (far) return far > 0 ? 0 : 1;
           const box = first.getBoundingClientRect();
           const middle = box.top + box.height / 2;
           return (window.innerHeight * (2 / 3) - middle) / (window.innerHeight / 3);

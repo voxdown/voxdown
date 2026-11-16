@@ -4884,10 +4884,21 @@ button {
   text-wrap: pretty;
 }
 
-/* Labels in the handouts and scripts: never under 11 px. */
-:is(.route-viz, #wr, .step-example)
-  :is(.vxd-name, .vxd-group-name, .vxd-group-direction, .vxd-group-label) {
+/* Labels in the handouts and scripts: never under 11 px in the small Writer, 12 px in the
+   production handouts, where there's room. */
+:is(#wr, .step-example) :is(.vxd-name, .vxd-group-name, .vxd-group-direction, .vxd-group-label) {
   font-size: 11px !important;
+}
+.route-viz
+  :is(
+    .vxd-name,
+    .vxd-group-name,
+    .vxd-group-direction,
+    .vxd-group-label,
+    .vxd-chip-who,
+    .vxd-direction > span
+  ) {
+  font-size: 12px !important;
 }
 
 :is(.route-viz, #wr, .step-example) .vxd-group-label {
@@ -5977,8 +5988,9 @@ html:not(.js) .big-edit .struck {
 }
 
 /* Sections well below the first view aren't laid out until they come near: the first layout is
-   the hero's and the spine's alone. Each keeps a size close to its real one until then (and its real
-   one, once seen), so nothing moves as they arrive. */
+   the hero's and the spine's alone. Until then each holds its measured size (contain-intrinsic-size
+   is the content box: each section's height less its padding, per layout), and once seen, its real
+   one ("auto"), so the page is its true length from the start. */
 .prod,
 .proof,
 .dark-dev,
@@ -5988,60 +6000,126 @@ html:not(.js) .big-edit .struck {
   content-visibility: auto;
 }
 .prod {
-  contain-intrinsic-size: auto 1600px;
+  contain-intrinsic-size: auto 1355px;
 }
 .proof {
-  contain-intrinsic-size: auto calc(85vh + 2110px);
+  contain-intrinsic-size: auto calc(85vh + 1913px);
 }
 .dark-dev {
-  contain-intrinsic-size: auto 485px;
+  contain-intrinsic-size: auto 339px;
 }
 .free {
-  contain-intrinsic-size: auto 515px;
+  contain-intrinsic-size: auto 387px;
 }
 .final {
-  contain-intrinsic-size: auto 660px;
+  contain-intrinsic-size: auto 536px;
 }
 .foot {
-  contain-intrinsic-size: auto 205px;
+  contain-intrinsic-size: auto 116px;
 }
 @media (max-width: 1199px) {
   .prod {
-    contain-intrinsic-size: auto 1880px;
+    contain-intrinsic-size: auto 1670px;
   }
   .proof {
-    contain-intrinsic-size: auto calc(85vh + 1825px);
+    contain-intrinsic-size: auto calc(85vh + 1656px);
   }
   .dark-dev {
-    contain-intrinsic-size: auto 510px;
+    contain-intrinsic-size: auto 385px;
   }
   .free {
-    contain-intrinsic-size: auto 520px;
+    contain-intrinsic-size: auto 414px;
   }
   .final {
-    contain-intrinsic-size: auto 460px;
+    contain-intrinsic-size: auto 385px;
   }
   .foot {
-    contain-intrinsic-size: auto 255px;
+    contain-intrinsic-size: auto 164px;
   }
 }
 @media (max-width: 860px) {
   .prod {
-    contain-intrinsic-size: auto 1820px;
+    contain-intrinsic-size: auto 1756px;
   }
   .proof {
-    contain-intrinsic-size: auto calc(76vh + 1450px);
+    contain-intrinsic-size: auto calc(76vh + 1353px);
   }
   .dark-dev {
-    contain-intrinsic-size: auto 540px;
+    contain-intrinsic-size: auto 440px;
   }
   .free {
-    contain-intrinsic-size: auto 710px;
+    contain-intrinsic-size: auto 635px;
   }
   .final {
-    contain-intrinsic-size: auto 555px;
+    contain-intrinsic-size: auto 481px;
   }
   .foot {
-    contain-intrinsic-size: auto 305px;
+    contain-intrinsic-size: auto 216px;
   }
+  /* The spine's steps, whose examples are drawn once the parser is in: until a step has its
+     example, it holds the height it will have, so the page is its true length from the start. */
+  .js .step:not(:has(.step-example))[data-step="1"] {
+    min-height: 462px;
+  }
+  .js .step:not(:has(.step-example))[data-step="2"] {
+    min-height: 425px;
+  }
+  .js .step:not(:has(.step-example))[data-step="3"] {
+    min-height: 675px;
+  }
+  .js .step:not(:has(.step-example))[data-step="4"] {
+    min-height: 691px;
+  }
+  .js .step:not(:has(.step-example))[data-step="5"] {
+    min-height: 585px;
+  }
+  .js .step:not(:has(.step-example))[data-step="6"] {
+    min-height: 663px;
+  }
+  .js .step:not(:has(.step-example))[data-step="7"] {
+    min-height: 772px;
+  }
+}
+
+/* Step 3's caret and the arc from "how?": drawn as strokes, coming down onto the caret from above;
+   as the direction is written into its slot they give way (a proofreader's clean copy), and "how?"
+   stays in the margin. With reduced motion, only the settled copy: no line near the words. */
+.pen .lead-arc {
+  transform: none;
+  animation: none;
+  overflow: visible;
+}
+.pen .lead-arc path {
+  fill: none;
+  stroke: #c62f1b;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pen.mark-caret .caret-mark,
+.pen.mark-caret .lead {
+  opacity: calc(1 - var(--set, 1));
+}
+/* The direction's slot, while it waits: its room kept, ruled faintly at the baseline. */
+.wr .dir-slot.new {
+  opacity: 1;
+  -webkit-text-fill-color: color-mix(in srgb, currentColor calc(var(--set, 1) * 100%), transparent);
+  background: linear-gradient(
+      to right,
+      rgb(124 58 237 / calc(0.45 * (1 - var(--set, 1)))) 50%,
+      transparent 0
+    )
+    0 calc(100% - 0.1em) / 8px 1.5px repeat-x;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* The connector, named beside the engines. */
+.eng-note {
+  margin-top: 0.7rem !important;
+  font-size: 0.88rem;
+}
+.eng-note a {
+  color: inherit;
+  text-underline-offset: 0.15em;
 }

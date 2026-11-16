@@ -6154,14 +6154,35 @@ html:not(.js) .big-edit .struck {
   color: var(--ink);
 }
 
-/* On a phone the battle script is three lines: the note to the performer, Percival's question and
-   Gerald's answer, whole within the card. */
+/* On a phone the battle script is shorter: the note to the performer, the group it speaks of with
+   its first two lines, "The dragon sighed." and Gerald's roar, whole within the card. */
 @media (max-width: 600px) {
-  #route-script article > :not(.on-phone) {
+  #route-script article > :not(.on-phone),
+  #route-script .off-phone {
     display: none;
   }
   .route-viz#route-script {
     max-height: none;
     mask-image: none;
   }
+}
+
+/* The settled "how?": a short faint tick toward the direction it asked for, once that is in. */
+.pen .tick-settled {
+  overflow: visible;
+  opacity: calc(var(--set, 1) * 0.6);
+  pointer-events: none;
+}
+.pen .tick-settled path {
+  fill: none;
+  stroke: #c62f1b;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Captions wrap without leaving a word alone on the last line. */
+.cap-p,
+.step > p {
+  text-wrap: pretty;
 }

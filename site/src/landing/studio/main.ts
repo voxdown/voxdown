@@ -2291,9 +2291,13 @@ function initSpine(): void {
           ? x + 8
           : Math.max(end, mark.shape === "circle" ? ringLeft + 0.95 * ringW : end);
       const leadY = mark.shape === "caret" ? y + h - 6 : y + h / 2;
-      const leadFrom = reach + 10;
       // The note's place: the margin, or a little further right where a mark asks for room.
       const noteX = margin + (mark.nudge ?? 0);
+      // The arrow picture's head (on the left, mirrored) sits 9.2% in from its edge: for a ring, the
+      // arrow starts so its tip touches the ring's outer edge.
+      const ringTip = ringLeft + 0.95 * ringW;
+      const leadFrom =
+        mark.shape === "circle" ? (ringTip - 0.092 * (noteX - 8)) / 0.908 : reach + 10;
       const lead = noteX - 8 - leadFrom;
       // Every note points back at its mark: an arrow where there's room, a short hooked tick where not.
       const hookW = Math.max(0, Math.min(30, noteX - 4 - (end + 6)));
@@ -2317,7 +2321,19 @@ function initSpine(): void {
       const words = done
         ? `<i><s>who?</s><br>${escapeHtml(shortName(who))}</i>${TICK}`
         : `<i>${escapeHtml(mark.word)}</i>`;
-      group.innerHTML = `${shape}${leader}<span class="hand" style="left:${noteX}px;top:${y + h / 2 - 12}px">${words}</span>`;
+      // Once the direction is written in and the arc has gone, a short faint tick from the note
+      // toward the direction's end, so "how?" stays attached (never reaching the words).
+      let settledTick = "";
+      if (mark.shape === "caret") {
+        const rects = [...target.getClientRects()];
+        const last = rects[rects.length - 1];
+        const dirEnd = last ? last.right - base.left : x;
+        const tickY = (last ? last.top + last.height / 2 - base.top : y + h / 2) + 1;
+        const tickW = Math.min(34, noteX - 6 - (dirEnd + 10));
+        if (tickW >= 12)
+          settledTick = `<svg class="tick-settled" viewBox="0 0 ${tickW.toFixed(1)} 12" aria-hidden="true" style="left:${(noteX - 6 - tickW).toFixed(1)}px;top:${(tickY - 6).toFixed(1)}px;width:${tickW.toFixed(1)}px;height:12px"><path d="M${tickW.toFixed(1)} 6 L 1 6 M1 6 L 6 2.5 M1 6 L 6 9.5"/></svg>`;
+      }
+      group.innerHTML = `${shape}${leader}${settledTick}<span class="hand" style="left:${noteX}px;top:${y + h / 2 - 12}px">${words}</span>`;
       annot.append(group);
       if (done) continue;
       const annotBox = annot.getBoundingClientRect();
@@ -2994,16 +3010,25 @@ whenBooted(initCast);
     const from = full.indexOf("%% Percival talks");
     const to = full.indexOf("I’ve been practicing.”") + "I’ve been practicing.”".length;
     const battle = parse(`${front}\n\n${full.slice(from, to)}\n`);
-    // On a phone, three of its lines: the note to the performer, Percival's question and Gerald's
-    // directed answer (the same rendering, fewer lines).
+    // On a phone, fewer of its lines (the same rendering): the note to the performer, the group it
+    // speaks of with its first two lines, "The dragon sighed." and Gerald's directed roar.
     const page = document.createElement("template");
     page.innerHTML = render.renderScript(battle, { header: false });
-    for (const part of page.content.querySelectorAll("article > *"))
-      if (
-        part.querySelector(".vxd-note") ||
-        /Aren’t you going to roar\?|Ro+ar\./.test(part.textContent ?? "")
-      )
+    for (const part of page.content.querySelectorAll("article > *")) {
+      const text = part.textContent ?? "";
+      if (part.querySelector(".vxd-note") || /^The dragon sighed\.$|Ro+ar\./.test(text.trim()))
         part.classList.add("on-phone");
+      if (part.classList.contains("vxd-group")) {
+        part.classList.add("on-phone");
+        // Its third line and the break before it are left for wider screens.
+        for (const [i, line] of [...part.querySelectorAll(".vxd-line")].entries())
+          if (i >= 2) {
+            line.classList.add("off-phone");
+            const before = line.previousElementSibling;
+            if (before?.tagName === "BR") before.classList.add("off-phone");
+          }
+      }
+    }
     redraw(
       $("#route-script"),
       `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${page.innerHTML}</div>`,
@@ -3580,9 +3605,8 @@ for (const image of $$<HTMLImageElement>("img[data-clay], img[data-shot]")) {
   });
 }
 
-/* The parser comes in as the spine is about to come into view, at the reader's first press, touch
-   or key, or else when the page has been idle a few seconds after loading: never on the first
-   view's path. (A press on play needs none of it.) */
+/* The parser comes in on first use: as the spine is about to come into view, or at the reader's
+   first press, touch or key. Never with the first view. (A press on play needs none of it.) */
 {
   // On a phone the spine's examples are part of the page's length: any touch or scroll asks for
   // the parser at once, so they're in long before the reader reaches them.
@@ -3608,14 +3632,4 @@ for (const image of $$<HTMLImageElement>("img[data-clay], img[data-shot]")) {
     });
   };
   window.addEventListener("scroll", nearing, { passive: true });
-  const later = () =>
-    globalThis.setTimeout(
-      () =>
-        "requestIdleCallback" in window
-          ? window.requestIdleCallback(go, { timeout: 2000 })
-          : globalThis.setTimeout(go, 500),
-      3000,
-    );
-  if (document.readyState === "complete") later();
-  else window.addEventListener("load", later, { once: true });
 }

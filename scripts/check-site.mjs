@@ -307,6 +307,33 @@ console.log(
   "front page: a scene lit as it plays, Start writing, the scene in the Writer, old links sent on: ok",
 );
 
+// Every public page's card: its og:image and og:url are the site's own addresses, in full, and
+// the picture is in the build.
+const SITE = "https://voxdown.github.io/voxdown/";
+for (const page of [
+  "index.html",
+  "writer/index.html",
+  "listen.html",
+  "playground.html",
+  "spec.html",
+  "cheatsheet.html",
+]) {
+  const html = readFileSync(join(dist, page), "utf8");
+  const tag = (property) =>
+    html.match(new RegExp(`<meta property="${property}" content="([^"]*)"`))?.[1];
+  for (const property of ["og:image", "og:url"]) {
+    const url = tag(property);
+    if (!url?.startsWith(SITE))
+      problems.push(
+        `${page}: ${property} is ${url ?? "missing"}, not a full address under ${SITE}`,
+      );
+  }
+  const image = tag("og:image");
+  if (image?.startsWith(SITE) && !existsSync(join(dist, image.slice(SITE.length))))
+    problems.push(`${page}: its og:image, ${image}, isn't in the build`);
+}
+console.log("cards: every public page's picture and address in full, the picture built: ok");
+
 // The listening page: each recording was made from the story as it is now, and every part it
 // plays has its place on the page.
 const listen = await browser.newPage({ viewport: { width: 1440, height: 900 } });

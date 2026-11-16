@@ -3481,8 +3481,31 @@ if (looked.leading === leadingBefore)
   problems.push("writer: the line spacing didn't change the page's lines");
 if (looked.gap < 1 || !looked.indent.includes("Another one."))
   problems.push(`writer: paragraphs aren't set in as in a book: ${JSON.stringify(looked)}`);
+// Cancel puts everything back as it was when the dialog opened, the look too.
+const cancelBefore = await maker.evaluate(() => ({
+  size: getComputedStyle(document.querySelector(".cm-content")).fontSize,
+  paper: localStorage.getItem("vxd-writer-paper"),
+  theme: localStorage.getItem("vxd-theme"),
+}));
 await maker.click("#theme");
-await maker.click('#page-looks label:has(input[value="auto"])');
+await maker.waitForSelector("#page-settings[open]");
+await maker.click('#page-looks label:has(input[value="night"])');
+await maker.fill("#page-size", "15");
+await maker.dispatchEvent("#page-size", "input");
+await maker.click("#page-cancel");
+// The dialog's close event comes a moment after it shuts.
+await maker.waitForTimeout(200);
+const cancelAfter = await maker.evaluate(() => ({
+  size: getComputedStyle(document.querySelector(".cm-content")).fontSize,
+  paper: localStorage.getItem("vxd-writer-paper"),
+  theme: localStorage.getItem("vxd-theme"),
+}));
+if (JSON.stringify(cancelAfter) !== JSON.stringify(cancelBefore))
+  problems.push(
+    `writer: Cancel in Page and text didn't put it back: ${JSON.stringify({ cancelBefore, cancelAfter })}`,
+  );
+// Restore defaults: the usual page, and Auto.
+await maker.click("#theme");
 await maker.click("#page-reset");
 await maker.click('#page-settings button[value="done"]');
 if (

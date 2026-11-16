@@ -50,14 +50,21 @@ export function inkOf(url: string): Promise<Ink | undefined> {
 }
 
 const alpha = (ink: Ink, x: number, y: number) =>
-  ink.a[Math.min(ink.h - 1, Math.max(0, y | 0)) * ink.w + Math.min(ink.w - 1, Math.max(0, x | 0))] as number;
+  ink.a[
+    Math.min(ink.h - 1, Math.max(0, y | 0)) * ink.w + Math.min(ink.w - 1, Math.max(0, x | 0))
+  ] as number;
 
 /**
  * The middle of the ink in each column, and how much ink the column holds against the picture's
  * typical column: a thin wisp that all but vanishes once the picture is drawn small doesn't count
  * as the end of the line.
  */
-function middles(ink: Ink): { mid: Float32Array; mass: Float32Array; rows: Float32Array; peak: Uint8Array } {
+function middles(ink: Ink): {
+  mid: Float32Array;
+  mass: Float32Array;
+  rows: Float32Array;
+  peak: Uint8Array;
+} {
   if (ink.mid && ink.mass && ink.rows && ink.peak)
     return { mid: ink.mid, mass: ink.mass, rows: ink.rows, peak: ink.peak };
   const mid = new Float32Array(ink.w).fill(-1);
@@ -211,7 +218,8 @@ export function wordsOf(el: HTMLElement): Words {
   if (Number.isFinite(lineHeight)) {
     const ascent = metrics.fontBoundingBoxAscent;
     const descent = metrics.fontBoundingBoxDescent;
-    baseline = (Number.parseFloat(style.paddingTop) || 0) + (lineHeight - ascent - descent) / 2 + ascent;
+    baseline =
+      (Number.parseFloat(style.paddingTop) || 0) + (lineHeight - ascent - descent) / 2 + ascent;
   } else {
     const probe = document.createElement("span");
     probe.style.cssText = "display:inline-block;width:0;height:0;vertical-align:baseline";

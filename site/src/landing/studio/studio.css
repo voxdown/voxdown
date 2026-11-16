@@ -5705,7 +5705,10 @@ html:not(.js) .big-edit .struck {
   background-image: none;
 }
 .mini-paper .k-speech.ink-ring {
-  background-image: linear-gradient(color-mix(in srgb, var(--sp) 60%, transparent), color-mix(in srgb, var(--sp) 60%, transparent));
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--sp) 60%, transparent),
+    color-mix(in srgb, var(--sp) 60%, transparent)
+  );
   background-size: calc(100% - 4.35em) 2px;
   background-position: 2.35em calc(100% - 0.42em);
 }

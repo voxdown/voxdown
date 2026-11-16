@@ -33,7 +33,7 @@ import {
 // Only the two recorded stories, read as they are: nothing else to parse at load.
 import dragonText from "../../../../examples/the-dragon-who-would-not-roar.vxd?raw";
 import windText from "../../../../examples/the-north-wind-and-the-sun.vxd?raw";
-import { type Ink, inkEnd, inkOf, pictureEnd, ringEnd, type Words, wordsEnd, wordsOf } from "./ink";
+import { type Ink, type Words, inkEnd, inkOf, pictureEnd, ringEnd, wordsEnd, wordsOf } from "./ink";
 import "./studio.css";
 
 const $ = <T extends HTMLElement = HTMLElement>(
@@ -480,7 +480,10 @@ function seekHero(share: number): void {
       const box = $("#demo").getBoundingClientRect();
       if (box.top > window.innerHeight * 0.5 || box.bottom < 0)
         smoothJump(() =>
-          $("#demo").scrollIntoView({ behavior: calm.matches ? "auto" : "smooth", block: "center" }),
+          $("#demo").scrollIntoView({
+            behavior: calm.matches ? "auto" : "smooth",
+            block: "center",
+          }),
         );
     }
   });
@@ -1454,7 +1457,9 @@ function initSpine(): void {
   const inks: { ring?: Ink; under?: Ink; arrow?: Ink } = {};
   const inksReady = Promise.all(
     (["ring", "under", "arrow"] as const).map(async (name) => {
-      const file = { ring: "pencil-circle", under: "pencil-underline", arrow: "pencil-arrow" }[name];
+      const file = { ring: "pencil-circle", under: "pencil-underline", arrow: "pencil-arrow" }[
+        name
+      ];
       const ink = await inkOf(`../../landing/studio/pen/${file}.webp`);
       if (ink) inks[name] = ink;
     }),
@@ -2476,7 +2481,8 @@ function initSpine(): void {
               time = 100 + (mark.el.textContent ?? "").replace(/\s/g, "").length * 140;
             else {
               const b = mark.el.getBoundingClientRect();
-              if (mark.el.classList.contains("ink-under")) time = Math.max(350, Math.min(700, b.width * 2));
+              if (mark.el.classList.contains("ink-under"))
+                time = Math.max(350, Math.min(700, b.width * 2));
               else {
                 const x = b.width / 2;
                 const y = b.height / 2;
@@ -2495,7 +2501,8 @@ function initSpine(): void {
             let t0 = 0;
             for (const part of parts) {
               const s1 = s0 + part.weight / weight;
-              if (share <= s1) return (t0 + (part.time * (share - s0)) / (s1 - s0 || 1)) / pace.scale;
+              if (share <= s1)
+                return (t0 + (part.time * (share - s0)) / (s1 - s0 || 1)) / pace.scale;
               s0 = s1;
               t0 += part.time;
             }
@@ -2890,7 +2897,10 @@ initCast();
       const pin = $(".views-pin", track);
       const top = Number.parseFloat(getComputedStyle(pin).top) || 0;
       const y =
-        window.scrollY + track.getBoundingClientRect().top - top + ((at + 0.5) / 4) * run.offsetHeight;
+        window.scrollY +
+        track.getBoundingClientRect().top -
+        top +
+        ((at + 0.5) / 4) * run.offsetHeight;
       smoothJump(() => {
         state.view = view;
         showWindow();

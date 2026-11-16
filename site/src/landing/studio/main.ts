@@ -1434,24 +1434,28 @@ function initSpine(): void {
     {
       handle: "Narrator",
       name: "Narrator",
+      full: "The Narrator",
       about: "Warm and unhurried, enjoying the joke.",
       stats: "",
     },
     {
       handle: G,
       name: "Gerald",
+      full: "Gerald the Dragon",
       about: "An old dragon. Deep, polite and utterly unbothered.",
       stats: "",
     },
     {
       handle: P,
       name: "Sir Percival",
+      full: "Sir Percival",
       about: "A young knight. Brave in theory, nervous in practice.",
       stats: "",
     },
   ];
+  // The Writer's card: the handle, the full name (as the real screenshots show it), counts, about.
   const castCard = (member: (typeof CAST)[number]) =>
-    `<div class="cc" data-cast="${member.handle}" style="--sp:${colorFor(member.handle)}"><p class="cc-h"><span class="dot"></span><span class="cc-at">@</span>${member.handle}<i>→</i></p><p class="cc-s">${statText(castStats(2).get(member.handle))}</p><p class="cc-a">${member.about}</p></div>`;
+    `<div class="cc" data-cast="${member.handle}" style="--sp:${colorFor(member.handle)}"><p class="cc-h"><span class="dot"></span><span class="cc-at">@</span>${member.handle}<i>→</i></p><p class="cc-n">${member.full}</p><p class="cc-s">${statText(castStats(2).get(member.handle))}${member.handle === "Narrator" ? " · reads the rest" : ""}</p><p class="cc-a">${member.about}</p></div>`;
 
   /* The picker "Who says this?", as the Writer's: the cast, each in their colour. */
   const pickerHtml = (
@@ -1627,13 +1631,14 @@ function initSpine(): void {
   /* The pencil: it rings or underlines the words, and writes its question in the margin. */
   const PEN: Record<
     number,
-    Array<{ at: string; word: string; shape: "circle" | "under" | "caret" }>
+    Array<{ at: string; word: string; shape: "circle" | "under" | "caret"; nudge?: number }>
   > = {
     2: [{ at: "could .k-speech", word: "who?", shape: "circle" }],
     3: [
       // A proofreader's caret where the direction goes in, and "how?" pointing at it.
       { at: "could .k-dir", word: "how?", shape: "caret" },
-      { at: "rumble", word: "what do we hear?", shape: "circle" },
+      // A little further right, clear of the sound's "inside".
+      { at: "rumble", word: "what do we hear?", shape: "circle", nudge: 9 },
       { at: "pause", word: "a beat", shape: "circle" },
     ],
   };
@@ -1789,7 +1794,9 @@ function initSpine(): void {
   function refresh(): void {
     const stats = castStats(Math.max(2, Math.min(active, STEPS)));
     for (const line of $$<HTMLElement>(".cc[data-cast]"))
-      $(".cc-s", line).textContent = statText(stats.get(line.dataset.cast as string));
+      $(".cc-s", line).textContent =
+        statText(stats.get(line.dataset.cast as string)) +
+        (line.dataset.cast === "Narrator" ? " · reads the rest" : "");
 
     const made = outputs();
     for (const panel of $$(".pv-p-script")) panel.innerHTML = made.script;
@@ -2285,30 +2292,32 @@ function initSpine(): void {
           : Math.max(end, mark.shape === "circle" ? ringLeft + 0.95 * ringW : end);
       const leadY = mark.shape === "caret" ? y + h - 6 : y + h / 2;
       const leadFrom = reach + 10;
-      const lead = margin - 8 - leadFrom;
+      // The note's place: the margin, or a little further right where a mark asks for room.
+      const noteX = margin + (mark.nudge ?? 0);
+      const lead = noteX - 8 - leadFrom;
       // Every note points back at its mark: an arrow where there's room, a short hooked tick where not.
-      const hookW = Math.max(0, Math.min(30, margin - 4 - (end + 6)));
+      const hookW = Math.max(0, Math.min(30, noteX - 4 - (end + 6)));
       // To a caret, an arc from the note that comes down onto it from above, clear of the line
       // (the direction will be written beside the caret, and a line through words means delete).
       const arcLeft = x - 10;
       const arcTop = y - 26;
-      const arcW = margin - 6 - arcLeft + 4;
+      const arcW = noteX - 6 - arcLeft + 4;
       const arcH = h / 2 + 30;
       const at = (px: number, py: number) =>
         `${(px - arcLeft).toFixed(1)} ${(py - arcTop).toFixed(1)}`;
       const tipY = y + 4;
       const leader =
         mark.shape === "caret"
-          ? `<svg class="lead lead-arc" viewBox="0 0 ${arcW.toFixed(1)} ${arcH.toFixed(1)}" aria-hidden="true" style="left:${arcLeft.toFixed(1)}px;top:${arcTop.toFixed(1)}px;width:${arcW.toFixed(1)}px;height:${arcH.toFixed(1)}px"><path d="M${at(margin - 6, y + h / 2)} C ${at(margin - 70, y - 20)}, ${at(x + 50, y - 22)}, ${at(x, tipY)}"/><path d="M${at(x, tipY)} L ${at(x - 4.5, tipY - 6)}"/><path d="M${at(x, tipY)} L ${at(x + 4.5, tipY - 6)}"/></svg>`
+          ? `<svg class="lead lead-arc" viewBox="0 0 ${arcW.toFixed(1)} ${arcH.toFixed(1)}" aria-hidden="true" style="left:${arcLeft.toFixed(1)}px;top:${arcTop.toFixed(1)}px;width:${arcW.toFixed(1)}px;height:${arcH.toFixed(1)}px"><path d="M${at(noteX - 6, y + h / 2)} C ${at(noteX - 70, y - 20)}, ${at(x + 50, y - 22)}, ${at(x, tipY)}"/><path d="M${at(x, tipY)} L ${at(x - 4.5, tipY - 6)}"/><path d="M${at(x, tipY)} L ${at(x + 4.5, tipY - 6)}"/></svg>`
           : lead >= 40
             ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${(leadY - 9).toFixed(1)}px;width:${lead.toFixed(1)}px;height:18px">`
             : hookW >= 12
-              ? `<svg class="lead hook" viewBox="0 0 ${hookW.toFixed(1)} 20" aria-hidden="true" style="left:${(margin - 4 - hookW).toFixed(1)}px;top:${y + h / 2 - 12}px;width:${hookW.toFixed(1)}px;height:20px">${hookPath(hookW / 30)}</svg>`
+              ? `<svg class="lead hook" viewBox="0 0 ${hookW.toFixed(1)} 20" aria-hidden="true" style="left:${(noteX - 4 - hookW).toFixed(1)}px;top:${y + h / 2 - 12}px;width:${hookW.toFixed(1)}px;height:20px">${hookPath(hookW / 30)}</svg>`
               : "";
       const words = done
         ? `<i><s>who?</s><br>${escapeHtml(shortName(who))}</i>${TICK}`
         : `<i>${escapeHtml(mark.word)}</i>`;
-      group.innerHTML = `${shape}${leader}<span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px">${words}</span>`;
+      group.innerHTML = `${shape}${leader}<span class="hand" style="left:${noteX}px;top:${y + h / 2 - 12}px">${words}</span>`;
       annot.append(group);
       if (done) continue;
       const annotBox = annot.getBoundingClientRect();
@@ -2985,9 +2994,19 @@ whenBooted(initCast);
     const from = full.indexOf("%% Percival talks");
     const to = full.indexOf("I’ve been practicing.”") + "I’ve been practicing.”".length;
     const battle = parse(`${front}\n\n${full.slice(from, to)}\n`);
+    // On a phone, three of its lines: the note to the performer, Percival's question and Gerald's
+    // directed answer (the same rendering, fewer lines).
+    const page = document.createElement("template");
+    page.innerHTML = render.renderScript(battle, { header: false });
+    for (const part of page.content.querySelectorAll("article > *"))
+      if (
+        part.querySelector(".vxd-note") ||
+        /Aren’t you going to roar\?|Ro+ar\./.test(part.textContent ?? "")
+      )
+        part.classList.add("on-phone");
     redraw(
       $("#route-script"),
-      `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${render.renderScript(battle, { header: false })}</div>`,
+      `<div class="script-page" data-vxd-theme="light"><p class="script-head">Script · The battle</p>${page.innerHTML}</div>`,
     );
     // The rows as the Writer's Export › Lines as CSV writes them: who, how, what, and where.
     const all = lines(dragon.story);

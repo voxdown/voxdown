@@ -2020,9 +2020,13 @@ function initSpine(): void {
     stopSetIn?.();
     stopSetIn = undefined;
     wr.style.removeProperty("--set");
+    wr.style.removeProperty("--clear");
     // Where the pencil marks the page, it sets them in itself once its marks are made.
     if (!calm.matches && PEN[n] && window.innerWidth > 860) {
-      if (landing !== n) wr.style.setProperty("--set", "0");
+      if (landing !== n) {
+        wr.style.setProperty("--set", "0");
+        wr.style.setProperty("--clear", "0");
+      }
     } else if (!calm.matches && n >= 2) {
       const after = 0;
       const span = 0.5;
@@ -2261,15 +2265,27 @@ function initSpine(): void {
       const y = first.top - base.top;
       const w = first.width;
       const h = first.height;
-      // The leader runs from the end of the row's ink (marks included) to the margin.
+      // The leader runs from the end of the row's ink (marks included) to the margin: the ink there
+      // once the step's tags have set in, and the ink there before (what's still to come, `.new`,
+      // isn't on the page yet).
+      const onRow = (r: DOMRect) =>
+        r.width > 0 && r.top < first.bottom - 3 && r.bottom > first.top + 3;
       const whole = document.createRange();
       whole.selectNodeContents(line);
       const end = Math.max(
         x + w,
-        ...[...whole.getClientRects()]
-          .filter((r) => r.width > 0 && r.top < first.bottom - 3 && r.bottom > first.top + 3)
-          .map((r) => r.right - base.left),
+        ...[...whole.getClientRects()].filter(onRow).map((r) => r.right - base.left),
       );
+      const shown = wr.classList.contains("who-set") ? ".new:not(.who-slot)" : ".new";
+      let endStill = x + w;
+      const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim() || node.parentElement?.closest(shown)) continue;
+        const part = document.createRange();
+        part.selectNodeContents(node);
+        for (const r of part.getClientRects())
+          if (onRow(r)) endStill = Math.max(endStill, r.right - base.left);
+      }
       const group = document.createElement("div");
       // "who?" answered: struck through, the speaker named, a tick; nothing left to draw.
       const done = mark.word === "who?" && Boolean(who);
@@ -2294,11 +2310,17 @@ function initSpine(): void {
       // The note's place: the margin, or a little further right where a mark asks for room.
       const noteX = margin + (mark.nudge ?? 0);
       // The arrow picture's head (on the left, mirrored) sits 9.2% in from its edge: for a ring, the
-      // arrow starts so its tip touches the ring's outer edge.
+      // arrow starts so its tip touches the ring's outer edge, unless words stand between the ring
+      // and the note. It never runs through words on the page: while the pencil draws, it may reach
+      // over the room kept for what's still to come; before that sets in, it draws back clear of it.
       const ringTip = ringLeft + 0.95 * ringW;
+      /** Where the arrow picture starts for its head's tip to be at `tip`. */
+      const startFor = (tip: number) => (tip - 0.092 * (noteX - 8)) / 0.908;
       const leadFrom =
-        mark.shape === "circle" ? (ringTip - 0.092 * (noteX - 8)) / 0.908 : reach + 10;
+        mark.shape === "circle" ? startFor(Math.max(ringTip, endStill + 8)) : reach + 10;
+      const leadSettled = mark.shape === "circle" ? startFor(Math.max(ringTip, end + 8)) : leadFrom;
       const lead = noteX - 8 - leadFrom;
+      const back = leadSettled - leadFrom;
       // Every note points back at its mark: an arrow where there's room, a short hooked tick where not.
       const hookW = Math.max(0, Math.min(30, noteX - 4 - (end + 6)));
       // To a caret, an arc from the note that comes down onto it from above, clear of the line
@@ -2309,12 +2331,13 @@ function initSpine(): void {
       const arcH = h / 2 + 30;
       const at = (px: number, py: number) =>
         `${(px - arcLeft).toFixed(1)} ${(py - arcTop).toFixed(1)}`;
-      const tipY = y + 4;
+      // The arrowhead stops just above the line: its barbs never touch the speaker's name before it.
+      const tipY = y - 1;
       const leader =
         mark.shape === "caret"
           ? `<svg class="lead lead-arc" viewBox="0 0 ${arcW.toFixed(1)} ${arcH.toFixed(1)}" aria-hidden="true" style="left:${arcLeft.toFixed(1)}px;top:${arcTop.toFixed(1)}px;width:${arcW.toFixed(1)}px;height:${arcH.toFixed(1)}px"><path d="M${at(noteX - 6, y + h / 2)} C ${at(noteX - 70, y - 20)}, ${at(x + 50, y - 22)}, ${at(x, tipY)}"/><path d="M${at(x, tipY)} L ${at(x - 4.5, tipY - 6)}"/><path d="M${at(x, tipY)} L ${at(x + 4.5, tipY - 6)}"/></svg>`
           : lead >= 40
-            ? `<img class="lead" src="./landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${(leadY - 9).toFixed(1)}px;width:${lead.toFixed(1)}px;height:18px">`
+            ? `<img class="lead" src="./landing/studio/pen/pencil-arrow.webp" alt="" style="left:calc(${leadFrom.toFixed(1)}px + ${back.toFixed(1)}px * var(--clear, 1));top:${(leadY - 9).toFixed(1)}px;width:calc(${lead.toFixed(1)}px - ${back.toFixed(1)}px * var(--clear, 1));height:18px">`
             : hookW >= 12
               ? `<svg class="lead hook" viewBox="0 0 ${hookW.toFixed(1)} 20" aria-hidden="true" style="left:${(noteX - 4 - hookW).toFixed(1)}px;top:${y + h / 2 - 12}px;width:${hookW.toFixed(1)}px;height:20px">${hookPath(hookW / 30)}</svg>`
               : "";
@@ -2334,6 +2357,8 @@ function initSpine(): void {
           settledTick = `<svg class="tick-settled" viewBox="0 0 ${tickW.toFixed(1)} 12" aria-hidden="true" style="left:${(noteX - 6 - tickW).toFixed(1)}px;top:${(tickY - 6).toFixed(1)}px;width:${tickW.toFixed(1)}px;height:12px"><path d="M${tickW.toFixed(1)} 6 L 1 6 M1 6 L 6 2.5 M1 6 L 6 9.5"/></svg>`;
       }
       group.innerHTML = `${shape}${leader}${settledTick}<span class="hand" style="left:${noteX}px;top:${y + h / 2 - 12}px">${words}</span>`;
+      // Measured as the pencil draws it: before any leader draws back.
+      group.style.setProperty("--clear", "0");
       annot.append(group);
       if (done) continue;
       const annotBox = annot.getBoundingClientRect();
@@ -2387,6 +2412,7 @@ function initSpine(): void {
       const leadEl = group.querySelector<HTMLElement | SVGElement>(".lead");
       if (leadEl) strokes.push({ el: leadEl, kind: "lead", ...boxOf(leadEl) });
     }
+    for (const group of annot.children) (group as HTMLElement).style.removeProperty("--clear");
     if (calm.matches || answered || !strokes.length) return;
 
     // One pencil, its lead (at 4.9% and 96.2% of its picture) at the point it is drawing.
@@ -2555,7 +2581,9 @@ function initSpine(): void {
       }
       pencil.style.transform = `translate(${pos[0].toFixed(1)}px, ${pos[1].toFixed(1)}px)`;
       pencil.style.opacity = String(fade);
-      // The step's tags and directions set into the text after the pause.
+      // In the pause, the leaders draw back clear of what's to come and the caret's arc goes; then
+      // the step's tags and directions set into the text.
+      wr.style.setProperty("--clear", Math.max(0, Math.min(1, (t - clock) / PAUSE)).toFixed(3));
       wr.style.setProperty("--set", Math.max(0, Math.min(1, (t - setFrom) / SET)).toFixed(3));
     };
     // Drawn by the scroll, at a hand's pace: the step's choreography over the first part of its

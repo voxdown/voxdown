@@ -6101,9 +6101,10 @@ html:not(.js) .big-edit .struck {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* The caret and its arc go in the pause before the direction sets in: never over its words. */
 .pen.mark-caret .caret-mark,
 .pen.mark-caret .lead {
-  opacity: calc(1 - var(--set, 1));
+  opacity: calc(1 - var(--clear, 1));
 }
 /* The direction's slot, while it waits: its room kept, ruled faintly at the baseline. */
 .wr .dir-slot.new {

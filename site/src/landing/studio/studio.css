@@ -6113,13 +6113,3 @@ html:not(.js) .big-edit .struck {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-
-/* The connector, named beside the engines. */
-.eng-note {
-  margin-top: 0.7rem !important;
-  font-size: 0.88rem;
-}
-.eng-note a {
-  color: inherit;
-  text-underline-offset: 0.15em;
-}

@@ -6,7 +6,6 @@
  */
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/inter";
-import "@fontsource-variable/literata";
 import * as renderLib from "@voxdown/render";
 /** Text made safe for HTML (the renderer's own rule; the renderer itself loads with the spine). */
 const escapeHtml = (text: string) =>
@@ -34,6 +33,7 @@ import {
 // Only the two recorded stories, read as they are: nothing else to parse at load.
 import dragonText from "../../../../examples/the-dragon-who-would-not-roar.vxd?raw";
 import windText from "../../../../examples/the-north-wind-and-the-sun.vxd?raw";
+import { type Ink, inkEnd, inkOf, pictureEnd, ringEnd, type Words, wordsEnd, wordsOf } from "./ink";
 import "./studio.css";
 
 const $ = <T extends HTMLElement = HTMLElement>(
@@ -247,7 +247,9 @@ $("#np-toggle").addEventListener("click", () => {
 });
 $("#np-back").addEventListener("click", () => {
   const home = player.owner?.home();
-  home?.scrollIntoView({ behavior: calm.matches ? "auto" : "smooth", block: "center" });
+  smoothJump(() =>
+    home?.scrollIntoView({ behavior: calm.matches ? "auto" : "smooth", block: "center" }),
+  );
 });
 
 /* ================================================================== marks, coloured */
@@ -261,11 +263,28 @@ function spotOf(kind: string): string {
 }
 
 /** The text as written, each mark coloured as the Writer colours it. */
+/** Each story's tokens, worked out once: they are sorted by position, so a range is found by search. */
+const tokensOf = new WeakMap<Story, ReturnType<typeof tokens>>();
 function marked(story: Story, from: number, to: number, colors: Map<string, string>): string {
   const source = story.source;
+  let all = tokensOf.get(story);
+  if (!all) {
+    all = tokens(story);
+    tokensOf.set(story, all);
+  }
+  // The first token that could fall in the range.
+  let lo = 0;
+  let hi = all.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if ((all[mid] as (typeof all)[number]).range.from < from) lo = mid + 1;
+    else hi = mid;
+  }
   let html = "";
   let at = from;
-  for (const token of tokens(story)) {
+  for (let i = lo; i < all.length; i++) {
+    const token = all[i] as (typeof all)[number];
+    if (token.range.from >= to) break;
     if (token.range.from < at || token.range.to > to) continue;
     html += escapeHtml(source.slice(at, token.range.from));
     const color = token.speaker ? colors.get(token.speaker) : undefined;
@@ -460,7 +479,9 @@ function seekHero(share: number): void {
     if (window.innerWidth < 960) {
       const box = $("#demo").getBoundingClientRect();
       if (box.top > window.innerHeight * 0.5 || box.bottom < 0)
-        $("#demo").scrollIntoView({ behavior: calm.matches ? "auto" : "smooth", block: "center" });
+        smoothJump(() =>
+          $("#demo").scrollIntoView({ behavior: calm.matches ? "auto" : "smooth", block: "center" }),
+        );
     }
   });
   track.addEventListener("click", (event) => {
@@ -574,18 +595,41 @@ sheet.addEventListener("pointerover", (event) => {
 sheet.addEventListener("pointerleave", () => tip.classList.remove("on"));
 sheet.addEventListener("scroll", () => tip.classList.remove("on"), { passive: true });
 
+/* Literata, the story's face, only as the spine or the production section nears: the first screen
+   doesn't use it. Its fallback takes the same room, and the mock is measured again once it's in. */
+{
+  let asked = false;
+  const load = () => {
+    if (asked) return;
+    asked = true;
+    near.disconnect();
+    void import("@fontsource-variable/literata").then(() =>
+      document.fonts.load('15px "Literata Variable"').then(() => respine?.()),
+    );
+  };
+  const near = new IntersectionObserver(
+    (entries) => entries.some((e) => e.isIntersecting) && load(),
+    {
+      rootMargin: "250px 0px",
+    },
+  );
+  for (const el of $$("#spine-track, .prod, .proof")) near.observe(el);
+}
+
 /* ================================================================== the typewriter */
 
 /**
- * Types the text in `root` a character at a time, with a caret after the last one. Every
- * character is laid out from the start and only made visible in turn, so no line re-wraps.
- * Returns a function that finishes the typing at once.
+ * Types the text in `root` as far as it's told: every character is laid out from the start and only
+ * made visible up to a point, so no line ever re-wraps. Punctuation and line ends take a little more
+ * of the distance, the beat a typist takes. Straight quotes curl a few characters later. The caret
+ * sits after the last visible character: solid while the text moves, blinking when it rests.
  */
-function typewrite(
+type Typer = { to: (share: number) => void; total: number; whole: () => void };
+function typer(
   root: HTMLElement,
   caret: HTMLElement | null,
   onType?: (typed: string) => void,
-): () => void {
+): Typer {
   const nodes: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode())
@@ -597,7 +641,6 @@ function typewrite(
     for (const ch of node.data) {
       const span = document.createElement("span");
       span.className = "tw";
-      // Quotes are typed straight and curl a beat later, as smart quotes do.
       span.textContent = ch === "“" || ch === "”" ? '"' : ch;
       if (ch === "“" || ch === "”") span.dataset.curl = ch;
       frag.append(span);
@@ -605,67 +648,229 @@ function typewrite(
     }
     node.replaceWith(frag);
   }
+  // How far along the text each character is reached.
+  const reach: number[] = [];
+  let sum = 0;
+  for (const [i, ch] of chars.entries()) {
+    const next = chars[i + 1];
+    const lineEnd = !next || next.closest("p") !== ch.closest("p");
+    sum += lineEnd ? 6 : /[.,!?;:]/.test(ch.textContent ?? "") ? 3 : 1;
+    reach.push(sum);
+  }
+  // A short tail after the last character, so a closing quote also curls a few beats later.
+  const end = sum + 3;
   root.classList.add("typing-on");
-  root.classList.remove("typed");
-  let at = 0;
-  let timer = 0;
-  const place = () => {
+  let shown = -1;
+  let curledTo = -1;
+  let rest = 0;
+  const place = (count: number) => {
     if (!caret) return;
-    const last = chars[Math.max(0, at - 1)];
     const base = caret.offsetParent?.getBoundingClientRect();
-    if (!last || !base) return;
-    const box = last.getBoundingClientRect();
-    const x = at === 0 ? box.left - base.left : box.right - base.left;
+    const ref = count === 0 ? chars[0] : chars[count - 1];
+    if (!ref || !base) return;
+    const box = ref.getBoundingClientRect();
+    const x = count === 0 ? box.left - base.left : box.right - base.left;
     caret.style.transform = `translate(${x.toFixed(1)}px, ${(box.top - base.top).toFixed(1)}px)`;
     caret.style.height = `${box.height}px`;
   };
-  const report = () => {
-    if (!onType) return;
-    const lines = [...root.querySelectorAll(".ln")].filter((l) => !l.textContent?.startsWith("##"));
-    onType(
-      lines
-        .map((l) => [...l.querySelectorAll(".tw.on")].map((c) => c.textContent).join(""))
-        .join(" "),
+  const show = (count: number, at = reach[count - 1] ?? 0) => {
+    // A quote goes in straight, and curls once the scroll has gone three more characters on.
+    const curls = chars.reduce(
+      (n, ch, i) => n + (ch.dataset.curl && at >= (reach[i] as number) + 3 ? 1 : 0),
+      0,
     );
-  };
-  const curl = (ch: HTMLElement) => {
-    if (ch.dataset.curl) ch.textContent = ch.dataset.curl;
-  };
-  const finish = () => {
-    clearTimeout(timer);
-    for (const ch of chars) {
-      ch.classList.add("on");
-      curl(ch);
+    if (count === shown && curls === curledTo) return;
+    for (const [i, ch] of chars.entries()) {
+      ch.classList.toggle("on", i < count);
+      if (ch.dataset.curl)
+        ch.textContent = i < count && at >= (reach[i] as number) + 3 ? ch.dataset.curl : '"';
     }
-    report();
-    at = chars.length;
-    place();
-    root.classList.remove("typing-on");
-    root.classList.add("typed");
-  };
-  const next = () => {
-    const ch = chars[at];
-    if (!ch) {
-      finish();
-      return;
+    curledTo = curls;
+    if (count === shown) return;
+    shown = count;
+    place(count);
+    if (caret) {
+      caret.classList.add("moving");
+      clearTimeout(rest);
+      rest = window.setTimeout(() => caret.classList.remove("moving"), 420);
     }
-    ch.classList.add("on");
-    if (ch.dataset.curl) window.setTimeout(() => curl(ch), 160);
-    at += 1;
-    place();
-    report();
-    const following = chars[at];
-    const lineEnd = following && following.closest("p") !== ch.closest("p");
-    const pause = lineEnd
-      ? 210
-      : /[.,!?;:]/.test(ch.textContent ?? "")
-        ? 130
-        : 24 + Math.random() * 14;
-    timer = window.setTimeout(next, pause);
+    root.classList.toggle("typed", count >= chars.length);
+    if (onType) {
+      const lines = [...root.querySelectorAll(".ln")].filter(
+        (l) => !l.textContent?.startsWith("##"),
+      );
+      onType(
+        lines
+          .map((l) => [...l.querySelectorAll(".tw.on")].map((c) => c.textContent).join(""))
+          .join(" "),
+      );
+    }
   };
-  place();
-  timer = window.setTimeout(next, 250);
-  return finish;
+  const to = (share: number) => {
+    const target = Math.max(0, Math.min(1, share)) * end;
+    let count = 0;
+    while (count < chars.length && (reach[count] as number) <= target + 1e-6) count++;
+    show(count, target);
+  };
+  show(0, 0);
+  return { to, total: chars.length, whole: () => show(chars.length, end) };
+}
+
+/**
+ * A scroll the page makes itself (a jump to a step or a view). Until it ends, nothing it passes on
+ * the way is shown: no step or view in between is set, and every scrubbed mark is simply where the
+ * page is. It ends on `scrollend`, after 150 ms without a scroll event (older Safari has no
+ * `scrollend`, and a jump that doesn't move fires none), or at once when the reader takes over.
+ * Then each part of the page carries on from where it actually is.
+ */
+/** The reader taking over the scroll. */
+const TAKE_OVER = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+let jumping = 0;
+let jumps = 0;
+const afterJump: Array<() => void> = [];
+function smoothJump(go: () => void): void {
+  const id = ++jumps;
+  jumping = id;
+  let idle = 0;
+  const end = () => {
+    window.clearTimeout(idle);
+    window.removeEventListener("scroll", moved);
+    window.removeEventListener("scrollend", end);
+    for (const kind of TAKE_OVER) window.removeEventListener(kind, end);
+    if (jumping !== id) return;
+    jumping = 0;
+    for (const sync of afterJump) sync();
+  };
+  const moved = () => {
+    window.clearTimeout(idle);
+    idle = window.setTimeout(end, 150);
+  };
+  window.addEventListener("scroll", moved, { passive: true });
+  window.addEventListener("scrollend", end);
+  for (const kind of TAKE_OVER) window.addEventListener(kind, end, { passive: true });
+  idle = window.setTimeout(end, 300);
+  go();
+}
+
+/**
+ * How a hand follows the scroll. The work is measured in the hand's own milliseconds (`scale`);
+ * `map` turns the scroll's share into how far through that work the page is (0 to 1), so each
+ * stroke can have its own stretch of scroll. The pencil eases towards it (time constant `tau`
+ * seconds) at no more than `max` of its milliseconds per real second, and settles exactly there.
+ */
+type Pace = {
+  scale: number;
+  map?: (share: number) => number;
+  tau?: number;
+  max?: number;
+  /** Start from nothing (rather than where the page already is) and draw up to it. */
+  from0?: boolean;
+  /** While true, the hand is wherever the scroll says, at once (a jump landing). */
+  snap?: () => boolean;
+};
+
+/** The hooked tick's three strokes, drawn from the note back to the mark, in its box's own px. */
+function hookPath(sx: number): string {
+  const x = (v: number) => (v * sx).toFixed(2);
+  return [
+    `M${x(29)} 6 C ${x(20)} 4, ${x(10)} 6, ${x(3)} 13`,
+    `M${x(3)} 13 L ${x(9)} 13`,
+    `M${x(3)} 13 L ${x(4)} 7`,
+  ]
+    .map((d) => `<path d="${d}"/>`)
+    .join("");
+}
+
+/** A hooked tick drawn to `t` (0 to 1): its strokes one after the other, each by its own dash.
+ *  Returns where the drawing has got to, in the tick's own px; with `paint` off, only that. */
+function drawHook(svg: SVGElement, t: number, paint = true): [number, number] {
+  const paths = [...svg.querySelectorAll("path")];
+  const lengths = paths.map((path) => path.getTotalLength());
+  let left = lengths.reduce((sum, l) => sum + l, 0) * Math.max(0, Math.min(1, t));
+  let at: [number, number] | undefined;
+  for (const [i, path] of paths.entries()) {
+    const length = lengths[i] as number;
+    const drawn = Math.max(0, Math.min(length, left));
+    if (paint) {
+      path.style.strokeDasharray = `${length.toFixed(2)} ${(length + 1).toFixed(2)}`;
+      path.style.strokeDashoffset = (length - drawn).toFixed(2);
+      // Hidden entirely until its turn (a round cap would otherwise show a dot).
+      path.style.visibility = drawn > 0 ? "" : "hidden";
+    }
+    if (!at && (drawn < length || i === paths.length - 1)) {
+      const point = path.getPointAtLength(drawn);
+      at = [point.x, point.y];
+    }
+    left -= length;
+  }
+  return at ?? [0, 0];
+}
+
+/** The least scroll a stroke is given (px): more than one wheel notch. */
+const STROKE_SCROLL = 105;
+
+/** The hand's own pace: about 0.3 s to close most of a gap, never faster than 1.6× its own time. */
+const HAND: Omit<Pace, "scale"> = { tau: 0.3, max: 1600 };
+
+/**
+ * Drives a typer or a drawing from a share the page works out each frame (the scroll). Without a
+ * pace it eases lightly toward it, so a trackpad's inertia doesn't flicker; with one it follows at
+ * a hand's pace. Returns a function that stops it.
+ */
+function scrub(
+  type: { to: (share: number) => void },
+  share: () => number,
+  pace?: Pace,
+): () => void {
+  let now = Number.NaN;
+  let frame = 0;
+  let going = false;
+  let last = 0;
+  const step = (time: number) => {
+    const raw = share();
+    let target = raw;
+    if (pace) {
+      const s = Math.max(0, Math.min(1, raw));
+      target = (pace.map ? pace.map(s) : s) * pace.scale;
+    }
+    // The first reading jumps straight there: it is where the page already is.
+    if (Number.isNaN(now)) now = pace?.from0 ? 0 : target;
+    if (jumping || pace?.snap?.()) now = target;
+    if (!pace) {
+      now += (target - now) * 0.35;
+      if (Math.abs(target - now) < 0.002) now = target;
+    } else {
+      const dt = last ? Math.min(0.05, (time - last) / 1000) : 1 / 60;
+      const gap = target - now;
+      let move = gap * (1 - Math.exp(-dt / (pace.tau ?? 0.38)));
+      const most = (pace.max ?? 1300) * dt;
+      // Never faster than a hand; never so slow near the end that it crawls.
+      const least = Math.min(Math.abs(gap), 90 * dt);
+      if (Math.abs(move) > most) move = Math.sign(gap) * most;
+      if (Math.abs(move) < least) move = Math.sign(gap) * least;
+      now += move;
+      if (Math.abs(target - now) < 0.5) now = target;
+    }
+    type.to(pace ? now / pace.scale : now);
+    going = now !== target;
+    last = going ? time : 0;
+    frame = going ? requestAnimationFrame(step) : 0;
+  };
+  const wake = () => {
+    if (!going) {
+      going = true;
+      frame = requestAnimationFrame(step);
+    }
+  };
+  // Read in the next frame, not now: measuring here would force a layout inside the caller's task.
+  wake();
+  window.addEventListener("scroll", wake, { passive: true });
+  window.addEventListener("resize", wake);
+  return () => {
+    cancelAnimationFrame(frame);
+    window.removeEventListener("scroll", wake);
+    window.removeEventListener("resize", wake);
+  };
 }
 
 /* ================================================================== the spine */
@@ -1245,6 +1450,15 @@ function initSpine(): void {
     ],
   };
 
+  // The marks' own ink, read once, for the pencil's lead.
+  const inks: { ring?: Ink; under?: Ink; arrow?: Ink } = {};
+  const inksReady = Promise.all(
+    (["ring", "under", "arrow"] as const).map(async (name) => {
+      const file = { ring: "pencil-circle", under: "pencil-underline", arrow: "pencil-arrow" }[name];
+      const ink = await inkOf(`../../landing/studio/pen/${file}.webp`);
+      if (ink) inks[name] = ink;
+    }),
+  );
   const wr = $("#wr");
   buildMock(wr);
   const doc = $("#wr-doc");
@@ -1580,12 +1794,36 @@ function initSpine(): void {
     else wr.dataset.pane = n === 7 ? "audio" : "";
     preview.inert = n !== 6 && n !== 7;
     // Comments, then the cut line lands in Scraps.
-    clearTimeout(scrapTimer);
-    if (n === 5) scrapTimer = window.setTimeout(() => setTab("scraps"), calm.matches ? 0 : 1800);
+    if (n === 5 && calm.matches) setTab("scraps");
     // The page drawn afresh for the beat: its new marks and lines arrive, nothing already there moves.
     $("#wr-lines-doc").innerHTML =
       n === 1 ? linesHtml(OPENING, 1) : linesHtml(LINES, Math.max(n, 0), {}, n);
-    // Step 1 types its opening a character at a time; moving on finishes it at once.
+    // The step's tags and directions set into the text by the scroll (after the pencil's marks, where
+    // it makes any); step 5's cut line goes to Scraps halfway through.
+    stopSetIn?.();
+    stopSetIn = undefined;
+    wr.style.removeProperty("--set");
+    // Where the pencil marks the page, it sets them in itself once its marks are made.
+    if (!calm.matches && PEN[n] && window.innerWidth > 860) {
+      if (landing !== n) wr.style.setProperty("--set", "0");
+    } else if (!calm.matches && n >= 2) {
+      const after = 0;
+      const span = 0.5;
+      stopSetIn = scrub(
+        {
+          to: (share) => {
+            wr.style.setProperty(
+              "--set",
+              Math.max(0, Math.min(1, (share - after) / span)).toFixed(3),
+            );
+            if (n === 5) setTab(share >= 0.5 ? "scraps" : "comments");
+          },
+        },
+        () => stepShare(n),
+        { ...HAND, scale: 900 },
+      );
+    }
+    // Step 1 is typed by the scroll: down types, up untypes. Leaving it stops the scrubbing.
     finishTyping?.();
     finishTyping = undefined;
     const caret = $(".caret", wr);
@@ -1615,9 +1853,11 @@ function initSpine(): void {
     if (typeNow) {
       // The status bar counts only what has been typed.
       $("[data-status]", wr).textContent = status(0);
-      finishTyping = typewrite($("#wr-lines-doc"), caret, (typed) => {
+      const type = typer($("#wr-lines-doc"), caret, (typed) => {
         $("[data-status]", wr).textContent = status(countWords(typed));
       });
+      // The typing runs over the first 65% of the step's scroll, and holds whole for the rest.
+      finishTyping = scrub(type, () => stepShare(1));
     }
     if (n < STEPS - 1 && player.owner === finaleOwner && playing() && window.innerWidth > 860)
       player.audio?.pause();
@@ -1631,11 +1871,32 @@ function initSpine(): void {
     const draw = () => {
       if (active === n) drawPen(n);
     };
-    document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(draw)));
+    Promise.all([document.fonts.ready, inksReady]).then(() =>
+      requestAnimationFrame(() => requestAnimationFrame(draw)),
+    );
   }
-  let scrapTimer = 0;
 
   let finishTyping: (() => void) | undefined;
+  let stopSetIn: (() => void) | undefined;
+  /** How far through a step's scroll its choreography completes: the typing, then the marks. */
+  const doneBy = (n: number) => (n === 1 ? 0.65 : 0.85);
+  /** Where the reader is in step n's choreography: 0 at its start, 1 once it's complete. */
+  function stepShare(n: number): number {
+    const step = steps[n - 1];
+    if (!step || landing === n) return 1;
+    const box = step.getBoundingClientRect();
+    return (window.innerHeight / 2 - box.top) / box.height / doneBy(n);
+  }
+  /** The step a jump is landing on: its marks are shown complete, not drawn on the way. */
+  let landing = 0;
+  for (const kind of TAKE_OVER)
+    window.addEventListener(
+      kind,
+      () => {
+        landing = 0;
+      },
+      { passive: true },
+    );
 
   function captionHtml(n: number): string {
     const step = steps[n - 1];
@@ -1670,9 +1931,16 @@ function initSpine(): void {
     const step = steps[n - 1];
     if (!step) return;
     const box = step.getBoundingClientRect();
-    const top = window.scrollY + box.top + box.height / 2 - window.innerHeight / 2;
-    window.scrollTo({ top, behavior: calm.matches ? "auto" : "smooth" });
-    setStep(n);
+    // Step 1 is landed on just past where its typing completes, so it shows the whole opening.
+    // Every step is landed on just past where its choreography completes.
+    const at = doneBy(n) + 0.03;
+    const top = window.scrollY + box.top + box.height * at - window.innerHeight / 2;
+    // Only the step jumped to is shown, complete, all the way there.
+    smoothJump(() => {
+      landing = n;
+      setStep(n);
+      window.scrollTo({ top, behavior: calm.matches ? "auto" : "smooth" });
+    });
   }
 
   function scrollDoc(ids: string[] = []): void {
@@ -1699,6 +1967,35 @@ function initSpine(): void {
   /** A step's pencil, drawing; finishing it at once leaves its marks complete. */
   let finishPen: (() => void) | undefined;
 
+  /**
+   * The words a mark is about: a quote with its quotation marks, or a line's own sentence (not the
+   * sound tag after it). Rings and underlines are sized from these.
+   */
+  function circled(line: HTMLElement, target: HTMLElement, inner: boolean): Range {
+    const range = document.createRange();
+    if (inner && target.classList.contains("k-speech")) {
+      range.selectNodeContents(target);
+      const before = target.previousSibling;
+      const after = target.nextSibling;
+      if (before?.nodeType === Node.TEXT_NODE && (before as Text).data.endsWith("“"))
+        range.setStart(before, (before as Text).data.length - 1);
+      if (after?.nodeType === Node.TEXT_NODE && (after as Text).data.startsWith("”"))
+        range.setEnd(after, 1);
+      return range;
+    }
+    if (!inner) {
+      const own = [...line.childNodes].find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+      );
+      if (own) {
+        range.selectNodeContents(own);
+        return range;
+      }
+    }
+    range.selectNodeContents(target);
+    return range;
+  }
+
   function drawPen(n: number, answered = false): void {
     finishPen?.();
     finishPen = undefined;
@@ -1709,12 +2006,15 @@ function initSpine(): void {
     const margin = doc.clientWidth - Number.parseFloat(getComputedStyle(doc).paddingRight) + 16;
     const base = doc.getBoundingClientRect();
     type Stroke = {
-      el: HTMLElement;
+      el: HTMLElement | SVGElement;
       kind: "ring" | "under" | "lead" | "word";
       x: number;
       y: number;
       w: number;
       h: number;
+      /** A note's line: its letters as ink, and where a point in it lands on the annotations. */
+      words?: Words;
+      place?: (x: number, y: number) => [number, number];
     };
     const strokes: Stroke[] = [];
     for (const mark of marks) {
@@ -1722,9 +2022,8 @@ function initSpine(): void {
       const line = doc.querySelector<HTMLElement>(`[data-id="${id}"]`);
       const target = inner ? line?.querySelector<HTMLElement>(inner) : line;
       if (!line || !target || !target.offsetParent) continue;
-      const range = document.createRange();
-      range.selectNodeContents(target);
-      const first = range.getClientRects()[0] ?? target.getBoundingClientRect();
+      const range = circled(line, target, Boolean(inner));
+      const first = range.getBoundingClientRect();
       const x = first.left - base.left;
       const y = first.top - base.top;
       const w = first.width;
@@ -1742,53 +2041,77 @@ function initSpine(): void {
       // "who?" answered: struck through, the speaker named, a tick; nothing left to draw.
       const done = mark.word === "who?" && Boolean(who);
       group.className = `pen mark-${mark.shape}${done ? " pen-done" : ""}${answered ? " pen-now" : ""}`;
-      // A ring clear of the letters: wider and taller than the words it circles.
+      // A ring sized by the loop drawn in its picture: at mid-height the loop's inside runs from
+      // 10.3% to 92.2% of the picture, so the words sit inside it with room on both sides.
+      const ringW = w * 1.28 + 34;
+      const ringH = h + 28;
+      const ringLeft = x + w / 2 - 0.5125 * ringW;
       const shape =
         mark.shape === "circle"
-          ? `<img class="ring" src="../../landing/studio/pen/pencil-circle.webp" alt="" style="left:${x - 16}px;top:${y - 12}px;width:${w + 32}px;height:${h + 24}px">`
+          ? `<img class="ring" src="../../landing/studio/pen/pencil-circle.webp" alt="" style="left:${ringLeft.toFixed(1)}px;top:${y - 14}px;width:${ringW.toFixed(1)}px;height:${ringH}px">`
           : `<img class="under" src="../../landing/studio/pen/pencil-underline.webp" alt="" style="left:${x - 4}px;top:${y + h - 9}px;width:${w + 8}px;height:20px">`;
-      const leadFrom = end + 18;
+      const reach = Math.max(end, mark.shape === "circle" ? ringLeft + 0.95 * ringW : end);
+      const leadFrom = reach + 10;
       const lead = margin - 8 - leadFrom;
-      // A leader only where it clears the words by a margin; otherwise the note alone.
+      // Every note points back at its mark: an arrow where there's room, a short hooked tick where not.
+      const hookW = Math.max(0, Math.min(30, margin - 4 - (end + 6)));
       const leader =
         lead >= 40
-          ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom}px;top:${y + h / 2 - 9}px;width:${lead}px;height:18px">`
-          : "";
+          ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${y + h / 2 - 9}px;width:${lead.toFixed(1)}px;height:18px">`
+          : hookW >= 12
+            ? `<svg class="lead hook" viewBox="0 0 ${hookW.toFixed(1)} 20" aria-hidden="true" style="left:${(margin - 4 - hookW).toFixed(1)}px;top:${y + h / 2 - 12}px;width:${hookW.toFixed(1)}px;height:20px">${hookPath(hookW / 30)}</svg>`
+            : "";
       const words = done
         ? `<i><s>who?</s><br>${escapeHtml(shortName(who))}</i>${TICK}`
         : `<i>${escapeHtml(mark.word)}</i>`;
       group.innerHTML = `${shape}${leader}<span class="hand" style="left:${margin}px;top:${y + h / 2 - 12}px">${words}</span>`;
       annot.append(group);
       if (done) continue;
+      const annotBox = annot.getBoundingClientRect();
+      const boxOf = (el: Element) => {
+        const b = el.getBoundingClientRect();
+        return { x: b.left - annotBox.left, y: b.top - annotBox.top, w: b.width, h: b.height };
+      };
       const ring = $(".ring, .under", group);
-      strokes.push({
-        el: ring,
-        kind: mark.shape === "circle" ? "ring" : "under",
-        x: ring.offsetLeft,
-        y: ring.offsetTop,
-        w: ring.offsetWidth,
-        h: ring.offsetHeight,
-      });
-      const leadEl = group.querySelector<HTMLElement>(".lead");
-      if (leadEl)
-        strokes.push({
-          el: leadEl,
-          kind: "lead",
-          x: leadEl.offsetLeft,
-          y: leadEl.offsetTop,
-          w: leadEl.offsetWidth,
-          h: leadEl.offsetHeight,
-        });
-      const hand = $(".hand", group);
-      const letters = $("i", hand);
-      strokes.push({
-        el: hand,
-        kind: "word",
-        x: hand.offsetLeft,
-        y: hand.offsetTop,
-        w: letters.offsetWidth + 4,
-        h: hand.offsetHeight,
-      });
+      strokes.push({ el: ring, kind: mark.shape === "circle" ? "ring" : "under", ...boxOf(ring) });
+      // The note, a line at a time: each line written left to right, with the pencil along it.
+      const letters = $(".hand i", group);
+      const parts = (letters.textContent ?? "").split(" ");
+      letters.innerHTML = parts
+        .map((part) => `<span class="nw">${escapeHtml(part)}</span>`)
+        .join(" ");
+      const rows: string[][] = [];
+      let rowTop = Number.NaN;
+      for (const span of $$("span.nw", letters)) {
+        if (span.offsetTop !== rowTop) {
+          rows.push([]);
+          rowTop = span.offsetTop;
+        }
+        (rows[rows.length - 1] as string[]).push(span.textContent ?? "");
+      }
+      letters.innerHTML = rows
+        .map((row) => `<span class="nl">${escapeHtml(row.join(" "))}</span>`)
+        .join("<br>");
+      // Each line's letters as ink; the note is slanted (its <i> skewed about its middle), so a
+      // point in a line is carried through that slant onto the annotations.
+      const handBox = group.querySelector<HTMLElement>(".hand")?.getBoundingClientRect();
+      const annotLeft = annot.getBoundingClientRect();
+      const slant = new DOMMatrix(getComputedStyle(letters).transform).c;
+      const middle = letters.offsetTop + letters.offsetHeight / 2;
+      for (const row of $$("span.nl", letters)) {
+        const b = boxOf(row);
+        const hx = (handBox?.left ?? 0) - annotLeft.left;
+        const hy = (handBox?.top ?? 0) - annotLeft.top;
+        const place = (x: number, y: number): [number, number] => {
+          const px = row.offsetLeft + x;
+          const py = row.offsetTop + y;
+          return [hx + px + slant * (py - middle), hy + py];
+        };
+        strokes.push({ el: row, kind: "word", ...b, w: b.w + 4, words: wordsOf(row), place });
+      }
+      // Then the line from the note back to its mark.
+      const leadEl = group.querySelector<HTMLElement | SVGElement>(".lead");
+      if (leadEl) strokes.push({ el: leadEl, kind: "lead", ...boxOf(leadEl) });
     }
     if (calm.matches || answered || !strokes.length) return;
 
@@ -1799,105 +2122,177 @@ function initSpine(): void {
     pencil.alt = "";
     annot.classList.add("drawing");
     annot.append(pencil);
-    for (const stroke of strokes) stroke.el.classList.add("to-draw");
 
-    // Each stroke's path for the lead, and how long it takes.
-    const ringAt = (s: Stroke, t: number): [number, number] => {
-      // Clockwise from about ten o'clock, once round and a little over, as a hand rings a word.
-      const a = ((-60 + t * 380) * Math.PI) / 180;
-      return [
-        s.x + s.w / 2 + (s.w / 2 - 4) * Math.sin(a),
-        s.y + s.h / 2 - (s.h / 2 - 4) * Math.cos(a),
-      ];
+    // Where the lead is while a stroke is drawn to `t` (0 to 1): on the very end of the ink that
+    // the stroke's own reveal shows. A ring's conic mask, from ten o'clock round and a little over:
+    // where its edge crosses the ring's ink. An underline, shown from the left, and an arrow,
+    // mirrored and shown from the right (from the note back to its mark): the last column of ink
+    // shown, at the ink's middle. A note's line: the end of its letters shown. A hooked tick: the
+    // furthest point of its path the clip shows.
+    const tipAt = (s: Stroke, t: number): [number, number] => {
+      if (s.kind === "ring" && inks.ring) {
+        const [x, y] = ringEnd(inks.ring, s.w, s.h, -60 + t * 380);
+        return [s.x + x, s.y + y];
+      }
+      if (s.kind === "under" && inks.under) {
+        const [u, v] = pictureEnd(inks.under, t, s.h);
+        return [s.x + u * s.w, s.y + v * s.h];
+      }
+      if (s.kind === "lead" && s.el instanceof SVGElement) {
+        // The very paths being dashed, at the dash's length (their own px: no scaling between).
+        const [x, y] = drawHook(s.el, t, false);
+        return [s.x + x, s.y + y];
+      }
+      if (s.kind === "lead" && inks.arrow) {
+        const [u, v] = inkEnd(inks.arrow, t);
+        return [s.x + (1 - u) * s.w, s.y + v * s.h];
+      }
+      if (s.kind === "word" && s.words && s.place) return s.place(...wordsEnd(s.words, t));
+      return [s.x + s.w * t, s.y + s.h / 2];
     };
-    const along = (s: Stroke, t: number): [number, number] =>
-      s.kind === "word" ? [s.x + s.w * t, s.y + s.h * 0.78] : [s.x + s.w * t, s.y + s.h * 0.5];
-    const DUR = { ring: 300, under: 200, lead: 140, word: 240 } as const;
-    const MOVE = 70;
-    type Seg = { s: Stroke; from: number; to: number };
+    const startAt = (s: Stroke): [number, number] => tipAt(s, 0);
+    const endAt = (s: Stroke): [number, number] => tipAt(s, 1);
+    // How long a hand takes over each stroke (its own milliseconds), by its length: a ring by the
+    // way round it, a note by its letters, an underline or a leader by its run.
+    const handTime = (s: Stroke): number => {
+      if (s.kind === "ring") {
+        const a = s.w / 2;
+        const b = s.h / 2;
+        const round = Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+        return Math.max(780, Math.min(1000, round * 1.1));
+      }
+      if (s.kind === "word") return 100 + (s.el.textContent ?? "").replace(/\s/g, "").length * 140;
+      if (s.kind === "under") return Math.max(350, Math.min(700, s.w * 2));
+      return Math.max(240, Math.min(500, s.w * 2.2));
+    };
+    type Seg = { s: Stroke; move: number; from: number; to: number };
     const plan: Seg[] = [];
-    let clock0 = 60;
+    // The scroll each part gets: [its hand time, its weight of scroll]. A stroke never gets less than
+    // a wheel notch's worth, so one notch never completes more than one stroke.
+    const parts: Array<[number, number, number]> = [];
+    let clock = 0;
+    let from: [number, number] | undefined;
     for (const s of strokes) {
-      clock0 += MOVE;
-      plan.push({ s, from: clock0, to: clock0 + DUR[s.kind] });
-      clock0 += DUR[s.kind];
+      const start = startAt(s);
+      // The travel to it: a moment to arrive, then by the distance.
+      const move = from
+        ? Math.min(380, 150 + Math.hypot(start[0] - from[0], start[1] - from[1]) * 0.35)
+        : 300;
+      const draw = handTime(s);
+      parts.push([move, 0, 0], [draw, 0, 1]);
+      plan.push({ s, move, from: clock + move, to: clock + move + draw });
+      clock += move + draw;
+      from = endAt(s);
     }
-    const total = clock0 + 260;
-    const startAt = (s: Stroke): [number, number] =>
-      s.kind === "ring" ? ringAt(s, 0) : along(s, 0);
-    const endAt = (s: Stroke): [number, number] => (s.kind === "ring" ? ringAt(s, 1) : along(s, 1));
-    const reveal = (s: Stroke, t: number) => {
-      const p = Math.max(0, Math.min(1, t));
+    // A visible pause once the marks are made (the pencil lifts away in it), then the tags set in.
+    const LIFT = 300;
+    const PAUSE = 220;
+    const SET = 380;
+    const setFrom = clock + PAUSE;
+    const total = setFrom + SET;
+    parts.push([PAUSE, 0, 0], [SET, 0, 0]);
+    // The step's span shared out by hand time, so a steady scroll keeps the hand at an even pace;
+    // a stroke never gets less than a wheel notch's worth.
+    {
+      const box = steps[n - 1]?.getBoundingClientRect();
+      const span = (box?.height ?? 600) * doneBy(n);
+      const time = parts.reduce((sum, [t]) => sum + t, 0);
+      let rate = span / time;
+      for (let i = 0; i < 8; i++) {
+        const floored = parts.filter(([t, , stroke]) => stroke && t * rate < STROKE_SCROLL);
+        const rest = time - floored.reduce((sum, [t]) => sum + t, 0);
+        rate = Math.max(0, span - floored.length * STROKE_SCROLL) / Math.max(1, rest);
+      }
+      for (const part of parts)
+        part[1] = part[2] ? Math.max(STROKE_SCROLL, part[0] * rate) : part[0] * rate;
+    }
+    // Scroll share to hand time, part by part.
+    const weight = parts.reduce((sum, [, w]) => sum + w, 0);
+    const map = (share: number): number => {
+      let s0 = 0;
+      let t0 = 0;
+      for (const [time, w] of parts) {
+        const s1 = s0 + w / weight;
+        if (share <= s1) return (t0 + (time * (share - s0)) / (s1 - s0 || 1)) / total;
+        s0 = s1;
+        t0 += time;
+      }
+      return 1;
+    };
+    wr.dataset.penWeight = String(Math.round(weight));
+    const reveal = (s: Stroke, k: number) => {
+      if (s.el instanceof SVGElement) {
+        // The hooked tick, drawn along its own paths: the dash's end is where the lead is.
+        drawHook(s.el, k);
+        return;
+      }
+      if (k >= 1) {
+        s.el.style.maskImage = "";
+        s.el.style.removeProperty("-webkit-mask-image");
+        s.el.style.clipPath = "";
+        return;
+      }
+      const p = Math.max(0, k);
       if (s.kind === "ring") {
         s.el.style.maskImage = `conic-gradient(from -60deg, #000 ${(p * 380).toFixed(1)}deg, transparent 0)`;
         s.el.style.setProperty("-webkit-mask-image", s.el.style.maskImage);
       } else if (s.kind === "lead") {
-        // The arrow is drawn mirrored: its visual left is its own right.
-        s.el.style.clipPath = `inset(0 0 0 ${((1 - p) * 100).toFixed(1)}%)`;
+        // From the note's end back towards the mark. The arrow picture is mirrored, so its own right
+        // is the screen's left.
+        s.el.style.clipPath = `inset(-20% ${((1 - p) * 100).toFixed(1)}% -20% 0)`;
       } else s.el.style.clipPath = `inset(-20% ${((1 - p) * 100).toFixed(1)}% -20% 0)`;
     };
-    const finishStroke = (s: Stroke) => {
-      s.el.classList.remove("to-draw");
-      s.el.style.maskImage = "";
-      s.el.style.removeProperty("-webkit-mask-image");
-      s.el.style.clipPath = "";
-    };
-    for (const seg of plan) reveal(seg.s, 0);
     const first = startAt((plan[0] as Seg).s);
     const offstage: [number, number] = [first[0] + 90, first[1] - 70];
-    const put = ([x, y]: [number, number], fade = 1) => {
-      pencil.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
-      pencil.style.opacity = String(fade);
-    };
-    put(offstage, 0);
-    const t0 = performance.now();
-    let frame = 0;
-    const tick = (now: number) => {
-      const t = now - t0;
+    /** The step's marks at a point in their choreography: everything set from that alone. */
+    const render = (t: number) => {
       let pos: [number, number] = offstage;
       let fade = 1;
       let prevEnd: [number, number] = offstage;
+      let placed = false;
       for (const seg of plan) {
+        const k = Math.max(0, Math.min(1, (t - seg.from) / (seg.to - seg.from)));
+        reveal(seg.s, k);
+        if (placed) continue;
         if (t < seg.from) {
           // Travelling to this stroke's start.
-          const k = Math.max(0, Math.min(1, (t - (seg.from - MOVE)) / MOVE));
+          const m = Math.max(0, Math.min(1, (t - (seg.from - seg.move)) / seg.move));
           const target = startAt(seg.s);
-          const e = k * k * (3 - 2 * k);
+          const e = m * m * (3 - 2 * m);
           pos = [
             prevEnd[0] + (target[0] - prevEnd[0]) * e,
             prevEnd[1] + (target[1] - prevEnd[1]) * e,
           ];
-          if (seg === plan[0]) fade = k;
-          break;
-        }
-        const k = Math.min(1, (t - seg.from) / (seg.to - seg.from));
-        reveal(seg.s, k);
-        pos = seg.s.kind === "ring" ? ringAt(seg.s, k) : along(seg.s, k);
-        if (k >= 1) finishStroke(seg.s);
-        prevEnd = endAt(seg.s);
-        if (k < 1) break;
+          if (seg === plan[0]) fade = m;
+          placed = true;
+        } else if (k < 1) {
+          pos = tipAt(seg.s, k);
+          placed = true;
+        } else prevEnd = endAt(seg.s);
       }
       const last = plan[plan.length - 1] as Seg;
-      if (t > last.to) {
-        // Lifted away.
-        const k = Math.min(1, (t - last.to) / 260);
+      if (!placed) {
+        // Lifted away once the last mark is made; back if the reader scrolls back into the marks.
+        const k = Math.max(0, Math.min(1, (t - last.to) / LIFT));
         const e = endAt(last.s);
         pos = [e[0] + 40 * k, e[1] - 50 * k];
         fade = 1 - k;
       }
-      put(pos, fade);
-      if (t < total) frame = requestAnimationFrame(tick);
-      else finish();
+      pencil.style.transform = `translate(${pos[0].toFixed(1)}px, ${pos[1].toFixed(1)}px)`;
+      pencil.style.opacity = String(fade);
+      // The step's tags and directions set into the text after the pause.
+      wr.style.setProperty("--set", Math.max(0, Math.min(1, (t - setFrom) / SET)).toFixed(3));
     };
-    const finish = () => {
-      cancelAnimationFrame(frame);
-      for (const seg of plan) finishStroke(seg.s);
-      pencil.remove();
-      annot.classList.remove("drawing");
-      if (finishPen === finish) finishPen = undefined;
-    };
-    finishPen = finish;
-    frame = requestAnimationFrame(tick);
+    // Drawn by the scroll, at a hand's pace: the step's choreography over the first part of its
+    // span, both ways. A jump lands with it complete.
+    // At once, where the page is (a jump: complete), so no frame shows the marks before they're drawn.
+    render(landing === n ? total : map(Math.max(0, Math.min(1, stepShare(n)))) * total);
+    finishPen = scrub({ to: (share) => render(share * total) }, () => stepShare(n), {
+      ...HAND,
+      scale: total,
+      map,
+      snap: () => landing === n,
+    });
   }
 
   /* The finale: the scene, voiced from this file, each line lit as it's heard. */
@@ -1988,6 +2383,8 @@ function initSpine(): void {
   {
     const middle = new IntersectionObserver(
       (entries) => {
+        // A jump shows only where it's going.
+        if (jumping) return;
         for (const entry of entries) {
           const n = Number((entry.target as HTMLElement).dataset.step);
           if (entry.isIntersecting) setStep(n);
@@ -1998,6 +2395,16 @@ function initSpine(): void {
     );
     for (const step of steps) middle.observe(step);
     setStep(0);
+    // After a jump, the step actually in the middle of the screen.
+    afterJump.push(() => {
+      const mid = window.innerHeight / 2;
+      const here = steps.find((step) => {
+        const box = step.getBoundingClientRect();
+        return box.top <= mid && box.bottom > mid;
+      });
+      if (here) setStep(Number(here.dataset.step));
+      else if (steps[0] && steps[0].getBoundingClientRect().top > mid) setStep(0);
+    });
     respine = () => {
       const n = active;
       active = -1;
@@ -2011,23 +2418,133 @@ function initSpine(): void {
     });
   }
 
-  // On a phone, each small Writer plays its change as it comes into view.
-  {
-    const seenOnce = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries)
-          if (entry.isIntersecting) {
-            entry.target.classList.add("seen");
-            seenOnce.unobserve(entry.target);
+  // On a phone, each small Writer's change follows its place on the screen, both ways, at a hand's
+  // pace, over the whole time it is on screen.
+  for (const example of $$(".step-example")) example.classList.add("seen");
+  // Set up in a task of their own, after the beats are built.
+  globalThis.setTimeout(() => {
+    if (!calm.matches && window.innerWidth <= 860)
+      for (const example of $$(".step-example")) {
+        if (example.closest('.step[data-step="1"]')) continue;
+        const paper = example.querySelector<HTMLElement>(".mini") ?? example;
+        type Mark = { el: HTMLElement; kind: "ink" | "line" };
+        let marks: Mark[] = [];
+        let laid = false;
+        // The pencil's strokes in reading order: each noted line's ring or underline, then its note
+        // a line at a time.
+        const lay = () => {
+          marks = [];
+          for (const line of $$(".ln.noted", example)) {
+            for (const ink of $$(".ink-ring, .ink-under", line))
+              marks.push({ el: ink, kind: "ink" });
+            const note = line.querySelector<HTMLElement>(".note");
+            if (!note || note.querySelector("s")) continue;
+            const text = note.dataset.text ?? note.textContent ?? "";
+            note.dataset.text = text;
+            note.innerHTML = text
+              .split(" ")
+              .map((word) => `<span class="nw">${escapeHtml(word)}</span>`)
+              .join(" ");
+            const rows: string[][] = [];
+            let top = Number.NaN;
+            for (const word of $$("span.nw", note)) {
+              if (word.offsetTop !== top) {
+                rows.push([]);
+                top = word.offsetTop;
+              }
+              (rows[rows.length - 1] as string[]).push(word.textContent ?? "");
+            }
+            note.innerHTML = rows
+              .map((row) => `<span class="nl">${escapeHtml(row.join(" "))}</span>`)
+              .join("<br>");
+            for (const row of $$("span.nl", note)) marks.push({ el: row, kind: "line" });
           }
-      },
-      { threshold: 0.35 },
-    );
-    for (const example of $$(".step-example")) {
-      if (calm.matches) example.classList.add("seen");
-      else seenOnce.observe(example);
-    }
-    // The phone's first beat types too: each time it comes into view, finished when it leaves.
+          laid = true;
+        };
+        // The hand's time over each stroke, by its length, with a moment's travel between them, a
+        // pause, then the tags set in; and each part's stretch of the crossing.
+        type Part = { mark?: Mark; time: number; weight: number };
+        let parts: Part[] = [];
+        const pace: Pace = { ...HAND, scale: 1, map: (share) => share };
+        const plan = () => {
+          parts = [];
+          for (const [i, mark] of marks.entries()) {
+            const move = i ? 300 : 0;
+            if (move) parts.push({ time: move, weight: move * 0.06 });
+            let time: number;
+            if (mark.kind === "line")
+              time = 100 + (mark.el.textContent ?? "").replace(/\s/g, "").length * 140;
+            else {
+              const b = mark.el.getBoundingClientRect();
+              if (mark.el.classList.contains("ink-under")) time = Math.max(350, Math.min(700, b.width * 2));
+              else {
+                const x = b.width / 2;
+                const y = b.height / 2;
+                const round = Math.PI * (3 * (x + y) - Math.sqrt((3 * x + y) * (x + 3 * y)));
+                time = Math.max(780, Math.min(1000, round * 1.1));
+              }
+            }
+            parts.push({ mark, time, weight: Math.max(STROKE_SCROLL, time * 0.14) });
+          }
+          if (marks.length) parts.push({ time: 450, weight: 60 });
+          parts.push({ time: 700, weight: 90 });
+          const weight = parts.reduce((sum, part) => sum + part.weight, 0);
+          pace.scale = parts.reduce((sum, part) => sum + part.time, 0);
+          pace.map = (share) => {
+            let s0 = 0;
+            let t0 = 0;
+            for (const part of parts) {
+              const s1 = s0 + part.weight / weight;
+              if (share <= s1) return (t0 + (part.time * (share - s0)) / (s1 - s0 || 1)) / pace.scale;
+              s0 = s1;
+              t0 += part.time;
+            }
+            return 1;
+          };
+          example.dataset.weight = String(Math.round(weight));
+        };
+        lay();
+        plan();
+        void document.fonts.ready.then(() => {
+          lay();
+          plan();
+        });
+        scrub(
+          {
+            to: (share) => {
+              // Each stroke from its own start in the hand's time; the set-in last.
+              let t = share * pace.scale;
+              for (const [i, part] of parts.entries()) {
+                const k = Math.max(0, Math.min(1, t / part.time));
+                const mark = part.mark;
+                if (mark?.el.isConnected) {
+                  if (mark.kind === "ink") mark.el.style.setProperty("--p", k.toFixed(3));
+                  else
+                    mark.el.style.clipPath =
+                      k >= 1 ? "" : `inset(-20% ${((1 - k) * 100).toFixed(1)}% -20% 0)`;
+                }
+                if (i === parts.length - 1) example.style.setProperty("--set", k.toFixed(3));
+                t -= part.time;
+              }
+            },
+          },
+          () => {
+            // All the while it's on screen: from its top entering near the bottom to its bottom
+            // reaching near the top. A long stretch of scroll, the taller the longer.
+            const box = paper.getBoundingClientRect();
+            const share =
+              (window.innerHeight * 0.9 - box.top) / (window.innerHeight * 0.75 + box.height);
+            // The pictures it draws with are fetched only as it comes near.
+            if (share > -1) example.classList.add("near");
+            // A jump to this step lands with its example complete.
+            if (landing === Number(example.closest<HTMLElement>(".step")?.dataset.step)) return 1;
+            return share;
+          },
+          pace,
+        );
+      }
+    // The phone's first beat is typed by the scroll too, as it crosses the screen: from entering its
+    // lower third to reaching its upper third.
     const first = document.querySelector<HTMLElement>(
       '.step[data-step="1"] .step-example .mini-paper',
     );
@@ -2038,23 +2555,17 @@ function initSpine(): void {
       words.innerHTML = html;
       first.after(words);
       first.setAttribute("aria-hidden", "true");
-      let finish: (() => void) | undefined;
-      new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting && !finish && window.innerWidth <= 860) {
-              first.innerHTML = `${html}<span class="caret tw-caret"></span>`;
-              finish = typewrite(first, $(".tw-caret", first));
-            } else if (!entry.isIntersecting && finish) {
-              finish();
-              finish = undefined;
-            }
-          }
-        },
-        { threshold: 0.6 },
-      ).observe(first);
+      if (window.innerWidth <= 860) {
+        first.innerHTML = `${html}<span class="caret tw-caret"></span>`;
+        const type = typer(first, $(".tw-caret", first));
+        scrub(type, () => {
+          const box = first.getBoundingClientRect();
+          const middle = box.top + box.height / 2;
+          return (window.innerHeight * (2 / 3) - middle) / (window.innerHeight / 3);
+        });
+      }
     }
-  }
+  }, 0);
 }
 {
   // Once, when the page is idle after loading, or sooner if the reader gets near it.
@@ -2072,8 +2583,9 @@ function initSpine(): void {
     },
   );
   near.observe($("#spine"));
-  // On a phone the beats' examples are part of the page's length: built now, so nothing below moves.
-  if (window.matchMedia("(max-width: 860px)").matches) build();
+  // On a phone the beats' examples are part of the page's length: built in the very next task (its
+  // own, not the page's first), before anything below can be reached.
+  if (window.matchMedia("(max-width: 860px)").matches) globalThis.setTimeout(build, 0);
   const idle = () =>
     "requestIdleCallback" in window
       ? window.requestIdleCallback(build, { timeout: 4000 })
@@ -2223,25 +2735,169 @@ initCast();
       alt: "The same passage with its marks drawn, in the LOOK look: “Gerald the Dragon” as a tag before his lines, his direction as a small note above “Could you not?”, sounds and the pause as chips.",
     },
   };
+  // Two pictures, one over the other: a new view (or look) is decoded behind, then faded in over
+  // the one showing, so a change never shows a blank or a half-drawn picture.
   const shot = $<HTMLImageElement>("#shot");
-  const phone = $<HTMLSourceElement>("#shot-phone");
+  const back = $<HTMLImageElement>(".shot-back");
+  const ORDER = ["focus", "workbench", "written", "drawn"];
   const state = { view: "focus", look: "light" };
-  const showWindow = () => {
-    const view = VIEWS[state.view] as (typeof VIEWS)[string];
-    const name = view.file(state.look);
-    const phoneName = `${name}-phone`;
-    shot.src = `../../landing/studio/app/${name}.webp`;
-    phone.srcset = `../../landing/studio/app/${phoneName}.webp`;
-    shot.alt = view.alt.replace("LOOK", LOOK_NAMES[state.look] ?? "");
-    $("#view-cap").innerHTML = view.cap;
+  const small = window.matchMedia("(max-width: 600px)");
+  /** The picture for a view in a look: the whole window, or on a phone its readable crop. */
+  const urlOf = (view: string, look: string, whole = false) =>
+    `../../landing/studio/app/${(VIEWS[view] as (typeof VIEWS)[string]).file(look)}${!whole && small.matches ? "-phone" : ""}.webp`;
+  const altOf = (view: string, look: string) =>
+    (VIEWS[view] as (typeof VIEWS)[string]).alt.replace("LOOK", LOOK_NAMES[look] ?? "");
+  // Fetched and decoded ahead of need: the views either side, in the look being shown.
+  const ready = new Map<string, Promise<void>>();
+  const fetchAhead = (url: string): Promise<void> => {
+    let done = ready.get(url);
+    if (!done) {
+      const image = new Image();
+      image.src = url;
+      done = image.decode().catch(() => undefined);
+      ready.set(url, done);
+    }
+    return done;
   };
+  const ahead = () => {
+    const at = ORDER.indexOf(state.view);
+    for (const k of [at + 1, at - 1, at + 2])
+      if (ORDER[k]) void fetchAhead(urlOf(ORDER[k] as string, state.look));
+  };
+  let front = shot;
+  let behind = back;
+  let turn = 0;
+  let said = 0;
+  let near = false;
+  const showWindow = (fade = true, quiet = false) => {
+    const view = VIEWS[state.view] as (typeof VIEWS)[string];
+    const url = urlOf(state.view, state.look);
+    $("#view-cap").innerHTML = view.cap;
+    for (const button of $$<HTMLButtonElement>("[data-view]"))
+      button.setAttribute("aria-pressed", String(button.dataset.view === state.view));
+    // The caption is announced once the view has settled, not on every step of the scroll.
+    window.clearTimeout(said);
+    if (!quiet)
+      said = window.setTimeout(() => announce(($("#view-cap").textContent ?? "").trim()), 900);
+    if (!near) return;
+    ahead();
+    if (front.getAttribute("src") === url) return;
+    const mine = ++turn;
+    const incoming = behind;
+    const outgoing = front;
+    void fetchAhead(url).then(() => {
+      if (mine !== turn) return;
+      incoming.src = url;
+      incoming.alt = altOf(state.view, state.look);
+      incoming.removeAttribute("aria-hidden");
+      incoming.id = "shot";
+      outgoing.removeAttribute("id");
+      outgoing.alt = "";
+      outgoing.setAttribute("aria-hidden", "true");
+      front = incoming;
+      behind = outgoing;
+      const swap = () => {
+        incoming.classList.add("shot-front");
+        incoming.classList.remove("shot-in");
+        outgoing.classList.remove("shot-front", "shot-in");
+      };
+      if (!fade || calm.matches || !outgoing.getAttribute("src")) {
+        swap();
+        return;
+      }
+      // Faded in over the old picture, then it becomes the one in front.
+      incoming.classList.add("shot-in");
+      incoming.style.opacity = "0";
+      requestAnimationFrame(() => {
+        incoming.style.opacity = "";
+        window.setTimeout(() => {
+          if (front === incoming) swap();
+        }, 320);
+      });
+    });
+  };
+  // The caption is as tall as its tallest view at this width, so the picture never moves.
+  const sizeCap = () => {
+    const cap = $("#view-cap");
+    const probe = cap.cloneNode() as HTMLElement;
+    probe.removeAttribute("id");
+    probe.style.cssText = `position:absolute;visibility:hidden;min-height:0;width:${cap.getBoundingClientRect().width}px`;
+    cap.after(probe);
+    let tallest = 0;
+    for (const view of Object.values(VIEWS)) {
+      probe.innerHTML = view.cap;
+      tallest = Math.max(tallest, probe.getBoundingClientRect().height);
+    }
+    probe.remove();
+    cap.style.minHeight = `${Math.ceil(tallest)}px`;
+  };
+  window.addEventListener("resize", sizeCap, { passive: true });
+  {
+    const watch = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        watch.disconnect();
+        near = true;
+        sizeCap();
+        void document.fonts.ready.then(sizeCap);
+        showWindow(false, true);
+      },
+      { rootMargin: "600px 0px" },
+    );
+    watch.observe($(".shot-tile"));
+  }
+  // The four views follow the scroll: the window is pinned while the page runs past it, a view for
+  // each stretch, with a thin line under the buttons showing how far along it is.
+  const track = $("#views-track");
+  const run = $(".views-run", track);
+  const line = $(".seg-run i");
+  const where = () => {
+    const pin = $(".views-pin", track);
+    const top = Number.parseFloat(getComputedStyle(pin).top) || 0;
+    const box = track.getBoundingClientRect();
+    return (top - box.top) / Math.max(1, run.offsetHeight);
+  };
+  const viewAt = (p: number) => ORDER[Math.max(0, Math.min(3, Math.floor(p * 4)))] as string;
+  let queued = false;
+  const follow = () => {
+    queued = false;
+    const p = where();
+    line.style.transform = `scaleX(${Math.max(0, Math.min(1, p)).toFixed(3)})`;
+    // A jump shows only where it's going.
+    if (jumping) return;
+    const view = viewAt(p);
+    if (view !== state.view) {
+      state.view = view;
+      showWindow();
+    }
+  };
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!queued) {
+        queued = true;
+        requestAnimationFrame(follow);
+      }
+    },
+    { passive: true },
+  );
+  afterJump.push(follow);
+  // A button goes to its view's place in the run, as the step buttons do.
   for (const button of $$<HTMLButtonElement>("[data-view]"))
     button.addEventListener("click", () => {
-      state.view = button.dataset.view as string;
-      for (const other of $$<HTMLButtonElement>("[data-view]"))
-        other.setAttribute("aria-pressed", String(other === button));
-      showWindow();
+      const view = button.dataset.view as string;
+      const at = ORDER.indexOf(view);
+      const pin = $(".views-pin", track);
+      const top = Number.parseFloat(getComputedStyle(pin).top) || 0;
+      const y =
+        window.scrollY + track.getBoundingClientRect().top - top + ((at + 0.5) / 4) * run.offsetHeight;
+      smoothJump(() => {
+        state.view = view;
+        showWindow();
+        window.scrollTo({ top: y, behavior: calm.matches ? "auto" : "smooth" });
+      });
     });
+  // The look stays as chosen for every view, scrolling down or back up, until another is picked.
   for (const button of $$<HTMLButtonElement>("[data-look]"))
     button.addEventListener("click", () => {
       state.look = button.dataset.look as string;
@@ -2249,36 +2905,57 @@ initCast();
         other.setAttribute("aria-pressed", String(other === button));
       showWindow();
     });
+  small.addEventListener("change", () => showWindow(false, true));
 
   // Any screenshot, full size.
   const box = $<HTMLDialogElement>("#lightbox");
   const big = $<HTMLImageElement>("#lightbox-img");
+  // The last open's "drag to look around" watcher, dropped when the next one opens.
+  let hintGone: (() => void) | undefined;
   for (const zoom of $$<HTMLButtonElement>("[data-zoom]"))
     zoom.addEventListener("click", () => {
-      const img = $<HTMLImageElement>("img", zoom);
       const look = zoom.dataset.zoom === "look";
-      big.src = look ? shot.src : (zoom.dataset.zoom as string);
-      big.width = look ? 1280 : Number(zoom.dataset.zoomW);
-      big.height = look ? 800 : Number(zoom.dataset.zoomH);
-      // On a phone it shows at half its pixel width: sharp on a 2× screen, and panned.
-      big.style.width = window.innerWidth <= 600 ? `${big.width}px` : "";
+      const img = look ? front : $<HTMLImageElement>("img", zoom);
+      big.src = look ? urlOf(state.view, state.look, true) : (zoom.dataset.zoom as string);
+      // The picture's own size, kept apart: an image's width reads as 0 until it has decoded.
+      const w = look ? 1280 : Number(zoom.dataset.zoomW);
+      const h = look ? 800 : Number(zoom.dataset.zoomH);
+      big.width = w;
+      big.height = h;
       big.alt = img.alt;
       box.showModal();
+      // On a phone the Writer's window fills the dialog's height (sharp on a 2× screen), to pan.
+      const phoneLook = look && window.innerWidth <= 600;
+      big.style.width = phoneLook
+        ? `${Math.round((Math.min(box.clientHeight, window.innerHeight) * w) / h)}px`
+        : window.innerWidth <= 600
+          ? `${w}px`
+          : "";
       // On a phone the screenshot shows at its own size, to pan; it opens on the story.
       if (window.innerWidth <= 600) {
         const fit = () => {
-          // It opens on the passage: the story column, near "Could you not?".
-          const spots: Record<string, number[]> = {
-            focus: [270, 150],
-            workbench: [110, 160],
-            written: [290, 280],
-            drawn: [290, 280],
+          // It opens on the view's key line: [where the line starts, where its ink ends], in the
+          // window's own 1280-pixel width. A line wider than the phone shows its end, the quote.
+          const lines: Record<string, number[]> = {
+            focus: [288, 776],
+            written: [307, 795],
+            drawn: [307, 650],
+            workbench: [48, 48],
           };
-          const at = spots[state.view] ?? [0, 0];
-          box.scrollLeft = look
-            ? (at[0] as number)
-            : Math.max(0, (big.width - box.clientWidth) / 2);
-          box.scrollTop = look ? (at[1] as number) : 0;
+          if (!phoneLook) {
+            box.scrollLeft = Math.max(0, (w - box.clientWidth) / 2);
+            box.scrollTop = 0;
+            return;
+          }
+          const scale = Number.parseFloat(big.style.width) / 1280;
+          const [from, to] = (lines[state.view] ?? [0, 0]) as [number, number];
+          const left = from * scale - 16;
+          const right = to * scale + 24;
+          box.scrollLeft = Math.max(
+            0,
+            right - left > box.clientWidth ? right - box.clientWidth : left,
+          );
+          box.scrollTop = 0;
         };
         if (big.complete) fit();
         else big.addEventListener("load", fit, { once: true });
@@ -2286,11 +2963,14 @@ initCast();
         const hint = $("#lb-hint");
         hint.classList.remove("gone");
         const opened = performance.now();
+        if (hintGone) box.removeEventListener("scroll", hintGone);
         const gone = () => {
           if (performance.now() - opened < 400) return;
           hint.classList.add("gone");
           box.removeEventListener("scroll", gone);
+          hintGone = undefined;
         };
+        hintGone = gone;
         box.addEventListener("scroll", gone, { passive: true });
       }
     });
@@ -2303,6 +2983,45 @@ initCast();
 if (window.matchMedia("(max-width: 860px)").matches)
   for (const fold of $$<HTMLDetailsElement>("details[data-fold]")) fold.open = false;
 
+/* Every fold opens and closes smoothly: its height and a light fade, both ways, the content never
+   jumping. Reduced motion: at once. Find-in-page and links into a fold open it as the browser does. */
+for (const details of $$<HTMLDetailsElement>("details")) {
+  const summary = details.querySelector<HTMLElement>(":scope > summary");
+  if (!summary) continue;
+  let running: Animation | undefined;
+  let closing = false;
+  const inside = () => [...details.children].filter((child) => child !== summary) as HTMLElement[];
+  summary.addEventListener("click", (event) => {
+    if (calm.matches) return;
+    event.preventDefault();
+    const from = details.getBoundingClientRect().height;
+    running?.cancel();
+    const opening = !details.open || closing;
+    details.style.overflow = "hidden";
+    // Both ends measured as they will stand.
+    details.open = true;
+    const open = details.getBoundingClientRect().height;
+    details.open = false;
+    const shut = details.getBoundingClientRect().height;
+    details.open = true;
+    closing = !opening;
+    const to = opening ? open : shut;
+    const timing = { duration: 280, easing: "cubic-bezier(0.25, 0.8, 0.25, 1)" };
+    for (const child of inside())
+      child.animate({ opacity: opening ? [0, 1] : [1, 0] }, { ...timing, fill: "forwards" });
+    const anim = details.animate({ height: [`${from}px`, `${to}px`] }, timing);
+    running = anim;
+    anim.onfinish = () => {
+      if (running !== anim) return;
+      running = undefined;
+      if (closing) details.open = false;
+      closing = false;
+      details.style.overflow = "";
+      for (const child of inside()) for (const fade of child.getAnimations()) fade.cancel();
+    };
+  });
+}
+
 /* The footer's supporter line: only with a real address. */
 if (/^https:\/\/\S+$/.test(SUPPORT_URL)) {
   const line = document.createElement("p");
@@ -2310,25 +3029,150 @@ if (/^https:\/\/\S+$/.test(SUPPORT_URL)) {
   line.append("VoxDown is free and stays free. If it helps your work, ");
   const link = document.createElement("a");
   link.href = SUPPORT_URL;
-  link.textContent = "you can support it";
+  // An outside page: it opens in a new tab, so the reader keeps their place.
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.innerHTML =
+    'you can support it<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span>';
   line.append(link, ".");
   $(".foot-brand").append(line);
 }
 
-/* "$0" corrected to "Free" by the editor's pencil, as the card comes into view. */
+/* Marks outside the spine, drawn by the scroll as they cross the middle of the screen (from
+   entering its lower third to reaching its upper third), and undrawn on the way back. The pencil's
+   lead is always on the very end of the ink shown. */
 {
+  const crossing = (el: Element) => {
+    const box = el.getBoundingClientRect();
+    return (window.innerHeight * (2 / 3) - (box.top + box.height / 2)) / (window.innerHeight / 3);
+  };
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
   const edit = $(".big-edit");
-  if (calm.matches || !("IntersectionObserver" in window)) edit.classList.add("corrected");
-  else {
-    const seen = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((e) => e.isIntersecting)) return;
-        seen.disconnect();
-        edit.classList.add("corrected");
+  // The old one-off correction's states are not used: the marks are set from the scroll.
+  edit.classList.add("corrected");
+  const finalWord = $(".pen-final-word");
+  /** Where a pencil's lead is, in its parent's own px (4.9% across and 96.2% down its picture). */
+  const leadOf = (pen: HTMLElement): [number, number] => [
+    pen.offsetLeft + pen.offsetWidth * 0.0488,
+    pen.offsetTop + pen.offsetHeight * 0.9619,
+  ];
+  const setMove = (host: HTMLElement, tip: [number, number], rest: [number, number]) => {
+    host.style.setProperty("--px", `${(tip[0] - rest[0]).toFixed(1)}px`);
+    host.style.setProperty("--py", `${(tip[1] - rest[1]).toFixed(1)}px`);
+  };
+  // The underline's own ink, for its pencil's lead.
+  let underInk: Ink | undefined;
+  void inkOf("../../landing/studio/pen/pencil-underline.webp").then((ink) => {
+    underInk = ink;
+  });
+  /** An underline shown from the left up to `u`: the end of its ink, in its parent's px. */
+  const underEnd = (under: HTMLElement, u: number): [number, number] => {
+    const [x, y] = underInk ? pictureEnd(underInk, u, under.offsetHeight) : [u, 0.5];
+    return [under.offsetLeft + x * under.offsetWidth, under.offsetTop + y * under.offsetHeight];
+  };
+  if (!calm.matches) {
+    // "$0" struck through, then "Free" written beside it, the pencil following its lead. The pencil
+    // lives inside "Free"'s slanted box, so everything is worked out in that box's own px.
+    const handFree = $(".hand-free", edit);
+    const word = $(".free-word", edit);
+    const pen = $(".pen-free", edit);
+    type Geo = {
+      start: [number, number];
+      along: [number, number];
+      toLocal: (x: number, y: number) => [number, number];
+      words: Words;
+    };
+    let geo: Geo | undefined;
+    const forget = () => {
+      geo = undefined;
+    };
+    window.addEventListener("resize", forget, { passive: true });
+    // "Free" moves when its handwriting arrives: measured again then.
+    document.fonts.addEventListener("loadingdone", forget);
+    const measure = (): Geo => {
+      const em = Number.parseFloat(getComputedStyle(edit).fontSize);
+      const box = edit.getBoundingClientRect();
+      const struck = $(".struck", edit).getBoundingClientRect();
+      // The slanted box: where it sits unslanted, and its slant about its middle, undone.
+      const w = handFree.offsetWidth;
+      const h = handFree.offsetHeight;
+      const ox = box.left + handFree.offsetLeft + w / 2;
+      const oy = box.top + handFree.offsetTop + h / 2;
+      const m = new DOMMatrix(getComputedStyle(handFree).transform).inverse();
+      const toLocal = (x: number, y: number): [number, number] => [
+        m.a * (x - ox) + m.c * (y - oy) + w / 2,
+        m.b * (x - ox) + m.d * (y - oy) + h / 2,
+      ];
+      // The stroke: from 0.1em before "$0" to 0.1em after, along its middle 52% down, turned up 9°
+      // about its start.
+      const length = struck.width + 0.2 * em;
+      return {
+        start: [struck.left - 0.1 * em, struck.top + struck.height * 0.52 + 0.065 * em],
+        along: [length * Math.cos(Math.PI / 20), -length * Math.sin(Math.PI / 20)],
+        toLocal,
+        words: wordsOf(word),
+      };
+    };
+    scrub(
+      {
+        to: (share) => {
+          geo ??= measure();
+          const strike = clamp(share / 0.4);
+          const free = clamp((share - 0.43) / 0.42);
+          const rest = leadOf(pen);
+          const struckEnd = geo.toLocal(
+            geo.start[0] + strike * geo.along[0],
+            geo.start[1] + strike * geo.along[1],
+          );
+          const [wx, wy] = wordsEnd(geo.words, free);
+          const written: [number, number] = [word.offsetLeft + wx, word.offsetTop + wy];
+          // On the stroke's end while it's drawn, a short hop, then on the end of the letters.
+          const hop = clamp((share - 0.4) / 0.03);
+          const tip: [number, number] =
+            share < 0.43
+              ? [
+                  struckEnd[0] + (written[0] - struckEnd[0]) * hop,
+                  struckEnd[1] + (written[1] - struckEnd[1]) * hop,
+                ]
+              : written;
+          setMove(edit, tip, rest);
+          edit.style.setProperty("--strike", strike.toFixed(3));
+          edit.style.setProperty("--free", free.toFixed(3));
+          edit.style.setProperty("--rest", clamp(share * 6).toFixed(3));
+        },
       },
-      { threshold: 0.6 },
+      () => crossing(edit),
     );
-    seen.observe(edit);
+    // The line under "waiting.", drawn left to right, the pencil on its end.
+    const finalUnder = $(".under-img", finalWord);
+    const finalPen = $(".pen-final", finalWord);
+    scrub(
+      {
+        to: (share) => {
+          const u = clamp(share / 0.85);
+          finalWord.style.setProperty("--u", u.toFixed(3));
+          setMove(finalWord, underEnd(finalUnder, u), leadOf(finalPen));
+        },
+      },
+      () => crossing(finalWord),
+    );
+    // The hero's "whole cast.": the top of the page is past its crossing, so the pencil draws the
+    // line there at its own pace as the page opens, and comes to rest on its end.
+    const heroWord = document.querySelector<HTMLElement>(".hero .pen-under");
+    const heroUnder = heroWord?.querySelector<HTMLElement>("img:not(.pen-rest)");
+    const heroPen = heroWord?.querySelector<HTMLElement>(".pen-rest");
+    if (heroWord && heroUnder && heroPen)
+      scrub(
+        {
+          to: (share) => {
+            const u = clamp(share);
+            heroWord.style.setProperty("--u", u.toFixed(3));
+            setMove(heroWord, underEnd(heroUnder, u), leadOf(heroPen));
+          },
+        },
+        () => 1,
+        { ...HAND, scale: 1300, max: 1300, from0: true },
+      );
   }
 }
 
@@ -2380,7 +3224,8 @@ for (const image of $$<HTMLImageElement>("img[data-clay], img[data-shot]")) {
     },
     { passive: true },
   );
-  update();
+  // After the first frame: measuring now would force the page's first layout inside this script.
+  requestAnimationFrame(update);
 }
 
 // After a resize, the doc's scroll and the pencil are measured again.

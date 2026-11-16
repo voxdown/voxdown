@@ -1,3 +1,10 @@
+/* Literata's fallback, the same width as Literata (measured against Liberation Serif, Times's
+   metrics), so nothing moves when Literata arrives. */
+@font-face {
+  font-family: "Literata Fallback";
+  src: local("Times New Roman"), local("Liberation Serif"), local("Tinos");
+  size-adjust: 116.5%;
+}
 /* Fallbacks that take the same room as the web fonts, so nothing moves when they arrive. */
 @font-face {
   font-family: "Bricolage Fallback";
@@ -68,7 +75,7 @@
   --display: "Bricolage Grotesque Variable", "Bricolage Fallback", system-ui, sans-serif;
   --body: "Inter Variable", "Inter Fallback", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Rec", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --serif: "Literata Variable", Georgia, serif;
+  --serif: "Literata Variable", "Literata Fallback", Georgia, serif;
   --radius: 22px;
   --shadow-soft: 0 1px 2px rgb(21 17 42 / 0.05), 0 12px 32px -12px rgb(40 20 90 / 0.18);
   --shadow-lift: 0 2px 4px rgb(21 17 42 / 0.05), 0 30px 70px -28px rgb(60 20 120 / 0.38);
@@ -1578,6 +1585,16 @@ button {
   height: 50vh;
 }
 
+/* The pencil's steps get the scroll their marks need: every stroke more than a wheel notch. */
+@media (min-width: 861px) {
+  .step[data-step="2"] {
+    height: max(58vh, 800px);
+  }
+  .step[data-step="3"] {
+    height: max(58vh, 2800px);
+  }
+}
+
 /* On a wide screen the steps only time the stage: their words are for screen readers. */
 .step > * {
   position: absolute;
@@ -2719,7 +2736,7 @@ button {
 
 .book-page .vxd,
 .script-page .vxd {
-  --vxd-story-font: "Literata Variable", Georgia, serif;
+  --vxd-story-font: "Literata Variable", "Literata Fallback", Georgia, serif;
   --vxd-interface-font: "Rec", system-ui, sans-serif;
   --vxd-size: 14.5px;
   --vxd-measure: none;
@@ -4726,7 +4743,6 @@ button {
   }
 
   .for ul {
-    overflow-x: auto;
     scrollbar-width: none;
     padding-bottom: 0.2rem;
     flex-wrap: wrap;
@@ -5538,8 +5554,8 @@ html:not(.js) .big-edit .struck {
 
 /* Rings clear of the letters on the phone too. */
 .ink-ring {
-  padding: 0.46em 0.85em 0.5em;
-  margin: 0 -0.85em;
+  padding: 0.46em 1.05em 0.5em;
+  margin: 0 -1.05em;
   background-size: 100% 100%;
 }
 
@@ -5589,15 +5605,15 @@ html:not(.js) .big-edit .struck {
 }
 /* A ringed spoken line on the phone: the ring round the words, the speaker's underline under them. */
 .mini-paper .k-speech.ink-ring {
-  padding: 0.5em 0.95em 0.56em;
-  margin: 0 -0.95em;
+  padding: 0.56em 2em 0.62em 2.35em;
+  margin: 0 -2em 0 -2.35em;
   background-image: url("/landing/studio/pen/pencil-circle.webp"),
     linear-gradient(
       color-mix(in srgb, var(--sp) 60%, transparent),
       color-mix(in srgb, var(--sp) 60%, transparent)
     );
-  background-size: 100% 100%, calc(100% - 1.9em) 2px;
-  background-position: center, 0.95em calc(100% - 0.36em);
+  background-size: 100% 100%, calc(100% - 2.7em) 2px;
+  background-position: center, 1.35em calc(100% - 0.36em);
   background-repeat: no-repeat;
   background-color: transparent;
 }
@@ -5605,4 +5621,292 @@ html:not(.js) .big-edit .struck {
   background-image: url("/landing/studio/pen/pencil-circle.webp");
   background-size: 100% 100%;
   background-position: center;
+}
+
+/* The note's lines, each its own stroke; and the short hooked tick where an arrow has no room. */
+.hand .nl {
+  display: inline-block;
+}
+.pen .hook {
+  transform: none;
+  animation: none;
+  overflow: visible;
+}
+.pen .hook path {
+  fill: none;
+  stroke: #c62f1b;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Step 1's caret, typed by the scroll: it blinks at rest (and on the empty page, inviting the
+   scroll), and holds solid while the text moves. */
+.wr:is([data-step="0"], [data-step="1"]) .caret,
+.tw-caret {
+  animation: blink 1s steps(1) infinite;
+}
+.wr .caret.moving,
+.tw-caret.moving {
+  animation: none;
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ scrubbed by the scroll */
+
+/* Every mark below is set from a progress the scroll gives (0 to 1); none runs on a timer. With
+   reduced motion no progress is set, and each shows finished. */
+
+/* The mock: the pencil's marks never fade on their own; tags set in with the step's --set. */
+.pen > *,
+.annot .ring,
+.annot .under,
+.annot .lead,
+.annot .hand {
+  animation: none !important;
+}
+.wr .new {
+  animation: none !important;
+  opacity: calc(0.22 + 0.78 * var(--set, 1));
+}
+/* The reader's own choice is never faded. */
+.wr.who-set .who-slot.new {
+  opacity: 1;
+}
+
+/* The phone's examples: their tags set in, their rings and underlines drawn, their notes written. */
+.js .step-example .mk,
+.js .step-example .is-new {
+  transition: none;
+  opacity: calc(0.22 + 0.78 * var(--set, 1));
+}
+.js .step-example .is-new {
+  transform: translateX(calc((1 - var(--set, 1)) * 24px));
+}
+.step-example .note .nl {
+  display: inline-block;
+}
+.ink-ring {
+  position: relative;
+  background-image: none;
+}
+.ink-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: url("/landing/studio/pen/pencil-circle.webp") center / 100% 100% no-repeat;
+  -webkit-mask-image: conic-gradient(from -60deg, #000 calc(var(--p, 1) * 380deg), transparent 0);
+  mask-image: conic-gradient(from -60deg, #000 calc(var(--p, 1) * 380deg), transparent 0);
+}
+/* Not fetched until its example comes near. */
+.js .step-example:not(.near) .ink-ring::before {
+  background-image: none;
+}
+.mini-paper .k-speech.ink-ring {
+  background-image: linear-gradient(color-mix(in srgb, var(--sp) 60%, transparent), color-mix(in srgb, var(--sp) 60%, transparent));
+  background-size: calc(100% - 4.35em) 2px;
+  background-position: 2.35em calc(100% - 0.42em);
+}
+.step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech.ink-ring {
+  background-image: none;
+}
+.ink-under,
+.js .step-example .ink-under {
+  background-size: calc(var(--p, 1) * 100%) 0.5em;
+  transition: none;
+}
+
+/* "$0 → Free": the stroke drawn, "$0" greyed under it, "Free" written, the pencil following. */
+.facts .big-edit .struck::after {
+  transform: scaleX(var(--strike, 1));
+  transition: none;
+}
+.facts .big-edit.corrected .struck {
+  color: transparent;
+  -webkit-text-fill-color: color-mix(in srgb, #8f8a9f calc(var(--strike, 1) * 100%), transparent);
+  transition: none;
+}
+.facts .big-edit .hand-free {
+  opacity: 1;
+  translate: none;
+  transition: none;
+}
+/* Only the word is revealed; the pencil beside it stays whole. */
+.facts .big-edit .free-word {
+  display: inline-block;
+  clip-path: inset(-30% calc((1 - var(--free, 1)) * 100%) -30% -10%);
+}
+.facts .big-edit .pen-free {
+  transition: none;
+  opacity: var(--rest, 1);
+  translate: var(--px, 0px) var(--py, 0px);
+}
+
+/* The final band: the line under "waiting." drawn left to right, the pencil at its end. */
+.final-band .pen-final-word .under-img {
+  animation: none;
+  clip-path: inset(-40% calc((1 - var(--u, 1)) * 100%) -40% 0);
+}
+.final-band .pen-final {
+  animation: none;
+  translate: var(--px, 0px) var(--py, 0px);
+}
+
+/* The hero: on every screen it sits in the top half at the top of the page, so by the same rule its
+   underline is simply drawn, with the pencil at rest at its end. No timed fade. */
+.pen-under img,
+.pen-under .pen-rest {
+  animation: none;
+}
+
+/* The phone's full view: the picture fills the dialog's height; the hint sits over it. */
+@media (max-width: 600px) {
+  .lightbox img {
+    height: auto;
+  }
+  .lb-hint {
+    bottom: 1.5rem;
+  }
+}
+/* The calm window's picture keeps its shape before it arrives. */
+.shot-tile .shot {
+  aspect-ratio: 2560 / 1600;
+  background: var(--bg-2);
+}
+/* The developer section's packages: a table, open on wide screens. */
+.dark-dev .fold > summary {
+  display: none;
+}
+@media (min-width: 861px) {
+  .dark-dev .pkgs {
+    margin-top: 1rem;
+  }
+}
+@media (max-width: 860px) {
+  .dark-dev .fold > summary {
+    display: flex;
+    background: rgb(255 255 255 / 0.06);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14) inset;
+    color: #fff;
+  }
+}
+/* The reader's answer on the phone is never faded by the scroll either; and the ringed quote sits
+   in a touch, so the ring stays on the paper. */
+.js .step-example.who-set .who-slot {
+  opacity: 1;
+  transform: none;
+}
+.mini-paper .ln[data-id="could"] {
+  padding-left: 0.35em;
+}
+
+/* The hero's "whole cast.": the line drawn left to right at the pencil's pace, the pencil along it.
+   Until the script draws it the line waits undrawn (only where motion is welcome). */
+.hero .pen-under > img:not(.pen-rest) {
+  clip-path: inset(-40% calc((1 - var(--u, 1)) * 100%) -40% 0);
+}
+.hero .pen-under .pen-rest {
+  translate: var(--px, 0px) var(--py, 0px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .js .hero .pen-under {
+    --u: 0;
+  }
+  /* Until the script draws the line, no pencil waiting at its end. */
+  .js .hero .pen-under:not([style]) .pen-rest {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ section 03: the views by scroll */
+
+/* The window is pinned while the page runs past it: a stretch of scroll for each of the four views. */
+.views-track {
+  position: relative;
+}
+.views-pin {
+  position: sticky;
+  top: 4.6rem;
+  z-index: 1;
+}
+.views-run {
+  height: 200vh;
+}
+/* Small enough that the whole window, its bar and its caption fit on the screen while pinned. */
+.views-pin .shot-tile {
+  max-width: min(100%, calc((100vh - 4.6rem - 9.5rem) * 1.6));
+  max-width: min(100%, calc((100dvh - 4.6rem - 9.5rem) * 1.6));
+  margin-inline: auto;
+}
+/* The two pictures, one over the other, in a box of the picture's own shape. */
+.shot-stack {
+  position: relative;
+  display: block;
+  aspect-ratio: 2560 / 1600;
+  background: var(--bg-2);
+}
+.shot-stack .shot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: cover;
+  object-position: top center;
+  background: none;
+}
+.shot-stack .shot-back {
+  z-index: 0;
+}
+.shot-stack .shot-front {
+  z-index: 1;
+}
+.shot-stack .shot-in {
+  z-index: 2;
+  transition: opacity 0.3s ease;
+}
+.shot-stack .shot:not([src]) {
+  visibility: hidden;
+}
+/* The thin line under the view buttons: how far through the four views the scroll is. */
+.seg-views {
+  position: relative;
+}
+.seg-run {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: -0.45rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.seg-run i {
+  position: absolute;
+  inset: 0;
+  background: var(--violet);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+@media (max-width: 600px) {
+  .views-pin {
+    top: 4.1rem;
+  }
+  .views-run {
+    height: 170vh;
+  }
+  .shot-stack {
+    aspect-ratio: 780 / 740;
+  }
+  .shot-stack .shot {
+    object-position: 42% 50%;
+    object-fit: cover !important;
+    aspect-ratio: auto !important;
+  }
+  .seg-run {
+    bottom: -0.35rem;
+  }
 }

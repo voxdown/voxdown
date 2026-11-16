@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VoxDown: write it once, hand it to the whole cast</title>
-<meta name="description" content="VoxDown is plain text that knows who says every line, and how. Write in the free VoxDown Writer, then send the same file to a narrator, to voice actors, or to an audiobook engine with a voice for every character. No account; your story stays on your computer.">
+<meta name="description" content="VoxDown is Markdown that knows who says every line, and how. Write in the free VoxDown Writer, then send the same file to a narrator, to voice actors, or to an AI voice engine with a voice for every character. No account; your story stays on your computer.">
 <meta name="theme-color" content="#7c3aed">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="VoxDown">
 <meta property="og:title" content="VoxDown: write it once, hand it to the whole cast">
-<meta property="og:description" content="Plain text that knows who speaks every line, and how. A free writing app in your browser, and a file that's ready for the booth or an audiobook engine.">
+<meta property="og:description" content="Markdown that knows who says every line, and how. A free writing app in your browser, and a file that's ready for actors in the booth or an AI voice engine.">
 <meta property="og:image" content="../../landing/studio/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -46,7 +46,7 @@
       <div class="hero-words">
         <p class="pill-note"><span class="dot-live" aria-hidden="true"></span>Free · open source · runs in your browser</p>
         <h1 id="hero-title">Write it once.<br>Hand it to the <span class="keep pen-under">whole cast.<img src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" decoding="async"><img class="pen-rest" data-clay src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" decoding="async"></span></h1>
-        <p class="lede">VoxDown is plain text that knows who says every line, and how. Write in the free Writer, then hand the very same file to the booth or to an audiobook engine.</p>
+        <p class="lede">VoxDown is Markdown that knows who says every line, and how. Write in the free Writer, then hand the very same file to actors in the booth or to an AI voice engine.</p>
         <div class="cta-row">
           <a class="btn btn-grad btn-lg" href="../../writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
@@ -178,7 +178,7 @@
       <header class="sec-head sec-head-dark">
         <p class="eyebrow eyebrow-dark"><span>02</span> Production-ready</p>
         <h2 id="prod-title">Every voice, one file.</h2>
-        <p class="sec-lede"><span class="wide-only">The cast list sits at the top of the story. Pick each character’s voice once in Make an audiobook…, and every line they say goes to it. </span>Hear who got the part, then choose who gets the file: people who perform it, or an engine that voices it, at that service’s own prices, or free with Kokoro.</p>
+        <p class="sec-lede">Pick each character’s voice once in Make an audiobook…, and every line they say goes to it. Hear who got the part, then choose who gets the file: the people who perform it, or an engine that voices it.</p>
       </header>
       <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"></div>
       <ul class="cast-list" id="cast-list" aria-label="The cast, each with a line from the recording"></ul>
@@ -223,6 +223,8 @@
         <p class="sec-lede">The Writer’s own screens, with the dragon story open: as quiet as a blank page, or with everything to hand. <span class="narrow-only">Tap the picture for the whole window.</span></p>
       </header>
 
+      <div class="views-track" id="views-track">
+      <div class="views-pin">
       <figure class="shot-tile" aria-labelledby="view-cap">
         <div class="shot-bar">
           <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -231,10 +233,11 @@
             <button type="button" data-view="workbench" aria-pressed="false">Workbench</button>
             <button type="button" data-view="written" aria-pressed="false">As written</button>
             <button type="button" data-view="drawn" aria-pressed="false">Drawn</button>
+            <span class="seg-run" aria-hidden="true"><i></i></span>
           </div>
         </div>
         <div class="shot-sub">
-          <p class="view-cap" id="view-cap" aria-live="polite">Focus mode: the toolbar and panels step away, and every paragraph but yours fades back.</p>
+          <p class="view-cap" id="view-cap">Focus mode: the toolbar and panels step away, and every paragraph but yours fades back.</p>
           <div class="seg seg-looks" role="group" aria-label="Look">
             <span class="seg-label" aria-hidden="true">Look</span>
             <button type="button" data-look="light" aria-pressed="true">Paper</button>
@@ -244,13 +247,16 @@
           </div>
         </div>
         <button type="button" class="zoom" data-zoom="look" aria-label="View the whole window, full size">
-          <picture>
-            <source media="(max-width: 600px)" srcset="../../landing/studio/app/calm2-focus-light-phone.webp" width="780" height="740" id="shot-phone">
-            <img class="shot" id="shot" src="../../landing/studio/app/calm2-focus-light.webp" width="2560" height="1600" loading="lazy" decoding="async" alt="The VoxDown Writer in focus mode, in the Paper look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.">
-          </picture>
+          <span class="shot-stack">
+            <img class="shot shot-front" id="shot" width="2560" height="1600" decoding="async" alt="The VoxDown Writer in focus mode, in the Paper look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.">
+            <img class="shot shot-back" width="2560" height="1600" decoding="async" alt="" aria-hidden="true">
+          </span>
           <span class="zoom-hint" aria-hidden="true">View the whole window</span>
         </button>
       </figure>
+      </div>
+      <div class="views-run" aria-hidden="true"></div>
+      </div>
 
       <details class="fold" data-fold open>
       <summary>Two more screens: the scene board, and bring your own AI</summary>
@@ -306,7 +312,7 @@
             <li>Screen-reader labels, and a phone layout</li>
             <li>Six looks, your font, size and spacing</li>
           </ul>
-          <p class="index-more"><a href="../../cheatsheet.html">Every mark on one page <span aria-hidden="true">→</span></a></p>
+          <p class="index-more"><a href="../../cheatsheet.html" target="_blank" rel="noopener">Every mark on one page<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
         </details>
       </div>
     </div>
@@ -320,12 +326,12 @@
         <p class="eyebrow eyebrow-dark"><span>04</span> For developers</p>
         <h2 id="devs-title">Open all the way down.</h2>
         <p class="sec-lede">A published spec, a parser, renderers, an editor component and a command line.</p>
-        <p class="dev-links"><a href="../../spec.html">The spec</a><a href="../../cheatsheet.html">Cheat sheet</a><a href="../../playground.html">Playground</a><a href="https://github.com/voxdown/voxdown">GitHub</a></p>
+        <p class="dev-links"><a href="../../spec.html" target="_blank" rel="noopener">The spec<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="../../cheatsheet.html" target="_blank" rel="noopener">Cheat sheet<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="../../playground.html" target="_blank" rel="noopener">Playground<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="https://github.com/voxdown/voxdown" target="_blank" rel="noopener">GitHub<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
       </div>
       <div class="devs-code">
         <pre class="term"><code><span class="prompt">$</span> npm install voxdown
 <span class="prompt">$</span> npx @voxdown/cli check story.vxd</code></pre>
-        <details class="more more-dark">
+        <details class="fold fold-dark" data-fold open>
         <summary>The packages</summary>
         <ul class="pkgs">
           <li><code>voxdown</code><span>Parse a story: its cast, lines and marks.</span></li>
@@ -351,7 +357,7 @@
           <p>Nothing is sent to us; there’s no VoxDown server to send it to. Files open from your computer and save back there: in place in Chrome and Edge, as a downloaded copy elsewhere.</p>
           <ul class="vows"><li>No account</li><li>No analytics</li><li>No ads</li><li>AI and voices only if you choose them</li></ul>
         </li>
-        <li><p class="big big-edit"><s class="struck" aria-hidden="true">$0</s> <span class="hand-free">Free<img class="pen-free" src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></p><p>No subscription and no sign-up. Audiobooks can be free too, with Kokoro on your own computer.</p></li>
+        <li><p class="big big-edit"><s class="struck" aria-hidden="true">$0</s> <span class="hand-free"><span class="free-word">Free</span><img class="pen-free" src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></p><p>No subscription and no sign-up. Audiobooks can be free too, with Kokoro on your own computer.</p></li>
         <li><p class="big">MIT</p><p>The Writer and every tool are open source, and the spec is CC BY 4.0. Once loaded, the Writer works offline.</p></li>
       </ul>
     </div>

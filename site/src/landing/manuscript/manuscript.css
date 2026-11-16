@@ -1,0 +1,2657 @@
+/* VoxDown, the Manuscript edition: warm paper, black ink and one editor's red pencil.
+   Fraunces for display and the editor's hand, Literata for reading, Recursive for the typescript. */
+
+:root {
+  --paper: #f3eadb;
+  --paper-hi: #fbf6ec;
+  --paper-lo: #e8dcc6;
+  --ink: #1c1915;
+  --ink-2: #463f36;
+  --ink-3: #685f52;
+  --rule: #d5c6aa;
+  --red: #b93018; /* text: 5:1 on the paper */
+  --red-pen: #e0402b; /* the pencil itself, for marks that aren't words */
+  --red-deep: #9a2611;
+  --display: "Fraunces Variable", "Iowan Old Style", Georgia, serif;
+  --body: "Literata Variable", "Iowan Old Style", Georgia, serif;
+  --type: "Recursive Variable", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* The Writer's mark colours (its Paper look), held to AA on this paper. */
+  --m-direction: #7c3aed;
+  --m-sound: #0f766e;
+  --m-ins: #9c4708;
+  --m-note: #854d0e;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .24 0 0 0 0 .14 0 0 0 .55 -.18'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --fibres: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .09' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .36 0 0 0 0 .22 0 0 0 .5 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 1.5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+body {
+  margin: 0;
+  background-color: var(--paper);
+  background-image: var(--grain);
+  color: var(--ink);
+  font: 400 1.125rem / 1.65 var(--body);
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+p,
+h1,
+h2,
+h3,
+ul,
+ol,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+a {
+  color: inherit;
+}
+code,
+kbd,
+pre {
+  font-family: var(--type);
+  font-variation-settings: "MONO" 1, "CASL" 0;
+}
+kbd {
+  display: inline-block;
+  text-indent: 0;
+  padding: 0 0.32em;
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--paper-hi);
+  font-size: 0.78em;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+::selection {
+  background: color-mix(in srgb, var(--red-pen) 22%, transparent);
+}
+:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.skip {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 20;
+  padding: 0.6rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+  font: 500 1rem var(--display);
+}
+.skip:focus {
+  top: 1rem;
+}
+
+/* The red pencil's reading progress. */
+.progress {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 3px;
+  z-index: 15;
+  pointer-events: none;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--red-pen);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+
+/* ───────── Small type ───────── */
+
+.kicker {
+  font: 620 0.78rem / 1.3 var(--display);
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+.kicker .dot {
+  margin: 0 0.35em;
+  color: var(--ink-3);
+}
+.hand {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 480;
+  font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 24;
+  color: var(--red);
+  letter-spacing: 0.005em;
+}
+.lede {
+  font: 400 clamp(1.12rem, 1.4vw, 1.3rem) / 1.6 var(--body);
+  color: var(--ink-2);
+  max-width: 36rem;
+}
+.fine {
+  font-size: 0.92rem;
+  color: var(--ink-3);
+}
+
+/* ───────── Buttons ───────── */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem 1.2rem;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 3rem;
+  padding: 0.78rem 1.35rem;
+  border: 1.5px solid transparent;
+  border-radius: 3px;
+  font: 560 1.04rem / 1.2 var(--display);
+  font-variation-settings: "opsz" 18, "SOFT" 30;
+  letter-spacing: 0.005em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s
+    ease;
+}
+.btn-red {
+  background: var(--red);
+  color: #fffaf2;
+  box-shadow: 0 1px 0 var(--red-deep), 0 10px 24px -14px rgb(150 30 10 / 0.7);
+}
+.btn-red:hover {
+  background: var(--red-deep);
+}
+.btn-red .dash {
+  opacity: 0.75;
+}
+.btn .arrow {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.25s ease;
+}
+.btn:hover .arrow {
+  transform: translateX(3px);
+}
+.btn-ink {
+  background: var(--ink);
+  color: var(--paper-hi);
+}
+.btn-ink:hover {
+  background: #3a342c;
+}
+.btn-quiet {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--ink) 30%, transparent);
+  color: var(--ink);
+}
+.btn-quiet:hover {
+  border-color: var(--ink);
+  background: color-mix(in srgb, var(--paper-hi) 60%, transparent);
+}
+.btn-plain {
+  padding-inline: 0.4rem;
+  background: transparent;
+  color: var(--ink);
+}
+.btn-plain .listen-label {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--red-pen) 60%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.3em;
+}
+.btn-plain:hover .listen-label {
+  color: var(--red);
+}
+.btn-plain .disc {
+  margin-left: 0;
+  width: 2.3rem;
+  height: 2.3rem;
+  transition: transform 0.2s ease;
+}
+.btn-plain:hover .disc {
+  transform: scale(1.06);
+}
+.btn-small {
+  min-height: 2.4rem;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.95rem;
+}
+.btn-big {
+  min-height: 3.6rem;
+  padding: 1rem 1.7rem;
+  font-size: 1.18rem;
+}
+.disc {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-left: -0.45rem;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fffaf2;
+}
+.btn-ink .disc {
+  background: var(--paper-hi);
+  color: var(--ink);
+}
+.disc svg,
+.mini-play svg,
+.big-play svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+}
+.i-pause,
+.playing .i-play {
+  display: none;
+}
+.playing .i-pause {
+  display: block;
+}
+.listen-time {
+  font: 400 0.85rem var(--type);
+  font-variation-settings: "MONO" 1;
+  color: var(--ink-3);
+}
+.btn-ink .listen-time {
+  color: color-mix(in srgb, var(--paper) 70%, transparent);
+}
+.text-link {
+  color: var(--ink);
+  font: 540 1rem var(--display);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--red-pen) 70%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.3em;
+}
+.text-link:hover {
+  color: var(--red);
+}
+
+/* ───────── The masthead ───────── */
+
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: 1.25rem clamp(1.1rem, 5vw, 4rem);
+  border-bottom: 1px solid color-mix(in srgb, var(--rule) 70%, transparent);
+}
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-decoration: none;
+  font: 600 1.4rem / 1 var(--display);
+  font-variation-settings: "opsz" 48, "SOFT" 50;
+  letter-spacing: -0.01em;
+}
+.masthead nav {
+  display: flex;
+  gap: 1.6rem;
+  margin-left: auto;
+}
+.masthead nav a {
+  font: 560 0.8rem / 1 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink-2);
+  padding: 0.5rem 0;
+}
+.masthead nav a:hover {
+  color: var(--red);
+}
+
+/* ───────── The title page ───────── */
+
+.title-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  gap: 2rem clamp(2rem, 5vw, 5rem);
+  align-items: center;
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: clamp(2.5rem, 7vh, 5rem) clamp(1.1rem, 5vw, 4rem) clamp(2.5rem, 6vh, 4rem);
+}
+.title-words .kicker {
+  margin-bottom: 1.6rem;
+}
+h1 {
+  font: 360 clamp(3.4rem, 7.6vw, 7.4rem) / 0.94 var(--display);
+  font-variation-settings: "opsz" 144, "SOFT" 40, "WONK" 0;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+h1 .line {
+  display: block;
+}
+h1 em {
+  font-style: italic;
+  font-weight: 340;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+}
+.circled {
+  position: relative;
+  display: inline-block;
+}
+h1 .circled .pen-circle {
+  inset: -0.02em -0.34em -0.16em -0.4em;
+}
+.title-words .lede {
+  margin-top: 2rem;
+}
+.title-words .actions {
+  margin-top: 2.3rem;
+}
+.title-words .fine {
+  margin-top: 1.2rem;
+}
+
+/* A page of typescript, marked up. */
+.sheet-paper {
+  position: relative;
+  background-color: var(--paper-hi);
+  background-image: var(--grain);
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgb(120 95 60 / 0.12),
+    0 1px 1px rgb(80 60 30 / 0.06),
+    0 12px 24px -12px rgb(80 60 30 / 0.22),
+    0 40px 70px -40px rgb(80 60 30 / 0.4);
+}
+.tw {
+  font: 400 0.86rem / 2.5 var(--type);
+  font-variation-settings: "MONO" 1, "CASL" 0.15;
+  color: #2a2620;
+  text-indent: 2.5em;
+}
+.galley {
+  position: relative;
+  padding: 1.5rem 0 2.5rem;
+}
+.galley-sheet {
+  padding: 2.2rem 9rem 2.6rem 2.2rem;
+  transform: rotate(1.4deg);
+}
+.galley-head {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-bottom: 1.4rem;
+  font: 400 0.72rem var(--type);
+  font-variation-settings: "MONO" 1;
+  color: var(--ink-3);
+}
+.galley-note {
+  position: absolute;
+  right: 1.4rem;
+  font-size: 1.05rem;
+  transform: rotate(-4deg);
+}
+.galley-note.n1 {
+  top: 7.5rem;
+}
+.galley-note.n2 {
+  top: 13.3rem;
+}
+.galley-note.n3 {
+  top: 17rem;
+}
+.galley-arrow {
+  top: 6rem;
+  right: 5.6rem;
+  width: 4.2rem;
+  height: 2.6rem;
+}
+.galley figcaption {
+  margin: 1.6rem 0 0 1.4rem;
+  font-size: 1rem;
+  color: var(--ink-3);
+  max-width: 18rem;
+}
+.pen-img {
+  position: absolute;
+  right: -3.5rem;
+  bottom: -2rem;
+  width: clamp(12rem, 22vw, 19rem);
+  height: auto;
+  transform: rotate(-6deg);
+  filter: drop-shadow(0 14px 14px rgb(60 40 20 / 0.25));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.pen-img.loaded {
+  opacity: 1;
+}
+
+/* Inserted words: a caret in the line, the words above it. */
+.ins {
+  position: relative;
+}
+.caret {
+  position: absolute;
+  left: -0.28em;
+  bottom: -0.42em;
+  text-indent: 0;
+  color: var(--red-pen);
+  font: 700 1.15em / 1 var(--display);
+}
+.above {
+  position: absolute;
+  left: -0.5em;
+  bottom: calc(100% - 0.05em);
+  white-space: nowrap;
+  font-size: 0.98rem;
+  line-height: 1;
+  text-indent: 0;
+  transform: rotate(-1.5deg);
+  transform-origin: 0 100%;
+}
+.ring,
+.under {
+  position: relative;
+  white-space: nowrap;
+  text-indent: 0;
+}
+
+/* ───────── The red pencil: drawn in SVG, or the hand-drawn images when they arrive ───────── */
+
+.pen {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  background: no-repeat center / 100% 100%;
+}
+.pen svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.pen path {
+  fill: none;
+  stroke: var(--red-pen);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  opacity: 0.88;
+}
+.has-pen-circle .pen-circle {
+  background-image: var(--pen-circle);
+}
+.has-pen-arrow .pen-arrow {
+  background-image: var(--pen-arrow);
+}
+.has-pen-underline .pen-underline {
+  background-image: var(--pen-underline);
+}
+.has-pen-bracket .pen-bracket {
+  background-image: var(--pen-bracket);
+}
+.has-pen-circle .pen-circle svg,
+.has-pen-arrow .pen-arrow svg,
+.has-pen-underline .pen-underline svg,
+.has-pen-bracket .pen-bracket svg {
+  display: none;
+}
+.ring .pen-circle {
+  inset: -0.55em -0.7em -0.5em -0.75em;
+}
+.under .pen-underline {
+  left: -0.3em;
+  right: -0.4em;
+  bottom: -1.05em;
+  height: 1.7em;
+}
+/* The arrow points right as drawn: turned to point back at the text. */
+.pen-arrow {
+  transform: scaleX(-1);
+}
+
+/* The hero's ring draws itself on arrival. */
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ink-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+h1 .pen-circle path {
+  animation: draw 1.1s 0.5s cubic-bezier(0.6, 0, 0.3, 1) backwards;
+}
+.has-pen-circle h1 .pen-circle {
+  animation: ink-in 0.8s 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* ───────── Contents ───────── */
+
+.contents {
+  grid-column: 1 / -1;
+  margin-top: clamp(1.5rem, 5vh, 3.5rem);
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--ink);
+}
+.contents-title {
+  font: 620 0.74rem / 1 var(--display);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 1rem;
+}
+.contents ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.contents li + li {
+  border-left: 1px solid var(--rule);
+}
+.contents a {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.7rem;
+  padding: 0.3rem 1.1rem;
+  text-decoration: none;
+  height: 100%;
+}
+.contents li:first-child a {
+  padding-left: 0;
+}
+.contents .num {
+  grid-row: span 2;
+  font: italic 400 1.9rem / 1 var(--display);
+  font-variation-settings: "opsz" 72, "SOFT" 100, "WONK" 1;
+  color: var(--red);
+  min-width: 1.6rem;
+}
+.contents .ct {
+  font: 560 1.04rem / 1.25 var(--display);
+  font-variation-settings: "opsz" 24;
+}
+.contents .cd {
+  font-size: 0.86rem;
+  color: var(--ink-3);
+  line-height: 1.35;
+  margin-top: 0.15rem;
+}
+.contents .leader {
+  display: none;
+}
+.contents a:hover .ct {
+  color: var(--red);
+}
+
+/* ───────── Chapters ───────── */
+
+.chapter {
+  position: relative;
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: clamp(5rem, 13vh, 9rem) clamp(1.1rem, 5vw, 4rem) 0;
+}
+.chapter-head {
+  position: relative;
+  max-width: 50rem;
+  margin-bottom: clamp(2.5rem, 7vh, 4.5rem);
+}
+.chapter-num {
+  position: absolute;
+  right: calc(100% + 1.6rem);
+  top: -0.7rem;
+  font: italic 300 4.4rem / 1 var(--display);
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  color: var(--red-pen);
+  opacity: 0.9;
+}
+h2 {
+  margin: 0.9rem 0 1.3rem;
+  font: 380 clamp(2.3rem, 4.6vw, 4.1rem) / 1.02 var(--display);
+  font-variation-settings: "opsz" 144, "SOFT" 30;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+h3 {
+  font: 560 1.35rem / 1.2 var(--display);
+  font-variation-settings: "opsz" 36, "SOFT" 40;
+  letter-spacing: -0.005em;
+}
+.h-sub {
+  font: 400 clamp(1.7rem, 2.8vw, 2.4rem) / 1.1 var(--display);
+  font-variation-settings: "opsz" 96, "SOFT" 50;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+/* ───────── I. The craft of marking ───────── */
+
+.craft {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: 0 clamp(2rem, 5vw, 5rem);
+}
+.steps {
+  padding: 8vh 0 6vh;
+}
+.step {
+  min-height: 62vh;
+  padding-top: 0.5rem;
+  opacity: 0.5;
+  transition: opacity 0.4s ease;
+}
+.step.current,
+.craft[data-step="0"] .step:first-child {
+  opacity: 1;
+}
+.step:last-child {
+  min-height: 50vh;
+}
+.step-num {
+  font: italic 400 2.6rem / 1 var(--display);
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  color: var(--red);
+  margin-bottom: 0.6rem;
+}
+.step h3 {
+  font-size: clamp(1.5rem, 2.2vw, 1.9rem);
+  margin-bottom: 0.8rem;
+}
+.step p:not(.step-num) {
+  color: var(--ink-2);
+  max-width: 26rem;
+}
+.step code {
+  font-size: 0.86em;
+  padding: 0.05em 0.25em;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--paper-hi) 80%, transparent);
+  white-space: nowrap;
+}
+.m-name {
+  color: #1f4fbf;
+  font-weight: 650;
+}
+.m-name.m-p {
+  color: #1f4fbf;
+}
+.m-dir {
+  color: var(--m-direction);
+  font-style: italic;
+}
+.m-sound {
+  color: var(--m-sound);
+}
+.m-ins {
+  color: var(--m-ins);
+}
+
+.stage {
+  position: relative;
+}
+.stage-inner {
+  position: sticky;
+  top: max(1.5rem, calc(50vh - 17rem));
+}
+.stage-label {
+  position: relative;
+  height: 1.2rem;
+  margin-bottom: 0.9rem;
+  font: 620 0.74rem / 1.2 var(--display);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.stage-label span {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.4s ease;
+}
+.stage-l1,
+.stage-l4 {
+  opacity: 0;
+}
+.stage-l1,
+.stage-l4 {
+  color: var(--red);
+}
+.craft:is([data-step="1"], [data-step="2"], [data-step="3"]) .stage-l0 {
+  opacity: 0;
+}
+.craft:is([data-step="1"], [data-step="2"], [data-step="3"]) .stage-l1 {
+  opacity: 1;
+}
+.craft[data-step="4"] .stage-l0 {
+  opacity: 0;
+}
+.craft[data-step="4"] .stage-l4 {
+  opacity: 1;
+  color: var(--ink);
+}
+
+.stage-sheet {
+  display: grid;
+  padding: 2.4rem 0 2.6rem 2.4rem;
+}
+.proof,
+.set {
+  grid-area: 1 / 1;
+}
+.proof {
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.pr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 10.5rem;
+  gap: 1.2rem;
+}
+.pr + .pr {
+  margin-top: 0.15rem;
+}
+.margin {
+  position: relative;
+  padding: 0.4rem 1rem 0 0.4rem;
+  border-left: 1px dashed color-mix(in srgb, var(--rule) 80%, transparent);
+}
+.margin .hand {
+  font-size: 1.12rem;
+  line-height: 1.3;
+  transform: rotate(-3deg);
+  transform-origin: 0 50%;
+}
+.margin .hand.small {
+  font-size: 0.98rem;
+  margin-top: 0.5rem;
+}
+.margin .pen-arrow {
+  left: -1.5rem;
+  top: 2.2rem;
+  width: 3.6rem;
+  height: 1.9rem;
+  transform: scaleX(-1) rotate(-12deg);
+}
+.margin .pen-bracket {
+  left: -0.75rem;
+  top: 0.2rem;
+  width: 1.3rem;
+  height: 2.4rem;
+}
+.margin .pen-bracket + .hand {
+  margin-left: 0.6rem;
+}
+
+/* The marks arrive step by step: words fade in, the pencil draws (or, as an image, inks in). */
+.s1,
+.s2,
+.s3 {
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.pen.s1 path,
+.pen.s3 path {
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.6, 0, 0.3, 1) 0.1s;
+}
+.craft:is([data-step="1"], [data-step="2"], [data-step="3"]) .s1,
+.craft:is([data-step="2"], [data-step="3"]) .s2,
+.craft[data-step="3"] .s3 {
+  opacity: 1;
+}
+.craft:is([data-step="1"], [data-step="2"], [data-step="3"]) .pen.s1 path,
+.craft[data-step="3"] .pen.s3 path {
+  stroke-dashoffset: 0;
+}
+.margin .pen.s1 {
+  transition-delay: 0.15s;
+}
+
+/* Step 4: the pencil sets into type. */
+.set {
+  margin: 0;
+  padding-right: 2.4rem;
+  font: 400 0.9rem / 2 var(--type);
+  font-variation-settings: "MONO" 1, "CASL" 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #2a2620;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.7s ease 0.1s, transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s;
+}
+.craft[data-step="4"] .proof {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+.craft[data-step="4"] .set {
+  opacity: 1;
+  transform: none;
+}
+
+/* VoxDown, coloured as the Writer colours it. */
+.vxd .t-name,
+.mv .t-name,
+.key .t-name {
+  color: color-mix(in oklab, var(--c, #2563eb) 80%, var(--ink));
+  font-weight: 650;
+}
+.vxd .t-mark,
+.mv .t-mark,
+.key .t-mark {
+  color: color-mix(in oklab, var(--c, var(--ink-3)) 60%, var(--ink-3));
+}
+.t-quote {
+  color: var(--ink-3);
+}
+.t-direction,
+.t-group {
+  color: var(--m-direction);
+  font-style: italic;
+}
+.t-sound,
+.t-vocal {
+  color: var(--m-sound);
+}
+.t-instruction {
+  color: var(--m-ins);
+}
+.t-note {
+  color: var(--m-note);
+  font-style: italic;
+}
+.t-comment {
+  color: var(--ink-3);
+  font-style: italic;
+}
+.t-heading {
+  color: var(--ink-3);
+}
+.t-said {
+  background: color-mix(in srgb, var(--c) 10%, transparent);
+  text-decoration: underline dashed color-mix(in srgb, var(--c) 55%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.28em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* ───────── One page, every form ───────── */
+
+.forms {
+  margin-top: clamp(3rem, 8vh, 6rem);
+}
+.forms-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem 4rem;
+  align-items: end;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--ink);
+  margin-bottom: 2.6rem;
+}
+.forms-head p {
+  color: var(--ink-2);
+  max-width: 30rem;
+}
+.forms-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem;
+  align-items: start;
+}
+.form {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 1.1rem;
+}
+.form figcaption {
+  font-size: 0.98rem;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.form-k {
+  display: block;
+  margin-bottom: 0.25rem;
+  font: 620 0.76rem / 1.3 var(--display);
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+.form .sheet-paper {
+  min-height: 27rem;
+  padding: 1.8rem 1.7rem;
+}
+.forms-grid .form:nth-child(1) .sheet-paper {
+  transform: rotate(-0.8deg);
+}
+.forms-grid .form:nth-child(3) .sheet-paper {
+  transform: rotate(0.7deg);
+}
+
+.book-page {
+  font: 400 0.93rem / 1.55 var(--body);
+  text-align: justify;
+  hyphens: auto;
+}
+.bp-head {
+  margin-bottom: 1.4rem;
+  text-align: center;
+  font: 500 0.66rem / 1 var(--display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.bp + .bp {
+  text-indent: 1.4em;
+}
+.drop {
+  float: left;
+  margin: 0.08em 0.12em 0 0;
+  font: 400 3.2em / 0.8 var(--display);
+  font-variation-settings: "opsz" 144, "SOFT" 50;
+  color: var(--red);
+}
+.bp-folio {
+  margin-top: 1.3rem;
+  text-align: center;
+  font: 400 0.8rem var(--display);
+  color: var(--ink-3);
+}
+
+.script-page {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+.sp-line {
+  display: grid;
+  grid-template-columns: 5.6rem minmax(0, 1fr);
+  gap: 0.7rem;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+.sp-who {
+  padding-top: 0.12rem;
+  font: 640 0.66rem / 1.5 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--c) 78%, var(--ink));
+}
+.sp-who.narr {
+  color: var(--ink-3);
+}
+.sp-how {
+  color: var(--m-direction);
+}
+.sp-text {
+  font-family: var(--body);
+}
+.sp-sound {
+  display: inline-block;
+  padding: 0 0.45em;
+  border: 1px solid color-mix(in srgb, var(--m-sound) 40%, transparent);
+  border-radius: 999px;
+  font: 400 0.72rem / 1.6 var(--type);
+  font-variation-settings: "MONO" 1;
+  color: var(--m-sound);
+  white-space: nowrap;
+}
+
+.voices-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+.cast {
+  display: grid;
+  gap: 0.15rem;
+}
+.cast li {
+  display: grid;
+  grid-template-columns: 0.8rem 1fr;
+  column-gap: 0.7rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 3px;
+  transition: background-color 0.3s ease;
+}
+.cast li.speaking {
+  background: color-mix(in srgb, var(--c, var(--ink-3)) 11%, transparent);
+}
+.cast-dot {
+  grid-row: span 2;
+  width: 0.62rem;
+  height: 0.62rem;
+  margin-top: 0.42rem;
+  border-radius: 50%;
+  background: var(--c, var(--ink-3));
+  transition: transform 0.3s ease;
+}
+.cast li.speaking .cast-dot {
+  transform: scale(1.45);
+}
+.cast-name {
+  font: 580 1rem / 1.35 var(--display);
+}
+.cast-about {
+  font-size: 0.86rem;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+.passage-play {
+  align-self: flex-start;
+}
+.voices-now {
+  min-height: 2.6em;
+  font: italic 0.88rem / 1.45 var(--body);
+  color: var(--ink-3);
+}
+
+/* ───────── II. Read along ───────── */
+
+.reader-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.38fr);
+  gap: 2rem clamp(2rem, 5vw, 4.5rem);
+  align-items: start;
+}
+.reader-controls {
+  position: sticky;
+  top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.scene-pick {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ink);
+}
+.scene-tab {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.75rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: none;
+  color: var(--ink-3);
+  font: 500 1.06rem / 1.3 var(--display);
+  font-variation-settings: "opsz" 24;
+  text-align: left;
+  cursor: pointer;
+}
+.scene-tab::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--red-pen);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.scene-tab:hover {
+  color: var(--ink);
+}
+.scene-tab[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.scene-tab[aria-selected="true"]::after {
+  opacity: 1;
+}
+.deck {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.6rem;
+}
+.big-play {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 4.2rem;
+  height: 4.2rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fffaf2;
+  cursor: pointer;
+  box-shadow: 0 12px 26px -12px rgb(150 30 10 / 0.75);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.big-play:hover {
+  background: var(--red-deep);
+  transform: scale(1.04);
+}
+.big-play svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+.big-play .i-play {
+  margin-left: 0.2rem;
+}
+.deck-now {
+  min-width: 0;
+}
+.now-who {
+  font: 600 0.84rem / 1.3 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--c, var(--ink)) 80%, var(--ink));
+}
+.now-how {
+  min-height: 1.5em;
+  font: italic 1rem / 1.45 var(--body);
+  color: var(--m-direction);
+}
+.track {
+  position: relative;
+  height: 1.1rem;
+  cursor: pointer;
+}
+.track::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--rule);
+}
+.track-fill {
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--red-pen);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+.time {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -0.9rem;
+  font: 400 0.8rem var(--type);
+  font-variation-settings: "MONO" 1;
+  color: var(--ink-3);
+}
+.view-pick {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 0.2rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+.view-pick button {
+  padding: 0.42rem 0.95rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-3);
+  font: 540 0.9rem / 1.2 var(--display);
+  cursor: pointer;
+}
+.view-pick button[aria-checked="true"] {
+  background: var(--ink);
+  color: var(--paper-hi);
+}
+.reader-cast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  font: 500 0.9rem / 1.4 var(--display);
+  color: var(--ink-2);
+}
+.rc {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.rc::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--c);
+}
+.credit {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.reader-page {
+  padding: 1.6rem 0 1.2rem;
+}
+.running-head {
+  padding: 0 3.5rem 0.9rem;
+  font: 560 0.7rem / 1 var(--display);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--ink-3);
+}
+.reader-scroll {
+  position: relative;
+  height: min(70vh, 40rem);
+  overflow: auto;
+  padding: 1.2rem clamp(1.4rem, 4vw, 4rem) 40% clamp(2.6rem, 5vw, 5rem);
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+  mask-image: linear-gradient(transparent, #000 2.2rem, #000 calc(100% - 3rem), transparent);
+}
+.reader-scroll:focus-visible {
+  outline-offset: -4px;
+}
+.reader-text {
+  max-width: 36rem;
+  margin: 0 auto;
+  font: 400 1.12rem / 1.7 var(--body);
+}
+.rr {
+  transition: opacity 0.45s ease;
+}
+.reader-text.playing .rr {
+  opacity: 0.45;
+}
+.reader-text.playing .rr.heard {
+  opacity: 1;
+}
+.reader-text .mv {
+  display: none;
+}
+.reader-text.as-marks .pv {
+  display: none;
+}
+.reader-text.as-marks .mv {
+  display: inline;
+}
+.reader-text.as-print .only-marks {
+  display: none;
+}
+/* As printed */
+.as-print .rr {
+  text-align: justify;
+  hyphens: auto;
+}
+.as-print .rr + .rr {
+  text-indent: 1.5em;
+}
+.as-print .rr-title {
+  margin: 0.4rem 0 1.4rem;
+  font: 400 clamp(1.7rem, 3vw, 2.3rem) / 1.1 var(--display);
+  font-variation-settings: "opsz" 96, "SOFT" 60;
+  text-align: center;
+  text-indent: 0 !important;
+}
+.as-print .rr-bookonly {
+  font-style: italic;
+  text-align: center;
+  text-indent: 0 !important;
+  color: var(--ink-2);
+  margin-bottom: 1.6rem;
+}
+.as-print .rr-page {
+  margin: 1.4rem 0;
+  text-align: center;
+  text-indent: 0 !important;
+  color: var(--red);
+  font-size: 1.2rem;
+}
+.as-print .rr-page + .rr,
+.as-print .rr-title + .rr,
+.as-print .rr-bookonly + .rr {
+  text-indent: 0;
+}
+.as-print .rr-group {
+  text-indent: 0;
+  padding-left: 1.5em;
+  font-style: italic;
+}
+.as-print .rr-heading + .rr {
+  text-indent: 0;
+}
+/* As written */
+.as-marks {
+  font: 400 0.94rem / 1.85 var(--type);
+  font-variation-settings: "MONO" 1, "CASL" 0;
+}
+.as-marks .rr {
+  margin-bottom: 0.7rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reader-mark {
+  left: clamp(1rem, 2.6vw, 2.6rem);
+  top: 0;
+  width: 0.85rem;
+  height: 2rem;
+  opacity: 0;
+  transform: translateY(0);
+  transition: transform 0.5s cubic-bezier(0.3, 0.7, 0.2, 1), height 0.5s
+    cubic-bezier(0.3, 0.7, 0.2, 1), opacity 0.3s ease;
+}
+.reader-mark.on {
+  opacity: 1;
+}
+.folio {
+  padding-top: 0.6rem;
+  text-align: center;
+  font: 400 0.8rem var(--display);
+  color: var(--ink-3);
+}
+
+/* ───────── III. The desk ───────── */
+
+.desk-shot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: 2.5rem;
+  align-items: start;
+}
+.shot-frame {
+  position: relative;
+  border-radius: 8px;
+  overflow: visible;
+}
+.shot-frame picture {
+  display: block;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--paper-lo);
+  box-shadow: 0 0 0 1px rgb(90 70 40 / 0.18), 0 30px 60px -30px rgb(60 40 20 / 0.5), 0 70px 120px
+    -60px rgb(60 40 20 / 0.45);
+}
+.shot-frame img {
+  width: 100%;
+  height: auto;
+}
+.pin,
+.pin-n {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fffaf2;
+  font: italic 600 0.98rem / 1 var(--display);
+  font-variation-settings: "SOFT" 100, "WONK" 1;
+  box-shadow: 0 0 0 3px var(--paper-hi), 0 6px 12px -4px rgb(80 20 10 / 0.5);
+}
+.pin {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-50%, -50%);
+}
+.notes {
+  display: grid;
+  gap: 1.15rem;
+  counter-reset: none;
+}
+.notes li {
+  display: grid;
+  grid-template-columns: 1.9rem 1fr;
+  gap: 0.8rem;
+  font-size: 0.97rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.notes b {
+  font: 600 1.02rem var(--display);
+  color: var(--ink);
+}
+
+.vignettes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(2.5rem, 5vw, 4.5rem) clamp(2rem, 5vw, 5rem);
+  margin-top: clamp(4rem, 10vh, 7rem);
+}
+.vig h3 {
+  margin: 1.6rem 0 0.6rem;
+}
+.vig p {
+  color: var(--ink-2);
+  max-width: 32rem;
+}
+.vig-art {
+  position: relative;
+  height: 15.5rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--paper-lo) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule) 70%, transparent);
+  overflow: hidden;
+}
+
+/* The scene board, as index cards. */
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  padding: 1.1rem;
+}
+.col-h {
+  margin-bottom: 0.6rem;
+  font: 620 0.62rem / 1.2 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.card {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0.7rem 0.55rem;
+  margin-bottom: 0.6rem;
+  background: #fffdf7;
+  border-top: 3px solid var(--k, var(--red-pen));
+  border-radius: 2px;
+  box-shadow: 0 1px 0 rgb(80 60 30 / 0.12), 0 6px 12px -8px rgb(80 60 30 / 0.4);
+  font-size: 0.74rem;
+  line-height: 1.3;
+}
+.card b {
+  font: 600 0.84rem / 1.25 var(--display);
+}
+.card span {
+  color: var(--ink-3);
+  font-family: var(--body);
+}
+.card i {
+  justify-self: start;
+  margin-top: 0.25rem;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  font: 500 0.62rem / 1.6 var(--display);
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.s-done {
+  background: #dcebdc;
+  color: #24572d;
+}
+.s-draft {
+  background: #f6e3c7;
+  color: #7a4510;
+}
+.s-idea {
+  background: #e6e1f5;
+  color: #4c3a8a;
+}
+.c1 {
+  --k: #15803d;
+}
+.c2 {
+  --k: #2563eb;
+}
+.c3 {
+  --k: #c2410c;
+}
+.c4 {
+  --k: #9333ea;
+}
+.card.lift {
+  transform: rotate(-3deg) translate(0.6rem, 0.2rem);
+  box-shadow: 0 2px 0 rgb(80 60 30 / 0.1), 0 18px 26px -12px rgb(80 60 30 / 0.5);
+  transition: transform 0.9s cubic-bezier(0.3, 0.7, 0.2, 1) 0.3s;
+}
+html.js .vig-board:not(.in) .card.lift {
+  transform: none;
+}
+
+/* Scraps and comments. */
+.scraps .scrap {
+  position: absolute;
+  left: 8%;
+  top: 14%;
+  width: 56%;
+  padding: 1rem 1.1rem 1.2rem;
+  background: #fffdf7;
+  font: 400 0.82rem / 1.7 var(--type);
+  font-variation-settings: "MONO" 1, "CASL" 0.15;
+  color: var(--ink-2);
+  transform: rotate(-3deg);
+  clip-path: polygon(
+    0 3%,
+    6% 0,
+    14% 2%,
+    24% 0,
+    37% 3%,
+    49% 1%,
+    61% 3%,
+    74% 0,
+    86% 2%,
+    100% 0,
+    99% 30%,
+    100% 62%,
+    98% 100%,
+    88% 97%,
+    76% 100%,
+    62% 98%,
+    50% 100%,
+    36% 97%,
+    24% 100%,
+    12% 98%,
+    0 100%,
+    1% 70%,
+    0 35%
+  );
+  filter: drop-shadow(0 6px 8px rgb(80 60 30 / 0.2));
+}
+.scrap-k,
+.comment-k {
+  margin-bottom: 0.3rem;
+  font: 620 0.6rem / 1 var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.scraps .comment {
+  position: absolute;
+  right: 6%;
+  bottom: 12%;
+  width: 44%;
+  padding: 0.85rem 0.95rem;
+  background: #fbefb9;
+  font: italic 0.86rem / 1.45 var(--body);
+  color: #4a3a12;
+  transform: rotate(2.5deg);
+  box-shadow: 0 10px 18px -10px rgb(80 60 30 / 0.5);
+}
+.scraps-arrow {
+  left: 40%;
+  top: 58%;
+  width: 4.4rem;
+  height: 2.4rem;
+  transform: rotate(18deg);
+}
+
+/* Six looks. */
+.looks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  padding: 1.1rem;
+  align-content: center;
+}
+.look {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 6.1rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 8px 14px -10px rgb(60 40 20 / 0.45);
+}
+.look i {
+  font: italic 400 1.7rem / 1 var(--display);
+  font-variation-settings: "opsz" 72, "SOFT" 100, "WONK" 1;
+}
+.look b {
+  font: 600 0.72rem / 1.2 var(--display);
+  letter-spacing: 0.06em;
+}
+.l-auto {
+  --bg: linear-gradient(135deg, #fffdf8 50%, #1f2228 50%);
+  --fg: #222;
+}
+.l-auto b {
+  color: #e9e9e6;
+  align-self: flex-end;
+}
+.l-paper {
+  --bg: #fffdf8;
+  --fg: #25282d;
+}
+.l-sepia {
+  --bg: #f1e4c9;
+  --fg: #5b4636;
+}
+.l-night {
+  --bg: #1f2228;
+  --fg: #e4e5e3;
+}
+.l-slate {
+  --bg: #2c3542;
+  --fg: #e2e8f0;
+}
+.l-hc {
+  --bg: #000;
+  --fg: #fff;
+}
+
+/* Bring your own AI. */
+.ai {
+  display: grid;
+  align-content: center;
+  gap: 0.45rem;
+  padding: 1.2rem 1.4rem;
+}
+.ai-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  background: #fffdf7;
+  border-radius: 3px;
+  box-shadow: 0 1px 0 rgb(80 60 30 / 0.1);
+  font: 500 0.92rem / 1.3 var(--display);
+}
+.ai-n {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--red-pen);
+  color: var(--red);
+  font: italic 600 0.75rem / 1 var(--display);
+}
+.tick {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font: 500 0.74rem / 1.5 var(--type);
+  font-variation-settings: "MONO" 1;
+  background: color-mix(in srgb, #c2410c 12%, transparent);
+  color: #8a2f08;
+}
+.tick + .tick {
+  background: color-mix(in srgb, #2563eb 12%, transparent);
+  color: #1d48a8;
+}
+
+/* The index. */
+.index {
+  margin-top: clamp(4rem, 10vh, 6.5rem);
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--ink);
+}
+.index-title {
+  font: 400 1.9rem / 1 var(--display);
+  font-variation-settings: "opsz" 72, "SOFT" 50;
+  margin-bottom: 1.5rem;
+}
+.index-title span {
+  font-style: italic;
+  font-size: 0.6em;
+  color: var(--ink-3);
+}
+.index-cols {
+  columns: 3 16rem;
+  column-gap: 3rem;
+  column-rule: 1px solid var(--rule);
+}
+.index-cols div {
+  break-inside: avoid;
+  margin-bottom: 0.7rem;
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+  font-size: 0.97rem;
+  line-height: 1.5;
+}
+.index-cols dt,
+.index-cols dd {
+  display: inline;
+}
+.index-cols dt {
+  font-weight: 600;
+  color: var(--ink);
+}
+.index-cols dt::after {
+  content: ", ";
+  font-weight: 400;
+}
+.index-cols dd {
+  color: var(--ink-2);
+}
+
+.cta-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem 2rem;
+  margin-top: clamp(3.5rem, 8vh, 5rem);
+  padding: 2rem clamp(1.4rem, 3vw, 2.4rem);
+  background: var(--ink);
+  color: var(--paper-hi);
+  border-radius: 3px;
+  background-image: var(--grain);
+}
+.cta-line {
+  font: italic 400 clamp(1.5rem, 2.6vw, 2.1rem) / 1.15 var(--display);
+  font-variation-settings: "opsz" 96, "SOFT" 100, "WONK" 1;
+}
+.cta-band .text-link {
+  color: var(--paper-hi);
+  text-decoration-color: color-mix(in srgb, var(--red-pen) 90%, transparent);
+}
+.cta-band .text-link:hover {
+  color: #ffd9cf;
+}
+.cta-band :focus-visible {
+  outline-color: #ffb4a4;
+}
+
+/* ───────── IV. Out into the world ───────── */
+
+.sheets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(1.2rem, 2.5vw, 2.4rem);
+}
+.out-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+.out-item figcaption {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.out-item figcaption code {
+  font-size: 0.86em;
+}
+.out-sheet {
+  aspect-ratio: 8.5 / 11;
+  padding: 9% 9%;
+  overflow: hidden;
+  font-size: clamp(0.5rem, 0.72vw, 0.66rem);
+}
+.sheets .out-item:nth-child(1) .out-sheet {
+  --r: -2.2deg;
+}
+.sheets .out-item:nth-child(2) .out-sheet {
+  --r: 1.3deg;
+}
+.sheets .out-item:nth-child(3) .out-sheet {
+  --r: -1deg;
+}
+.sheets .out-item:nth-child(4) .out-sheet {
+  --r: 2deg;
+}
+.out-sheet {
+  transform: rotate(var(--r, 0deg));
+}
+.shunn {
+  font-family: var(--type);
+  font-variation-settings: "MONO" 1, "CASL" 0;
+  line-height: 2;
+  color: #2a2620;
+}
+.shunn-top {
+  display: flex;
+  justify-content: space-between;
+  line-height: 1.5;
+  margin-bottom: 22%;
+}
+.shunn-title {
+  text-align: center;
+  line-height: 1.6;
+}
+.shunn-by {
+  text-align: center;
+  margin-bottom: 1.6em;
+}
+.shunn-tx {
+  text-indent: 3em;
+}
+.bookish {
+  font-family: var(--body);
+  line-height: 1.6;
+  text-align: justify;
+}
+.bk-orn {
+  text-align: center;
+  color: var(--red);
+  font-size: 1.6em;
+  margin-top: 8%;
+}
+.bk-title {
+  margin: 0.6em 0 2.2em;
+  text-align: center;
+  font: 400 1.65em / 1.15 var(--display);
+  font-variation-settings: "opsz" 72, "SOFT" 60;
+}
+.bk-tx.ind {
+  text-indent: 1.4em;
+}
+.bookish .drop {
+  font-size: 3.1em;
+}
+.sides {
+  font-family: var(--type);
+  font-variation-settings: "MONO" 1, "CASL" 0;
+  line-height: 1.6;
+}
+.sd-head {
+  margin-bottom: 2em;
+  font-weight: 700;
+  color: #1d48a8;
+}
+.sd-head span {
+  font-weight: 400;
+  color: var(--ink-3);
+}
+.sd-cue {
+  color: var(--ink-3);
+}
+.sd-line {
+  margin: 0.2em 0 1.5em 2em;
+  padding: 0.1em 0.4em;
+  background: color-mix(in srgb, #2563eb 11%, transparent);
+  color: var(--ink);
+}
+.audio {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6em;
+  background-color: #23201b;
+  color: #efe6d6;
+  font-family: var(--display);
+}
+.au-head {
+  font-size: 1.5em;
+  font-style: italic;
+  font-variation-settings: "SOFT" 100, "WONK" 1;
+  margin-top: 12%;
+}
+.wave {
+  width: 100%;
+  height: 4.2em;
+}
+.wave path {
+  fill: none;
+  stroke: var(--red-pen);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.au-list {
+  display: grid;
+  gap: 0.9em;
+  font-family: var(--body);
+  font-size: 1.05em;
+  line-height: 1.45;
+  color: #d6ccba;
+}
+.au-list b {
+  color: #fff7ea;
+}
+
+/* ───────── Appendix ───────── */
+
+.key-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 3rem clamp(2rem, 5vw, 5rem);
+  align-items: start;
+}
+.key {
+  border-top: 1px solid var(--ink);
+}
+.key div {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1.4rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--rule);
+  align-items: baseline;
+}
+.key dt code {
+  font-size: 0.9rem;
+  color: #2a2620;
+}
+.key dd {
+  font-size: 0.97rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.key dd code {
+  font-size: 0.86em;
+}
+.curious {
+  padding: 1.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--paper-hi) 60%, transparent);
+}
+.curious h3 {
+  margin-bottom: 0.7rem;
+}
+.curious p {
+  font-size: 0.98rem;
+  color: var(--ink-2);
+}
+.shell {
+  margin: 1.3rem 0;
+  padding: 1rem 1.15rem;
+  border-radius: 3px;
+  background: var(--ink);
+  color: #efe6d6;
+  font-size: 0.84rem;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+.links {
+  display: grid;
+  gap: 0.45rem;
+}
+.links a {
+  font: 540 1rem var(--display);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--red-pen) 60%, transparent);
+  text-underline-offset: 0.25em;
+}
+.links a:hover {
+  color: var(--red);
+}
+
+/* ───────── V. Colophon ───────── */
+
+.colophon {
+  max-width: 44rem;
+  text-align: center;
+}
+.owl {
+  width: 9.5rem;
+  height: auto;
+  margin: 0 auto 1.6rem;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.owl.loaded {
+  opacity: 1;
+}
+.colophon h2 {
+  font-size: clamp(2rem, 3.6vw, 3rem);
+}
+.colophon-text {
+  margin: 0 auto 1.1rem;
+  max-width: 36rem;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.colophon-set {
+  margin-top: 1.8rem;
+  font: italic 0.92rem var(--body);
+  color: var(--ink-3);
+}
+.fleuron {
+  margin-top: 1rem;
+  font-size: 1.6rem;
+  color: var(--red);
+}
+
+/* ───────── The invitation ───────── */
+
+.invite {
+  max-width: 84rem;
+  margin: clamp(4rem, 10vh, 7rem) auto 0;
+  padding: clamp(4rem, 12vh, 8rem) clamp(1.1rem, 5vw, 4rem);
+  text-align: center;
+  border-top: 1px solid var(--ink);
+}
+.invite h2 {
+  margin: 0 auto 1.4rem;
+  max-width: 14ch;
+  font-size: clamp(2.8rem, 6.6vw, 6rem);
+  line-height: 0.98;
+}
+.invite h2 em {
+  font-weight: 340;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  color: var(--red);
+}
+.invite .lede {
+  margin: 0 auto 2.4rem;
+}
+.invite .actions {
+  justify-content: center;
+}
+.invite .fine {
+  margin-top: 1.4rem;
+}
+
+/* ───────── Footer ───────── */
+
+.foot {
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: 2.2rem clamp(1.1rem, 5vw, 4rem) 3rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem 2.5rem;
+  align-items: start;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9rem;
+  color: var(--ink-3);
+}
+.foot-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: 600 1.1rem var(--display);
+  color: var(--ink);
+}
+.foot nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+}
+.foot nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.foot nav a:hover {
+  color: var(--red);
+  text-decoration: underline;
+}
+
+/* ───────── The little player ───────── */
+
+.mini {
+  position: fixed;
+  left: 50%;
+  bottom: 1.2rem;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.4rem 1.1rem 0.4rem 0.4rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper-hi);
+  box-shadow: 0 16px 30px -12px rgb(30 20 10 / 0.6);
+  transform: translateX(-50%);
+  animation: mini-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.mini[hidden] {
+  display: none;
+}
+@keyframes mini-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0.8rem);
+  }
+}
+.mini-play {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fffaf2;
+  cursor: pointer;
+}
+.mini-now {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+  font: 0.92rem var(--body);
+}
+.mini-k {
+  font: 620 0.68rem var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #ffb4a4;
+  margin-right: 0.3rem;
+}
+.mini :focus-visible {
+  outline-color: #ffb4a4;
+}
+
+/* ───────── Arrivals ───────── */
+
+html.js .reveal,
+html.js .chapter-head > *:not(.chapter-num) {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.8s ease, transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+html.js .chapter-head .chapter-num {
+  opacity: 0;
+  transform: translateX(10px) rotate(-6deg);
+  transition: opacity 0.8s ease 0.2s, transform 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.2s;
+}
+html.js .chapter-head > :nth-child(3) {
+  transition-delay: 0.08s;
+}
+html.js .chapter-head > :nth-child(4) {
+  transition-delay: 0.16s;
+}
+html.js .reveal.in,
+html.js .chapter-head.in > *:not(.chapter-num) {
+  opacity: 1;
+  transform: none;
+}
+html.js .chapter-head.in .chapter-num {
+  opacity: 0.9;
+  transform: none;
+}
+/* Pages dealt onto the table. */
+html.js .sheets .out-item.reveal .out-sheet {
+  transform: translateY(40px) rotate(calc(var(--r, 0deg) * -3));
+  transition: transform 1s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+html.js .sheets .out-item.reveal.in .out-sheet {
+  transform: rotate(var(--r, 0deg));
+}
+.sheets .out-item:nth-child(2) {
+  transition-delay: 0.1s;
+}
+.sheets .out-item:nth-child(3) {
+  transition-delay: 0.2s;
+}
+.sheets .out-item:nth-child(4) {
+  transition-delay: 0.3s;
+}
+.sheets .out-item:nth-child(2) .out-sheet {
+  transition-delay: 0.1s;
+}
+.sheets .out-item:nth-child(3) .out-sheet {
+  transition-delay: 0.2s;
+}
+.sheets .out-item:nth-child(4) .out-sheet {
+  transition-delay: 0.3s;
+}
+.forms-grid .form:nth-child(2) {
+  transition-delay: 0.12s;
+}
+.forms-grid .form:nth-child(3) {
+  transition-delay: 0.24s;
+}
+.vignettes .vig:nth-child(2n) {
+  transition-delay: 0.12s;
+}
+
+/* The hero arrives like a page being set. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.title-words > *,
+h1 .line {
+  animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+h1 .line:nth-child(2) {
+  animation-delay: 0.08s;
+}
+h1 .line:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.title-words > .lede {
+  animation-delay: 0.25s;
+}
+.title-words > .actions {
+  animation-delay: 0.33s;
+}
+.title-words > .fine {
+  animation-delay: 0.4s;
+}
+@keyframes galley-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) rotate(4deg);
+  }
+}
+.galley-sheet {
+  animation: galley-in 1.1s 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.galley .hand,
+.galley .caret,
+.galley .pen {
+  animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation-delay: 1s;
+}
+.galley .galley-note.n2 {
+  animation-delay: 1.2s;
+}
+.galley .galley-note.n3 {
+  animation-delay: 1.35s;
+}
+.galley .pen-arrow {
+  animation-name: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  html.js .reveal,
+  html.js .chapter-head > *,
+  html.js .sheets .out-item.reveal .out-sheet {
+    opacity: 1 !important;
+    transform: none;
+  }
+  html.js .sheets .out-item .out-sheet {
+    transform: rotate(var(--r, 0deg)) !important;
+  }
+}
+
+/* ───────── Narrower pages ───────── */
+
+@media (max-width: 1180px) {
+  .chapter-num {
+    position: static;
+    margin-bottom: 0.4rem;
+    font-size: 3.2rem;
+  }
+  .galley-sheet {
+    padding-right: 7.5rem;
+  }
+  .pen-img {
+    right: -1.5rem;
+  }
+}
+
+@media (max-width: 1040px) {
+  .title-page {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+  }
+  h1 {
+    font-size: clamp(3.2rem, 7.4vw, 5.6rem);
+  }
+  .contents ol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 1rem;
+  }
+  .contents li:nth-child(4) {
+    border-left: 0;
+  }
+  .contents li:nth-child(4) a {
+    padding-left: 0;
+  }
+  .forms-head {
+    grid-template-columns: 1fr;
+  }
+  .desk-shot {
+    grid-template-columns: 1fr;
+  }
+  .notes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.2rem 2rem;
+  }
+  .sheets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2.5rem 2.2rem;
+    max-width: 44rem;
+  }
+  .out-sheet {
+    font-size: clamp(0.6rem, 1.3vw, 0.76rem);
+  }
+  .key-wrap {
+    grid-template-columns: 1fr;
+  }
+  .forms-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.2rem;
+  }
+  .form .sheet-paper {
+    padding: 1.3rem 1.1rem;
+  }
+  .sp-line {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}
+
+@media (max-width: 860px) {
+  .masthead-cta {
+    display: none;
+  }
+  .title-page {
+    grid-template-columns: 1fr;
+  }
+  .galley {
+    max-width: 34rem;
+    margin-top: 1rem;
+  }
+  .craft {
+    grid-template-columns: 1fr;
+  }
+  .stage {
+    grid-row: 1;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: 0 calc(-1 * clamp(1.1rem, 5vw, 4rem));
+    padding: 0.8rem clamp(1.1rem, 5vw, 4rem) 1rem;
+    background: var(--grain), linear-gradient(var(--paper) 90%, transparent);
+  }
+  .stage-inner {
+    position: static;
+  }
+  .steps {
+    grid-row: 2;
+    padding: 2rem 0 30vh;
+  }
+  .step {
+    min-height: 44vh;
+  }
+  .forms-grid {
+    grid-template-columns: 1fr;
+    max-width: 30rem;
+    gap: 2.6rem;
+  }
+  .form .sheet-paper {
+    min-height: 0;
+    padding: 1.6rem 1.5rem;
+  }
+  .sp-line {
+    grid-template-columns: 5.4rem minmax(0, 1fr);
+    gap: 0.7rem;
+  }
+  .reader-body {
+    grid-template-columns: 1fr;
+  }
+  .reader-controls {
+    position: static;
+  }
+  .vignettes {
+    grid-template-columns: 1fr;
+  }
+  .foot {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  body {
+    font-size: 1.06rem;
+  }
+  .masthead {
+    gap: 0.8rem;
+    padding-block: 0.9rem;
+  }
+  .wordmark {
+    font-size: 1.2rem;
+  }
+  .wordmark img {
+    width: 24px;
+    height: 24px;
+  }
+  .masthead nav {
+    gap: 0.75rem;
+  }
+  .masthead nav a {
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+  }
+  h1 {
+    font-size: clamp(2.9rem, 15vw, 4.2rem);
+  }
+  .title-words .lede {
+    margin-top: 1.5rem;
+  }
+  .title-words .actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .galley-sheet {
+    padding: 1.5rem 5.6rem 1.8rem 1.2rem;
+  }
+  .tw {
+    font-size: 0.74rem;
+    text-indent: 1.5em;
+  }
+  .galley-note {
+    right: 0.6rem;
+    font-size: 0.86rem;
+  }
+  .galley-note.n1 {
+    top: 6rem;
+  }
+  .galley-note.n2 {
+    top: 11.2rem;
+  }
+  .galley-note.n3 {
+    top: 15rem;
+  }
+  .galley-arrow {
+    right: 3.6rem;
+    top: 4.6rem;
+    width: 3rem;
+  }
+  .galley .above {
+    font-size: 0.82rem;
+  }
+  .pen-img {
+    width: 9.5rem;
+    right: -0.8rem;
+    bottom: -1.2rem;
+  }
+  .contents ol {
+    grid-template-columns: 1fr;
+    row-gap: 0;
+  }
+  .contents li + li {
+    border-left: 0;
+  }
+  .contents a,
+  .contents li:nth-child(4) a {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.55rem 0;
+  }
+  .contents .num {
+    font-size: 1.15rem;
+    min-width: 1.8rem;
+  }
+  .contents .leader {
+    display: block;
+    flex: 1;
+    border-bottom: 1px dotted var(--ink-3);
+    transform: translateY(-0.25em);
+  }
+  .contents .cd {
+    margin: 0;
+    font-style: italic;
+  }
+  .contents .ct {
+    white-space: nowrap;
+  }
+
+  .stage-sheet {
+    padding: 1.2rem 0 1.3rem 1rem;
+  }
+  .stage-label {
+    margin-bottom: 0.5rem;
+  }
+  .stage .tw {
+    font-size: 0.68rem;
+    line-height: 2.45;
+    text-indent: 1.2em;
+  }
+  .pr {
+    grid-template-columns: minmax(0, 1fr) 4.8rem;
+    gap: 0.5rem;
+  }
+  .margin {
+    padding: 0.3rem 0.4rem 0 0.3rem;
+  }
+  .margin .hand {
+    font-size: 0.8rem;
+  }
+  .margin .hand.small {
+    font-size: 0.72rem;
+  }
+  .margin .pen-arrow {
+    display: none;
+  }
+  .stage .above {
+    font-size: 0.76rem;
+    bottom: 1.35em;
+  }
+  .set {
+    font-size: 0.7rem;
+    line-height: 1.8;
+    padding-right: 1rem;
+  }
+  .step h3 {
+    font-size: 1.4rem;
+  }
+  .step-num {
+    font-size: 2rem;
+  }
+
+  .reader-scroll {
+    height: 62vh;
+    padding-left: 2rem;
+    padding-right: 1.1rem;
+  }
+  .reader-text {
+    font-size: 1.02rem;
+  }
+  .reader-mark {
+    left: 0.7rem;
+    width: 0.7rem;
+  }
+  .running-head {
+    padding-inline: 1rem;
+  }
+  .as-marks {
+    font-size: 0.8rem;
+  }
+
+  .shot-frame .pin {
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.8rem;
+  }
+  .notes {
+    grid-template-columns: 1fr;
+  }
+  .vig-art {
+    height: 14rem;
+  }
+  .board {
+    gap: 0.5rem;
+    padding: 0.8rem;
+  }
+  .card {
+    padding: 0.5rem;
+  }
+  .card span {
+    display: none;
+  }
+  .looks {
+    gap: 0.55rem;
+    padding: 0.8rem;
+  }
+  .look {
+    height: 5.6rem;
+  }
+  .index-cols {
+    columns: 1;
+  }
+  .cta-band {
+    padding: 1.6rem 1.3rem;
+  }
+  .cta-band .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sheets {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 1.2rem;
+    margin: 0 calc(-1 * clamp(1.1rem, 5vw, 4rem));
+    padding: 1.4rem clamp(1.1rem, 5vw, 4rem) 1.6rem;
+    scrollbar-width: none;
+  }
+  .out-item {
+    flex: 0 0 74%;
+    scroll-snap-align: center;
+  }
+  .out-sheet {
+    font-size: 0.6rem;
+  }
+
+  .key div {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  .curious {
+    padding: 1.4rem;
+  }
+  .invite .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .btn-big {
+    font-size: 1.08rem;
+  }
+}

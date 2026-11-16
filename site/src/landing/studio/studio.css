@@ -1,0 +1,5915 @@
+/* Literata's fallback, the same width as Literata (measured against Liberation Serif, Times's
+   metrics), so nothing moves when Literata arrives. */
+@font-face {
+  font-family: "Literata Fallback";
+  src: local("Times New Roman"), local("Liberation Serif"), local("Tinos");
+  size-adjust: 116.5%;
+}
+/* Fallbacks that take the same room as the web fonts, so nothing moves when they arrive. */
+@font-face {
+  font-family: "Bricolage Fallback";
+  font-weight: 100 600;
+  src: local("Arial"), local("Liberation Sans"), local("Helvetica");
+  size-adjust: 102.9%;
+}
+@font-face {
+  font-family: "Bricolage Fallback";
+  font-weight: 601 1000;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"),
+    local("Helvetica Bold");
+  size-adjust: 102.9%;
+}
+@font-face {
+  font-family: "Inter Fallback";
+  font-weight: 100 550;
+  src: local("Arial"), local("Liberation Sans"), local("Helvetica");
+  size-adjust: 106.7%;
+}
+@font-face {
+  font-family: "Inter Fallback";
+  font-weight: 551 1000;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"),
+    local("Helvetica Bold");
+  size-adjust: 106.7%;
+}
+/* VoxDown, the studio direction: a bright launch page whose one idea is the editor's pencil and the
+   speaker's colour. A pencil marks a passage; the marks set into VoxDown in each speaker's colour; and
+   those colours run through everything after: lanes, underlines, cards and the app's own screens.
+
+   Faces: Bricolage Grotesque for display, Inter for reading, Literata for story text, and the
+   Writer's own Recursive (one file; its MONO axis gives the code) for the app and the code. The
+   pencil's few handwritten words come from a 3 KB subset of Recursive's casual style. */
+@font-face {
+  font-family: "Rec";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./rec.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "Rec Hand";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./hand.woff2") format("woff2");
+}
+:root {
+  --bg: #fbfaff;
+  --bg-2: #f3f1fa;
+  --ink: #15112a;
+  --ink-2: #48425f;
+  --ink-3: #635d7a;
+  --line: rgb(21 17 42 / 0.09);
+  --line-2: rgb(21 17 42 / 0.14);
+  --violet: #7c3aed;
+  --coral: #fb7185;
+  --amber: #f59e0b;
+  --teal: #14b8a6;
+  --violet-d: #6d28d9;
+  --coral-d: #e11d48;
+  --amber-d: #b45309;
+  --teal-d: #0f766e;
+  --night: #0f0b1d;
+  --grad: linear-gradient(100deg, #7c3aed 0%, #c026d3 42%, #e11d48 72%, #ea580c 100%);
+  --grad-btn: linear-gradient(100deg, #6d28d9 0%, #a21caf 50%, #e11d48 100%);
+  --display: "Bricolage Grotesque Variable", "Bricolage Fallback", system-ui, sans-serif;
+  --body: "Inter Variable", "Inter Fallback", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Rec", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --serif: "Literata Variable", "Literata Fallback", Georgia, serif;
+  --radius: 22px;
+  --shadow-soft: 0 1px 2px rgb(21 17 42 / 0.05), 0 12px 32px -12px rgb(40 20 90 / 0.18);
+  --shadow-lift: 0 2px 4px rgb(21 17 42 / 0.05), 0 30px 70px -28px rgb(60 20 120 / 0.38);
+  --m-direction: #7c3aed;
+  --m-sound: #0f766e;
+  --m-time: #b45309;
+  --m-note: #854d0e;
+  --m-quiet: #6b7280;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: 5rem;
+}
+
+code,
+pre,
+kbd,
+.sheet {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 1.0625rem / 1.6 var(--body);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+figure,
+pre {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+img {
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--violet);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip {
+  position: fixed;
+  left: 1rem;
+  top: -4rem;
+  z-index: 100;
+  padding: 0.6rem 1rem;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 10px;
+  text-decoration: none;
+}
+
+.skip:focus {
+  top: 1rem;
+}
+
+.wrap {
+  width: min(100% - 2 * clamp(1.15rem, 4vw, 3rem), 78rem);
+  margin-inline: auto;
+}
+
+/* ------------------------------------------------------------------ buttons */
+.btn {
+  --h: 2.9rem;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: var(--h);
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  font: 600 0.98rem / 1.1 var(--body);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease, background-color
+    0.2s ease;
+}
+
+.btn svg {
+  width: 1.1em;
+  height: 1.1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s ease;
+}
+
+.btn:hover svg:last-child:not(.i-play):not(.i-pause) {
+  transform: translateX(3px);
+}
+
+.btn-lg {
+  --h: 3.5rem;
+  padding: 0 1.6rem;
+  font-size: 1.05rem;
+}
+
+.btn-sm {
+  --h: 2.4rem;
+  padding: 0 1rem;
+  font-size: 0.9rem;
+}
+
+.btn-grad {
+  color: #fff;
+  background: var(--grad-btn);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.35) inset, 0 10px 30px -8px rgb(162 28 175 / 0.55), 0 2px
+    6px rgb(109 40 217 / 0.25);
+}
+
+.btn-grad:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.35) inset, 0 18px 40px -10px rgb(162 28 175 / 0.6), 0 2px
+    6px rgb(109 40 217 / 0.25);
+}
+
+.btn-aside {
+  font-weight: 500;
+  opacity: 0.92;
+}
+
+.btn-ink {
+  color: #fff;
+  background: var(--ink);
+  box-shadow: 0 8px 22px -10px rgb(21 17 42 / 0.6);
+}
+
+.btn-ink:hover {
+  background: #2a2148;
+  transform: translateY(-1px);
+}
+
+.btn-glass {
+  color: var(--ink);
+  background: rgb(255 255 255 / 0.6);
+  box-shadow: 0 0 0 1px var(--line-2) inset, var(--shadow-soft);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+}
+
+.btn-glass:hover {
+  background: rgb(255 255 255 / 0.85);
+  transform: translateY(-1px);
+}
+
+.btn-white {
+  color: var(--ink);
+  background: #fff;
+  box-shadow: 0 14px 34px -12px rgb(21 17 42 / 0.55);
+}
+
+.btn-white:hover {
+  transform: translateY(-2px);
+}
+
+.btn-clear {
+  color: #fff;
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.55) inset;
+}
+
+.btn-clear:hover {
+  background: rgb(255 255 255 / 0.22);
+}
+
+.btn-time {
+  font: 500 0.82rem / 1 var(--mono);
+  color: var(--ink-3);
+  padding-left: 0.15rem;
+}
+
+.btn-ink .btn-time {
+  color: rgb(255 255 255 / 0.7);
+}
+
+.play-glyph {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-left: -0.55rem;
+  border-radius: 50%;
+  background: var(--grad-btn);
+  color: #fff;
+}
+
+.btn-ink .play-glyph {
+  background: #fff;
+  color: var(--ink);
+}
+
+.play-glyph svg,
+.play-round svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+  stroke: none;
+}
+
+.i-pause,
+.playing .i-play {
+  display: none;
+}
+
+.playing .i-pause {
+  display: block;
+}
+
+/* ------------------------------------------------------------------ header */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 0.7rem 0;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.top.scrolled {
+  background: rgb(251 250 255 / 0.72);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.top-in {
+  width: min(100% - 2 * clamp(1.15rem, 4vw, 3rem), 78rem);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font: 750 1.2rem / 1 var(--display);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.brand img {
+  border-radius: 8px;
+}
+
+.top-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.top-nav a {
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 0.94rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.top-nav a:hover {
+  color: var(--ink);
+  background: rgb(21 17 42 / 0.05);
+}
+
+/* ------------------------------------------------------------------ gradient mesh */
+.mesh {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mesh i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.28;
+  will-change: transform;
+}
+
+.mesh .m1 {
+  width: 46rem;
+  height: 40rem;
+  left: -14rem;
+  top: -18rem;
+  background: radial-gradient(closest-side, #a78bfa, transparent);
+  animation: drift1 22s ease-in-out infinite alternate;
+}
+
+.mesh .m2 {
+  width: 40rem;
+  height: 36rem;
+  right: -10rem;
+  top: -10rem;
+  background: radial-gradient(closest-side, #fda4af, transparent);
+  animation: drift2 26s ease-in-out infinite alternate;
+}
+
+.mesh .m3 {
+  width: 36rem;
+  height: 30rem;
+  right: 18%;
+  top: 18rem;
+  background: radial-gradient(closest-side, #fcd34d, transparent);
+  opacity: 0.4;
+  animation: drift3 30s ease-in-out infinite alternate;
+}
+
+.mesh .m4 {
+  width: 34rem;
+  height: 30rem;
+  left: 12%;
+  top: 30rem;
+  background: radial-gradient(closest-side, #5eead4, transparent);
+  opacity: 0.45;
+  animation: drift1 28s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes drift1 {
+  to {
+    transform: translate(6rem, 4rem) scale(1.1);
+  }
+}
+@keyframes drift2 {
+  to {
+    transform: translate(-5rem, 6rem) scale(0.92);
+  }
+}
+@keyframes drift3 {
+  to {
+    transform: translate(-7rem, -3rem) scale(1.15);
+  }
+}
+/* ------------------------------------------------------------------ hero */
+.hero {
+  position: relative;
+  margin-top: -4rem;
+  padding-top: 4rem;
+  isolation: isolate;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(rgb(21 17 42 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(21 17 42 / 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 20%, transparent 75%);
+  pointer-events: none;
+}
+
+.hero .mesh {
+  z-index: -2;
+  bottom: -6rem;
+  mask-image: linear-gradient(#000 55%, transparent);
+}
+
+.hero-in {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 3rem clamp(2rem, 5vw, 5rem);
+  padding: clamp(3rem, 9vh, 6.5rem) 0 clamp(2.5rem, 6vh, 4rem);
+}
+
+.pill-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.85rem 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.65);
+  box-shadow: 0 0 0 1px var(--line) inset, var(--shadow-soft);
+  font-size: 0.86rem;
+  font-weight: 550;
+  color: var(--ink-2);
+  backdrop-filter: blur(8px);
+}
+
+.dot-live {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 0 4px rgb(20 184 166 / 0.2);
+}
+
+.hero h1 {
+  margin-top: 1.4rem;
+  font: 780 clamp(2.9rem, 6.4vw, 5.6rem) / 0.96 var(--display);
+  font-variation-settings: "opsz" 96, "wdth" 92;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+  color: var(--ink);
+}
+
+.keep {
+  display: inline-block;
+}
+
+.lede {
+  margin-top: 1.5rem;
+  max-width: 34rem;
+  font-size: clamp(1.08rem, 1.4vw, 1.24rem);
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 2.1rem;
+}
+
+.fine {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 1.2rem;
+  font-size: 0.92rem;
+  color: var(--ink-3);
+}
+
+.fine svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: var(--teal-d);
+  stroke-width: 2;
+}
+
+/* The demo: a dark window on the bright mesh, the scene lit as it's heard. */
+.hero-demo {
+  position: relative;
+  min-width: 0;
+}
+
+.demo {
+  position: relative;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgb(28 22 52 / 0.94), rgb(15 11 29 / 0.97));
+  color: #e9e6f5;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08) inset, 0 1px 0 rgb(255 255 255 / 0.12) inset,
+    0 50px 100px -40px rgb(60 20 120 / 0.65), 0 18px 40px -20px rgb(225 29 72 / 0.25);
+  overflow: hidden;
+  --m-direction: #c4b5fd;
+  --m-sound: #5eead4;
+  --m-time: #fbbf24;
+  --m-note: #fde68a;
+  --m-quiet: #9aa1ab;
+}
+
+.demo::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(196 181 253 / 0.6),
+    rgb(253 164 175 / 0.6),
+    transparent
+  );
+}
+
+.demo-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem 0;
+}
+
+.lights {
+  display: inline-flex;
+  gap: 0.4rem;
+  flex: none;
+}
+
+.lights i {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: #fb7185;
+}
+
+.lights i:nth-child(2) {
+  background: #f59e0b;
+}
+
+.lights i:nth-child(3) {
+  background: #14b8a6;
+}
+
+.demo-tabs {
+  display: flex;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.demo-tab {
+  flex: none;
+  padding: 0.45rem 0.85rem;
+  border: 0;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: #a8a2c2;
+  font: 500 0.84rem / 1.2 var(--body);
+  cursor: pointer;
+}
+
+.demo-tab:hover {
+  color: #fff;
+}
+
+.demo-tab[aria-selected="true"] {
+  background: rgb(255 255 255 / 0.07);
+  color: #fff;
+}
+
+.demo-tab:focus-visible {
+  outline-color: #c4b5fd;
+  outline-offset: -3px;
+}
+
+.sheet {
+  position: relative;
+  height: clamp(16rem, 44vh, 24rem);
+  overflow: auto;
+  padding: 1.2rem 0.9rem 1.6rem;
+  background: rgb(255 255 255 / 0.035);
+  border-block: 1px solid rgb(255 255 255 / 0.07);
+  font: 400 0.86rem / 1.72 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.2) transparent;
+  mask-image: linear-gradient(transparent, #000 1.2rem, #000 calc(100% - 2.4rem), transparent);
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+.sheet:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: -2px;
+  border-radius: 0;
+}
+
+.sheet .row {
+  padding: 0.04rem 0.7rem;
+  border-left: 3px solid transparent;
+  border-radius: 0 6px 6px 0;
+  transition: opacity 0.35s ease, background-color 0.35s ease, border-color 0.35s ease;
+}
+
+.sheet .row.gap {
+  height: 0.7em;
+}
+
+.sheet.playing .row {
+  opacity: 0.38;
+}
+
+.sheet .row.heard {
+  opacity: 1;
+  border-left-color: color-mix(in oklab, var(--c, #a78bfa) 60%, #fff);
+  background: color-mix(in srgb, var(--c, #a78bfa) 18%, transparent);
+}
+
+/* The marks: as the Writer colours them. Dark card: speaker colours drawn toward white. */
+.demo .t-name,
+.demo .t-mark,
+.demo .t-vocal {
+  color: color-mix(in oklab, var(--c, #c4b5fd) 55%, #fff);
+}
+
+.demo .t-name {
+  font-weight: 650;
+}
+
+.t-name {
+  color: color-mix(in oklab, var(--c, #2563eb) 85%, #000);
+  font-weight: 650;
+}
+
+.t-mark {
+  color: color-mix(in oklab, var(--c, var(--m-quiet)) 70%, #fff);
+}
+
+.t-vocal {
+  color: var(--c, var(--m-sound));
+}
+
+.t-quote {
+  color: var(--m-quiet);
+}
+
+.t-direction,
+.t-group {
+  color: var(--m-direction);
+  font-style: italic;
+}
+
+.t-sound {
+  color: var(--m-sound);
+}
+
+.t-instruction {
+  color: var(--m-time);
+}
+
+.t-note {
+  color: var(--m-note);
+}
+
+.t-comment {
+  color: var(--m-quiet);
+}
+
+.t-heading {
+  font-weight: 700;
+}
+
+.demo .t-heading {
+  color: #fff;
+}
+
+/* Spot the marks: one kind glows, the rest of the text steps back. */
+.sheet [data-spot] {
+  border-radius: 4px;
+  transition: background-color 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+}
+
+.sheet[data-spot="who"] .row [data-spot="who"],
+.sheet[data-spot="how"] .row [data-spot="how"],
+.sheet[data-spot="sound"] .row [data-spot="sound"],
+.sheet[data-spot="time"] .row [data-spot="time"] {
+  background: rgb(0 0 0 / 0.45);
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.75);
+  text-decoration: underline 2px;
+  text-underline-offset: 4px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.legend-label {
+  margin-right: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a8a2c2;
+}
+
+.chip-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+  color: #d9d5ea;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chip-k b {
+  font: 600 0.8rem / 1 var(--mono);
+}
+
+.chip-k:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.chip-k[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.18);
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.55) inset;
+  color: #fff;
+}
+
+.chip-k:focus-visible {
+  outline-color: #c4b5fd;
+}
+
+.k-who {
+  color: #fdba74;
+}
+
+.k-how {
+  color: #c4b5fd;
+}
+
+.k-time {
+  color: #fbbf24;
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.play-round {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--grad-btn);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 24px -6px rgb(225 29 72 / 0.55);
+  transition: transform 0.2s ease;
+}
+
+.play-round svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.play-round:hover {
+  transform: scale(1.06);
+}
+
+.play-round:focus-visible {
+  outline-color: #c4b5fd;
+}
+
+.demo.is-playing .play-round {
+  animation: pulse 1.8s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(251 113 133 / 0.5), 0 8px 24px -6px rgb(225 29 72 / 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgb(251 113 133 / 0), 0 8px 24px -6px rgb(225 29 72 / 0.55);
+  }
+}
+.player-mid {
+  flex: 1;
+  min-width: 0;
+}
+
+.now {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 550;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now #now-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-dot {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--c, #a78bfa) 60%, #fff);
+  transition: background-color 0.3s ease;
+}
+
+.track {
+  position: relative;
+  height: 0.4rem;
+  margin-top: 0.6rem;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 0.12);
+  cursor: pointer;
+}
+
+.track::before {
+  content: "";
+  position: absolute;
+  inset: -0.6rem 0;
+}
+
+.track:focus-visible {
+  outline-color: #c4b5fd;
+}
+
+.track-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, #a78bfa, #fb7185, #fbbf24);
+  border-radius: inherit;
+}
+
+.time {
+  flex: none;
+  font: 500 0.8rem / 1 var(--mono);
+  color: #a8a2c2;
+  font-variant-numeric: tabular-nums;
+}
+
+.tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: 600 0.8rem / 1.3 var(--body);
+  box-shadow: 0 10px 30px -8px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.tip.on {
+  opacity: 1;
+}
+
+.demo-cap {
+  margin-top: 0.9rem;
+  padding-inline: 0.4rem;
+  font-size: 0.88rem;
+  color: var(--ink-2);
+}
+
+.demo-cap a {
+  color: var(--violet-d);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.demo-cap a:hover {
+  text-decoration: underline;
+}
+
+/* Who it's for. */
+.for {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem 1.2rem;
+  padding: 0.6rem 0 clamp(3rem, 7vh, 5rem);
+}
+
+.for-label {
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.for ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.for li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 0.9rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.7);
+  box-shadow: 0 0 0 1px var(--line) inset;
+  font-size: 0.92rem;
+  font-weight: 550;
+  color: var(--ink-2);
+}
+
+.for li i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--d);
+}
+
+/* ------------------------------------------------------------------ section heads */
+.band {
+  padding: clamp(4.5rem, 11vh, 8rem) 0;
+}
+
+.sec-head {
+  max-width: 50rem;
+  margin: 0 auto clamp(2.2rem, 5vh, 3.5rem);
+  text-align: center;
+}
+
+.sec-head h2,
+.devs h2 {
+  margin-top: 0.9rem;
+  font: 760 clamp(2.2rem, 4.6vw, 3.9rem) / 1 var(--display);
+  font-variation-settings: "opsz" 96, "wdth" 94;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.sec-head .sec-lede {
+  margin-inline: auto;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--violet-d);
+}
+
+.eyebrow span {
+  display: grid;
+  place-items: center;
+  min-width: 2rem;
+  height: 1.6rem;
+  padding: 0 0.4rem;
+  border-radius: 8px;
+  background: rgb(124 58 237 / 0.1);
+  font: 600 0.78rem / 1 var(--mono);
+  letter-spacing: 0;
+}
+
+.sec-lede {
+  margin-top: 1.1rem;
+  max-width: 40rem;
+  font-size: clamp(1.05rem, 1.3vw, 1.18rem);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+/* ------------------------------------------------------------------ dark */
+.dark {
+  position: relative;
+  padding: clamp(5rem, 12vh, 8.5rem) 0;
+  background: var(--night);
+  color: #e9e6f5;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.dark-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(40rem 30rem at 85% 15%, rgb(124 58 237 / 0.35), transparent 70%),
+    radial-gradient(36rem 26rem at 10% 70%, rgb(225 29 72 / 0.2), transparent 70%),
+    radial-gradient(30rem 20rem at 60% 100%, rgb(20 184 166 / 0.18), transparent 70%);
+}
+
+.dark :focus-visible {
+  outline-color: #c4b5fd;
+}
+
+.eyebrow-dark {
+  color: #c4b5fd;
+}
+
+.eyebrow-dark span {
+  background: rgb(196 181 253 / 0.14);
+}
+
+.dark h2 {
+  color: #fff;
+}
+
+.dark .sec-lede {
+  color: #c9c4dc;
+}
+
+.dark .sec-lede b {
+  color: #fff;
+}
+
+.term {
+  margin-top: 0.7rem;
+  padding: 1rem 1.2rem;
+  border-radius: 14px;
+  background: rgb(0 0 0 / 0.35);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08) inset;
+  font: 500 0.92rem / 1.7 var(--mono);
+  color: #fff;
+  overflow-x: auto;
+}
+
+.prompt {
+  color: #fb7185;
+  user-select: none;
+}
+
+.devs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  margin-top: clamp(4rem, 10vh, 7rem);
+  padding-top: clamp(3rem, 7vh, 5rem);
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.dev-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.3rem;
+  margin-top: 1.5rem;
+}
+
+.dev-links a:hover {
+  text-decoration-color: #fff;
+}
+
+.devs-code .term {
+  margin-top: 0;
+}
+
+.pkgs {
+  display: grid;
+  margin-top: 1rem;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08) inset;
+  overflow: hidden;
+}
+
+.pkgs li {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr;
+  gap: 1rem;
+  padding: 0.75rem 1.1rem;
+  font-size: 0.9rem;
+  color: #c9c4dc;
+}
+
+.pkgs li + li {
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.pkgs li > code {
+  font: 600 0.84rem / 1.5 var(--mono);
+  color: #c4b5fd;
+}
+
+.pkgs span code {
+  font: 600 0.84rem / 1 var(--mono);
+  color: #fda4af;
+}
+
+/* ------------------------------------------------------------------ free, open */
+.free {
+  padding: clamp(4rem, 10vh, 6.5rem) 0 clamp(1.5rem, 4vh, 2.5rem);
+}
+
+.facts {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1.3fr 1fr;
+}
+
+.facts li {
+  padding: 1.6rem 1.6rem 1.7rem;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line) inset, var(--shadow-soft);
+}
+
+.facts .big {
+  font: 800 clamp(2.6rem, 5vw, 4rem) / 1 var(--display);
+  letter-spacing: -0.05em;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-bottom: 0.05em;
+}
+
+.facts li:nth-child(2) .big {
+  background: linear-gradient(100deg, #e11d48, #ea580c);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.facts li:nth-child(3) .big {
+  background: linear-gradient(100deg, #0f766e, #6d28d9);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.facts li p:last-child {
+  margin-top: 0.7rem;
+  color: var(--ink-2);
+}
+
+/* ------------------------------------------------------------------ final */
+.final {
+  padding: clamp(1.5rem, 4vh, 2.5rem) 0 clamp(4rem, 10vh, 6rem);
+}
+
+.final-band {
+  position: relative;
+  padding: clamp(3.5rem, 9vw, 7rem) clamp(1.4rem, 5vw, 4rem);
+  border-radius: 36px;
+  background: radial-gradient(60rem 26rem at 85% 110%, rgb(234 88 12 / 0.38), transparent 60%),
+    linear-gradient(160deg, #2e1065, #1e1240 55%, #150d2e);
+  color: #fff;
+  text-align: center;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: 0 50px 100px -40px rgb(46 16 101 / 0.6);
+}
+
+.final-band h2 {
+  position: relative;
+  font: 800 clamp(2.6rem, 7vw, 6rem) / 0.95 var(--display);
+  font-variation-settings: "opsz" 96, "wdth" 90;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+
+.final-band > p {
+  position: relative;
+  max-width: 36rem;
+  margin: 1.2rem auto 0;
+  font-size: clamp(1.05rem, 1.5vw, 1.25rem);
+  color: rgb(255 255 255 / 0.92);
+}
+
+.cta-center {
+  position: relative;
+  justify-content: center;
+}
+
+.final-band :focus-visible {
+  outline-color: #fff;
+}
+
+.final-fine {
+  font-size: 0.92rem !important;
+  margin-top: 1.5rem !important;
+  color: rgb(255 255 255 / 0.9) !important;
+}
+
+/* ------------------------------------------------------------------ footer */
+.foot {
+  padding: 2.5rem 0 3rem;
+  border-top: 1px solid var(--line);
+}
+
+.foot-in {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1.5rem 3rem;
+}
+
+.foot-brand p {
+  max-width: 34rem;
+  margin-top: 0.8rem;
+  font-size: 0.9rem;
+  color: var(--ink-3);
+}
+
+.foot nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 0.4rem 1.3rem;
+}
+
+.foot nav a {
+  font-size: 0.92rem;
+  font-weight: 550;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.foot nav a:hover {
+  color: var(--violet-d);
+  text-decoration: underline;
+}
+
+/* The header over a dark band: dark glass, light words. */
+.top.on-dark {
+  background: rgb(15 11 29 / 0.72);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.08);
+  color: #fff;
+}
+
+.top.on-dark .top-nav a {
+  color: #d9d5ea;
+}
+
+.top.on-dark .top-nav a:hover {
+  color: #fff;
+  background: rgb(255 255 255 / 0.08);
+}
+
+.top.on-dark .btn-ink {
+  background: #fff;
+  color: var(--ink);
+}
+
+.top.on-dark :focus-visible {
+  outline-color: #c4b5fd;
+}
+
+@media (max-width: 600px) {
+  .btn-lg {
+    padding-inline: 1.1rem;
+    display: flex;
+    white-space: normal;
+    text-align: center;
+    padding: 0.6rem 1.1rem;
+    font-size: 1rem;
+    --h: 3.1rem;
+  }
+}
+/* ------------------------------------------------------------------ hero additions */
+.pen-under {
+  position: relative;
+}
+
+.pen-under img {
+  position: absolute;
+  left: -3%;
+  width: 106%;
+  height: 0.42em;
+  object-fit: fill;
+  pointer-events: none;
+  transform-origin: left center;
+  animation: underline-in 0.9s cubic-bezier(0.6, 0, 0.3, 1) 0.5s both;
+  bottom: -0.28em;
+}
+
+@keyframes underline-in {
+  from {
+    transform: scaleX(0);
+  }
+}
+.pen-final.missing,
+.lock.missing {
+  display: none;
+}
+
+.mesh.idle i {
+  animation-play-state: paused;
+}
+
+/* ------------------------------------------------------------------ the spine */
+.spine {
+  padding: clamp(4rem, 10vh, 7rem) 0 clamp(3rem, 8vh, 5rem);
+  background: linear-gradient(180deg, var(--bg), var(--bg-2) 12%, var(--bg-2) 88%, var(--bg));
+}
+
+.spine .sec-head {
+  margin-bottom: clamp(1rem, 3vh, 2rem);
+}
+
+.spine-track {
+  display: grid;
+}
+
+.spine-stick,
+.steps {
+  grid-area: 1 / 1;
+}
+
+.spine-stick {
+  position: sticky;
+  top: 3.9rem;
+  z-index: 1;
+  align-self: start;
+  height: calc(100vh - 3.9rem);
+  height: calc(100dvh - 3.9rem);
+}
+
+.spine-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  height: 100%;
+  padding: 0.5rem 0 1rem;
+}
+
+.jump ol {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.jump button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line-2) inset;
+  color: var(--ink-2);
+  font: 600 0.8rem / 1 var(--body);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.jump button span {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background: var(--bg-2);
+  font: 600 0.7rem / 1 var(--mono);
+  color: var(--ink);
+}
+
+.jump button:hover {
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.jump button[aria-current="step"] {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: none;
+}
+
+.jump button[aria-current="step"] span {
+  background: var(--grad-btn);
+  color: #fff;
+}
+
+.wr-holder {
+  flex: 1;
+  min-height: 0;
+}
+
+.caption {
+  display: flex;
+  gap: 1.5rem;
+  min-height: 5.6rem;
+  align-items: flex-start;
+}
+
+.caption-words {
+  flex: 1;
+  min-width: 0;
+}
+
+.caption-words > * {
+  animation: cap-in 0.45s ease both;
+}
+
+.caption-words > :nth-child(2) {
+  animation-delay: 0.05s;
+}
+
+.caption-words > :nth-child(3) {
+  animation-delay: 0.1s;
+}
+
+@keyframes cap-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.cap-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: 600 0.8rem / 1 var(--body);
+  color: var(--violet-d);
+}
+
+.cap-n span {
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--grad-btn);
+  color: #fff;
+  font: 600 0.72rem / 1 var(--mono);
+}
+
+.cap-h {
+  margin-top: 0.35rem;
+  font: 750 clamp(1.3rem, 2vw, 1.75rem) / 1.1 var(--display);
+  letter-spacing: -0.03em;
+}
+
+.cap-p {
+  margin-top: 0.3rem;
+  max-width: 52rem;
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.finale-play {
+  flex: none;
+}
+
+.finale-play[hidden] {
+  display: none;
+}
+
+.steps {
+  position: relative;
+  z-index: 0;
+  pointer-events: none;
+  padding-bottom: 25vh;
+}
+
+.step {
+  position: relative;
+  height: 58vh;
+}
+
+.step:first-child {
+  height: 50vh;
+}
+
+/* The pencil's steps get the scroll their marks need: every stroke more than a wheel notch. */
+@media (min-width: 861px) {
+  .step[data-step="2"] {
+    height: max(58vh, 800px);
+  }
+  .step[data-step="3"] {
+    height: max(58vh, 2800px);
+  }
+}
+
+/* On a wide screen the steps only time the stage: their words are for screen readers. */
+.step > * {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.step > .step-play {
+  display: none;
+}
+
+.spine-after {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+/* ------------------------------------------------------------------ the Writer, drawn */
+.wr {
+  --bench: 15.5rem;
+  --w-ink: #25282d;
+  --w-quiet: #646b75;
+  --w-rule: #dde1e6;
+  --w-desk: #e7eaee;
+  --w-teal: #245f61;
+  --m-direction: #7c3aed;
+  --m-sound: #0f766e;
+  --m-page: #b45309;
+  position: relative;
+  display: grid;
+  grid-template-rows: 2.5rem 2.3rem minmax(0, 1fr) 1.6rem;
+  height: 100%;
+  border-radius: 14px;
+  background: var(--w-desk);
+  color: var(--w-ink);
+  font: 400 12.5px / 1.3 "Rec", system-ui, sans-serif;
+  font-variation-settings: "MONO" 0, "CASL" 0;
+  box-shadow: 0 0 0 1px rgb(21 17 42 / 0.12), 0 40px 80px -40px rgb(40 20 90 / 0.45), 0 10px 30px
+    -18px rgb(21 17 42 / 0.3);
+  overflow: hidden;
+}
+
+.wr svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+.wr-sp {
+  flex: 1;
+}
+
+.wr-top,
+.wr-tools,
+.wr-status {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.8rem;
+  background: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+}
+
+.wr-top {
+  gap: 0.9rem;
+  border-bottom: 1px solid var(--w-rule);
+}
+
+.wr-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: 600 15px / 1 var(--serif);
+}
+
+.wr-logo img {
+  border-radius: 4px;
+}
+
+.wr-logo em {
+  font-weight: 400;
+  color: var(--w-teal);
+  font-style: normal;
+}
+
+.wr-menus {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.wr-menus span {
+  padding: 0.25rem 0.45rem;
+  border-radius: 5px;
+  font-size: 13px;
+}
+
+.wr-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+}
+
+.wr-file small {
+  font-size: 11.5px;
+  color: var(--w-quiet);
+}
+
+.wr-saved {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.wr-save {
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  background: var(--w-teal);
+  color: #fff;
+  font-weight: 600;
+}
+
+.wr-look {
+  padding: 0.22rem 0.65rem;
+  border: 1px solid #d5dae1;
+  border-radius: 999px;
+}
+
+.wr-ico {
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 6px;
+}
+
+.wr-tools {
+  border-bottom: 1px solid var(--w-rule);
+}
+
+.tb-group,
+.wr-tools > span[aria-hidden] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.45rem;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.tb-serif {
+  font: 600 14px / 1 var(--serif);
+}
+
+.tsep {
+  width: 1px;
+  height: 1rem;
+  margin: 0 0.25rem;
+  background: var(--w-rule);
+}
+
+/* The one button that works: Who says this…, at its beat. */
+.tb-live {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--w-ink);
+  cursor: pointer;
+}
+
+.tb-live:hover {
+  background: #eef0f3;
+}
+
+.tb-live:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 1px;
+}
+
+/* The feature the beat is about, picked out. */
+.wr [data-hl] {
+  transition: background-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
+}
+
+.wr[data-hl="who"] [data-hl="who"],
+.wr[data-hl="how"] [data-hl="how"],
+.wr[data-hl="insert"] [data-hl="insert"],
+.wr[data-hl="bench"] [data-hl="bench"],
+.wr[data-hl="preview"] [data-hl="preview"],
+.wr[data-hl="export"] [data-hl="export"],
+.wr[data-hl="audio"] [data-hl="audio"] {
+  background: rgb(124 58 237 / 0.12);
+  box-shadow: 0 0 0 2px #7c3aed inset;
+  color: #5b21b6;
+  animation: hl-pulse 1.6s ease-out 0.2s 2;
+}
+
+.wr[data-step="2"]:not(.who-set) #wr-who {
+  animation: hl-pulse 1.6s ease-out 0.2s infinite;
+}
+
+@keyframes hl-pulse {
+  0% {
+    box-shadow: 0 0 0 2px #7c3aed inset, 0 0 0 0 rgb(124 58 237 / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 2px #7c3aed inset, 0 0 0 10px rgb(124 58 237 / 0);
+  }
+}
+.wr-status {
+  gap: 1rem;
+  font-size: 11.5px;
+  color: var(--w-quiet);
+  border-top: 1px solid var(--w-rule);
+}
+
+.wr-body {
+  position: relative;
+  overflow: hidden;
+}
+
+/* The workbench, in from the left when the story needs it. */
+.bench {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 2;
+  width: var(--bench);
+  background: #fff;
+  border-right: 1px solid var(--w-rule);
+  transform: translateX(-101%);
+  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+  user-select: none;
+}
+
+.wr:is([data-step="2"], [data-step="3"], [data-step="4"], [data-step="5"]) .bench {
+  transform: none;
+}
+
+.bench-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid var(--w-rule);
+}
+
+.bt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.45rem 0.5rem;
+  border-bottom: 2px solid transparent;
+  color: var(--w-quiet);
+  font-weight: 600;
+}
+
+.bt em {
+  display: none;
+  font-style: normal;
+}
+
+.bt small {
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: #eef0f3;
+  font-size: 10.5px;
+}
+
+.wr[data-tab="cast"] .bt-cast,
+.wr[data-tab="scenes"] .bt-scenes,
+.wr[data-tab="scraps"] .bt-scraps,
+.wr[data-tab="comments"] .bt-comments {
+  color: var(--w-ink);
+  border-bottom-color: var(--w-teal);
+}
+
+.wr[data-tab="cast"] .bt-cast em,
+.wr[data-tab="scenes"] .bt-scenes em,
+.wr[data-tab="scraps"] .bt-scraps em,
+.wr[data-tab="comments"] .bt-comments em {
+  display: inline;
+}
+
+.pane {
+  display: none;
+  padding: 0.7rem;
+}
+
+.wr[data-tab="cast"] .pane-cast,
+.wr[data-tab="scenes"] .pane-scenes,
+.wr[data-tab="scraps"] .pane-scraps,
+.wr[data-tab="comments"] .pane-comments {
+  display: block;
+  animation: pane-in 0.45s ease both;
+}
+
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+/* A cast card, as the Writer's Cast tab draws it. */
+.cc {
+  margin-bottom: 0.5rem;
+  padding: 0.55rem 0.7rem 0.6rem;
+  border: 1px solid #e3e6ea;
+  border-radius: 8px;
+  background: #fff;
+  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.cc-h {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 13px;
+}
+
+.cc-at {
+  color: var(--w-quiet);
+}
+
+.cc-h i {
+  margin-left: auto;
+  font-style: normal;
+  color: #2f5da8;
+}
+
+.cc .dot,
+.ab-cast .dot,
+.picker .dot {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--sp);
+}
+
+.cc-s {
+  margin-top: 0.25rem;
+  font-size: 11.5px;
+  color: var(--w-quiet);
+}
+
+.cc-a {
+  margin-top: 0.25rem;
+  font: italic 400 12.5px / 1.35 var(--serif);
+}
+
+.cc.cc-new {
+  border-color: color-mix(in srgb, var(--sp) 60%, #fff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sp) 22%, transparent);
+  animation: card-new 0.6s ease both;
+}
+
+@keyframes card-new {
+  from {
+    opacity: 0.4;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.cmt {
+  padding: 0.6rem;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.cmt small,
+.scrap small {
+  display: block;
+  font-size: 11px;
+  color: var(--w-quiet);
+}
+
+.cmt p {
+  margin-top: 0.25rem;
+  font: 400 13.5px / 1.4 var(--serif);
+}
+
+.scrap {
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 1px dashed #c9ced6;
+  background: #fafbfc;
+}
+
+.wr[data-tab="scraps"] .scrap {
+  animation: scrap-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both;
+}
+
+@keyframes scrap-in {
+  from {
+    opacity: 0;
+    transform: translateX(160px) rotate(3deg);
+  }
+}
+.scrap p {
+  margin-bottom: 0.3rem;
+  font: 400 13.5px / 1.4 var(--serif);
+}
+
+.scrap-back {
+  display: inline-block;
+  margin-top: 0.4rem;
+  color: #2f5da8;
+  font-size: 12px;
+}
+
+/* The page. */
+.desk {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 0.9rem;
+}
+
+.paper {
+  --shift: 0px;
+  position: relative;
+  width: min(36rem, calc(100% - 3rem));
+  height: 100%;
+  border-radius: 6px 6px 0 0;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(30 40 60 / 0.08), 0 10px 30px -18px rgb(30 40 60 / 0.3);
+  overflow: hidden;
+  transform: translateX(var(--shift));
+  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+  user-select: none;
+}
+
+.wr:is([data-step="2"], [data-step="3"], [data-step="4"], [data-step="5"]) .paper {
+  --shift: calc(var(--bench) / 2);
+}
+
+.wr:is([data-step="6"], [data-step="7"]) .paper {
+  --shift: calc(var(--pv) / -2);
+}
+
+.doc {
+  position: relative;
+  padding: 1.6rem 7.6rem 4rem 2.4rem;
+  font: 400 15px / 1.7 var(--serif);
+  color: var(--w-ink);
+  transition: transform 0.65s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ln {
+  margin: 0 0 0.6em;
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  transition: background-color 0.3s ease, opacity 0.3s ease;
+}
+
+.ln.tight {
+  margin-bottom: 0;
+}
+
+.wr:not(.s3) .ln[data-id="eye"] {
+  margin-bottom: 0.6em;
+}
+
+.wr .ln[data-s] {
+  display: none;
+}
+
+.wr.s3 .ln[data-s="3"],
+.wr.s4 .ln[data-s="4"] {
+  display: block;
+}
+
+.wr.s5 .ln.cut {
+  display: none;
+}
+
+.wr .mk[data-s] {
+  display: none;
+}
+
+.wr.s2 .mk[data-s="2"],
+.wr.s3 .mk[data-s="3"],
+.wr.s5 .mk[data-s="5"] {
+  display: inline;
+}
+
+/* "Could you not?" waits for the reader to give it its speaker. */
+.wr:not(.who-set) .who-slot {
+  display: none !important;
+}
+
+.wr .new {
+  animation: set-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) 0.9s both;
+}
+
+.wr[data-step="4"] .new {
+  animation-delay: 0.2s;
+}
+
+/* A new mark is in its place from the first frame, faint, then inks in: nothing sits beside a gap. */
+@keyframes set-in {
+  from {
+    opacity: 0.22;
+  }
+}
+/* Marks as the Writer shows them: its sans, in their colours. */
+.mk {
+  font-family: "Rec", system-ui, sans-serif;
+  font-variation-settings: "MONO" 0, "CASL" 0;
+  font-size: 0.9em;
+}
+
+.k-head {
+  font-weight: 700;
+}
+
+.k-name,
+.k-vocal {
+  color: color-mix(in oklab, var(--sp) 82%, #000);
+  font-weight: 650;
+}
+
+.k-dir,
+.k-group {
+  color: var(--m-direction, #7c3aed);
+  font-style: italic;
+}
+
+.k-group .k-name {
+  font-style: normal;
+}
+
+.k-sound {
+  color: var(--m-sound, #0f766e);
+}
+
+.k-pause {
+  color: var(--m-page, #b45309);
+}
+
+.k-comment {
+  color: #6b7280;
+}
+
+/* A speaker's words: tinted and underlined in their colour, as the Writer draws them. */
+.wr.s2 .k-speech,
+.mini-paper .k-speech {
+  background-color: color-mix(in oklab, var(--sp) 14%, transparent);
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--sp) 60%, transparent),
+    color-mix(in srgb, var(--sp) 60%, transparent)
+  );
+  background-size: 100% 2px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  padding-bottom: 1px;
+  border-radius: 2px;
+  transition: background-color 0.5s ease;
+}
+
+.wr:not(.who-set) [data-id="could"] .k-speech,
+.step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech {
+  background: none;
+}
+
+.wr.s3 .ln.g1,
+.wr.s4 .ln.g2,
+.mini-paper .ln.g1 {
+  box-shadow: inset 3px 0 0 rgb(124 58 237 / 0.45);
+  border-radius: 0;
+  padding-left: 0.7rem;
+}
+
+/* Typing: a character at a time, every character in its place from the start. */
+.wr[data-step="0"] .ln {
+  opacity: 0;
+}
+
+.typing-on .tw:not(.on) {
+  visibility: hidden;
+}
+
+.caret {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 1.2em;
+  background: var(--w-ink, #25282d);
+  opacity: 0;
+  transform: translate(2.7rem, 1.75rem);
+  pointer-events: none;
+}
+
+.wr:is([data-step="0"], [data-step="1"]) .caret,
+.tw-caret {
+  opacity: 1;
+}
+
+/* Solid while it types; it blinks once the line is written (or waiting on a blank page). */
+.wr[data-step="0"] .caret,
+.typed + .caret,
+.typed .tw-caret {
+  animation: blink 1s steps(1) infinite;
+}
+
+.wr[data-step="1"] .doc:has(.typed) .caret {
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.mini-paper {
+  position: relative;
+  padding: 0.9rem 1rem;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(30 40 60 / 0.08);
+  font: 400 14.5px / 1.65 var(--serif);
+}
+
+/* Heard, in the finale. */
+.wr.voicing .ln:not(.heard) {
+  opacity: 0.45;
+}
+
+.ln.heard {
+  background: color-mix(in srgb, #7c3aed 9%, transparent);
+  box-shadow: inset 3px 0 0 #7c3aed;
+}
+
+/* The pencil: it rings the words and writes in the margin; the notes stay, only the pencil lifts. */
+.annot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pen > * {
+  position: absolute;
+}
+
+.ring,
+.under {
+  object-fit: fill;
+  animation: pen-draw 0.5s ease var(--d) both;
+}
+
+.lead {
+  object-fit: fill;
+  transform: scaleX(-1);
+  animation: lead-draw 0.5s ease calc(var(--d) + 0.15s) both;
+}
+
+@keyframes pen-draw {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+@keyframes lead-draw {
+  from {
+    opacity: 0;
+    transform: scaleX(-0.4);
+  }
+}
+.hand,
+.note {
+  font: 400 20px / 1 "Rec Hand", "Comic Sans MS", cursive;
+  color: #c62f1b;
+}
+
+.hand {
+  max-width: 6.8rem;
+  animation: hand-in 0.6s ease calc(var(--d) + 0.25s) both;
+}
+
+.hand i,
+.note {
+  display: inline-block;
+  font-style: normal;
+  transform: skewX(-11deg);
+}
+
+@keyframes hand-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+/* The step's one pencil: its lead at the origin, moved by a transform as it draws. */
+.pencil-tip {
+  position: absolute;
+  left: calc(-0.0488 * 5.6rem);
+  top: calc(-0.9619 * 5.6rem * 347 / 520);
+  width: 5.6rem;
+  height: auto;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 10px rgb(21 17 42 / 0.25));
+  will-change: transform, opacity;
+}
+/* While it draws, the marks come only from the pencil: no fades of their own. */
+.annot.drawing .to-draw,
+.annot.drawing .ring,
+.annot.drawing .under,
+.annot.drawing .lead,
+.annot.drawing .hand {
+  animation: none;
+}
+/* "Who says this?" */
+.picker {
+  position: absolute;
+  z-index: 5;
+  width: 15rem;
+  padding: 0.55rem;
+  border-radius: 10px;
+  background: #fff;
+  color: #25282d;
+  font: 400 13px / 1.3 "Rec", system-ui, sans-serif;
+  font-variation-settings: "MONO" 0, "CASL" 0;
+  box-shadow: 0 0 0 1px rgb(21 17 42 / 0.12), 0 18px 40px -12px rgb(21 17 42 / 0.4);
+  animation: pop-in 0.18s ease both;
+}
+
+.picker[hidden] {
+  display: none;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.picker-h {
+  padding: 0.15rem 0.4rem 0.45rem;
+  font-weight: 650;
+}
+
+.picker-list {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.picker-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.5rem;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-list button:hover,
+.picker-list button:focus-visible {
+  background: #f1eefc;
+  outline: none;
+  box-shadow: 0 0 0 2px #7c3aed inset;
+}
+
+/* The preview, in from the right. */
+.preview {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 2;
+  width: var(--pv);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid var(--w-rule);
+  transform: translateX(101%);
+  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.wr:is([data-step="6"], [data-step="7"]) .preview {
+  transform: none;
+}
+
+.pv-tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0 0.8rem;
+  border-bottom: 1px solid var(--w-rule);
+  background: #fff;
+}
+
+.pv-tabs button {
+  padding: 0.65rem 0.5rem 0.5rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--w-quiet, #646b75);
+  font: 600 13px / 1.2 "Rec", system-ui, sans-serif;
+  font-variation-settings: "MONO" 0;
+  cursor: pointer;
+}
+
+.pv-tabs button:hover {
+  color: var(--w-ink, #25282d);
+}
+
+.pv-tabs button[aria-selected="true"] {
+  color: var(--w-ink, #25282d);
+  border-bottom-color: var(--w-teal, #245f61);
+}
+
+.pv-tabs button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: -2px;
+}
+
+.pv-title {
+  display: none;
+}
+
+.wr[data-pane="audio"] .pv-tabs button {
+  display: none;
+}
+
+.wr[data-pane="audio"] .pv-audio {
+  display: inline-block;
+  padding: 0.65rem 0.5rem 0.5rem;
+  border-bottom: 2px solid #7c3aed;
+  color: #5b21b6;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.pv {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  padding: 0.9rem;
+  background: #f6f7f9;
+  scrollbar-width: thin;
+}
+
+.pv:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: -2px;
+}
+
+.wr[data-pane="book"] .pv-p-book,
+.wr[data-pane="script"] .pv-p-script,
+.wr[data-pane="lines"] .pv-p-lines,
+.wr[data-pane="audio"] .pv-p-audio {
+  display: block;
+  animation: pane-in-right 0.4s ease both;
+}
+
+@keyframes pane-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+.pv .book-page,
+.pv .script-page,
+.pv .sides-page {
+  padding: 1rem 1.1rem 2rem;
+}
+
+/* The scene board. */
+.board {
+  position: absolute;
+  left: 50%;
+  top: 1.2rem;
+  z-index: 3;
+  width: min(24rem, 70%);
+  padding: 0.9rem;
+  border-radius: 12px;
+  background: #e7eaee;
+  box-shadow: 0 0 0 1px rgb(21 17 42 / 0.1), 0 30px 60px -20px rgb(21 17 42 / 0.45);
+  opacity: 0;
+  transform: translate(-50%, 16px) scale(0.97);
+  transition: opacity 0.4s ease, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+.wr[data-step="4"] .board {
+  opacity: 1;
+  transform: translate(-25%, 0);
+  transition-delay: 0.6s;
+}
+
+.board-h {
+  margin-bottom: 0.6rem;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.bcard {
+  margin-bottom: 0.45rem;
+  padding: 0.5rem 0.65rem 0.45rem;
+  border-radius: 8px;
+  background: #fff;
+  border-left: 4px solid var(--st);
+  box-shadow: 0 0 0 1px #e1e4e8, 0 1px 2px rgb(21 17 42 / 0.06);
+}
+
+.bcard b {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.bcard i {
+  display: block;
+  margin: 0.2rem 0 0.35rem;
+  font: italic 400 12.5px / 1.35 var(--serif);
+}
+
+.bcard span {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bcard em {
+  padding: 0.1rem 0.45rem;
+  border: 1px solid #d5dae1;
+  border-radius: 5px;
+  font-style: normal;
+  font-size: 11px;
+}
+
+.bcard small {
+  font-size: 11px;
+  color: var(--w-quiet, #646b75);
+}
+
+.st-rev {
+  --st: #2f5da8;
+}
+
+.st-draft {
+  --st: #c2410c;
+}
+
+.wr[data-step="4"] .bcard-new {
+  animation: drag-in 1s cubic-bezier(0.5, 0, 0.2, 1) 1.1s both;
+}
+
+@keyframes drag-in {
+  0% {
+    opacity: 0;
+    transform: translate(60px, 30px) rotate(4deg);
+    box-shadow: 0 20px 30px -10px rgb(21 17 42 / 0.35);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(8px, -4px) rotate(-1deg);
+    box-shadow: 0 20px 30px -10px rgb(21 17 42 / 0.35);
+  }
+}
+/* Make an audiobook. */
+.ab {
+  font: 400 12.5px / 1.35 "Rec", system-ui, sans-serif;
+  font-variation-settings: "MONO" 0;
+  color: var(--w-ink, #25282d);
+}
+
+.ab-title {
+  font: 700 15px / 1.2 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.ab-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0.7rem 0 0.5rem;
+  color: #5c6370;
+}
+
+.ab-select {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid #d5dae1;
+  border-radius: 6px;
+  background: #fff;
+  color: #25282d;
+  font-weight: 600;
+}
+
+.ab-select i {
+  font-style: normal;
+  color: #5c6370;
+}
+
+.ab-cast {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+
+.ab-cast li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 7px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+
+.ab-cast b {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.ab-now {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+  font-weight: 600;
+  color: #25282d;
+}
+
+.ab-now span:last-child {
+  font: 500 11.5px / 1.35 "Rec", monospace;
+  font-variation-settings: "MONO" 1;
+  color: #5c6370;
+}
+
+.lanes {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.6rem;
+  border-radius: 10px;
+  background: #1a1530;
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: 5.4rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lane > span {
+  font: 600 11px / 1.2 var(--body);
+  color: #d9d5ea;
+}
+
+.lane-track {
+  position: relative;
+  height: 1.05rem;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.06);
+}
+
+.lane-track i {
+  position: absolute;
+  top: 0.18rem;
+  bottom: 0.18rem;
+  left: var(--x);
+  width: max(var(--w), 3px);
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--c) 70%, #fff);
+  opacity: 0.6;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.lane-track i.on {
+  opacity: 1;
+  transform: scaleY(1.35);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--c) 70%, transparent);
+}
+
+.playhead-rail {
+  position: absolute;
+  top: 0.35rem;
+  bottom: 0.35rem;
+  left: calc(0.6rem + 5.9rem);
+  right: 0.6rem;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 8px #fff;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.lanes.playing .playhead {
+  opacity: 1;
+}
+
+/* Book, script and lines pages, shared by the mock, the examples and the dark section. */
+.book-page {
+  position: relative;
+  padding: 1.4rem 1.6rem 2.6rem;
+  border-radius: 4px 10px 10px 4px;
+  background: #fffdf8;
+  box-shadow: 0 0 0 1px rgb(80 60 30 / 0.12) inset, -6px 0 0 -3px #efe8da;
+}
+
+.book-page .vxd,
+.script-page .vxd {
+  --vxd-story-font: "Literata Variable", "Literata Fallback", Georgia, serif;
+  --vxd-interface-font: "Rec", system-ui, sans-serif;
+  --vxd-size: 14.5px;
+  --vxd-measure: none;
+  --vxd-ink: #2a241c;
+  hyphens: auto;
+}
+
+.script-page .vxd {
+  --vxd-ink: #25282d;
+}
+
+.book-page .vxd-book .vxd-p {
+  margin: 0;
+}
+
+.book-run,
+.book-folio {
+  text-align: center;
+  font: 500 10.5px / 1 var(--body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #6b604c;
+}
+
+.book-run {
+  margin-bottom: 0.9rem;
+}
+
+.book-folio {
+  position: absolute;
+  inset: auto 0 0.9rem;
+  letter-spacing: 0.05em;
+}
+
+.script-page {
+  padding: 1.2rem 1.3rem;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(21 17 42 / 0.08) inset;
+}
+
+.script-head {
+  margin-bottom: 0.8rem;
+  font: 600 11px / 1.3 var(--body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5c6370;
+}
+
+.sides-page {
+  padding: 1.2rem 1.3rem;
+  border-radius: 10px;
+  background: #fff;
+  color: #25282d;
+  box-shadow: 0 0 0 1px rgb(21 17 42 / 0.08) inset;
+  font: 400 14px / 1.55 var(--serif);
+}
+
+.sides-head {
+  margin-bottom: 0.7rem;
+  font: 600 11px / 1.3 var(--body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5c6370;
+}
+
+.sides-head span {
+  color: color-mix(in oklab, var(--sp) 85%, #000);
+}
+
+.sides-page .cue {
+  margin-top: 0.55rem;
+  font: italic 400 12px / 1.4 var(--body);
+  color: #5c6370;
+}
+
+.sides-page .said {
+  padding-left: 0.6rem;
+  border-left: 3px solid #c2410c;
+  border-left-color: color-mix(in oklab, var(--sp, #c2410c) 85%, #000);
+}
+
+.sides-page .said b {
+  font: 700 11px / 1 var(--body);
+  letter-spacing: 0.06em;
+}
+
+.sides-page .said i {
+  font: italic 500 12.5px / 1 var(--body);
+  color: #6d28d9;
+}
+
+/* ------------------------------------------------------------------ the cast */
+.cast {
+  background: var(--bg);
+}
+
+.cast-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.cast-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.3rem 1.3rem 1.4rem;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line) inset, var(--shadow-soft);
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cast-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--sp);
+}
+
+.cast-card.on {
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 2px var(--sp) inset, var(--shadow-lift);
+}
+
+.cast-top {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.medal {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  background: var(--sp);
+  color: #fff;
+  font: 800 1.2rem / 1 var(--display);
+}
+
+.cast-card h3 {
+  font: 720 1.2rem / 1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.cast-voice {
+  margin-top: 0.15rem;
+  font-size: 0.84rem;
+  color: var(--ink-3);
+}
+
+.cast-about {
+  margin-top: 0.9rem;
+  font-size: 0.95rem;
+  color: var(--ink-2);
+}
+
+.cast-line {
+  margin: 0.9rem 0 1.1rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  background: var(--bg-2);
+  font: 400 0.82rem / 1.6 var(--mono);
+  flex: 1;
+}
+
+.cast-line code {
+  font: inherit;
+  white-space: normal;
+}
+
+.cast-line .t-name,
+.cast-line .t-mark {
+  color: color-mix(in oklab, var(--c, var(--ink)) 85%, #000);
+}
+
+.audition {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 1rem 0.45rem 0.45rem;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sp) 12%, #fff);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--sp) 45%, transparent) inset;
+  color: color-mix(in oklab, var(--sp) 70%, #000);
+  font: 650 0.92rem / 1 var(--body);
+  cursor: pointer;
+}
+
+.audition .play-glyph {
+  margin-left: 0;
+  background: var(--sp);
+}
+
+.audition:hover {
+  background: color-mix(in srgb, var(--sp) 20%, #fff);
+}
+
+.cast-meter {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--sp) 12%, transparent);
+}
+
+.cast-meter i {
+  display: block;
+  height: 100%;
+  background: var(--sp);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+/* ------------------------------------------------------------------ production */
+.sec-head-dark h2 {
+  color: #fff;
+}
+
+.routes {
+  display: grid;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.route {
+  display: flex;
+  flex-direction: column;
+  padding: 1.6rem;
+  border-radius: 24px;
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+  min-width: 0;
+}
+
+.route-kicker {
+  align-self: flex-start;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgb(196 181 253 / 0.14);
+  color: #c4b5fd;
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.route h3 {
+  margin-top: 0.8rem;
+  font: 740 clamp(1.4rem, 2.2vw, 1.85rem) / 1.1 var(--display);
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+
+.route > p {
+  margin-top: 0.6rem;
+  color: #c9c4dc;
+}
+
+.route > p b {
+  color: #fff;
+}
+
+.route-viz {
+  margin: 1.2rem 0;
+}
+
+.engines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.eng {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+}
+
+.eng b {
+  font: 700 1.05rem / 1.2 var(--display);
+  color: #fff;
+}
+
+.eng i {
+  font-style: normal;
+  font-size: 0.82rem;
+  color: #b9b3cf;
+}
+
+.eng-free {
+  background: linear-gradient(140deg, rgb(20 184 166 / 0.28), rgb(20 184 166 / 0.08));
+  box-shadow: 0 0 0 1px rgb(94 234 212 / 0.35) inset;
+}
+
+.eng-free i {
+  color: #99f6e4;
+}
+
+.route-note {
+  margin-top: 0.9rem !important;
+  font-size: 0.9rem;
+}
+
+.also-out {
+  max-width: 46rem;
+  margin: 1.8rem auto 0;
+  text-align: center;
+  color: #c9c4dc;
+}
+
+.dark-dev {
+  padding-block: clamp(4rem, 10vh, 6.5rem);
+}
+
+.dark-dev .devs {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* ------------------------------------------------------------------ proof */
+.proof {
+  background: linear-gradient(180deg, var(--bg-2), var(--bg) 30%);
+}
+
+.shot-tile {
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line) inset, var(--shadow-lift);
+  overflow: hidden;
+}
+
+.shot-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  justify-content: space-between;
+}
+
+.seg {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: var(--bg-2);
+  box-shadow: 0 0 0 1px var(--line) inset;
+}
+
+.seg button {
+  padding: 0.35rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--bg-2);
+}
+
+.proof-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.proof-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0.8rem 0.8rem 1.3rem;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line) inset, var(--shadow-soft);
+}
+
+.proof-card > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 11;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 14px;
+  background: var(--bg-2);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.proof-card > img.missing {
+  display: none;
+}
+
+.proof-card h3 {
+  margin: 1rem 0.5rem 0;
+  font: 720 1.25rem / 1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.proof-card > p {
+  margin: 0.4rem 0.5rem 0;
+  color: var(--ink-2);
+}
+
+.index {
+  margin-top: 2.2rem;
+  padding: 1.6rem 1.8rem;
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  box-shadow: 0 0 0 1px var(--line) inset;
+}
+
+.index-title {
+  font: 720 1.2rem / 1.2 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.index-list {
+  columns: 3 16rem;
+  column-gap: 2rem;
+  margin-top: 1rem;
+}
+
+.index-list li {
+  position: relative;
+  break-inside: avoid;
+  padding: 0.28rem 0 0.28rem 1.1rem;
+  font-size: 0.94rem;
+  color: var(--ink-2);
+}
+
+.index-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.78rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--violet);
+}
+
+.index-list kbd,
+.index kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.45rem;
+  height: 1.45rem;
+  margin-left: 0.2rem;
+  padding: 0 0.35rem;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 -2px 0 #d7d2e8 inset, 0 0 0 1px var(--line-2) inset;
+  font: 650 0.72rem / 1 var(--body);
+  color: var(--ink);
+  vertical-align: 0.05em;
+}
+
+.index-more {
+  margin-top: 1rem;
+}
+
+.index-more a {
+  color: var(--violet-d);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.index-more a:hover {
+  text-decoration: underline;
+}
+
+.fact-private {
+  position: relative;
+  background: radial-gradient(circle at 92% 20%, rgb(20 184 166 / 0.4), transparent 40%),
+    radial-gradient(circle at 0% 110%, rgb(124 58 237 / 0.55), transparent 55%),
+    linear-gradient(160deg, #1d1638, #0f0b1d) !important;
+  color: #fff;
+  overflow: hidden;
+  grid-row: span 2;
+  display: flex;
+  flex-direction: column;
+}
+
+.fact-private .lock {
+  position: absolute;
+  width: 3.4rem;
+  height: 3.4rem;
+  right: 1.4rem;
+  top: 1.4rem;
+  fill: none;
+  stroke: #5eead4;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: none;
+}
+
+.fact-kicker {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgb(20 184 166 / 0.22);
+  color: #99f6e4;
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fact-private h3 {
+  margin-top: 0.8rem;
+  max-width: 12ch;
+  font: 780 clamp(1.7rem, 2.6vw, 2.3rem) / 1 var(--display);
+  letter-spacing: -0.04em;
+}
+
+.fact-private > p:last-child {
+  margin-top: 0.7rem !important;
+  color: rgb(255 255 255 / 0.88) !important;
+}
+
+.pen-final {
+  position: absolute;
+  z-index: 0;
+  width: clamp(9rem, 16vw, 14rem);
+  height: auto;
+  left: clamp(1rem, 4vw, 4rem);
+  bottom: 1.5rem;
+  rotate: -14deg;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  filter: drop-shadow(0 18px 24px rgb(40 0 60 / 0.4)) brightness(1.05);
+  pointer-events: none;
+}
+
+.pen-final.loaded {
+  opacity: 0.95;
+}
+
+/* ------------------------------------------------------------------ now playing */
+.np {
+  position: fixed;
+  left: 50%;
+  bottom: 1.1rem;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.45rem 0.5rem 0.45rem 1rem;
+  border-radius: 999px;
+  background: rgb(21 17 42 / 0.92);
+  color: #fff;
+  box-shadow: 0 18px 40px -12px rgb(21 17 42 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+  animation: np-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (min-width: 861px) {
+  .np {
+    left: auto;
+    right: 1.2rem;
+    transform: none;
+    animation-name: np-in-right;
+  }
+}
+@keyframes np-in-right {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.np[hidden] {
+  display: none;
+}
+
+@keyframes np-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+.np-dot {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--c, #a78bfa) 60%, #fff);
+}
+
+.np-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 550;
+}
+
+.np-k {
+  color: #c4b5fd;
+  font-weight: 700;
+}
+
+.np-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.np-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+}
+
+.np-back {
+  flex: none;
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  font: 600 0.84rem / 1 var(--body);
+  cursor: pointer;
+}
+
+.np-back:hover {
+  background: rgb(255 255 255 / 0.2);
+}
+
+.np :focus-visible {
+  outline-color: #c4b5fd;
+}
+
+/* ------------------------------------------------------------------ examples (phone, screen readers) */
+.step-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font: 650 0.8rem / 1.2 var(--body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.step-label span {
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--grad-btn);
+  color: #fff;
+  font: 600 0.75rem / 1 var(--mono);
+  letter-spacing: 0;
+}
+
+.step-label em {
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--violet-d);
+}
+
+/* ------------------------------------------------------------------ responsive */
+
+@media (max-width: 1180px) {
+  .cast-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wr {
+    --bench: 14rem;
+  }
+
+  .wr-file small,
+  .wr-look {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .legend-label {
+    display: none;
+  }
+
+  .tb:not(.tb-i) {
+    gap: 0;
+    font-size: 0;
+  }
+
+  .tb:not(.tb-i) svg {
+    margin: 0;
+  }
+}
+@media (max-height: 760px) and (min-width: 861px) {
+  .caption {
+    min-height: 4.6rem;
+  }
+
+  .cap-p {
+    font-size: 0.92rem;
+  }
+
+  .jump button {
+    padding-block: 0.22rem;
+  }
+}
+@media (max-width: 960px) {
+  .hero-in {
+    grid-template-columns: 1fr;
+  }
+
+  .routes,
+  .devs {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 860px) {
+  /* The steps, stacked: each with its own example, no pinned window. */
+  .spine-stick {
+    display: none;
+  }
+
+  .steps {
+    pointer-events: auto;
+    padding-bottom: 0;
+    counter-reset: none;
+  }
+
+  .step,
+  .step:first-child {
+    height: auto;
+    padding: 1.1rem 0 1.3rem;
+  }
+
+  .step + .step {
+    border-top: 1px solid var(--line);
+  }
+
+  .step > * {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .step > .step-play {
+    display: inline-flex;
+    margin-top: 1rem;
+  }
+
+  .step h3 {
+    margin-top: 0.7rem;
+    font: 740 1.6rem / 1.1 var(--display);
+    letter-spacing: -0.03em;
+  }
+
+  .step h3 + p {
+    margin-top: 0.5rem;
+    color: var(--ink-2);
+  }
+
+  .step-example .book-page,
+  .step-example .script-page,
+  .step-example .sides-page {
+    box-shadow: 0 0 0 1px var(--line) inset, var(--shadow-soft);
+  }
+
+  .proof-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .top-nav {
+    display: none;
+  }
+
+  .top .btn-sm {
+    margin-left: auto;
+  }
+}
+@media (max-width: 600px) {
+  body {
+    font-size: 1rem;
+  }
+
+  .cta-row .btn {
+    width: 100%;
+  }
+
+  .sheet {
+    height: 19rem;
+    font-size: 0.86rem;
+  }
+
+  .demo-head {
+    padding-inline: 0.75rem;
+  }
+
+  .lights {
+    display: none;
+  }
+
+  .for,
+  .for ul {
+    justify-content: flex-start;
+  }
+
+  .cast-list {
+    grid-template-columns: 1fr;
+  }
+
+  .engines {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pkgs li {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .final-band {
+    border-radius: 28px;
+    padding-bottom: 9rem;
+  }
+
+  .pen-final {
+    left: 50%;
+    translate: -50% 0;
+    width: 9rem;
+  }
+
+  .shot {
+    object-position: 42% 50%;
+    object-fit: initial !important;
+    aspect-ratio: 780 / 740 !important;
+  }
+
+  .index {
+    padding: 1.3rem;
+  }
+
+  .np-back {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ calm */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* The step buttons and the audiobook panel, compact where room is short. */
+@media (max-width: 1180px) {
+  .jump ol {
+    gap: 0.2rem;
+  }
+
+  .jump button {
+    gap: 0.3rem;
+    padding: 0.22rem 0.5rem 0.22rem 0.22rem;
+    font-size: 0.74rem;
+  }
+
+  .jump button span {
+    width: 1.15rem;
+    height: 1.15rem;
+    font-size: 0.64rem;
+  }
+}
+@media (max-height: 820px) and (min-width: 861px) {
+  .pv-p-audio .ab-row {
+    margin: 0.4rem 0 0.35rem;
+  }
+
+  .pv-p-audio .ab-cast {
+    gap: 0.2rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .pv-p-audio .ab-cast li {
+    padding: 0.22rem 0.5rem;
+  }
+
+  .pv-p-audio .lanes {
+    gap: 0.2rem;
+    padding: 0.45rem 0.6rem;
+  }
+
+  .pv-p-audio .ab-now {
+    margin-top: 0.5rem;
+  }
+}
+.hand i {
+  display: inline-block;
+  font-style: normal;
+  transform: skewX(-11deg);
+}
+
+/* Code: Recursive with its MONO axis on, ligatures off. */
+:is(
+    code,
+    pre,
+    kbd,
+    .sheet,
+    .term,
+    .time,
+    .btn-time,
+    .cast-line,
+    .eyebrow span,
+    .csv pre,
+    .jump button span,
+    .cap-n span,
+    .step-label span,
+    .pkgs code
+  ) {
+  font-variation-settings: "MONO" 1, "CASL" 0;
+  font-variant-ligatures: none;
+}
+
+.final-band .btn-clear {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.7) inset;
+}
+
+/* The beat's "try it" line, in the caption. */
+.cap-try {
+  display: inline;
+  color: #6d28d9;
+  font-weight: 650;
+}
+
+.step-try {
+  margin-top: 0.6rem;
+  font-weight: 650;
+  color: var(--violet-d);
+}
+
+/* ------------------------------------------------------------------ each beat, a small Writer */
+.mini {
+  border-radius: 14px;
+  background: #e7eaee;
+  box-shadow: 0 0 0 1px rgb(21 17 42 / 0.12), var(--shadow-soft);
+  overflow: hidden;
+  color: #25282d;
+  font: 400 12.5px / 1.35 "Rec", system-ui, sans-serif;
+  font-variation-settings: "MONO" 0, "CASL" 0;
+}
+
+.mini-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+  border-bottom: 1px solid #dde1e6;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.mini-bar img {
+  border-radius: 3px;
+}
+
+.mini-bar b {
+  font: 600 13px / 1 var(--serif);
+}
+
+.mini-bar em {
+  font: 400 13px / 1 var(--serif);
+  font-style: normal;
+  color: #245f61;
+}
+
+.mini-bar span {
+  margin-left: 0.4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #5c6370;
+  font-size: 11.5px;
+}
+
+.mini-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  background: #fff;
+  border-bottom: 1px solid #dde1e6;
+}
+
+.mini-tools .tb-live {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1.5px #7c3aed inset;
+  color: #5b21b6;
+  font-weight: 650;
+  gap: 0.35rem;
+  font-size: 13px !important;
+}
+
+.mini-tools .tb-live svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.mini-body {
+  position: relative;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.7rem;
+}
+
+.mini-paper .ln {
+  margin: 0 0 0.45em;
+  padding: 0;
+}
+
+.mini-paper .ln.tight {
+  margin-bottom: 0;
+}
+
+.mini-paper .ln.noted {
+  position: relative;
+}
+
+.mini-paper .ln.g1 {
+  padding-left: 0.6rem;
+}
+
+.mini-paper .ln.g1.noted {
+  padding-right: 5.6rem;
+}
+
+.note {
+  position: absolute;
+  right: 0;
+  top: 0.05em;
+  font-size: 17px;
+  line-height: 1.05;
+  width: 6.2rem;
+}
+
+/* The pencil, placed by hand: a ring around the words, or a line under them. */
+.ink-ring {
+  padding: 0.12em 0.4em;
+  background: url("/landing/studio/pen/pencil-circle.webp") center / 100% 100% no-repeat;
+  margin: 0 -0.4em;
+  white-space: nowrap;
+}
+
+.k-speech.ink-ring {
+  background: url("/landing/studio/pen/pencil-circle.webp") center / 100% 100% no-repeat,
+    color-mix(in oklab, var(--sp) 14%, transparent);
+}
+
+.ink-under {
+  padding-bottom: 0.3em;
+  background: url("/landing/studio/pen/pencil-underline.webp") 0 100% / 100% 0.5em no-repeat;
+}
+
+.mini-cast .cc {
+  margin: 0;
+}
+
+.mini-cast:empty {
+  display: none;
+}
+
+.mini .picker {
+  position: relative;
+  width: auto;
+}
+
+.mini-pane {
+  padding: 0.7rem 0.8rem;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #dde1e6 inset;
+  font: 400 14px / 1.4 var(--serif);
+}
+
+.mini-board {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  border-radius: 10px;
+  background: #f3f5f8;
+  box-shadow: 0 0 0 1px #dde1e6 inset;
+}
+
+.mini-board .bcard {
+  margin: 0;
+}
+
+.mini-pane .cmt,
+.mini-pane .scrap {
+  margin-top: 0.35rem;
+}
+
+.mini-tabs .pv-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mini-tabs .pv-tabs button {
+  flex: none;
+  min-height: 2.6rem;
+}
+
+.mini-tabs .pv {
+  padding: 0;
+  background: none;
+}
+
+.mini-tabs[data-pane="script"] .pv-p-script,
+.mini-tabs[data-pane="book"] .pv-p-book,
+.mini-tabs[data-pane="lines"] .pv-p-lines {
+  display: block;
+}
+
+.mini .ab {
+  padding: 0.2rem;
+}
+
+.ex-h {
+  margin-bottom: 0.4rem;
+  font: 650 11px / 1 var(--body) !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5c6370;
+  display: block !important;
+}
+
+/* The change each small Writer shows as it comes into view. */
+.js .step-example .mk,
+.js .step-example .ink-ring,
+.js .step-example .ink-under,
+.js .step-example .note,
+.js .step-example .is-new {
+  transition: opacity 0.5s ease 0.5s, transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.5s;
+}
+
+.js .step-example:not(.seen) .mk,
+.js .step-example:not(.seen) .note,
+.js .step-example:not(.seen) .is-new {
+  opacity: 0.22;
+}
+
+.js .step-example:not(.seen) .is-new {
+  transform: translateX(24px);
+}
+
+.js .step-example:not(.seen) .ink-ring,
+.js .step-example:not(.seen) .ink-under {
+  background-size: 0 0, auto;
+}
+
+/* On a wide screen the examples are for screen readers only: nothing in them to press. */
+@media (min-width: 861px) {
+  .step .live,
+  .step .mini-tabs .pv-tabs {
+    display: none !important;
+  }
+
+  .step .mini-tabs .pv {
+    display: block;
+  }
+}
+/* ------------------------------------------------------------------ section 03, new */
+.route-viz .script-page {
+  max-width: 34rem;
+}
+
+.script-page .vxd-note {
+  display: block;
+  margin: 0.2rem 0 0.6rem;
+  padding: 0.45rem 0.65rem;
+  border-left: 3px solid #a16207;
+  border-radius: 0 6px 6px 0;
+  background: #fefce8;
+  color: #713f12;
+  font: italic 500 13px / 1.4 var(--body);
+}
+
+.csv {
+  margin: 0 0 1rem;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.35);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08) inset;
+  overflow: hidden;
+}
+
+.csv figcaption {
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  font-size: 0.78rem;
+  color: #b9b3cf;
+}
+
+.csv pre {
+  padding: 0.8rem 0.9rem;
+  overflow-x: auto;
+  font: 500 0.8rem / 1.65 var(--mono);
+  color: #e9e6f5;
+  white-space: pre;
+}
+
+.csv pre:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: -2px;
+}
+
+/* ------------------------------------------------------------------ section 04, new */
+.seg-looks {
+  flex-wrap: wrap;
+  align-items: center;
+  margin-left: 0;
+  background: none;
+  box-shadow: none;
+  gap: 0.15rem;
+}
+
+.zoom {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.zoom picture,
+.zoom img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.zoom:focus-visible {
+  outline: 3px solid var(--violet);
+  outline-offset: -3px;
+}
+
+.zoom-hint {
+  position: absolute;
+  right: 0.9rem;
+  bottom: 0.9rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  background: rgb(21 17 42 / 0.82);
+  color: #fff;
+  font: 600 0.82rem / 1 var(--body);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.zoom:hover .zoom-hint,
+.zoom:focus-visible .zoom-hint {
+  opacity: 1;
+}
+
+.proof-card .zoom img {
+  aspect-ratio: 16 / 11;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.outcomes {
+  display: grid;
+  margin-top: 1rem;
+  gap: 0.6rem 1.4rem;
+}
+
+.outcomes li {
+  color: var(--ink-2);
+}
+
+.outcomes b {
+  display: block;
+  color: var(--ink);
+  font: 700 1.05rem / 1.3 var(--display);
+  letter-spacing: -0.01em;
+  font-size: 1rem;
+}
+
+.more {
+  margin-top: 1.2rem;
+}
+
+.more summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line-2) inset;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.more summary::-webkit-details-marker {
+  display: none;
+}
+
+.more summary::after {
+  content: "+";
+  font-weight: 700;
+  color: var(--violet-d);
+}
+
+.more[open] summary::after {
+  content: "−";
+}
+
+.lightbox {
+  width: min(96vw, 1600px);
+  max-width: none;
+  max-height: 94vh;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 40px 100px rgb(0 0 0 / 0.5);
+  overflow: auto;
+}
+
+.lightbox::backdrop {
+  background: rgb(15 11 29 / 0.78);
+}
+
+.lightbox img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lb-close {
+  position: sticky;
+  top: 0.6rem;
+  float: right;
+  z-index: 1;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin: 0.6rem 0.6rem -3.2rem 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.lb-close:focus-visible {
+  outline: 3px solid #c4b5fd;
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .outcomes {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .proof-card .zoom img {
+    max-height: 26rem;
+    object-fit: contain;
+    background: #e7eaee;
+    aspect-ratio: auto 292 / 640;
+  }
+
+  .seg-looks button {
+    padding: 0.32rem 0.55rem;
+    font-size: 0.76rem;
+  }
+
+  .shot-bar .lights {
+    display: none;
+  }
+
+  .zoom-hint {
+    opacity: 1;
+    font-size: 0.74rem;
+    padding: 0.3rem 0.6rem;
+    top: auto;
+    right: 50%;
+    bottom: 0.45rem;
+    translate: 50% 0;
+    background: var(--ink);
+  }
+}
+.routes {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+}
+
+.step[data-step="2"] .step-example:not(.who-set) .who-slot {
+  display: none;
+}
+
+.ink-ring,
+.ink-under {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech.ink-ring {
+  background: url("/landing/studio/pen/pencil-circle.webp") center / 100% 100% no-repeat;
+}
+
+/* Beat 1 starts only once the frame is pinned, so its caption is on screen. */
+@media (min-width: 861px) {
+  .steps {
+    padding-top: calc(50vh - 4.5rem);
+  }
+}
+/* The scene board, in the workbench beside the page. */
+.pane-scenes {
+  padding: 0.75rem;
+}
+
+.pane-scenes .board-h,
+.mini-board .board-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.board-h small {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: #5c6370;
+}
+
+.board-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.board-list .bcard {
+  position: relative;
+  margin: 0;
+  cursor: grab;
+  transition: box-shadow 0.2s ease;
+  padding-right: 2.7rem;
+}
+
+.board-list .bcard:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+.board-list .bcard.dragging {
+  z-index: 2;
+  cursor: grabbing;
+  box-shadow: 0 0 0 1px #e1e4e8, 0 16px 30px -10px rgb(21 17 42 / 0.4);
+}
+
+.wr[data-step="4"] .pane-scenes .bcard-new {
+  animation: card-new 0.6s ease 0.4s both;
+}
+
+.moves {
+  position: absolute;
+  display: flex;
+  gap: 0.2rem;
+  top: 50%;
+  right: 0.4rem;
+  translate: 0 -50%;
+  flex-direction: column;
+}
+
+.moves button {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid #d5dae1;
+  border-radius: 6px;
+  background: #fff;
+  color: #25282d;
+  font: 600 14px / 1 "Rec", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.moves button:hover {
+  background: #f1eefc;
+}
+
+.moves button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 1px;
+}
+
+/* The page follows the board: a moved scene's text moves with it. */
+.doc,
+.scene-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.battle-first .ln[data-scene="battle"] {
+  order: -1;
+}
+
+.wr.battle-first .ln[data-id="battle"] {
+  margin-top: 0;
+}
+
+.scene-page .ln[data-scene="mountain"]:first-child,
+.battle-first .scene-page .ln[data-scene="battle"]:first-of-type {
+  margin-top: 0;
+}
+
+.scene-page .ln[data-id="battle"] {
+  margin-top: 0.4em;
+}
+
+/* The recording's casting, said plainly when the reader changed it. */
+.ab-recast {
+  margin: 0.7rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #7c2d12;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.ab-recast[hidden] {
+  display: none;
+}
+
+.ab-recast button {
+  margin-top: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid #c2410c;
+  border-radius: 6px;
+  background: #fff;
+  color: #9a3412;
+  font: 600 12px / 1.2 "Rec", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.ab-recast button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 1px;
+}
+
+/* The phone's own words and room. */
+.desk-alt {
+  display: none;
+}
+
+@media (min-width: 861px) {
+  .step .desk-alt {
+    display: block;
+  }
+
+  .step .mini-board.desk-alt {
+    display: grid;
+  }
+}
+/* The final band: the pencil underlines "waiting." and rests at its end. */
+.final-band .pen-final-word {
+  position: relative;
+  display: inline-block;
+}
+
+.final-band .pen-final-word .under-img {
+  position: absolute;
+  left: -2%;
+  bottom: -0.2em;
+  width: 104%;
+  height: 0.4em;
+  object-fit: fill;
+  filter: brightness(1.15) saturate(1.1);
+}
+
+.final-band .pen-final {
+  position: absolute;
+  filter: drop-shadow(0 10px 14px rgb(0 0 0 / 0.4));
+  rotate: 0deg;
+  transform-origin: 0 100%;
+  /* The lead (4.9% across, 96.2% down the picture) on the end of the line it has just drawn. */
+  left: calc(96% - 0.0735em);
+  bottom: -0.038em;
+  width: 1.5em;
+  translate: none;
+  animation: none;
+  height: auto;
+  object-fit: contain;
+}
+
+.fact-private .lock path:last-child {
+  fill: rgb(94 234 212 / 0.25);
+}
+
+@media (max-width: 860px) {
+  .fact-private {
+    grid-row: auto;
+    grid-column: 1 / -1;
+  }
+}
+/* The cast: on a phone, chips and the chosen voice. */
+.cast-chips {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .cast-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .cast-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.75rem;
+    padding: 0.3rem 0.85rem 0.3rem 0.3rem;
+    border: 0;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--sp) 40%, transparent) inset;
+    color: var(--ink);
+    font: 600 0.92rem / 1 var(--body);
+    cursor: pointer;
+  }
+
+  .cast-chip .medal {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.9rem;
+  }
+
+  .cast-chip[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--sp) 14%, #fff);
+    box-shadow: 0 0 0 2px var(--sp) inset;
+  }
+
+  .cast-list .cast-card:not(.chosen) {
+    display: none;
+  }
+}
+
+/* Phone: the hint under the picture, and the full view at its own size, to pan. */
+@media (max-width: 600px) {
+  .zoom {
+    padding-bottom: 2.4rem;
+  }
+
+  .proof-card .zoom {
+    padding-bottom: 2.6rem;
+  }
+
+  .lightbox {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+
+  .lightbox img {
+    width: auto;
+    max-width: none;
+  }
+
+  .lb-close {
+    position: fixed;
+    top: 0.7rem;
+    right: 0.7rem;
+    float: none;
+    margin: 0;
+  }
+}
+.board-list .bcard b {
+  padding-right: 0;
+}
+
+/* Phone: the handouts in a window of their own, scrolled inside, not the whole page long. */
+@media (max-width: 860px) {
+  .mini-tabs .pv {
+    overflow: auto;
+    overscroll-behavior: contain;
+    max-height: 16rem;
+    mask-image: linear-gradient(#000 calc(100% - 3rem), transparent);
+    padding-bottom: 1.5rem;
+  }
+}
+.btn-grad .btn-time {
+  color: #fff;
+}
+
+.cast-line .t-quote {
+  color: #565b66;
+}
+
+.script-page .vxd-chip-vocal,
+.pv .vxd-chip-vocal {
+  color: color-mix(in oklab, var(--vxd-c, #0f766e) 78%, #000);
+}
+
+/* Wide screens: the per-beat examples are the phone's; only each beat's words (and step 6's text
+   alternative) stay, for screen readers. Nothing hidden can take the focus. */
+@media (min-width: 861px) {
+  .step .step-example .mini,
+  .step .phone-only {
+    display: none !important;
+  }
+}
+/* The reader's answer: at once, with a short flash of its colour. */
+.wr .who-slot.flash,
+.step-example .who-slot.flash {
+  animation: who-flash 0.7s ease-out both !important;
+}
+
+@keyframes who-flash {
+  from {
+    background-color: color-mix(in srgb, var(--sp) 30%, transparent);
+    border-radius: 3px;
+  }
+}
+/* The pencil, answered: "who?" struck through, the speaker named, a tick. */
+.hand s,
+.note s {
+  text-decoration: line-through 2px #c62f1b;
+  margin-right: 0.15em;
+}
+
+.hand .tick,
+.note .tick {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-left: 0.15em;
+  vertical-align: -0.05em;
+  fill: none;
+  stroke: #c62f1b;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pen-done .hand {
+  max-width: 7rem;
+  white-space: nowrap;
+  line-height: 1.1;
+  translate: 0 -0.55em;
+}
+
+.pen-now .ring,
+.pen-now .lead,
+.pen-now .under {
+  animation: none;
+}
+
+.pen-now .hand {
+  animation: hand-in 0.35s ease both;
+}
+
+.pv {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.pv .vxd {
+  --vxd-size: 14px;
+}
+
+.pv .vxd-name,
+.step-example .vxd-name {
+  font-size: 11px !important;
+  vertical-align: 0.1em;
+}
+
+.pv .vxd-chip,
+.step-example .vxd-chip,
+.route .vxd-chip {
+  font-size: 11px !important;
+}
+
+.pv .vxd-direction > span,
+.step-example .vxd-direction > span {
+  font-size: 11px;
+}
+
+.route .route-viz:last-child,
+.route .csv:last-child {
+  margin-bottom: 0;
+}
+
+.route-viz#route-script {
+  flex: 1;
+  display: flex;
+}
+
+.route-viz#route-script .script-page {
+  flex: 1;
+  max-width: none;
+}
+
+.route-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.4rem;
+  margin-top: 1rem;
+  padding: 1rem 1.2rem;
+  border-radius: 18px;
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+}
+
+.route-foot .term {
+  margin: 0;
+  flex: none;
+}
+
+.route-foot .route-note {
+  flex: 1 1 22rem;
+  margin: 0 !important;
+  color: #c9c4dc;
+  font-size: 0.92rem;
+}
+
+.fact-private > p:not(.fact-kicker) {
+  margin-top: 0.7rem;
+  color: rgb(255 255 255 / 0.88);
+}
+
+.vows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 1.1rem;
+}
+
+.vows li {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16) inset;
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 550;
+}
+
+.facts > li:not(.fact-private) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Folds: open (and their summary hidden) on wide screens; one tap to open on a phone. */
+.fold > summary {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .fold {
+    margin-top: 1rem;
+  }
+
+  .fold > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    min-height: 3.2rem;
+    padding: 0.8rem 1.1rem;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--line-2) inset;
+    font: 650 1rem / 1.3 var(--display);
+    color: var(--ink);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .fold > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .fold > summary::after {
+    content: "+";
+    flex: none;
+    font-size: 1.3rem;
+    color: var(--violet-d);
+  }
+
+  .fold[open] > summary::after {
+    content: "−";
+  }
+
+  .fold > summary:focus-visible {
+    outline: 3px solid var(--violet);
+    outline-offset: 2px;
+  }
+
+  .fold[open] .proof-grid,
+  .fold[open] .index {
+    margin-top: 0.8rem;
+  }
+
+  .fold .index-title {
+    display: none;
+  }
+
+  /* The board picture without the dead space under it. */
+  .proof-card .zoom {
+    padding-bottom: 2.4rem;
+  }
+
+  .proof-card .zoom img {
+    max-height: 22rem;
+    width: auto;
+    margin-inline: auto;
+    background: none;
+  }
+
+  .proof-card h3 {
+    margin-top: 0.4rem;
+  }
+
+  /* Production, said once: the engines are in the spine's last beat. */
+  .route .engines {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ the phone, shorter */
+@media (max-width: 860px) {
+  /* Who it's for: one swipeable row. */
+  .for {
+    padding-bottom: 2.2rem;
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+
+  .for ul {
+    scrollbar-width: none;
+    padding-bottom: 0.2rem;
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 0.35rem;
+  }
+
+  .for li {
+    flex: none;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.84rem;
+    gap: 0.4rem;
+  }
+
+  .sheet {
+    height: 16rem;
+  }
+
+  .spine {
+    padding-top: 2.5rem;
+  }
+
+  .step-example {
+    margin-top: 0.75rem;
+  }
+
+  .mini-board .bcard i {
+    display: none;
+  }
+
+  .mini-body {
+    gap: 0.45rem;
+    padding: 0.55rem;
+  }
+
+  .band,
+  .dark {
+    padding-block: 3rem;
+  }
+
+  .sec-head {
+    margin-bottom: 1.4rem;
+  }
+
+  /* Production: the two outputs as short windows. */
+  .route {
+    padding: 1.2rem;
+  }
+
+  .route-viz#route-script {
+    max-height: 15rem;
+    overflow: hidden;
+    mask-image: linear-gradient(#000 80%, transparent);
+  }
+
+  .route .csv pre {
+    max-height: 8.5rem;
+    overflow: auto;
+    mask-image: linear-gradient(90deg, #000 78%, transparent);
+  }
+
+  .route .csv {
+    margin: 0.8rem 0 0;
+    position: relative;
+  }
+
+  .dark-dev .fold > summary {
+    background: rgb(255 255 255 / 0.06);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14) inset;
+    color: #fff;
+  }
+
+  .dark-dev .fold > summary::after {
+    color: #c4b5fd;
+  }
+
+  .dark-dev .devs {
+    gap: 1.2rem;
+  }
+
+  /* Free and MIT side by side. */
+  .facts {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.7rem;
+  }
+
+  .facts > li:not(.fact-private) {
+    padding: 1.1rem 1.1rem 1.2rem;
+  }
+
+  .facts .big {
+    font-size: 2.3rem;
+  }
+
+  .facts > li:not(.fact-private) p:last-child {
+    font-size: 0.9rem;
+  }
+
+  .free {
+    padding-top: 2.5rem;
+  }
+
+  .final {
+    padding-bottom: 2.5rem;
+  }
+
+  .final-band {
+    padding-bottom: 3rem !important;
+  }
+}
+/* The CSV fills whatever room its card has, its rows scrolling inside. */
+.route .csv {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.route .csv pre {
+  flex: 1 1 0;
+  min-height: 9.5rem;
+  overflow: auto;
+}
+
+@media (max-width: 860px) {
+  .route .csv pre {
+    flex: none;
+    min-height: 0;
+  }
+}
+.fact-private .fact-kicker {
+  align-self: flex-start;
+}
+
+/* Their measured heights, so the page is its true length before they are laid out. */
+/* Lines wrap without leaving a lone word or letter at an edge. */
+.doc .ln,
+.mini-paper .ln {
+  text-wrap: pretty;
+}
+
+/* Labels in the handouts and scripts: never under 11 px. */
+:is(.route-viz, #wr, .step-example)
+  :is(.vxd-name, .vxd-group-name, .vxd-group-direction, .vxd-group-label) {
+  font-size: 11px !important;
+}
+
+:is(.route-viz, #wr, .step-example) .vxd-group-label {
+  line-height: 1.4;
+}
+
+.sides-page .said b {
+  color: color-mix(in oklab, var(--sp, #c2410c) 70%, #000);
+}
+
+/* The audiobook panel: the line being heard, as it's heard. */
+.ab-line {
+  min-height: 4.4em;
+  margin-top: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  font: italic 400 15px / 1.45 var(--serif);
+  color: #25282d;
+}
+
+.mini .ab-line {
+  min-height: 0;
+}
+
+/* Wide and narrow wording. */
+.narrow-only {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .wide-only {
+    display: none;
+  }
+
+  .narrow-only {
+    display: inline;
+  }
+}
+/* Pencil notes keep their distance from the words. */
+.mini-paper .ln.noted {
+  padding-right: 7rem;
+}
+
+/* The privacy card: its words fill it, chips at its foot. */
+@media (min-width: 861px) {
+  .fact-private h3 {
+    font-size: clamp(2rem, 3.1vw, 2.8rem);
+  }
+
+  .fact-private > p:not(.fact-kicker) {
+    font-size: 1.1rem;
+    line-height: 1.6;
+  }
+}
+/* The cast, in the production section: a compact strip of auditions on the dark. */
+.prod .cast-list {
+  gap: 0.8rem;
+  margin-bottom: 1.2rem;
+}
+
+.prod .cast-card {
+  padding: 1rem 1rem 1.1rem;
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset;
+  color: #e9e6f5;
+}
+
+.prod .cast-card.on {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--sp) 60%, #fff) inset;
+}
+
+.prod .cast-card h3 {
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.prod .cast-voice {
+  color: #b9b3cf;
+}
+
+.prod .cast-about {
+  display: none;
+}
+
+.prod .cast-line {
+  margin: 0.8rem 0 0.9rem;
+  background: rgb(0 0 0 / 0.3);
+  color: #e9e6f5;
+  --m-direction: #c4b5fd;
+  --m-sound: #5eead4;
+  --m-quiet: #b9b3cf;
+  flex: none;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: none;
+  height: auto;
+  mask-image: none;
+  overflow: visible;
+  display: block;
+}
+
+.prod .cast-line .t-name,
+.prod .cast-line .t-mark,
+.prod .cast-line .t-vocal {
+  color: color-mix(in oklab, var(--c, #c4b5fd) 50%, #fff);
+}
+
+.prod .cast-line .t-quote {
+  color: #b9b3cf;
+}
+
+.prod .audition {
+  background: color-mix(in srgb, var(--sp) 22%, #1d1638);
+  box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--sp) 55%, #fff) inset;
+  color: #fff;
+  margin-top: auto;
+}
+
+.prod .audition:hover {
+  background: color-mix(in srgb, var(--sp) 34%, #1d1638);
+}
+
+.prod .audition:focus-visible {
+  outline-color: #c4b5fd;
+}
+
+.prod .cast-chip {
+  color: var(--ink);
+}
+
+.prod .routes {
+  margin-top: 0.4rem;
+}
+
+/* The page's lines in a column of their own (a moved scene takes its place by order). */
+.doc-lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.caption .finale-play {
+  width: 13.5rem;
+  margin-top: 0.3rem;
+  justify-content: flex-start;
+}
+
+/* One preview width throughout (no beat changes it). */
+.wr,
+.wr[data-step="6"] {
+  --pv: 26rem;
+}
+
+@media (max-width: 1180px) {
+  .wr,
+  .wr[data-step="6"] {
+    --pv: 22rem;
+  }
+}
+.caption .finale-play .btn-time {
+  margin-left: auto;
+}
+
+@media (max-height: 820px) and (min-width: 861px) {
+  .pv-p-audio .ab-line {
+    min-height: 0;
+    margin-top: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    font-size: 14px;
+  }
+
+  .pv-p-audio .ab-recast {
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 12px;
+  }
+}
+/* Measured heights, now the cast is part of production. */
+/* ------------------------------------------------------------------ owner additions */
+/* "$0" corrected to "Free": one red stroke through "$0", which then fades to grey, and "Free"
+   written beside it in the same red. Both sit over the same box, so nothing around them moves. */
+.facts .big-edit {
+  position: relative;
+  display: inline-block;
+  align-self: flex-start;
+  width: fit-content;
+}
+
+.big-edit .struck {
+  position: relative;
+  text-decoration: none;
+  transition: color 0.5s ease 0.35s, -webkit-text-fill-color 0.5s ease 0.35s;
+}
+
+.big-edit.corrected .struck {
+  color: #8f8a9f;
+  -webkit-text-fill-color: #8f8a9f;
+}
+
+.big-edit .struck::after {
+  content: "";
+  position: absolute;
+  left: -0.1em;
+  right: -0.1em;
+  top: 52%;
+  height: 0.13em;
+  border-radius: 0.1em;
+  background: #c62f1b;
+  rotate: -9deg;
+  transform-origin: left center;
+  transition: transform 0.45s cubic-bezier(0.6, 0, 0.3, 1);
+}
+
+.big-edit .hand-free {
+  position: absolute;
+  left: calc(100% + 0.28em);
+  bottom: 0.38em;
+  font: 400 0.62em / 1 "Rec Hand", "Comic Sans MS", cursive;
+  letter-spacing: 0;
+  color: #c62f1b;
+  -webkit-text-fill-color: #c62f1b;
+  white-space: nowrap;
+  transform: skewX(-11deg) rotate(-6deg);
+  transition: opacity 0.4s ease 0.4s, translate 0.4s ease 0.4s;
+}
+
+/* Before the pencil reaches it: "$0" whole, "Free" not yet written. */
+.js .big-edit:not(.corrected) .struck::after {
+  transform: scaleX(0);
+}
+
+.js .big-edit:not(.corrected) .hand-free {
+  opacity: 0;
+  translate: 0 0.15em;
+}
+
+html:not(.js) .big-edit .struck {
+  color: #8f8a9f;
+  -webkit-text-fill-color: #8f8a9f;
+}
+
+/* The phone's scene board: ↑ and ↓ side by side inside each card, 40 px targets, no overlap. */
+@media (max-width: 860px) {
+  .board-list .bcard {
+    padding-right: 0.65rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 0.6rem;
+  }
+
+  .moves {
+    position: static;
+    translate: none;
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: 0.45rem;
+  }
+
+  .moves button {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 16px;
+  }
+}
+/* Handout headings: 12 px; their bodies as they were. */
+.pv .book-run,
+.pv .book-folio,
+.pv .sides-head,
+.step-example .sides-head,
+.step-example .book-run,
+.script-head {
+  font-size: 12px !important;
+}
+
+/* "Made for" on the phone: the label on one line, the chips wrapping onto rows. */
+@media (max-width: 860px) {
+  .for-label {
+    white-space: nowrap;
+  }
+}
+
+/* The phone's first screen: less above the story, more of the story. */
+@media (max-width: 600px) {
+  .hero-in {
+    gap: 1.6rem;
+    padding-top: 1.4rem;
+  }
+
+  .hero h1 {
+    margin-top: 0.9rem;
+    font-size: clamp(2.3rem, 10.5vw, 3rem);
+  }
+
+  .lede {
+    margin-top: 0.9rem;
+    font-size: 1.02rem;
+  }
+
+  .cta-row {
+    margin-top: 1.2rem;
+    gap: 0.55rem;
+  }
+
+  .fine {
+    margin-top: 0.7rem;
+  }
+}
+
+/* The workbench's tab row fits its badge at narrower widths. */
+@media (max-width: 1180px) {
+  .bench-tabs {
+    padding: 0 0.3rem;
+  }
+
+  .bt {
+    padding-inline: 0.32rem;
+  }
+}
+/* Headings break evenly. */
+.route h3,
+.proof-card h3,
+.cap-h,
+.step h3 {
+  text-wrap: balance;
+}
+
+/* Step 7: the current line fills the panel's room. */
+.pv-p-audio .ab {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.pv-p-audio .ab-line {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  font-size: 17px;
+}
+
+/* After the screenshots: four short outcomes, the inventory behind one closed link. */
+.outcomes {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.outcomes li {
+  font-size: 0.92rem;
+}
+
+@media (max-width: 1100px) {
+  .outcomes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.more-dark {
+  margin-top: 1rem;
+}
+
+.more-dark summary {
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16) inset;
+  color: #fff;
+}
+
+.more-dark summary::after {
+  color: #c4b5fd;
+}
+
+.more-dark summary:focus-visible {
+  outline: 3px solid #c4b5fd;
+  outline-offset: 2px;
+}
+
+.more-dark[open] .pkgs {
+  margin-top: 0.8rem;
+}
+
+.for .short-txt {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .for .wide-txt {
+    display: none;
+  }
+
+  .for .short-txt {
+    display: inline;
+  }
+}
+@media (max-width: 860px) {
+  .board-list .bcard .moves {
+    justify-content: flex-end;
+    grid-row: 1 / span 3;
+    margin-top: 0;
+  }
+}
+
+/* The four outcomes, on a phone. */
+@media (max-width: 600px) {
+  .outcomes {
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+  }
+
+  .outcomes li {
+    font-size: 0.9rem;
+  }
+
+  .outcomes b {
+    font-size: 0.95rem;
+  }
+}
+@media (max-width: 860px) {
+  .board-list .bcard > b,
+  .board-list .bcard > span:not(.moves) {
+    grid-column: 1;
+  }
+
+  .board-list .bcard .moves {
+    grid-column: 2;
+  }
+}
+/* Wide and narrow wording, as blocks. */
+.narrow-only-block {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .wide-only-block {
+    display: none !important;
+  }
+
+  .narrow-only-block {
+    display: block;
+  }
+
+  .route-foot {
+    display: block;
+  }
+
+  .route-foot .route-note {
+    margin-bottom: 0.6rem !important;
+  }
+
+  .route > p:not(.route-kicker) {
+    font-size: 0.95rem;
+  }
+}
+
+@media (min-width: 861px) {
+  .prod .cast-line {
+    flex: 1;
+  }
+}
+@media (max-width: 860px) {
+  .prod .cast-line {
+    flex: none;
+  }
+
+  .prod .cast-card .audition {
+    margin-top: 0;
+  }
+}
+
+/* Developers: the code beside the headline, no empty well. */
+@media (min-width: 961px) {
+  .dark-dev .devs {
+    align-items: center;
+  }
+
+  .dark-dev {
+    padding-block: clamp(3rem, 8vh, 5rem);
+  }
+}
+/* The phone's screenshot keeps its own shape before it loads. */
+@media (max-width: 600px) {
+  .proof-card:nth-child(2) .zoom img {
+    aspect-ratio: auto 704 / 540;
+  }
+}
+/* The window: its view, its caption, and the looks as a quieter second row. */
+.shot-bar .seg-views {
+  margin-left: auto;
+}
+
+.shot-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.2rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.view-cap {
+  flex: 1 1 22rem;
+  min-height: 1.5em;
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+
+.seg-looks .seg-label {
+  margin-right: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.seg-looks button {
+  padding: 0.28rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+.seg-looks button[aria-pressed="true"] {
+  background: var(--bg-2);
+  color: var(--ink);
+  box-shadow: 0 0 0 1.5px var(--ink) inset;
+}
+
+.seg button:focus-visible {
+  outline: 3px solid var(--violet);
+  outline-offset: 1px;
+}
+
+@media (max-width: 600px) {
+  .shot-bar {
+    justify-content: center;
+  }
+
+  .shot-bar .seg-views {
+    margin: 0;
+  }
+
+  .seg-views button {
+    padding: 0.4rem 0.55rem;
+    font-size: 0.8rem;
+  }
+
+  .shot-sub {
+    padding: 0.6rem 0.7rem;
+  }
+
+  .view-cap {
+    flex-basis: 100%;
+    font-size: 0.9rem;
+  }
+
+  .seg-looks .seg-label {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wr[data-step="1"] .caret {
+    opacity: 0;
+  }
+}
+.step[data-step="1"] .mini-paper .ln.g1 {
+  box-shadow: none;
+  padding-left: 0;
+}
+
+/* Spot the marks: what the chosen kind does, said beside the chips. */
+.spot-say {
+  flex-basis: 100%;
+  min-height: 1.45em;
+  margin-top: 0.15rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: #d9d5ea;
+}
+
+/* The caption under the floating player: its words never reach where the pill sits, so its
+   layout is the same whether the pill shows or not; the beat's own play button gives way to it. */
+@media (min-width: 861px) {
+  .caption-words {
+    max-width: min(48rem, calc(100% - 29rem));
+  }
+
+  .np-on .caption .finale-play {
+    visibility: hidden;
+  }
+
+  .caption {
+    justify-content: space-between;
+  }
+}
+
+/* Phone: the CSV scrolls sideways, and says so; the handouts end on a fade. */
+@media (max-width: 860px) {
+  .route .csv figcaption::after {
+    content: "scroll →";
+    float: right;
+    color: #b9b3cf;
+  }
+}
+
+/* ------------------------------------------------------------------ the red pencil */
+
+/* After the correction: the pencil at rest, its lead on the end of "Free". */
+.big-edit .hand-free {
+  position: absolute;
+}
+.big-edit .pen-free {
+  position: absolute;
+  /* The lead at (4.9%, 96.2%) of the picture, set on the end of the word's baseline. */
+  width: 2.2em;
+  height: auto;
+  left: calc(100% - 0.008em);
+  top: -0.31em;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 8px rgb(21 17 42 / 0.2));
+  -webkit-text-fill-color: initial;
+  transition: opacity 0.4s ease 0.9s;
+}
+.js .big-edit:not(.corrected) .pen-free {
+  opacity: 0;
+}
+@media (max-width: 860px) {
+  /* A shorter pencil in the narrow card; its lead in the same place. */
+  .big-edit .pen-free {
+    width: 1.7em;
+    left: calc(100% + 0.016em);
+    top: 0.011em;
+  }
+}
+
+/* The hero's pencil, resting with its lead at the end of the line it drew under "whole cast." */
+.pen-under .pen-rest {
+  position: absolute;
+  /* The line runs from -3% to 97% of the words; it ends at 97.86% of its own width. */
+  left: calc(94.86% - 0.0735em);
+  bottom: -0.098em;
+  width: 1.5em;
+  height: auto;
+  object-fit: contain;
+  transform: none;
+  transform-origin: 0 100%;
+  filter: drop-shadow(0 10px 14px rgb(21 17 42 / 0.22));
+  animation: pen-rest-in 0.4s ease 1.35s both;
+}
+.pen-under .pen-rest.missing {
+  display: none;
+}
+@keyframes pen-rest-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (max-width: 600px) {
+  .pen-under .pen-rest {
+    width: 1.2em;
+    left: calc(94.86% - 0.0586em);
+    bottom: -0.09em;
+  }
+}
+
+/* Rings clear of the letters on the phone too. */
+.ink-ring {
+  padding: 0.46em 1.05em 0.5em;
+  margin: 0 -1.05em;
+  background-size: 100% 100%;
+}
+
+/* The full view on a phone: dark around the picture, and a cue to pan. */
+@media (max-width: 600px) {
+  .lightbox {
+    background: #15112a;
+  }
+  .lb-hint {
+    position: fixed;
+    left: 50%;
+    bottom: 1.2rem;
+    translate: -50% 0;
+    margin: 0;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: rgb(21 17 42 / 0.88);
+    color: #fff;
+    font: 600 0.9rem / 1 var(--body);
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  .lb-hint.gone {
+    opacity: 0;
+  }
+}
+.lb-hint {
+  display: none;
+}
+@media (max-width: 600px) {
+  .lightbox[open] .lb-hint {
+    display: block;
+  }
+}
+
+/* Short screens: the mock's page a touch smaller, so each step's lines and notes fit above the
+   status bar. */
+@media (max-height: 820px) and (min-width: 861px) {
+  .doc {
+    font-size: 14px;
+    line-height: 1.62;
+    padding-top: 1.1rem;
+  }
+  .desk {
+    padding-top: 0.6rem;
+  }
+}
+/* A ringed spoken line on the phone: the ring round the words, the speaker's underline under them. */
+.mini-paper .k-speech.ink-ring {
+  padding: 0.56em 2em 0.62em 2.35em;
+  margin: 0 -2em 0 -2.35em;
+  background-image: url("/landing/studio/pen/pencil-circle.webp"),
+    linear-gradient(
+      color-mix(in srgb, var(--sp) 60%, transparent),
+      color-mix(in srgb, var(--sp) 60%, transparent)
+    );
+  background-size: 100% 100%, calc(100% - 2.7em) 2px;
+  background-position: center, 1.35em calc(100% - 0.36em);
+  background-repeat: no-repeat;
+  background-color: transparent;
+}
+.step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech.ink-ring {
+  background-image: url("/landing/studio/pen/pencil-circle.webp");
+  background-size: 100% 100%;
+  background-position: center;
+}
+
+/* The note's lines, each its own stroke; and the short hooked tick where an arrow has no room. */
+.hand .nl {
+  display: inline-block;
+}
+.pen .hook {
+  transform: none;
+  animation: none;
+  overflow: visible;
+}
+.pen .hook path {
+  fill: none;
+  stroke: #c62f1b;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Step 1's caret, typed by the scroll: it blinks at rest (and on the empty page, inviting the
+   scroll), and holds solid while the text moves. */
+.wr:is([data-step="0"], [data-step="1"]) .caret,
+.tw-caret {
+  animation: blink 1s steps(1) infinite;
+}
+.wr .caret.moving,
+.tw-caret.moving {
+  animation: none;
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ scrubbed by the scroll */
+
+/* Every mark below is set from a progress the scroll gives (0 to 1); none runs on a timer. With
+   reduced motion no progress is set, and each shows finished. */
+
+/* The mock: the pencil's marks never fade on their own; tags set in with the step's --set. */
+.pen > *,
+.annot .ring,
+.annot .under,
+.annot .lead,
+.annot .hand {
+  animation: none !important;
+}
+.wr .new {
+  animation: none !important;
+  opacity: calc(0.22 + 0.78 * var(--set, 1));
+}
+/* The reader's own choice is never faded. */
+.wr.who-set .who-slot.new {
+  opacity: 1;
+}
+
+/* The phone's examples: their tags set in, their rings and underlines drawn, their notes written. */
+.js .step-example .mk,
+.js .step-example .is-new {
+  transition: none;
+  opacity: calc(0.22 + 0.78 * var(--set, 1));
+}
+.js .step-example .is-new {
+  transform: translateX(calc((1 - var(--set, 1)) * 24px));
+}
+.step-example .note .nl {
+  display: inline-block;
+}
+.ink-ring {
+  position: relative;
+  background-image: none;
+}
+.ink-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: url("/landing/studio/pen/pencil-circle.webp") center / 100% 100% no-repeat;
+  -webkit-mask-image: conic-gradient(from -60deg, #000 calc(var(--p, 1) * 380deg), transparent 0);
+  mask-image: conic-gradient(from -60deg, #000 calc(var(--p, 1) * 380deg), transparent 0);
+}
+/* Not fetched until its example comes near. */
+.js .step-example:not(.near) .ink-ring::before {
+  background-image: none;
+}
+.mini-paper .k-speech.ink-ring {
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--sp) 60%, transparent),
+    color-mix(in srgb, var(--sp) 60%, transparent)
+  );
+  background-size: calc(100% - 4.35em) 2px;
+  background-position: 2.35em calc(100% - 0.42em);
+}
+.step[data-step="2"] .step-example:not(.who-set) [data-id="could"] .k-speech.ink-ring {
+  background-image: none;
+}
+.ink-under,
+.js .step-example .ink-under {
+  background-size: calc(var(--p, 1) * 100%) 0.5em;
+  transition: none;
+}
+
+/* "$0 → Free": the stroke drawn, "$0" greyed under it, "Free" written, the pencil following. */
+.facts .big-edit .struck::after {
+  transform: scaleX(var(--strike, 1));
+  transition: none;
+}
+.facts .big-edit.corrected .struck {
+  color: transparent;
+  -webkit-text-fill-color: color-mix(in srgb, #8f8a9f calc(var(--strike, 1) * 100%), transparent);
+  transition: none;
+}
+.facts .big-edit .hand-free {
+  opacity: 1;
+  translate: none;
+  transition: none;
+}
+/* Only the word is revealed; the pencil beside it stays whole. */
+.facts .big-edit .free-word {
+  display: inline-block;
+  clip-path: inset(-30% calc((1 - var(--free, 1)) * 100%) -30% -10%);
+}
+.facts .big-edit .pen-free {
+  transition: none;
+  opacity: var(--rest, 1);
+  translate: var(--px, 0px) var(--py, 0px);
+}
+
+/* The final band: the line under "waiting." drawn left to right, the pencil at its end. */
+.final-band .pen-final-word .under-img {
+  animation: none;
+  clip-path: inset(-40% calc((1 - var(--u, 1)) * 100%) -40% 0);
+}
+.final-band .pen-final {
+  animation: none;
+  translate: var(--px, 0px) var(--py, 0px);
+}
+
+/* The hero: on every screen it sits in the top half at the top of the page, so by the same rule its
+   underline is simply drawn, with the pencil at rest at its end. No timed fade. */
+.pen-under img,
+.pen-under .pen-rest {
+  animation: none;
+}
+
+/* The phone's full view: the picture fills the dialog's height; the hint sits over it. */
+@media (max-width: 600px) {
+  .lightbox img {
+    height: auto;
+  }
+  .lb-hint {
+    bottom: 1.5rem;
+  }
+}
+/* The calm window's picture keeps its shape before it arrives. */
+.shot-tile .shot {
+  aspect-ratio: 2560 / 1600;
+  background: var(--bg-2);
+}
+/* The developer section's packages: a table, open on wide screens. */
+.dark-dev .fold > summary {
+  display: none;
+}
+@media (min-width: 861px) {
+  .dark-dev .pkgs {
+    margin-top: 1rem;
+  }
+}
+@media (max-width: 860px) {
+  .dark-dev .fold > summary {
+    display: flex;
+    background: rgb(255 255 255 / 0.06);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14) inset;
+    color: #fff;
+  }
+}
+/* The reader's answer on the phone is never faded by the scroll either; and the ringed quote sits
+   in a touch, so the ring stays on the paper. */
+.js .step-example.who-set .who-slot {
+  opacity: 1;
+  transform: none;
+}
+.mini-paper .ln[data-id="could"] {
+  padding-left: 0.35em;
+}
+
+/* The hero's "whole cast.": the line drawn left to right at the pencil's pace, the pencil along it.
+   Until the script draws it the line waits undrawn (only where motion is welcome). */
+.hero .pen-under > img:not(.pen-rest) {
+  clip-path: inset(-40% calc((1 - var(--u, 1)) * 100%) -40% 0);
+}
+.hero .pen-under .pen-rest {
+  translate: var(--px, 0px) var(--py, 0px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .js .hero .pen-under {
+    --u: 0;
+  }
+  /* Until the script draws the line, no pencil waiting at its end. */
+  .js .hero .pen-under:not([style]) .pen-rest {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ section 03: the views by scroll */
+
+/* The window is pinned while the page runs past it: a stretch of scroll for each of the four views. */
+.views-track {
+  position: relative;
+}
+.views-pin {
+  position: sticky;
+  top: 4.6rem;
+  z-index: 1;
+}
+.views-run {
+  height: 200vh;
+}
+/* Small enough that the whole window, its bar and its caption fit on the screen while pinned. */
+.views-pin .shot-tile {
+  max-width: min(100%, calc((100vh - 4.6rem - 9.5rem) * 1.6));
+  max-width: min(100%, calc((100dvh - 4.6rem - 9.5rem) * 1.6));
+  margin-inline: auto;
+}
+/* The two pictures, one over the other, in a box of the picture's own shape. */
+.shot-stack {
+  position: relative;
+  display: block;
+  aspect-ratio: 2560 / 1600;
+  background: var(--bg-2);
+}
+.shot-stack .shot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: cover;
+  object-position: top center;
+  background: none;
+}
+.shot-stack .shot-back {
+  z-index: 0;
+}
+.shot-stack .shot-front {
+  z-index: 1;
+}
+.shot-stack .shot-in {
+  z-index: 2;
+  transition: opacity 0.3s ease;
+}
+.shot-stack .shot:not([src]) {
+  visibility: hidden;
+}
+/* The thin line under the view buttons: how far through the four views the scroll is. */
+.seg-views {
+  position: relative;
+}
+.seg-run {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: -0.45rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.seg-run i {
+  position: absolute;
+  inset: 0;
+  background: var(--violet);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+@media (max-width: 600px) {
+  .views-pin {
+    top: 4.1rem;
+  }
+  .views-run {
+    height: 170vh;
+  }
+  .shot-stack {
+    aspect-ratio: 780 / 740;
+  }
+  .shot-stack .shot {
+    object-position: 42% 50%;
+    object-fit: cover !important;
+    aspect-ratio: auto !important;
+  }
+  .seg-run {
+    bottom: -0.35rem;
+  }
+}

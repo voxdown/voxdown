@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoxDown: write it once, hand it to the whole cast</title>
+<meta name="description" content="VoxDown is Markdown that knows who says every line, and how. Write in the free VoxDown Writer, then send the same file to a narrator, to voice actors, or to an AI voice engine with a voice for every character. No account; your story stays on your computer.">
+<meta name="theme-color" content="#7c3aed">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="VoxDown">
+<meta property="og:title" content="VoxDown: write it once, hand it to the whole cast">
+<meta property="og:description" content="Markdown that knows who says every line, and how. A free writing app in your browser, and a file that's ready for actors in the booth or an AI voice engine.">
+<meta property="og:image" content="../../landing/studio/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="VoxDown: “Write it once. Hand it to the whole cast.” beside the dragon story written in VoxDown, each speaker in their colour.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../icon.svg">
+<script>document.documentElement.classList.add("js")</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<header class="top" id="top">
+  <div class="top-in">
+    <a class="brand" href="./" aria-label="VoxDown, home">
+      <img src="../../icon.svg" alt="" width="28" height="28">
+      <span>VoxDown</span>
+    </a>
+    <nav class="top-nav" aria-label="Site">
+      <a href="../../writer/">Writer</a>
+      <a href="../../listen.html">Listen</a>
+      <a href="../../spec.html">Spec</a>
+      <a href="https://github.com/voxdown/voxdown">GitHub</a>
+    </nav>
+    <a class="btn btn-ink btn-sm" href="../../writer/">Open the Writer</a>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- The hook: the promise, the action, and the scene that proves it. -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="mesh" aria-hidden="true"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></div>
+    <div class="hero-in wrap">
+      <div class="hero-words">
+        <p class="pill-note"><span class="dot-live" aria-hidden="true"></span>Free · open source · runs in your browser</p>
+        <h1 id="hero-title">Write it once.<br>Hand it to the <span class="keep pen-under">whole cast.<img src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" decoding="async"><img class="pen-rest" data-clay src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" decoding="async"></span></h1>
+        <p class="lede">VoxDown is Markdown that knows who says every line, and how. Write in the free Writer, then hand the very same file to actors in the booth or to an AI voice engine.</p>
+        <div class="cta-row">
+          <a class="btn btn-grad btn-lg" href="../../writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+          <button class="btn btn-glass btn-lg" type="button" id="hero-play" aria-controls="demo">
+            <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></span>
+            <span class="hero-play-label">Hear the dragon scene</span> <span class="btn-time" id="hero-time">2:28</span>
+          </button>
+        </div>
+        <p class="fine"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>No account. Your story stays on your computer.</p>
+      </div>
+
+      <div class="hero-demo">
+        <figure class="demo" id="demo" aria-label="A recorded scene, as written in VoxDown and as heard">
+          <div class="demo-head">
+            <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="demo-tabs" role="tablist" aria-label="Choose a recorded scene" id="demo-tabs"><button type="button" class="demo-tab" role="tab" id="demo-tab-0" aria-controls="sheet" aria-selected="true" title="The Dragon Who Would Not Roar">The Dragon</button><button type="button" class="demo-tab" role="tab" id="demo-tab-1" aria-controls="sheet" aria-selected="false" tabindex="-1" title="The North Wind and the Sun">The North Wind</button></div>
+          </div>
+          <div class="sheet" id="sheet" tabindex="0" role="tabpanel" aria-labelledby="demo-tab-0" aria-describedby="sheet-summary"></div>
+          <p class="sr-only" id="sheet-summary">The dragon story as written in VoxDown, from its first heading: each line marked with who says it and how, with the sounds and pauses, ready to be read aloud. Press play to hear it, voiced from this very text.</p>
+          <div class="legend" role="group" aria-label="Spot a kind of mark in the scene">
+            <span class="legend-label">Spot the marks</span>
+            <button type="button" class="chip-k" data-spot="who" aria-pressed="false" aria-describedby="spot-say"><b class="k-who">@</b> who</button>
+            <button type="button" class="chip-k" data-spot="how" aria-pressed="false" aria-describedby="spot-say"><b class="k-how">( )</b> how</button>
+            <button type="button" class="chip-k" data-spot="sound" aria-pressed="false" aria-describedby="spot-say"><b class="k-sound">[ ]</b> sounds</button>
+            <button type="button" class="chip-k" data-spot="time" aria-pressed="false" aria-describedby="spot-say"><b class="k-time">{ }</b> timing</button>
+            <p class="spot-say" id="spot-say" aria-live="polite">Pick a kind of mark to see where it is, and what it does.</p>
+          </div>
+          <div class="player">
+            <button class="play-round" type="button" id="demo-play" aria-label="Play the scene">
+              <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+              <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+            </button>
+            <div class="player-mid">
+              <p class="now" id="now"><span class="now-dot" id="now-dot" aria-hidden="true"></span><span id="now-text">Press play to follow along.</span></p>
+              <div class="track" id="track" role="slider" tabindex="0" aria-label="Position in the scene" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0:00"><div class="track-fill" id="track-fill"></div></div>
+            </div>
+            <span class="time" id="time">2:28</span>
+          </div>
+          <div class="tip" id="tip" aria-hidden="true"></div>
+        </figure>
+        <p class="demo-cap">It’s Markdown with a few marks for who and how: any text editor opens it, and it still reads like a story. Voiced with ElevenLabs from this exact file, marks and all. <a id="demo-open" href="../../writer/#example=the-dragon-who-would-not-roar" target="_blank" rel="noopener">Open this scene in the Writer<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
+      </div>
+    </div>
+
+    <div class="for wrap">
+      <span class="for-label" id="for-label">Made for</span>
+      <ul aria-labelledby="for-label">
+        <li><i style="--d:#7c3aed"></i><span class="wide-txt">Fiction writers</span><span class="short-txt">Fiction</span></li>
+        <li><i style="--d:#fb7185"></i><span class="wide-txt">Audio drama</span><span class="short-txt">Audio drama</span></li>
+        <li><i style="--d:#f59e0b"></i><span class="wide-txt">Podcasts</span><span class="short-txt">Podcasts</span></li>
+        <li><i style="--d:#14b8a6"></i><span class="wide-txt">Audiobook makers</span><span class="short-txt">Audiobooks</span></li>
+        <li><i style="--d:#7c3aed"></i><span class="wide-txt">AI-voice and TTS tinkerers</span><span class="short-txt">TTS tinkerers</span></li>
+        <li><i style="--d:#fb7185"></i><span class="wide-txt">Curious developers</span><span class="short-txt">Developers</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 01. The spine: one scene written, marked, organised and voiced, in the Writer. -->
+  <section class="spine" id="spine" aria-labelledby="spine-title">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow"><span>01</span> The Writer, at work</p>
+        <h2 id="spine-title">From blank page to booth.</h2>
+        <p class="sec-lede">One dragon, one knight, one very bad night’s sleep. Scroll, and watch a scene get written, marked, organised and voiced in the VoxDown Writer.</p>
+      </header>
+    </div>
+
+    <div class="spine-track" id="spine-track">
+      <div class="spine-stick" id="spine-stick">
+        <div class="wrap spine-frame">
+          <nav class="jump" aria-label="Jump to a step">
+            <ol id="jump"></ol>
+          </nav>
+          <div class="wr-holder"><div class="wr" id="wr" role="group" aria-label="A likeness of the VoxDown Writer" data-step="0"></div></div>
+          <div class="caption" id="caption">
+            <div class="caption-words" aria-hidden="true" id="caption-words"></div>
+            <button class="btn btn-grad finale-play" type="button" data-finale-play>
+              <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></span>
+              <span class="finale-label">Play the scene</span> <span class="btn-time">0:34</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ol class="steps wrap" id="steps">
+        <li class="step" data-step="1" data-label="Type" data-feature="Plain text, smart quotes">
+          <h3>A blank page. A sleepy dragon.</h3>
+          <p>Start the way you always do: type. It’s plain text, so there’s nothing to learn before the first sentence.</p>
+        </li>
+        <li class="step" data-step="2" data-label="Who" data-feature="Who says this… · Ctrl+K" data-try="Try it: press Who, or Ctrl+K, and pick the speaker." data-try-phone="Try it: tap Who.">
+          <h3>Who said that? You tell it.</h3>
+          <p>Put the cursor in a quote and give it its speaker. The name goes before the quote, the line takes their colour, and they get a card in the Cast.</p>
+        </li>
+        <li class="step" data-step="3" data-label="How" data-feature="How it’s said… · Sound · Pause">
+          <h3>Deep, polite and utterly unbothered.</h3>
+          <p>Directions in round brackets say how a line lands. Square brackets hold what the world sounds like, and braces hold a beat of silence.</p>
+        </li>
+        <li class="step" data-step="4" data-label="Scenes" data-feature="Scenes · the scene board · Alt+↑/↓" data-try="Try it: move The battle with Alt+↑, or drag it." data-try-phone="Try it: tap ↑ on The battle.">
+          <h3>Then the knight gets brave.</h3>
+          <p>A second scene, and the scene board opens beside the page: each scene a card, with a line and a state. Move a card and its text moves with it.</p>
+        </li>
+        <li class="step" data-step="5" data-label="Notes" data-feature="Comments · Scraps">
+          <h3>Notes to self. Lines on ice.</h3>
+          <p>Leave yourself a comment that’s never read aloud or printed. Not sure about “smite”? Cut it to Scraps, where it waits in a file beside the story.</p>
+        </li>
+        <li class="step" data-step="6" data-label="Hand over" data-feature="Preview › Script, Book · Export › Each character’s lines" data-try="Try the tabs: Script, Book, Lines.">
+          <h3>Three handouts, zero retyping.</h3>
+          <p>The script for the table read, the book for readers, and each character’s lines for the booth, with the cue before each one.</p>
+        </li>
+        <li class="step" data-step="7" data-label="Audio" data-feature="File › Make an audiobook…">
+          <h3>Press play. That’s the file talking.</h3>
+          <p>Make an audiobook… gives each character a voice: ElevenLabs, OpenAI or Azure on your own account, or Kokoro, free on your computer. This scene was voiced from this very file.</p>
+          <button class="btn btn-ink finale-play step-play" type="button" data-finale-play>
+            <span class="play-glyph" aria-hidden="true"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg></span>
+            <span class="finale-label">Play the scene</span> <span class="btn-time">0:34</span>
+          </button>
+        </li>
+      </ol>
+    </div>
+    <div class="wrap">
+      <p class="spine-after"><a class="btn btn-grad btn-lg" href="../../writer/#example=the-dragon-who-would-not-roar" target="_blank" rel="noopener">Open this story in the Writer<span class="sr-only"> (opens in a new tab)</span> <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></p>
+    </div>
+  </section>
+
+  <!-- 02. The payoff: the cast heard, then the file handed to people or to an engine. -->
+  <section class="dark prod" aria-labelledby="prod-title">
+    <div class="dark-glow" aria-hidden="true"></div>
+    <div class="wrap">
+      <header class="sec-head sec-head-dark">
+        <p class="eyebrow eyebrow-dark"><span>02</span> Production-ready</p>
+        <h2 id="prod-title">Every voice, one file.</h2>
+        <p class="sec-lede">Pick each character’s voice once in Make an audiobook…, and every line they say goes to it. Hear who got the part, then choose who gets the file: the people who perform it, or an engine that voices it.</p>
+      </header>
+      <div class="cast-chips" id="cast-chips" role="group" aria-label="Choose a character to hear"></div>
+      <ul class="cast-list" id="cast-list" aria-label="The cast, each with a line from the recording"></ul>
+      <div class="routes">
+        <article class="route">
+          <p class="route-kicker">To people</p>
+          <h3>Notes that ride along, and never get read out</h3>
+          <p><span class="narrow-only">A script with notes the narrator sees and the listener never hears.</span><span class="wide-only">A note to the performer goes in the script right where it matters. The narrator sees it; the listener never hears it.</span></p>
+          <div class="route-viz" id="route-script"></div>
+        </article>
+        <article class="route">
+          <p class="route-kicker">To engines and tools</p>
+          <h3>Every line, a row</h3>
+          <p><span class="narrow-only">A voice per character, or every line as CSV or JSON for your own tools.</span><span class="wide-only">A voice per character through <b>Make an audiobook…</b>, or every line as CSV or JSON for your own pipeline: who, how, what, and where in the story.</span></p>
+          <div class="route-viz engines" aria-hidden="true">
+            <span class="eng"><b>ElevenLabs</b><i>your account</i></span>
+            <span class="eng"><b>OpenAI</b><i>your account</i></span>
+            <span class="eng"><b>Azure</b><i>your account</i></span>
+            <span class="eng eng-free"><b>Kokoro</b><i>free, on your computer</i></span>
+          </div>
+          <figure class="csv"><figcaption>the-dragon-who-would-not-roar.csv</figcaption><pre id="route-csv" tabindex="0" aria-label="The scene’s lines as CSV"></pre></figure>
+        </article>
+      </div>
+      <div class="route-foot">
+        <pre class="term wide-only-block"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
+        <p class="route-note"><span class="wide-only">The small connector the Writer reaches your voices through. VoxDown never sees your story or your keys.</span><span class="narrow-only">Voices come through a small connector on your computer. VoxDown never sees your story or your keys.</span></p>
+        <details class="more more-dark narrow-only-block">
+          <summary>The command</summary>
+          <pre class="term"><code><span class="prompt">$</span> npx -y @voxdown/cli connect</code></pre>
+        </details>
+      </div>
+      <p class="also-out">Also: a Word document with your comments as Word comments, an EPUB, a standard manuscript to submit, and a production file for audio tools.</p>
+    </div>
+  </section>
+
+  <!-- 04. The real app, as proof. -->
+  <section class="proof band" aria-labelledby="proof-title">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow"><span>03</span> The real thing</p>
+        <h2 id="proof-title">A whole book, in one calm window.</h2>
+        <p class="sec-lede">The Writer’s own screens, with the dragon story open: as quiet as a blank page, or with everything to hand. <span class="narrow-only">Tap the picture for the whole window.</span></p>
+      </header>
+
+      <div class="views-track" id="views-track">
+      <div class="views-pin">
+      <figure class="shot-tile" aria-labelledby="view-cap">
+        <div class="shot-bar">
+          <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="seg seg-views" role="group" aria-label="What the window shows">
+            <button type="button" data-view="focus" aria-pressed="true">Focus</button>
+            <button type="button" data-view="workbench" aria-pressed="false">Workbench</button>
+            <button type="button" data-view="written" aria-pressed="false">As written</button>
+            <button type="button" data-view="drawn" aria-pressed="false">Drawn</button>
+            <span class="seg-run" aria-hidden="true"><i></i></span>
+          </div>
+        </div>
+        <div class="shot-sub">
+          <p class="view-cap" id="view-cap">Focus mode: the toolbar and panels step away, and every paragraph but yours fades back.</p>
+          <div class="seg seg-looks" role="group" aria-label="Look">
+            <span class="seg-label" aria-hidden="true">Look</span>
+            <button type="button" data-look="light" aria-pressed="true">Paper</button>
+            <button type="button" data-look="sepia" aria-pressed="false">Sepia</button>
+            <button type="button" data-look="dark" aria-pressed="false">Night</button>
+            <button type="button" data-look="slate" aria-pressed="false">Slate</button>
+          </div>
+        </div>
+        <button type="button" class="zoom" data-zoom="look" aria-label="View the whole window, full size">
+          <span class="shot-stack">
+            <img class="shot shot-front" id="shot" width="2560" height="1600" decoding="async" alt="The VoxDown Writer in focus mode, in the Paper look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.">
+            <img class="shot shot-back" width="2560" height="1600" decoding="async" alt="" aria-hidden="true">
+          </span>
+          <span class="zoom-hint" aria-hidden="true">View the whole window</span>
+        </button>
+      </figure>
+      </div>
+      <div class="views-run" aria-hidden="true"></div>
+      </div>
+
+      <details class="fold" data-fold open>
+      <summary>Two more screens: the scene board, and bring your own AI</summary>
+      <ul class="proof-grid">
+        <li class="proof-card">
+          <button type="button" class="zoom" data-zoom="../../landing/studio/app/board.webp" data-zoom-w="1192" data-zoom-h="1232" aria-label="View the scene board, full size">
+            <picture>
+              <source media="(max-width: 600px)" srcset="../../landing/studio/app/phone-board.webp" width="292" height="640">
+              <img data-shot src="../../landing/studio/app/board.webp" alt="The scene board: the dragon story’s scenes as cards, each with a one-line summary, a state (Done, Revised, Draft, Idea) and a word count." loading="lazy" decoding="async" width="1192" height="1232">
+            </picture>
+          </button>
+          <h3>The scene board</h3>
+          <p>See the shape of the whole book at once, and move a scene by moving its card.</p>
+        </li>
+        <li class="proof-card">
+          <button type="button" class="zoom" data-zoom="../../landing/studio/app/ai-direct.webp" data-zoom-w="1280" data-zoom-h="914" aria-label="View the Direct the reading with AI dialog, full size">
+            <picture>
+              <source media="(max-width: 600px)" srcset="../../landing/studio/app/phone-ai.webp" width="704" height="540">
+              <img data-shot src="../../landing/studio/app/ai-direct.webp" alt="The “Direct the reading with AI” dialog: copy a request into any AI chat, then paste its answer back to check each suggestion." loading="lazy" decoding="async" width="1280" height="914">
+            </picture>
+          </button>
+          <h3>Bring your own AI, if you like</h3>
+          <p>A first pass of speakers or directions from the AI you already use, every suggestion yours to keep or drop. Nothing is sent until you press the button.</p>
+        </li>
+      </ul>
+      </details>
+
+      <div class="index">
+        <h3 class="index-title">And it quietly takes care of the rest</h3>
+        <ul class="outcomes">
+          <li><b>Warnings with fixes.</b> <span class="out-d">Odd marks get a warning and a fix; “Next quote with no speaker” finds each unnamed line.</span></li>
+          <li><b>Autosaved drafts and versions.</b> <span class="out-d">Drafts kept as you type, so a closed tab loses nothing; name versions to go back to.</span></li>
+          <li><b>Import Word and EPUB.</b> <span class="out-d">Or Fountain, Markdown, or a paste from Google Docs with the formatting kept.</span></li>
+          <li><b>Built for long books.</b> <span class="out-d">150,000 words open in about a quarter of a second.</span></li>
+        </ul>
+        <details class="more">
+          <summary>Everything it does</summary>
+          <ul class="index-list">
+            <li>Warnings, each with a fix</li>
+            <li>Next quote with no speaker <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>K</kbd></li>
+            <li>Go to a chapter or scene <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>O</kbd></li>
+            <li>Move a paragraph, scene or chapter</li>
+            <li>Focus mode and typewriter scrolling</li>
+            <li>Style hints and “Words leaned on…”</li>
+            <li>A daily goal and timed sprints</li>
+            <li>Named versions to go back to</li>
+            <li>Drafts kept as you type</li>
+            <li>Works offline once loaded</li>
+            <li>Opens .vxd, .md, .txt, Fountain, Word and EPUB</li>
+            <li>Paste from Google Docs, formatting kept</li>
+            <li>A quick, rough read-through <kbd>F9</kbd></li>
+            <li>Every command on the keyboard <kbd>Ctrl</kbd><kbd>/</kbd></li>
+            <li>Screen-reader labels, and a phone layout</li>
+            <li>Six looks, your font, size and spacing</li>
+          </ul>
+          <p class="index-more"><a href="../../cheatsheet.html" target="_blank" rel="noopener">Every mark on one page<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05. Developers. -->
+  <section class="dark dark-dev" aria-labelledby="devs-title">
+    <div class="dark-glow" aria-hidden="true"></div>
+    <div class="wrap devs">
+      <div class="devs-words">
+        <p class="eyebrow eyebrow-dark"><span>04</span> For developers</p>
+        <h2 id="devs-title">Open all the way down.</h2>
+        <p class="sec-lede">A published spec, a parser, renderers, an editor component and a command line.</p>
+        <p class="dev-links"><a href="../../spec.html" target="_blank" rel="noopener">The spec<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="../../cheatsheet.html" target="_blank" rel="noopener">Cheat sheet<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="../../playground.html" target="_blank" rel="noopener">Playground<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a><a href="https://github.com/voxdown/voxdown" target="_blank" rel="noopener">GitHub<span class="sr-only"> (opens in a new tab)</span> <span aria-hidden="true">↗</span></a></p>
+      </div>
+      <div class="devs-code">
+        <pre class="term"><code><span class="prompt">$</span> npm install voxdown
+<span class="prompt">$</span> npx @voxdown/cli check story.vxd</code></pre>
+        <details class="fold fold-dark" data-fold open>
+        <summary>The packages</summary>
+        <ul class="pkgs">
+          <li><code>voxdown</code><span>Parse a story: its cast, lines and marks.</span></li>
+          <li><code>@voxdown/render</code><span>The book and the script, as HTML.</span></li>
+          <li><code>@voxdown/editor</code><span>An editor as a web component.</span></li>
+          <li><code>@voxdown/cli</code><span><code>vxd</code> check · convert · connect · tag · produce · mcp</span></li>
+          <li><code>VS Code</code><span>Colours, warnings and a preview.</span></li>
+        </ul>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06. Free, open, yours. -->
+  <section class="free" aria-labelledby="free-title">
+    <div class="wrap">
+      <h2 id="free-title" class="sr-only">Free, open and yours</h2>
+      <ul class="facts">
+        <li class="fact-private">
+          <svg class="lock" viewBox="0 0 48 48" aria-hidden="true"><path d="M15 21v-6a9 9 0 0 1 18 0v6"/><rect x="9" y="21" width="30" height="21" rx="5"/><path d="M24 36.5s-5.5-3.3-5.5-6.9a3 3 0 0 1 5.5-1.6 3 3 0 0 1 5.5 1.6c0 3.6-5.5 6.9-5.5 6.9z"/></svg>
+          <p class="fact-kicker">Private by design</p>
+          <h3>Your story, your computer.</h3>
+          <p>Nothing is sent to us; there’s no VoxDown server to send it to. Files open from your computer and save back there: in place in Chrome and Edge, as a downloaded copy elsewhere.</p>
+          <ul class="vows"><li>No account</li><li>No analytics</li><li>No ads</li><li>AI and voices only if you choose them</li></ul>
+        </li>
+        <li><p class="big big-edit"><s class="struck" aria-hidden="true">$0</s> <span class="hand-free"><span class="free-word">Free</span><img class="pen-free" src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></p><p>No subscription and no sign-up. Audiobooks can be free too, with Kokoro on your own computer.</p></li>
+        <li><p class="big">MIT</p><p>The Writer and every tool are open source, and the spec is CC BY 4.0. Once loaded, the Writer works offline.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="final" aria-labelledby="final-title">
+    <div class="wrap">
+      <div class="final-band">
+                        <h2 id="final-title">Your cast is <span class="pen-under pen-final-word">waiting.<img class="under-img" src="../../landing/studio/pen/pencil-underline.webp" alt="" width="700" height="234" loading="lazy" decoding="async"><img class="pen-final" data-clay src="../../landing/studio/pen/red-pencil.webp" alt="" width="520" height="347" loading="lazy" decoding="async"></span></h2>
+        <p>Open the Writer and start typing. Or open the dragon story and see every mark at work.</p>
+        <div class="cta-row cta-center">
+          <a class="btn btn-white btn-lg" href="../../writer/"><span class="btn-text">Start writing <span class="btn-aside">— free, no sign‑up</span></span> <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+          <a class="btn btn-clear btn-lg" href="../../writer/#example=the-dragon-who-would-not-roar">Open the dragon story</a>
+        </div>
+        <p class="final-fine">Runs in your browser. No account, nothing to install.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-brand">
+      <a class="brand" href="./"><img src="../../icon.svg" alt="" width="26" height="26"><span>VoxDown</span></a>
+      <p>VoxDown is open source under the MIT license; the spec is CC BY 4.0. The example stories are free to copy (CC0). The recordings were voiced with ElevenLabs.</p>
+      <!-- The supporter line is added here by main.ts, only once SUPPORT_URL is set. -->
+    </div>
+    <nav aria-label="More">
+      <a href="../../writer/">Writer</a>
+      <a href="../../listen.html">Listen</a>
+      <a href="../../playground.html">Playground</a>
+      <a href="../../spec.html">Spec</a>
+      <a href="../../cheatsheet.html">Cheat sheet</a>
+      <a href="https://marketplace.visualstudio.com/items?itemName=voxdown.voxdown">VS Code</a>
+      <a href="https://github.com/voxdown/voxdown">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+<!-- What's playing, when its scene is out of view. -->
+<div class="np" id="np" hidden>
+  <span class="np-dot" id="np-dot" aria-hidden="true"></span>
+  <span class="np-text"><span class="np-k">Now</span> <span id="np-who">The narrator</span></span>
+  <button type="button" class="np-btn" id="np-toggle" aria-label="Pause">
+    <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+    <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+  </button>
+  <button type="button" class="np-back" id="np-back">Back to the scene</button>
+</div>
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot, full size">
+  <form method="dialog"><button class="lb-close" type="submit" aria-label="Close">×</button></form>
+  <img id="lightbox-img" alt="" width="1600" height="1000">
+  <p class="lb-hint" id="lb-hint" aria-hidden="true">Drag to look around</p>
+</dialog>
+<p class="sr-only" aria-live="polite" id="announce"></p>
+<script type="module" src="../../src/landing/studio/main.ts"></script>
+</body>
+</html>

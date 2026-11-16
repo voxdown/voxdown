@@ -2,7 +2,7 @@
 
 Changes to the packages, newest first. Changes to the format itself are in [spec/CHANGELOG.md](spec/CHANGELOG.md). How versions work: [VERSIONING.md](VERSIONING.md).
 
-## Unreleased
+## Spec 1.3 and 1.4, `voxdown` 1.5.0, `@voxdown/render` 1.5.0, `@voxdown/editor` 1.4.0, `@voxdown/cli` 1.3.0, `@voxdown/produce` 0.2.0, the VS Code extension 1.3.0, VoxDown Writer, and the website (16 November 2026)
 
 **Speaking together** (spec 1.4, §5.10): `@FirstPig+ “Wolfie, Wolfie, let us come in!” said the three little pigs.` A `+` straight after a name means the speech is said by that character together with others; the character named is the voice used when only one voice is made. What changed is in [spec/CHANGELOG.md](spec/CHANGELOG.md).
 
@@ -19,7 +19,7 @@ Changes to the packages, newest first. Changes to the format itself are in [spec
 **@voxdown/produce**
 - A production line said together has `together: true`, voiced by the speaker named; its `hash` is the same as alone, so nothing is made again for a `+`. `saidTogether(script)` counts them, and `togetherNote(script, made)` says so.
 
-**@voxdown/cli** (next release)
+**@voxdown/cli**
 - `vxd produce` ends by saying how many lines said together were voiced by one speaker only. `vxd export` gives `together` as `voxdown` does; `vxd check` reports `together-names`. `vxd tag` teaches the AI `@Name+`, and gives a quote several characters say at once to the first named or most prominent, said together. In `vxd mcp`, `voxdown_assign_speakers` takes `together` on an answer, and `voxdown_story` counts the lines said together. The cheat sheet a model reads is for VoxDown 1.4.
 
 **VoxDown Writer**

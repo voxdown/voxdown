@@ -30,6 +30,12 @@ export type ProductionLine = {
   kind: LineKind;
   /** Who says it, or makes the sound: speech and a character's sounds. */
   speaker: string | null;
+  /**
+   * Present, and true, when others say it or make the sound with the speaker (`@FirstPig+`, spec
+   * §5.10). `speaker` is the voice to use when only one is made, as here: a tool that can lay
+   * other voices over it may. Not in `hash`: the speaker's own voice sounds the same either way.
+   */
+  together?: true;
   /** How it is said, after the group rules (§6.4). */
   direction: string | null;
   /**
@@ -253,7 +259,10 @@ export function productionScript(story: Story): ProductionScript {
     item: Item,
     heading: number | undefined,
   ):
-    | Pick<ProductionLine, "kind" | "speaker" | "direction" | "text" | "stress" | "ms" | "heading">
+    | Pick<
+        ProductionLine,
+        "kind" | "speaker" | "together" | "direction" | "text" | "stress" | "ms" | "heading"
+      >
     | undefined {
     if (item.kind === "speech") {
       const { text, stress } = plainWithStress(item.text);
@@ -261,6 +270,7 @@ export function productionScript(story: Story): ProductionScript {
       return {
         kind: "speech",
         speaker: item.speaker,
+        ...(item.together ? { together: true as const } : {}),
         direction: item.direction,
         text,
         ...(stress.length ? { stress } : {}),
@@ -271,6 +281,7 @@ export function productionScript(story: Story): ProductionScript {
       return {
         kind: "vocal",
         speaker: item.speaker,
+        ...(item.together ? { together: true as const } : {}),
         direction: item.direction,
         text: item.description,
       };
@@ -357,4 +368,25 @@ export function productionScript(story: Story): ProductionScript {
     chapters: chapters.filter((entry) => entry.first),
     lines,
   };
+}
+
+/**
+ * How many lines are said, or sounds made, together with others (`@FirstPig+`, spec §5.10): each
+ * is voiced by the one speaker named, alone, where a service speaks one voice at a time.
+ */
+export function saidTogether(script: ProductionScript): number {
+  return script.lines.filter((line) => line.together).length;
+}
+
+/**
+ * What to tell the writer of lines said together, or "" if there are none: `made` once the book is
+ * made, else before.
+ */
+export function togetherNote(script: ProductionScript, made: boolean): string {
+  const count = saidTogether(script);
+  if (count === 0) return "";
+  const lines = `${count} line${count === 1 ? "" : "s"} said together with others (@Name+)`;
+  return made
+    ? `${lines} ${count === 1 ? "was" : "were"} voiced by one speaker only, the one named: the others' voices are not in it.`
+    : `${lines} will be voiced by one speaker only, the one named: the others' voices won't be in it.`;
 }

@@ -1040,7 +1040,10 @@ export class StretchTools {
       .speakers()
       .find((speaker) => speaker.handle.toLowerCase() === speech.speaker.toLowerCase())?.color;
     (who.querySelector(".dot") as HTMLElement).style.setProperty("--c", color ?? "var(--quiet)");
-    (who.querySelector(".who-name") as HTMLElement).textContent = speech.speaker;
+    // Said with others (`@Name+`): the voice named, and the others with it. Who keeps the `+`.
+    (who.querySelector(".who-name") as HTMLElement).textContent = speech.together
+      ? `${speech.speaker} and others`
+      : speech.speaker;
     const how = this.part(".how");
     how.textContent = speech.ownDirection ? `(${speech.ownDirection})` : "+ how";
     how.title = speech.ownDirection ? `How it’s said: ${speech.ownDirection}` : "How it’s said";

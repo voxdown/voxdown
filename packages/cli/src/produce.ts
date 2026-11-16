@@ -26,6 +26,7 @@ import {
   productionScript,
   speakersOf,
   toWav,
+  togetherNote,
   voiceId,
 } from "@voxdown/produce";
 import {
@@ -282,6 +283,11 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
     typeof values[name] === "string" ? (values[name] as string) : undefined;
   const story = parse(input.text);
   const script = productionScript(story);
+  // Lines said together with others (spec §5.10) have one voice here: the writer is told, last.
+  const together = (made: boolean) => {
+    const note = togetherNote(script, made);
+    return note ? `${note}\n` : "";
+  };
   if (script.lines.every((line) => line.kind !== "speech"))
     throw new Failure(`${input.name} has nothing to read aloud`);
   const where = input.path ? dirname(input.path) : context.cwd;
@@ -306,7 +312,7 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
         chapterSsml(script, chapter.number, casting),
       );
     context.stdout(
-      `Wrote the production script (${script.lines.length} lines, ${script.chapters.length} chapter${script.chapters.length === 1 ? "" : "s"}) and SSML to ${out}.\n`,
+      `Wrote the production script (${script.lines.length} lines, ${script.chapters.length} chapter${script.chapters.length === 1 ? "" : "s"}) and SSML to ${out}.\n${together(false)}`,
     );
     return OK;
   }
@@ -364,20 +370,20 @@ export async function produceCommand(context: ProduceContext): Promise<number> {
   });
   if (result.type === "estimated") {
     context.stderr(
-      `Nothing ${mode === "studio" ? "sent" : "made"} (--dry-run). Change the voices in casting.json, then run it again.\n`,
+      `Nothing ${mode === "studio" ? "sent" : "made"} (--dry-run). Change the voices in casting.json, then run it again.\n${together(false)}`,
     );
     return OK;
   }
   if (result.type === "declined") return OK;
   if (result.type === "studio") {
     context.stdout(
-      `${script.title} is in ElevenLabs Studio, each line in its character's voice: ${result.url}\nListen, change and convert it there; nothing is converted (or paid for) until you do.\n`,
+      `${script.title} is in ElevenLabs Studio, each line in its character's voice: ${result.url}\nListen, change and convert it there; nothing is converted (or paid for) until you do.\n${together(true)}`,
     );
     return OK;
   }
   context.stdout(
     `${script.title}: ${result.chapters} chapter${result.chapters === 1 ? "" : "s"}, ${duration(result.durationMs)}, in ${out}${result.ffmpeg ? (chapters ? " (MP3 a chapter)" : " (an M4B, and an MP3 a chapter)") : " (WAV a chapter: install ffmpeg for MP3 and M4B)"}.\n` +
-      `${result.requests} line${result.requests === 1 ? "" : "s"} asked of ${result.service}, ${result.fromStore} already made.\n`,
+      `${result.requests} line${result.requests === 1 ? "" : "s"} asked of ${result.service}, ${result.fromStore} already made.\n${together(true)}`,
   );
   return OK;
 }

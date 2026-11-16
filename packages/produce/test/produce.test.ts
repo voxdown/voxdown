@@ -27,12 +27,14 @@ import {
   produce,
   productionScript,
   resample,
+  saidTogether,
   silence,
   speakersOf,
   studioContent,
   styleFor,
   toPcm16,
   toWav,
+  togetherNote,
   trimmed,
   voiceId,
 } from "../src/index";
@@ -140,6 +142,25 @@ describe("the production script", () => {
     // A line with no stress keeps the hash it always had.
     expect(stressed.lines[1]?.hash).toBe(script.lines[1]?.hash);
     expect(capitalized("Only me, Straße.", [[5, 15]])).toBe("Only ME, STRAßE.");
+  });
+
+  it("marks a line said together with others, voiced by the speaker named (spec §5.10)", () => {
+    const pigs = productionScript(
+      parse("@FirstPig+ “Let us in!” @FirstPig+ [giggles] @Wolf “No.”"),
+    );
+    expect(pigs.lines.map((line) => [line.speaker, line.together])).toEqual([
+      ["FirstPig", true],
+      ["FirstPig", true],
+      ["Wolf", undefined],
+    ]);
+    // The speaker's own voice sounds the same said together or alone: not made again for a `+`.
+    const alone = productionScript(parse("@FirstPig “Let us in!” @FirstPig [giggles] @Wolf “No.”"));
+    expect(pigs.lines.map((line) => line.hash)).toEqual(alone.lines.map((line) => line.hash));
+    expect(saidTogether(pigs)).toBe(2);
+    expect(togetherNote(pigs, true)).toBe(
+      "2 lines said together with others (@Name+) were voiced by one speaker only, the one named: the others' voices are not in it.",
+    );
+    expect(togetherNote(alone, true)).toBe("");
   });
 
   it("is a whole chapter when the story has no chapter headings", () => {

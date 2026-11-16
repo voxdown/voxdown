@@ -113,7 +113,7 @@ export const stylesheet = `
 }
 :where(.vxd) .vxd-name:has(+ .vxd-narration) { color: var(--vxd-muted); }
 /* Said together with others (spec §5.10): "and others" after the name, quieter than it. */
-:where(.vxd) .vxd-together { text-transform: none; letter-spacing: 0; font-weight: 400; font-style: italic; opacity: 0.85; }
+:where(.vxd) .vxd-together { text-transform: none; letter-spacing: 0; font-weight: 400; font-style: italic; }
 :where(.vxd) .vxd-direction { display: inline; position: relative; vertical-align: baseline; }
 :where(.vxd) .vxd-direction.vxd-direction-long { display: inline; position: static; width: auto; height: auto; }
 :where(.vxd) .vxd-direction.vxd-direction-long > span { position: static; white-space: normal; font-size: 0.8em; line-height: inherit; margin-right: 0.35em; }

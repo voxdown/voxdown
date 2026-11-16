@@ -79,18 +79,18 @@ vxd export story.vxd --format csv
 ```
 
 ```
-kind,speaker,direction,text,scene,page,together
-speech,Narrator,,The cave,1,1,
-speech,Narrator,,The dragon was snoring.,1,1,
-vocal,Gerald,,snores,1,1,
-speech,Gerald,"deep, polite",Could you not?,1,1,
-speech,Percival,,"I meant to do that,",1,1,
-speech,Narrator,,said Sir Percival.,1,1,
-sound,,,armor wobbles,1,1,
-speech,Gerlad,,Go away.,1,1,
+kind,speaker,direction,text,scene,page
+speech,Narrator,,The cave,1,1
+speech,Narrator,,The dragon was snoring.,1,1
+vocal,Gerald,,snores,1,1
+speech,Gerald,"deep, polite",Could you not?,1,1
+speech,Percival,,"I meant to do that,",1,1
+speech,Narrator,,said Sir Percival.,1,1
+sound,,,armor wobbles,1,1
+speech,Gerlad,,Go away.,1,1
 ```
 
-The default `--format json` gives the same rows with more fields, such as each row's line and column in the file. `--speech-only` keeps only what characters say: speech and the sounds they make. A line said together with others (`@FirstPig+`, spec §5.10) has `yes` in the last column, `together`, and `"together": true` in JSON.
+The default `--format json` gives the same rows with more fields, such as each row's line and column in the file. `--speech-only` keeps only what characters say: speech and the sounds they make.
 
 `--format text` gives each character's lines, for a performer's script:
 

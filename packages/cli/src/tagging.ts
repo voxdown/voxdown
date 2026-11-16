@@ -144,6 +144,7 @@ export const INSTRUCTIONS = `You attribute dialogue in fiction: for each numbere
 The story is written in VoxDown, a plain-text format for stories read aloud. What matters here:
 - A quote marked ⟦12⟧ is quote number 12, and needs a speaker.
 - \`@Name “…”\` means Name says that quote: those already have their speakers. Use them as anchors for who has been talking.
+- \`@Name+ “…”\` means Name says it together with others, all at once (a chorus, "they all cried"); Name is the voice used when only one is made.
 - A quote later on the same line as a marked one carries on the same speaker.
 - Other marks you may see: \`(softly)\` after a name is how it is said, \`[door creaks]\` is a sound, \`{pause}\` and \`{page}\` are instructions, \`%% … %%\` is a note. They are not dialogue.
 
@@ -158,6 +159,7 @@ How to answer:
 - speaker is a short name from the cast list, exactly as written there.
 - A quote that no character says aloud (a sign, a title, a word being discussed, a letter the narrator reads out) goes to the narrator. A character's quoted thought is theirs.
 - A character who speaks but isn't in the cast: speaker "new", with their name in newName (as the story calls them). Otherwise newName is "".
+- A quote several characters say at once ("cried the three little pigs", "they all shouted"): speaker is the one named first, or the most prominent of them, and together is true. Otherwise together is false.
 - confidence: high when the text settles it, medium when it's the clear best reading, low when it's a guess. Use "unknown" only when there is no way to tell.
 - Answer every numbered quote in the passage, and only those. Never rewrite the story.`;
 
@@ -176,7 +178,7 @@ export function answerSchema(story: Story): Record<string, unknown> {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["quote", "cue", "speaker", "newName", "confidence"],
+          required: ["quote", "cue", "speaker", "newName", "together", "confidence"],
           properties: {
             quote: { type: "integer", description: "The quote's number, from ⟦n⟧." },
             cue: {
@@ -188,6 +190,10 @@ export function answerSchema(story: Story): Record<string, unknown> {
             newName: {
               type: "string",
               description: 'A new character\'s name when speaker is "new"; otherwise "".',
+            },
+            together: {
+              type: "boolean",
+              description: "Whether several characters say it at once, the speaker among them.",
             },
             confidence: { type: "string", enum: ["high", "medium", "low"] },
           },
@@ -284,6 +290,8 @@ export function readAnswer(
     const confidence: Confidence =
       item?.confidence === "high" || item?.confidence === "low" ? item.confidence : "medium";
     const cue = typeof item?.cue === "string" ? item.cue.trim() : "";
+    // Said by several at once (spec §5.10): `@Name+`. Only a plain `true` counts.
+    const together = item?.together === true ? { together: true } : {};
     if (!asked.has(quote)) {
       problems.push(`quote ${String(item?.quote)} wasn't asked about`);
       continue;
@@ -295,7 +303,7 @@ export function readAnswer(
       const full = typeof item?.newName === "string" ? item.newName.trim() : "";
       const member = full ? castMemberNamed(story, full) : undefined;
       if (member) {
-        gifts.push({ quote, speaker: member, confidence, cue });
+        gifts.push({ quote, speaker: member, ...together, confidence, cue });
         continue;
       }
       const short = full ? (newcomers.get(full.toLowerCase()) ?? shortName(full)) : "";
@@ -304,13 +312,13 @@ export function readAnswer(
         continue;
       }
       newcomers.set(full.toLowerCase(), short);
-      gifts.push({ quote, speaker: short, fullName: full, confidence, cue });
+      gifts.push({ quote, speaker: short, fullName: full, ...together, confidence, cue });
       continue;
     }
     const member =
       castMemberNamed(story, speaker) ??
       known.find((other) => other.name.toLowerCase() === speaker.toLowerCase())?.name;
-    if (member) gifts.push({ quote, speaker: member, confidence, cue });
+    if (member) gifts.push({ quote, speaker: member, ...together, confidence, cue });
     else problems.push(`quote ${quote}: “${speaker}” isn't in the cast`);
   }
   const unknown = passage.numbers.filter((number) => !gifts.some((gift) => gift.quote === number));

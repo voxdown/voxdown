@@ -47,7 +47,10 @@ export function proseWords(source: string): number {
     kept
       .join("\n\n")
       .replace(/^#{1,6}\s+/gm, "")
-      .replace(/@[\p{L}\p{N}_-]*(?:[ \t]*\([^)\n]*\))?|\[[^\]\n]*\]|\{[^}\n]*\}/gu, " "),
+      .replace(
+        /@[\p{L}\p{N}_-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?(?:[ \t]*\([^)\n]*\))?|\[[^\]\n]*\]|\{[^}\n]*\}/gu,
+        " ",
+      ),
   );
 }
 
@@ -79,7 +82,10 @@ export function glimpse(source: string): { title?: string; words: string } {
     .slice(0, 1500)
     .replace(/%%[\s\S]*?(?:%%|$)/g, " ")
     .replace(/^#{1,6}[ \t]+/gm, "")
-    .replace(/@[\p{L}\p{N}_-]+|\{[^}\n]*\}|\([^)\n]*\)|\[[^\]\n]*\]/gu, " ")
+    .replace(
+      /@[\p{L}\p{N}_-]+(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?|\{[^}\n]*\}|\([^)\n]*\)|\[[^\]\n]*\]/gu,
+      " ",
+    )
     .replace(/[*_]+/g, "")
     .replace(/\s+/g, " ")
     .trim();

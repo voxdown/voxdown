@@ -892,7 +892,9 @@ const tools: StretchTools = new StretchTools({
             [
               ...view.state.doc
                 .toString()
-                .matchAll(/@[\p{L}][\p{L}\p{N}_'’-]*\s*\(([^()\n]{1,60})\)|@\(([^()\n]{1,60})\)/gu),
+                .matchAll(
+                  /@[\p{L}][\p{L}\p{N}_'’-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?\s*\(([^()\n]{1,60})\)|@\(([^()\n]{1,60})\)/gu,
+                ),
             ].map((found) => (found[1] ?? found[2] ?? "").trim()),
           ),
         ].filter(Boolean)

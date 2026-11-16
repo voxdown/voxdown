@@ -11,6 +11,7 @@ import {
   type TextChange,
   diffChanges,
   giveQuotes,
+  lines,
   parse,
   quotesOf,
 } from "voxdown";
@@ -609,6 +610,20 @@ async function nameSpeakers(
   }
 }
 
+/**
+ * What to tell the writer of lines said together with others (`@Name+`, spec §5.10), as
+ * `vxd produce` does: a voice service speaks one voice at a time, so each is voiced by the one
+ * speaker named. Undefined when there are none.
+ */
+export function togetherNote(text: string, made: boolean): string | undefined {
+  const count = lines(parse(text)).filter((line) => line.together).length;
+  if (count === 0) return undefined;
+  const said = `${count} ${count === 1 ? "line" : "lines"} said together with others (@Name+)`;
+  return made
+    ? `${said} ${count === 1 ? "was" : "were"} voiced by one speaker only, the one named: the others' voices are not in it.`
+    : `${said} will be voiced by one speaker only, the one named: the others' voices won't be in it.`;
+}
+
 /** Casts and prices an audiobook, then makes it (or sends it to ElevenLabs Studio). */
 async function audiobook(
   pairing: Pairing,
@@ -658,6 +673,15 @@ async function audiobook(
       running.signal,
     );
     if (!done) throw new HelperError("The helper stopped before it was done.");
+    // Lines said together have one voice here: the writer is told, after the rest.
+    const together = togetherNote(context.text(), done.result !== "estimated");
+    const told = () => {
+      if (!together) return;
+      const note = document.createElement("p");
+      note.className = "sheet-note ai-together";
+      note.textContent = together;
+      result.append(note);
+    };
     if (done.result === "estimated") {
       go.textContent = "Make it";
       go.onclick = () => void audiobook(pairing, service, "make", context, sounds, found);
@@ -666,6 +690,7 @@ async function audiobook(
         second.textContent = "Send to ElevenLabs Studio";
         second.onclick = () => void audiobook(pairing, service, "studio", context, sounds, found);
       }
+      told();
     } else if (done.result === "studio") {
       const link = document.createElement("a");
       link.href = String(done.url);
@@ -675,6 +700,7 @@ async function audiobook(
       progress.textContent =
         "It's in ElevenLabs Studio, each line in its character's voice: listen, change and convert it there.";
       result.replaceChildren(link);
+      told();
       go.textContent = "Cast it and count the cost";
       go.onclick = () => void audiobook(pairing, service, "estimate", context, sounds, found);
     } else if (done.result === "made") {
@@ -688,6 +714,7 @@ async function audiobook(
         list.append(item);
       }
       result.replaceChildren(list);
+      told();
       go.textContent = "Cast it and count the cost";
       go.onclick = () => void audiobook(pairing, service, "estimate", context, sounds, found);
     }

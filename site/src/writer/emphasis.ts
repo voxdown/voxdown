@@ -133,7 +133,7 @@ export function wordsIn(
   if (from === line.from) cut(/^\s*#{1,6}[ \t]+/u, true);
   const leading = [
     /^\s+/u,
-    /^@[\p{L}\p{N}_'’-]*\s*(?:\([^()\n]*\)\s*)?/u,
+    /^@[\p{L}\p{N}_'’-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?\s*(?:\([^()\n]*\)\s*)?/u,
     /^\[[^\]\n]*\]/u,
     /^\{[^}\n]*\}/u,
     /^%%.*?%%/u,
@@ -143,7 +143,10 @@ export function wordsIn(
   // a closing one first (`” said Alice`), an opening one last. It stays outside the signs.
   leading.push(/^[”»](?=\s|$)/u, /^’(?=\s)/u);
   // And the next speaker's name and direction, where the narration before them was cut.
-  trailing.push(/[“«„]$/u, /@[\p{L}\p{N}_'’-]*\s*(?:\([^()\n]*\)\s*)?$/u);
+  trailing.push(
+    /[“«„]$/u,
+    /@[\p{L}\p{N}_'’-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?\s*(?:\([^()\n]*\)\s*)?$/u,
+  );
   while (leading.some((pattern) => cut(pattern, true)));
   while (trailing.some((pattern) => cut(pattern, false)));
   // A quote's words up to where its passage was cut: its opening mark outside the signs too.

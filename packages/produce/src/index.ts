@@ -68,5 +68,7 @@ export {
   plain,
   plainWithStress,
   productionScript,
+  saidTogether,
+  togetherNote,
 } from "./script";
 export { GAPS, chapterSsml, lineSsml, ssmlDocument, styleFor, xml } from "./ssml";

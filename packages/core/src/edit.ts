@@ -1,5 +1,5 @@
 import { escapeReferences, hasLetterOrDigit } from "./chars";
-import { baseSpeaker, groupDirection } from "./groups";
+import { baseSpeaker, baseTogether, groupDirection } from "./groups";
 import { scanName } from "./inline";
 import { lexedTokens } from "./lexed";
 import type { Block, Group, Item, Line, Mark, Speech, Story, Vocal } from "./model";
@@ -345,32 +345,64 @@ function beforeGlued(story: Story, line: Line, at: number): number {
   }
 }
 
-/** A mark for `speaker` with an optional direction, as §13.3 writes it. */
-function markText(speaker: string, direction: string | null): string {
-  return direction ? `@${speaker} (${directionText(direction)})` : `@${speaker}`;
+/**
+ * A mark for `speaker` with an optional direction, as §13.3 writes it: `@Gerald (yawning)`, and
+ * `@FirstPig+` for a speech said together with others (§5.10).
+ */
+function markText(speaker: string, direction: string | null, together = false): string {
+  const name = together ? `${speaker}+` : speaker;
+  return direction ? `@${name} (${directionText(direction)})` : `@${name}`;
 }
+
+/** Where a mark's name ends, with the `+` and any names after it (§5.10): a direction goes after. */
+function nameEnd(mark: Mark): number {
+  return mark.togetherRange?.to ?? mark.nameRange.to;
+}
+
+/** How a speech is given to someone (§13.4). */
+export type SpeakerOptions = {
+  /**
+   * Whether the new speaker says it together with others, `@FirstPig+` (§5.10). By default a
+   * speech said together stays said together, and one said alone stays alone: only the voice it
+   * falls back on changes.
+   */
+  together?: boolean;
+};
 
 /**
  * Gives a stretch of speech or narration to another character (§13.4). The name is written as
  * the cast spells it. Later quotes on the line that carried the speech on keep their speaker.
+ * A speech said together with others (§5.10) stays so, unless `options.together` says otherwise.
  * Like every edit here, it changes only what it says it does: where that can't be done without
  * changing other words or voices, it returns no changes.
  */
-export function setSpeaker(story: Story, speech: Speech, name: string): TextChange[] {
-  return session(() => setSpeakerNow(story, speech, name));
+export function setSpeaker(
+  story: Story,
+  speech: Speech,
+  name: string,
+  options: SpeakerOptions = {},
+): TextChange[] {
+  return session(() => setSpeakerNow(story, speech, name, options));
 }
 
-function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[] {
+function setSpeakerNow(
+  story: Story,
+  speech: Speech,
+  name: string,
+  options: SpeakerOptions,
+): TextChange[] {
   // A stretch with no letter or digit in it isn't heard (§12.1): nothing to give.
   if (!hasLetterOrDigit(speech.text)) return [];
   // A later paragraph of an unmarked speech over paragraphs is given with the whole speech.
   const origin = narrationOrigin(story, speech);
-  if (origin) return setSpeaker(story, origin, name);
+  if (origin) return setSpeaker(story, origin, name, options);
   // A quote is given away whole, with the sounds made inside it.
   const { stretches, items: quote } = quoteOf(story, speech, true);
   const first = stretches[0] as Speech;
   const key = nameKey(name);
   const spelling = spelled(story, name);
+  // Said together, or alone, as it was unless asked (§5.10).
+  const together = (was: Heard) => options.together ?? was.together;
   // Narration that holds quotes gives them, with the new mark directly before the first (§13.3):
   // the first quote goes whole, a quote after it may go with it (§5.6), and the narrator's own
   // words stay the narrator's.
@@ -398,21 +430,24 @@ function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[]
     const given = settled(
       story,
       [...new Set([...quote, ...rest, ...sounds, ...carried])],
-      speakerChanges(story, first, name, opening.from),
+      speakerChanges(story, first, name, opening.from, options.together),
       {
         inside: (was, now) =>
           (firstQuote(was.at)
-            ? nameKey(now.speaker) === key
+            ? nameKey(now.speaker) === key && now.together === together(was)
             : mayGo(was.at)
-              ? nameKey(now.speaker) === key || sameName(now.speaker, was.speaker)
-              : sameName(now.speaker, was.speaker)) && now.direction === was.direction,
-        wanted: (was, now) => ({
-          speaker:
-            firstQuote(was.at) || (mayGo(was.at) && nameKey(now.speaker) === key)
-              ? spelling
-              : was.speaker,
-          direction: was.direction,
-        }),
+              ? (nameKey(now.speaker) === key && now.together === together(was)) ||
+                (sameName(now.speaker, was.speaker) && now.together === was.together)
+              : sameName(now.speaker, was.speaker) && now.together === was.together) &&
+          now.direction === was.direction,
+        wanted: (was, now) => {
+          const given = firstQuote(was.at) || (mayGo(was.at) && nameKey(now.speaker) === key);
+          return {
+            speaker: given ? spelling : was.speaker,
+            direction: was.direction,
+            together: given ? together(was) : was.together,
+          };
+        },
         some: (now) => now.some((char) => nameKey(char.speaker) === key),
       },
     );
@@ -421,9 +456,13 @@ function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[]
   }
   // Anything else goes whole: every word of the stretch, said as before.
   const whole: Promise = {
-    inside: (was, now) => nameKey(now.speaker) === key && now.direction === was.direction,
-    wanted: (was) => ({ speaker: spelling, direction: was.direction }),
+    inside: (was, now) =>
+      nameKey(now.speaker) === key &&
+      now.direction === was.direction &&
+      now.together === together(was),
+    wanted: (was) => ({ speaker: spelling, direction: was.direction, together: together(was) }),
   };
+  const joined = options.together ?? first.together === true;
   // Narration between a mark and the quote it gives (`@Gerald Gerald put on his spectacles.
   // “I thought…”`, §5.4): a new mark before it would claim that quote instead, so the mark there
   // becomes the new speaker's, who says the rest of the line up to the next mark, and the mark
@@ -441,7 +480,11 @@ function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[]
       story,
       quote,
       [
-        { from: start, to: start, insert: markAt(story.source, start, markText(spelling, null)) },
+        {
+          from: start,
+          to: start,
+          insert: markAt(story.source, start, markText(spelling, null, joined)),
+        },
         { ...removeWithSpace(story.source, mark.range), insert: "" },
         {
           from: at,
@@ -460,7 +503,7 @@ function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[]
       story,
       quote,
       [
-        { ...mark.range, insert: markText(spelling, null) },
+        { ...mark.range, insert: markText(spelling, null, joined) },
         {
           from: at,
           to: at,
@@ -471,7 +514,12 @@ function setSpeakerNow(story: Story, speech: Speech, name: string): TextChange[]
     );
     if (moved.length > 0) return moved;
   }
-  return settled(story, quote, speakerChanges(story, first, name), whole);
+  return settled(
+    story,
+    quote,
+    speakerChanges(story, first, name, undefined, options.together),
+    whole,
+  );
 }
 
 /**
@@ -573,25 +621,29 @@ function speakerChanges(
   speech: Speech,
   name: string,
   quoteAt?: number,
+  asked?: boolean,
 ): TextChange[] {
   checkName(name);
   const speaker = spelled(story, name);
-  if (nameKey(speaker) === nameKey(speech.speaker)) return [];
+  // Said together as it was, unless asked (§5.10).
+  const together = asked ?? speech.together === true;
+  const sameTogether = together === (speech.together === true);
+  if (nameKey(speaker) === nameKey(speech.speaker) && sameTogether) return [];
   const { line, groups } = place(story, speech);
   const changes: TextChange[] = [];
   const keep = (other: Speech) => {
     const own = ownDirectionMark(story, other);
+    const mark = markText(speech.speaker, other.ownDirection, other.together === true);
     if (own) {
-      changes.push({ ...own, insert: markText(speech.speaker, other.ownDirection) });
+      changes.push({ ...own, insert: mark });
     } else if (other.openQuote) {
       const at = other.openQuote.from;
-      const insert = markAt(story.source, at, markText(speech.speaker, other.ownDirection));
-      changes.push({ from: at, to: at, insert });
+      changes.push({ from: at, to: at, insert: markAt(story.source, at, mark) });
     }
   };
   const own = ownDirectionMark(story, speech);
   const base = baseSpeaker(groups, story.meta.narrator);
-  const toBase = nameKey(speaker) === nameKey(base);
+  const toBase = nameKey(speaker) === nameKey(base) && together === baseTogether(groups);
   // A group's direction is its own character's (§7.2): given to someone else, the stretch keeps
   // it in the new mark, written the one way §13.3 gives (`@Zed (sighing)`).
   const fromGroup =
@@ -609,10 +661,18 @@ function speakerChanges(
       } else {
         changes.push({ ...removeWithSpace(story.source, mark.range), insert: "" });
       }
-    } else if (fromGroup && !mark.directionRange && how) {
-      changes.push({ ...mark.nameRange, insert: `${speaker} (${directionText(how)})` });
     } else {
-      changes.push({ ...mark.nameRange, insert: speaker });
+      // The name changes; the `+` stays, goes or comes as asked (§5.10).
+      const plus = together ? "+" : "";
+      const written = sameTogether ? speaker : `${speaker}${plus}`;
+      const to = sameTogether ? mark.nameRange.to : nameEnd(mark);
+      const said = fromGroup && !mark.directionRange && how ? ` (${directionText(how)})` : "";
+      if (said && sameTogether && mark.togetherRange) {
+        changes.push({ ...mark.nameRange, insert: speaker });
+        changes.push({ from: nameEnd(mark), to: nameEnd(mark), insert: said });
+      } else {
+        changes.push({ from: mark.nameRange.from, to, insert: `${written}${said}` });
+      }
     }
   } else if (own) {
     // `@(quieter) “Oh dear.”` becomes `@Gerald (quieter) “Oh dear.”`; `@()Well` becomes `@Gerald Well`.
@@ -620,12 +680,13 @@ function speakerChanges(
       speech.ownDirection === null && !/^\s/.test(story.source.slice(own.to, own.to + 1));
     changes.push({
       ...own,
-      insert: `${markText(speaker, speech.ownDirection)}${spaced ? " " : ""}`,
+      insert: `${markText(speaker, speech.ownDirection, together)}${spaced ? " " : ""}`,
     });
   } else {
     // A quote carried on from a mark keeps how it is said: `@Zed (yawning) “Very.”`.
     const at = speech.openQuote?.from ?? quoteAt ?? beforeGlued(story, line, speech.textRange.from);
-    changes.push({ from: at, to: at, insert: markAt(story.source, at, markText(speaker, how)) });
+    const mark = markText(speaker, how, together);
+    changes.push({ from: at, to: at, insert: markAt(story.source, at, mark) });
   }
   // Words that open with `(` would read as the new mark's direction: `@Gerald \(sighs)`.
   if (!speech.quoted && quoteAt === undefined && story.source[speech.textRange.from] === "(") {
@@ -645,7 +706,7 @@ function speakerChanges(
     );
     if (inner) {
       const at = inner.range.from;
-      const mark = markText(speaker, how);
+      const mark = markText(speaker, how, together);
       changes.push({ from: at, to: at, insert: markAt(story.source, at, mark) });
     }
   }
@@ -658,7 +719,11 @@ function speakerChanges(
     const ownMark = following?.mark !== undefined && following.mark.range.from >= speech.range.to;
     if (following?.openQuote && !ownMark) {
       const at = following.openQuote.from;
-      const mark = markText(spelled(story, following.speaker), following.ownDirection);
+      const mark = markText(
+        spelled(story, following.speaker),
+        following.ownDirection,
+        following.together === true,
+      );
       changes.push({ from: at, to: at, insert: markAt(story.source, at, mark) });
     }
   }
@@ -685,6 +750,11 @@ function groupsAt(story: Story, at: number): Group[] {
 /** The voice a line has of its own at `at`: the innermost character group's, else the narrator (§7.2). */
 function baseVoiceAt(story: Story, at: number): string {
   return baseSpeaker(groupsAt(story, at), story.meta.narrator);
+}
+
+/** Whether the line's own voice at `at` says it together with others: `::: @FirstPig+` (§5.10). */
+function baseTogetherAt(story: Story, at: number): boolean {
+  return baseTogether(groupsAt(story, at));
 }
 
 /**
@@ -925,10 +995,13 @@ function speakerInLine(story: Story, from: number, to: number, name: string): Te
       to: item.range.to + (source[item.range.to] === " " ? 1 : 0),
       insert: "",
     }));
+  // Words all said together with others stay so in their new voice; any said alone, alone (§5.10).
+  const together = chars.every((char) => char.together);
   // The line's own voice, the narrator or a group's character: no name needed (§5.9), only the
   // marks taken out, or `@/` where another voice spoke up to the words; and a `@/` that ended the
   // words' old voice straight after them goes too, ending nothing now.
-  const own = sameName(speaker, baseVoiceAt(story, start));
+  const own =
+    sameName(speaker, baseVoiceAt(story, start)) && together === baseTogetherAt(story, start);
   if (own) {
     let at = words.to;
     while (/[ \t]/.test(source[at] ?? "")) at++;
@@ -949,12 +1022,16 @@ function speakerInLine(story: Story, from: number, to: number, name: string): Te
       ? [{ ...first, insert }, ...removed.slice(1)]
       : [{ from: start, to: start, insert }, ...removed];
   };
-  const openings = own ? [opening(null), opening("@/")] : [opening(`@${speaker}`)];
+  const openings = own
+    ? [opening(null), opening("@/")]
+    : [opening(markText(speaker, null, together))];
   // Each word said as it was, by its new voice: a direction it had stays, one it hadn't comes in.
   const promise = {
     inside: (was: Heard, now: Heard) =>
-      sameName(now.speaker, speaker) && now.direction === was.direction,
-    wanted: (was: Heard) => ({ speaker, direction: was.direction }),
+      sameName(now.speaker, speaker) &&
+      now.direction === was.direction &&
+      now.together === together,
+    wanted: (was: Heard) => ({ speaker, direction: was.direction, together }),
   };
   for (const first of openings) {
     // The mark alone, the voices after the words given back where they changed.
@@ -968,7 +1045,12 @@ function speakerInLine(story: Story, from: number, to: number, name: string): Te
   let next = words.to;
   while (next < end && /\s/.test(source[next] ?? "")) next++;
   const after = heard(story).find((char) => char.at >= next && char.at < end);
-  if (!after || !sameName(after.speaker, baseVoiceAt(story, next))) return null;
+  if (
+    !after ||
+    !sameName(after.speaker, baseVoiceAt(story, next)) ||
+    after.together !== baseTogetherAt(story, next)
+  )
+    return null;
   const back = { from: next, to: next, insert: markAt(source, next, "@/") };
   for (const first of openings) {
     const closed = settled(story, within, [...first, back], promise);
@@ -1024,8 +1106,14 @@ function directionInLine(
   };
   const promise = {
     inside: (was: Heard, now: Heard) =>
-      sameName(now.speaker, was.speaker) && now.direction === wanted(was, now.speaker),
-    wanted: (was: Heard) => ({ speaker: was.speaker, direction: wanted(was, was.speaker) }),
+      sameName(now.speaker, was.speaker) &&
+      now.together === was.together &&
+      now.direction === wanted(was, now.speaker),
+    wanted: (was: Heard) => ({
+      speaker: was.speaker,
+      direction: wanted(was, was.speaker),
+      together: was.together,
+    }),
   };
   // No direction: the marks taken out may be all it takes; else `@()` before the words.
   const tries =
@@ -1046,8 +1134,14 @@ function setDirectionNow(story: Story, speech: Speech, direction: string | null)
   const value = direction?.replace(/\s+/g, " ").trim() || null;
   return settled(story, quote, changes, {
     inside: (was, now) =>
-      sameName(now.speaker, was.speaker) && (value === null || now.direction === value),
-    wanted: (was, now) => ({ speaker: was.speaker, direction: value ?? now.direction }),
+      sameName(now.speaker, was.speaker) &&
+      now.together === was.together &&
+      (value === null || now.direction === value),
+    wanted: (was, now) => ({
+      speaker: was.speaker,
+      direction: value ?? now.direction,
+      together: was.together,
+    }),
   });
 }
 
@@ -1067,7 +1161,8 @@ const notWord = (char: string) => {
   return code < 128 ? (ASCII_NOT_WORDS[code] as boolean) : NOT_WORDS.test(char);
 };
 
-type Voice = { speaker: string; direction: string | null };
+/** Who says something, how, and whether others say it with them (§5.10). */
+type Voice = { speaker: string; direction: string | null; together: boolean };
 
 /** One character a listener hears, in speech or in a character's sound, and who says it and how. */
 type Heard = Voice & {
@@ -1208,6 +1303,7 @@ function hearLine(
         audible,
         speaker: item.speaker,
         direction: item.direction,
+        together: item.together === true,
       });
       first = false;
     }
@@ -1217,6 +1313,7 @@ function hearLine(
 const voiceOf = (item: Speech | Vocal): Voice => ({
   speaker: item.speaker,
   direction: item.direction,
+  together: item.together === true,
 });
 const sameName = (a: string, b: string) => a === b || nameKey(a) === nameKey(b);
 
@@ -1231,15 +1328,22 @@ type Promise = {
 
 /** `@/` as a mark (§5.9) in the text an edit writes. */
 const END_MARK = /(?:^|[^\p{L}\p{N}])@\/(?![\p{L}\p{N}/])/u;
+/** A name with a `+` after it, said together (§5.10), in the text an edit writes. */
+const TOGETHER_MARK = /(?:^|[^\p{L}\p{N}])@\p{L}[\p{L}\p{M}\p{N}_'’-]*\+/u;
 
 /**
- * Changes that write `@/` into a story that declares a version before 1.2 declare 1.2 as well: a
- * reader that holds to the version declared reads `@/` as text (§16). A story that declares none
- * is left so.
+ * Changes that write `@/` into a story that declares a version before 1.2 declare 1.2 as well,
+ * and changes that write `@Name+` one before 1.4 declare 1.4: a reader that holds to the version
+ * declared reads them as text (§16). A story that declares none is left so.
  */
 function declared(story: Story, changes: TextChange[]): TextChange[] {
-  if (!changes.some((change) => END_MARK.test(change.insert))) return changes;
-  const bump = declareVersion(story, "1.2");
+  const version = changes.some((change) => TOGETHER_MARK.test(change.insert))
+    ? "1.4"
+    : changes.some((change) => END_MARK.test(change.insert))
+      ? "1.2"
+      : null;
+  if (version === null) return changes;
+  const bump = declareVersion(story, version);
   return bump ? [...changes, bump].sort((a, b) => a.from - b.from || a.to - b.to) : changes;
 }
 
@@ -1346,7 +1450,9 @@ function kept(
     const now = after[i] as Heard;
     return was.target
       ? !promise.inside(was, now)
-      : !sameName(now.speaker, was.speaker) || now.direction !== was.direction;
+      : !sameName(now.speaker, was.speaker) ||
+          now.direction !== was.direction ||
+          now.together !== was.together;
   });
   if (wrong >= 0) {
     const was = before[wrong] as Heard;
@@ -1376,7 +1482,7 @@ function tidied(
   for (const change of [...current]) {
     if (change.from !== change.to || !change.insert.startsWith("@")) continue;
     const marks =
-      change.insert.match(/@(?:\([^)]*\)|[\p{L}\p{N}_'’-]+(?: \([^)]*\))?) ?\\?/gu) ?? [];
+      change.insert.match(/@(?:\([^)]*\)|[\p{L}\p{N}_'’-]+\+?(?: \([^)]*\))?) ?\\?/gu) ?? [];
     if (marks.length < 2 && current.length < 2) continue;
     for (const mark of marks) {
       const insert = change.insert.replace(mark, "");
@@ -1393,7 +1499,7 @@ function tidied(
   // (`::: whispering` … `@Narrator (whispering) [gasps]`): the name alone will do.
   for (const change of [...current]) {
     if (change.from !== change.to) continue;
-    for (const match of change.insert.matchAll(/(?<=[\p{L}\p{N}_'’-]) \([^)]*\)/gu)) {
+    for (const match of change.insert.matchAll(/(?<=[\p{L}\p{N}_'’+-]) \([^)]*\)/gu)) {
       const at = match.index ?? 0;
       const insert = change.insert.slice(0, at) + change.insert.slice(at + match[0].length);
       const next = current.map((other) => (other === change ? { ...other, insert } : other));
@@ -1467,14 +1573,28 @@ export function heardIndex(story: Story, item: Speech | Vocal): number {
  * API).
  */
 export function heardVoices(story: Story): Voice[] {
-  return heard(story).map((char) => ({ speaker: char.speaker, direction: char.direction }));
+  return heard(story).map((char) => ({
+    speaker: char.speaker,
+    direction: char.direction,
+    together: char.together,
+  }));
 }
 
 /** Every character heard, where it is, and who says it how (for tests; not part of the package's API). */
-export function heardPlaces(
-  story: Story,
-): Array<{ at: number; char: string; speaker: string; direction: string | null }> {
-  return heard(story).map(({ at, char, speaker, direction }) => ({ at, char, speaker, direction }));
+export function heardPlaces(story: Story): Array<{
+  at: number;
+  char: string;
+  speaker: string;
+  direction: string | null;
+  together: boolean;
+}> {
+  return heard(story).map(({ at, char, speaker, direction, together }) => ({
+    at,
+    char,
+    speaker,
+    direction,
+    together,
+  }));
 }
 
 /** Whether two stories have the same words heard, each said by the same character in the same way. */
@@ -1497,6 +1617,7 @@ export function hearingDifferences(a: Story, b: Story): number[] {
     if (
       !sameName(now.speaker, was.speaker) ||
       now.direction !== was.direction ||
+      now.together !== was.together ||
       now.audible !== was.audible
     ) {
       differences.push(was.at);
@@ -1516,6 +1637,7 @@ function sameHeard(first: readonly Heard[], second: readonly Heard[]): boolean {
         now.char === was.char &&
         sameName(now.speaker, was.speaker) &&
         now.direction === was.direction &&
+        now.together === was.together &&
         now.audible === was.audible
       );
     })
@@ -1532,7 +1654,9 @@ function giveBack(story: Story, char: Heard, voice: Voice): { at: number; insert
   const source = story.source;
   const item = char.item;
   let at: number;
-  const sameSpeaker = sameName(voice.speaker, item.speaker);
+  // A `@(…)` keeps who speaks, and whether others join in (§5.10): it gives back only a direction.
+  const sameSpeaker =
+    sameName(voice.speaker, item.speaker) && voice.together === (item.together === true);
   if (char.first) {
     at = item.kind === "speech" ? (item.openQuote?.from ?? item.textRange.from) : item.range.from;
     // A paragraph that carries a speech on must open with the quote's mark: a direction of its
@@ -1559,7 +1683,7 @@ function giveBack(story: Story, char: Heard, voice: Voice): { at: number; insert
   // A sound for whoever is speaking (`@[giggles]`) keeps its voice by taking a name of its own:
   // `@Narrator [giggles]`.
   if (item.kind === "vocal" && !item.mark) {
-    const name = spelled(story, voice.speaker);
+    const name = `${spelled(story, voice.speaker)}${voice.together ? "+" : ""}`;
     const said = how ? ` (${directionText(how)})` : "";
     return { at: item.range.from + 1, insert: `${name}${said} ` };
   }
@@ -1571,13 +1695,14 @@ function giveBack(story: Story, char: Heard, voice: Voice): { at: number; insert
     !item.quoted &&
     !sameSpeaker &&
     plain &&
-    sameName(voice.speaker, baseVoiceAt(story, at));
+    sameName(voice.speaker, baseVoiceAt(story, at)) &&
+    voice.together === baseTogetherAt(story, at);
   const mark =
     item.kind === "speech" && sameSpeaker
       ? direction
       : narratorBack
         ? "@/"
-        : markText(spelled(story, voice.speaker), how);
+        : markText(spelled(story, voice.speaker), how, voice.together);
   const insert = markAt(source, at, mark) + (escaped ? "\\" : "");
   return { at, insert };
 }
@@ -1639,7 +1764,7 @@ function directionChanges(story: Story, speech: Speech, direction: string | null
     if (markFirst && speech.mark) {
       const range = speech.mark.directionRange;
       if (range) return [{ from: range.from + 1, to: range.to - 1, insert: text }];
-      const at = speech.mark.nameRange.to;
+      const at = nameEnd(speech.mark);
       return [{ from: at, to: at, insert: ` (${text})` }];
     }
     // A paragraph that carries a speech on keeps the quote's mark first (§5.7), as does one that
@@ -1669,10 +1794,11 @@ function directionChanges(story: Story, speech: Speech, direction: string | null
     const mark = speech.mark;
     const needed =
       speech.quoted ||
-      nameKey(speech.speaker) !== nameKey(baseSpeaker(groups, story.meta.narrator));
+      nameKey(speech.speaker) !== nameKey(baseSpeaker(groups, story.meta.narrator)) ||
+      (speech.together === true) !== baseTogether(groups);
     if (!needed) return [{ ...removeWithSpace(story.source, mark.range), insert: "" }];
     const directionRange = mark.directionRange as Range;
-    return [{ from: mark.nameRange.to, to: directionRange.to, insert: "" }];
+    return [{ from: nameEnd(mark), to: directionRange.to, insert: "" }];
   }
   // A direction carried over from the speech this one carries on.
   if (speech.openQuote) {
@@ -1780,7 +1906,10 @@ function renameCharacterNow(story: Story, from: string, to: string): TextChange[
       const now = after[i] as Heard;
       const speaker = nameKey(was.speaker) === key ? to : was.speaker;
       return (
-        now.char === was.char && sameName(now.speaker, speaker) && now.direction === was.direction
+        now.char === was.char &&
+        sameName(now.speaker, speaker) &&
+        now.direction === was.direction &&
+        now.together === was.together
       );
     });
   return same ? sorted : [];

@@ -93,6 +93,12 @@ const PIECES = [
   "@[x](y)",
   "@Gerald [snores]",
   "@[giggles]",
+  // said together (§5.10), and names after the `+` that 1.4 reserves
+  "@Gerald+",
+  "@Wanda+ (yawning)",
+  "@Gerald+Wanda",
+  "+",
+  "@Gerald+ [snores]",
   // quotes of every kind, and apostrophes
   "“",
   "”",
@@ -144,6 +150,7 @@ const PIECES = [
   ":::",
   "::: whispering",
   "::: @Gerald (whispering)",
+  "::: @Wanda+ (whispering)",
   "::: {book only}",
   "# ",
   "## Title",
@@ -690,6 +697,7 @@ describe("on stories made at random", () => {
       "“Hello,” said Gerald.\n",
       "@Ann “Hello,” said Gerald.\n",
       "@Ann (whispering) “Hello,” @Ann (whispering) said Gerald.\n",
+      "@Ann+ “Hello,” said the twins. “Again.”\n",
       "::: whispering\n",
       ":::\n",
       "\n",

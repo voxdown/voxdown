@@ -422,7 +422,7 @@ describe("vxd export", () => {
     expect(all.stdout).toBe(linesToCsv(lines(story)));
     const said = await vxd(["export", "peter.vxd", "--format", "csv", "--speech-only"], files);
     expect(said.stdout).toBe(linesToCsv(lines(story, { speechOnly: true })));
-    expect(said.stdout.split("\r\n")[0]).toBe("kind,speaker,direction,text,scene,page");
+    expect(said.stdout.split("\r\n")[0]).toBe("kind,speaker,direction,text,scene,page,together");
     const saved = await vxd(
       ["export", "peter.vxd", "--format", "csv", "--out", "lines.csv"],
       files,

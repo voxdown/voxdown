@@ -13,7 +13,7 @@
  * Two things run longer than a line: a quote runs to its closing mark (§5.7), and a group to its
  * closing line (§7).
  */
-import { baseSpeaker, groupDirection, visibilityOf } from "./groups";
+import { baseSpeaker, baseTogether, groupDirection, visibilityOf } from "./groups";
 import {
   type CloseToken,
   type DirectionToken,
@@ -28,7 +28,7 @@ import {
 import type { DirectionMark, Group, Item, Line, Mark } from "./model";
 import type { Names } from "./names";
 import type { Range } from "./source";
-import type { Warn } from "./warnings";
+import { type Warn, warnOthers } from "./warnings";
 
 /** Who speaks a stretch, and with what direction of its own. */
 export type Voice = {
@@ -36,6 +36,8 @@ export type Voice = {
   own: string | null;
   quoted: boolean;
   continued: boolean;
+  /** Said together with others, from an `@Name+` (§5.10). */
+  together?: true;
   mark?: Mark;
   directionMark?: DirectionMark;
 };
@@ -65,6 +67,8 @@ type Stretch = { pieces: TextToken[]; openQuote?: Range; closeQuote?: Range };
 
 class ParagraphReader {
   private readonly base: string;
+  /** Whether the base voice says it together with others: a group's `::: @Name+` (§5.10). */
+  private readonly baseTogether: boolean;
   /** The quote open right now, which may have opened on an earlier line. */
   private quote: (OpenQuote & { warned: boolean }) | null = null;
 
@@ -84,6 +88,7 @@ class ParagraphReader {
 
   constructor(private readonly context: ParagraphContext) {
     this.base = baseSpeaker(context.groups, context.names.narrator);
+    this.baseTogether = baseTogether(context.groups);
   }
 
   read(lines: readonly LexedLine[], carried: Voice | null) {
@@ -136,6 +141,7 @@ class ParagraphReader {
             direction: this.effective(voice.speaker, voice.own),
             description: token.description,
             range: token.range,
+            ...(voice.together ? { together: true as const } : {}),
           });
           break;
         }
@@ -233,6 +239,7 @@ class ParagraphReader {
         quoted: true,
         continued: false,
         mark: this.pending,
+        ...together(this.pending),
       };
     } else {
       const earlier = carried ?? this.lastEnded;
@@ -267,12 +274,23 @@ class ParagraphReader {
       range: token.range,
       nameRange: token.nameRange,
       ...(token.directionRange ? { directionRange: token.directionRange } : {}),
+      ...(token.togetherRange
+        ? { togetherRange: token.togetherRange, together: true as const }
+        : {}),
     };
+    if (token.othersRange) warnOthers(this.context.warn, speaker, token.othersRange);
     this.items.push(mark);
     if (this.speech?.quoted) {
       // Inside a quote, a mark changes who speaks from here to the closing mark.
       this.flush();
-      this.speech = { speaker, own: mark.direction, quoted: true, continued: false, mark };
+      this.speech = {
+        speaker,
+        own: mark.direction,
+        quoted: true,
+        continued: false,
+        mark,
+        ...together(mark),
+      };
       return this.ownSound(mark, tokens, index);
     }
     if (this.speech) {
@@ -287,7 +305,14 @@ class ParagraphReader {
     } else if (last === index) {
       // No quote and no sound: the character says the rest of the line (§5.8).
       this.flush();
-      this.speech = { speaker, own: mark.direction, quoted: false, continued: false, mark };
+      this.speech = {
+        speaker,
+        own: mark.direction,
+        quoted: false,
+        continued: false,
+        mark,
+        ...together(mark),
+      };
       this.narration = { own: null };
     }
     return last;
@@ -310,6 +335,7 @@ class ParagraphReader {
       description: token.description,
       range: token.range,
       mark,
+      ...together(mark),
     });
     return next;
   }
@@ -370,6 +396,7 @@ class ParagraphReader {
       quoted: false,
       continued: false,
       ...(directionMark ? { directionMark } : {}),
+      ...(this.baseTogether ? { together: true as const } : {}),
     };
   }
 
@@ -400,6 +427,7 @@ class ParagraphReader {
       textRange,
       quoted: voice.quoted,
       continued: voice.continued,
+      ...(voice.together ? { together: true as const } : {}),
       ...(voice.mark ? { mark: voice.mark } : {}),
       ...(voice.directionMark ? { directionMark: voice.directionMark } : {}),
       ...(openQuote ? { openQuote } : {}),
@@ -416,7 +444,13 @@ function continuation(voice: Voice): Voice {
     quoted: true,
     continued: true,
     ...(voice.directionMark ? { directionMark: voice.directionMark } : {}),
+    ...(voice.together ? { together: true as const } : {}),
   };
+}
+
+/** `together: true` for a voice whose mark says it is said with others (§5.10), else nothing. */
+function together(mark: Mark): { together?: true } {
+  return mark.together ? { together: true } : {};
 }
 
 /** Whether a quote opens after `index` on this line before the next character mark. */

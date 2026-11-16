@@ -32,6 +32,7 @@ function story(next: () => number): string {
       () => `@${pick(["Ann", "Bob"])} ${words(2)}`,
       () => `@${pick(["Ann", "Bob"])} (${pick(["softly", "sadly"])}) ${words(2)}`,
       () => `@(${pick(["softly", "loudly"])}) ${words(2)}`,
+      () => `@${pick(["Ann", "Bob"])}+ ${words(2)}`,
       () => `@/ ${words(2)}`,
       () => `“${words(2)},” ${words(1)} said.`,
       () => `*${words(2)}* ${words(1)}`,
@@ -99,7 +100,11 @@ describe("Who and How on words selected at random", () => {
           (then.at < a || then.at >= b)
         ) {
           // Well away from it: as before.
-          expect([char.speaker, char.direction], what).toEqual([then.speaker, then.direction]);
+          expect([char.speaker, char.direction, char.together], what).toEqual([
+            then.speaker,
+            then.direction,
+            then.together,
+          ]);
         }
       }
     }

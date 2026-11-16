@@ -29,7 +29,7 @@ bookText(story); // "“I’ve only just got to sleep,” said the dragon."
 | `warnings` | `{ code, severity, message, range, line, column }`. The codes are stable (SPEC.md §12.3). |
 | `frontMatter` | The raw YAML and its parsed `data`, or `null`. |
 
-A line’s `items` are, in source order: `speech` (`speaker`, `direction`, `ownDirection`, `text`, `quoted`, `continued`, and the ranges of its words and quotes), `vocal` (a sound a character makes), `sound`, `instruction` (`name`, `value`), `note`, `image`, and the `mark`s and `direction`s that produced them. Every type is exported, and documented in [`src/model.ts`](src/model.ts).
+A line’s `items` are, in source order: `speech` (`speaker`, `direction`, `ownDirection`, `text`, `quoted`, `continued`, `together` when said with others from an `@Name+` (§5.10), and the ranges of its words and quotes), `vocal` (a sound a character makes), `sound`, `instruction` (`name`, `value`), `note`, `image`, and the `mark`s and `direction`s that produced them. Every type is exported, and documented in [`src/model.ts`](src/model.ts).
 
 ## The two readings
 
@@ -38,8 +38,8 @@ A line’s `items` are, in source order: `speech` (`speaker`, `direction`, `ownD
 
 ## The spoken script as data
 
-- **`lines(story, { speechOnly? })`**: one `ScriptLine` per thing heard: `kind` (`speech`, `vocal`, `sound`, `page`, `pause`, `instruction`, `note`, `image`), `speaker`, `direction`, `text`, `name` (an instruction’s), `heading` (a heading’s level), `scene` (from 1), `sceneTitle`, `page` (the page it is on), and its `line` and `column`. The shape multi-voice text-to-speech tools take.
-- **`linesToCsv(rows, columns?)`**: `kind,speaker,direction,text,scene,page`, RFC 4180; or the columns given, such as `line` added.
+- **`lines(story, { speechOnly? })`**: one `ScriptLine` per thing heard: `kind` (`speech`, `vocal`, `sound`, `page`, `pause`, `instruction`, `note`, `image`), `speaker`, `together` (present, and `true`, on a line said with others, §5.10), `direction`, `text`, `name` (an instruction’s), `heading` (a heading’s level), `scene` (from 1), `sceneTitle`, `page` (the page it is on), and its `line` and `column`. The shape multi-voice text-to-speech tools take.
+- **`linesToCsv(rows, columns?)`**: `kind,speaker,direction,text,scene,page,together`, RFC 4180, where `together` is `yes` for a line said with others (`@Name+`, §5.10) and empty otherwise; or the columns given, such as `line` added.
 - **`textByCharacter(story)`**: a `Map` from each character to what they say, one line per speech, for a performer’s sides.
 
 ## Writing back
@@ -53,7 +53,7 @@ Each edit returns the smallest list of `TextChange` (`{ from, to, insert }`) tha
 
 | Edit | What it does (SPEC.md §13) |
 | --- | --- |
-| `setSpeaker(story, speech, name)` | Gives a stretch, or the whole quote it is part of (over lines and paragraphs), to another character; narration that holds quotes gives its first quote. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. |
+| `setSpeaker(story, speech, name, { together? })` | Gives a stretch, or the whole quote it is part of (over lines and paragraphs), to another character; narration that holds quotes gives its first quote. Replaces the name in its mark, or adds one; a later quote that carried the speech on gets a mark too, so it keeps its speaker. A speech said together with others (`@Name+`, §5.10) stays so, and one said alone stays alone, unless `together` says otherwise; a story declaring an older version then declares 1.4. |
 | `setDirection(story, speech, direction \| null)` | Adds, replaces or removes a stretch’s own direction, where §13 says to write it: to the quote's end, or to a direction of its own inside it. |
 | `setSpeakerWithin(story, from, to, name)` | Gives a few words of one line to a character, and nothing else: `@Name` before them, and after them what gives the rest back as it was (`@/` for the narrator, §5.9). Part of a quote can't be given away (a quote has one voice). |
 | `setDirectionWithin(story, from, to, direction \| null)` | Says a few words of one line so, and nothing else: `@(…)` before them, and `@()` or the direction the rest had after them. Inside a quote too. |

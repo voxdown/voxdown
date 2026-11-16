@@ -77,6 +77,8 @@ export type Break = { kind: "break"; range: Range };
 export type Group = {
   /** The character everything unmarked inside belongs to (§7.2). */
   character?: string;
+  /** Whether that character says it together with others: `::: @FirstPig+` (§5.10). */
+  together?: true;
   direction?: string;
   visibility?: Visibility;
   /** The opening line. */
@@ -131,6 +133,11 @@ export type Speech = {
   quoted: boolean;
   /** Whether the quote carries on an earlier speech without a mark of its own (§5.6, §5.7). */
   continued: boolean;
+  /**
+   * Whether the speaker says it together with others, from an `@Name+` (§5.10): the speaker is
+   * the voice used when only one is made. Absent otherwise.
+   */
+  together?: true;
   /** The character mark that gave this speech its speaker. */
   mark?: Mark;
   /** The `@(…)` its own direction was written in, if any. */
@@ -148,6 +155,8 @@ export type Vocal = {
   range: Range;
   /** The character mark the sound follows. Absent for `@[…]`. */
   mark?: Mark;
+  /** Whether others make the sound with the speaker, from an `@Name+` (§5.10). */
+  together?: true;
 };
 
 /** A sound in the world (§8.1). */
@@ -175,7 +184,10 @@ export type Comment = { kind: "comment"; text: string; range: Range };
 /** An image (§8.3): shown in the book, not heard. `link` is where it links to, if a link holds it. */
 export type Image = { kind: "image"; alt: string; src: string; link?: string; range: Range };
 
-/** A character mark, `@Gerald` or `@Gerald (yawning)` (§5.2, §6.1). */
+/**
+ * A character mark, `@Gerald` or `@Gerald (yawning)` (§5.2, §6.1), or `@Gerald+`, said together
+ * with others (§5.10).
+ */
 export type Mark = {
   kind: "mark";
   speaker: string;
@@ -183,6 +195,10 @@ export type Mark = {
   range: Range;
   nameRange: Range;
   directionRange?: Range;
+  /** The `+` after the name and any names after it, when the speech is said together (§5.10). */
+  togetherRange?: Range;
+  /** Whether the character says it together with others (§5.10). */
+  together?: true;
 };
 
 /** `@(…)`, a direction for whoever is speaking (§6.2), or `@()`, back to none (§6.3). */
@@ -198,6 +214,7 @@ export type WarningCode =
   | "stray-group-close"
   | "idle-mark"
   | "idle-end"
+  | "together-names"
   | "stray-quote"
   | "unknown-character"
   | "name-case"

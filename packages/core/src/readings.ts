@@ -67,10 +67,10 @@ function scriptLine(item: Item): string | null {
   switch (item.kind) {
     case "speech":
       return hasLetterOrDigit(item.text)
-        ? `${voice(item.speaker, item.direction)}: ${item.text}`
+        ? `${voice(item.speaker, item.direction, item.together)}: ${item.text}`
         : null;
     case "vocal":
-      return `${voice(item.speaker, item.direction)} [${item.description}]`;
+      return `${voice(item.speaker, item.direction, item.together)} [${item.description}]`;
     case "sound":
       return `[${item.description}]`;
     case "instruction":
@@ -92,8 +92,10 @@ function scriptLine(item: Item): string | null {
   }
 }
 
-function voice(speaker: string, direction: string | null): string {
-  return direction === null ? speaker : `${speaker} (${direction})`;
+/** `Gerald`, `Gerald (yawning)`; `FirstPig+` when said together with others (§5.10). */
+function voice(speaker: string, direction: string | null, together?: boolean): string {
+  const who = together ? `${speaker}+` : speaker;
+  return direction === null ? who : `${who} (${direction})`;
 }
 
 function label(visibility: Visibility): string {

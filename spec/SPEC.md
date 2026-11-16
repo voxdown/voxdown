@@ -1,6 +1,6 @@
 # VoxDown
 
-**Version 1.3, 14 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
+**Version 1.4, 16 November 2026,** by Etienne Ackermann ([@eackermann](https://github.com/eackermann)). © 2026 Etienne Ackermann. This specification is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Its examples are also published as [conformance.json](conformance.json) (§15). What changed since the drafts is in [CHANGELOG.md](CHANGELOG.md), and every mark fits on one page in [CHEATSHEET.md](CHEATSHEET.md).
 
 VoxDown is a plain-text format for stories that are read aloud. It records:
 
@@ -46,7 +46,7 @@ Sir Percival stopped.
 14. [Rendering](#14-rendering)
 15. [Conformance](#15-conformance)
 16. [Versions](#16-versions)
-17. [Beyond 1.0](#17-beyond-10)
+17. [Beyond 1.4](#17-beyond-14)
 
 ## 1. Goals
 
@@ -65,6 +65,7 @@ Sir Percival stopped.
 | --- | --- |
 | A character's line | `@Gerald “Could you not?”` |
 | A line inside narration | `@Gerald “I’ve only just got to sleep,” said the dragon.` |
+| A line said by several at once | `@FirstPig+ “Let us come in!”` (§5.10) |
 | How it is said | `@Gerald (yawning) “I’m tired.”` |
 | A direction for the narrator | `@(warmly) Once upon a time…` |
 | A change of direction mid-line | `@Gerald “I know. @(yawning) I’m tired.”` |
@@ -92,7 +93,7 @@ Each rule comes with examples. An example shows the input, then a line with a si
 
 The spoken script has one line per thing heard. A line is either:
 
-- `Character: text` for something said, or `Character (direction): text` when it has a direction;
+- `Character: text` for something said, or `Character (direction): text` when it has a direction, with a `+` after the character when others say it too (`FirstPig+: text`, §5.10);
 - `[description]` for a sound;
 - `Character [description]` for a sound made by a character;
 - `{page}`, `{pause}` or another instruction;
@@ -842,6 +843,98 @@ A quote ends only at its closing mark: inside one, `@/` changes nothing, and a p
 Gerald: I know. I’m tired.
 Narrator: See @/lib.
 ```
+
+### 5.10 Speaking together
+
+New in 1.4. A `+` straight after a character's name, with no space between them, means the speech is said by that character **together with others**: a chorus, a crowd, “they all cried”. The character named is the one whose voice is used when only one voice is made. Who the others are, the story around it says.
+
+This is what the story says, not a question for later: each tool decides what to do about it. A tool that makes audio may record the other voices too and lay them over each other, or say which lines still need them; a reader who reads the story aloud alone reads the line once. The `+` is part of the mark, so it is never read aloud or printed. The spoken script writes it after the speaker's name (§12.1).
+
+```example 1.4
+@FirstPig+ “Wolfie, Wolfie, let us come in!” said the three little pigs.
+.
+FirstPig+: Wolfie, Wolfie, let us come in!
+Narrator: said the three little pigs.
+.
+“Wolfie, Wolfie, let us come in!” said the three little pigs.
+```
+
+A direction goes after the `+`, with or without a space, as after any name (§6.1).
+
+```example 1.4
+@FirstPig+(giggling) “Hee!”
+@FirstPig+ (giggling) “Hee hee!”
+.
+FirstPig+ (giggling): Hee!
+FirstPig+ (giggling): Hee hee!
+```
+
+It lasts exactly as long as the mark's speaker does, wherever a mark carries: the quote it claims, and that quote carried on along the line (§5.6) and over lines and paragraphs (§5.7);
+
+```example 1.4
+@FirstPig+ “Not by the hair,” cried the pigs. “Not by the hair
+of my chinny chin chin!”
+.
+FirstPig+: Not by the hair,
+Narrator: cried the pigs.
+FirstPig+: Not by the hair
+FirstPig+: of my chinny chin chin!
+```
+
+speech without quotes, up to `@/` or the end of the line (§5.8, §5.9);
+
+```example 1.4
+The pigs looked at each other. @FirstPig+ Not by the hair of our chinny chin chins, @/ they said.
+.
+Narrator: The pigs looked at each other.
+FirstPig+: Not by the hair of our chinny chin chins,
+Narrator: they said.
+```
+
+everything unmarked inside a group that names the character (§7.2), which is all said together;
+
+```example 1.4
+::: @FirstPig+ whispering
+Is he gone?
+I think he’s gone.
+@Wolf “I’m not.”
+:::
+.
+FirstPig+ (whispering): Is he gone?
+FirstPig+ (whispering): I think he’s gone.
+Wolf: I’m not.
+```
+
+and a sound the character makes (§8.2), which they all make.
+
+```example 1.4
+The wolf fell into the pot. @FirstPig+ [giggles]
+.
+Narrator: The wolf fell into the pot.
+FirstPig+ [giggles]
+```
+
+`@()` changes only the direction (§6.3), so the speech is still said together after it; `@/` ends it with its speaker. A later mark without the `+` is the character alone.
+
+```example 1.4
+@FirstPig+ (shouting) “Go away! @() Please.” @FirstPig “He won’t.”
+.
+FirstPig+ (shouting): Go away!
+FirstPig+: Please.
+FirstPig: He won’t.
+```
+
+Naming who else speaks is kept for a later version (§17). Names joined to the `+`, each after a `+` of its own, are part of the mark: never read aloud or printed, and no character of their own. In 1.4, `@FirstPig+SecondPig+ThirdPig` means `@FirstPig+`, and a parser says that the names will be read later (`together-names`, §12.3). So a file that names them already means the right thing, and will say more under a later version. Only a name straight after a `+` counts (§5.2): `@FirstPig+ SecondPig` is `@FirstPig+` followed by the text “SecondPig”.
+
+```example 1.4
+@FirstPig+SecondPig+ThirdPig “Not by the hair of my chinny chin chin!”
+.
+FirstPig+: Not by the hair of my chinny chin chin!
+.
+“Not by the hair of my chinny chin chin!”
+```
+
+In everything else it is a mark like any other: names ignore case and are written as the cast spells them (§5.2), and an `@FirstPig+` that gives its character nothing to say or do is warned about (`idle-mark`, §12.3).
 
 ## 6. How it is said
 
@@ -1607,6 +1700,7 @@ The examples write it like this:
 | --- | --- |
 | `Character: text` | Speech or narration. |
 | `Character (direction): text` | The same, with a direction. |
+| `Character+: text`, `Character+ (direction): text`, `Character+ [description]` | Said, or a sound made, together with others (§5.10). |
 | `Character [description]`, `Character (direction) [description]` | A sound made by a character. |
 | `[description]` | A sound. |
 | `{page}`, `{page 12}`, `{pause}`, `{pause 2s}`, `{name value}` | An instruction. |
@@ -1638,7 +1732,7 @@ Group boundaries are not shown; their effect is visible in each line's character
 The book text is the printed story as plain Markdown. It is the file with these removed:
 
 - front matter;
-- character marks, directions and sounds;
+- character marks (with a `+` and any names after it, §5.10), directions and sounds;
 - notes, page turns, pauses and other instructions;
 - group lines;
 - paragraphs and headings marked `{audio only}` or `{hidden}`.
@@ -1689,6 +1783,7 @@ A parser never rejects a file. It should report these warnings, each with its li
 | `stray-group-close` | A line of colons closes no group. | warning |
 | `idle-mark` | A character mark gives its character nothing to say or do. | warning |
 | `idle-end` | A `@/` ends nothing: it is inside a quote, or the line's own voice already speaks (new in 1.2). | warning |
+| `together-names` | Names follow the `+` of a speech said together; a later version will read them, and for now the mark means its first name with a `+` (new in 1.4, §5.10). | info |
 | `stray-quote` | A quotation mark has nothing after it on its line. | warning |
 | `unknown-character` | A name is not in the cast, when the file has a cast. | warning |
 | `name-case` | A name is written with different capitals in different places. | warning |
@@ -1708,15 +1803,16 @@ The format is meant to be edited both by hand and through a visual editor. A vis
 2. **Small edits.** An edit changes only the characters it must. Tools never reflow text, change quotation styles, normalize spacing or reorder front matter, unless the author asks them to (rule 8).
 3. **New marks are written in one way:**
    - a character mark and direction go directly before the speech's opening quote, with the cast's spelling: `@Gerald (yawning) “…`;
+   - for a speech said together, the `+` goes straight after the name and before the direction: `@FirstPig+ (giggling) “…` (§5.10);
    - a direction for narration goes before its first word: `@(warmly) Once…`;
    - a direction for a speech that takes its direction from its mark goes in the mark, so it covers the whole speech, over the paragraphs that carry it on; a stretch with a `@(…)` of its own has that one replaced instead;
    - a direction of its own for a paragraph that carries a speech on (§5.7) goes just inside its opening mark, so the paragraph still carries the speech on: `“@(softly)Two.”`;
    - a sound follows the word it belongs to, after one space: `fell over. [clatter]`;
    - a page turn, pause or note between lines goes on a line of its own;
    - between two characters with no space between them, a mark goes without the space after it, which would show in the book: `“Hi.”@Ann—he said.` Where the mark would then run on into what follows, as a name runs on into a word's letters, there is no way to write it without changing the book.
-4. **Changing who says a line.** Replace the name in its mark. If the speech had no mark because it carried on an earlier one (§5.6), add a mark to it. If a later quote on the same line carried this one on, add a mark to that quote too, so its speaker stays the same. A speech over paragraphs (§5.7) is given away whole, from any of its paragraphs: the mark goes before the quote it starts with.
+4. **Changing who says a line.** Replace the name in its mark. If the speech had no mark because it carried on an earlier one (§5.6), add a mark to it. If a later quote on the same line carried this one on, add a mark to that quote too, so its speaker stays the same. A speech over paragraphs (§5.7) is given away whole, from any of its paragraphs: the mark goes before the quote it starts with. A speech said together with others stays so (§5.10): the `+` stays after the new name, `@FirstPig+` becoming `@Wolf+`, and a mark added for it, or for a quote that carried it on, has one too. A speech said alone stays alone. Only when the author asks is a speech given to someone alone or together.
 5. **Removing a direction.** Delete the parentheses, their content and one space. If the remaining character mark is not needed, remove it too.
-6. **Renaming a character.** Changing a full name touches only the front matter. Changing a short name replaces it in the cast and in every mark.
+6. **Renaming a character.** Changing a full name touches only the front matter. Changing a short name replaces it in the cast and in every mark, keeping a `+` and any names after it (§5.10).
 7. **A tool's own divisions are never line breaks or words.** How a tool cuts the spoken script into pieces of its own, such as one audio recording per sentence, is the tool's business. A tool that keeps such a division in the file writes its own instruction (§9.5), such as a recording tool's `{recorder:join}` between two sentences it records as one; it never adds a line break or changes the words to make one.
 8. **Formatting is asked for.** A formatter tidies a file only when its author runs it, and never changes who says what, how, or in what order: words change only in their spaces and, when asked, their quotation marks. It may remove spaces at the start and end of lines, make runs of spaces and of blank lines one, put one blank line after the front matter and around headings and scene breaks, end the file with one line break, and write each name as the cast spells it. It keeps the front matter, line endings and group lines as they are. Changing straight quotation marks to curly ones is a separate choice, made for the story's language; an apostrophe becomes `’`, and a mark after a digit, such as `6"`, stays as it is.
 
@@ -1728,6 +1824,7 @@ A renderer can show the file in two ways. The **book view** is the book text, ty
 
 - each character has a color, assigned in cast order;
 - a character's full name appears where the speaker changes, and their words carry a light tint or underline in their color;
+- a speech said together with others (§5.10) has a quiet “and others” beside the name;
 - a direction appears as a small italic marking above its first word, with a bar beside the lines a group covers;
 - sounds appear as small chips in the text, and a character's sounds in the character's color;
 - a page turn between lines is a rule across the page, and one inside a line is a small marker;
@@ -1767,7 +1864,7 @@ A reader should also report the warnings in §12.3, with their codes. A viewer t
 | `input` | The file. |
 | `script` | The spoken script, as written in the examples (§3). Required of every reader. |
 | `book` | The book text, when the example gives one. Required of every reader. |
-| `lines` | The spoken script as data: one object per line heard, as the reference parser exports them. |
+| `lines` | The spoken script as data: one object per line heard, as the reference parser exports them. A line said together with others has `"together": true` (§5.10). |
 | `warnings` | The warnings the reference parser reports: `code`, `line` and `column`. Recommended, not required. |
 
 The examples are the tests, and the spec is the authority: if the file and this document ever disagree, this document is right and the file has a bug.
@@ -1782,12 +1879,21 @@ This spec has a version, `major.minor`, separate from the version of any tool. A
 
 A file without a `voxdown` key is read by the latest version the reader knows.
 
-## 17. Beyond 1.0
+## 17. Beyond 1.4
 
-Questions for later versions. None of them changes a 1.0 file.
+Questions for later versions. None of them changes what a file written today means.
 
 - **Dialogue with dashes.** Spanish, French and other languages often mark speech with dashes instead of quotes. A rule for where a dash speech ends.
-- **Speaking together.** A chorus line said by two characters at once, as in “they both cried”: perhaps `@Wanda @Marmalade “Fine.”`.
+- **Naming who else speaks.** A speech said together names only the voice it falls back on (§5.10). The others could be named after the `+`, as 1.4 already reserves: `@FirstPig+SecondPig+ThirdPig “Not by the hair of my chinny chin chin!”`. Or a cast entry could name them, so that one mark stands for all of them, alone or on a group:
+
+  ```yaml
+  cast:
+    Pigs:
+      name: The Three Little Pigs
+      together: [FirstPig, SecondPig, ThirdPig]
+  ```
+
+  A reader that doesn't know `together` ignores it, as it does any cast key it doesn't know (§4.3), and hears The Three Little Pigs as one character. Either way, a tool that produces audio would record each voice on its own and lay them over each other.
 - **A speech broken by a song.** In novels, a character's quote can stop for a song or a letter in a paragraph of its own, then go on after it with no opening mark: `“…and I had to sing` ¶ `‘Twinkle, twinkle, little bat!’` ¶ `You know the song, perhaps?”`. A quote carries on only into a paragraph that opens with the same mark (§5.7), so today the first part warns, and the rest needs a mark of its own.
 - **Quotes of the same kind inside a quote.** `“…things are “much of a muchness”—did you…”` closes at the inner mark (§5.5), so today the inner quote is escaped: `\“much of a muchness\”`.
 - **Pronunciation.** A front matter list of how to say names and invented words.

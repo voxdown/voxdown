@@ -134,6 +134,20 @@ const manifestOf = (name: string) =>
   recordings[`../../recordings/${name.replace(/\.vxd$/, "")}.json`];
 
 /** The two recorded stories, parsed at boot. */
+/**
+ * Whether `el`'s section is more than a screen away (-1 above, 1 below, 0 near). Sections below the
+ * first view aren't laid out until they come near (content-visibility), and reading a box inside
+ * one would lay it out: the section's own box is read instead.
+ */
+function farOff(el: Element): -1 | 0 | 1 {
+  const section = el.closest("section, footer");
+  if (!section) return 0;
+  const box = section.getBoundingClientRect();
+  if (box.bottom < -window.innerHeight) return -1;
+  if (box.top > window.innerHeight * 2) return 1;
+  return 0;
+}
+
 /** The two recorded stories: their recordings are there from the start (a press on play needs
  *  nothing more), their text is parsed when first read, once the parser is in. */
 const parsedStories = new Map<string, Story>();
@@ -998,6 +1012,18 @@ function sizeCaptionOf(caption: HTMLElement, steps: HTMLElement[]): void {
 
 /* ================================================================== the spine */
 
+/* The step buttons are in the page from the start; one pressed before the spine is built asks for
+   it, and the jump is made as soon as it is. */
+let spineBuilt = false;
+let pendingStep = 0;
+document.querySelector("#jump")?.addEventListener("click", (event) => {
+  if (spineBuilt) return;
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-go]");
+  if (!button) return;
+  pendingStep = Number(button.dataset.go);
+  afterBoot(() => undefined);
+});
+
 /* Built when it nears the screen: nothing of it costs the first view. */
 let respine: (() => void) | undefined;
 function initSpine(): void {
@@ -1169,9 +1195,13 @@ function initSpine(): void {
           const open = seg.t.startsWith("“") ? "“" : "";
           const close = seg.t.endsWith("”") ? "”" : "";
           // A one- or two-letter first word stays with the next, never alone at a line's end.
-          const words = seg.t
-            .slice(open.length, seg.t.length - close.length)
-            .replace(/^(\S{1,2}) /, "$1\u00a0");
+          // A short quote is never broken ("Could" alone at a line's end); a longer one keeps
+          // its first word of one or two letters with the next.
+          const said = seg.t.slice(open.length, seg.t.length - close.length);
+          const words =
+            said.split(" ").length <= 3
+              ? said.replaceAll(" ", "\u00a0")
+              : said.replace(/^(\S{1,2}) /, "$1\u00a0");
           return `${open}<span class="k-speech${inked}"${style}>${escapeHtml(words)}</span>${close}`;
         }
         const slot = seg.slot ? " who-slot" : seg.dirSlot ? " dir-slot" : "";
@@ -1201,6 +1231,8 @@ function initSpine(): void {
           line.cut ? "cut" : "",
           pen ? "noted" : "",
           fresh !== undefined && line.s === fresh ? "new" : "",
+          // A line that is a mark alone (a group's start or end, a pause): its room is kept, ruled.
+          fresh !== undefined && line.s === fresh && line.segs.every((seg) => seg.k) ? "slot" : "",
         ]
           .filter(Boolean)
           .join(" ");
@@ -1566,10 +1598,14 @@ function initSpine(): void {
   }
 
   /* The pencil: it rings or underlines the words, and writes its question in the margin. */
-  const PEN: Record<number, Array<{ at: string; word: string; shape: "circle" | "under" }>> = {
+  const PEN: Record<
+    number,
+    Array<{ at: string; word: string; shape: "circle" | "under" | "caret" }>
+  > = {
     2: [{ at: "could .k-speech", word: "who?", shape: "circle" }],
     3: [
-      { at: "could .k-speech", word: "how?", shape: "under" },
+      // A proofreader's caret where the direction goes in, and "how?" pointing at it.
+      { at: "could .k-dir", word: "how?", shape: "caret" },
       { at: "rumble", word: "what do we hear?", shape: "circle" },
       { at: "pause", word: "a beat", shape: "circle" },
     ],
@@ -2062,7 +2098,19 @@ function initSpine(): void {
     // Step 1 is landed on just past where its typing completes, so it shows the whole opening.
     // Every step is landed on just past where its choreography completes.
     const at = doneBy(n) + 0.03;
-    const top = window.scrollY + box.top + box.height * at - window.innerHeight / 2;
+    let top = window.scrollY + box.top + box.height * at - window.innerHeight / 2;
+    // Never past the last place the stage is pinned (the last step ends below it), so the steps'
+    // bar and the mock stay in view.
+    const stick = document.querySelector<HTMLElement>(".spine-stick");
+    const trackBox = document.querySelector("#spine-track")?.getBoundingClientRect();
+    if (stick?.offsetHeight && trackBox)
+      top = Math.min(
+        top,
+        window.scrollY +
+          trackBox.bottom -
+          stick.offsetHeight -
+          (Number.parseFloat(getComputedStyle(stick).top) || 0),
+      );
     // Only the step jumped to is shown, complete, all the way there.
     smoothJump(() => {
       landing = n;
@@ -2103,7 +2151,7 @@ function initSpine(): void {
     line: HTMLElement,
     target: HTMLElement,
     inner: boolean,
-    shape: "circle" | "under" = "circle",
+    shape: "circle" | "under" | "caret" = "circle",
   ): Range {
     const range = document.createRange();
     // Underlined, a spoken line's first word: where an editor puts the line and asks how.
@@ -2154,7 +2202,7 @@ function initSpine(): void {
     const base = doc.getBoundingClientRect();
     type Stroke = {
       el: HTMLElement | SVGElement;
-      kind: "ring" | "under" | "lead" | "word";
+      kind: "ring" | "under" | "lead" | "word" | "caret";
       x: number;
       y: number;
       w: number;
@@ -2170,7 +2218,11 @@ function initSpine(): void {
       const target = inner ? line?.querySelector<HTMLElement>(inner) : line;
       if (!line || !target || !target.offsetParent) continue;
       const range = circled(line, target, Boolean(inner), mark.shape);
-      const first = range.getBoundingClientRect();
+      // A caret marks a point: where the slot begins, on its first line.
+      const first =
+        mark.shape === "caret"
+          ? (range.getClientRects()[0] ?? range.getBoundingClientRect())
+          : range.getBoundingClientRect();
       const x = first.left - base.left;
       const y = first.top - base.top;
       const w = first.width;
@@ -2194,17 +2246,24 @@ function initSpine(): void {
       const ringH = h + 28;
       const ringLeft = x + w / 2 - 0.5125 * ringW;
       const shape =
-        mark.shape === "circle"
-          ? `<img class="ring" src="../../landing/studio/pen/pencil-circle.webp" alt="" style="left:${ringLeft.toFixed(1)}px;top:${y - 14}px;width:${ringW.toFixed(1)}px;height:${ringH}px">`
-          : `<img class="under" src="../../landing/studio/pen/pencil-underline.webp" alt="" style="left:${x - 4}px;top:${y + h - 9}px;width:${w + 8}px;height:20px">`;
-      const reach = Math.max(end, mark.shape === "circle" ? ringLeft + 0.95 * ringW : end);
+        mark.shape === "caret"
+          ? `<svg class="caret-mark" viewBox="0 0 16 12" aria-hidden="true" style="left:${(x - 8).toFixed(1)}px;top:${(y + h - 8).toFixed(1)}px;width:16px;height:12px"><path d="M1.5 11 L8 1.5 L14.5 11"/></svg>`
+          : mark.shape === "circle"
+            ? `<img class="ring" src="../../landing/studio/pen/pencil-circle.webp" alt="" style="left:${ringLeft.toFixed(1)}px;top:${y - 14}px;width:${ringW.toFixed(1)}px;height:${ringH}px">`
+            : `<img class="under" src="../../landing/studio/pen/pencil-underline.webp" alt="" style="left:${x - 4}px;top:${y + h - 9}px;width:${w + 8}px;height:20px">`;
+      // From a caret the leader runs straight across its empty slot; else from past the row's ink.
+      const reach =
+        mark.shape === "caret"
+          ? x + 8
+          : Math.max(end, mark.shape === "circle" ? ringLeft + 0.95 * ringW : end);
+      const leadY = mark.shape === "caret" ? y + h - 6 : y + h / 2;
       const leadFrom = reach + 10;
       const lead = margin - 8 - leadFrom;
       // Every note points back at its mark: an arrow where there's room, a short hooked tick where not.
       const hookW = Math.max(0, Math.min(30, margin - 4 - (end + 6)));
       const leader =
         lead >= 40
-          ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${y + h / 2 - 9}px;width:${lead.toFixed(1)}px;height:18px">`
+          ? `<img class="lead" src="../../landing/studio/pen/pencil-arrow.webp" alt="" style="left:${leadFrom.toFixed(1)}px;top:${(leadY - 9).toFixed(1)}px;width:${lead.toFixed(1)}px;height:18px">`
           : hookW >= 12
             ? `<svg class="lead hook" viewBox="0 0 ${hookW.toFixed(1)} 20" aria-hidden="true" style="left:${(margin - 4 - hookW).toFixed(1)}px;top:${y + h / 2 - 12}px;width:${hookW.toFixed(1)}px;height:20px">${hookPath(hookW / 30)}</svg>`
             : "";
@@ -2219,8 +2278,13 @@ function initSpine(): void {
         const b = el.getBoundingClientRect();
         return { x: b.left - annotBox.left, y: b.top - annotBox.top, w: b.width, h: b.height };
       };
-      const ring = $(".ring, .under", group);
-      strokes.push({ el: ring, kind: mark.shape === "circle" ? "ring" : "under", ...boxOf(ring) });
+      const ring = group.querySelector<HTMLElement | SVGElement>(".ring, .under, .caret-mark");
+      if (ring)
+        strokes.push({
+          el: ring,
+          kind: mark.shape === "circle" ? "ring" : mark.shape === "caret" ? "caret" : "under",
+          ...boxOf(ring),
+        });
       // The note, a line at a time: each line written left to right, with the pencil along it.
       const letters = $(".hand i", group);
       const parts = (letters.textContent ?? "").split(" ");
@@ -2285,7 +2349,7 @@ function initSpine(): void {
         const [u, v] = pictureEnd(inks.under, t, s.h);
         return [s.x + u * s.w, s.y + v * s.h];
       }
-      if (s.kind === "lead" && s.el instanceof SVGElement) {
+      if (s.el instanceof SVGElement) {
         // The very paths being dashed, at the dash's length (their own px: no scaling between).
         const [x, y] = drawHook(s.el, t, false);
         return [s.x + x, s.y + y];
@@ -2310,6 +2374,7 @@ function initSpine(): void {
       }
       if (s.kind === "word") return 100 + (s.el.textContent ?? "").replace(/\s/g, "").length * 140;
       if (s.kind === "under") return Math.max(350, Math.min(700, s.w * 2));
+      if (s.kind === "caret") return 360;
       return Math.max(240, Math.min(500, s.w * 2.2));
     };
     type Seg = { s: Stroke; move: number; from: number; to: number };
@@ -2563,6 +2628,9 @@ function initSpine(): void {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-go]");
       if (button) goTo(Number(button.dataset.go));
     });
+    // A step asked for before the spine was built.
+    spineBuilt = true;
+    if (pendingStep) globalThis.setTimeout(() => goTo(pendingStep), 0);
   }
 
   // On a phone, each small Writer's change follows its place on the screen, both ways, at a hand's
@@ -2731,7 +2799,7 @@ whenBooted(
     void document.fonts.ready.then(() =>
       window.innerWidth <= 860 || !("requestIdleCallback" in window)
         ? initSpine()
-        : window.requestIdleCallback(initSpine, { timeout: 1500 }),
+        : window.requestIdleCallback(initSpine, { timeout: 400 }),
     ),
 );
 
@@ -2911,7 +2979,7 @@ whenBooted(initCast);
   const VIEWS: Record<string, { file: (look: string) => string; cap: string; alt: string }> = {
     focus: {
       file: (look) => `calm2-focus-${look}`,
-      cap: "Focus mode: the toolbar and panels step away, and every paragraph but yours fades back.",
+      cap: "Focus mode: the panels step away, and every paragraph but yours fades back.",
       alt: "The VoxDown Writer in focus mode, in the LOOK look: Gerald’s line “Could you not?” in full ink, the rest of the dragon story faded back.",
     },
     workbench: {
@@ -3047,6 +3115,8 @@ whenBooted(initCast);
   const run = $(".views-run", track);
   const line = $(".seg-run i");
   const where = () => {
+    const far = farOff(track);
+    if (far) return far < 0 ? 2 : -1;
     const pin = $(".views-pin", track);
     const top = Number.parseFloat(getComputedStyle(pin).top) || 0;
     const box = track.getBoundingClientRect();
@@ -3132,13 +3202,14 @@ whenBooted(initCast);
       // On a phone the screenshot shows at its own size, to pan; it opens on the story.
       if (window.innerWidth <= 600) {
         const fit = () => {
-          // It opens on the view's key line from where it starts ("@Gerald…"), in the window's own
-          // 1280-pixel width; a quote too long for the phone runs off the right, to pan to.
-          const lines: Record<string, number> = {
-            focus: 288,
-            written: 307,
-            drawn: 307,
-            workbench: 48,
+          // It opens on the view's key line, [where it starts, where its quote ends], in the window's
+          // own 1280-pixel width: whole where it fits; where it doesn't, ending at the right edge, so
+          // the quote ("Could you not?") is whole and the line's start is a pan to the left.
+          const lines: Record<string, [number, number]> = {
+            focus: [288, 776],
+            written: [307, 795],
+            drawn: [307, 650],
+            workbench: [48, 48],
           };
           if (!phoneLook) {
             box.scrollLeft = Math.max(0, (w - box.clientWidth) / 2);
@@ -3146,7 +3217,13 @@ whenBooted(initCast);
             return;
           }
           const scale = Number.parseFloat(big.style.width) / 1280;
-          box.scrollLeft = Math.max(0, (lines[state.view] ?? 0) * scale - 16);
+          const [from, to] = lines[state.view] ?? [0, 0];
+          const left = from * scale - 16;
+          const right = to * scale + 20;
+          box.scrollLeft = Math.max(
+            0,
+            right - left > box.clientWidth ? right - box.clientWidth : left,
+          );
           box.scrollTop = 0;
         };
         if (big.complete) fit();
@@ -3235,6 +3312,9 @@ if (/^https:\/\/\S+$/.test(SUPPORT_URL)) {
    lead is always on the very end of the ink shown. */
 {
   const crossing = (el: Element) => {
+    // A section far off isn't laid out (content-visibility): read only its own box then.
+    const far = farOff(el);
+    if (far) return far < 0 ? 2 : -1;
     const box = el.getBoundingClientRect();
     return (window.innerHeight * (2 / 3) - (box.top + box.height / 2)) / (window.innerHeight / 3);
   };
@@ -3438,19 +3518,42 @@ for (const image of $$<HTMLImageElement>("img[data-clay], img[data-shot]")) {
   });
 }
 
-/* The parser comes in once the page has loaded and is idle (or at the reader's first sign of
-   intent, if sooner): never on the first view's path, and always before the spine is reached. */
+/* The parser comes in as the spine is about to come into view, at the reader's first press, touch
+   or key, or else when the page has been idle a few seconds after loading: never on the first
+   view's path. (A press on play needs none of it.) */
 {
-  const intents = ["pointermove", "pointerdown", "touchstart", "keydown", "wheel", "scroll"];
+  // On a phone the spine's examples are part of the page's length: any touch or scroll asks for
+  // the parser at once, so they're in long before the reader reaches them.
+  const phone = window.matchMedia("(max-width: 860px)").matches;
+  const intents = phone
+    ? ["pointerdown", "touchstart", "keydown", "wheel", "scroll"]
+    : ["pointerdown", "touchstart", "keydown"];
   const go = () => {
     for (const kind of intents) window.removeEventListener(kind, go);
+    window.removeEventListener("scroll", nearing);
     void boot();
   };
   for (const kind of intents) window.addEventListener(kind, go, { passive: true, once: true });
+  // As the reader scrolls towards the spine: within a quarter of a screen below the fold.
+  const track = $("#spine-track");
+  let queued = false;
+  const nearing = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      if (track.getBoundingClientRect().top < window.innerHeight * 1.25) go();
+    });
+  };
+  window.addEventListener("scroll", nearing, { passive: true });
   const later = () =>
-    "requestIdleCallback" in window
-      ? window.requestIdleCallback(go, { timeout: 1500 })
-      : globalThis.setTimeout(go, 800);
+    globalThis.setTimeout(
+      () =>
+        "requestIdleCallback" in window
+          ? window.requestIdleCallback(go, { timeout: 2000 })
+          : globalThis.setTimeout(go, 500),
+      3000,
+    );
   if (document.readyState === "complete") later();
   else window.addEventListener("load", later, { once: true });
 }

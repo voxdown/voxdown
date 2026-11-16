@@ -5627,12 +5627,14 @@ html:not(.js) .big-edit .struck {
 .hand .nl {
   display: inline-block;
 }
-.pen .hook {
+.pen .hook,
+.pen .caret-mark {
   transform: none;
   animation: none;
   overflow: visible;
 }
-.pen .hook path {
+.pen .hook path,
+.pen .caret-mark path {
   fill: none;
   stroke: #c62f1b;
   stroke-width: 2.4;
@@ -5847,7 +5849,7 @@ html:not(.js) .big-edit .struck {
   z-index: 1;
 }
 .views-run {
-  height: 130vh;
+  height: 85vh;
 }
 /* Small enough that the whole window, its bar and its caption fit on the screen while pinned. */
 .views-pin .shot-tile {
@@ -5911,7 +5913,7 @@ html:not(.js) .big-edit .struck {
     top: 4.1rem;
   }
   .views-run {
-    height: 110vh;
+    height: 76vh;
   }
   .shot-stack {
     aspect-ratio: 780 / 740;
@@ -5930,4 +5932,116 @@ html:not(.js) .big-edit .struck {
    keyboard focus there must never scroll the page (and undraw a step's marks). */
 .jump button {
   scroll-margin-top: -1rem;
+}
+
+/* A line that is a mark alone (a group's start or end, a pause) keeps its room before the mark sets
+   in, ruled faintly, so it reads as a place left for it rather than a hole. */
+.wr .ln.slot.new {
+  position: relative;
+  opacity: 1;
+}
+.wr .ln.slot.new > .mk {
+  opacity: var(--set, 1);
+}
+.wr .ln.slot.new::after {
+  content: "";
+  position: absolute;
+  left: 0.7rem;
+  top: 50%;
+  width: 4.5rem;
+  border-top: 1.5px dashed rgb(124 58 237 / 0.4);
+  opacity: calc(1 - var(--set, 1));
+  pointer-events: none;
+}
+
+/* The phone's full view: "Drag to look around" at the top, over the window's own title bar, clear
+   of the story's lines. */
+@media (max-width: 600px) {
+  .lightbox[open] .lb-hint {
+    top: 1rem;
+    bottom: auto;
+    left: 1rem;
+    translate: none;
+  }
+}
+
+/* Short wide screens: the final band and the space below it tighter, so at the very end of the page
+   "Your cast is waiting." sits clear of the site's bar. */
+@media (max-height: 820px) and (min-width: 861px) {
+  .final-band {
+    padding-block: clamp(2.5rem, 7vh, 4rem);
+  }
+  .final {
+    padding-bottom: 2.5rem;
+  }
+}
+
+/* Sections well below the first view aren't laid out until they come near: the first layout is
+   the hero's and the spine's alone. Each keeps a size close to its real one until then (and its real
+   one, once seen), so nothing moves as they arrive. */
+.prod,
+.proof,
+.dark-dev,
+.free,
+.final,
+.foot {
+  content-visibility: auto;
+}
+.prod {
+  contain-intrinsic-size: auto 1600px;
+}
+.proof {
+  contain-intrinsic-size: auto calc(85vh + 2110px);
+}
+.dark-dev {
+  contain-intrinsic-size: auto 485px;
+}
+.free {
+  contain-intrinsic-size: auto 515px;
+}
+.final {
+  contain-intrinsic-size: auto 660px;
+}
+.foot {
+  contain-intrinsic-size: auto 205px;
+}
+@media (max-width: 1199px) {
+  .prod {
+    contain-intrinsic-size: auto 1880px;
+  }
+  .proof {
+    contain-intrinsic-size: auto calc(85vh + 1825px);
+  }
+  .dark-dev {
+    contain-intrinsic-size: auto 510px;
+  }
+  .free {
+    contain-intrinsic-size: auto 520px;
+  }
+  .final {
+    contain-intrinsic-size: auto 460px;
+  }
+  .foot {
+    contain-intrinsic-size: auto 255px;
+  }
+}
+@media (max-width: 860px) {
+  .prod {
+    contain-intrinsic-size: auto 1820px;
+  }
+  .proof {
+    contain-intrinsic-size: auto calc(76vh + 1450px);
+  }
+  .dark-dev {
+    contain-intrinsic-size: auto 540px;
+  }
+  .free {
+    contain-intrinsic-size: auto 710px;
+  }
+  .final {
+    contain-intrinsic-size: auto 555px;
+  }
+  .foot {
+    contain-intrinsic-size: auto 305px;
+  }
 }

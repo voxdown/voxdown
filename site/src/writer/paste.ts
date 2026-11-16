@@ -12,7 +12,7 @@ import { styleSheets } from "./epub";
  * `%% … %%`, a group's `:::`, a front matter). Pasted as it is, not as a page's text.
  */
 const VOXDOWN =
-  /(?:^|\s)@[\p{L}\p{N}_'’-]*\s*(?:\([^()\n]*\)\s*)?[“"‘'«(]|\{(?:pause|page|book only|hidden|audio only|heard only|printed only)\b[^}\n]*\}|%%[^\n]*%%|(?:^|\n)(?::::|---[ \t]*\r?\n)/u;
+  /(?:^|\s)@[\p{L}\p{N}_'’-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?\s*(?:\([^()\n]*\)\s*)?[“"‘'«(]|\{(?:pause|page|book only|hidden|audio only|heard only|printed only)\b[^}\n]*\}|%%[^\n]*%%|(?:^|\n)(?::::|---[ \t]*\r?\n)/u;
 
 /** What Google Docs and Word put on the clipboard: a document, whatever its font. */
 const DOCUMENT = /id="docs-internal-guid-|urn:schemas-microsoft-com:office|class="?Mso/i;

@@ -30,6 +30,25 @@ describe("editor marks", () => {
     ]);
   });
 
+  it("draws a name said together with others, its + and any names after it one chip", () => {
+    const source = "@FirstPig+SecondPig (giggling) “Hee!” @FirstPig+ [giggles]";
+    expect(kinds(source)).toEqual([
+      "name:@FirstPig+SecondPig",
+      "direction:(giggling)",
+      "speech:Hee!",
+      "directed:Hee!",
+      "vocal:@FirstPig+ [giggles]",
+    ]);
+    const marks = editorMarks(source);
+    expect(marks.find((m) => m.kind === "name")).toMatchObject({ together: true });
+    expect(marks.find((m) => m.kind === "vocal")).toMatchObject({ together: true });
+    expect(editorMarks("::: @FirstPig+ whispering\nHi.\n:::")[0]).toMatchObject({
+      kind: "group",
+      speaker: "FirstPig",
+      together: true,
+    });
+  });
+
   it("warns about a quote opening while another is still open, with a fix to close it", () => {
     const source =
       "He tied the napkin. @Rupert “Where is my spoon? The cook brought an egg. “Lovely.”";

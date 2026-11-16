@@ -38,7 +38,7 @@ describe("Peter Rabbit", () => {
   });
 
   it("reads its front matter, details and cast", () => {
-    expect(story.frontMatter?.raw.startsWith("voxdown: 1.3\ntitle:")).toBe(true);
+    expect(story.frontMatter?.raw.startsWith("voxdown: 1.4\ntitle:")).toBe(true);
     expect(slice(story, story.frontMatter?.range ?? { from: 0, to: 0 })).toMatch(
       /^---\n[\s\S]*\n---$/,
     );
@@ -46,7 +46,7 @@ describe("Peter Rabbit", () => {
       title: "The Tale of Peter Rabbit",
       author: "Beatrix Potter",
       language: "en-GB",
-      version: "1.3",
+      version: "1.4",
       narrator: "Narrator",
     });
     expect(story.cast.map((member) => [member.handle, member.name])).toEqual([

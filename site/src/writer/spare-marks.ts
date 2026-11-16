@@ -7,7 +7,7 @@
 import { type Story, type TextChange, applyChanges, diffChanges, lines, parse } from "voxdown";
 
 /**
- * Everything heard, in order, by whom and how: each character of speech by itself, so that a
+ * Everything heard, in order, by whom (alone or with others) and how: each character of speech by itself, so that a
  * mark which only cuts one voice's words in two (`@Ann She said @Ann hello`) changes nothing.
  */
 const heard = (story: Story) =>
@@ -15,9 +15,11 @@ const heard = (story: Story) =>
     .flatMap((line) =>
       line.kind === "speech"
         ? [...line.text.replace(/\s+/g, "")].map(
-            (char) => `${line.speaker}|${line.direction}|${char}`,
+            (char) => `${line.speaker}|${line.together ? "+" : ""}|${line.direction}|${char}`,
           )
-        : [`${line.kind}|${line.speaker}|${line.direction}|${line.text}|${line.name}`],
+        : [
+            `${line.kind}|${line.speaker}|${line.together ? "+" : ""}|${line.direction}|${line.text}|${line.name}`,
+          ],
     )
     .join("\n");
 
@@ -80,7 +82,8 @@ function sparePass(original: string, text: string, wanted: string): string {
     })),
     ...items.flatMap((item) =>
       item.kind === "mark" && item.directionRange
-        ? [{ from: item.nameRange.to, to: item.directionRange.to }]
+        ? // After the name and any `+` said together (spec §5.10), which stays.
+          [{ from: item.togetherRange?.to ?? item.nameRange.to, to: item.directionRange.to }]
         : [],
     ),
   ].sort((a, b) => b.from - a.from || a.to - b.to);

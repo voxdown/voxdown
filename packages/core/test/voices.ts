@@ -31,6 +31,8 @@ export type Spoken = {
   char: string;
   speaker: string;
   direction: string | null;
+  /** Whether others say it with the speaker (§5.10): no edit of who or how changes it. */
+  together: boolean;
   target: boolean;
   /** Whether the edit may leave this character of its stretch as it was (see narrationBefore). */
   optional: boolean;
@@ -208,6 +210,7 @@ export function spokenChars(
       char,
       speaker: item.speaker,
       direction: item.direction,
+      together: item.together === true,
       target: target.includes(item) || optional.includes(item),
       strict: strict && target.includes(item),
       optional: optional.includes(item),
@@ -262,6 +265,9 @@ export function brokenPromise(
     return `"${after[silenced]?.char}" at ${silenced} is heard or not as it wasn't`;
   for (const [index, was] of before.entries()) {
     const now = after[index] as Spoken;
+    if (now.together !== was.together) {
+      return `"${was.char}" at ${index} is said ${was.together ? "together" : "alone"} no longer`;
+    }
     if (
       was.target
         ? !promise.inside(was, now) &&

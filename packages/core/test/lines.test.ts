@@ -88,7 +88,7 @@ describe("lines", () => {
   it("writes CSV with quoting where a cell needs it", () => {
     const csv = linesToCsv(lines(parse('@Gerald (dry, very) “He said "no", twice.”')));
     expect(csv).toBe(
-      'kind,speaker,direction,text,scene,page\r\nspeech,Gerald,"dry, very","He said ""no"", twice.",1,1\r\n',
+      'kind,speaker,direction,text,scene,page,together\r\nspeech,Gerald,"dry, very","He said ""no"", twice.",1,1,\r\n',
     );
     // Other columns, in the order given: where each line is, for a producer's cue sheet.
     expect(linesToCsv(lines(parse("Hello.\n\n@Gerald “Hi.”")), ["line", "speaker", "text"])).toBe(

@@ -2,6 +2,16 @@
 
 The spec is versioned on its own, apart from the packages (SPEC.md §16).
 
+## 1.4 (16 November 2026)
+
+New in 1.4, for something a 1.3 file would rarely hold (§16): SPEC.md marks it "new in 1.4", and `conformance.json` gives its examples `"since": "1.4"`.
+
+- **Speaking together** (§5.10): a `+` straight after a name means the speech is said by that character together with others: `@FirstPig+ “Wolfie, Wolfie, let us come in!” said the three little pigs.` The character named is the voice used when only one voice is made. It lasts exactly as long as the mark's speaker does: the quote and the quote carried on, words without quotes up to `@/`, a group (`::: @FirstPig+ whispering`), a sound (`@FirstPig+ [giggles]`, they all giggle). `@()` keeps it, and a later `@FirstPig` is FirstPig alone. The `+` is never read aloud or printed; the spoken script writes it after the speaker (`FirstPig+: …`), and the lines in `conformance.json` have `"together": true`.
+- **Names after the `+`** are reserved for a later version, which may name who else speaks: in 1.4, `@FirstPig+SecondPig+ThirdPig` is part of the mark and means `@FirstPig+`, so the names are never text. A new warning, `together-names`, at the level `info`, says so.
+- §13: tools that edit keep the `+`: a speech given to someone else stays said together unless the author asks, a mark added for it has one, and renaming a character keeps it.
+
+What a 1.3 reader does with it: `+` ends a name (§5.2) and is text. `@FirstPig+ “…”` gives the quote to FirstPig and prints a stray `+` in the book; `@FirstPig+ (giggling) “Hee!”` has the narrator read `+ (giggling)` and drops the direction; `@FirstPig+ [giggles]` is a sound in the world, and prints `+`. A tool that writes a `+` into a file that declares an older version declares 1.4.
+
 ## 1.3 (14 November 2026)
 
 New in 1.3, for something a 1.2 file would rarely hold (§16): SPEC.md marks it "new in 1.3", and `conformance.json` gives its examples `"since": "1.3"`.

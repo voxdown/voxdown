@@ -22,6 +22,11 @@ export type ScriptLine = {
   kind: ScriptLineKind;
   /** Who says it or makes the sound: speech and vocal sounds only. */
   speaker: string | null;
+  /**
+   * Present, and true, when others say it or make the sound with the speaker, from an `@Name+`
+   * (§5.10). The speaker is the voice to use when only one is made.
+   */
+  together?: true;
   /** How it is said, after the group rules (§6.4): speech and vocal sounds only. */
   direction: string | null;
   /**
@@ -67,6 +72,7 @@ export function lines(story: Story, options: LinesOptions = {}): ScriptLine[] {
     out.push({
       kind: row.kind,
       speaker: row.speaker,
+      ...(row.together ? { together: true as const } : {}),
       direction: row.direction,
       text: row.text,
       name: row.name,
@@ -88,6 +94,7 @@ export function lines(story: Story, options: LinesOptions = {}): ScriptLine[] {
               ...base,
               kind: "speech",
               speaker: item.speaker,
+              ...(item.together ? { together: true as const } : {}),
               direction: item.direction,
               text: item.text,
               heading: block.kind === "heading" ? block.level : null,
@@ -99,6 +106,7 @@ export function lines(story: Story, options: LinesOptions = {}): ScriptLine[] {
               ...base,
               kind: "vocal",
               speaker: item.speaker,
+              ...(item.together ? { together: true as const } : {}),
               direction: item.direction,
               text: item.description,
             });
@@ -232,18 +240,25 @@ function positions(source: string): (offset: number) => { line: number; column: 
   };
 }
 
-const CSV_COLUMNS = ["kind", "speaker", "direction", "text", "scene", "page"] as const;
+const CSV_COLUMNS = ["kind", "speaker", "direction", "text", "scene", "page", "together"] as const;
 
 /**
- * The lines as CSV (RFC 4180): kind, speaker, direction, text, scene, page; or the columns given,
- * in their order, such as `[...]` with `"line"` added for where each is in the file.
+ * The lines as CSV (RFC 4180): kind, speaker, direction, text, scene, page, together; or the
+ * columns given, in their order, such as `[...]` with `"line"` added for where each is in the file.
+ * `together` is `yes` for a line said with others (§5.10), else empty, and comes last so the
+ * columns before it stay where they were.
  */
 export function linesToCsv(
   rows: readonly ScriptLine[],
   columns: readonly (keyof ScriptLine)[] = CSV_COLUMNS,
 ): string {
-  const cell = (value: string | number | null) => {
-    const text = value === null ? "" : String(value);
+  const cell = (value: string | number | boolean | null | undefined) => {
+    const text =
+      value === null || value === undefined || value === false
+        ? ""
+        : value === true
+          ? "yes"
+          : String(value);
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   const body = rows.map((row) => columns.map((column) => cell(row[column])).join(","));
@@ -252,7 +267,8 @@ export function linesToCsv(
 
 /**
  * What each character says, as plain text: one line per speech, in order, for a performer's
- * sides. Characters are listed in cast order, then in the order they first speak.
+ * sides. Characters are listed in cast order, then in the order they first speak. A line said
+ * together with others (§5.10) is the named character's, with "with others" beside its direction.
  */
 export function textByCharacter(story: Story): Map<string, string> {
   const said = new Map<string, string[]>();
@@ -261,7 +277,9 @@ export function textByCharacter(story: Story): Map<string, string> {
     if (row.speaker === null) continue;
     const key = [...said.keys()].find((name) => nameKey(name) === nameKey(row.speaker ?? ""));
     const list = said.get(key ?? row.speaker) ?? [];
-    const direction = row.direction ? `(${row.direction}) ` : "";
+    // Said with others (§5.10): the performer's line still, and they know who joins in.
+    const how = [row.direction, row.together ? "with others" : null].filter(Boolean).join("; ");
+    const direction = how ? `(${how}) ` : "";
     list.push(row.kind === "vocal" ? `${direction}[${row.text}]` : `${direction}${row.text}`);
     said.set(key ?? row.speaker, list);
   }

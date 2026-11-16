@@ -703,11 +703,11 @@ function tagSummary(tagged: Tagged, name: string): string {
   const look = [
     ...held.map((proposal) => ({
       ...proposal,
-      said: `${proposal.speaker}? held back (${proposal.confidence})`,
+      said: `${proposal.speaker}${proposal.together ? "+" : ""}? held back (${proposal.confidence})`,
     })),
     ...refused.map((proposal) => ({
       ...proposal,
-      said: `${proposal.speaker}: not given, ${proposal.why}`,
+      said: `${proposal.speaker}${proposal.together ? "+" : ""}: not given, ${proposal.why}`,
     })),
   ].sort((a, b) => a.line - b.line);
   if (look.length) {

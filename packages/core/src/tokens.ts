@@ -23,7 +23,8 @@ export type TokenKind =
   | "quote";
 
 /**
- * `mark` is the `@` sign and `name` the name after it. `quote` is a speech's own quotation mark.
+ * `mark` is the `@` sign and the `+` after a name with any names after it (§5.10), and `name` the
+ * name after the `@`. `quote` is a speech's own quotation mark.
  * `speaker` is set on the tokens that belong to a character.
  */
 export type SyntaxToken = { kind: TokenKind; range: Range; speaker?: string };
@@ -36,6 +37,8 @@ export function tokens(story: Story): SyntaxToken[] {
   const addMark = (mark: Mark) => {
     add("mark", { from: mark.range.from, to: mark.range.from + 1 }, mark.speaker);
     add("name", mark.nameRange, mark.speaker);
+    // Said together (§5.10): the `+`, and any names after it, are part of the mark.
+    if (mark.togetherRange) add("mark", mark.togetherRange, mark.speaker);
     if (mark.directionRange) add("direction", mark.directionRange, mark.speaker);
   };
   const addItem = (item: Item) => {

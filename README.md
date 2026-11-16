@@ -48,10 +48,10 @@ bookText(story);
 // “I’ve only just got to sleep,” said the dragon.
 
 linesToCsv(lines(story));
-// kind,speaker,direction,text,scene,page
-// speech,Gerald,yawning,"I’ve only just got to sleep,",1,1
-// speech,Narrator,,said the dragon.,1,1
-// sound,,,snores,1,1
+// kind,speaker,direction,text,scene,page,together
+// speech,Gerald,yawning,"I’ve only just got to sleep,",1,1,
+// speech,Narrator,,said the dragon.,1,1,
+// sound,,,snores,1,1,
 ```
 
 Or from the command line, without installing anything:

@@ -143,6 +143,24 @@ describe("vxd produce", () => {
     expect(script.format).toBe("voxdown-production/1");
   });
 
+  it("says how many lines said together are voiced by one speaker only", async () => {
+    await writeFile(
+      join(folder, "pigs.vxd"),
+      "@FirstPig+ “Let us in!” said the pigs. @FirstPig+ [giggles]\n\n@Wolf “No.”\n",
+    );
+    const script = await vxd(["produce", "pigs.vxd", "--script-only"], kokoro([]));
+    expect(script.code).toBe(0);
+    expect(script.stdout).toContain(
+      "2 lines said together with others (@Name+) will be voiced by one speaker only, the one named",
+    );
+    const json = JSON.parse(await readFile(join(folder, "pigs.audiobook", "script.json"), "utf8"));
+    expect(json.lines[0]).toMatchObject({ speaker: "FirstPig", together: true });
+    const dry = await vxd(["produce", "pigs.vxd", "--dry-run"], kokoro([]));
+    expect(dry.stderr.trimEnd().split("\n").at(-1)).toContain("2 lines said together with others");
+    const owl = await vxd(["produce", "owl.vxd", "--script-only"], kokoro([]));
+    expect(owl.stdout).not.toContain("together");
+  });
+
   it("says how to get a voice service when there is none", async () => {
     const none: Machine = {
       ...kokoro([]),

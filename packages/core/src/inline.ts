@@ -35,6 +35,10 @@ export type MarkToken = {
   range: Range;
   nameRange: Range;
   directionRange?: Range;
+  /** `+` straight after the name, and any names after it: said together with others (§5.10). */
+  togetherRange?: Range;
+  /** The names after the `+`, which 1.4 reserves (§5.10). */
+  othersRange?: Range;
 };
 export type DirectionToken = { type: "direction"; direction: string | null; range: Range };
 /** `@/`: the speech a mark began without quotes ends, and the line's own voice speaks (§5.9). */
@@ -447,11 +451,26 @@ function lexAt(source: string, at: number, to: number): Atom | null {
   if (nameEnd === at + 1) return null;
   const nameRange = { from: at + 1, to: nameEnd };
   const name = source.slice(nameRange.from, nameRange.to);
-  let paren = nameEnd;
+  const together = togetherAt(source, nameEnd, to);
+  const markEnd = together?.range.to ?? nameEnd;
+  const extra = together
+    ? {
+        togetherRange: together.range,
+        ...(together.others ? { othersRange: together.others } : {}),
+      }
+    : {};
+  let paren = markEnd;
   while (paren < to && isSpace(source[paren])) paren++;
   const close = paren < to && source[paren] === "(" ? matchParen(source, paren, to) : -1;
   if (close < 0) {
-    return { type: "mark", name, direction: null, range: { from: at, to: nameEnd }, nameRange };
+    return {
+      type: "mark",
+      name,
+      direction: null,
+      range: { from: at, to: markEnd },
+      nameRange,
+      ...extra,
+    };
   }
   return {
     type: "mark",
@@ -460,7 +479,36 @@ function lexAt(source: string, at: number, to: number): Atom | null {
     range: { from: at, to: close + 1 },
     nameRange,
     directionRange: { from: paren, to: close + 1 },
+    ...extra,
   };
+}
+
+/**
+ * New in 1.4: a `+` straight after a name, said together with others (§5.10), and the names
+ * joined to it by more `+` signs (`@FirstPig+SecondPig+ThirdPig`), which 1.4 reserves: they are
+ * part of the mark, never text. A name must follow a `+` directly (`@A+ B` is `@A+` and the text
+ * ` B`). Null when no `+` follows the name.
+ */
+function togetherAt(
+  source: string,
+  nameEnd: number,
+  to: number,
+): { range: Range; others?: Range } | null {
+  if (nameEnd >= to || source[nameEnd] !== "+") return null;
+  let end = nameEnd + 1;
+  let othersEnd = end;
+  for (;;) {
+    const next = scanName(source, end, to);
+    if (next === end) break;
+    othersEnd = next;
+    end = next;
+    if (end < to && source[end] === "+") end++;
+    else break;
+  }
+  const range = { from: nameEnd, to: end };
+  return othersEnd > nameEnd + 1
+    ? { range, others: { from: nameEnd + 1, to: othersEnd } }
+    : { range };
 }
 
 /**

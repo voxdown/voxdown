@@ -28,6 +28,8 @@ export type Proposal = {
   speaker: string;
   /** A new character's full name, as the AI gave it. */
   fullName?: string;
+  /** Said by the speaker together with others, written `@Name+` (spec §5.10). */
+  together?: true;
   confidence: Confidence;
   cue: string;
   /** Given, held back as less sure than asked for, or refused by the core (with why). */
@@ -185,6 +187,7 @@ export async function tagStory(
         ...describe(gift.quote),
         speaker: gift.speaker,
         ...(gift.fullName ? { fullName: gift.fullName } : {}),
+        ...(gift.together ? { together: true as const } : {}),
         confidence: gift.confidence,
         cue: gift.cue,
         outcome: held ? "held" : refused.has(gift.quote) ? "refused" : "given",

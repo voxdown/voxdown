@@ -11,6 +11,7 @@ export { tokens } from "./tokens";
 export type { SyntaxToken, TokenKind } from "./tokens";
 export { write, changesFrom, diffChanges } from "./write";
 export {
+  type SpeakerOptions,
   type TextChange,
   applyChanges,
   declareVersion,

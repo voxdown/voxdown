@@ -7,7 +7,7 @@ import { VISIBILITY_NAMES, lexLine } from "./inline";
 import type { Group, Instruction, Mark, Note, Visibility } from "./model";
 import type { Names } from "./names";
 import type { Range } from "./source";
-import type { Warn } from "./warnings";
+import { type Warn, warnOthers } from "./warnings";
 
 /**
  * Reads a group's opening line. It holds no story text: a character mark, instructions such as
@@ -27,9 +27,16 @@ export function readGroupLine(
     if (token.type === "mark" && !group.mark) {
       const nameRange = token.nameRange;
       const speaker = names.use(token.name, nameRange);
-      group.mark = toMark(speaker, { from: token.range.from, to: nameRange.to }, nameRange);
+      const markEnd = token.togetherRange?.to ?? nameRange.to;
+      group.mark = toMark(speaker, { from: token.range.from, to: markEnd }, nameRange);
       group.character = speaker;
-      if (token.range.to > nameRange.to) direction.push({ from: nameRange.to, to: token.range.to });
+      if (token.togetherRange) {
+        group.mark.togetherRange = token.togetherRange;
+        group.mark.together = true;
+        group.together = true;
+      }
+      if (token.othersRange) warnOthers(warn, speaker, token.othersRange);
+      if (token.range.to > markEnd) direction.push({ from: markEnd, to: token.range.to });
     } else if (token.type === "instruction") {
       const instruction: Instruction = {
         kind: "instruction",
@@ -68,6 +75,15 @@ export function baseSpeaker(groups: readonly Group[], narrator: string): string 
     if (character !== undefined) return character;
   }
   return narrator;
+}
+
+/** Whether the innermost character group says what it gives together with others (§5.10). */
+export function baseTogether(groups: readonly Group[]): boolean {
+  for (let i = groups.length - 1; i >= 0; i--) {
+    const group = groups[i];
+    if (group?.character !== undefined) return group.together === true;
+  }
+  return false;
 }
 
 /**

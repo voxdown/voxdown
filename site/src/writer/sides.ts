@@ -13,6 +13,8 @@ export type SideLine = {
   text: string;
   /** A sound the character makes, not words. */
   vocal: boolean;
+  /** Said, or made, together with others (`@Name+`, spec §5.10): the character's line still. */
+  together?: true;
   /** Where it is: its line in the file, and the page it is on ("" before the first). */
   line: number;
   page: string;
@@ -66,6 +68,7 @@ export function sidesOf(of: Story): Side[] {
         ...(line.direction ? { direction: line.direction } : {}),
         text: line.text,
         vocal: line.kind === "vocal",
+        ...(line.together ? { together: true as const } : {}),
         line: line.line,
         // Its page, where the story turns pages at all.
         page: paged ? line.page : "",
@@ -90,7 +93,7 @@ export function sidesText(of: Story): string {
         if (line.cue) out.push(`    …${line.cue.words} (${line.cue.speaker})`);
         const text = line.vocal ? `[${line.text}]` : line.text;
         out.push(
-          `${side.name}${line.direction ? ` (${line.direction})` : ""}: ${text}    [${where(line)}]`,
+          `${side.name}${line.together ? " and others" : ""}${line.direction ? ` (${line.direction})` : ""}: ${text}    [${where(line)}]`,
           "",
         );
       }
@@ -114,7 +117,7 @@ export function sidesHtml(of: Story, title: string): string {
               `<h3>${escaped(heading(scene))}</h3>${scene.lines
                 .map(
                   (line) =>
-                    `${line.cue ? `<p class="cue">…${escaped(line.cue.words)} <span>(${escaped(line.cue.speaker)})</span></p>` : ""}<p class="line"><small>${escaped(where(line))}</small><b>${escaped(side.name)}</b>${line.direction ? ` <i>(${escaped(line.direction)})</i>` : ""} ${line.vocal ? `[${escaped(line.text)}]` : escaped(line.text)}</p>`,
+                    `${line.cue ? `<p class="cue">…${escaped(line.cue.words)} <span>(${escaped(line.cue.speaker)})</span></p>` : ""}<p class="line"><small>${escaped(where(line))}</small><b>${escaped(side.name)}</b>${line.together ? " <em>and others</em>" : ""}${line.direction ? ` <i>(${escaped(line.direction)})</i>` : ""} ${line.vocal ? `[${escaped(line.text)}]` : escaped(line.text)}</p>`,
                 )
                 .join("")}`,
           )
@@ -132,5 +135,6 @@ h3 { font: 600 10pt/1.3 system-ui, sans-serif; color: #444; text-transform: uppe
 .line small { float: right; margin-left: 1em; color: #777; font: 8.5pt system-ui, sans-serif; }
 .line b { font: 600 10.5pt system-ui, sans-serif; letter-spacing: 0.03em; text-transform: uppercase; }
 .line i { color: #444; }
+.line em { color: #444; font: italic 9.5pt system-ui, sans-serif; }
 </style></head><body>${pages}</body></html>`;
 }

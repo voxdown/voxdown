@@ -46,7 +46,10 @@ export function wordsOnly(text: string): string {
       .replace(/<!--[\s\S]*?-->/g, blank)
       .replace(/%%[\s\S]*?%%/g, blank)
       // A name and its direction, a direction for whoever speaks, an end, `@()`.
-      .replace(/@[\p{L}][\p{L}\p{M}\p{N}_'’-]*(?:[ \t]*\([^)\n]*\))?|@\([^)\n]*\)|@\//gu, blank)
+      .replace(
+        /@[\p{L}][\p{L}\p{M}\p{N}_'’-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?(?:[ \t]*\([^)\n]*\))?|@\([^)\n]*\)|@\//gu,
+        blank,
+      )
       // Sounds and a character's sounds, instructions, headings' and groups' signs.
       .replace(/\[[^\]\n]*\]|\{[^}\n]*\}/g, blank)
       // Headings, whole: a chapter's name is no sentence of the story's.

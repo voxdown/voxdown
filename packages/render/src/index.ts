@@ -239,7 +239,10 @@ type ScriptContext = {
   story: Story;
   colors: Map<string, string>;
   options: RenderOptions;
-  /** Who spoke last, so a name is shown only where the speaker changes. */
+  /**
+   * Who spoke last, so a name is shown only where the speaker changes: their name, with a `+`
+   * when others spoke with them (see `voiceKey`).
+   */
   last: string | null;
   /** The groups around the block being written, outermost first. */
   groups: readonly Group[];
@@ -247,17 +250,32 @@ type ScriptContext = {
   inline?: Map<string, string>;
 };
 
-/** What the labels of the groups around a block already say: a character, and a direction. */
+/**
+ * What the labels of the groups around a block already say: a character (as `voiceKey` writes
+ * it, with a `+` when said together), and a direction.
+ */
 function groupSays(groups: readonly Group[]): {
   character: string | undefined;
   direction: string | undefined;
 } {
   const inner = [...groups].reverse();
+  const named = inner.find((group) => group.character);
   return {
-    character: inner.find((group) => group.character)?.character,
+    character: named?.character && voiceKey(named.character, named.together),
     direction: inner.find((group) => group.direction)?.direction,
   };
 }
+
+/** A voice as `context.last` keeps it: the name, and `+` when others say it too (§5.10). */
+function voiceKey(speaker: string, together: boolean | undefined): string {
+  return together ? `${speaker}+` : speaker;
+}
+
+/**
+ * Said together with others (§5.10): a quiet "and others" after the name, which a stylesheet can
+ * restyle by `.vxd-together` (or the `data-together` on the speech).
+ */
+const AND_OTHERS = `<span class="vxd-together"> and others</span>`;
 
 function commonGroups(a: readonly Group[], b: readonly Group[]): number {
   let n = 0;
@@ -271,7 +289,7 @@ function groupOpen(group: Group, context: ScriptContext): string {
   const parts: string[] = [];
   if (group.character)
     parts.push(
-      `<span class="vxd-group-name">${escapeHtml(fullName(context.story, group.character))}</span>`,
+      `<span class="vxd-group-name">${escapeHtml(fullName(context.story, group.character))}${group.together ? AND_OTHERS : ""}</span>`,
     );
   if (group.direction)
     parts.push(`<span class="vxd-group-direction">${escapeHtml(group.direction)}</span>`);
@@ -279,7 +297,9 @@ function groupOpen(group: Group, context: ScriptContext): string {
     parts.push(
       `<span class="vxd-chip vxd-chip-instruction">${escapeHtml(instruction.name)}</span>`,
     );
-  const attrs = group.character ? ` data-speaker="${escapeHtml(group.character)}"` : "";
+  const attrs = group.character
+    ? ` data-speaker="${escapeHtml(group.character)}"${group.together ? " data-together" : ""}`
+    : "";
   return `<div class="vxd-group"${attrs}${style}><div class="vxd-group-label"${placed(group.range, context.options)}>${parts.join(" ")}</div><div class="vxd-group-body">`;
 }
 
@@ -372,15 +392,17 @@ function scriptLine(line: Line, context: ScriptContext, heading: boolean): strin
         gap(item.range.from);
         const color = colors.get(item.speaker);
         const style = color ? ` style="--vxd-c: ${color}"` : "";
+        const key = voiceKey(item.speaker, item.together);
         const who =
-          context.last !== item.speaker && item.speaker !== story.meta.narrator
-            ? `<span class="vxd-chip-who">${escapeHtml(fullName(story, item.speaker))}</span> `
+          context.last !== key && (item.speaker !== story.meta.narrator || item.together)
+            ? `<span class="vxd-chip-who">${escapeHtml(fullName(story, item.speaker))}${item.together ? AND_OTHERS : ""}</span> `
             : "";
         const direction = item.direction
           ? `<span class="vxd-chip-direction">${escapeHtml(item.direction)}</span> `
           : "";
-        html += `<span class="vxd-chip vxd-chip-vocal" data-speaker="${escapeHtml(item.speaker)}"${style}${placed(item.range, options)}>${who}${direction}${escapeHtml(item.description)}</span>`;
-        context.last = item.speaker;
+        const together = item.together ? " data-together" : "";
+        html += `<span class="vxd-chip vxd-chip-vocal" data-speaker="${escapeHtml(item.speaker)}"${together}${style}${placed(item.range, options)}>${who}${direction}${escapeHtml(item.description)}</span>`;
+        context.last = key;
         at = item.range.to;
         break;
       }
@@ -513,15 +535,17 @@ function ownPieces(speech: Speech, line: Line): Array<[number, number]> {
 function speechHtml(speech: Speech, context: ScriptContext, heading: boolean, line: Line): string {
   const { story, colors, options } = context;
   const source = story.source;
-  const narrator = speech.speaker === story.meta.narrator;
+  // The narrator said together with others is named, as anyone is (§5.10).
+  const narrator = speech.speaker === story.meta.narrator && !speech.together;
   const color = narrator ? undefined : colors.get(speech.speaker);
-  const changed = context.last !== speech.speaker;
+  const key = voiceKey(speech.speaker, speech.together);
+  const changed = context.last !== key;
   const spoken = /[\p{L}\p{N}]/u.test(speech.text);
   // Narration between two stretches of one character's speech doesn't name them again.
-  if (spoken && (!narrator || options.narratorName)) context.last = speech.speaker;
+  if (spoken && (!narrator || options.narratorName)) context.last = key;
   const name =
     spoken && changed && !heading && (!narrator || options.narratorName)
-      ? `<span class="vxd-name"${color ? ` style="--vxd-c: ${color}"` : ""}>${escapeHtml(fullName(story, speech.speaker))}</span>`
+      ? `<span class="vxd-name"${color ? ` style="--vxd-c: ${color}"` : ""}>${escapeHtml(fullName(story, speech.speaker))}${speech.together ? AND_OTHERS : ""}</span>`
       : "";
   // A direction its group's label already says isn't written again over each line.
   const direction =
@@ -541,7 +565,8 @@ function speechHtml(speech: Speech, context: ScriptContext, heading: boolean, li
     .filter(Boolean)
     .join(" ");
   const style = color ? ` style="--vxd-c: ${color}"` : "";
-  return `${name}<span class="${classes}" data-speaker="${escapeHtml(speech.speaker)}"${style}${placed(speech.range, options)}>${direction}${words}</span>`;
+  const together = speech.together ? " data-together" : "";
+  return `${name}<span class="${classes}" data-speaker="${escapeHtml(speech.speaker)}"${together}${style}${placed(speech.range, options)}>${direction}${words}</span>`;
 }
 
 function fullName(story: Story, speaker: string): string {

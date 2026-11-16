@@ -21,6 +21,7 @@ import {
   castMemberNamed,
   giveQuotes,
   isName,
+  lines,
   parse,
   quotesOf,
   setAbout,
@@ -37,7 +38,7 @@ export const PROCEDURE = `# Tagging speakers in a VoxDown story
 2. If the cast is thin, skim the story and add the speaking characters with voxdown_add_character (a one-word short name, their full name, and a few words about them).
 3. Call voxdown_unattributed_quotes: it gives one passage, each waiting quote marked ⟦n⟧, with the passage before it for context.
 4. Decide who says each numbered quote: dialogue tags ("said Mara"), who a pronoun refers to, turn-taking (two people alternate), names used to address someone (usually not the speaker), action beats, and voice. A quote no character says aloud (a sign, a title) belongs to the narrator; a character's quoted thought is theirs.
-5. Call voxdown_assign_speakers with the answers and the revision you were given. Use the cast's short names; for someone new, give their name and they join the cast. Leave out quotes you can't tell.
+5. Call voxdown_assign_speakers with the answers and the revision you were given. Use the cast's short names; for someone new, give their name and they join the cast. Leave out quotes you can't tell. A quote several characters say at once goes to the one named first, or the most prominent, with together: true.
 6. Read what was refused and why, fix what you can, then call voxdown_unattributed_quotes again with after set to the last quote number, until none remain.
 7. Tell the writer what you gave, and list the quotes you left out or weren't sure of, with their lines.
 
@@ -153,7 +154,7 @@ export function createVoxdownServer(files: Files, version: string): McpServer {
     {
       title: "A story's cast and quotes",
       description:
-        "A VoxDown story's title, narrator and cast, how many quotes it has and how many wait for a speaker, and how many warnings it has.",
+        "A VoxDown story's title, narrator and cast, how many quotes it has and how many wait for a speaker, how many lines are said together with others (@Name+), and how many warnings it has.",
       inputSchema: z.object({ file: FILE }),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
@@ -170,6 +171,8 @@ export function createVoxdownServer(files: Files, version: string): McpServer {
           cast: castOf(story),
           quotes: quotesOf(story).length,
           waiting: waitingIn(story).length,
+          // Lines said together with others, `@Name+` (spec §5.10).
+          together: lines(story).filter((line) => line.together).length,
           warnings: story.warnings.filter((warning) => warning.severity === "warning").length,
         });
       } catch (error) {
@@ -244,6 +247,12 @@ export function createVoxdownServer(files: Files, version: string): McpServer {
                 .describe(
                   "A short name from the cast, or a new character's name (they join the cast).",
                 ),
+              together: z
+                .boolean()
+                .optional()
+                .describe(
+                  "Said by the speaker together with others, all at once, written @Name+ (a chorus, “they all cried”). Left out: as it is now.",
+                ),
             }),
           )
           .max(300),
@@ -265,18 +274,21 @@ export function createVoxdownServer(files: Files, version: string): McpServer {
           );
         const known = speakersOf(story);
         const refusedEarly: Array<{ quote: number; why: string }> = [];
-        const gifts = answers.flatMap(({ quote, speaker }) => {
+        const gifts = answers.flatMap(({ quote, speaker, together }) => {
           const name = speaker.trim();
+          const said = together === undefined ? {} : { together };
           const member =
             castMemberNamed(story, name) ??
             known.find((other) => other.name.toLowerCase() === name.toLowerCase())?.name;
-          if (member) return [{ quote, speaker: member }];
+          if (member) return [{ quote, speaker: member, ...said }];
           const short = isName(name) ? name : shortName(name);
           if (!short) {
             refusedEarly.push({ quote, why: `“${speaker}” can't be written as a name` });
             return [];
           }
-          return [{ quote, speaker: short, ...(short !== name ? { fullName: name } : {}) }];
+          return [
+            { quote, speaker: short, ...(short !== name ? { fullName: name } : {}), ...said },
+          ];
         });
         const given = giveQuotes(story, gifts);
         const text = applyChanges(story.source, given.changes);

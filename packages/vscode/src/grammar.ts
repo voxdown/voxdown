@@ -254,16 +254,22 @@ const instruction: Rule = {
 // Marks (§5, §6, §8.2).
 
 const AT = cap(vd(S.mark), "@");
+/**
+ * `+` straight after a name, said together with others, and the names joined to it by more `+`
+ * signs, which 1.4 reserves: all part of the mark (§5.10).
+ */
+const TOGETHER = optional(cap(vd(S.mark), String.raw`\+(?:${NAME}(?:\+${NAME})*\+?)?`));
 const direction = (...pieces: Piece[]) =>
   cap({ name: vd(S.direction), patterns: escapes }, ...pieces);
 /** A character's own sound, straight after the mark or its direction. Not a link. */
 const ownSound = optional(String.raw`[^\S\n]*`, soundParts(vd(S.vocal)), `(?!${PARENS})`);
 
-/** `@Gerald`, `@Gerald (yawning)`, `@Gerald [snores]`. */
+/** `@Gerald`, `@Gerald (yawning)`, `@Gerald [snores]`, `@FirstPig+ (giggling)`. */
 const characterMark = seq(
   AT_START,
   AT,
   cap(vd(S.name), NAME),
+  TOGETHER,
   optional("[ \\t]*", direction(PARENS)),
   ownSound,
 );
@@ -478,6 +484,7 @@ const groupLine: Rule = {
       AT_START,
       AT,
       cap(vd(S.name), NAME),
+      TOGETHER,
       optional("[ \\t]*", direction(PARENS)),
     ),
     { name: vd(S.direction), match: String.raw`[^\s@{%\\]+(?:[^\S\n]+[^\s@{%\\]+)*` },

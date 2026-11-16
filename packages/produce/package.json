@@ -1,6 +1,6 @@
 {
   "name": "@voxdown/produce",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turn a VoxDown story into an audiobook with the voice service you choose: a production script any tool can read, adapters (ElevenLabs, OpenAI-compatible speech such as Kokoro, Azure), and chapters assembled as WAV, MP3 and M4B.",
   "license": "MIT",
   "author": "Etienne Ackermann",

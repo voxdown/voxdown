@@ -1,6 +1,6 @@
 # VoxDown cheat sheet
 
-Every mark on one page. VoxDown 1.3; the full rules are in [SPEC.md](SPEC.md).
+Every mark on one page. VoxDown 1.4; the full rules are in [SPEC.md](SPEC.md).
 
 **The one rule:** on each line, the quotes after a name belong to it, and everything else belongs to the narrator.
 
@@ -12,6 +12,7 @@ Every mark on one page. VoxDown 1.3; the full rules are in [SPEC.md](SPEC.md).
 | `@Gerald “I’m tired,” said the dragon.` | Only the quote is Gerald’s; “said the dragon” is the narrator’s. |
 | `@Baker “A little flame,” he said. “Gently.”` | A quote later on the same line carries the speech on: “Gently.” is the baker’s too. |
 | `@Wanda “Fine!” @Marmalade “Hm.”` | Two characters on one line, each with their own mark. |
+| `@FirstPig+ “Let us come in!”` | Said by FirstPig together with others; FirstPig’s is the voice if only one is made. On a group or a sound too: `::: @FirstPig+`, `@FirstPig+ [giggles]` (new in 1.4). |
 | `@Gerald Could you not?` | No quote: Gerald says the rest of the line. |
 | `“Stop thief!” cried Mr. McGregor.` | No mark: the narrator reads it all, quotes included. |
 | `\@Gerald`, `\“` | A backslash makes a sign literal: an `@` that isn’t a mark, a quote the narrator reads. |
@@ -56,7 +57,7 @@ Every mark on one page. VoxDown 1.3; the full rules are in [SPEC.md](SPEC.md).
 
 ```yaml
 ---
-voxdown: 1.3
+voxdown: 1.4
 title: The Tale of Peter Rabbit
 author: Beatrix Potter
 language: en-GB

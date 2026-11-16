@@ -1,5 +1,5 @@
 ---
-voxdown: 1.2
+voxdown: 1.4
 title: Die Bremer Stadtmusikanten
 subtitle: Nach den Brüdern Grimm
 author: Neu erzählt von den VoxDown-Autoren
@@ -54,7 +54,7 @@ Dann fingen sie alle zugleich an, ihre Musik zu machen. @Esel [iaht] @Hund [bell
 
 [Glas zerbricht]
 
-@Räuber (voller Angst) „Ein Gespenst!“, schrien die Räuber, und sie flohen in den Wald.
+@Räuber+ (voller Angst) „Ein Gespenst!“, schrien die Räuber, und sie flohen in den Wald.
 
 {page}
 

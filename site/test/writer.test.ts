@@ -5,6 +5,7 @@ import { editorMarks } from "@voxdown/editor";
 import { renderBook } from "@voxdown/render";
 import { describe, expect, it, vi } from "vitest";
 import { applyChanges, bookText, lines, parse, setSpeaker } from "voxdown";
+import { togetherNote } from "../src/writer/ai-dialog";
 import { countsOf } from "../src/writer/counts";
 import { changesOnly, diffLines, diffWords, withWords } from "../src/writer/diff";
 import { emphasisIn, frontMatterEnd, plainText, toggleEmphasis } from "../src/writer/emphasis";
@@ -27,7 +28,7 @@ import { moveSection } from "../src/writer/sections";
 import { sidesHtml, sidesOf, sidesText } from "../src/writer/sides";
 import { withoutSpareMarks } from "../src/writer/spare-marks";
 import { draftsToLetGo, thinVersions } from "../src/writer/store";
-import { newChapterLevel } from "../src/writer/story-data";
+import { castOf, newChapterLevel } from "../src/writer/story-data";
 import {
   composed,
   dialogueTag,
@@ -817,6 +818,38 @@ describe("sides", () => {
   });
 });
 
+describe("lines said together with others (spec §5.10)", () => {
+  const pigs = parse(
+    "@FirstPig+ (giggling) “Let us in!” said the pigs. @FirstPig “Me.”\n\n@FirstPig+ [giggles]\n",
+  );
+
+  it("are the named character's in the sides, said with others", () => {
+    const text = sidesText(pigs);
+    expect(text).toContain("FirstPig and others (giggling): Let us in!    [line 1]");
+    expect(text).toContain("FirstPig: Me.    [line 1]");
+    expect(text).toContain("FirstPig and others: [giggles]    [line 3]");
+    expect(sidesHtml(pigs, "Pigs")).toContain("<b>FirstPig</b> <em>and others</em>");
+  });
+
+  it("count for the named character, and how many with others", () => {
+    const cast = castOf(pigs);
+    expect(new Map(cast.said).get("FirstPig")).toBe(3);
+    expect(cast.together).toEqual([["FirstPig", 2]]);
+    expect(castOf(parse("@Ann “Hi.”")).together).toBeUndefined();
+  });
+
+  it("leave the + and the names after it out of the words counted", () => {
+    expect(proseWords("@FirstPig+SecondPig (giggling) “Hee hee!”")).toBe(2);
+  });
+
+  it("are said to be voiced by one speaker only when an audiobook is made", () => {
+    expect(togetherNote("@FirstPig+ “Let us in!” @FirstPig+ [giggles]", true)).toBe(
+      "2 lines said together with others (@Name+) were voiced by one speaker only, the one named: the others' voices are not in it.",
+    );
+    expect(togetherNote("@Ann “Hi.”", false)).toBeUndefined();
+  });
+});
+
 describe("two edits as one", () => {
   it("makes the second in the text the first made, as one set of changes", () => {
     const source = "abc def";
@@ -1131,6 +1164,14 @@ describe("an edit's marks, no more than needed", () => {
     expect(give("@Wanda “Fine!” said Bob. “Hm.”", 2, "Bob")).toBe(
       "@Wanda “Fine!” said Bob. @Bob “Hm.”",
     );
+    // Said together or alone is who says it (spec §5.10): the + stays, and its mark too.
+    expect(give("@Wanda+ “Fine!” said they. “Hm.”", 2, "Bob")).toBe(
+      "@Wanda+ “Fine!” said they. @Bob+ “Hm.”",
+    );
+    const pigs = "@Pig+ (softly) @(sadly) Not I. @Pig “Nor I.”";
+    expect(
+      applyChanges(pigs, withoutSpareMarks(parse(pigs), [{ from: 0, to: 0, insert: "" }])),
+    ).toBe("@Pig+ (sadly) Not I. @Pig “Nor I.”");
     const text = "@Wanda (softly) “Fine!” @Wanda “Hm.”";
     expect(
       applyChanges(text, withoutSpareMarks(parse(text), [{ from: 0, to: 0, insert: "" }])),

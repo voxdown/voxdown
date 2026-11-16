@@ -164,6 +164,29 @@ describe("giving quotes", () => {
     expect(bookText(parse(after))).toBe(bookText(story));
   });
 
+  it("gives a quote said together with others as @Name+, and keeps or takes out a + asked", () => {
+    const pigs = "“Let us in!” cried the pigs. “Please.”\n\n@Wolf+ “No.”\n";
+    const story = parse(pigs);
+    const result = giveQuotes(story, [
+      { quote: 1, speaker: "FirstPig", together: true },
+      { quote: 3, speaker: "Wolf", together: false },
+    ]);
+    expect(result.refused).toEqual([]);
+    expect(applyChanges(pigs, result.changes)).toBe(
+      "@FirstPig+ “Let us in!” cried the pigs. “Please.”\n\n@Wolf “No.”\n",
+    );
+    expect(quotesOf(parse(applyChanges(pigs, result.changes)))[1]).toMatchObject({
+      speaker: "FirstPig",
+      together: true,
+      continued: true,
+    });
+    // Given again with no word of together, a quote said together stays so.
+    const again = parse("@FirstPig+ “Let us in!”\n");
+    expect(
+      applyChanges(again.source, giveQuotes(again, [{ quote: 1, speaker: "Pig" }]).changes),
+    ).toBe("@Pig+ “Let us in!”\n");
+  });
+
   it("says which quotes went along with one given, and refuses what can't be written", () => {
     const story = parse(source);
     const result = giveQuotes(story, [

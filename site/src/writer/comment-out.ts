@@ -57,9 +57,10 @@ export function commentOut(
     !/[“"«„]/u.test(rest)
   ) {
     const lineStart = source.lastIndexOf("\n", from - 1) + 1;
-    const name = /@[\p{L}][\p{L}\p{M}\p{N}_'’-]*(?:[ \t]*\([^)\n]*\))?[ \t]*$/u.exec(
-      source.slice(lineStart, from),
-    );
+    const name =
+      /@[\p{L}][\p{L}\p{M}\p{N}_'’-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?(?:[ \t]*\([^)\n]*\))?[ \t]*$/u.exec(
+        source.slice(lineStart, from),
+      );
     if (name) from = lineStart + name.index;
   }
   const text = source.slice(from, to);

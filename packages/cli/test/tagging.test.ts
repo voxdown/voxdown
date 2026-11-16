@@ -6,6 +6,7 @@ import type { Ask, Backend } from "../src/ai";
 import { CHEATSHEET } from "../src/cheatsheet";
 import { scoreAgainst, tagStory, withoutSpeakers } from "../src/tag";
 import {
+  INSTRUCTIONS,
   answerSchema,
   jsonIn,
   passagePrompt,
@@ -127,6 +128,27 @@ describe("a model's answer", () => {
     expect(reading.unknown).toEqual([5]);
     expect(reading.problems).toEqual(["quote 9 wasn't asked about"]);
     expect(newcomers.get("old nan")).toBe("OldNan");
+  });
+
+  it("gives a quote said by several at once as said together (spec §5.10)", () => {
+    const answer = JSON.stringify({
+      answers: [
+        {
+          quote: 1,
+          cue: "they cried",
+          speaker: "Tom",
+          newName: "",
+          together: true,
+          confidence: "high",
+        },
+        { quote: 2, cue: "tag", speaker: "Mara", newName: "", together: "yes", confidence: "high" },
+      ],
+    });
+    expect(readAnswer(story, passage, answer).gifts).toEqual([
+      { quote: 1, speaker: "Tom", together: true, confidence: "high", cue: "they cried" },
+      { quote: 2, speaker: "Mara", confidence: "high", cue: "tag" },
+    ]);
+    expect(INSTRUCTIONS).toContain("@Name+");
   });
 
   it("that isn't JSON says so", () => {

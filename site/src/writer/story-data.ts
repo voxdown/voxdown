@@ -90,14 +90,19 @@ export type CastView = {
   narrator: string;
   said: Array<[string, number]>;
   words: Array<[string, number]>;
+  /** Of each speaker's lines, those said together with others (`@Name+`, spec §5.10). */
+  together?: Array<[string, number]>;
 };
 
 export function castOf(story: Story): CastView {
   const said = new Map<string, number>();
   const words = new Map<string, number>();
+  const together = new Map<string, number>();
   for (const line of lines(story)) {
     if ((line.kind === "speech" || line.kind === "vocal") && line.speaker) {
       said.set(line.speaker, (said.get(line.speaker) ?? 0) + 1);
+      // Counted as the named character's, as every line is; how many with others, too.
+      if (line.together) together.set(line.speaker, (together.get(line.speaker) ?? 0) + 1);
       const count = line.text.match(/[\p{L}\p{N}][\p{L}\p{N}’'-]*/gu)?.length ?? 0;
       words.set(line.speaker, (words.get(line.speaker) ?? 0) + count);
     }
@@ -111,6 +116,7 @@ export function castOf(story: Story): CastView {
     narrator: story.meta.narrator,
     said: [...said],
     words: [...words],
+    ...(together.size ? { together: [...together] } : {}),
   };
 }
 
@@ -119,6 +125,8 @@ export type Passage = {
   from: number;
   to: number;
   speaker: string;
+  /** Said by the speaker together with others (`@Name+`, spec §5.10). */
+  together?: true;
   ownDirection: string | null;
   /** Where its character mark starts, if it has one. */
   markFrom?: number;
@@ -138,6 +146,7 @@ export function passagesOf(story: Story): Passage[] {
             from: item.range.from,
             to: item.range.to,
             speaker: item.speaker,
+            ...(item.together ? { together: true as const } : {}),
             ownDirection: item.ownDirection,
             ...(item.mark ? { markFrom: item.mark.range.from } : {}),
           });

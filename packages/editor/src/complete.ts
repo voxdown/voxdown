@@ -161,7 +161,11 @@ export function completions(characters: () => readonly Character[]): Extension {
       };
     }
 
-    const direction = /@(?:[\p{L}][\p{L}\p{M}\p{N}_'’-]*\s*)?\(([^()]*)$/u.exec(before);
+    // After `@Name`, and `@Name+` said together with others (spec §5.10).
+    const direction =
+      /@(?:[\p{L}][\p{L}\p{M}\p{N}_'’-]*(?:\+(?:[\p{L}][\p{L}\p{M}\p{N}_'’-]*\+?)*)?\s*)?\(([^()]*)$/u.exec(
+        before,
+      );
     if (direction) {
       const typed = direction[1] ?? "";
       const used = new Map<string, number>();
@@ -198,9 +202,10 @@ export function completions(characters: () => readonly Character[]): Extension {
 
     // A group's direction: `::: whispering`, `::: @Rupert grandly`.
     const line = context.state.doc.lineAt(context.pos);
-    const groupHead = /^:::[ \t]*(?:@\p{L}[\p{L}\p{M}\p{N}_'’-]*[ \t]+)?([^:]*)$/u.exec(
-      line.text.slice(0, context.pos - line.from),
-    );
+    const groupHead =
+      /^:::[ \t]*(?:@\p{L}[\p{L}\p{M}\p{N}_'’-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?[ \t]+)?([^:]*)$/u.exec(
+        line.text.slice(0, context.pos - line.from),
+      );
     if (groupHead) {
       const typed = groupHead[1] ?? "";
       const used = new Map<string, number>();

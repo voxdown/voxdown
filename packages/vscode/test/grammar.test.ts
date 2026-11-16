@@ -309,6 +309,21 @@ describe("the grammar by hand", () => {
     expect(await scopesOf(text, "said")).toEqual(["text.voxdown"]);
   });
 
+  it("takes a + after a name, and names after it, as part of the mark (§5.10)", async () => {
+    const text = "@FirstPig+SecondPig+ThirdPig (giggling) “Hee!” said the pigs.";
+    expect(await scopesOf(text, "FirstPig")).toContain("entity.name.tag.character.voxdown");
+    expect(await scopesOf(text, "+")).toContain("punctuation.definition.tag.voxdown");
+    expect(await scopesOf(text, "SecondPig")).toContain("punctuation.definition.tag.voxdown");
+    expect(await scopesOf(text, "giggling")).toContain(
+      "entity.other.attribute-name.direction.voxdown",
+    );
+    expect(await scopesOf(text, "Hee")).toContain("string.quoted.double.speech.voxdown");
+    expect(await scopesOf("::: @FirstPig+ whispering", "+")).toContain(
+      "punctuation.definition.tag.voxdown",
+    );
+    expect(await scopesOf("@FirstPig+ SecondPig said.", "SecondPig")).toEqual(["text.voxdown"]);
+  });
+
   it("names in any script, with apostrophes between letters", async () => {
     for (const [text, name] of [
       ["@Zoë “Hi.”", "Zoë"],

@@ -28,6 +28,8 @@ export type Quote = {
   text: string;
   /** Who says it now. */
   speaker: string;
+  /** Others say it with the speaker, from an `@Name+` (§5.10). */
+  together?: true;
   /**
    * No mark gives it to anyone: the narrator reads it with the words around it, as in
    * `“Stop thief!” cried Mr. McGregor.` These are the quotes waiting for a speaker.
@@ -82,6 +84,7 @@ export function quotesOf(story: Story): Quote[] {
       to,
       text,
       speaker: speech.speaker,
+      ...(speech.together ? { together: true as const } : {}),
       narrated: !own && nameKey(speech.speaker) === narrator,
       continued: own && speech.continued,
       line: lineNumber(starts, at),
@@ -201,7 +204,14 @@ const TITLE =
   /^(?:mr|mrs|ms|mx|miss|mister|missus|dr|doctor|sir|dame|lady|lord|captain|capt|cap'n|mate|first mate|second mate|father|mother|uncle|aunt|aunty|king|queen|prince|princess|professor|prof|colonel|col|major|general|sergeant|sgt|lieutenant|lt|commander|admiral|reverend|rev|madam|madame|monsieur|old|young|little)\.?\s+/u;
 
 /** A quote to give: its number, and the speaker's name, with their full name if they're new. */
-export type Gift = { quote: number; speaker: string; fullName?: string };
+/**
+ * A quote given to a speaker. `together`: said by them together with others, `@Name+` (§5.10);
+ * left out, a quote said together stays so and one said alone stays alone.
+ */
+export type Gift = { quote: number; speaker: string; fullName?: string; together?: boolean };
+
+/** What giving a quote asks for, worked out from its gift. */
+type Wanted = { quote: Quote; speaker: string; fullName?: string; together: boolean };
 
 /** What giving quotes did. */
 export type Given = {
@@ -234,7 +244,7 @@ export function giveQuotes(story: Story, gifts: readonly Gift[]): Given {
 function giveQuotesNow(story: Story, gifts: readonly Gift[]): Given {
   const quotes = quotesOf(story);
   const refused: Given["refused"] = [];
-  const wanted = new Map<number, { quote: Quote; speaker: string; fullName?: string }>();
+  const wanted = new Map<number, Wanted>();
   for (const gift of gifts) {
     const quote = quotes[gift.quote - 1];
     if (!quote) {
@@ -253,6 +263,10 @@ function giveQuotesNow(story: Story, gifts: readonly Gift[]): Given {
       quote,
       speaker,
       ...(gift.fullName ? { fullName: gift.fullName } : {}),
+      // The narrator reads a quote alone: a quote given back to them is never said together.
+      together:
+        nameKey(speaker) !== nameKey(story.meta.narrator) &&
+        (gift.together ?? quote.together === true),
     });
   }
   // Up to three goes: a gift that fails its read-back is refused (or, if it went without a mark of
@@ -313,7 +327,7 @@ type Attempt = {
 function attemptGifts(
   story: Story,
   quotes: readonly Quote[],
-  wanted: ReadonlyMap<number, { quote: Quote; speaker: string; fullName?: string }>,
+  wanted: ReadonlyMap<number, Wanted>,
   explicit: ReadonlySet<number>,
 ): Attempt {
   const source = story.source;
@@ -336,24 +350,29 @@ function attemptGifts(
             ownMark.set(item.openQuote.from, item.mark);
   // Who says each quote once these are given, as far as the marks go: for a quote that could
   // carry on the one before it on its line.
+  // (A voice said together is written with its `+`, §5.10: another voice than the speaker alone.)
   const after = new Map<number, string>();
+  const voiceOf = (speaker: string, together: boolean | undefined) =>
+    `${nameKey(speaker)}${together ? "+" : ""}`;
   for (const quote of quotes) {
     const gift = wanted.get(quote.number);
     if (!gift) {
-      after.set(quote.number, quote.speaker);
+      after.set(quote.number, voiceOf(quote.speaker, quote.together));
       continue;
     }
-    after.set(quote.number, gift.speaker);
+    after.set(quote.number, voiceOf(gift.speaker, gift.together));
     const key = nameKey(gift.speaker);
+    const sameTogether = gift.together === (quote.together === true);
     // Already theirs: nothing to do.
-    if (key === nameKey(quote.speaker) && (!quote.narrated || key === narrator)) continue;
+    if (key === nameKey(quote.speaker) && sameTogether && (!quote.narrated || key === narrator))
+      continue;
     const before = quotes[quote.number - 2];
     const carries =
       before !== undefined &&
       before.line === quote.line &&
       !explicit.has(quote.number) &&
       !/[@{}[\]]/.test(source.slice(before.to, quote.from)) &&
-      nameKey(after.get(before.number) ?? "") === key &&
+      (after.get(before.number) ?? "") === voiceOf(gift.speaker, gift.together) &&
       (quote.narrated || quote.continued);
     if (carries) {
       unmarked.add(quote.number);
@@ -366,18 +385,20 @@ function attemptGifts(
     // A quote with a mark of its own: the name in it changes (its direction stays), rather
     // than a second mark going in front of it.
     const own = ownMark.get(quote.from);
+    const plus = gift.together ? "+" : "";
     if (own) {
+      // Said together as asked: the `+`, and any names after it, stay or go with it.
       marks.push({
         from: own.nameRange.from,
-        to: own.nameRange.to,
-        insert: spelled(story, gift.speaker),
+        to: sameTogether ? own.nameRange.to : (own.togetherRange?.to ?? own.nameRange.to),
+        insert: `${spelled(story, gift.speaker)}${sameTogether ? "" : plus}`,
       });
       continue;
     }
     marks.push({
       from: quote.from,
       to: quote.from,
-      insert: markAt(source, quote.from, `@${spelled(story, gift.speaker)}`),
+      insert: markAt(source, quote.from, `@${spelled(story, gift.speaker)}${plus}`),
     });
   }
   // Anyone new joins the cast, when the story has one, their full name with them.
@@ -414,6 +435,7 @@ function attemptGifts(
     if (gift) {
       const ok =
         nameKey(is.speaker) === nameKey(gift.speaker) &&
+        (is.together === true) === gift.together &&
         (nameKey(gift.speaker) !== narrator || is.narrated);
       if (ok) given.push(quote.number);
       else
@@ -421,9 +443,14 @@ function attemptGifts(
           quote.number,
           nameKey(gift.speaker) === narrator
             ? `it goes with ${is.speaker}'s speech before it on the line: giving it back to the narrator needs a mark of the narrator's own`
-            : `read back, it would be ${is.speaker}'s, not ${gift.speaker}'s`,
+            : nameKey(is.speaker) === nameKey(gift.speaker)
+              ? `read back, it would be said ${is.together ? "together with others" : "alone"}`
+              : `read back, it would be ${is.speaker}'s, not ${gift.speaker}'s`,
         );
-    } else if (nameKey(is.speaker) !== nameKey(was.speaker)) {
+    } else if (
+      nameKey(is.speaker) !== nameKey(was.speaker) ||
+      (is.together === true) !== (was.together === true)
+    ) {
       if (was.narrated && (is.continued || !is.narrated)) carried.push(quote.number);
       else failed.set(blame(quotes, wanted, quote), `it would take quote ${quote.number} with it`);
     }

@@ -11,14 +11,16 @@ import { examples, root, spec } from "./examples";
  */
 const HANDLE = String.raw`\p{L}[\p{L}\p{M}\p{N}_-]*(?:['’]\p{L}[\p{L}\p{M}\p{N}_-]*)*`;
 const DIRECTION = String.raw`\((?:[^()]|\([^()]*\))+\)`;
+/** A speaker, with a `+` when others say it too (§5.10). */
+const SPEAKER = String.raw`${HANDLE}\+?`;
 const SCRIPT_LINE = new RegExp(
   [
     String.raw`^$`,
     String.raw`^---$`,
-    String.raw`^#{1,6} ${HANDLE}(?: ${DIRECTION})?: .+$`,
+    String.raw`^#{1,6} ${SPEAKER}(?: ${DIRECTION})?: .+$`,
     String.raw`^#{1,6} .+ \{(?:hidden|book only)\}$`,
-    String.raw`^${HANDLE}(?: ${DIRECTION})?: .+$`,
-    String.raw`^${HANDLE}(?: ${DIRECTION})? \[[^\]]+\]$`,
+    String.raw`^${SPEAKER}(?: ${DIRECTION})?: .+$`,
+    String.raw`^${SPEAKER}(?: ${DIRECTION})? \[[^\]]+\]$`,
     String.raw`^\[[^\]]+\]$`,
     String.raw`^\{[^{}]+\}$`,
     String.raw`^\{(?:book only|hidden)\} .+$`,

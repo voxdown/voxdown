@@ -2,7 +2,29 @@
 
 Changes to the packages, newest first. Changes to the format itself are in [spec/CHANGELOG.md](spec/CHANGELOG.md). How versions work: [VERSIONING.md](VERSIONING.md).
 
-## Unreleased
+## Spec 1.3 and 1.4, `voxdown` 1.5.0, `@voxdown/render` 1.5.0, `@voxdown/editor` 1.4.0, `@voxdown/cli` 1.3.0, `@voxdown/produce` 0.2.0, the VS Code extension 1.3.0, VoxDown Writer, and the website (16 November 2026)
+
+**Speaking together** (spec 1.4, §5.10): `@FirstPig+ “Wolfie, Wolfie, let us come in!” said the three little pigs.` A `+` straight after a name means the speech is said by that character together with others; the character named is the voice used when only one voice is made. What changed is in [spec/CHANGELOG.md](spec/CHANGELOG.md).
+
+**voxdown**
+- Follows spec 1.4: `SPEC_VERSION` is `"1.4"`. A mark, a speech, a character's sound and a group said together have `together: true` (and a mark its `togetherRange`); the spoken script writes `FirstPig+:`. `lines()` gives `together: true` on such a line and leaves it out on any other; `linesToCsv` has a `together` column last, `yes` or empty, so the columns before it stay where they were. `textByCharacter` gives the line to the named character, "with others" beside its direction. Names after the `+` are part of the mark, with a new `info` warning, `together-names`.
+- Edits keep it: `setSpeaker` gives a speech said together to someone else said together (`@Wolf+`), a mark it adds for a carried-on quote has the `+` too, and `{ together }` says otherwise; `setDirection` writes the direction after the `+`; `renameCharacter` and the formatter keep it. Every edit checks that what was said together still is. One that writes a `+` into a story declaring an older version declares 1.4. `giveQuotes` takes `together` on a gift, and a quote has `together`.
+
+**@voxdown/render**
+- A speech, a character's sound or a group said together names its speaker with a quiet "and others" (`.vxd-together`), and carries `data-together`; where the same character then speaks alone, the name is shown again.
+
+**@voxdown/editor**, **VS Code extension**
+- The `+` and any names after it are part of the mark: in the editor, part of the name's chip, which says "and others", as a sound's and a group's do; in VS Code, scoped as the mark. Directions are still offered after `@Name+`.
+
+**@voxdown/produce**
+- A production line said together has `together: true`, voiced by the speaker named; its `hash` is the same as alone, so nothing is made again for a `+`. `saidTogether(script)` counts them, and `togetherNote(script, made)` says so.
+
+**@voxdown/cli**
+- `vxd produce` ends by saying how many lines said together were voiced by one speaker only. `vxd export` gives `together` as `voxdown` does; `vxd check` reports `together-names`. `vxd tag` teaches the AI `@Name+`, and gives a quote several characters say at once to the first named or most prominent, said together. In `vxd mcp`, `voxdown_assign_speakers` takes `together` on an answer, and `voxdown_story` counts the lines said together. The cheat sheet a model reads is for VoxDown 1.4.
+
+**VoxDown Writer**
+- `@Name+` is highlighted as one mark, drawn as "FirstPig and others"; the Script preview says it; the bar over a passage names its speaker "and others", and Who keeps the `+` with the new speaker. The Cast tab counts such lines for the named character and says how many are with others; Each character's lines marks them "and others". **Make an audiobook…** says how many lines said together are voiced by one speaker only. The word count leaves the `+` and the names after it out.
+- *Die Bremer Stadtmusikanten* has the robbers cry out together: `@Räuber+ (voller Angst) „Ein Gespenst!“`.
 
 **Directing the reading with AI** ([docs/ai.md](docs/ai.md#directing-the-reading-in-the-writer)).
 

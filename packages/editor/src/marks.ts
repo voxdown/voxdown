@@ -9,14 +9,15 @@ export type EditorMark =
   | { kind: "speech"; from: number; to: number; speaker: string }
   /** Words a direction of their own applies to: dashed, as a script marks them. */
   | { kind: "directed"; from: number; to: number }
-  | { kind: "name"; from: number; to: number; speaker: string }
+  /** `@Name`, and `@Name+` said together with others (§5.10): the `+` and any names after it too. */
+  | { kind: "name"; from: number; to: number; speaker: string; together?: true }
   /** `speaker`: whose words it directs (the name it sits with, else the next speech on its line). */
   | { kind: "direction"; from: number; to: number; text: string; speaker?: string }
   | { kind: "cleared"; from: number; to: number }
   /** `@/`: a speech without quotes ends, and the line's own voice speaks again. */
   | { kind: "ended"; from: number; to: number }
   | { kind: "sound"; from: number; to: number; text: string }
-  | { kind: "vocal"; from: number; to: number; speaker: string; text: string }
+  | { kind: "vocal"; from: number; to: number; speaker: string; text: string; together?: true }
   | { kind: "page"; from: number; to: number; label?: string; ownLine: boolean }
   | { kind: "pause"; from: number; to: number; value?: string }
   | { kind: "instruction"; from: number; to: number; text: string; raw: string }
@@ -29,6 +30,8 @@ export type EditorMark =
       to: number;
       text: string;
       speaker?: string;
+      /** Its character says everything inside together with others: `::: @FirstPig+` (§5.10). */
+      together?: true;
       close?: boolean;
       /** Whose lines it holds: its character's, else the narrator's (for Listen as). */
       voice?: string;
@@ -335,7 +338,10 @@ function unclosedBrackets(story: Story): EditorMark[] {
       });
     }
     // A `:::` line holds the group's direction and nothing else: speech on it is lost.
-    const groupHead = /^[ \t]*:::[ \t]*(?:@\p{L}[\p{L}\p{M}\p{N}_'’-]*)?/u.exec(line);
+    const groupHead =
+      /^[ \t]*:::[ \t]*(?:@\p{L}[\p{L}\p{M}\p{N}_'’-]*(?:\+(?:\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)*)?)?/u.exec(
+        line,
+      );
     if (groupHead) {
       const head = groupHead[0].length;
       const k = line.slice(head).search(/[@“"]/u);
@@ -359,7 +365,7 @@ function unclosedBrackets(story: Story): EditorMark[] {
     }
     // A direction without its brackets is read aloud: `@Rupert softly “…”`.
     const unbracketed =
-      /(^|[^\p{L}\p{N}\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*)[ \t]+(\p{L}[\p{L}’'-]*(?:,?[ \t]+\p{L}[\p{L}’'-]*){0,3})[ \t]*[“"]/u.exec(
+      /(^|[^\p{L}\p{N}\\])@(\p{L}[\p{L}\p{M}\p{N}_'’-]*\+?)[ \t]+(\p{L}[\p{L}’'-]*(?:,?[ \t]+\p{L}[\p{L}’'-]*){0,3})[ \t]*[“"]/u.exec(
         line,
       );
     if (unbracketed && !inNote(at(unbracketed.index))) {
@@ -601,6 +607,7 @@ export function marksOf(story: Story): EditorMark[] {
       to: group.range.to,
       text: [shown, group.direction].filter(Boolean).join(" · "),
       ...(group.character ? { speaker: group.character } : {}),
+      ...(group.together ? { together: true as const } : {}),
       voice: group.character ?? story.meta.narrator,
     });
     if (group.closeRange) out.push({ kind: "group", ...group.closeRange, text: "", close: true });
@@ -630,12 +637,13 @@ export function marksOf(story: Story): EditorMark[] {
               });
             break;
           }
-          // The chip stands for `@Name`, the at sign included.
+          // The chip stands for `@Name`, the at sign included, and a `+` after it (§5.10).
           out.push({
             kind: "name",
             from: item.range.from,
-            to: item.nameRange.to,
+            to: item.togetherRange?.to ?? item.nameRange.to,
             speaker: item.speaker,
+            ...(item.together ? { together: true as const } : {}),
           });
           if (item.directionRange)
             out.push({
@@ -671,13 +679,15 @@ export function marksOf(story: Story): EditorMark[] {
             to: item.range.to,
             speaker: item.speaker,
             text: item.description,
+            ...(item.together ? { together: true as const } : {}),
           });
           if (item.mark?.directionRange)
             out.push({
               kind: "name",
               from: item.mark.range.from,
-              to: item.mark.nameRange.to,
+              to: item.mark.togetherRange?.to ?? item.mark.nameRange.to,
               speaker: item.speaker,
+              ...(item.mark.together ? { together: true as const } : {}),
             });
           break;
         case "sound":

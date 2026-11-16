@@ -560,9 +560,10 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             Decoration.replace({
               widget: new ChipWidget(
                 "name",
-                nameOf(mark.speaker),
+                // Said together with others (§5.10), as the script view says it.
+                mark.together ? `${nameOf(mark.speaker)} and others` : nameOf(mark.speaker),
                 color,
-                `@${mark.speaker}`,
+                mark.together ? `@${mark.speaker}+: said together with others` : `@${mark.speaker}`,
                 options.onNameClick
                   ? (v) =>
                       options.onNameClick?.(v, {
@@ -650,7 +651,7 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
             Decoration.replace({
               widget: new ChipWidget(
                 "vocal",
-                `${nameOf(mark.speaker)} · ${shortSound(mark.text)}`,
+                `${nameOf(mark.speaker)}${mark.together ? " and others" : ""} · ${shortSound(mark.text)}`,
                 color,
                 mark.text,
                 undefined,
@@ -829,7 +830,12 @@ function build(view: EditorView, options: PreviewOptions): DecorationSet {
                 "group",
                 mark.close
                   ? "end of group"
-                  : [mark.speaker ? nameOf(mark.speaker) : "", mark.text]
+                  : [
+                      mark.speaker
+                        ? `${nameOf(mark.speaker)}${mark.together ? " and others" : ""}`
+                        : "",
+                      mark.text,
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "group",
                 mark.close ? ":::" : "Applies to the lines below, until :::",

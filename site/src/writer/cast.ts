@@ -37,6 +37,7 @@ export function castPanel(
 ): HTMLElement {
   const said = new Map(story.said);
   const words = new Map(story.words);
+  const together = new Map(story.together ?? []);
   const narrator = story.narrator;
   const inCast = new Map(story.cast.map((member) => [member.handle.toLowerCase(), member]));
   const names = [...colors.keys()];
@@ -136,8 +137,10 @@ export function castPanel(
     aboutInput.spellcheck = true;
     aboutInput.setAttribute("aria-label", `About ${handle}`);
     const spoken = words.get(handle) ?? 0;
+    // Lines said with others (`@Name+`) are theirs too, the voice used when one is made.
+    const joined = together.get(handle) ?? 0;
     (item.querySelector(".cast-lines") as HTMLElement).textContent =
-      `${count} ${count === 1 ? "line" : "lines"}${spoken ? ` · ${spoken.toLocaleString()} ${spoken === 1 ? "word" : "words"}` : ""}${isNarrator ? " · reads the rest" : ""}`;
+      `${count} ${count === 1 ? "line" : "lines"}${joined ? ` (${joined.toLocaleString()} with others)` : ""}${spoken ? ` · ${spoken.toLocaleString()} ${spoken === 1 ? "word" : "words"}` : ""}${isNarrator ? " · reads the rest" : ""}`;
 
     commit(handleInput, (value) => {
       const next = value.trim();

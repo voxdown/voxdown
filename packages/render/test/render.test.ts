@@ -55,6 +55,36 @@ describe("the script's labels", () => {
   });
 });
 
+describe("a speech said together with others (spec §5.10)", () => {
+  const story = parse(
+    "---\ncast:\n  FirstPig: The First Little Pig\n---\n@FirstPig+ “Let us in!” said the pigs. “Please.”\n@FirstPig “Me too.” @FirstPig+ [giggles]\n\n::: @FirstPig+ whispering\nIs he gone?\n:::\n",
+  );
+
+  it("names the speaker and others, quietly, once, and again when they speak alone", () => {
+    const html = renderScript(story, { header: false });
+    const doc = dom(html);
+    const names = [...doc.querySelectorAll(".vxd-name, .vxd-chip-who, .vxd-group-name")].map(
+      (name) => name.textContent,
+    );
+    expect(names).toEqual([
+      "The First Little Pig and others",
+      "The First Little Pig",
+      "The First Little Pig and others",
+      "The First Little Pig and others",
+    ]);
+    expect(doc.querySelectorAll(".vxd-speech[data-together]").length).toBe(3);
+    expect(doc.querySelector('.vxd-chip-vocal[data-together][data-speaker="FirstPig"]')).not.toBe(
+      null,
+    );
+    expect(doc.querySelector(".vxd-group[data-together]")).not.toBe(null);
+    expect(stylesheet).toContain(".vxd-together {");
+  });
+
+  it("prints no + in the book", () => {
+    expect(renderBook(story, { header: false })).not.toContain("+");
+  });
+});
+
 describe("the book's title, subtitle and author", () => {
   it("follow a title the story opens with as its heading, rather than going", () => {
     const front = "---\ntitle: The Review\nsubtitle: A Story\nauthor: A. Teller\n---\n\n";

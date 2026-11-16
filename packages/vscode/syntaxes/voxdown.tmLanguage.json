@@ -134,7 +134,7 @@
         },
         {
           "name": "meta.mark.character.voxdown",
-          "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
+          "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:(\\+(?:\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*(?:\\+\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)*\\+?)?))?(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
           "captures": {
             "1": {
               "name": "punctuation.definition.tag.voxdown"
@@ -143,6 +143,9 @@
               "name": "entity.name.tag.character.voxdown"
             },
             "3": {
+              "name": "punctuation.definition.tag.voxdown"
+            },
+            "4": {
               "name": "entity.other.attribute-name.direction.voxdown",
               "patterns": [
                 {
@@ -539,7 +542,7 @@
     },
     "character-mark": {
       "name": "meta.mark.character.voxdown",
-      "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
+      "match": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:(\\+(?:\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*(?:\\+\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)*\\+?)?))?(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
       "captures": {
         "1": {
           "name": "punctuation.definition.tag.voxdown"
@@ -548,6 +551,9 @@
           "name": "entity.name.tag.character.voxdown"
         },
         "3": {
+          "name": "punctuation.definition.tag.voxdown"
+        },
+        "4": {
           "name": "entity.other.attribute-name.direction.voxdown",
           "patterns": [
             {
@@ -555,13 +561,13 @@
             }
           ]
         },
-        "5": {
+        "6": {
           "name": "entity.name.type.vocal.voxdown"
         },
-        "6": {
+        "7": {
           "name": "punctuation.definition.sound.begin.voxdown"
         },
-        "7": {
+        "8": {
           "name": "entity.name.type.vocal.voxdown",
           "patterns": [
             {
@@ -569,13 +575,13 @@
             }
           ]
         },
-        "8": {
+        "9": {
           "name": "punctuation.definition.sound.end.voxdown"
         }
       }
     },
     "speech": {
-      "begin": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
+      "begin": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:(\\+(?:\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*(?:\\+\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)*\\+?)?))?(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.tag.voxdown"
@@ -584,6 +590,9 @@
           "name": "entity.name.tag.character.voxdown"
         },
         "3": {
+          "name": "punctuation.definition.tag.voxdown"
+        },
+        "4": {
           "name": "entity.other.attribute-name.direction.voxdown",
           "patterns": [
             {
@@ -591,13 +600,13 @@
             }
           ]
         },
-        "5": {
+        "6": {
           "name": "entity.name.type.vocal.voxdown"
         },
-        "6": {
+        "7": {
           "name": "punctuation.definition.sound.begin.voxdown"
         },
-        "7": {
+        "8": {
           "name": "entity.name.type.vocal.voxdown",
           "patterns": [
             {
@@ -605,7 +614,7 @@
             }
           ]
         },
-        "8": {
+        "9": {
           "name": "punctuation.definition.sound.end.voxdown"
         }
       },
@@ -650,7 +659,7 @@
       ]
     },
     "speech-heading": {
-      "begin": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
+      "begin": "(?<![\\p{L}\\p{M}\\p{N}&&[^\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]])(@)(\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)(?:(\\+(?:\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*(?:\\+\\p{L}(?:[\\p{L}\\p{M}\\p{N}_\\-]|(?<=[\\p{L}\\p{M}])['’](?=[\\p{L}\\p{M}]))*)*\\+?)?))?(?:[ \\t]*((\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?(?:[^\\S\\n]*((\\[)((?=[^\\]\\n]*?[^\\s\\]])(?:[^\\]\\\\%\\n]|\\\\.|%(?!%))*)(\\]))(?!(\\((?:(?:[^()\\\\%\\n]|\\\\.|%(?!%))|\\g<-1>)*\\))))?",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.tag.voxdown"
@@ -659,6 +668,9 @@
           "name": "entity.name.tag.character.voxdown"
         },
         "3": {
+          "name": "punctuation.definition.tag.voxdown"
+        },
+        "4": {
           "name": "entity.other.attribute-name.direction.voxdown",
           "patterns": [
             {
@@ -666,13 +678,13 @@
             }
           ]
         },
-        "5": {
+        "6": {
           "name": "entity.name.type.vocal.voxdown"
         },
-        "6": {
+        "7": {
           "name": "punctuation.definition.sound.begin.voxdown"
         },
-        "7": {
+        "8": {
           "name": "entity.name.type.vocal.voxdown",
           "patterns": [
             {
@@ -680,7 +692,7 @@
             }
           ]
         },
-        "8": {
+        "9": {
           "name": "punctuation.definition.sound.end.voxdown"
         }
       },

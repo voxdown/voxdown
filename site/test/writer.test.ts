@@ -1164,6 +1164,14 @@ describe("an edit's marks, no more than needed", () => {
     expect(give("@Wanda “Fine!” said Bob. “Hm.”", 2, "Bob")).toBe(
       "@Wanda “Fine!” said Bob. @Bob “Hm.”",
     );
+    // Said together or alone is who says it (spec §5.10): the + stays, and its mark too.
+    expect(give("@Wanda+ “Fine!” said they. “Hm.”", 2, "Bob")).toBe(
+      "@Wanda+ “Fine!” said they. @Bob+ “Hm.”",
+    );
+    const pigs = "@Pig+ (softly) @(sadly) Not I. @Pig “Nor I.”";
+    expect(
+      applyChanges(pigs, withoutSpareMarks(parse(pigs), [{ from: 0, to: 0, insert: "" }])),
+    ).toBe("@Pig+ (sadly) Not I. @Pig “Nor I.”");
     const text = "@Wanda (softly) “Fine!” @Wanda “Hm.”";
     expect(
       applyChanges(text, withoutSpareMarks(parse(text), [{ from: 0, to: 0, insert: "" }])),

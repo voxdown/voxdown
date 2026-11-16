@@ -229,6 +229,7 @@ export function asPassage(speech: Speech): Passage {
     from: speech.range.from,
     to: speech.range.to,
     speaker: speech.speaker,
+    ...(speech.together ? { together: true as const } : {}),
     ownDirection: speech.ownDirection,
     ...(speech.mark ? { markFrom: speech.mark.range.from } : {}),
   };

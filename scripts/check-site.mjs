@@ -334,6 +334,40 @@ for (const page of [
 }
 console.log("cards: every public page's picture and address in full, the picture built: ok");
 
+// For search: every public page names itself as canonical (its og:url), the sitemap lists exactly
+// those pages, and the drafts left unlinked ask not to be indexed.
+const publicPages = {
+  "index.html": SITE,
+  "writer/index.html": `${SITE}writer/`,
+  "listen.html": `${SITE}listen.html`,
+  "playground.html": `${SITE}playground.html`,
+  "spec.html": `${SITE}spec.html`,
+  "cheatsheet.html": `${SITE}cheatsheet.html`,
+};
+for (const [page, url] of Object.entries(publicPages)) {
+  const canonical = readFileSync(join(dist, page), "utf8").match(
+    /<link rel="canonical" href="([^"]*)"/,
+  )?.[1];
+  if (canonical !== url)
+    problems.push(`${page}: its canonical is ${canonical ?? "missing"}, not ${url}`);
+}
+const sitemap = existsSync(join(dist, "sitemap.xml"))
+  ? [...readFileSync(join(dist, "sitemap.xml"), "utf8").matchAll(/<loc>([^<]*)<\/loc>/g)].map(
+      (m) => m[1],
+    )
+  : [];
+const wanted = Object.values(publicPages);
+if (sitemap.length !== wanted.length || wanted.some((url) => !sitemap.includes(url)))
+  problems.push(`sitemap.xml lists ${JSON.stringify(sitemap)}, not the public pages`);
+for (const page of [
+  "landing/stage/index.html",
+  "landing/manuscript/index.html",
+  "landing/studio/index.html",
+])
+  if (!/<meta name="robots" content="noindex">/.test(readFileSync(join(dist, page), "utf8")))
+    problems.push(`${page}: not marked noindex`);
+console.log("search: canonical addresses, the sitemap, the drafts kept out: ok");
+
 // The listening page: each recording was made from the story as it is now, and every part it
 // plays has its place on the page.
 const listen = await browser.newPage({ viewport: { width: 1440, height: 900 } });

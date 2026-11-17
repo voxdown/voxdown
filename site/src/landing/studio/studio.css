@@ -5130,17 +5130,9 @@ button {
   transition: opacity 0.4s ease 0.4s, translate 0.4s ease 0.4s;
 }
 
-/* Before the pencil reaches it: "$0" whole, "Free" not yet written. */
-.js .big-edit:not(.corrected) .struck::after {
-  transform: scaleX(0);
-}
-
-.js .big-edit:not(.corrected) .hand-free {
-  opacity: 0;
-  translate: 0 0.15em;
-}
-
-html:not(.js) .big-edit .struck {
+/* Readable even if the inline .js flag runs but the main module is blocked or fails to load.
+   Once running, the scroll animation sets --strike and --free itself. */
+.big-edit:not(.corrected) .struck {
   color: #8f8a9f;
   -webkit-text-fill-color: #8f8a9f;
 }
@@ -5525,9 +5517,6 @@ html:not(.js) .big-edit .struck {
   filter: drop-shadow(0 6px 8px rgb(21 17 42 / 0.2));
   -webkit-text-fill-color: initial;
   transition: opacity 0.4s ease 0.9s;
-}
-.js .big-edit:not(.corrected) .pen-free {
-  opacity: 0;
 }
 @media (max-width: 860px) {
   /* A shorter pencil in the narrow card; its lead in the same place. */

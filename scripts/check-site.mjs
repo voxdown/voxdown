@@ -307,6 +307,126 @@ console.log(
   "front page: a scene lit as it plays, Start writing, the scene in the Writer, old links sent on: ok",
 );
 
+// Phone walkthroughs remain readable before the parser or fonts arrive, or without scripting.
+{
+  const context = await browser.newContext({
+    viewport: { width: 393, height: 852 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  let releaseParser;
+  let releaseFonts;
+  const parserGate = new Promise((resolve) => {
+    releaseParser = resolve;
+  });
+  const fontGate = new Promise((resolve) => {
+    releaseFonts = resolve;
+  });
+  await context.route("**/assets/vox-*.js", async (route) => {
+    await parserGate;
+    await route.continue();
+  });
+  await context.route("**/*.woff2", async (route) => {
+    await fontGate;
+    await route.continue();
+  });
+  const mobile = await context.newPage();
+  watch(mobile, "front page slow phone");
+  try {
+    await mobile.goto(`${base}/`, { waitUntil: "domcontentloaded" });
+    const fallback = await mobile.locator("[data-static-example]").evaluateAll((examples) => ({
+      count: examples.length,
+      readable: examples.every(
+        (el) => el.getBoundingClientRect().height > 40 && el.textContent.trim().length > 40,
+      ),
+      ids: examples.flatMap((el) => [...el.querySelectorAll("[id]")]),
+    }));
+    if (fallback.count !== 7 || !fallback.readable || fallback.ids.length)
+      problems.push(`front page: missing static phone examples: ${JSON.stringify(fallback)}`);
+    // Start enhancement while fonts and the parser are still held back.
+    const asked = mobile.waitForRequest(/\/vox-[^/]+\.js$/);
+    await mobile.evaluate(() => window.dispatchEvent(new Event("pointerdown")));
+    await asked;
+    if (await mobile.locator(".step-example:not([data-static-example])").count())
+      problems.push("front page: phone examples unexpectedly enhanced before the parser arrived");
+    releaseParser();
+    await mobile.waitForFunction(
+      () => document.querySelectorAll(".step-example:not([data-static-example])").length === 7,
+    );
+    if (await mobile.locator("[data-static-example]").count())
+      problems.push("front page: enhancement duplicated the static examples");
+    if ((await mobile.evaluate(() => document.fonts.status)) !== "loading")
+      problems.push("front page: the delayed-font regression did not exercise pending fonts");
+    releaseFonts();
+    await mobile.evaluate(() => document.fonts.ready);
+    // The replacement is interactive, not just a second illustration.
+    await mobile.locator('[data-who-open="picker-phone"]').click();
+    await mobile.locator('#picker-phone [data-pick="Percival"]').click();
+    if (
+      !(await mobile.locator('.step[data-step="2"] .who-slot').textContent()).includes("Percival")
+    )
+      problems.push("front page: the phone speaker picker stopped working after enhancement");
+    await mobile.locator("#ph-t-book").click();
+    if (!(await mobile.locator("#ph-book").isVisible()))
+      problems.push("front page: the phone book tab stopped working after enhancement");
+    await mobile
+      .locator('.step[data-step="4"] .bcard[data-scene="battle"] [data-move="up"]')
+      .click();
+    if (
+      (await mobile
+        .locator('.step[data-step="4"] .mini-board.live .bcard')
+        .first()
+        .getAttribute("data-scene")) !== "battle"
+    )
+      problems.push("front page: the phone scene board stopped working after enhancement");
+  } finally {
+    releaseParser();
+    releaseFonts();
+    await context.close();
+  }
+  // Inline startup can run while a content blocker prevents the actual module from loading.
+  // The .js flag alone must never leave the illustrations or the price correction hidden.
+  const blocked = await browser.newContext({ viewport: { width: 393, height: 852 } });
+  try {
+    await blocked.route("**/assets/index-*.js", (route) => route.abort());
+    const mobile = await blocked.newPage();
+    await mobile.goto(`${base}/`, { waitUntil: "domcontentloaded" });
+    const state = await mobile.evaluate(() => ({
+      js: document.documentElement.classList.contains("js"),
+      examples: document.querySelectorAll("[data-static-example]").length,
+      free: getComputedStyle(document.querySelector(".hand-free")).opacity,
+      strike: getComputedStyle(document.querySelector(".struck"), "::after").transform,
+    }));
+    if (
+      !state.js ||
+      state.examples !== 7 ||
+      state.free !== "1" ||
+      state.strike !== "matrix(1, 0, 0, 1, 0, 0)"
+    )
+      problems.push(`front page: blocked script hides content: ${JSON.stringify(state)}`);
+  } finally {
+    await blocked.close();
+  }
+  const plain = await browser.newContext({
+    viewport: { width: 393, height: 852 },
+    javaScriptEnabled: false,
+  });
+  try {
+    const mobile = await plain.newPage();
+    await mobile.goto(`${base}/`);
+    for (const example of await mobile.locator("[data-static-example]").all())
+      if (!(await example.isVisible()))
+        problems.push("front page: an illustration is hidden without JavaScript");
+    const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+    if (overflow) problems.push("front page: static phone illustrations overflow the viewport");
+  } finally {
+    await plain.close();
+  }
+  console.log(
+    "front page: static phone illustrations, delayed parser/fonts, and enhanced controls: checked",
+  );
+}
+
 // Every public page's card: its og:image and og:url are the site's own addresses, in full, and
 // the picture is in the build.
 const SITE = "https://voxdown.github.io/voxdown/";

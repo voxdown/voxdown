@@ -1691,7 +1691,9 @@ function initSpine(): void {
     example.className = "step-example";
     example.innerHTML = `<p class="sr-only phone-only">In the Writer:</p>${exampleHtml(n)}`;
     const button = step.querySelector(".step-play");
-    if (button) step.insertBefore(example, button);
+    const fallback = step.querySelector("[data-static-example]");
+    if (fallback) fallback.replaceWith(example);
+    else if (button) step.insertBefore(example, button);
     else step.append(example);
     if (step.dataset.try) {
       const tryIt = document.createElement("p");
@@ -2886,18 +2888,20 @@ function initSpine(): void {
     }
   }, 0);
 }
-// The spine, once the stories are read: on a phone at once, in a task of its own (its examples are
-// part of the page's length); on a wide screen in the idle time after that.
-// It also waits for the page's fonts: built in a fallback face, its top bar would shift as they
-// arrived.
-whenBooted(
-  () =>
+// The static examples are already readable. Enhance phones without waiting for every web font;
+// any geometry that depends on fonts is refreshed once they arrive. Desktop keeps its idle setup.
+whenBooted(() => {
+  if (window.innerWidth <= 860) {
+    initSpine();
+    void document.fonts.ready.then(() => respine?.());
+  } else {
     void document.fonts.ready.then(() =>
-      window.innerWidth <= 860 || !("requestIdleCallback" in window)
-        ? initSpine()
-        : window.requestIdleCallback(initSpine, { timeout: 400 }),
-    ),
-);
+      "requestIdleCallback" in window
+        ? window.requestIdleCallback(initSpine, { timeout: 400 })
+        : initSpine(),
+    );
+  }
+});
 
 /* ================================================================== the cast */
 

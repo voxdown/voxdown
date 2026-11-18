@@ -19,6 +19,21 @@ function markdownPages(): Plugin {
   };
 }
 
+/** Match static hosting's directory redirect before Vite's index.html fallback. */
+function studioDirectory(): Plugin {
+  return {
+    name: "voxdown-studio-directory",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const match = /^\/studio(\?.*)?$/.exec(request.url ?? "");
+        if (!match) return next();
+        response.writeHead(302, { Location: `/studio/${match[1] ?? ""}` });
+        response.end();
+      });
+    },
+  };
+}
+
 /**
  * The playground is a static site: relative paths, so it works from any folder on GitHub Pages,
  * and the workspace packages read from source.
@@ -38,7 +53,7 @@ function buildOf(): { commit: string; date: string } {
 export default defineConfig({
   base: "./",
   define: { __WRITER_BUILD__: JSON.stringify(buildOf()) },
-  plugins: [markdownPages()],
+  plugins: [studioDirectory(), markdownPages()],
   resolve: { alias: workspaceAliases },
   server: { fs: { allow: [".."] } },
   // The Writer draws a long story's script and book in a worker, which imports the packages.

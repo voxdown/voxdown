@@ -109,6 +109,7 @@
   <dialog id="guide" aria-labelledby="guide-title">
     <div class="dialog-heading"><h2 id="guide-title">Write a screenplay, naturally.</h2><button class="close" type="button" aria-label="Close guide">×</button></div>
     <p>Fountain is plain text. Leave a blank line between paragraphs. Studio displays the margins; your file keeps the words you type.</p>
+    <button id="practice-fountain" type="button">Try guided practice…</button>
     <p>The Element menu changes the current line while preserving its words. Ctrl/⌘ Enter starts a separated paragraph. Preferences can enable screenplay Enter/Tab assistance; it starts switched off. Type <code>@</code> or start a scene heading to suggest names and locations already in your screenplay. Ctrl Space requests suggestions; Escape dismisses them.</p>
     <p>Type <code>[[</code> to get <code>[[|]]</code>, with the caret inside. Typing the closing brackets moves past the generated ones. Backspace removes an empty pair, one layer at a time. Select text and use Note, B, I, or U to wrap it; repeat to remove the marks. Pasted text and ordinary quotation marks are left as typed. Change pairing in Preferences (also available from Commands).</p>
     <pre>INT. LIGHTHOUSE - NIGHT
@@ -123,6 +124,7 @@ JONAH
 Then we leave the light on.</pre>
     <dl><dt>Scene</dt><dd><code>INT. ROOM - DAY</code> or <code>.A FORCED SCENE</code></dd><dt>Dialogue</dt><dd>A NAME on its own line, followed immediately by speech.</dd><dt>Parenthetical</dt><dd><code>(under her breath)</code> between the name and speech.</dd><dt>Simultaneous speech</dt><dd>Put <code>^</code> after the second character’s name.</dd><dt>Emphasis</dt><dd><code>*italic*</code>, <code>**bold**</code>, <code>_underline_</code>.</dd><dt>Private note</dt><dd><code>[[A note that will not print.]]</code></dd><dt>Omitted passage</dt><dd><code>/* Keep this out of the PDF. */</code></dd><dt>Outline</dt><dd><code># Act one</code> and <code>= A synopsis</code> do not print.</dd><dt>New page</dt><dd><code>===</code> on a line of its own.</dd><dt>Keyboard</dt><dd>Ctrl/⌘ S saves to a chosen file where supported, or downloads Fountain; use Commands → Save Fountain as… to choose another file; Ctrl/⌘ F searches; Ctrl/⌘ Z undoes. Escape closes dialogs.</dd></dl>
     <p>This first Studio is for Fountain. Use <a href="../writer/">VoxDown Writer</a> for <code>.vxd</code> files. PDF uses bundled Courier Prime; unsupported characters are reported before export.</p>
+    <p>Commands includes Final Draft XML import and export, with a compatibility report before you continue. Keep your original file: interchange does not preserve every production or layout feature.</p>
     <p>Your draft stays in this browser. Download a file to keep an independent copy. Clearing site data removes browser recovery.</p>
     <a href="https://fountain.io/syntax/" target="_blank" rel="noopener noreferrer">Full Fountain syntax ↗</a>
   </dialog>

@@ -1,5 +1,6 @@
 import { type FountainElement, type FountainKind, parseFountain } from "./fountain";
 import { fountainRuns } from "./inline";
+import { assertUnambiguousOmissions } from "./public-source";
 import { readSource } from "./source";
 
 export const MAX_FDX_BYTES = 8_000_000;
@@ -76,19 +77,7 @@ export function exportFdx(source: string, options: { includeTitle?: boolean } = 
   const document = parseFountain(source);
   if (document.warnings.length)
     throw new Error("Close unfinished private notes and omitted passages before exporting FDX.");
-  // Fountain comments do not nest. Reject ambiguous nested openers rather than
-  // exporting text after the parser's first closing delimiter as public text.
-  for (const omission of document.omissions) {
-    const inner = source.slice(omission.from + 2, omission.to - 2);
-    for (const match of inner.matchAll(/\[\[|\/\*/g)) {
-      let slashes = 0;
-      for (let at = match.index - 1; at >= 0 && inner[at] === "\\"; at--) slashes++;
-      if (slashes % 2 === 0)
-        throw new Error(
-          "Nested private comment delimiters are ambiguous. Simplify the notes or omitted passages before exporting FDX; no file was prepared.",
-        );
-    }
-  }
+  assertUnambiguousOmissions(source, document);
   const includeTitle = options.includeTitle !== false;
   let paragraphs = 0;
   let dualPairs = 0;

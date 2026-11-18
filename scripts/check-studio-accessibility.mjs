@@ -123,11 +123,19 @@ try {
     "Scoped find and replace",
     "Locations and location rename",
     "Export Final Draft XML (FDX)",
+    "Import Final Draft XML (FDX)",
+    "Rehearsal cue cards",
+    "Practice Fountain step by step",
   ]) {
     await page.locator("#commands").click();
     await page.getByRole("searchbox", { name: "Find a command" }).fill(command);
     await page.keyboard.press("Enter");
     await audit(command);
+    if (command === "Rehearsal cue cards") {
+      await page.getByRole("button", { name: "Start rehearsing", exact: true }).click();
+      await page.getByRole("button", { name: "Reveal speech", exact: true }).click();
+      await audit("focused rehearsal with revealed speech");
+    }
     if (command === "Scene cards and rearrangement") {
       await page.getByRole("button", { name: "Add synopsis…", exact: true }).first().click();
       await page.getByLabel("Scene synopsis", { exact: true }).fill("A visitor arrives.");

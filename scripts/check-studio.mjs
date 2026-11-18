@@ -349,9 +349,52 @@ try {
   );
   assert.equal(await save(page), reviseSource);
   await page.getByRole("tab", { name: "Page preview", exact: true }).click();
+  await runCommand("Rehearsal cue cards");
+  await page.getByRole("button", { name: "Start rehearsing", exact: true }).click();
+  assert.equal(await page.locator(".rehearsal-answer").textContent(), "");
+  await page.getByRole("button", { name: "Reveal speech", exact: true }).click();
+  assert.match(await page.locator(".rehearsal-answer").textContent(), /Stay\./);
+  assert(!(await page.locator(".rehearsal-dialog").textContent()).includes("private Stay."));
+  await page.keyboard.press("Escape");
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Practice Fountain step by step");
+  await page.getByLabel("Practice text", { exact: true }).fill("INT. STUDY - DAY");
+  assert.equal(
+    await page.getByRole("button", { name: "Next lesson", exact: true }).isEnabled(),
+    true,
+  );
+  await page.getByRole("button", { name: "Close practice", exact: true }).click();
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Import Final Draft XML (FDX)");
+  await page.getByLabel("FDX file", { exact: true }).setInputFiles({
+    name: "Revisions.fdx",
+    mimeType: "application/xml",
+    buffer: Buffer.from(fdx),
+  });
+  await page.getByRole("button", { name: "Open as new screenplay", exact: true }).click();
+  await ready(page);
+  const imported = await save(page);
+  assert(imported.includes("MARA"));
+  assert.match(await page.locator("#page").innerText(), /Stay\./);
+  assert(!imported.includes("private Stay."));
+  await open(page, reviseSource, "Revisions-after-import.fountain");
   console.log(
     "Studio: location rename, speech editing, scoped replacement, performer PDF, storage information and separate literal reference: passed",
   );
+  const nestedPrivate = "INT. ROOM - DAY\n\nMARA\nHello. [[private [[inner]] still private]]";
+  await open(page, nestedPrivate, "Ambiguous.fountain");
+  let ambiguousDownloads = 0;
+  const countAmbiguous = () => {
+    ambiguousDownloads++;
+  };
+  page.on("download", countAmbiguous);
+  await page.locator("#pdf").click();
+  await page.waitForFunction(() =>
+    document.getElementById("notice").textContent.includes("Nested private"),
+  );
+  assert.equal(ambiguousDownloads, 0);
+  page.off("download", countAmbiguous);
+  assert.equal(await save(page), nestedPrivate);
   await open(page, "/*secret tail*/", "Partial-private.fountain");
   await content.focus();
   await page.keyboard.press("Control+Home");

@@ -19,8 +19,10 @@ import {
 import { mountBackup } from "./backup";
 import { mountCoach } from "./coach";
 import { mountFdxExport } from "./fdx-dialog";
+import { mountFdxImport } from "./fdx-import-dialog";
 import type { FountainDocument } from "./fountain";
 import type { ScreenplayLayout } from "./layout";
+import { mountLearning } from "./learning-dialog";
 import { mountLibrary } from "./library";
 import { LocalFileController } from "./local-file";
 import { mountLocations } from "./location-dialog";
@@ -29,7 +31,9 @@ import { createStudioOffline } from "./offline";
 import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
 import { mountPalette } from "./palette";
 import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
+import { assertUnambiguousOmissions } from "./public-source";
 import { mountReference } from "./reference";
+import { mountRehearsal } from "./rehearsal-dialog";
 import { mountRename } from "./rename-dialog";
 import { mountScopedReplace } from "./replace-dialog";
 import { mountSceneBoard } from "./scene-board";
@@ -295,6 +299,25 @@ const fdxExport = mountFdxExport(document.body, {
   current: () => ({ source: view.state.doc.toString(), name: title() }),
   download,
 });
+const fdxImport = mountFdxImport(document.body, {
+  openScreenplay: async (value, isCurrent) => {
+    if (!(await mayReplace()) || !isCurrent()) return false;
+    showSource(value.source, value.name);
+    return true;
+  },
+});
+const rehearsal = mountRehearsal(document.body, {
+  current: () => ({ source: view.state.doc.toString(), name: title() }),
+});
+const learning = mountLearning(document.body, {
+  returnToWriting: () => view.focus(),
+  openExample: () => $("example").click(),
+});
+$("practice-fountain").addEventListener("click", () => {
+  $<HTMLDialogElement>("guide").close();
+  $("help").focus();
+  learning.open();
+});
 const speechEditor = mountSpeechEditor(document.body, {
   current: () => ({ source: view.state.doc.toString(), id: draftId }),
   apply: (snapshot, plan) => {
@@ -358,6 +381,24 @@ const offline = createStudioOffline((status) => {
 });
 $("offline-prepare").addEventListener("click", () => void offline.prepare());
 const palette = mountPalette(document.body, [
+  {
+    label: "Import Final Draft XML (FDX)",
+    category: "Files and recovery",
+    keywords: "open convert interchange",
+    run: () => fdxImport.open(),
+  },
+  {
+    label: "Rehearsal cue cards",
+    category: "Export and perform",
+    keywords: "practice lines memorize actor role",
+    run: () => rehearsal.open(),
+  },
+  {
+    label: "Practice Fountain step by step",
+    category: "Learn and inspect",
+    keywords: "tutorial learn beginner lessons syntax",
+    run: () => learning.open(),
+  },
   {
     label: "Locations and location rename",
     category: "Plan and revise",
@@ -1087,7 +1128,7 @@ $("file").addEventListener("change", async () => {
   try {
     if (!/\.(fountain|txt)$/i.test(file.name))
       throw new Error(
-        "Open a .fountain or .txt screenplay. VoxDown .vxd stories belong in Writer.",
+        "Open a .fountain or .txt screenplay. For .fdx, use Commands → Import Final Draft XML. VoxDown .vxd stories belong in Writer.",
       );
     if (file.size > MAX_SOURCE * 4)
       throw new Error("This file is too large for experimental Studio. Open a smaller screenplay.");
@@ -1133,6 +1174,7 @@ pdfButton.addEventListener("click", async () => {
   pdfButton.disabled = true;
   pdfButton.textContent = "Making PDF…";
   try {
+    if (result.document) assertUnambiguousOmissions(view.state.doc.toString(), result.document);
     const { screenplayPdf } = await import("./pdf");
     const bytes = await screenplayPdf(result.layout, result.document?.title.title);
     download(new Uint8Array(bytes).buffer, fileName, "application/pdf");

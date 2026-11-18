@@ -188,6 +188,28 @@ async function cycle(index) {
   await page.getByLabel("Workbench view", { exact: true }).selectOption("notes");
   assert.equal(await page.locator(".workbench-content > article").count(), 100);
   await page.keyboard.press("Escape");
+  const tools = [
+    "Actor sides PDF",
+    "Rehearsal cue cards",
+    "Scene cards and rearrangement",
+    "Locations and location rename",
+    "Export Final Draft XML (FDX)",
+    "Practice Fountain step by step",
+    "Scoped find and replace",
+    "Storage and backups",
+  ];
+  const toolIndex = Number(String(index).match(/\d+$/)?.[0] ?? 0) % tools.length;
+  await page.locator("#commands").click();
+  await page.getByRole("searchbox", { name: "Find a command" }).fill(tools[toolIndex]);
+  await page.keyboard.press("Enter");
+  await page.locator("dialog[open]").waitFor();
+  if (tools[toolIndex] === "Rehearsal cue cards") {
+    await page.getByRole("button", { name: "Start rehearsing", exact: true }).click();
+    await page.getByRole("button", { name: "Reveal speech", exact: true }).click();
+  }
+  await page.keyboard.press("Escape");
+  await page.locator("dialog[open]").waitFor({ state: "hidden" });
+  assert.equal(await save(), baselineSource, "Read-only tools must preserve the screenplay");
   assert.deepEqual(errors, [], "No uncaught exceptions or recovery-loss dialogs");
   return { index, elapsedMs: performance.now() - started };
 }

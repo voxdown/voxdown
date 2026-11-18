@@ -2,6 +2,7 @@ import { type FountainDocument, type FountainElement, parseFountain } from "./fo
 import { fountainRuns } from "./inline";
 import { screenplayInsights } from "./insights";
 import { type ScreenplayLayout, layoutScreenplay } from "./layout";
+import { assertUnambiguousOmissions } from "./public-source";
 import { readSource } from "./source";
 
 export interface ActorSidesSegment {
@@ -55,6 +56,7 @@ export function prepareActorSides(source: string): ActorSidesProject {
     throw new Error(
       "Close incomplete private notes or omitted passages before exporting actor sides.",
     );
+  assertUnambiguousOmissions(source, document);
   const cast = screenplayInsights(document, source).characters;
   const names = new Map(cast.map((entry) => [identity(entry.name), entry.name]));
   const cueNames = new Map<number, string>();

@@ -1383,3 +1383,63 @@ body {
     min-height: 44px;
   }
 }
+
+.studio-fdx-import,
+.studio-learning,
+.rehearsal-dialog {
+  width: min(760px, calc(100vw - 24px));
+  max-width: min(760px, calc(100vw - 24px));
+}
+:is(.studio-fdx-import, .studio-learning, .rehearsal-dialog) :is(p, li, dd, h3, h4, label) {
+  overflow-wrap: anywhere;
+}
+:is(.studio-fdx-import, .studio-learning, .rehearsal-dialog) button {
+  margin: 4px 8px 4px 0;
+}
+:is(.studio-fdx-import, .studio-learning, .rehearsal-dialog) :is(input, select, textarea) {
+  max-width: 100%;
+  font-size: 16px;
+}
+.fdx-import-preview,
+.learning-example,
+.rehearsal-dialog pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.learning-input {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  font: 16px / 1.5 "Courier Prime", monospace;
+}
+.learning-preview {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.rehearsal-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rehearsal-filters label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.rehearsal-card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-block: 16px;
+}
+.rehearsal-dialog pre {
+  max-height: 35vh;
+  overflow: auto;
+  font-size: 16px;
+}
+@media (max-width: 700px) {
+  .rehearsal-filters {
+    grid-template-columns: 1fr;
+  }
+}

@@ -55,9 +55,15 @@ previews, single-step undo, source/omission preservation, EOF moves, bounded ren
 | 14 | Conservative FDX export with explicit compatibility report | Verified |
 | 15 | Editable portable scene synopses with exact source preview and undo | Verified |
 | 16 | Categorized commands, semantic aliases and predictable keyboard discovery | Verified |
-| 17 | Guarded FDX import with supported-subset conversion report | Implementing |
-| 18 | Self-paced performer rehearsal cards | Implementing |
-| 19 | Guided Fountain practice isolated from the writer's screenplay | Implementing |
+| 17 | Guarded FDX import with supported-subset conversion report | Verified |
+| 18 | Self-paced performer rehearsal cards | Verified |
+| 19 | Guided Fountain practice isolated from the writer's screenplay | Verified |
+| 20 | Consistent private-comment preflight across public handoffs | Verified |
+| 21 | Explicit, validated VoxDown voice adaptation | Implementing/reviewing |
+| 22 | Read-only local-file comparison with bounded word highlighting | Implementing/reviewing |
+| 23 | Reproducible interchange against an actual pinned Screenplain exporter | Independently verified; batch checks pending |
+| 24 | Previewed, collision-safe Fountain scene numbering | Implemented; independent review pending |
+| 25 | Public scene/cast breakdown with explicit spreadsheet-safe CSV | Implementing |
 
 Validation for the first seven rounds:
 - `pnpm check`: lint, typechecks, 2,376 tests in 89 files, package builds passed.
@@ -125,3 +131,15 @@ contrast. The root/nested-scope offline gate passed with the expanded asset grap
 The 4× CPU 500k-character performance gate passed, sustained typing p95 15.7ms and no
 measured typing long tasks on this machine. These checks cover the second batch only;
 rounds 17 onward remain in progress.
+
+Rounds 17–20: independent review covered hostile XML, literal Fountain conversion, metadata
+loss reports, asynchronous replacement cancellation, complete hidden/revealed speeches,
+dual-dialogue context, beginner practice isolation, and shared private-output boundaries.
+Mobile rehearsal setup now collapses explicitly for focused practice. Bare scene prefixes
+and time-only headings do not complete the location exercise. Component coverage totals
+102 tests. Integrated Chromium, Firefox and WPE WebKit, plus 27 accessibility states, pass.
+An initial WebKit run timed out in the older degraded-backup confirmation check; an isolated
+rerun passed that check and the complete suite. The expanded session
+soak passed 30 measured cycles over 121.8 seconds, rotating new tools against a 499k-character
+screenplay: 3.74 MiB retained page-heap growth, stable DOM and one reused worker. This is a
+short active regression, not proof of hours-long or physical-device stability.

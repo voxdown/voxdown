@@ -177,6 +177,18 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
       panel.querySelector<HTMLButtonElement>("button:not(:disabled):not([hidden])")?.focus();
     }
     trigger.addEventListener("click", () => (active?.button === trigger ? close() : open()));
+    // Once a menu-bar menu is open, the mouse can browse its siblings without more clicks.
+    // Touch pointerenter precedes a tap, so it must not open (then immediately close) a menu.
+    trigger.addEventListener("pointerenter", (event) => {
+      const bar = trigger.closest(".workspace-menus");
+      if (
+        event.pointerType === "mouse" &&
+        active &&
+        active.button !== trigger &&
+        bar?.contains(active.button)
+      )
+        open();
+    });
     trigger.addEventListener("keydown", (event) => {
       if (event.key === "ArrowDown") {
         event.preventDefault();

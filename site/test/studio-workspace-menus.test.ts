@@ -48,6 +48,45 @@ async function start(source = "!Alpha beta") {
   await ready();
 }
 describe("integrated workspace navigation", () => {
+  it("switches an open menu bar on mouse hover without opening closed or unrelated menus", async () => {
+    await start();
+    await page.locator("#view-menu").hover();
+    expect(await page.locator(".workspace-dropdown:visible").count()).toBe(0);
+    await page.locator("#file-menu").click();
+    for (const name of ["view", "tools", "help", "file"]) {
+      await page.locator(`#${name}-menu`).hover();
+      expect(await page.locator(".workspace-dropdown:visible").count()).toBe(1);
+      expect(await page.locator(`#${name}-dropdown`).isVisible()).toBe(true);
+      expect(await page.locator(`#${name}-menu`).getAttribute("aria-expanded")).toBe("true");
+      expect(
+        await page
+          .locator(`#${name}-dropdown`)
+          .evaluate((panel) => panel.contains(document.activeElement)),
+      ).toBe(true);
+    }
+    await page.locator("#preview-menu").hover();
+    expect(await page.locator("#file-dropdown").isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    expect(await page.locator("#file-menu").evaluate((el) => el === document.activeElement)).toBe(
+      true,
+    );
+    await page.locator("#view-menu").hover();
+    expect(await page.locator(".workspace-dropdown:visible").count()).toBe(0);
+    expect(await page.locator(".cm-content").innerText()).toBe("!Alpha beta");
+  });
+  it("keeps touch menu switching and dismissal on single taps", async () => {
+    await context.close();
+    context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    page = await context.newPage();
+    await start();
+    await page.locator("#file-menu").tap();
+    expect(await page.locator("#file-dropdown").isVisible()).toBe(true);
+    await page.locator("#view-menu").tap();
+    expect(await page.locator("#file-dropdown").isVisible()).toBe(false);
+    expect(await page.locator("#view-dropdown").isVisible()).toBe(true);
+    await page.locator("#view-menu").tap();
+    expect(await page.locator(".workspace-dropdown:visible").count()).toBe(0);
+  });
   it("keeps preferences fields visible during backward keyboard traversal", async () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await start();

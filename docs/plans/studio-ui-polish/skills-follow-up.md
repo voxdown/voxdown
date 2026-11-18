@@ -39,3 +39,7 @@ The reflow check now verifies actual control reachability, 44px targets, interna
 - No physical iOS keyboard, VoiceOver, native screenplay-app or print acceptance is inferred from these automated checks.
 
 Everything remains local; nothing was pushed or published.
+
+## Menu hover follow-up
+
+A user check caught an omitted desktop convention: opening File and moving the mouse over View did not switch menus. Open menu-bar disclosures now switch to a sibling on mouse entry. Hovering a closed menu bar does not open it, touch remains single-tap toggling, and the separate preview-actions disclosure is excluded. Integrated real mouse and touch tests cover switching, dismissal, Escape focus, single visible dropdown and source preservation. This interaction was missing from the earlier review scope.

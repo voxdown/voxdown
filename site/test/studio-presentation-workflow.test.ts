@@ -49,6 +49,34 @@ async function start(source = "!Alpha beta") {
   await ready();
 }
 describe("Studio speech, comments and scraps", () => {
+  it("learns a transition while typing and retains its standard marker after reload", async () => {
+    await start("> FADE OUT.\n\nFade out");
+    await page.locator("#editor .cm-content").click();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type(".");
+    const active = page.locator(".cm-activeLine");
+    expect(await active.textContent()).toBe("> Fade out.");
+    expect(await active.getAttribute("class")).toContain("f-transition");
+    expect(await active.evaluate((node) => getComputedStyle(node).textAlign)).toBe("right");
+    await page.keyboard.press("Control+z");
+    expect(await active.textContent()).toBe("Fade out");
+    await page.keyboard.press("Control+Shift+z");
+    expect(await active.textContent()).toBe("> Fade out.");
+    await page.keyboard.type("!");
+    expect(await active.textContent()).toBe("> Fade out.!");
+    await page.keyboard.press("Backspace");
+    await ready();
+    // The recovery save is debounced; wait for the UI to confirm it before reload.
+    await page.waitForFunction(
+      () => document.querySelector("#recovery")?.textContent === "Draft kept in this browser",
+    );
+    await page.reload();
+    await ready();
+    expect(await page.locator(".f-transition").allTextContents()).toEqual([
+      "> FADE OUT.",
+      "> Fade out.",
+    ]);
+  });
   it("keeps a blank dialogue continuation aligned and coloured, then exits on a second Enter", async () => {
     await start("INT. ROOM - DAY\n\n@JOHN\n(quietly)\nHello.");
     await page.locator("#editor .cm-content").click();

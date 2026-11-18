@@ -36,7 +36,8 @@ const advice: Record<FountainKind, Advice> = {
   },
   transition: {
     title: "Transition",
-    explanation: "This describes a transition between scenes. A leading > can force this element.",
+    explanation:
+      "This describes a transition between scenes. A leading > can force this element. Use > FADE OUT. once, and Studio adds > when you type that same standalone phrase later in this document. Centered text and private notes do not teach transitions.",
     next: "Leave a blank line before the next scene heading.",
     example: "CUT TO:\n\nEXT. HARBOR - DAWN",
   },

@@ -65,6 +65,7 @@ import { mountSpeechEditor } from "./speech-dialog";
 import { type StudioDraft, getDraft, keepDraft, listDrafts } from "./storage";
 import { mountStorageHealth } from "./storage-health";
 import { rememberParsedSource } from "./syntax";
+import { learnTransitions } from "./transition-learning";
 import { type WritingMark, smartPairs, toggleWritingMark } from "./typing";
 import { mountWorkbench } from "./workbench";
 import { insertScreenplayParagraph, screenplayCompletions, setScreenplayLine } from "./writing";
@@ -155,6 +156,7 @@ let replacing = false;
 let fileGeneration = 0;
 const editorExtensions: Extension = [
   history(),
+  learnTransitions(),
   search(),
   autocompletion({
     override: [screenplayCompletions(() => parsedDocument)],

@@ -4,7 +4,11 @@ import { type RehearsalCard, type RehearsalProject, prepareRehearsal } from "./r
 let instance = 0;
 export function mountRehearsal(
   host: HTMLElement,
-  actions: { current(): { source: string; name: string } },
+  actions: {
+    current(): { source: string; name: string; id?: string };
+    editSpeech?(snapshot: { source: string; name: string; id?: string }, line: number): boolean;
+    sides?(role: string): void;
+  },
 ) {
   const id = ++instance;
   const node = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) => {
@@ -69,6 +73,14 @@ export function mountRehearsal(
   const restart = node("button", "Restart these cues");
   for (const button of [previous, reveal, next, restart]) button.type = "button";
   nav.append(previous, reveal, next, restart);
+  const workflow = node("div");
+  workflow.className = "rehearsal-navigation";
+  const edit = node("button", "Edit this speech");
+  const sides = node("button", "Actor sides for this role…");
+  edit.type = sides.type = "button";
+  edit.hidden = !actions.editSpeech;
+  sides.hidden = !actions.sides;
+  workflow.append(edit, sides);
   const help = node(
     "p",
     "Use Previous/Next or the left/right arrow keys while reading a card. Arrow keys keep their normal behavior in filters. Changing a role, scene or cue hides the speech again. Filters show up to 100 choices; narrow the search for later entries. All scenes includes every cue for the selected role.",
@@ -95,10 +107,11 @@ export function mountRehearsal(
     begin,
     dialogDisclosure("Rehearsal controls", help),
   );
-  dialog.append(title, close, setup, progress, card, nav, status);
+  dialog.append(title, close, setup, progress, card, nav, workflow, status);
   arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let project: RehearsalProject | undefined;
+  let sourceSnapshot: { source: string; name: string; id?: string } | undefined;
   let cards: readonly RehearsalCard[] = [];
   let position = 0;
   let shown = false;
@@ -115,7 +128,7 @@ export function mountRehearsal(
     previous.disabled = !current || position === 0;
     next.disabled = !current || position >= cards.length - 1;
     reveal.disabled = restart.disabled = !current;
-    begin.disabled = !current;
+    begin.disabled = edit.disabled = sides.disabled = !current;
     if (!current) {
       progress.textContent = "No spoken cues match this selection.";
       heading.textContent =
@@ -158,7 +171,7 @@ export function mountRehearsal(
     position = 0;
     renderCard();
   }
-  function scenes() {
+  function scenes(preferredLine?: number) {
     sceneSelect.replaceChildren();
     const all = node("option", "All scenes for this role");
     all.value = "";
@@ -169,7 +182,11 @@ export function mountRehearsal(
     const found = (project?.scenes ?? []).filter(
       (entry) => ids.has(entry.id) && query(entry.heading).includes(query(sceneSearch.value)),
     );
-    for (const entry of found.slice(0, 100)) {
+    const preferred = found.find((entry) => entry.line === preferredLine);
+    const choices = preferred
+      ? [preferred, ...found.filter((entry) => entry !== preferred)]
+      : found;
+    for (const entry of choices.slice(0, 100)) {
       const option = node("option", `${shorten(entry.heading)} · line ${entry.line}`);
       option.value = String(entry.id);
       sceneSelect.append(option);
@@ -179,12 +196,17 @@ export function mountRehearsal(
       project?.roles.filter((entry) => query(entry.name).includes(query(roleSearch.value)))
         .length ?? 0;
     matches.textContent = `${countLabel(roleCount, "matching role")} · ${countLabel(found.length, "matching scene")}${roleCount > 100 || found.length > 100 ? ". Lists show up to 100; narrow the search for more." : ""}`;
+    if (preferred) sceneSelect.value = String(preferred.id);
     sceneSelect.disabled = !roleCards.length;
     selectCards();
   }
-  function roles() {
+  function roles(preferredRole?: string, preferredLine?: number) {
     roleSelect.replaceChildren();
-    for (const [index, role] of (project?.roles ?? []).entries()) {
+    const entries = [...(project?.roles ?? []).entries()];
+    entries.sort(
+      (a, b) => Number(b[1].name === preferredRole) - Number(a[1].name === preferredRole),
+    );
+    for (const [index, role] of entries) {
       if (!query(role.name).includes(query(roleSearch.value))) continue;
       if (roleSelect.options.length >= 100) break;
       const option = node("option", `${shorten(role.name)} · ${countLabel(role.cues, "cue")}`);
@@ -193,14 +215,16 @@ export function mountRehearsal(
     }
     roleSelect.disabled = !roleSelect.options.length;
     sceneSearch.value = "";
-    scenes();
+    const preferred = project?.roles.findIndex((role) => role.name === preferredRole) ?? -1;
+    if (preferred >= 0) roleSelect.value = String(preferred);
+    scenes(preferredLine);
   }
-  roleSearch.oninput = roles;
+  roleSearch.oninput = () => roles();
   roleSelect.onchange = () => {
     sceneSearch.value = "";
     scenes();
   };
-  sceneSearch.oninput = scenes;
+  sceneSearch.oninput = () => scenes();
   sceneSelect.onchange = selectCards;
   reveal.onclick = () => {
     const current = cards[position];
@@ -242,6 +266,7 @@ export function mountRehearsal(
   });
   function clear() {
     project = undefined;
+    sourceSnapshot = undefined;
     cards = [];
     position = 0;
     roleSearch.value = sceneSearch.value = "";
@@ -263,6 +288,33 @@ export function mountRehearsal(
         dismiss();
       }
     });
+  edit.onclick = () => {
+    const current = cards[position];
+    if (!sourceSnapshot || !current || !actions.editSpeech) return;
+    // Validate before closing; an old snapshot must never navigate another draft.
+    const currentDraft = actions.current();
+    if (currentDraft.source !== sourceSnapshot.source || currentDraft.id !== sourceSnapshot.id) {
+      status.textContent =
+        "The screenplay changed. Close and reopen rehearsal before editing this speech.";
+      return;
+    }
+    const captured = sourceSnapshot;
+    const line = current.line;
+    dismiss();
+    actions.editSpeech(captured, line);
+  };
+  sides.onclick = () => {
+    const role = cards[position]?.role;
+    if (!role || !sourceSnapshot) return;
+    const currentDraft = actions.current();
+    if (currentDraft.source !== sourceSnapshot.source || currentDraft.id !== sourceSnapshot.id) {
+      status.textContent =
+        "The screenplay changed. Close and reopen rehearsal before preparing actor sides.";
+      return;
+    }
+    dismiss();
+    actions.sides?.(role);
+  };
   close.onclick = dismiss;
   dialog.addEventListener("cancel", (event) => {
     event.preventDefault();
@@ -272,22 +324,25 @@ export function mountRehearsal(
     if (!dialog.open) clear();
   });
   return {
-    open() {
+    open(selection?: { role: string; sceneLine?: number }) {
       if (dialog.open) return;
       clear();
       setup.open = true;
       opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
       try {
         const current = { ...actions.current() };
+        sourceSnapshot = current;
         project = prepareRehearsal(current.source);
         snapshot.textContent = `Snapshot of ${current.name}. Close and reopen to include later edits.`;
-        roles();
+        roles(selection?.role, selection?.sceneLine);
+        if (selection && cards.length) setup.open = false;
       } catch (error) {
         status.textContent =
           error instanceof Error ? error.message : "Could not prepare rehearsal. Close and retry.";
       }
       dialog.showModal();
-      roleSearch.focus();
+      if (setup.open) roleSearch.focus();
+      else card.focus();
     },
     close: dismiss,
   };

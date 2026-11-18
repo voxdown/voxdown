@@ -177,8 +177,15 @@ export function mountStudioHelp(host: HTMLElement) {
         "Turn on “Use screenplay Enter and Tab shortcuts” in View → Preferences to use these.",
       ),
       group("When screenplay keys are on", [
-        ["Enter", "At the end of a scene heading or dialogue, start a new paragraph"],
-        ["Tab / Shift+Tab", "Cycle empty element templates forward or backward"],
+        [
+          "Enter",
+          "End an action, scene, transition or dialogue paragraph; continue after a cue or parenthetical",
+        ],
+        ["Shift+Enter", "Continue the same block on a new source line"],
+        [
+          "Tab / Shift+Tab",
+          "Cycle empty templates; after a character, Tab offers a parenthetical first",
+        ],
       ]),
       node(
         "p",

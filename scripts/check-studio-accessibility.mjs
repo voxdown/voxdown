@@ -129,6 +129,8 @@ try {
   );
 
   for (const command of [
+    "Go to page",
+    "Recent drafts",
     "Rename a character",
     "Scene cards and rearrangement",
     "Storage and backups",
@@ -171,9 +173,19 @@ try {
       await audit("focused rehearsal with revealed speech");
     }
     if (command === "Scene cards and rearrangement") {
-      await page.getByRole("button", { name: "Add synopsis…", exact: true }).first().click();
-      await page.getByLabel("Scene synopsis", { exact: true }).fill("A visitor arrives.");
-      await page.getByRole("button", { name: "Preview synopsis", exact: true }).click();
+      await page
+        .locator("dialog.studio-scene-board")
+        .getByRole("button", { name: "Add synopsis…", exact: true })
+        .first()
+        .click();
+      await page
+        .locator("dialog.studio-scene-board")
+        .getByLabel("Scene synopsis", { exact: true })
+        .fill("A visitor arrives.");
+      await page
+        .locator("dialog.studio-scene-board")
+        .getByRole("button", { name: "Preview synopsis", exact: true })
+        .click();
       await audit("scene synopsis editing and preview");
     }
     await page.keyboard.press("Escape");

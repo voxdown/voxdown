@@ -12,6 +12,7 @@ import { parseFountain } from "../src/studio/fountain";
 import {
   screenplayEnter,
   screenplayKeymap,
+  screenplayLineBreak,
   screenplayNextElement,
   screenplayPreviousElement,
 } from "../src/studio/screenplay-keymap";
@@ -30,7 +31,12 @@ function editor(doc: string, anchor = doc.length, head = anchor, extensions: Ext
   return target;
 }
 
-const commands = [screenplayEnter, screenplayNextElement, screenplayPreviousElement];
+const commands = [
+  screenplayEnter,
+  screenplayLineBreak,
+  screenplayNextElement,
+  screenplayPreviousElement,
+];
 
 describe("optional screenplay keyboard commands", () => {
   it.each([
@@ -39,6 +45,13 @@ describe("optional screenplay keyboard commands", () => {
     ["@Mara", "@Mara\n"],
     ["@Mara\n(quietly)", "@Mara\n(quietly)\n"],
     ["@Mara\nHello.", "@Mara\nHello.\n\n"],
+    ["An ordinary action.", "An ordinary action.\n\n"],
+    ["!FORCED ACTION", "!FORCED ACTION\n\n"],
+    [">CUT TO:", ">CUT TO:\n\n"],
+    ["CUT TO:", "CUT TO:\n\n"],
+    ["MARA", "MARA\n"],
+    ["MARA (V.O.)", "MARA (V.O.)\n"],
+    ["ÉLODIE", "ÉLODIE\n"],
   ])("moves from %s without inserting visual indentation", (source, expected) => {
     const target = editor(source);
     expect(screenplayEnter(target)).toBe(true);
@@ -56,20 +69,15 @@ describe("optional screenplay keyboard commands", () => {
   });
 
   it.each([
-    "An ordinary action.",
-    "MARA",
     "Title: A Film",
     "Title: A Film\n    Subtitle",
     "# Act one",
     "= Synopsis",
     "===",
-    ">CUT TO:",
     "~A song",
     "\\@literal",
     "\\INT. ROOM",
-    "!FORCED ACTION",
     "@",
-    "@Mara\n()",
     "",
     "  ",
   ])("leaves ambiguous or structural Enter to normal editing: %s", (source) => {
@@ -92,19 +100,108 @@ describe("optional screenplay keyboard commands", () => {
     expect(target.state.doc.toString()).toBe("@");
   });
 
-  it("offers parenthetical only after dialogue and places the caret inside", () => {
-    const target = editor("@Mara\n");
+  it("offers a parenthetical first after a cue and places the caret inside", () => {
+    for (const cue of ["@Mara", "MARA", "MARA (V.O.)", "ÉLODIE"]) {
+      const target = editor(`${cue}\n`);
+      screenplayNextElement(target);
+      expect(target.state.doc.toString()).toBe(`${cue}\n()`);
+      expect(target.state.selection.main.head).toBe(cue.length + 2);
+      expect(parseFountain(target.state.doc.toString()).elements[1]?.kind).toBe("parenthetical");
+      screenplayNextElement(target);
+      expect(target.state.doc.toString()).toBe(`${cue}\n!`);
+      screenplayNextElement(target);
+      expect(target.state.doc.toString()).toBe(`${cue}\n@`);
+      screenplayNextElement(target);
+      expect(target.state.doc.toString()).toBe(`${cue}\n.INT. `);
+      expect(parseFountain(target.state.doc.toString()).elements[1]?.kind).toBe("scene");
+      screenplayPreviousElement(target);
+      expect(target.state.doc.toString()).toBe(`${cue}\n@`);
+    }
+  });
+
+  it("does not infer a cue from lowercase, forced action or non-boundary prose", () => {
+    for (const source of ["Action.\n", "!MARA\n", "Earlier.\nMARA\n", "# MARA\n"]) {
+      const target = editor(source);
+      screenplayNextElement(target);
+      expect(target.state.doc.toString()).toBe(`${source}@`);
+    }
+  });
+
+  it("continues dialogue from inside a paired parenthetical and restores the caret on undo", () => {
+    const source = "@Mara\n(quietly)";
+    const target = editor(source, source.length - 1);
+    expect(screenplayEnter(target)).toBe(true);
+    expect(target.state.doc.toString()).toBe(`${source}\n`);
+    expect(target.state.selection.main.head).toBe(source.length + 1);
+    undo(target);
+    expect(target.state.doc.toString()).toBe(source);
+    expect(target.state.selection.main.head).toBe(source.length - 1);
+  });
+
+  it("leaves an unused parenthetical without splitting its pair", () => {
+    for (const anchor of [7, 8]) {
+      const target = editor("@Mara\n()", anchor);
+      expect(screenplayEnter(target)).toBe(true);
+      expect(target.state.doc.toString()).toBe("@Mara\n");
+      expect(target.state.selection.main.head).toBe(6);
+      undo(target);
+      expect(target.state.doc.toString()).toBe("@Mara\n()");
+      expect(target.state.selection.main.head).toBe(anchor);
+    }
+  });
+
+  it("Shift-Enter continues a speech instead of starting a new paragraph", () => {
+    const source = "MARA\nHello.";
+    const target = editor(source);
+    expect(screenplayLineBreak(target)).toBe(true);
+    expect(target.state.doc.toString()).toBe(`${source}\n`);
+    target.dispatch(
+      target.state.update({ changes: { from: target.state.doc.length, insert: "Again." } }),
+    );
+    expect(parseFountain(target.state.doc.toString()).elements.at(-1)?.kind).toBe("dialogue");
+  });
+
+  it("supports a complete writing flow without inserting indentation or forced cues", () => {
+    const target = editor("INT. KITCHEN - DAY");
+    const type = (text: string) => {
+      const from = target.state.selection.main.head;
+      target.dispatch(
+        target.state.update({
+          changes: { from, insert: text },
+          selection: { anchor: from + text.length },
+        }),
+      );
+    };
+    screenplayEnter(target);
+    type("Mara lifts the kettle.");
+    screenplayEnter(target);
+    type("MARA");
+    screenplayEnter(target);
     screenplayNextElement(target);
-    expect(target.state.doc.toString()).toBe("@Mara\n@");
-    screenplayNextElement(target);
-    expect(target.state.doc.toString()).toBe("@Mara\n()");
-    expect(target.state.selection.main.head).toBe(7);
-    expect(parseFountain(target.state.doc.toString()).elements[1]?.kind).toBe("parenthetical");
-    screenplayNextElement(target);
-    expect(target.state.doc.toString()).toBe("@Mara\n.INT. ");
-    expect(parseFountain(target.state.doc.toString()).elements[1]?.kind).toBe("scene");
-    screenplayPreviousElement(target);
-    expect(target.state.doc.toString()).toBe("@Mara\n()");
+    type("quietly");
+    screenplayEnter(target);
+    type("Tea?");
+    screenplayEnter(target);
+    type("JO");
+    screenplayEnter(target);
+    type("Please.");
+    expect(target.state.doc.toString()).toBe(
+      "INT. KITCHEN - DAY\n\nMara lifts the kettle.\n\nMARA\n(quietly)\nTea?\n\nJO\nPlease.",
+    );
+    expect(
+      parseFountain(target.state.doc.toString()).elements.map((element) => element.kind),
+    ).toEqual([
+      "scene",
+      "blank",
+      "action",
+      "blank",
+      "character",
+      "parenthetical",
+      "dialogue",
+      "blank",
+      "character",
+      "dialogue",
+    ]);
   });
 
   it.each(["INT. ROOM", "@Mara", "(quietly)", "!Action", ">CUT TO:", " ", "  ", "\t", " ()"])(
@@ -181,7 +278,7 @@ describe("optional screenplay keyboard commands", () => {
   it("leaves composition keystrokes to the input method", () => {
     const target = editor("@Mara");
     const bindings = target.state.facet(keymap).flat();
-    for (const key of ["Enter", "Tab", "Shift-Tab"]) {
+    for (const key of ["Enter", "Shift-Enter", "Tab", "Shift-Tab"]) {
       const binding = bindings.find((item) => item.key === key);
       expect(binding).toBeDefined();
       expect(binding?.run?.({ ...target, composing: true } as unknown as EditorView)).toBe(false);

@@ -305,9 +305,19 @@ try {
   assert.equal(await save(page), locationSource);
   await open(page, reviseSource, "Revisions.fountain");
   await runCommand("Scene cards and rearrangement");
-  await page.getByRole("button", { name: "Add synopsis…", exact: true }).first().click();
-  await page.getByLabel("Scene synopsis", { exact: true }).fill("Mara makes a decision.");
-  await page.getByRole("button", { name: "Preview synopsis", exact: true }).click();
+  await page
+    .locator("dialog.studio-scene-board")
+    .getByRole("button", { name: "Add synopsis…", exact: true })
+    .first()
+    .click();
+  await page
+    .locator("dialog.studio-scene-board")
+    .getByLabel("Scene synopsis", { exact: true })
+    .fill("Mara makes a decision.");
+  await page
+    .locator("dialog.studio-scene-board")
+    .getByRole("button", { name: "Preview synopsis", exact: true })
+    .click();
   await page.getByRole("button", { name: "Apply synopsis", exact: true }).click();
   assert.equal(
     await save(page),

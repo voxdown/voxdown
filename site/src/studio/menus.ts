@@ -10,6 +10,7 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
         [
           { id: "new", label: "New screenplay" },
           { id: "open", label: "Open Fountain…" },
+          { command: "Recent drafts", label: "Recent drafts…" },
           { command: "Import Final Draft XML (FDX)", label: "Import Final Draft…" },
         ],
         [
@@ -36,6 +37,7 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
         [
           { command: "Find", label: "Find…" },
           { command: "Go to scene", label: "Go to scene…" },
+          { command: "Go to page", label: "Go to page…" },
           { command: "Scoped find and replace", label: "Scoped find and replace…" },
         ],
         [

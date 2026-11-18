@@ -50,7 +50,7 @@
         </div>
         <div class="element-tools tool-group">
           <label class="sr-only" for="element-action">Change current line element</label>
-          <select id="element-action" title="Change the current source line without retyping its words"><option value="">Element…</option><option value="scene">Scene heading</option><option value="action">Action</option><option value="character">Character</option><option value="parenthetical">Parenthetical</option><option value="transition">Transition</option></select>
+          <select id="element-action" title="Change the current source line without retyping its words"><option value="" hidden>Element…</option><option value="scene">Scene heading</option><option value="action">Action</option><option value="character">Character</option><option value="parenthetical">Parenthetical</option><option value="transition">Transition</option></select>
           <button type="button" data-writing-mark="note" aria-label="Note" title="Private note (Ctrl/⌘ Shift M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v6l-4 4h-7zM9.5 13.5v-4h4M5 6.5h6M5 9h3"/></svg><span>Note</span></button>
           <button id="line-help" type="button" aria-label="Line help" title="Explain the Fountain element at the caret"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M6.2 5.9a1.8 1.8 0 1 1 3.3 1C8.5 7.5 8 8 8 9M8 11v.2"/></svg><span>Line help</span></button>
         </div>
@@ -115,7 +115,7 @@
     <h3>Writing</h3>
     <label class="typing-option"><input id="smart-pairs" type="checkbox" checked> Automatically close brackets and parentheses</label>
     <label class="preference"><input id="screenplay-keys" type="checkbox"> Use screenplay Enter and Tab shortcuts</label>
-    <details class="preference-detail"><summary>How screenplay shortcuts work</summary><p>Enter after a scene heading or dialogue starts a new paragraph. Tab cycles empty character, scene, action and transition templates; Shift Tab goes back. Existing words stay intact. Use Escape, then Tab to move focus out of the editor.</p></details>
+    <details class="preference-detail"><summary>How screenplay shortcuts work</summary><p>Enter after a scene heading, action, transition or dialogue starts a new paragraph. Shift Enter continues the same block. Enter inside paired parentheses continues into dialogue. Tab after a character opens a parenthetical; elsewhere it cycles empty character, scene, action and transition templates. Shift Tab goes back. Existing words stay intact. Use Escape, then Tab to move focus out of the editor.</p></details>
     <label class="preference"><input id="typewriter" type="checkbox"> Keep the typing line near the centre</label>
     <details class="preference-detail"><summary>About focus mode</summary><p>Focus hides the toolbar, scenes and preview while keeping menus available. Press Escape or Ctrl/⌘ Shift F, or choose Leave focus, to return. Your previous toolbar and panel choices are restored.</p></details>
     <h3>Printed pages</h3>

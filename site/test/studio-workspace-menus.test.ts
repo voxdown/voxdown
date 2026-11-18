@@ -109,6 +109,9 @@ describe("integrated workspace navigation", () => {
       mimeType: "text/plain",
       buffer: Buffer.from("INT. ROOM\n\n[[Unclosed note"),
     });
+    await page.waitForFunction(
+      () => (document.querySelector("#name") as HTMLInputElement)?.value === "Warning.fountain",
+    );
     await ready();
     expect(await page.locator("#issues").isVisible()).toBe(true);
     expect(await page.locator("#pdf").isDisabled()).toBe(true);

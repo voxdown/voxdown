@@ -42,6 +42,7 @@ import { mountLearning } from "./learning-dialog";
 import { mountLibrary } from "./library";
 import { LocalFileController, type LocalFileHandle } from "./local-file";
 import { mountLocations } from "./location-dialog";
+import { mountManuscriptNavigation } from "./manuscript-navigation";
 import { mountWorkspaceMenus } from "./menus";
 import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } from "./navigation";
 import { type NoticeLifetime, createNoticePresenter } from "./notice";
@@ -53,7 +54,11 @@ import { mountWorkspacePanels } from "./panels";
 import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
 import { mountPreviewSpace } from "./preview-space";
 import { assertUnambiguousOmissions } from "./public-source";
+import { mountRecentDrafts } from "./recent-drafts";
 import { mountReference } from "./reference";
+import { mountSceneContext } from "./scene-context";
+import { type WorkspacePosition, createWorkspaceSession } from "./workspace-session";
+import "./scene-context.css";
 import { mountRehearsal } from "./rehearsal-dialog";
 import { mountRename } from "./rename-dialog";
 import { mountScopedReplace } from "./replace-dialog";
@@ -136,6 +141,12 @@ const markField = StateField.define<DecorationSet>({
 type Result = WorkerResult;
 let source = readSource("");
 let draftId = crypto.randomUUID();
+let positionDraftId: string = draftId;
+const workspaceSession = createWorkspaceSession();
+let positionSaving: ReturnType<typeof setTimeout> | undefined;
+let pendingPosition:
+  | { id: string; revision: number; saved: WorkspacePosition; scheduled?: boolean }
+  | undefined;
 let revision = 0;
 let keptRevision = -1;
 let lastDownload = "";
@@ -204,11 +215,14 @@ const editorExtensions: Extension = [
     ...searchKeymap,
   ]),
   EditorView.updateListener.of((update) => {
+    if (update.geometryChanged && pendingPosition) finishPositionRestore();
     $<HTMLButtonElement>("undo").disabled = undoDepth(update.state) === 0;
     $<HTMLButtonElement>("redo").disabled = redoDepth(update.state) === 0;
     if (update.docChanged && !recovering) {
       notices.sourceEdited();
       revision++;
+      pendingPosition = undefined;
+      positionDraftId = draftId;
       hasWork = true;
       keptRevision = -1;
       updateFileControls();
@@ -220,7 +234,16 @@ const editorExtensions: Extension = [
     if (update.selectionSet || update.docChanged) {
       const line = update.state.doc.lineAt(update.state.selection.main.head).number;
       $("position").textContent = `Line ${line}`;
+      if (
+        pendingPosition &&
+        (update.state.selection.main.head !== pendingPosition.saved.head ||
+          update.state.selection.main.anchor !== pendingPosition.saved.anchor)
+      )
+        pendingPosition = undefined;
       updateCurrentScene(line);
+      manuscriptNavigation.position(line);
+      updateElementLabel(line);
+      queuePosition();
       if (preferences.typewriter && update.docChanged && !view.compositionStarted) {
         requestAnimationFrame(() => {
           if (preferences.typewriter)
@@ -241,6 +264,37 @@ document.querySelector<HTMLAnchorElement>(".skip")?.addEventListener("click", (e
   event.preventDefault();
   revealWriting();
   view.focus();
+});
+const manuscriptNavigation = mountManuscriptNavigation($("position").parentElement as HTMLElement, {
+  jump: jumpToLine,
+  zoom: (size) => {
+    preferences.textSize = size;
+    keepPreferences();
+    view.dispatch({
+      effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: "center" }),
+    });
+  },
+});
+view.scrollDOM.addEventListener("scroll", queuePosition, { passive: true });
+for (const event of ["pointerdown", "wheel", "touchstart"] as const)
+  view.dom.addEventListener(
+    event,
+    () => {
+      pendingPosition = undefined;
+    },
+    { passive: true },
+  );
+window.addEventListener("pagehide", savePosition);
+const recentDrafts = mountRecentDrafts(document.body, {
+  current: () => ({ id: draftId, revision }),
+  open: async (draft, _expected, stillCurrent) => {
+    // Read and validate before replacing any current work.
+    readSource(draft.source);
+    if (!(await mayReplace()) || !stillCurrent()) return false;
+    showSource(draft.source, draft.name);
+    restorePosition(draft.id);
+    return true;
+  },
 });
 const referencePanel = mountReference(preview, () => {
   if (preferences.focus) {
@@ -418,7 +472,41 @@ const fdxImport = mountFdxImport(document.body, {
   },
 });
 const rehearsal = mountRehearsal(document.body, {
-  current: () => ({ source: view.state.doc.toString(), name: title() }),
+  current: () => ({ source: view.state.doc.toString(), name: title(), id: draftId }),
+  editSpeech: (snapshot, line) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    jumpToLine(line);
+    return true;
+  },
+  sides: (role) => actorSides.open({ role }),
+});
+const sceneContext = mountSceneContext($("outline"), {
+  current: () => ({ source: view.state.doc.toString(), id: draftId }),
+  apply: (snapshot, plan) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
+    notice("Synopsis saved. Undo restores the previous version.", "success");
+    return true;
+  },
+  jump: (snapshot, line) => {
+    if (snapshot.id !== draftId || snapshot.source !== view.state.doc.toString()) return false;
+    jumpToLine(line);
+    return true;
+  },
+  rehearse: (_snapshot, selection) => rehearsal.open(selection),
+  sides: (_snapshot, selection) => actorSides.open(selection),
 });
 const learning = mountLearning(document.body, {
   returnToWriting: () => view.focus(),
@@ -525,7 +613,19 @@ function goToScene(): void {
   $("scene-search").focus();
 }
 const commands: StudioCommand[] = [
+  {
+    label: "Recent drafts",
+    category: "Files and recovery",
+    keywords: "continue reopen browser",
+    run: () => recentDrafts.open(),
+  },
   { label: "Find", category: "Write and edit", shortcut: "Mod F", run: findInScreenplay },
+  {
+    label: "Go to page",
+    category: "Navigate",
+    run: () => manuscriptNavigation.open(),
+    enabled: () => manuscriptNavigation.ready(),
+  },
   { label: "Go to scene", category: "Navigate", shortcut: "Mod Shift O", run: goToScene },
   {
     label: "Toolbar",
@@ -910,6 +1010,11 @@ function applyPreferences(): void {
   appearance.apply(preferences.theme);
   if (preferences.focus) app.classList.remove("mobile-preview", "outline-open");
   document.documentElement.style.setProperty("--editor-size", `${preferences.textSize}px`);
+  document.documentElement.style.setProperty(
+    "--manuscript-scale",
+    String(preferences.textSize / 16),
+  );
+  manuscriptNavigation.zoom(preferences.textSize);
   app.classList.toggle("focus-writing", preferences.focus);
   $("focus-mode").setAttribute("aria-pressed", String(preferences.focus));
   $("mobile-focus").setAttribute("aria-pressed", String(preferences.focus));
@@ -1037,12 +1142,104 @@ $("element-action").addEventListener("change", () => {
     );
   }
   select.value = "";
+  updateElementLabel(view.state.doc.lineAt(view.state.selection.main.head).number);
   view.focus();
 });
 
 function notice(message: string, lifetime: NoticeLifetime = "important"): void {
   notices.show(message, lifetime);
 }
+function updateElementLabel(line: number): void {
+  const option = $<HTMLSelectElement>("element-action").options[0];
+  if (!option) return;
+  const kind = latest ? parsedDocument?.elements[line - 1]?.kind : undefined;
+  const labels: Record<string, string> = {
+    scene: "Scene heading",
+    action: "Action",
+    character: "Character",
+    dialogue: "Dialogue",
+    parenthetical: "Parenthetical",
+    transition: "Transition",
+    note: "Private note",
+    boneyard: "Omitted passage",
+    section: "Section",
+    synopsis: "Synopsis",
+    title: "Title field",
+    lyric: "Lyric",
+    centered: "Centred text",
+    "page-break": "Page break",
+  };
+  option.textContent = kind ? (labels[kind] ?? "Element…") : "Element…";
+}
+function queuePosition(): void {
+  if (recovering) return;
+  clearTimeout(positionSaving);
+  positionSaving = setTimeout(savePosition, 250);
+}
+function savePosition(): void {
+  clearTimeout(positionSaving);
+  if (recovering || pendingPosition || view.scrollDOM.clientHeight === 0) return;
+  const { anchor, head } = view.state.selection.main;
+  const viewportTop = view.scrollDOM.getBoundingClientRect().top - view.documentTop;
+  const block = view.lineBlockAtHeight(viewportTop);
+  workspaceSession.save(positionDraftId, {
+    anchor,
+    head,
+    scrollTop: view.scrollDOM.scrollTop,
+    documentLength: view.state.doc.length,
+    viewportAnchor: block.from,
+    viewportOffset: block.top - viewportTop,
+  });
+}
+function restorePosition(id: string): void {
+  const saved = workspaceSession.restore(id, view.state.doc.length);
+  if (!saved) return;
+  pendingPosition = { id: draftId, revision, saved };
+  view.dispatch({
+    selection: { anchor: saved.anchor, head: saved.head },
+    effects: EditorView.scrollIntoView(saved.viewportAnchor ?? saved.head, {
+      y: saved.viewportAnchor === undefined ? "center" : "start",
+    }),
+  });
+}
+function finishPositionRestore(): void {
+  const pending = pendingPosition;
+  if (!pending || pending.scheduled || !latest?.document) return;
+  pending.scheduled = true;
+  // Live margins change line heights. Restore only after the new parse has been decorated
+  // and CodeMirror has measured it, rather than racing worker completion with a timer.
+  requestAnimationFrame(() =>
+    view.requestMeasure({
+      key: pending,
+      read: () => {
+        if (pendingPosition !== pending || view.scrollDOM.clientHeight === 0) return null;
+        const saved = pending.saved;
+        if (saved.viewportAnchor === undefined || saved.viewportOffset === undefined)
+          return saved.scrollTop;
+        const block = view.lineBlockAt(saved.viewportAnchor);
+        return (
+          view.scrollDOM.scrollTop +
+          view.documentTop +
+          block.top -
+          view.scrollDOM.getBoundingClientRect().top -
+          saved.viewportOffset
+        );
+      },
+      write: (scrollTop) => {
+        if (scrollTop === null) {
+          pending.scheduled = false;
+          return;
+        }
+        if (pendingPosition !== pending || pending.id !== draftId || pending.revision !== revision)
+          return;
+        view.scrollDOM.scrollTop = scrollTop;
+        pendingPosition = undefined;
+        queuePosition();
+      },
+    }),
+  );
+}
+
 function text(): string {
   return writeSource(source, view.state.doc.toString());
 }
@@ -1179,6 +1376,8 @@ async function mayReplace(): Promise<boolean> {
 }
 
 function showSource(value: string, fileName: string): void {
+  savePosition();
+  pendingPosition = undefined;
   previewSpace.restore(false);
   const next = readSource(value);
   localFile.disconnect();
@@ -1190,6 +1389,7 @@ function showSource(value: string, fileName: string): void {
   source = next;
   parsedDocument = undefined;
   draftId = crypto.randomUUID();
+  positionDraftId = draftId;
   revision = 0;
   updateFileControls();
   keptRevision = -1;
@@ -1219,6 +1419,8 @@ function scheduleParse(delay = 180): void {
   clearTimeout(parsing);
   const generation = ++parseGeneration;
   latest = undefined;
+  manuscriptNavigation.update(undefined, 1);
+  updateElementLabel(1);
   workbench.stale();
   pdfButton.disabled = true;
   $("counts").textContent = "Updating pages…";
@@ -1240,6 +1442,12 @@ function scheduleParse(delay = 180): void {
 }
 function applyResult(result: Result): void {
   latest = result;
+  $("position").textContent =
+    `Line ${view.state.doc.lineAt(view.state.selection.main.head).number}`;
+  manuscriptNavigation.update(
+    result.layout,
+    view.state.doc.lineAt(view.state.selection.main.head).number,
+  );
   updatePageGuides();
   $("retry-preview").hidden = true;
   const document = result.document;
@@ -1248,10 +1456,17 @@ function applyResult(result: Result): void {
     rememberParsedSource(view.state.doc, document);
     workbench.update(document, view.state.doc.toString());
     decorate(document);
+    finishPositionRestore();
     const scenes = document.elements.filter((element) => element.kind === "scene");
     $("scene-count").textContent = String(scenes.length);
     outlineItems = outlineOf(document);
     renderOutline();
+    sceneContext.update(
+      { id: draftId, source: view.state.doc.toString() },
+      view.state.doc.lineAt(view.state.selection.main.head).number,
+      document,
+    );
+    updateElementLabel(view.state.doc.lineAt(view.state.selection.main.head).number);
     const scriptPages = result.layout?.pages.filter((p) => p.number !== null).length;
     $("counts").textContent =
       `${scenes.length} ${scenes.length === 1 ? "scene" : "scenes"} · ${scriptPages ?? "—"} script ${scriptPages === 1 ? "page" : "pages"}`;
@@ -1351,6 +1566,7 @@ function renderOutline(): void {
 }
 $("scene-search").addEventListener("input", renderOutline);
 function updateCurrentScene(line: number): void {
+  sceneContext.select(line);
   const item = outlineItems[itemAtLine(outlineItems, line)];
   const next = item ? outlineButtons.get(item.line) : undefined;
   if (next === activeOutline) return;
@@ -1689,7 +1905,9 @@ async function start(): Promise<void> {
         throw error;
       }
       name.value = recovered.name;
+      positionDraftId = recovered.id;
       view.setState(editingState(source.normalized));
+      restorePosition(recovered.id);
       hasWork = false;
       $("recovery").textContent = "Recovered draft · edits will be kept as a new copy";
     } else $("recovery").textContent = "Local recovery ready · download to keep a file";

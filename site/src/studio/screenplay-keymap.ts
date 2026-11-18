@@ -1,5 +1,5 @@
 /** Opt-in keyboard assistance. All layout remains presentation; edits are plain Fountain. */
-import { completionStatus } from "@codemirror/autocomplete";
+import { acceptCompletion, completionStatus } from "@codemirror/autocomplete";
 import { isolateHistory } from "@codemirror/commands";
 import { type EditorState, type Extension, Prec, type StateCommand } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
@@ -21,48 +21,99 @@ function safeContext(state: EditorState, from: number, to: number) {
   return parsed;
 }
 
-/** End-of-line only. A scene or dialogue ends a paragraph; a cue or parenthetical
- * continues on the next line. Ordinary action, blank lines, titles, notes and
- * structural elements retain the editor's normal Enter behavior.
- * Natural uppercase cues with no following dialogue also use normal Enter.
+/** A newly typed natural cue has no following dialogue yet, so Fountain still
+ * calls it action. Recognize only a short, unforced uppercase boundary line for
+ * keyboard assistance; never rewrite it or change the parser's interpretation.
  */
-export const screenplayEnter: StateCommand = (target) => {
+function pendingCue(state: EditorState, number: number): boolean {
+  if (number < 1) return false;
+  const line = state.doc.line(number);
+  const text = line.text.trim();
+  if (number > 1 && state.doc.line(number - 1).text.trim()) return false;
+  if (text.length > 120 || !/\p{Lu}/u.test(text)) return false;
+  return /^[\p{Lu}\p{M}\p{N} .’'_-]+(?:\s*\([^()\n]*\))?\s*\^?$/u.test(text);
+}
+
+function insertLineBreak(target: Parameters<StateCommand>[0], position: number): boolean {
   const { state, dispatch } = target;
-  const line = caretLine(state);
-  if (!line || state.selection.main.head !== line.to || !line.text.trim()) return false;
-  // Cheap refusals avoid parsing in the common ambiguous/structural cases.
-  if (/^\s*(?:\\|#|=|!|>|~|\[\[|\/\*)/.test(line.text)) return false;
-  const startsParagraph = line.number === 1 || state.doc.line(line.number - 1).text === "";
-  const trimmed = line.text.trim();
-  if (
-    startsParagraph &&
-    !/^(?:@|\.[\p{L}\p{N}]|(?:INT\.?\/EXT|INT|EXT|EST|I\/E)(?:[. ]|$))/iu.test(trimmed) &&
-    (!/\p{Lu}/u.test(trimmed) || /\p{Ll}/u.test(trimmed))
-  )
-    return false;
-  const parsed = safeContext(state, line.from, line.to);
-  const element = parsed?.elements[line.number - 1];
-  if (!element) return false;
-  if (element.kind === "scene" || element.kind === "dialogue") {
-    return insertScreenplayParagraph(target);
-  }
-  if (element.kind !== "character" && element.kind !== "parenthetical") return false;
-  // Don't turn an unfinished empty template into a dialogue block.
-  if (!element.text.trim() || element.text === "()") return false;
   dispatch(
     state.update({
-      changes: { from: line.to, insert: "\n" },
-      selection: { anchor: line.to + 1 },
+      changes: { from: position, insert: "\n" },
+      selection: { anchor: position + 1 },
       scrollIntoView: true,
       userEvent: "input",
       annotations: isolateHistory.of("full"),
     }),
   );
   return true;
+}
+
+/** Scenes, action, dialogue and transitions end paragraphs. Character cues and
+ * parentheticals continue dialogue. A pending uppercase cue stays plain Fountain.
+ * Paired parentheticals accept Enter immediately before their closing bracket.
+ * Structural/private elements and mid-line edits retain normal editor behavior.
+ */
+export const screenplayEnter: StateCommand = (target) => {
+  const { state, dispatch } = target;
+  const line = caretLine(state);
+  if (!line || !line.text.trim()) return false;
+  const head = state.selection.main.head;
+  const beforeClose = head === line.to - 1 && line.text.endsWith(")");
+  if (head !== line.to && !beforeClose) return false;
+  // Explicit source-only elements should never acquire screenplay keyboard behavior.
+  if (/^\s*(?:\\|#|=|~|\[\[|\/\*)/.test(line.text)) return false;
+  const parsed = safeContext(state, line.from, line.to);
+  const element = parsed?.elements[line.number - 1];
+  if (!element) return false;
+  if (beforeClose && element.kind !== "parenthetical") return false;
+  if (element.kind === "parenthetical" && element.text === "()") {
+    // Enter on an unused parenthetical returns to the dialogue line rather than
+    // splitting the pair into two broken Fountain elements.
+    const from = line.from + line.text.indexOf("(");
+    dispatch(
+      state.update({
+        changes: { from, to: from + 2 },
+        selection: { anchor: from },
+        scrollIntoView: true,
+        userEvent: "input",
+        annotations: isolateHistory.of("full"),
+      }),
+    );
+    return true;
+  }
+  if (element.kind === "character" || element.kind === "parenthetical") {
+    if (!element.text.trim()) return false;
+    return insertLineBreak(target, line.to);
+  }
+  if (element.kind === "action" && pendingCue(state, line.number)) {
+    return insertLineBreak(target, line.to);
+  }
+  if (["scene", "action", "dialogue", "transition", "centered"].includes(element.kind)) {
+    return insertScreenplayParagraph(target);
+  }
+  return false;
+};
+
+/** Shift-Enter deliberately keeps a line in the same block, including dialogue.
+ * It also leaves a paired parenthetical intact when the caret precedes its `)`.
+ */
+export const screenplayLineBreak: StateCommand = (target) => {
+  const { state } = target;
+  const line = caretLine(state);
+  if (!line || !line.text.trim()) return false;
+  const parsed = safeContext(state, line.from, line.to);
+  const element = parsed?.elements[line.number - 1];
+  if (!element || !["action", "dialogue", "character", "parenthetical"].includes(element.kind))
+    return false;
+  const head = state.selection.main.head;
+  if (head === line.to) return insertLineBreak(target, head);
+  if (element.kind === "parenthetical" && head === line.to - 1 && line.text.endsWith(")"))
+    return insertLineBreak(target, line.to);
+  return false;
 };
 
 /** Cycle only empty templates. Text with any user content is never reformatted.
- * Blank → @ → (optional dialogue parenthetical) → INT. → ! → > → blank.
+ * Blank → @ → INT. → ! → > → blank. Within dialogue, () comes first.
  * Parentheticals require a preceding cue/dialogue. Non-boundary scenes use .INT.
  * Shift-Tab follows the reverse order. No whitespace indentation is inserted.
  */
@@ -84,10 +135,11 @@ function cycleElement(direction: 1 | -1): StateCommand {
     const inDialogue =
       previous?.kind === "character" ||
       previous?.kind === "dialogue" ||
-      previous?.kind === "parenthetical";
+      previous?.kind === "parenthetical" ||
+      (previous?.kind === "action" && pendingCue(state, line.number - 1));
     const boundary = line.number === 1 || !state.doc.line(line.number - 1).text.trim();
     const scene = boundary ? "INT. " : ".INT. ";
-    const templates = ["", "@", ...(inDialogue ? ["()"] : []), scene, "!", ">"];
+    const templates = inDialogue ? ["", "()", "!", "@", scene, ">"] : ["", "@", scene, "!", ">"];
     const current = /^\.?INT\. $/.test(line.text) ? scene : line.text;
     const index = templates.indexOf(current);
     if (index < 0) return false;
@@ -133,12 +185,22 @@ export function screenplayKeymap(): Extension {
     keymap.of(
       [
         { key: "Enter", command: screenplayEnter },
+        { key: "Shift-Enter", command: screenplayLineBreak },
         { key: "Tab", command: screenplayNextElement },
         { key: "Shift-Tab", command: screenplayPreviousElement },
       ].map(({ key, command }) => ({
         key,
         run: (view) => {
-          if (view.composing || completionStatus(view.state) !== null) return false;
+          if (view.composing) return false;
+          if (completionStatus(view.state) === "active") {
+            if (key !== "Tab") return false;
+            // Keep focus in the manuscript even during CodeMirror's brief
+            // completion-opening guard. Tab must not escape an active suggestion.
+            acceptCompletion(view);
+            return true;
+          }
+          // A pending completion request may resolve to no suggestions. It must
+          // not make fast typing fall back to different paragraph behavior.
           return command(view);
         },
       })),

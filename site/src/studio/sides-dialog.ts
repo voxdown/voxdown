@@ -150,12 +150,16 @@ export function mountActorSides(
     }
     controls();
   }
-  function filter() {
+  function filter(preferredRole?: string) {
     const previous = select.value;
     select.replaceChildren();
     const query = search.value.trim().normalize("NFC").toLowerCase();
     let found = 0;
-    for (const [index, character] of (project?.characters ?? []).entries()) {
+    const entries = [...(project?.characters ?? []).entries()];
+    entries.sort(
+      (a, b) => Number(b[1].name === preferredRole) - Number(a[1].name === preferredRole),
+    );
+    for (const [index, character] of entries) {
       if (!character.name.normalize("NFC").toLowerCase().includes(query)) continue;
       found++;
       if (found > 100) continue;
@@ -166,9 +170,12 @@ export function mountActorSides(
     }
     if ([...select.options].some((option) => option.value === previous)) select.value = previous;
     matches.textContent = `${found} matching ${found === 1 ? "character" : "characters"}${found > 100 ? "; showing the first 100. Narrow the search to find another role." : "."}`;
+    const preferred =
+      project?.characters.findIndex((character) => character.name === preferredRole) ?? -1;
+    if (preferred >= 0) select.value = String(preferred);
     updatePreview();
   }
-  search.oninput = filter;
+  search.oninput = () => filter();
   select.onchange = updatePreview;
   includeTitle.onchange = updatePreview;
   exportButton.onclick = async () => {
@@ -201,7 +208,7 @@ export function mountActorSides(
     }
   };
   return {
-    open() {
+    open(selection?: { role: string }) {
       if (dialog.open) return;
       clear();
       opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
@@ -211,7 +218,7 @@ export function mountActorSides(
         snapshot = { ...actions.current() };
         snapshotLabel.textContent = `${snapshot.name} · ${snapshot.paper === "a4" ? "A4" : "US Letter"}`;
         project = prepareActorSides(snapshot.source);
-        filter();
+        filter(selection?.role);
         if (!project.characters.length)
           status.textContent = "No characters with spoken dialogue were found in this snapshot.";
       } catch (error) {

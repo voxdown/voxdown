@@ -311,7 +311,7 @@ a {
   font-size: 10px;
 }
 .cm-activeLine {
-  background: #e8eee53b !important;
+  background-color: #e8eee53b !important;
 }
 .cm-line.f-scene {
   font-weight: 700;

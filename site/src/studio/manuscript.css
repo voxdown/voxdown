@@ -43,7 +43,7 @@
   color: var(--muted) !important;
 }
 #editor .cm-activeLine {
-  background: color-mix(in srgb, var(--accent) 4%, transparent) !important;
+  background-color: color-mix(in srgb, var(--accent) 4%, transparent) !important;
 }
 #editor .cm-line.f-scene,
 #editor .cm-line.f-title {

@@ -1,0 +1,56 @@
+:root {
+  --studio-comment-ink: #267249;
+  --studio-speech-wash: #eee5f8;
+  --studio-speech-lightness: 93%;
+}
+:root[data-theme="dark"] {
+  --studio-comment-ink: #8fd3aa;
+  --studio-speech-wash: #3a304b;
+  --studio-speech-lightness: 23%;
+}
+.cm-editor .cm-line.syntax-scene,
+.cm-editor .cm-line.syntax-section {
+  font-weight: 700;
+}
+.cm-editor .studio-comment,
+#editor .cm-line.syntax-note,
+#editor .cm-line.syntax-boneyard {
+  color: var(--studio-comment-ink);
+}
+.cm-editor .cm-line.studio-speech {
+  background-image: linear-gradient(var(--studio-speech-wash), var(--studio-speech-wash));
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  background-origin: border-box;
+}
+.cm-editor .cm-line.studio-speech.speech-margins {
+  background-size: 71% 100%;
+  background-position: 58.62% 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --studio-comment-ink: #8fd3aa;
+    --studio-speech-wash: #3a304b;
+    --studio-speech-lightness: 23%;
+  }
+}
+#editor .cm-line.f-character.studio-speech {
+  padding-right: 14% !important;
+}
+@media (max-width: 700px) {
+  .cm-editor .cm-line.studio-speech.speech-margins {
+    background-size: 86% 100%;
+    background-position: 57.14% 0;
+  }
+  #editor .cm-line.f-character.studio-speech {
+    padding-right: 8% !important;
+  }
+}
+
+:root[data-speech-colors="character"] .cm-line.studio-speech {
+  --studio-speech-wash: hsl(var(--studio-speaker-hue, 275) 48% var(--studio-speech-lightness));
+}
+:root[data-speech-colors="off"] .cm-line.studio-speech {
+  background-image: none;
+}

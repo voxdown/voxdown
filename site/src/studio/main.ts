@@ -10,21 +10,8 @@ import {
   undoDepth,
 } from "@codemirror/commands";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
-import {
-  Compartment,
-  EditorState,
-  type Extension,
-  StateEffect,
-  StateField,
-} from "@codemirror/state";
-import {
-  Decoration,
-  type DecorationSet,
-  EditorView,
-  highlightActiveLine,
-  keymap,
-  placeholder,
-} from "@codemirror/view";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { EditorView, highlightActiveLine, keymap, placeholder } from "@codemirror/view";
 import { mountAdaptation } from "./adaptation-dialog";
 import { mountStudioAppearance } from "./appearance";
 import { mountBackup } from "./backup";
@@ -33,9 +20,10 @@ import { mountCoach } from "./coach";
 import { mountCompareDialog } from "./compare-dialog";
 import { keepDialogFocusVisible } from "./dialog-layout";
 import { mountFileDrop } from "./drop-files";
+import { presentScreenplay, screenplayPresentation } from "./editor-presentation";
 import { mountFdxExport } from "./fdx-dialog";
 import { mountFdxImport } from "./fdx-import-dialog";
-import type { FountainDocument } from "./fountain";
+import { type FountainDocument, parseFountain } from "./fountain";
 import { mountStudioHelp } from "./help";
 import type { ScreenplayLayout } from "./layout";
 import { mountLearning } from "./learning-dialog";
@@ -48,6 +36,7 @@ import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } fro
 import { type NoticeLifetime, createNoticePresenter } from "./notice";
 import { mountNumberingDialog } from "./numbering-dialog";
 import { createStudioOffline } from "./offline";
+import { mountOutlineComments } from "./outline-comments";
 import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
 import { type StudioCommand, mountPalette } from "./palette";
 import { mountWorkspacePanels } from "./panels";
@@ -85,6 +74,9 @@ import "./manuscript.css";
 import "./help.css";
 import "./menus.css";
 import "./appearance.css";
+import "./editor-presentation.css";
+import "./outline-comments.css";
+import "./scraps.css";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const app = $("app");
@@ -127,16 +119,7 @@ const appearance = mountStudioAppearance({
 const scheduler = new ScreenplayScheduler(
   () => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
 );
-const marks = StateEffect.define<DecorationSet>();
-const markField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-  update(value, tr) {
-    let next = value.map(tr.changes);
-    for (const effect of tr.effects) if (effect.is(marks)) next = effect.value;
-    return next;
-  },
-  provide: (field) => EditorView.decorations.from(field),
-});
+const markField = screenplayPresentation(() => margins.checked);
 
 type Result = WorkerResult;
 let source = readSource("");
@@ -291,21 +274,55 @@ const recentDrafts = mountRecentDrafts(document.body, {
     // Read and validate before replacing any current work.
     readSource(draft.source);
     if (!(await mayReplace()) || !stillCurrent()) return false;
-    showSource(draft.source, draft.name);
+    showSource(draft.source, draft.name, draft.id);
     restorePosition(draft.id);
     return true;
   },
 });
-const referencePanel = mountReference(preview, () => {
-  if (preferences.focus) {
-    preferences.focus = false;
-    keepPreferences();
-  }
-  if (matchMedia("(max-width: 700px)").matches) app.classList.add("mobile-preview");
-  else app.classList.remove("no-preview");
-  rememberPreview();
-  updatePreviewToggle();
+const referencePanel = mountReference(
+  preview,
+  () => {
+    if (preferences.focus) {
+      preferences.focus = false;
+      keepPreferences();
+    }
+    if (matchMedia("(max-width: 700px)").matches) app.classList.add("mobile-preview");
+    else app.classList.remove("no-preview");
+    rememberPreview();
+    updatePreviewToggle();
+  },
+  {
+    current: () => ({ id: draftId, name: title() }),
+    getSelection: () => {
+      const { from, to } = view.state.selection.main;
+      return view.state.doc.sliceString(from, to);
+    },
+    insert: (value) => {
+      if (recovering || replacing || view.state.readOnly) return false;
+      const before = view.state.doc;
+      view.dispatch({
+        ...view.state.replaceSelection(value),
+        annotations: isolateHistory.of("full"),
+        userEvent: "input.paste",
+      });
+      if (view.state.doc === before) return false;
+      revealWriting();
+      view.focus();
+      return true;
+    },
+    changed: () => {
+      hasWork = true;
+      keptRevision = -1;
+      void persist();
+    },
+    download: (content, filename) => download(content, filename, "text/markdown;charset=utf-8"),
+  },
+);
+const outlineComments = mountOutlineComments({
+  current: () => ({ id: draftId, source: view.state.doc.toString() }),
+  jump: jumpToLine,
 });
+
 const previewSpace = mountPreviewSpace(
   {
     app,
@@ -613,6 +630,12 @@ function goToScene(): void {
   $("scene-search").focus();
 }
 const commands: StudioCommand[] = [
+  {
+    label: "Scraps",
+    category: "Writing space",
+    keywords: "shelf notes snippets offcuts",
+    run: () => referencePanel.openScraps(),
+  },
   {
     label: "Recent drafts",
     category: "Files and recovery",
@@ -1015,6 +1038,8 @@ function applyPreferences(): void {
     String(preferences.textSize / 16),
   );
   manuscriptNavigation.zoom(preferences.textSize);
+  document.documentElement.dataset.speechColors = preferences.speechColors;
+  $<HTMLSelectElement>("speech-colors").value = preferences.speechColors;
   app.classList.toggle("focus-writing", preferences.focus);
   $("focus-mode").setAttribute("aria-pressed", String(preferences.focus));
   $("mobile-focus").setAttribute("aria-pressed", String(preferences.focus));
@@ -1341,12 +1366,19 @@ async function persist(): Promise<boolean> {
   if (!hasWork) return true;
   const captured = revision;
   const id = draftId;
+  const scrapsKept = referencePanel.persistScraps();
   const draft: StudioDraft = { id, name: title(), source: text(), updated: Date.now() };
   try {
     await keepDraft(draft);
     if (draftId === id && revision === captured) {
       keptRevision = captured;
-      $("recovery").textContent = "Draft kept in this browser";
+      $("recovery").textContent = scrapsKept
+        ? "Draft kept in this browser"
+        : "Draft kept · scraps need exporting";
+      if (!scrapsKept)
+        notice(
+          "Your screenplay is kept, but its scraps could not be saved. Open Scraps and export them before closing this tab.",
+        );
       try {
         sessionStorage.setItem("studio-recovery-id", id);
       } catch {}
@@ -1375,7 +1407,7 @@ async function mayReplace(): Promise<boolean> {
   }
 }
 
-function showSource(value: string, fileName: string): void {
+function showSource(value: string, fileName: string, originalDraftId?: string): void {
   savePosition();
   pendingPosition = undefined;
   previewSpace.restore(false);
@@ -1394,6 +1426,7 @@ function showSource(value: string, fileName: string): void {
   updateFileControls();
   keptRevision = -1;
   name.value = fountainName(fileName);
+  referencePanel.refreshScraps(originalDraftId);
   // A new document starts a fresh undo history, so Undo never reveals another screenplay.
   view.setState(editingState(next.normalized));
   recovering = false;
@@ -1460,6 +1493,7 @@ function applyResult(result: Result): void {
     const scenes = document.elements.filter((element) => element.kind === "scene");
     $("scene-count").textContent = String(scenes.length);
     outlineItems = outlineOf(document);
+    outlineComments.update({ id: draftId, source: view.state.doc.toString() }, document);
     renderOutline();
     sceneContext.update(
       { id: draftId, source: view.state.doc.toString() },
@@ -1504,13 +1538,7 @@ function documentNode<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 function decorate(document: FountainDocument): void {
-  const ranges = margins.checked
-    ? document.elements.map((element) => {
-        const line = view.state.doc.line(Math.min(element.line, view.state.doc.lines));
-        return Decoration.line({ class: `f-${element.kind}` }).range(line.from);
-      })
-    : [];
-  view.dispatch({ effects: marks.of(Decoration.set(ranges, true)) });
+  view.dispatch({ effects: presentScreenplay.of(document) });
 }
 function jumpToLine(line: number): void {
   previewSpace.restore(false);
@@ -1546,9 +1574,13 @@ function renderOutline(): void {
       button.classList.toggle("section-link", item.kind === "section");
       button.addEventListener("click", () => jumpToLine(item.line));
       outlineButtons.set(item.line, button);
-      return button;
+      return outlineComments.row(item, button);
     }),
   );
+  if (!$<HTMLInputElement>("scene-search").value.trim()) {
+    const leading = outlineComments.leading();
+    if (leading) $("scene-list").prepend(leading);
+  }
   if (!found.total)
     $("scene-list").append(
       documentNode(
@@ -1689,10 +1721,15 @@ $("outline-toggle").addEventListener("click", () => {
     workspacePanels.setOutline(true);
   } else workspacePanels.toggleOutline();
 });
+$("speech-colors").addEventListener("change", () => {
+  const mode = $<HTMLSelectElement>("speech-colors").value;
+  preferences.speechColors = mode === "off" || mode === "uniform" ? mode : "character";
+  keepPreferences();
+});
 margins.addEventListener("change", () => {
   preferences.margins = margins.checked;
   keepPreferences();
-  if (latest?.document) decorate(latest.document);
+  decorate(parseFountain(view.state.doc.toString()));
 });
 paper.addEventListener("change", () => {
   preferences.paper = paper.value === "a4" ? "a4" : "letter";
@@ -1825,9 +1862,9 @@ $("example").addEventListener("click", async () => {
 const library = mountLibrary(document.body, {
   download,
   current: () => ({ name: title(), source: text(), draftId }),
-  replace: async (value, fileName) => {
+  replace: async (value, fileName, originalDraftId) => {
     if (!(await mayReplace())) return false;
-    showSource(value, fileName);
+    showSource(value, fileName, originalDraftId);
     return true;
   },
   notice,
@@ -1907,6 +1944,7 @@ async function start(): Promise<void> {
       name.value = recovered.name;
       positionDraftId = recovered.id;
       view.setState(editingState(source.normalized));
+      referencePanel.refreshScraps(recovered.id);
       restorePosition(recovered.id);
       hasWork = false;
       $("recovery").textContent = "Recovered draft · edits will be kept as a new copy";

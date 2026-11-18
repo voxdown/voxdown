@@ -16,8 +16,12 @@ function compile(name: string): string {
   const source = transpileModule(
     readFileSync(new URL(`../src/studio/${name}.ts`, import.meta.url), "utf8"),
     { compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.ES2022 } },
-  ).outputText.replace(/"\.\/([a-z-]+)"/g, (_, dependency: string) =>
-    JSON.stringify(compile(dependency)),
+  ).outputText.replace(/"(\.{1,2}\/[^".]+)"/g, (_, dependency: string) =>
+    JSON.stringify(
+      compile(
+        name.includes("/") ? `${name.slice(0, name.lastIndexOf("/"))}/${dependency}` : dependency,
+      ),
+    ),
   );
   const result = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
   modules.set(name, result);

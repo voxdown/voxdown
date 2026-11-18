@@ -64,6 +64,7 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
           { command: "Typewriter scrolling" },
           { command: "Page guides" },
           { command: "Open text reference beside screenplay", label: "Text reference…" },
+          { command: "Scraps" },
         ],
         [
           { id: "preferences", label: "Preferences…" },

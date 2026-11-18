@@ -1,0 +1,58 @@
+#scene-list {
+  align-content: start;
+}
+/* Private writing notes borrow the manuscript's green ink; the outline keeps its
+   existing compact scene rhythm instead of introducing another card treatment. */
+.outline-comment-heading {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: stretch;
+}
+#scene-list .outline-comment-toggle {
+  padding: 2px;
+  border: 0;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+  min-width: 0;
+}
+.outline-comment-heading > button[data-line] {
+  width: 100%;
+  min-width: 0;
+}
+.outline-comment-list {
+  margin: 2px 0 8px 11px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  display: grid;
+  gap: 2px;
+}
+.outline-comment-list[hidden] {
+  display: none;
+}
+#scene-list .outline-comment-link {
+  padding: 5px 7px;
+  border: 0;
+  color: var(--studio-comment-ink, #237243);
+  font-style: italic;
+  white-space: pre-wrap;
+}
+#scene-list .outline-comment-more {
+  padding: 5px 7px;
+  border: 0;
+  color: var(--muted);
+}
+.outline-comment-leading {
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+[data-theme="dark"] #scene-list .outline-comment-link {
+  color: var(--studio-comment-ink, #8bd6a3);
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] #scene-list .outline-comment-link {
+    color: var(--studio-comment-ink, #8bd6a3);
+  }
+}

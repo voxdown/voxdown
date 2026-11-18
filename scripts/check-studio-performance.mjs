@@ -277,9 +277,19 @@ try {
   assert.equal(await save(), source, "Opening/dismissing completion must not edit source");
   await ready();
   report.dom.editorLines = await page.locator(".cm-line").count();
-  report.dom.outlineButtons = await page.locator("#scene-list button").count();
+  report.dom.outlineButtons = await page.locator("#scene-list button[data-line]").count();
   assert.ok(report.dom.editorLines < 250, "CodeMirror must render a bounded viewport");
   assert.equal(report.dom.outlineButtons, 500, "Outline should cap rendering at 500 matches");
+  report.dom.commentDisclosures = await page.locator(".outline-comment-toggle").count();
+  assert.ok(
+    report.dom.commentDisclosures <= 501,
+    "Comment disclosures must follow the bounded outline",
+  );
+  assert.equal(
+    await page.locator(".outline-comment-link").count(),
+    0,
+    "Collapsed comments must render lazily",
+  );
   await clickWorkspaceAction(page, "workbench");
   await page.getByLabel("Workbench view", { exact: true }).selectOption("characters");
   report.dom.characterRows = await page.locator(".workbench-content > details").count();

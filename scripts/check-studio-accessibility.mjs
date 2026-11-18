@@ -194,6 +194,18 @@ try {
   await page.getByRole("searchbox", { name: "Find a command" }).fill("Open text reference");
   await page.keyboard.press("Enter");
   await audit("read-only text reference");
+  await page.getByRole("tab", { name: "Scraps", exact: true }).click();
+  await page.getByLabel("New scrap", { exact: true }).fill("An alternate line for later.");
+  await page.getByRole("button", { name: "Add scrap", exact: true }).click();
+  await page.locator(".outline-comment-toggle").first().click();
+  await audit("scraps and expanded outline comments, light");
+  await clickWorkspaceAction(page, "preferences");
+  await page.locator("#theme").selectOption("night");
+  await page.keyboard.press("Escape");
+  await audit("scraps and expanded outline comments, dark");
+  await clickWorkspaceAction(page, "preferences");
+  await page.locator("#theme").selectOption("paper");
+  await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "Page preview", exact: true }).click();
   await audit("populated screenplay, light appearance");
   await clickWorkspaceAction(page, "preferences");

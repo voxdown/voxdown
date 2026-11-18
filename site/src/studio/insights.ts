@@ -77,7 +77,7 @@ function plainText(text: string): string {
     .join("");
 }
 
-function characterName(cue: string): string {
+export function characterName(cue: string): string {
   // Extensions are performance directions, not separate cast members.
   let end = cue.length;
   while (end > 0 && /\s/u.test(cue.charAt(end - 1))) end--;

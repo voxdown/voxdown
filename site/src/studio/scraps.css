@@ -1,0 +1,109 @@
+/* The Writer's shelf of saved passages, using Studio's shared paper and chrome. */
+#preview .studio-scraps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#preview .studio-scraps[hidden] {
+  display: none;
+}
+.studio-scraps-composer,
+.studio-scrap-editor {
+  display: grid;
+  gap: 8px;
+}
+#preview .studio-scraps textarea,
+#preview .studio-scraps input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 8px;
+  font: inherit;
+  line-height: 1.5;
+}
+#preview .studio-scraps textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+.studio-scraps-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+#preview .studio-scraps-actions button {
+  min-height: 30px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.studio-scraps-list,
+.studio-scraps-deleted ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.studio-scrap {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.studio-scrap:first-child {
+  padding-top: 0;
+}
+.studio-scrap-text {
+  font-family: "Courier Prime", "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 14rem;
+  overflow: auto;
+  margin-bottom: 10px;
+}
+#preview .studio-scrap-note {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+  font-style: italic;
+}
+#preview .studio-scraps-status,
+#preview .studio-scraps-hint,
+#preview .studio-scraps-empty {
+  margin: 0;
+  color: color-mix(in srgb, var(--muted) 85%, var(--ink));
+  font-size: 12px;
+  line-height: 1.6;
+}
+.studio-scraps-status:empty {
+  display: none;
+}
+.studio-scraps-files {
+  padding-top: 8px;
+}
+.studio-scraps-deleted summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--muted) 85%, var(--ink));
+}
+.studio-scraps-deleted li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.studio-scraps-deleted p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  #preview .studio-scraps-actions button,
+  #preview .studio-scraps input {
+    min-height: 44px;
+  }
+}

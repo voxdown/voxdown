@@ -19,7 +19,7 @@ import {
 type LibraryCallbacks = {
   current(): { name: string; source: string; draftId: string };
   /** Replace with a new draft id, after preserving/confirming the current document. */
-  replace(source: string, name: string): Promise<boolean>;
+  replace(source: string, name: string, originalDraftId?: string): Promise<boolean>;
   notice(message: string): void;
   download(content: string, filename: string, type: string): void;
 };
@@ -441,7 +441,13 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
       }
       closeDialog();
       closedForReplacement = true;
-      if (await callbacks.replace(value.source, value.name))
+      if (
+        await callbacks.replace(
+          value.source,
+          value.name,
+          "draftId" in value ? value.draftId : value.id,
+        )
+      )
         callbacks.notice("Opened saved work as a new draft. The saved version is unchanged.");
       else reopen = true;
     } catch (error) {

@@ -1,7 +1,12 @@
+import { type StudioScrapsActions, mountStudioScraps } from "./scraps-panel";
 import { MAX_SOURCE, readSource } from "./source";
 
 /** A session-only, literal text reference beside the authoritative screenplay. */
-export function mountReference(host: HTMLElement, reveal: () => void) {
+export function mountReference(
+  host: HTMLElement,
+  reveal: () => void,
+  scrapsActions?: StudioScrapsActions,
+) {
   function node<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) {
     const element = document.createElement(tag);
     if (text) element.textContent = text;
@@ -25,15 +30,23 @@ export function mountReference(host: HTMLElement, reveal: () => void) {
   tabs.setAttribute("aria-label", "Beside your screenplay");
   const pageTab = node("button", "Page preview");
   const referenceTab = node("button", "Text reference");
-  for (const [tab, panel, id] of [
+  const scrapsTab = node("button", "Scraps");
+  const scrapsPanel = node("div");
+  scrapsPanel.id = "studio-scraps-panel";
+  scrapsPanel.className = "studio-side-panel";
+  scrapsPanel.setAttribute("role", "tabpanel");
+  scrapsPanel.setAttribute("aria-labelledby", "studio-scraps-tab");
+  const tabPanels = [
     [pageTab, pagePanel, "studio-page-tab"],
     [referenceTab, reference, "studio-reference-tab"],
-  ] as const) {
+    ...(scrapsActions ? [[scrapsTab, scrapsPanel, "studio-scraps-tab"] as const] : []),
+  ] as const;
+  for (const [tab, panel, id] of tabPanels) {
     tab.type = "button";
     tab.id = id;
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-controls", panel.id);
-    tab.onclick = () => select(tab === referenceTab);
+    tab.onclick = () => select(tab);
     tabs.append(tab);
   }
   const controls = node("div");
@@ -66,29 +79,53 @@ export function mountReference(host: HTMLElement, reveal: () => void) {
   hint.className = "reference-hint";
   reference.append(controls, name, status, content, hint, file);
   host.append(tabs, pagePanel, reference);
+  if (scrapsActions) host.append(scrapsPanel);
+  const scraps = scrapsActions ? mountStudioScraps(scrapsPanel, scrapsActions) : undefined;
   let generation = 0;
-  function select(isReference: boolean) {
-    pagePanel.hidden = isReference;
-    reference.hidden = !isReference;
-    pageTab.setAttribute("aria-selected", String(!isReference));
-    referenceTab.setAttribute("aria-selected", String(isReference));
-    pageTab.tabIndex = isReference ? -1 : 0;
-    referenceTab.tabIndex = isReference ? 0 : -1;
+  function select(selected: HTMLButtonElement) {
+    for (const [tab, panel] of tabPanels) {
+      panel.hidden = tab !== selected;
+      tab.setAttribute("aria-selected", String(tab === selected));
+      tab.tabIndex = tab === selected ? 0 : -1;
+    }
+    if (selected === scrapsTab) scraps?.refresh();
     if (heading) {
       const title = heading.querySelector("h2");
       const caption = heading.querySelector("span");
-      if (title) title.textContent = isReference ? "Beside your screenplay" : "On the page";
+      if (title)
+        title.textContent =
+          selected === pageTab
+            ? "On the page"
+            : selected === scrapsTab
+              ? "Scraps"
+              : "Beside your screenplay";
       if (caption)
-        caption.textContent = isReference ? "Read only · this tab" : "Same layout as PDF";
+        caption.textContent =
+          selected === pageTab
+            ? "Same layout as PDF"
+            : selected === scrapsTab
+              ? "Set aside for later"
+              : "Read only · this tab";
     }
   }
   tabs.addEventListener("keydown", (event) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
-    const isReference =
-      event.key === "End" || (event.key !== "Home" && document.activeElement === pageTab);
-    select(isReference);
-    (isReference ? referenceTab : pageTab).focus();
+    const active = Math.max(
+      0,
+      tabPanels.findIndex(([tab]) => tab === document.activeElement),
+    );
+    const index =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? tabPanels.length - 1
+          : (active + (event.key === "ArrowRight" ? 1 : -1) + tabPanels.length) % tabPanels.length;
+    const target = tabPanels[index]?.[0];
+    if (target) {
+      select(target);
+      target.focus();
+    }
   });
   open.onclick = () => file.click();
   clear.onclick = () => {
@@ -134,18 +171,30 @@ export function mountReference(host: HTMLElement, reveal: () => void) {
             : "Could not open this reference. Choose a UTF-8 text file.";
     }
   };
-  select(false);
+  select(pageTab);
   return {
     open() {
       reveal();
-      select(true);
+      select(referenceTab);
       open.focus();
     },
     showPage() {
-      select(false);
+      select(pageTab);
     },
     isReference() {
       return !reference.hidden;
+    },
+    openScraps() {
+      if (!scraps) return;
+      reveal();
+      select(scrapsTab);
+      scraps.focus();
+    },
+    refreshScraps(copyFromId?: string) {
+      scraps?.refresh(copyFromId);
+    },
+    persistScraps() {
+      return scraps?.persist() ?? true;
     },
   };
 }

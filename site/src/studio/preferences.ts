@@ -9,6 +9,7 @@ export type StudioPreferences = {
   screenplayKeys: boolean;
   toolbar: boolean;
   margins: boolean;
+  speechColors: "character" | "uniform" | "off";
   paper: "letter" | "a4";
   outline: boolean;
   preview: boolean;
@@ -22,6 +23,7 @@ export const defaultPreferences: StudioPreferences = {
   screenplayKeys: false,
   toolbar: true,
   margins: true,
+  speechColors: "character",
   paper: "letter",
   outline: true,
   preview: false,
@@ -39,6 +41,10 @@ export function parsePreferences(value: unknown): StudioPreferences {
     screenplayKeys: data.screenplayKeys === true,
     toolbar: data.toolbar !== false,
     margins: data.margins !== false,
+    speechColors:
+      data.speechColors === "off" || data.speechColors === "uniform"
+        ? data.speechColors
+        : "character",
     paper: data.paper === "a4" ? "a4" : "letter",
     outline: data.outline !== false,
     preview: data.preview === true,

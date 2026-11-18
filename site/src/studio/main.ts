@@ -1,5 +1,14 @@
 import { autocompletion, startCompletion } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap, isolateHistory } from "@codemirror/commands";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  isolateHistory,
+  redo,
+  redoDepth,
+  undo,
+  undoDepth,
+} from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
 import {
   Compartment,
@@ -65,6 +74,7 @@ import "./palette.css";
 import "./panels.css";
 import "./shell.css";
 import "./dialog-layout.css";
+import "./manuscript.css";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const app = $("app");
@@ -118,6 +128,7 @@ let activeOutline: HTMLButtonElement | undefined;
 const outlineButtons = new Map<number, HTMLButtonElement>();
 let parseGeneration = 0;
 let previewPage = 0;
+let layoutNoteMessages: string[] = [];
 let saving: ReturnType<typeof setTimeout> | undefined;
 let parsing: ReturnType<typeof setTimeout> | undefined;
 let recovering = true;
@@ -174,6 +185,8 @@ const editorExtensions: Extension = [
     ...searchKeymap,
   ]),
   EditorView.updateListener.of((update) => {
+    $<HTMLButtonElement>("undo").disabled = undoDepth(update.state) === 0;
+    $<HTMLButtonElement>("redo").disabled = redoDepth(update.state) === 0;
     if (update.docChanged && !recovering) {
       notices.sourceEdited();
       revision++;
@@ -434,11 +447,21 @@ const storageHealth = mountStorageHealth(document.body, {
   backup: () => backup.open(),
   recover: () => library.open(),
 });
-for (const id of ["preferences-dialog", "guide"]) {
+for (const id of ["preferences-dialog", "guide", "layout-notes-dialog"]) {
   const dialog = $<HTMLDialogElement>(id);
   const header = dialog.querySelector<HTMLElement>(".dialog-heading");
   if (header) keepDialogFocusVisible(dialog, header);
 }
+function renderLayoutNotes(): void {
+  $("layout-notes-list").replaceChildren(
+    ...layoutNoteMessages.map((message) => documentNode("li", message)),
+  );
+}
+function showLayoutNotes(): void {
+  renderLayoutNotes();
+  $<HTMLDialogElement>("layout-notes-dialog").showModal();
+}
+$("layout-notes").addEventListener("click", showLayoutNotes);
 $("storage-health").addEventListener("click", () => {
   $<HTMLDialogElement>("preferences-dialog").close();
   $("commands").focus();
@@ -458,6 +481,40 @@ const offline = createStudioOffline((status) => {
 });
 $("offline-prepare").addEventListener("click", () => void offline.prepare());
 const commands: StudioCommand[] = [
+  {
+    label: "Review layout notes",
+    category: "Export and perform",
+    keywords: "print warnings title metadata wrapping",
+    enabled: () => !$("layout-notes").hidden,
+    run: showLayoutNotes,
+  },
+  {
+    label: "Undo",
+    category: "Write and edit",
+    shortcut: "Mod Z",
+    run: () => {
+      undo(view);
+      view.focus();
+    },
+    enabled: () => undoDepth(view.state) > 0,
+  },
+  {
+    label: "Redo",
+    category: "Write and edit",
+    shortcut: "Mod Shift Z",
+    run: () => {
+      redo(view);
+      view.focus();
+    },
+    enabled: () => redoDepth(view.state) > 0,
+  },
+  ...(["bold", "italic", "underline", "note"] as const).map((mark) => ({
+    label: mark === "note" ? "Private note" : `${mark[0]?.toUpperCase()}${mark.slice(1)}`,
+    category: "Write and edit",
+    run: () => {
+      format(mark);
+    },
+  })),
   {
     label: "Toggle scene outline",
     category: "Writing space",
@@ -570,7 +627,7 @@ const commands: StudioCommand[] = [
     keywords: "write local",
     shortcut: "Ctrl/⌘ S",
     run: () => void saveToFile(),
-    enabled: () => localFile.available && !localFile.busy,
+    enabled: () => !localFile.busy,
   },
   {
     label: "Save Fountain as…",
@@ -901,6 +958,9 @@ function downloadSource(): void {
   );
 }
 function updateFileControls(): void {
+  const primary = $<HTMLButtonElement>("save-primary");
+  primary.disabled = localFile.busy;
+  primary.textContent = localFile.busy ? "Saving…" : "Save";
   const button = $<HTMLButtonElement>("save-file");
   button.hidden = !localFile.available;
   button.disabled = localFile.busy;
@@ -951,6 +1011,15 @@ async function saveToFile(saveAs = false): Promise<void> {
   updateFileControls();
 }
 $("save-file").addEventListener("click", () => void saveToFile());
+$("save-primary").addEventListener("click", () => void saveToFile());
+$("undo").addEventListener("click", () => {
+  undo(view);
+  view.focus();
+});
+$("redo").addEventListener("click", () => {
+  redo(view);
+  view.focus();
+});
 async function persist(): Promise<boolean> {
   if (!hasWork) return true;
   const captured = revision;
@@ -1069,11 +1138,18 @@ function applyResult(result: Result): void {
   }
   const messages = [
     ...(document?.warnings.map((w) => `Line ${w.line}: ${w.message}`) ?? []),
-    ...(result.layout?.warnings ?? []),
     ...(result.error ? [result.error] : []),
   ];
   $("issues").textContent = [...new Set(messages)].join(" ");
   $("issues").hidden = !messages.length;
+  const layoutNotes = [...new Set(result.layout?.warnings ?? [])].filter(
+    (message) => !messages.includes(message),
+  );
+  $("layout-notes").hidden = !layoutNotes.length;
+  $("layout-notes").textContent =
+    `${layoutNotes.length} layout ${layoutNotes.length === 1 ? "note" : "notes"}`;
+  layoutNoteMessages = layoutNotes;
+  if ($<HTMLDialogElement>("layout-notes-dialog").open) renderLayoutNotes();
   pdfButton.disabled =
     exporting || !result.layout || Boolean(result.error) || Boolean(document?.warnings.length);
   renderPage();
@@ -1220,7 +1296,9 @@ function updatePreviewToggle(): void {
     (mobile ? app.classList.contains("mobile-preview") : !app.classList.contains("no-preview"));
   preview.hidden = !shown;
   $("preview-toggle").setAttribute("aria-pressed", String(shown));
-  $("preview-toggle").textContent = mobile ? (shown ? "Writing" : "Preview") : "Preview";
+  const previewLabel = mobile && shown ? "Return to writing" : "Page preview";
+  $("preview-toggle").setAttribute("aria-label", previewLabel);
+  $("preview-toggle").title = previewLabel;
 }
 $("preview-toggle").addEventListener("click", () => {
   previewSpace.restore(false);
@@ -1360,6 +1438,7 @@ pdfButton.addEventListener("click", async () => {
   const fileName = title().replace(/\.fountain$/i, ".pdf");
   exporting = true;
   pdfButton.disabled = true;
+  const buttonContents = [...pdfButton.childNodes];
   pdfButton.textContent = "Making PDF…";
   try {
     if (result.document) assertUnambiguousOmissions(view.state.doc.toString(), result.document);
@@ -1378,11 +1457,7 @@ pdfButton.addEventListener("click", async () => {
     );
   } finally {
     exporting = false;
-    const fullLabel = documentNode("span", "Export PDF");
-    fullLabel.className = "desktop-label";
-    const smallLabel = documentNode("span", "PDF");
-    smallLabel.className = "mobile-label";
-    pdfButton.replaceChildren(fullLabel, smallLabel);
+    pdfButton.replaceChildren(...buttonContents);
     pdfButton.disabled = !latest?.layout || Boolean(latest?.document?.warnings.length);
   }
 });

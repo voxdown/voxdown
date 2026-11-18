@@ -110,10 +110,17 @@ try {
     name: "Accessibility.fountain",
     mimeType: "text/plain",
     buffer: Buffer.from(
-      "INT. LIGHTHOUSE - NIGHT\n\nA light moves.\n\nMARA\nSomeone is here.\n\n[[Private reminder]]\n\n# Act two\n\nEXT. BEACH - DAY\n\nWaves break.",
+      "Title: Accessibility screenplay\nNotes: Private title-page context.\n\nINT. LIGHTHOUSE - NIGHT\n\nA light moves.\n\nMARA\nSomeone is here.\n\n[[Private reminder]]\n\n# Act two\n\nEXT. BEACH - DAY\n\nWaves break.",
     ),
   });
   await ready();
+  await page.locator("#layout-notes").click();
+  await audit("layout notes");
+  await page.keyboard.press("Escape");
+  record(
+    await page.locator("#layout-notes").evaluate((node) => node === document.activeElement),
+    "Layout notes does not restore focus to its status action",
+  );
   await page.locator("#line-help").click();
   await audit("contextual Fountain help");
   await page.keyboard.press("Escape");
@@ -255,6 +262,13 @@ try {
       `320px preferences overflow in ${appearance}`,
     );
     await page.keyboard.press("Escape");
+    await page.locator("#layout-notes").click();
+    await audit(`320px layout notes, ${appearance}`);
+    record(
+      await page.locator("#layout-notes-dialog").evaluate((d) => d.scrollWidth <= d.clientWidth),
+      `320px layout notes overflow in ${appearance}`,
+    );
+    await page.keyboard.press("Escape");
     for (const command of [
       "Number scenes",
       "Scene and cast breakdown",
@@ -330,6 +344,16 @@ try {
     await page.locator("#editor").evaluate((node) => node.getBoundingClientRect().height >= 120),
     "Focus writing does not provide additional visible editing space",
   );
+  await page.locator("#commands").click();
+  await page.getByRole("searchbox", { name: "Find a command" }).fill("Review layout notes");
+  await page.keyboard.press("Enter");
+  record(
+    await page.locator("#layout-notes-dialog").isVisible(),
+    "Layout notes are unavailable from Commands in short-screen Focus writing",
+  );
+  await audit("short-screen Focus layout notes");
+  await page.keyboard.press("Escape");
+  record(await exitFocus.isVisible(), "Closing layout notes exits Focus writing");
   await exitFocus.click();
   await page.locator("#view-menu").click();
   await page.getByRole("button", { name: "Preview panel", exact: true }).click();

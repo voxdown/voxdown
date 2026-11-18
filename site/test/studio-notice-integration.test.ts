@@ -64,7 +64,7 @@ async function downloadSource() {
 describe("integrated success notice lifetime", () => {
   it("clears download feedback on accepted typing, retaining it across caret and preference changes", async () => {
     await start();
-    await page.locator("#mobile-focus").click();
+    await command("Focus writing");
     expect(await downloadSource()).toBe("!Alpha beta");
     expect(await page.locator("#notice").textContent()).toContain("Fountain download started");
     await page.locator(".cm-content").focus();
@@ -84,7 +84,7 @@ describe("integrated success notice lifetime", () => {
 
   it("rejects an oversized edit without losing the source-limit warning on the next accepted edit", async () => {
     await start("!Keep this.");
-    await page.locator("#mobile-focus").click();
+    await command("Focus writing");
     await downloadSource();
     await page.locator(".cm-content").focus();
     await page.keyboard.press("Control+a");
@@ -100,7 +100,7 @@ describe("integrated success notice lifetime", () => {
 
   it("shows the fresh tool result after its own edit, then clears it on a later edit", async () => {
     await start("INT. ROOM\n\nMARA\nHello.\n");
-    await page.locator("#mobile-focus").click();
+    await command("Focus writing");
     await command("Rename a character");
     const dialog = page.getByRole("dialog", { name: "Rename a character", exact: true });
     await dialog.getByLabel("Character", { exact: true }).selectOption("MARA");
@@ -127,7 +127,7 @@ describe("integrated success notice lifetime", () => {
     await page.goto(`${origin}/studio/`);
     await page.waitForFunction(() => !document.querySelector<HTMLElement>("#app")?.inert);
     await page.locator("#retry-preview").waitFor();
-    await page.locator("#mobile-focus").click();
+    await command("Focus writing");
     expect(await page.locator("#notice").textContent()).toContain("worker");
     await page.locator(".cm-content").focus();
     await page.keyboard.insertText("INT. ROOM\n\n!Still writing.");

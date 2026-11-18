@@ -116,7 +116,11 @@ describe("mobile File menu integration", () => {
     await start();
     await openFiles();
     await page.keyboard.press("Escape");
-    await page.locator("#mobile-focus").click();
+    await page.locator("#view-menu").click();
+    await page
+      .locator("#view-dropdown")
+      .getByRole("button", { name: "Focus writing", exact: true })
+      .click();
     expect(await page.locator("#file-menu").isVisible()).toBe(false);
     await page.locator("#commands").click();
     const commands = page.getByRole("dialog", { name: "Commands", exact: true });

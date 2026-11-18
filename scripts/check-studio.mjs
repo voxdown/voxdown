@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, resolve } from "node:path";
 import { chromium, firefox, webkit } from "playwright";
-import { clickWorkspaceAction, openPreferences, selectPaper } from "./studio-ui.mjs";
+import { clickWorkspaceAction, ensurePreview, openPreferences, selectPaper } from "./studio-ui.mjs";
 
 const { PDFDocument } = createRequire(resolve("site/package.json"))("pdf-lib");
 
@@ -83,7 +83,7 @@ const save = async (p) => {
     await new Promise((done) => setTimeout(done, Math.max(0, 1100 - (Date.now() - recent[0]))));
   const event = p.waitForEvent("download");
   void event.catch(() => {});
-  await p.locator("#download").click();
+  await clickWorkspaceAction(p, "download");
   return readFileSync(await (await event).path(), "utf8");
 };
 try {
@@ -169,8 +169,16 @@ try {
   assert.equal(await save(page), "@");
   await content.focus();
   await page.keyboard.press("Escape");
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(await content.evaluate((node) => node === document.activeElement), false);
+  // Provide a next in-page target for forward traversal. In headless Firefox,
+  // Tab from the last target leaves activeElement unchanged; no DOM focus event fires.
+  await ensurePreview(page);
+  await content.focus();
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Tab");
   assert.equal(await content.evaluate((node) => node === document.activeElement), false);
+  assert.equal(await save(page), "@");
   await open(page, "INT. ROOM\n\nAction.\n\n===\n\nEXT. PARK\n\nRain.", "Page-guides.fountain");
   assert.equal(await page.locator(".studio-page-guides span[title]").count(), 2);
   await openPreferences(page);
@@ -403,6 +411,7 @@ try {
   await ready(page);
   const imported = await save(page);
   assert(imported.includes("MARA"));
+  await ensurePreview(page);
   assert.match(await page.locator("#page").innerText(), /Stay\./);
   assert(!imported.includes("private Stay."));
   await open(page, reviseSource, "Revisions-after-import.fountain");
@@ -825,7 +834,7 @@ try {
   let lossyDownloads = 0;
   const countLossy = () => lossyDownloads++;
   degraded.on("download", countLossy);
-  await degraded.locator("#download").click();
+  await clickWorkspaceAction(degraded, "download");
   assert.match(await degraded.locator("#notice").textContent(), /incomplete Unicode character/);
   const cancelLoss = degraded.waitForEvent("dialog").then((dialog) => dialog.dismiss());
   await clickWorkspaceAction(degraded, "new");
@@ -868,6 +877,7 @@ try {
   // Allow the intentionally delayed old worker reply to arrive.
   await stale.waitForTimeout(1000);
   assert.match(await stale.locator("#scene-list").innerText(), /CURRENT/);
+  await ensurePreview(stale);
   assert.doesNotMatch(await stale.locator("#page").innerText(), /STALE/);
   console.log("Studio: delayed stale worker results cannot replace the current preview: passed");
 

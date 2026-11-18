@@ -10,52 +10,61 @@
   <title>VoxDown Studio — Screenplay workspace</title>
   <link rel="icon" href="../icon.svg" type="image/svg+xml">
 </head>
-<body>
+<body class="studio">
   <a class="skip" href="#editor">Skip to screenplay</a>
   <header class="app-header">
     <h1 class="sr-only">VoxDown Studio screenplay editor</h1>
-    <a class="brand" href="../writer/" title="Open VoxDown Writer">VoxDown <span>Studio</span></a>
-    <span class="badge">Experimental</span>
+    <a class="brand" href="../writer/" title="Open VoxDown Writer"><img src="../icon.svg" width="24" height="24" alt=""><span class="word">VoxDown <em>Studio</em></span></a>
     <nav class="workspace-menus" aria-label="Studio menus">
       <button id="file-menu" type="button" aria-expanded="false" aria-controls="file-dropdown">File</button>
+      <button id="edit-menu" type="button" aria-expanded="false" aria-controls="edit-dropdown">Edit</button>
       <button id="view-menu" type="button" aria-expanded="false" aria-controls="view-dropdown">View</button>
       <button id="tools-menu" type="button" aria-expanded="false" aria-controls="tools-dropdown">Tools</button>
       <button id="help-menu" type="button" aria-expanded="false" aria-controls="help-dropdown">Help</button>
     </nav>
-    <span class="private">Saved on this device</span>
-    <button id="commands" type="button" title="Commands (Ctrl/⌘ K)">Commands</button>
+    <div class="filebar">
+      <label class="filename"><span class="sr-only">File name</span><input id="name" value="Untitled.fountain" maxlength="180" spellcheck="false" autocomplete="off" aria-label="File name"></label>
+    </div>
+    <button id="save-primary" class="primary" type="button" title="Save Fountain (Ctrl/⌘ S)">Save</button>
+    <div class="panel-toggles" role="group" aria-label="Panels">
+      <button id="outline-toggle" type="button" aria-label="Scenes" title="Scenes" aria-expanded="false" aria-controls="outline"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg></button>
+      <button id="preview-toggle" type="button" aria-label="Page preview" title="Page preview" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M10 2.5v11"/></svg></button>
+    </div>
     <button id="mobile-focus" type="button" aria-pressed="false" aria-controls="editor" aria-label="Focus writing">Focus</button>
     <button id="workbench" type="button">Workbench</button>
     <button id="preferences" type="button">Preferences</button>
-    <button id="help" type="button" aria-label="Fountain guide"><span class="help-long">Fountain guide</span><span class="help-short">Guide</span> <span aria-hidden="true">?</span></button>
+    <button id="help" type="button" aria-label="Fountain guide">Fountain guide</button>
   </header>
-  <main id="app" aria-label="Screenplay workspace">
+  <main id="app" class="no-preview" aria-label="Screenplay workspace">
     <div class="documentbar">
-    <div class="filebar">
-      <label class="filename"><span class="sr-only">File name</span><input id="name" value="Untitled.fountain" maxlength="180" spellcheck="false" aria-label="File name"></label>
-      <div class="file-actions">
-        <button id="new" type="button">New</button>
-        <button id="open" type="button">Open…</button>
-        <button id="recent" type="button">Recover…</button>
-        <button id="save-file" type="button" title="Save Fountain to a chosen file (Ctrl or Command + S)" hidden>Save to file…</button>
-        <button id="download" type="button" title="Download an independent Fountain copy" aria-label="Download Fountain"><span class="desktop-label">Download Fountain</span><span class="mobile-label">Download</span></button>
-        <button id="pdf" class="primary" type="button" aria-label="Export PDF" disabled><span class="desktop-label">Export PDF</span><span class="mobile-label">PDF</span></button>
+      <div class="toolbar" aria-label="Writing tools">
+        <div class="history-tools tool-group" role="group" aria-label="History">
+          <button id="undo" type="button" disabled aria-label="Undo" title="Undo (Ctrl/⌘ Z)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 2.5 7 6 10.5M2.5 7h7a3.5 3.5 0 0 1 0 7H8"/></svg></button>
+          <button id="redo" type="button" disabled aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 13.5 7 10 10.5M13.5 7h-7a3.5 3.5 0 0 0 0 7H8"/></svg></button>
+        </div>
+        <div class="writing-tools tool-group" role="group" aria-label="Text formatting">
+          <button type="button" data-writing-mark="italic" aria-label="Italic" title="Italic (Ctrl/⌘ I)"><em>I</em></button>
+          <button type="button" data-writing-mark="bold" aria-label="Bold" title="Bold (Ctrl/⌘ B)"><strong>B</strong></button>
+          <button type="button" data-writing-mark="underline" aria-label="Underline" title="Underline (Ctrl/⌘ U)"><u>U</u></button>
+        </div>
+        <div class="element-tools tool-group">
+          <label class="sr-only" for="element-action">Change current line element</label>
+          <select id="element-action" title="Change the current source line without retyping its words"><option value="">Element…</option><option value="scene">Scene heading</option><option value="action">Action</option><option value="character">Character</option><option value="parenthetical">Parenthetical</option><option value="transition">Transition</option></select>
+          <button type="button" data-writing-mark="note" aria-label="Note" title="Private note (Ctrl/⌘ Shift M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v6l-4 4h-7zM9.5 13.5v-4h4M5 6.5h6M5 9h3"/></svg><span>Note</span></button>
+          <button id="line-help" type="button" aria-label="Line help" title="Explain the Fountain element at the caret"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M6.2 5.9a1.8 1.8 0 1 1 3.3 1C8.5 7.5 8 8 8 9M8 11v.2"/></svg><span>Line help</span></button>
+        </div>
+        <div class="workspace-tools tool-group">
+          <button id="focus-mode" type="button" aria-pressed="false">Focus</button>
+          <button id="commands" type="button" aria-label="Commands" title="Commands (Ctrl/⌘ K)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span>Commands</span></button>
+        </div>
+        <button id="pdf" type="button" aria-label="Export PDF" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2m-3 3 3-3 3 3M3 9v5h10V9"/></svg><span class="desktop-label">Export PDF</span><span class="mobile-label">PDF</span></button>
+        <button id="retry-preview" type="button" hidden>Retry preview</button>
       </div>
     </div>
-    <div class="toolbar">
-      <button id="outline-toggle" type="button" aria-expanded="false" aria-controls="outline">Scenes</button>
-
-      <label class="sr-only" for="element-action">Change current line element</label>
-      <select id="element-action" title="Change the current source line without retyping its words">
-        <option value="">Element…</option><option value="scene">Scene heading</option>
-        <option value="action">Action</option><option value="character">Character</option>
-        <option value="parenthetical">Parenthetical</option><option value="transition">Transition</option>
-      </select>
-      <button id="preview-toggle" type="button" aria-pressed="true">Page preview</button>
-      <button id="focus-mode" type="button" aria-pressed="false">Focus</button>
-      <button id="retry-preview" type="button" hidden>Retry preview</button>
-      <span id="counts" class="counts">Ready to write</span>
-    </div>
+    <div class="file-actions" hidden>
+      <button id="new" type="button">New</button><button id="open" type="button">Open…</button><button id="recent" type="button">Recover…</button>
+      <button id="save-file" type="button" hidden>Save to file…</button>
+      <button id="download" type="button" aria-label="Download Fountain">Download Fountain</button>
     </div>
     <div id="issues" tabindex="0" aria-label="Screenplay warnings" role="status" aria-live="polite" hidden></div>
     <div id="notice" tabindex="0" aria-label="Studio notification" role="status" aria-live="polite" hidden></div>
@@ -70,13 +79,6 @@
         <a class="writer-link" href="../writer/">Writing a VoxDown story? Open Writer ↗</a>
       </aside>
       <section id="writing" class="writing" aria-label="Fountain editor">
-        <div class="panel-heading"><h2>Screenplay</h2><div class="writing-tools" role="group" aria-label="Text formatting">
-          <button type="button" data-writing-mark="bold" aria-label="Bold" title="Bold (Ctrl/⌘ B)"><strong>B</strong></button>
-          <button type="button" data-writing-mark="italic" aria-label="Italic" title="Italic (Ctrl/⌘ I)"><em>I</em></button>
-          <button type="button" data-writing-mark="underline" aria-label="Underline" title="Underline (Ctrl/⌘ U)"><u>U</u></button>
-          <button id="line-help" type="button" title="Explain the Fountain element at the caret">Line help</button>
-          <button type="button" data-writing-mark="note" title="Private note (Ctrl/⌘ Shift M)">Note</button>
-        </div></div>
         <div id="editor" tabindex="-1"></div>
       </section>
       <section id="preview" class="preview" aria-label="Screenplay page preview">
@@ -94,23 +96,31 @@
         <p class="preview-hint">Notes, outlines, and omitted passages stay in your Fountain file. They do not print.</p>
       </section>
     </div>
-    <footer><span id="recovery" role="status">Opening local recovery…</span><span id="file-status" role="status" hidden></span><span id="position">Line 1</span></footer>
+    <footer><span id="recovery" role="status">Opening local recovery…</span><span id="file-status" role="status" hidden></span><span id="counts" class="counts">Ready to write</span><button id="layout-notes" type="button" hidden>Layout notes</button><span id="position">Line 1</span></footer>
   </main>
   <input id="file" type="file" accept=".fountain,.txt,text/plain" hidden>
+  <dialog id="layout-notes-dialog" aria-labelledby="layout-notes-title">
+    <div class="dialog-heading"><h2 id="layout-notes-title">Layout notes</h2><button class="close" type="button" aria-label="Close layout notes">×</button></div>
+    <p>These details affect the printed screenplay. Your Fountain source stays intact.</p>
+    <ul id="layout-notes-list"></ul>
+  </dialog>
   <dialog id="preferences-dialog" aria-labelledby="preferences-title">
     <div class="dialog-heading"><h2 id="preferences-title">Your writing space</h2><button class="close" type="button" aria-label="Close preferences">×</button></div>
     <p>Choose your writing preferences and the paper size used for preview and PDF.</p>
-    <label class="preference">Paper size <select id="paper"><option value="letter">US Letter</option><option value="a4">A4</option></select></label>
-    <label class="preference"><input id="margins" type="checkbox" checked> Live screenplay margins</label>
+    <h3>Appearance</h3>
     <label class="preference">Appearance <select id="theme"><option value="system">Use device setting</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <label class="preference">Editor text size <select id="text-size"><option>14</option><option>16</option><option>18</option><option>20</option></select></label>
+    <label class="preference"><input id="margins" type="checkbox" checked> Live screenplay margins</label>
+    <h3>Writing</h3>
     <label class="typing-option"><input id="smart-pairs" type="checkbox" checked> Automatically close brackets and parentheses</label>
     <label class="preference"><input id="screenplay-keys" type="checkbox"> Use screenplay Enter and Tab shortcuts</label>
     <details class="preference-detail"><summary>How screenplay shortcuts work</summary><p>Enter after a scene heading or dialogue starts a new paragraph. Tab cycles empty character, scene, action and transition templates; Shift Tab goes back. Existing words stay intact. Use Escape, then Tab to move focus out of the editor.</p></details>
     <label class="preference"><input id="typewriter" type="checkbox"> Keep the typing line near the centre</label>
+    <details class="preference-detail"><summary>About focus mode</summary><p>Focus hides the outline and preview. On phones it also hides file and page controls; Commands keeps those actions available. Use Exit focus in the phone header, or Focus again on desktop, to return.</p></details>
+    <h3>Printed pages</h3>
+    <label class="preference">Paper size <select id="paper"><option value="letter">US Letter</option><option value="a4">A4</option></select></label>
     <label class="preference"><input id="page-guides" type="checkbox"> Show printed page starts beside the text</label>
     <details class="preference-detail"><summary>About page guides</summary><p>Page numbers follow the current paper size. A + means several pages begin within the same source passage. Page preview shows the exact printed wrapping.</p></details>
-    <details class="preference-detail"><summary>About focus mode</summary><p>Focus hides the outline and preview. On phones it also hides file and page controls; Commands keeps those actions available. Use Exit focus in the phone header, or Focus again on desktop, to return. Bracket pairing can be switched off above.</p></details>
     <h3>Your files</h3>
     <button id="storage-health" type="button">Storage and backups…</button>
     <h3>Work offline</h3>
@@ -120,7 +130,7 @@
   </dialog>
   <dialog id="guide" aria-labelledby="guide-title">
     <div class="dialog-heading"><h2 id="guide-title">Write a screenplay, naturally.</h2><button class="close" type="button" aria-label="Close guide">×</button></div>
-    <p>Fountain is plain text. Write a scene heading, leave a blank line, then describe the action. Put a character’s name directly above their dialogue.</p>
+    <p class="studio-stage">VoxDown Studio is experimental. For VoxDown stories, use <a href="../writer/">Writer</a>.</p><p>Fountain is plain text. Write a scene heading, leave a blank line, then describe the action. Put a character’s name directly above their dialogue.</p>
     <button id="practice-fountain" class="primary" type="button">Try guided practice…</button>
     <pre>INT. LIGHTHOUSE - NIGHT
 

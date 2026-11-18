@@ -53,7 +53,7 @@ describe("integrated workspace navigation", () => {
     await page.locator("#view-menu").hover();
     expect(await page.locator(".workspace-dropdown:visible").count()).toBe(0);
     await page.locator("#file-menu").click();
-    for (const name of ["view", "tools", "help", "file"]) {
+    for (const name of ["edit", "view", "tools", "help", "file"]) {
       await page.locator(`#${name}-menu`).hover();
       expect(await page.locator(".workspace-dropdown:visible").count()).toBe(1);
       expect(await page.locator(`#${name}-dropdown`).isVisible()).toBe(true);
@@ -64,7 +64,7 @@ describe("integrated workspace navigation", () => {
           .evaluate((panel) => panel.contains(document.activeElement)),
       ).toBe(true);
     }
-    await page.locator("#preview-menu").hover();
+    await page.locator("#commands").hover();
     expect(await page.locator("#file-dropdown").isVisible()).toBe(true);
     await page.keyboard.press("Escape");
     expect(await page.locator("#file-menu").evaluate((el) => el === document.activeElement)).toBe(
@@ -73,6 +73,45 @@ describe("integrated workspace navigation", () => {
     await page.locator("#view-menu").hover();
     expect(await page.locator(".workspace-dropdown:visible").count()).toBe(0);
     expect(await page.locator(".cm-content").innerText()).toBe("!Alpha beta");
+  });
+  it("browses menu siblings with the arrow keys without changing the screenplay", async () => {
+    await start();
+    await page.locator("#file-menu").focus();
+    await page.keyboard.press("ArrowRight");
+    expect(await page.locator("#edit-menu").evaluate((el) => el === document.activeElement)).toBe(
+      true,
+    );
+    expect(await page.locator(".workspace-dropdown:visible").count()).toBe(0);
+    await page.keyboard.press("Enter");
+    for (const name of ["view", "tools", "help", "file", "edit"]) {
+      await page.keyboard.press("ArrowRight");
+      expect(await page.locator(`#${name}-dropdown`).isVisible()).toBe(true);
+    }
+    await page.keyboard.press("ArrowLeft");
+    expect(await page.locator("#file-dropdown").isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    expect(await page.locator("#file-menu").evaluate((el) => el === document.activeElement)).toBe(
+      true,
+    );
+    expect(await page.locator(".cm-content").innerText()).toBe("!Alpha beta");
+  });
+  it("keeps nonblocking layout notes available without a banner and retains real warnings", async () => {
+    await start("Title: Test\nNotes: Private title metadata\n\nINT. ROOM - DAY\n\nA door closes.");
+    expect(await page.locator("#issues").isVisible()).toBe(false);
+    await page.getByRole("button", { name: "1 layout note", exact: true }).click();
+    expect(await page.locator("#layout-notes-list").textContent()).toContain("notes");
+    await page.keyboard.press("Escape");
+    expect(
+      await page.locator("#layout-notes").evaluate((el) => el === document.activeElement),
+    ).toBe(true);
+    await page.locator("#file").setInputFiles({
+      name: "Warning.fountain",
+      mimeType: "text/plain",
+      buffer: Buffer.from("INT. ROOM\n\n[[Unclosed note"),
+    });
+    await ready();
+    expect(await page.locator("#issues").isVisible()).toBe(true);
+    expect(await page.locator("#pdf").isDisabled()).toBe(true);
   });
   it("keeps touch menu switching and dismissal on single taps", async () => {
     await context.close();
@@ -169,6 +208,7 @@ describe("integrated workspace navigation", () => {
   });
   it("dismisses preview actions before leaving expanded preview and keeps Tab local", async () => {
     await start();
+    await page.locator("#preview-toggle").click();
     await page.locator("#expand-preview").click();
     await page.locator("#preview-menu").click();
     await page.keyboard.press("Escape");
@@ -194,6 +234,17 @@ describe("integrated workspace navigation", () => {
   });
   it("keeps pane widths within a resized viewport before observer settlement", async () => {
     await start();
+    // A breakpoint can reveal the outline before its handle's ResizeObserver
+    // clears hidden. Writing must stay in its track even in that intermediate state.
+    const widthWithPendingHandle = await page.evaluate(() => {
+      const handle = document.querySelector<HTMLElement>(".outline-separator");
+      if (!handle) throw Error("Scenes resize handle missing");
+      handle.hidden = true;
+      const width = document.querySelector("#writing")?.getBoundingClientRect().width;
+      handle.hidden = false;
+      return width;
+    });
+    expect(widthWithPendingHandle).toBeGreaterThanOrEqual(320);
     await page.setViewportSize({ width: 800, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(800);
     expect((await page.locator("#writing").boundingBox())?.width).toBeGreaterThanOrEqual(320);

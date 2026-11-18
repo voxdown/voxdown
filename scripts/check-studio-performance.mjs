@@ -6,7 +6,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
-import { clickWorkspaceAction } from "./studio-ui.mjs";
+import { clickWorkspaceAction, ensurePreview } from "./studio-ui.mjs";
 
 const budgets = { inputP95: 250, inputMax: 1500, commandP95: 500, commandMax: 2000, ready: 15000 };
 const adaptationFrameBudget = 150;
@@ -79,7 +79,7 @@ const open = async (source, name) => {
 };
 const save = async () => {
   const downloaded = page.waitForEvent("download");
-  await page.locator("#download").click();
+  await clickWorkspaceAction(page, "download");
   return readFileSync(await (await downloaded).path(), "utf8");
 };
 const stats = (values) => {
@@ -159,6 +159,7 @@ try {
   });
   await page.goto(url);
   await ready();
+  await ensurePreview(page);
   // 19,950 physical lines, 499,500 UTF-16 characters: near both supported limits,
   // with 500 characters of headroom to verify sustained edits rather than rejected input.
   const block = (i) => [
@@ -362,10 +363,17 @@ try {
   };
   const adapted = () =>
     page.waitForFunction(
-      () =>
-        document
-          .querySelector('.adaptation-dialog [role="status"]')
-          ?.textContent?.startsWith("Validated 4900 spoken rows"),
+      () => {
+        const dialog = document.querySelector(".adaptation-dialog");
+        const status = dialog?.querySelector('[role="status"]')?.textContent ?? "";
+        const download = dialog?.querySelector("button.primary");
+        return (
+          status.startsWith("Validated:") &&
+          status.includes("4900 spoken lines") &&
+          download &&
+          !download.disabled
+        );
+      },
       undefined,
       { timeout: budgets.ready + 1000 },
     );

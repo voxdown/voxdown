@@ -47,7 +47,33 @@
 .workspace > #preview {
   min-width: 0;
 }
+/* Assign tracks explicitly: handle hidden states update in an observer, after
+   CSS breakpoints. Auto-placement can otherwise put writing into an 8px track. */
 @media (min-width: 1101px) {
+  #outline {
+    grid-column: 1;
+  }
+  .outline-separator {
+    grid-column: 2;
+  }
+  #writing {
+    grid-column: 3;
+  }
+  .preview-separator {
+    grid-column: 4;
+  }
+  #preview {
+    grid-column: 5;
+  }
+  #app.outline-collapsed #writing {
+    grid-column: 1;
+  }
+  #app.outline-collapsed .preview-separator {
+    grid-column: 2;
+  }
+  #app.outline-collapsed #preview {
+    grid-column: 3;
+  }
   #app .workspace {
     grid-template-columns: var(--outline-width, 224px) 8px minmax(320px, 1fr) 8px clamp(
         280px,
@@ -74,6 +100,15 @@
   }
 }
 @media (min-width: 760px) and (max-width: 1100px) {
+  #writing {
+    grid-column: 1;
+  }
+  .preview-separator {
+    grid-column: 2;
+  }
+  #preview {
+    grid-column: 3;
+  }
   #app .workspace {
     grid-template-columns: minmax(320px, 1fr) 8px clamp(
         280px,
@@ -83,6 +118,12 @@
   }
 }
 @media (min-width: 701px) and (max-width: 759px) {
+  #writing {
+    grid-column: 1;
+  }
+  #preview {
+    grid-column: 2;
+  }
   #app .workspace {
     grid-template-columns: minmax(320px, 1fr) minmax(280px, .85fr);
   }
@@ -119,5 +160,16 @@
 @media (max-width: 759px) {
   .preview-separator {
     display: none;
+  }
+}
+
+#app.focus-writing #writing,
+#app.preview-expanded #preview {
+  grid-column: 1;
+}
+@media (max-width: 700px) {
+  #writing,
+  #preview {
+    grid-column: 1;
   }
 }

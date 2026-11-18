@@ -40,8 +40,8 @@ const open = async (page, source, name = "Source.fountain") => {
 const text = (page) =>
   page.locator(".cm-line").evaluateAll((nodes) => nodes.map((node) => node.textContent).join("\n"));
 const save = async (page) => {
-  await clickWorkspaceAction(page, "save-file");
-  await page.waitForFunction(() => !document.getElementById("save-file").disabled);
+  await clickWorkspaceAction(page, "save-primary");
+  await page.waitForFunction(() => !document.getElementById("save-primary").disabled);
 };
 const makeContext = async ({ blockedRecovery = false, supported = true } = {}) => {
   const context = await browser.newContext({ acceptDownloads: true });
@@ -136,12 +136,12 @@ try {
   await page.evaluate(() => {
     studioFileTest.delayClose = true;
   });
-  await clickWorkspaceAction(page, "save-file");
+  await clickWorkspaceAction(page, "save-primary");
   await page.waitForFunction(() => studioFileTest.closes === 2);
   await page.locator(".cm-content").focus();
   await page.keyboard.type(" Newer edit.");
   await page.evaluate(() => studioFileTest.release());
-  await page.waitForFunction(() => !document.getElementById("save-file").disabled);
+  await page.waitForFunction(() => !document.getElementById("save-primary").disabled);
   assert.match(await page.locator("#file-status").textContent(), /Edits not yet saved/);
   assert.ok(!(await page.evaluate(() => studioFileTest.text)).includes("Newer edit."));
   assert.match(await page.locator("#notice").textContent(), /earlier version/);
@@ -173,11 +173,11 @@ try {
     studioFileTest.fail = null;
     studioFileTest.delayClose = true;
   });
-  await clickWorkspaceAction(page, "save-file");
+  await clickWorkspaceAction(page, "save-primary");
   await page.waitForFunction(() => studioFileTest.closes === 3);
   await open(page, "INT. NEW - DAY\n\nReplacement.", "New.fountain");
   await page.evaluate(() => studioFileTest.release());
-  await page.waitForFunction(() => !document.getElementById("save-file").disabled);
+  await page.waitForFunction(() => !document.getElementById("save-primary").disabled);
   assert.equal(await page.locator("#file-status").isVisible(), false);
   assert.equal(await text(page), "INT. NEW - DAY\n\nReplacement.");
   assert.deepEqual(errors, []);
@@ -212,7 +212,7 @@ try {
   assert.equal(await text(guarded), "A");
   // A real download still provides the pre-existing independent-copy escape hatch.
   const download = guarded.waitForEvent("download");
-  await guarded.locator("#download").click();
+  await clickWorkspaceAction(guarded, "download");
   assert.equal(readFileSync(await (await download).path(), "utf8"), "A");
   await clickWorkspaceAction(guarded, "new");
   await guarded.waitForFunction(
@@ -226,7 +226,7 @@ try {
   await fallback.goto(`${base}/studio/`);
   await ready(fallback);
   await open(fallback, source);
-  assert.equal(await fallback.locator("#save-file").isVisible(), false);
+  assert.equal(await fallback.locator("#save-primary").isVisible(), true);
   const fallbackDownload = fallback.waitForEvent("download");
   await fallback.locator(".cm-content").focus();
   await fallback.keyboard.press("Control+s");

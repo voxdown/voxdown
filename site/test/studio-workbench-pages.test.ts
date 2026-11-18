@@ -57,6 +57,7 @@ async function inspect(section: string) {
   await workbench().getByLabel("Workbench view", { exact: true }).selectOption(section);
 }
 async function downloaded() {
+  await page.locator("#file-menu").click();
   const pending = page.waitForEvent("download");
   await page.locator("#download").click();
   return readFileSync((await (await pending).path()) as string, "utf8");

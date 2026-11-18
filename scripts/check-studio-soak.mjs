@@ -6,7 +6,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
-import { clickWorkspaceAction } from "./studio-ui.mjs";
+import { clickWorkspaceAction, ensurePreview } from "./studio-ui.mjs";
 
 const budgets = {
   minimumCycles: 25,
@@ -76,7 +76,7 @@ const ready = async () => {
 };
 const save = async () => {
   const downloaded = page.waitForEvent("download");
-  await page.locator("#download").click();
+  await clickWorkspaceAction(page, "download");
   const download = await downloaded;
   const source = readFileSync(await download.path(), "utf8");
   await download.delete();
@@ -273,6 +273,7 @@ try {
   });
   await page.goto(url);
   await ready();
+  await ensurePreview(page);
   await open(baselineSource, "Soak-baseline.fountain");
   await clickWorkspaceAction(page, "recent");
   await libraryReady();

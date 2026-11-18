@@ -68,32 +68,36 @@ const geometry = () =>
     overflow: getComputedStyle(document.body).overflowY,
   }));
 describe("explicit mobile focus writing", () => {
-  it("recovers substantial writing space with a visible exit and all formatting/recovery controls", async () => {
+  it("recovers a row of writing space with an explicit exit and accessible formatting/help", async () => {
     await start();
     const normal = await geometry();
-    await page.getByRole("button", { name: "Focus writing", exact: true }).click();
+    await command("Focus writing");
     const focused = await geometry();
-    expect(normal.top - focused.top).toBeGreaterThanOrEqual(100);
+    expect(normal.top - focused.top).toBeGreaterThanOrEqual(44);
     expect(focused.top).toBeLessThanOrEqual(110);
-    expect(focused.height).toBeGreaterThan(normal.height + 100);
+    expect(focused.height).toBeGreaterThanOrEqual(normal.height + 44);
     expect(focused.width).toBe(320);
     expect(await page.locator(".filebar").isVisible()).toBe(false);
-    expect(await page.locator(".toolbar").isVisible()).toBe(false);
-    for (const name of [
-      "Commands",
-      "Exit focus writing",
-      "Bold",
-      "Italic",
-      "Underline",
-      "Line help",
-      "Note",
-    ]) {
+    expect(await page.locator(".toolbar").isVisible()).toBe(true);
+    for (const name of ["Commands", "Exit focus writing", "Bold", "Italic", "Note"]) {
       const button = page.getByRole("button", { name, exact: true });
       expect(await button.isVisible()).toBe(true);
       expect((await button.boundingBox())?.height).toBeGreaterThanOrEqual(44);
     }
     expect(await page.locator("#recovery").isVisible()).toBe(true);
     expect(await page.locator("#help").isVisible()).toBe(false);
+    await page.locator("#commands").click();
+    await page.getByRole("searchbox", { name: "Find a command" }).fill("Underline");
+    expect(
+      await page
+        .getByRole("dialog", { name: "Commands", exact: true })
+        .getByRole("button", { name: "Underline", exact: true })
+        .isEnabled(),
+    ).toBe(true);
+    await page.keyboard.press("Escape");
+    await command("Explain the current Fountain line");
+    expect(await page.locator("dialog[open]").isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
     await command("Fountain guide");
     expect(await page.locator("#guide").isVisible()).toBe(true);
     await page.keyboard.press("Escape");
@@ -109,7 +113,11 @@ describe("explicit mobile focus writing", () => {
     await page.keyboard.press("ArrowRight");
     for (let i = 0; i < 5; i++) await page.keyboard.press("Shift+ArrowRight");
     expect(await page.evaluate(() => getSelection()?.toString())).toBe("Alpha");
-    await page.locator("#mobile-focus").click();
+    await page.locator("#view-menu").click();
+    await page
+      .locator("#view-dropdown")
+      .getByRole("button", { name: "Focus writing", exact: true })
+      .click();
     expect(await page.evaluate(() => getSelection()?.toString())).toBe("Alpha");
     expect(
       await page.locator(".cm-content").evaluate((element) => document.activeElement === element),
@@ -117,7 +125,7 @@ describe("explicit mobile focus writing", () => {
     await page.getByRole("button", { name: "Bold", exact: true }).click();
     expect(await downloadSource()).toBe("!**Alpha** beta");
     await page.locator("#mobile-focus").click();
-    await page.locator("#mobile-focus").click();
+    await command("Focus writing");
     await page.keyboard.press("Control+z");
     expect(await downloadSource()).toBe(source);
   });
@@ -149,7 +157,7 @@ describe("explicit mobile focus writing", () => {
   });
   it("fits short viewports with a usable editor and an operable exit", async () => {
     await start();
-    await page.locator("#mobile-focus").click();
+    await command("Focus writing");
     await page.setViewportSize({ width: 320, height: 280 });
     const current = await geometry();
     expect(current.width).toBe(320);
@@ -163,13 +171,17 @@ describe("explicit mobile focus writing", () => {
     expect(exit?.height).toBeGreaterThanOrEqual(44);
     expect((exit?.y ?? 280) + (exit?.height ?? 0)).toBeLessThan(280);
     await page.getByRole("button", { name: "Exit focus writing", exact: true }).click();
+    expect(await page.locator(".filebar").isVisible()).toBe(false);
+    expect(await page.locator("#view-menu").isVisible()).toBe(true);
+    await page.setViewportSize({ width: 320, height: 700 });
     expect(await page.locator(".filebar").isVisible()).toBe(true);
+    expect(await downloadSource()).toBe("!Alpha beta");
   });
   it.each([
     { width: 667, height: 375, minimumEditor: 200 },
     { width: 375, height: 300, minimumEditor: 125 },
   ])(
-    "keeps menus, file identity, selection and writing available at $width×$height",
+    "keeps menus, selection and writing available at $width×$height",
     async ({ width, height, minimumEditor }) => {
       const source = "!Alpha beta";
       await start(source);
@@ -187,7 +199,8 @@ describe("explicit mobile focus writing", () => {
       expect(current.top).toBeLessThanOrEqual(145);
       expect(current.height).toBeGreaterThanOrEqual(minimumEditor);
       expect(await page.evaluate(() => document.body.scrollHeight)).toBe(height);
-      expect(await page.locator("#name").isVisible()).toBe(true);
+      expect(await page.locator("#name").isVisible()).toBe(false);
+      expect(await page.locator("#name").inputValue()).toBe("Focus.fountain");
       expect(await page.locator("#element-action").isVisible()).toBe(true);
       expect(
         await page
@@ -210,7 +223,7 @@ describe("explicit mobile focus writing", () => {
   it("keeps malformed-source diagnostics visible and the exact source downloadable", async () => {
     const source = "INT. ROOM\n\n[[Unclosed private note";
     await start(source);
-    await page.locator("#mobile-focus").click();
+    await command("Focus writing");
     expect(await page.locator("#issues").isVisible()).toBe(true);
     expect(await page.locator("#issues").textContent()).toMatch(/unclosed|unfinished|close/i);
     expect(await page.locator("#pdf").isDisabled()).toBe(true);
@@ -232,7 +245,7 @@ describe("explicit mobile focus writing", () => {
     await page.goto(`${origin}/studio/`);
     await page.waitForFunction(() => !document.querySelector<HTMLElement>("#app")?.inert);
     await page.locator("#retry-preview").waitFor();
-    await page.locator("#mobile-focus").click();
+    await command("Focus writing");
     expect(await page.locator("#retry-preview").isVisible()).toBe(true);
     expect(await page.locator("#notice").isVisible()).toBe(true);
     expect(await page.locator("#notice").textContent()).toContain("worker");

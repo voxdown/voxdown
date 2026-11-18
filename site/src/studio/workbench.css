@@ -11,28 +11,31 @@
   flex-direction: column;
 }
 .workbench-dialog :is(button, input, select) {
-  font-size: 13px;
+  font: 400 13.6px / 1.4 var(--ui, system-ui, sans-serif);
 }
 .workbench-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px 24px 16px;
+  padding: 18px 20px 14px;
   flex: 0 0 auto;
 }
 .workbench-header h2 {
-  font-size: 20px;
-  line-height: 1.3;
+  font: 600 1.15rem / 1.3 var(--story, Georgia, serif);
+  letter-spacing: 0;
 }
 .workbench-header button {
   flex: 0 0 auto;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
 }
 .workbench-navigation {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 0 24px 20px;
+  padding: 0 20px 16px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
@@ -60,7 +63,7 @@
   font-weight: 400;
 }
 .workbench-body {
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
   min-height: 0;
@@ -87,9 +90,7 @@
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 4px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 4px 0 8px;
   min-width: 0;
 }
 .workbench-dialog .workbench-metrics dt {
@@ -102,9 +103,9 @@
 .workbench-dialog .workbench-metrics dd {
   grid-row: 1;
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1.2;
-  font-weight: 650;
+  font-weight: 550;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -174,9 +175,8 @@
 }
 .workbench-content > details:not(.workbench-explanation),
 .workbench-content > article {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
   min-width: 0;
 }
 .workbench-content > details:not(.workbench-explanation) > summary {
@@ -205,7 +205,7 @@
     padding: 16px;
   }
   .workbench-header h2 {
-    font-size: 18px;
+    font-size: 1.1rem;
   }
   .workbench-navigation {
     padding: 0 16px 16px;
@@ -220,6 +220,9 @@
   .workbench-dialog summary {
     align-content: center;
   }
+  .workbench-dialog :is(input, select) {
+    font-size: 16px;
+  }
   .workbench-goal label {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
@@ -228,7 +231,7 @@
     gap: 8px;
   }
   .workbench-metrics > div {
-    padding: 12px 8px;
+    padding: 4px 0 8px;
   }
   .workbench-dialog .workbench-metrics dd {
     font-size: 24px;

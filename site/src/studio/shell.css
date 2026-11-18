@@ -1,87 +1,341 @@
-/* Studio chrome: a quiet writing desk, shared spacing and deliberate hierarchy. */
+/* Studio shares Writer's application frame; the screenplay remains the focal point. */
+@import "../workspace-theme.css";
 :root {
-  --surface: #fffefb;
-  --chrome: #f5f5f1;
-  --hover: #e9eee8;
-  --ink: #263a36;
-  --radius: 8px;
+  --desk: var(--workspace-desk);
+  --surface: var(--workspace-paper);
+  --chrome: var(--workspace-paper);
+  --hover: #edf0f3;
+  --ink: var(--workspace-ink);
+  --muted: var(--workspace-quiet);
+  --border: var(--workspace-edge);
+  --accent: var(--workspace-brand);
+  --primary-ink: #fff;
+  --ui: var(--workspace-ui);
+  --story: var(--workspace-story);
+  --radius: 6px;
+  color: var(--ink);
+  background: var(--desk);
+  font-family: var(--ui);
+  font-variation-settings: "CASL" 0.15;
+  color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --surface: #1e2926;
-  --chrome: #18221f;
-  --hover: #2b3e35;
-  --ink: #e0e8e0;
+  --desk: #121417;
+  --surface: #1b1d21;
+  --chrome: #1b1d21;
+  --hover: #2c3036;
+  --ink: #e4e5e3;
+  --muted: #9aa1ab;
+  --border: #363c44;
+  --accent: #3f9a9d;
+  --primary-ink: #101a1b;
+  color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
-    --surface: #1e2926;
-    --chrome: #18221f;
-    --hover: #2b3e35;
-    --ink: #e0e8e0;
+    --desk: #121417;
+    --surface: #1b1d21;
+    --chrome: #1b1d21;
+    --hover: #2c3036;
+    --ink: #e4e5e3;
+    --muted: #9aa1ab;
+    --border: #363c44;
+    --accent: #3f9a9d;
+    --primary-ink: #101a1b;
+    color-scheme: dark;
   }
 }
+body.studio {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background: var(--desk);
+  font-size: 14px;
+}
+.studio [hidden] {
+  display: none !important;
+}
+button,
+input,
+select,
+textarea {
+  font-family: var(--ui);
+}
+button,
+select {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: 5px;
+  touch-action: manipulation;
+}
+button:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--border);
+}
+:focus-visible {
+  outline: 2px solid #537fba;
+  outline-offset: 2px;
+}
+.primary,
+.primary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--primary-ink);
+  border-color: var(--accent);
+}
+button svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .app-header {
-  height: 56px;
-  gap: 16px;
-  padding: 0 20px;
-  background: var(--chrome);
+  height: 46px;
+  min-height: 46px;
+  flex: none;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding: 5px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 5;
 }
 .brand {
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font: 650 19px / 1.2 var(--story);
   letter-spacing: -.5px;
+  flex: none;
 }
-.badge {
-  font-size: 9px;
-  letter-spacing: .6px;
-  padding: 3px 5px;
+.brand .word {
+  font-weight: 650;
 }
-.app-header > #commands {
-  margin-left: auto;
-  font-size: 12px;
+.brand em {
+  font-weight: 400;
+  color: var(--accent);
 }
-.private {
-  display: none;
+.brand img {
+  width: 24px;
+  height: 24px;
 }
 .workspace-menus {
   display: flex;
-  gap: 2px;
+  gap: 0;
+  flex: none;
   align-items: center;
 }
 .workspace-menus button,
-#commands {
-  border-color: transparent;
+#commands,
+#focus-mode,
+#mobile-focus,
+.panel-toggles button {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 0;
   background: transparent;
   font-size: 13px;
+  white-space: nowrap;
 }
-.workspace-menus button[aria-expanded="true"] {
+.workspace-menus #file-menu,
+#outline-toggle {
+  display: inline-flex;
+}
+.workspace-menus button[aria-expanded="true"],
+.panel-toggles button[aria-pressed="true"],
+.panel-toggles button[aria-expanded="true"],
+#focus-mode[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--accent);
+}
+.app-header .filebar {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  flex-wrap: nowrap;
+}
+.filename {
+  flex: 1;
+  min-width: 0;
+}
+.filename input {
+  width: 100%;
+  min-height: 30px;
+  max-width: 360px;
+  padding: 4px 6px;
+  font-family: var(--ui);
+  font-variation-settings: "MONO" 1;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+}
+.filename input:hover,
+.filename input:focus {
+  border-color: var(--border);
+  background: var(--surface);
+}
+#save-primary {
+  min-height: 32px;
+  padding: 5px 13px;
+  font-size: 13px;
+  flex: none;
+}
+.panel-toggles {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.panel-toggles button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  min-width: 32px;
+  color: var(--muted);
+}
+#mobile-focus {
+  display: none;
+}
+#app {
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.documentbar {
+  flex: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+#app .toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  min-height: 38px;
+  gap: 10px;
+  padding: 2px 18px;
+  background: var(--surface);
+}
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+}
+.tool-group + .tool-group {
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+}
+#app .toolbar button,
+#app .toolbar select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  min-width: 28px;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+}
+#app .toolbar button:hover:not(:disabled),
+#app .toolbar select:hover {
   background: var(--hover);
 }
-.workspace-menus #file-menu {
-  display: block;
+.writing-tools {
+  width: auto;
+}
+.writing-tools button {
+  font-family: var(--story);
+  font-size: 15px !important;
+}
+#element-action {
+  width: 128px;
+  max-width: 150px;
+}
+.workspace-tools {
+  margin-left: auto;
+}
+#app .toolbar #focus-mode[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--accent);
+}
+#pdf {
+  white-space: nowrap;
+}
+#app .workspace {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+  border: 0;
+}
+#app > footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 27px;
+  gap: 16px;
+  padding: 4px 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+#recovery {
+  min-width: 0;
+}
+#counts {
+  margin-left: auto;
+  white-space: nowrap;
+}
+#position {
+  white-space: nowrap;
+}
+#file-status {
+  max-width: 40%;
 }
 .workspace-dropdown {
   position: fixed;
   z-index: 30;
-  width: 260px;
+  width: 270px;
   max-width: calc(100vw - 16px);
-  padding: 6px;
+  padding: 5px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--surface);
   color: var(--ink);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 12px 36px #0002;
+  border-radius: 7px;
+  box-shadow: 0 8px 24px #18202c24, 0 2px 4px #18202c0a;
 }
 .workspace-dropdown button {
   display: block;
   width: 100%;
-  min-height: 36px;
-  padding: 8px 10px;
+  min-height: 32px;
+  padding: 7px 10px;
   text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
   border: 0;
   background: transparent;
-  font-size: 13px;
 }
 .workspace-dropdown button:hover:not(:disabled),
 .workspace-dropdown button:focus-visible {
@@ -92,154 +346,262 @@
   border: 0;
   border-top: 1px solid var(--border);
 }
-#app {
-  height: calc(100dvh - 56px);
+.menu-check {
+  float: right;
+  margin-left: 12px;
+  color: var(--accent);
 }
-.filebar {
-  flex-wrap: nowrap;
-  padding: 12px 20px 8px;
-  gap: 12px;
+button[aria-pressed="false"] .menu-check {
+  visibility: hidden;
 }
-.filename {
-  min-width: 0;
+#app.focus-writing .workspace {
+  min-height: 0;
 }
-.filename input {
-  font-size: 16px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-}
-.filename input:hover {
-  border-color: var(--border);
-}
-.file-actions {
-  flex-wrap: nowrap;
-}
-.toolbar {
-  gap: 6px;
-  padding: 0 20px 10px;
-  align-items: center;
-}
-.toolbar > button {
-  border-color: transparent;
-  min-height: 32px;
-}
-.toolbar > select {
-  min-height: 32px;
-  max-width: 145px;
-}
-#outline-toggle {
-  display: block;
-}
-.toolbar #counts {
-  font-size: 11px;
-}
-.panel-heading {
-  min-height: 44px;
-  padding: 8px 12px;
-  gap: 8px;
-}
-.panel-heading h2 {
+#issues,
+#notice {
+  flex: none;
   font-size: 12px;
-  font-weight: 650;
-  text-transform: none;
-  letter-spacing: 0;
+  padding: 9px 18px;
+}
+#layout-notes {
+  padding: 2px 6px;
+  min-height: 22px;
+  flex: none;
   color: var(--muted);
-}
-.panel-heading h2 span {
-  font-weight: 400;
-  margin-left: 6px;
-}
-#outline {
-  padding: 0 12px 12px;
-  background: var(--chrome);
-}
-#outline .panel-heading {
-  padding-inline: 0;
-}
-#outline-close {
+  font-size: 11px;
   border: 0;
   background: transparent;
-  min-width: 28px;
-  min-height: 28px;
-  padding: 0;
-  font-size: 20px;
-  color: var(--muted);
 }
-#scene-search {
-  width: 100%;
-  min-width: 0;
-  font-size: 12px;
-  padding: 8px;
-  border-radius: 6px;
+#layout-notes:hover {
+  text-decoration: underline;
 }
-.outline-hint {
-  font-size: 12px;
+#layout-notes-dialog {
+  max-width: 520px;
+}
+#layout-notes-list {
+  padding-left: 22px;
   line-height: 1.6;
 }
-#scene-list:not(:empty) ~ .outline-hint {
-  display: none;
-}
-#outline .writer-link {
-  display: none;
-}
-#scene-cards {
-  font-size: 12px;
-  width: 100%;
+#layout-notes-list li + li {
   margin-top: 12px;
-  background: transparent;
 }
-.writing > .panel-heading {
-  padding: 6px 12px;
+@media (max-width: 1100px) {
+  .app-header {
+    padding-inline: 12px;
+    gap: 8px;
+  }
+  .brand {
+    font-size: 17px;
+  }
+  .brand img {
+    width: 22px;
+    height: 22px;
+  }
+  .workspace-menus button {
+    padding-inline: 7px;
+  }
+  #app .toolbar {
+    padding-inline: 12px;
+    gap: 6px;
+  }
 }
-.writing-tools {
-  gap: 2px;
-  flex-wrap: nowrap;
+@media (max-width: 900px) {
+  .app-header .brand .word {
+    display: none;
+  }
+  .filename input {
+    font-size: 12px;
+  }
+  #app .toolbar #line-help span,
+  #app .toolbar #commands span {
+    display: none;
+  }
 }
-.writing-tools button {
-  border-color: transparent;
-  min-width: 28px;
-  padding: 4px 7px;
+@media (max-width: 700px) {
+  .app-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 44px;
+    gap: 0 4px;
+    padding: 0 8px;
+  }
+  .app-header .brand {
+    display: flex;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+  .workspace-menus {
+    order: 0;
+    flex: 1;
+  }
+  .workspace-menus button {
+    min-height: 44px;
+    padding: 7px;
+    font-size: 13px;
+  }
+  .app-header .filebar {
+    order: 3;
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+  .filename input {
+    max-width: none;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  #save-primary {
+    position: absolute;
+    top: 44px;
+    right: 104px;
+    min-height: 44px;
+    padding: 6px 10px;
+  }
+  .panel-toggles {
+    order: 4;
+    position: absolute;
+    right: 8px;
+    top: 44px;
+  }
+  .panel-toggles button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .filename {
+    padding-right: 156px;
+  }
+  #app .toolbar {
+    gap: 3px;
+    padding: 2px 6px;
+    min-height: 46px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  #app .toolbar .history-tools {
+    display: none;
+  }
+  #app .toolbar .tool-group {
+    gap: 0;
+  }
+  #app .toolbar .tool-group + .tool-group {
+    padding-left: 3px;
+  }
+  #app .toolbar .writing-tools {
+    border-left: 0;
+    padding-left: 0;
+  }
+  #app .toolbar button,
+  #app .toolbar select {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 6px;
+  }
+  #element-action {
+    width: 104px;
+    font-size: 16px !important;
+  }
+  #app .toolbar .workspace-tools {
+    margin-left: 0;
+  }
+  #app .toolbar #commands span,
+  #app .toolbar #line-help span,
+  #app .toolbar [data-writing-mark="note"] span {
+    display: none;
+  }
+  #app .toolbar #commands,
+  #app .toolbar #line-help,
+  #app .toolbar [data-writing-mark="note"] {
+    min-width: 44px;
+  }
+  #app .toolbar #focus-mode,
+  #app .toolbar #line-help,
+  #app .toolbar #pdf,
+  #app .toolbar [data-writing-mark="underline"] {
+    display: none;
+  }
+  #mobile-focus {
+    display: none;
+    align-items: center;
+    min-height: 44px;
+    padding: 6px;
+    font-size: 12px;
+  }
+  .workspace-dropdown button {
+    min-height: 44px;
+  }
+  #app > footer {
+    padding: 5px 10px;
+    gap: 10px;
+    font-size: 10px;
+    min-height: 28px;
+  }
+  #counts {
+    display: none;
+  }
+  #position {
+    margin-left: auto;
+  }
+  #file-status {
+    max-width: 50%;
+  }
+  body:has(#app.focus-writing) .app-header .filebar,
+  body:has(#app.focus-writing) .workspace-menus,
+  body:has(#app.focus-writing) #save-primary,
+  body:has(#app.focus-writing) .panel-toggles {
+    display: none;
+  }
+  body:has(#app.focus-writing) #mobile-focus {
+    display: inline-flex;
+  }
+  body:has(#app.focus-writing) .app-header .brand {
+    display: flex;
+    margin-right: auto;
+  }
+  body:has(#app.focus-writing) .app-header .brand .word {
+    display: inline;
+  }
+  #app.focus-writing .toolbar {
+    display: flex;
+  }
+  #app.focus-writing .toolbar > :not(#retry-preview) {
+    display: flex;
+  }
+  #app.focus-writing .toolbar .element-tools {
+    display: flex;
+  }
+  #app.focus-writing .toolbar .element-tools #element-action {
+    display: none;
+  }
+  #app.focus-writing .toolbar #pdf {
+    display: none;
+  }
+  #app.mobile-preview .documentbar {
+    display: none;
+  }
 }
-#preview > .panel-heading {
-  display: none;
+@media (max-height: 550px) and (max-width: 700px) {
+  /* The same notes remain available in Commands while a phone keyboard is up. */
+  #layout-notes {
+    display: none;
+  }
+  .app-header .filebar {
+    display: none;
+  }
+  .panel-toggles {
+    position: static;
+    order: 0;
+  }
+  #save-primary {
+    display: none;
+  }
+  #app > footer {
+    min-height: 24px;
+  }
 }
-.studio-side-tabs {
-  padding: 6px 10px;
-  gap: 4px;
-  min-height: 44px;
-}
-.studio-side-tabs button {
-  font-size: 12px;
-  border-color: transparent;
-  min-height: 32px;
-  padding: 4px 8px;
-}
-.studio-side-tabs button[aria-selected="true"] {
-  background: var(--surface);
-  box-shadow: 0 1px 3px #0001;
-}
-.page-controls {
-  padding: 6px 10px;
-  gap: 4px;
-}
-.page-controls button {
-  border-color: transparent;
-  min-height: 30px;
-  padding: 3px 7px;
-  font-size: 11px;
-}
-#page-label {
-  font-size: 11px;
-}
-.preview-hint {
-  font-size: 11px;
-  line-height: 1.5;
-  padding: 8px 12px;
-  margin: 0;
-}
-#app > footer {
-  padding: 7px 20px;
-  font-size: 11px;
+@media (max-height: 550px) and (max-width: 420px) {
+  .panel-toggles {
+    display: none;
+  }
 }
 dialog {
   overscroll-behavior: contain;
@@ -269,7 +631,7 @@ dialog::backdrop {
   flex: none;
 }
 dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
-  min-height: 36px;
+  min-height: 44px;
   padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -318,272 +680,6 @@ dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
   padding-top: 16px;
   border-top: 1px solid var(--border);
 }
-@media (max-width: 1100px) {
-  .app-header {
-    gap: 8px;
-    padding-inline: 12px;
-  }
-  .badge {
-    display: none;
-  }
-  .writing > .panel-heading h2 {
-    display: none;
-  }
-  .writing-tools {
-    justify-content: flex-start;
-    width: 100%;
-  }
-  #scene-search {
-    font-size: 16px;
-  }
-}
-@media (max-width: 700px) {
-  .app-header {
-    height: auto;
-    min-height: 56px;
-    flex-wrap: wrap;
-    gap: 2px 6px;
-    padding: 6px 10px;
-  }
-  .brand {
-    font-size: 17px;
-  }
-  .workspace-menus {
-    order: 3;
-    flex-basis: 100%;
-    justify-content: flex-start;
-  }
-  .workspace-menus button {
-    min-height: 36px;
-    padding: 6px 12px;
-  }
-  .app-header > #commands {
-    min-height: 40px;
-    padding: 6px;
-  }
-  #mobile-focus {
-    display: none;
-  }
-  #app {
-    height: calc(100dvh - 94px);
-  }
-  .filebar {
-    padding: 8px 12px 4px;
-    gap: 6px;
-  }
-  .filename {
-    width: auto;
-    flex: 1;
-  }
-  .filename input {
-    font-size: 16px;
-  }
-  .file-actions {
-    width: auto;
-  }
-  .file-actions #pdf {
-    min-height: 40px;
-  }
-  .toolbar {
-    padding: 4px 12px 8px;
-    gap: 4px;
-  }
-  .toolbar button,
-  .toolbar select {
-    min-height: 40px;
-  }
-  .toolbar #counts {
-    display: none;
-  }
-  #element-action {
-    width: 106px;
-    font-size: 12px;
-  }
-  .writing > .panel-heading {
-    min-height: 44px;
-    padding: 2px 10px;
-  }
-  .writing-tools button {
-    min-height: 40px;
-    min-width: 40px;
-  }
-  .workspace-dropdown button {
-    min-height: 44px;
-  }
-  #outline-close {
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .page-controls button,
-  .studio-side-tabs button {
-    min-height: 40px;
-  }
-  #app > footer {
-    padding-inline: 12px;
-  }
-  #app.focus-writing {
-    height: calc(100dvh - 56px);
-  }
-  body:has(#app.focus-writing) .workspace-menus {
-    display: none;
-  }
-  body:has(#app.focus-writing) #mobile-focus {
-    display: block;
-  }
-  dialog {
-    padding: 18px;
-  }
-  dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-  dialog select {
-    min-height: 44px;
-    font-size: 16px;
-  }
-}
-.app-header {
-  min-height: 56px;
-  flex-wrap: nowrap;
-  padding-block: 0;
-}
-#scene-list > p {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--muted);
-}
-@media (max-width: 700px) {
-  .app-header {
-    flex-wrap: wrap;
-    padding-block: 4px;
-    gap: 0 4px;
-  }
-  #mobile-focus {
-    display: block;
-    min-height: 44px;
-    padding: 6px;
-    font-size: 12px;
-  }
-  .app-header > #commands {
-    min-height: 44px;
-  }
-  .workspace-menus button {
-    min-height: 44px;
-  }
-  .toolbar {
-    flex-wrap: nowrap;
-  }
-  .toolbar #preview-toggle {
-    white-space: nowrap;
-  }
-  .writing-tools button {
-    min-height: 44px;
-    min-width: 44px;
-  }
-  .page-controls button,
-  .studio-side-tabs button {
-    min-height: 44px;
-  }
-  #app > footer #position {
-    white-space: nowrap;
-  }
-}
-:root .workspace-menus button,
-:root .workspace-dropdown button,
-:root .writing-tools button,
-:root #commands {
-  background: transparent;
-}
-:root .workspace-menus button:hover,
-:root .workspace-menus button[aria-expanded="true"],
-:root .workspace-dropdown button:hover:not(:disabled),
-:root .workspace-dropdown button:focus-visible {
-  background: var(--hover);
-}
-.page-controls {
-  flex-wrap: nowrap;
-}
-#expand-preview {
-  margin-left: auto;
-}
-#preview-menu {
-  min-width: 30px;
-}
-@media (max-width: 700px) {
-  .toolbar button {
-    min-height: 44px;
-  }
-  .page-controls {
-    gap: 2px;
-  }
-  .page-controls button {
-    padding-inline: 5px;
-  }
-  #page-label {
-    white-space: nowrap;
-  }
-}
-.filename input {
-  text-overflow: ellipsis;
-}
-@media (min-width: 1101px) {
-  .documentbar {
-    display: grid;
-    grid-template-columns: minmax(170px, 1fr) auto auto;
-    gap: 20px;
-    align-items: center;
-    padding: 12px 20px;
-  }
-  .documentbar .filebar {
-    display: contents;
-  }
-  .documentbar .filename {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .documentbar .file-actions {
-    grid-column: 3;
-    grid-row: 1;
-  }
-  .documentbar .toolbar {
-    grid-column: 2;
-    grid-row: 1;
-    padding: 0;
-  }
-  .documentbar .counts {
-    display: none;
-  }
-}
-@media (max-width: 700px) {
-  body:has(#app.focus-writing) .brand span {
-    display: none;
-  }
-}
-@media (max-width: 700px) {
-  .toolbar select,
-  #preferences-dialog .preference,
-  #preferences-dialog .typing-option {
-    min-height: 44px;
-  }
-}
-:root[data-theme="dark"] {
-  --primary-ink: #173326;
-}
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="system"] {
-    --primary-ink: #173326;
-  }
-}
-:root .primary {
-  background: var(--accent);
-  color: var(--primary-ink, white);
-}
-.workspace-dropdown .menu-check {
-  float: right;
-  margin-left: 12px;
-  color: var(--accent);
-}
-
-.workspace-dropdown button[aria-pressed="false"] .menu-check {
-  visibility: hidden;
-}
 #guide {
   width: 600px;
 }
@@ -623,110 +719,55 @@ dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
   }
 }
 
-/* Keep the writing surface inside short windows and landscape/keyboard viewports.
-   Duplicate actions remain in File/View and Commands; this never changes focus mode. */
-@media (max-height: 550px) {
-  body {
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
+/* Preferences and Guide belong to the same Writer dialog family. */
+.dialog-heading h2 {
+  font: 600 1.15rem / 1.3 var(--story);
+  letter-spacing: -.2px;
+}
+dialog::backdrop {
+  background: #141a244d;
+}
+@media (max-width: 700px) {
+  dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  dialog select {
+    min-height: 44px;
+    font-size: 16px;
   }
-  #app,
-  #app.focus-writing {
-    height: auto;
-    flex: 1;
-    min-height: 0;
-  }
-  .workspace {
-    height: auto;
-    flex: 1;
-    min-height: 0;
-  }
-  .app-header {
-    height: 48px;
-    min-height: 48px;
+  #preferences-dialog .preference {
     flex-wrap: nowrap;
-    gap: 4px;
-    padding: 1px 10px;
   }
-  .app-header .badge,
-  .app-header .private,
-  .app-header #mobile-focus {
-    display: none;
+  #preferences-dialog .preference:has(select) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-block: 14px;
   }
-  .workspace-menus {
-    order: 0;
-    flex-basis: auto;
-    flex-shrink: 0;
-  }
-  .workspace-menus button,
-  .app-header > #commands,
-  .app-header > #mobile-focus {
-    min-height: 44px;
-    padding: 6px;
-  }
-  body:has(#app.focus-writing) #mobile-focus {
-    display: block;
-  }
-  .documentbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-    padding: 2px 10px;
-  }
-  .documentbar .filebar,
-  .documentbar .toolbar {
-    display: contents;
-  }
-  .documentbar .filename {
-    grid-column: 1;
-    grid-row: 1;
+  #preferences-dialog .preference select {
+    width: 100%;
     min-width: 0;
+    max-width: 100%;
+    margin-left: 0;
   }
-  .documentbar .filename input {
+  #preferences-dialog .preference,
+  #preferences-dialog .typing-option {
     min-height: 44px;
   }
-  .documentbar .file-actions,
-  .documentbar #outline-toggle,
-  .documentbar #preview-toggle,
-  .documentbar #focus-mode,
-  .documentbar #counts {
-    display: none;
-  }
-  .documentbar #element-action {
-    grid-column: 2;
-    grid-row: 1;
-    width: 110px;
-    min-height: 44px;
-  }
-  .documentbar #retry-preview:not([hidden]) {
-    grid-column: 1 / -1;
+  #layout-notes {
     min-height: 44px;
   }
 }
-@media (max-height: 550px) and (max-width: 700px) {
-  #app.mobile-preview .documentbar,
-  #app.mobile-preview .preview-hint,
-  #app.mobile-preview > footer {
-    display: none;
-  }
-  #app.mobile-preview .studio-side-tabs,
-  #app.mobile-preview .page-controls {
-    padding-block: 0;
-  }
-  #app.focus-writing .documentbar {
-    padding: 0;
-  }
-  #app.focus-writing .documentbar:has(#retry-preview:not([hidden])) {
-    padding: 2px 10px;
-  }
+
+input,
+textarea {
+  color: var(--ink);
+  background-color: var(--surface);
 }
-@media (max-height: 550px) and (max-width: 559px) {
-  .app-header .brand {
-    display: none;
-  }
-  body:has(#app.focus-writing) .brand {
-    display: block;
-  }
+#preferences-dialog label:has(input[type="checkbox"]) {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 12px;
+}
+#preferences-dialog label:has(input[type="checkbox"]) input {
+  margin-top: 3px;
 }

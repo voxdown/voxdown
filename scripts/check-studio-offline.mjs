@@ -142,7 +142,8 @@ const download = async (page, selector, expectedName) => {
   const pending = page.waitForEvent("download");
   void pending.catch(() => {});
   try {
-    await page.locator(selector).click({ timeout: 10000 });
+    if (selector === "#download") await clickWorkspaceAction(page, "download");
+    else await page.locator(selector).click({ timeout: 10000 });
     const file = await pending;
     if (expectedName) assert.equal(file.suggestedFilename(), expectedName);
     return readFileSync(await file.path());

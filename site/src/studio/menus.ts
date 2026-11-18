@@ -12,7 +12,11 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
           { id: "open", label: "Open Fountain…" },
           { command: "Import Final Draft XML (FDX)", label: "Import Final Draft…" },
         ],
-        [{ id: "save-file" }, { command: "Save Fountain as…" }, { command: "Download Fountain" }],
+        [
+          { command: "Save Fountain to file", label: "Save" },
+          { command: "Save Fountain as…" },
+          { id: "download" },
+        ],
         [
           { id: "recent", label: "Recovery and snapshots…" },
           { command: "Portable backup and restore", label: "Backup and restore…" },
@@ -22,6 +26,19 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
           { command: "Export Final Draft XML (FDX)", label: "Export Final Draft…" },
           { command: "Actor sides PDF", label: "Export actor sides…" },
           { command: "Adapt screenplay to VoxDown", label: "Adapt to VoxDown…" },
+        ],
+      ],
+    },
+    {
+      name: "edit",
+      groups: [
+        [{ command: "Undo" }, { command: "Redo" }],
+        [{ command: "Scoped find and replace", label: "Find and replace…" }],
+        [
+          { command: "Italic" },
+          { command: "Bold" },
+          { command: "Underline" },
+          { command: "Private note", label: "Private note" },
         ],
       ],
     },
@@ -72,6 +89,7 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
       groups: [
         [
           { id: "help", label: "Fountain guide…" },
+          { command: "Explain the current Fountain line", label: "Line help…" },
           { command: "Practice Fountain step by step", label: "Guided practice…" },
           { id: "example", label: "Try a short screenplay…" },
         ],
@@ -88,6 +106,7 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
     ],
   });
   let active: { button: HTMLButtonElement; panel: HTMLElement } | undefined;
+  const openers = new Map<HTMLButtonElement, () => void>();
   const sync: (() => void)[] = [];
   function close(restore = false) {
     if (!active) return;
@@ -176,6 +195,24 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
       active = { button: trigger, panel };
       panel.querySelector<HTMLButtonElement>("button:not(:disabled):not([hidden])")?.focus();
     }
+    openers.set(trigger, open);
+    const switchSibling = (event: KeyboardEvent) => {
+      if (event.isComposing || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      const bar = trigger.closest(".workspace-menus");
+      if (!bar) return;
+      const siblings = [...bar.querySelectorAll<HTMLButtonElement>("button")];
+      const next =
+        siblings[
+          (siblings.indexOf(trigger) + (event.key === "ArrowRight" ? 1 : -1) + siblings.length) %
+            siblings.length
+        ];
+      if (!next) return;
+      event.preventDefault();
+      if (active) openers.get(next)?.();
+      else next.focus();
+    };
+    trigger.addEventListener("keydown", switchSibling);
+    panel.addEventListener("keydown", switchSibling);
     trigger.addEventListener("click", () => (active?.button === trigger ? close() : open()));
     // Once a menu-bar menu is open, the mouse can browse its siblings without more clicks.
     // Touch pointerenter precedes a tap, so it must not open (then immediately close) a menu.

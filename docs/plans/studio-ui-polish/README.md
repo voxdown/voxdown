@@ -1,5 +1,7 @@
 # Studio UI and UX polish
 
+**Current design acceptance:** the user found this score-based cycle visually insufficient. The later [Writer-family redesign](../studio-writer-design-parity.md) and [independent visual comparison](../studio-writer-design-parity-review.md) supersede the aesthetic acceptance below. The historical scores are retained as an audit trail, not current proof of design maturity.
+
 2026-11-18. Local work only. This is a new polish cycle, separate from the prior feature rounds.
 
 Target: independently reviewed UI and UX of 9.5/10, or up to 30 substantive rounds. Scores are expert judgments of inspected workflows, not user-study measurements. The independent reviewer does not implement the changes it reviews.

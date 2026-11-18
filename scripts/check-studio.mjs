@@ -133,6 +133,118 @@ try {
   console.log(
     "Studio: pairing, overtyping, selection formatting, undo, safe notes, pasted text and persistent opt-out: passed",
   );
+  await page.locator("#preferences").click();
+  await page.locator("#screenplay-keys").check();
+  await page.locator("#page-guides").check();
+  await page.keyboard.press("Escape");
+  await open(page, "INT. ROOM - DAY", "Screenplay-keys.fountain");
+  await content.focus();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  assert.equal(await save(page), "INT. ROOM - DAY\n\n");
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), "INT. ROOM - DAY");
+  await open(page, "", "Element-cycle.fountain");
+  await content.focus();
+  await page.keyboard.press("Tab");
+  assert.equal(await save(page), "@");
+  await content.focus();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Tab");
+  assert.equal(await content.evaluate((node) => node === document.activeElement), false);
+  await open(page, "INT. ROOM\n\nAction.\n\n===\n\nEXT. PARK\n\nRain.", "Page-guides.fountain");
+  assert.equal(await page.locator(".studio-page-guides span[title]").count(), 2);
+  assert.equal(
+    await page.evaluate(() => {
+      const paper = document.querySelector("#paper");
+      paper.value = "a4";
+      paper.dispatchEvent(new Event("change"));
+      return document.querySelectorAll(".studio-page-guides span[title]").length;
+    }),
+    0,
+  );
+  await ready(page);
+  assert.equal(await page.locator(".studio-page-guides span[title]").count(), 2);
+  await page.locator("#paper").selectOption("letter");
+  await page.reload();
+  await ready(page);
+  await page.locator("#preferences").click();
+  assert(await page.locator("#screenplay-keys").isChecked());
+  assert(await page.locator("#page-guides").isChecked());
+  await page.locator("#screenplay-keys").uncheck();
+  await page.locator("#page-guides").uncheck();
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 800, height: 844 });
+  const tablet = await page.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth > innerWidth,
+    editor: document.querySelector(".writing").getBoundingClientRect().height,
+  }));
+  assert.equal(tablet.overflow, false);
+  assert(tablet.editor >= 560, `Tablet writing area too small: ${tablet.editor}`);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  console.log(
+    "Studio: screenplay keys, focus escape, page guides, persistent preferences and tablet writing space: passed",
+  );
+  const renameSource =
+    "INT. ROOM - DAY\n\nMARA (V.O.)\nHello, Mara. [[private]]\n\nJONAH ^\nHello.\n\nMARA\nAgain.";
+  await open(page, renameSource, "Rename.fountain");
+  await content.focus();
+  await page.keyboard.press("Control+Home");
+  await page.locator("#line-help").click();
+  assert.equal(
+    await page.getByRole("heading", { name: "Line 1: Scene heading", exact: true }).isVisible(),
+    true,
+  );
+  await page.getByRole("button", { name: "Back to writing", exact: true }).click();
+  await page.waitForFunction(
+    () => document.activeElement === document.querySelector(".cm-content"),
+  );
+  await page.keyboard.press("Control+k");
+  await page.getByRole("searchbox", { name: "Find a command" }).fill("Rename a character");
+  await page.keyboard.press("Enter");
+  const renameDialog = page.getByRole("dialog", { name: "Rename a character", exact: true });
+  await renameDialog.getByLabel("Character", { exact: true }).selectOption("MARA");
+  await renameDialog.getByLabel("New name", { exact: true }).fill("JONAH");
+  await renameDialog.getByRole("button", { name: "Preview rename", exact: true }).click();
+  assert.equal(
+    await renameDialog.getByRole("button", { name: "Apply rename", exact: true }).isEnabled(),
+    false,
+  );
+  await renameDialog
+    .getByLabel("Merge these cues with the existing character of this name", { exact: true })
+    .check();
+  await renameDialog.getByRole("button", { name: "Apply rename", exact: true }).click();
+  assert.equal(
+    await save(page),
+    renameSource.replace("MARA (V.O.)", "JONAH (V.O.)").replace("\nMARA\n", "\nJONAH\n"),
+  );
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), renameSource);
+  console.log(
+    "Studio: contextual line help, previewed cast merge, preserved private dialogue and atomic rename undo: passed",
+  );
+  const firstScene = "INT. ROOM - DAY #1#\n\n= A difficult choice\n\nMARA\nStay. [[private]]";
+  const lastScene = "EXT. BEACH - NIGHT #2#\n\nJONAH\nGo.";
+  const sceneSource = `Title: A Choice\n\n${firstScene}\n\n${lastScene}`;
+  await open(page, sceneSource, "Scenes.fountain");
+  await page.keyboard.press("Control+k");
+  await page.getByRole("searchbox", { name: "Find a command" }).fill("Scene cards");
+  await page.keyboard.press("Enter");
+  const board = page.getByRole("dialog", { name: "Scene cards", exact: true });
+  await board.getByRole("button", { name: "Move this scene…", exact: true }).first().click();
+  await board.getByRole("combobox", { name: "Place scene", exact: true }).selectOption("after");
+  await board.getByRole("combobox", { name: "Destination scene", exact: true }).selectOption("1");
+  await board.getByRole("button", { name: "Preview move", exact: true }).click();
+  await board.getByRole("button", { name: "Apply scene move", exact: true }).click();
+  assert.equal(await save(page), `Title: A Choice\n\n${lastScene}\n\n${firstScene}`);
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), sceneSource);
+  console.log(
+    "Studio: scene cards, exact scene move with notes/synopsis/title/numbering, EOF safety and atomic undo: passed",
+  );
   await open(page, "/*secret tail*/", "Partial-private.fountain");
   await content.focus();
   await page.keyboard.press("Control+Home");

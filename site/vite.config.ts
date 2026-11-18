@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { type Plugin, defineConfig } from "vite";
 import { workspaceAliases } from "../vitest.shared";
 import { markdownFile } from "./docs";
+import { studioOffline } from "./studio-offline-plugin";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -65,7 +66,7 @@ function buildOf(): { commit: string; date: string } {
 export default defineConfig({
   base: "./",
   define: { __WRITER_BUILD__: JSON.stringify(buildOf()) },
-  plugins: [studioDirectory(), studioSecurity(), markdownPages()],
+  plugins: [studioDirectory(), studioSecurity(), markdownPages(), studioOffline()],
   resolve: { alias: workspaceAliases },
   server: { fs: { allow: [".."] } },
   // The Writer draws a long story's script and book in a worker, which imports the packages.

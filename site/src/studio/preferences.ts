@@ -3,12 +3,16 @@ export type StudioPreferences = {
   textSize: 14 | 16 | 18 | 20;
   typewriter: boolean;
   focus: boolean;
+  pageGuides: boolean;
+  screenplayKeys: boolean;
 };
 export const defaultPreferences: StudioPreferences = {
   theme: "system",
   textSize: 16,
   typewriter: false,
   focus: false,
+  pageGuides: false,
+  screenplayKeys: false,
 };
 export function parsePreferences(value: unknown): StudioPreferences {
   const data = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -19,6 +23,8 @@ export function parsePreferences(value: unknown): StudioPreferences {
       : 16,
     typewriter: data.typewriter === true,
     focus: data.focus === true,
+    pageGuides: data.pageGuides === true,
+    screenplayKeys: data.screenplayKeys === true,
   };
 }
 export function readPreferences(): StudioPreferences {

@@ -1,5 +1,5 @@
 import { autocompletion, startCompletion } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, isolateHistory } from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
 import {
   Compartment,
@@ -17,13 +17,20 @@ import {
   placeholder,
 } from "@codemirror/view";
 import { mountBackup } from "./backup";
+import { mountCoach } from "./coach";
 import type { FountainDocument } from "./fountain";
 import type { ScreenplayLayout } from "./layout";
 import { mountLibrary } from "./library";
+import { LocalFileController } from "./local-file";
 import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } from "./navigation";
+import { createStudioOffline } from "./offline";
+import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
 import { mountPalette } from "./palette";
 import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
+import { mountRename } from "./rename-dialog";
+import { mountSceneBoard } from "./scene-board";
 import { ScreenplayScheduler, type WorkerResult, isSupersededRequest } from "./scheduler";
+import { screenplayKeymap } from "./screenplay-keymap";
 import { MAX_LINES, MAX_SOURCE, fountainName, readSource, writeSource } from "./source";
 import { type StudioDraft, getDraft, keepDraft, listDrafts } from "./storage";
 import { rememberParsedSource } from "./syntax";
@@ -47,6 +54,10 @@ const preview = $("preview");
 const page = $("page");
 const pairs = $<HTMLInputElement>("smart-pairs");
 const pairConfiguration = new Compartment();
+const pageGuideConfiguration = new Compartment();
+const screenplayKeyConfiguration = new Compartment();
+const localFile = new LocalFileController();
+let fileSavedRevision = -1;
 try {
   pairs.checked = localStorage.getItem("studio-smart-pairs") !== "off";
 } catch {}
@@ -124,7 +135,8 @@ const editorExtensions: Extension = [
     {
       key: "Mod-s",
       run: () => {
-        downloadSource();
+        if (localFile.available) void saveToFile();
+        else downloadSource();
         return true;
       },
     },
@@ -137,6 +149,7 @@ const editorExtensions: Extension = [
       revision++;
       hasWork = true;
       keptRevision = -1;
+      updateFileControls();
       $("recovery").textContent = "Keeping this draft…";
       clearTimeout(saving);
       saving = setTimeout(() => void persist(), 350);
@@ -166,7 +179,53 @@ document.querySelector<HTMLAnchorElement>(".skip")?.addEventListener("click", (e
   event.preventDefault();
   view.focus();
 });
-const workbench = mountWorkbench(document.body, jumpToLine);
+const coach = mountCoach(
+  document.body,
+  () => ({ source: view.state.doc.toString(), position: view.state.selection.main.head }),
+  () => view.focus(),
+);
+$("line-help").addEventListener("click", () => coach.open());
+const rename = mountRename(document.body, {
+  current: () => ({ source: view.state.doc.toString(), id: draftId }),
+  apply: (snapshot, plan) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
+    notice(
+      `Renamed ${plan.changes.length} character cues. ${plan.skipped.length} cues were left unchanged. Undo restores the original names.`,
+    );
+    return true;
+  },
+});
+const sceneBoard = mountSceneBoard(document.body, {
+  current: () => ({ source: view.state.doc.toString(), id: draftId }),
+  apply: (snapshot, plan) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
+    notice(
+      `Moved scene ${plan.moved.fromIndex + 1} to position ${plan.moved.toIndex + 1}. Undo restores the previous order.`,
+    );
+    return true;
+  },
+  jump: (snapshot, line) => {
+    if (snapshot.id !== draftId || snapshot.source !== view.state.doc.toString()) return false;
+    jumpToLine(line);
+    return true;
+  },
+});
+$("scene-cards").addEventListener("click", () => sceneBoard.open());
+const workbench = mountWorkbench(document.body, jumpToLine, () => rename.open());
 $("workbench").addEventListener("click", () => workbench.open());
 const backup = mountBackup(document.body, {
   current: () => ({ name: title(), source: text(), draftId }),
@@ -178,7 +237,42 @@ const backup = mountBackup(document.body, {
   download,
   notice,
 });
+const offline = createStudioOffline((status) => {
+  $("offline-status").textContent = status.message;
+  $("offline-status").dataset.state = status.state;
+  $<HTMLButtonElement>("offline-prepare").disabled =
+    status.state === "unavailable" || status.state === "preparing" || status.state === "checking";
+  $("offline-prepare").textContent =
+    status.state === "preparing"
+      ? "Preparing…"
+      : status.state === "ready"
+        ? "Check offline files"
+        : "Prepare for offline use";
+});
+$("offline-prepare").addEventListener("click", () => void offline.prepare());
 const palette = mountPalette(document.body, [
+  { label: "Scene cards and rearrangement", run: () => sceneBoard.open() },
+  { label: "Rename a character", run: () => rename.open() },
+  { label: "Explain the current Fountain line", run: () => coach.open() },
+  {
+    label: "Save Fountain to file",
+    shortcut: "Ctrl/⌘ S",
+    run: () => void saveToFile(),
+    enabled: () => localFile.available && !localFile.busy,
+  },
+  {
+    label: "Save Fountain as…",
+    run: () => void saveToFile(true),
+    enabled: () => localFile.available && !localFile.busy,
+  },
+  {
+    label: "Prepare Studio for offline use",
+    run: () => {
+      $<HTMLDialogElement>("preferences-dialog").showModal();
+      $("offline-prepare").focus();
+    },
+    enabled: () => offline.status().state !== "unavailable",
+  },
   {
     label: "Toggle live margins",
     run: () => {
@@ -254,6 +348,8 @@ function editingState(doc = ""): EditorState {
   return EditorState.create({
     doc,
     extensions: [
+      screenplayKeyConfiguration.of(preferences.screenplayKeys ? screenplayKeymap() : []),
+      pageGuideConfiguration.of(preferences.pageGuides ? pageGuides() : []),
       pairConfiguration.of(
         pairs.checked
           ? smartPairs(() =>
@@ -277,6 +373,8 @@ function applyPreferences(): void {
   $<HTMLSelectElement>("theme").value = preferences.theme;
   $<HTMLSelectElement>("text-size").value = String(preferences.textSize);
   $<HTMLInputElement>("typewriter").checked = preferences.typewriter;
+  $<HTMLInputElement>("page-guides").checked = preferences.pageGuides;
+  $<HTMLInputElement>("screenplay-keys").checked = preferences.screenplayKeys;
   updatePreviewToggle();
   view.requestMeasure();
 }
@@ -306,7 +404,25 @@ $("typewriter").addEventListener("change", () => {
   preferences.typewriter = $<HTMLInputElement>("typewriter").checked;
   keepPreferences();
 });
+$("page-guides").addEventListener("change", () => {
+  preferences.pageGuides = $<HTMLInputElement>("page-guides").checked;
+  view.dispatch({
+    effects: pageGuideConfiguration.reconfigure(preferences.pageGuides ? pageGuides() : []),
+  });
+  updatePageGuides();
+  keepPreferences();
+});
+$("screenplay-keys").addEventListener("change", () => {
+  preferences.screenplayKeys = $<HTMLInputElement>("screenplay-keys").checked;
+  view.dispatch({
+    effects: screenplayKeyConfiguration.reconfigure(
+      preferences.screenplayKeys ? screenplayKeymap() : [],
+    ),
+  });
+  keepPreferences();
+});
 applyPreferences();
+updateFileControls();
 
 function format(mark: WritingMark): boolean {
   if (view.compositionStarted) return false;
@@ -405,6 +521,56 @@ function downloadSource(): void {
     "Fountain download started. Keep the downloaded file as an independent copy of your screenplay.",
   );
 }
+function updateFileControls(): void {
+  const button = $<HTMLButtonElement>("save-file");
+  button.hidden = !localFile.available;
+  button.disabled = localFile.busy;
+  button.textContent = localFile.busy ? "Saving…" : localFile.filename ? "Save" : "Save to file…";
+  $("file-status").textContent = localFile.filename
+    ? `${localFile.filename} · ${fileSavedRevision === revision ? "File saved" : "Edits not yet saved to file"}`
+    : "";
+  $("file-status").hidden = !localFile.filename;
+}
+async function saveToFile(saveAs = false): Promise<void> {
+  if (recovering || replacing) return;
+  if (!localFile.available) {
+    downloadSource();
+    return;
+  }
+  const capturedId = draftId;
+  const capturedRevision = revision;
+  const value = text();
+  const pending =
+    saveAs || !localFile.filename ? localFile.saveAs(value, title()) : localFile.save(value);
+  updateFileControls();
+  const result = await pending;
+  if (capturedId !== draftId) {
+    updateFileControls();
+    return;
+  }
+  if (result.status === "saved") {
+    fileSavedRevision = capturedRevision;
+    // A linked file can change externally; it is not an independent downloaded copy.
+    // Keep recovery-loss guards tied to actual downloads, even after a successful Save.
+    notice(
+      revision === capturedRevision
+        ? `Saved to ${result.filename}.`
+        : `Saved an earlier version to ${result.filename}. Your newer edits are still in the editor; save again.`,
+    );
+  } else if (result.status === "conflict") {
+    notice(
+      `The file ${result.filename} changed outside Studio. It was not overwritten. Use Save As with a different filename, or Download, to keep your edits.`,
+    );
+  } else if (result.status === "error") {
+    notice(result.message);
+  } else if (result.status === "busy") {
+    notice("A file save is already in progress. Your edits remain available here.");
+  } else if (result.status === "cancelled") {
+    notice("File save cancelled. Your screenplay is unchanged.");
+  }
+  updateFileControls();
+}
+$("save-file").addEventListener("click", () => void saveToFile());
 async function persist(): Promise<boolean> {
   if (!hasWork) return true;
   const captured = revision;
@@ -445,6 +611,8 @@ async function mayReplace(): Promise<boolean> {
 
 function showSource(value: string, fileName: string): void {
   const next = readSource(value);
+  localFile.disconnect();
+  fileSavedRevision = -1;
   fileGeneration++;
   clearTimeout(saving);
   clearTimeout(parsing);
@@ -453,6 +621,7 @@ function showSource(value: string, fileName: string): void {
   parsedDocument = undefined;
   draftId = crypto.randomUUID();
   revision = 0;
+  updateFileControls();
   keptRevision = -1;
   name.value = fountainName(fileName);
   // A new document starts a fresh undo history, so Undo never reveals another screenplay.
@@ -474,6 +643,7 @@ function showSource(value: string, fileName: string): void {
 $("retry-preview").addEventListener("click", () => {
   scheduler.restart();
   scheduleParse(0);
+  updatePageGuides();
 });
 function scheduleParse(delay = 180): void {
   clearTimeout(parsing);
@@ -500,6 +670,7 @@ function scheduleParse(delay = 180): void {
 }
 function applyResult(result: Result): void {
   latest = result;
+  updatePageGuides();
   $("retry-preview").hidden = true;
   const document = result.document;
   if (document) {
@@ -524,6 +695,12 @@ function applyResult(result: Result): void {
   pdfButton.disabled =
     exporting || !result.layout || Boolean(result.error) || Boolean(document?.warnings.length);
   renderPage();
+}
+function updatePageGuides(): void {
+  if (!preferences.pageGuides) return;
+  view.dispatch({
+    effects: setPageGuides.of(latest?.layout ? pageGuideLocations(latest.layout) : []),
+  });
 }
 function documentNode<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -682,6 +859,7 @@ margins.addEventListener("change", () => {
 paper.addEventListener("change", () => {
   previewPage = 0;
   scheduleParse(0);
+  updatePageGuides();
 });
 $("previous").addEventListener("click", () => {
   previewPage--;
@@ -700,6 +878,7 @@ $("download").addEventListener("click", downloadSource);
 name.addEventListener("change", () => {
   name.value = title();
   revision++;
+  updateFileControls();
   keptRevision = -1;
   hasWork = true;
   $("recovery").textContent = "Keeping this draft…";

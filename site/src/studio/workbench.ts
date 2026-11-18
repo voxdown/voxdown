@@ -7,7 +7,11 @@ import {
   searchPrivateNotes,
 } from "./insights";
 
-export function mountWorkbench(host: HTMLElement, jump: (line: number) => void) {
+export function mountWorkbench(
+  host: HTMLElement,
+  jump: (line: number) => void,
+  rename?: () => void,
+) {
   const dialog = document.createElement("dialog");
   dialog.setAttribute("aria-labelledby", "workbench-title");
   const heading = document.createElement("h2");
@@ -106,6 +110,15 @@ export function mountWorkbench(host: HTMLElement, jump: (line: number) => void) 
           ),
         );
     } else if (select.value === "characters") {
+      if (rename) {
+        const renameButton = node("button", "Rename a character") as HTMLButtonElement;
+        renameButton.type = "button";
+        renameButton.onclick = () => {
+          dialog.close();
+          rename();
+        };
+        content.append(renameButton);
+      }
       const found = searchCharacters(data.characters, search.value);
       summary.textContent = `${found.total} characters · showing up to 100`;
       const excerpts = pending ? dialogueExcerpts(pending.document) : new Map();

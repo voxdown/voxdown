@@ -49,6 +49,8 @@ jobs:
       - run: pnpm site:check
       - run: STUDIO_BROWSER=firefox node scripts/check-studio.mjs
       - run: STUDIO_BROWSER=webkit node scripts/check-studio.mjs
+      - run: node scripts/check-studio-files.mjs
+      - run: node scripts/check-studio-offline.mjs
       - run: node scripts/check-studio-accessibility.mjs
       - run: node scripts/check-studio-performance.mjs
       - run: node scripts/check-studio-soak.mjs

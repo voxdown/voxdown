@@ -108,6 +108,20 @@ try {
     ),
   });
   await ready();
+  await page.locator("#line-help").click();
+  await audit("contextual Fountain help");
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(
+    () => document.activeElement === document.querySelector(".cm-content"),
+  );
+
+  for (const command of ["Rename a character", "Scene cards and rearrangement"]) {
+    await page.locator("#commands").click();
+    await page.getByRole("searchbox", { name: "Find a command" }).fill(command);
+    await page.keyboard.press("Enter");
+    await audit(command);
+    await page.keyboard.press("Escape");
+  }
   await audit("populated screenplay, light appearance");
   await page.locator("#preferences").click();
   await page.locator("#theme").selectOption("dark");

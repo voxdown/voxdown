@@ -242,12 +242,14 @@
   font-size: 11px;
 }
 dialog {
+  overscroll-behavior: contain;
   color: var(--ink);
   background: var(--surface);
   border-radius: 12px;
   border: 1px solid var(--border);
   padding: 24px;
 }
+
 dialog::backdrop {
   background: #16261f66;
 }
@@ -618,5 +620,113 @@ dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
   #guide .dialog-heading,
   #preferences-dialog .dialog-heading {
     top: -18px;
+  }
+}
+
+/* Keep the writing surface inside short windows and landscape/keyboard viewports.
+   Duplicate actions remain in File/View and Commands; this never changes focus mode. */
+@media (max-height: 550px) {
+  body {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #app,
+  #app.focus-writing {
+    height: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  .workspace {
+    height: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  .app-header {
+    height: 48px;
+    min-height: 48px;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 1px 10px;
+  }
+  .app-header .badge,
+  .app-header .private,
+  .app-header #mobile-focus {
+    display: none;
+  }
+  .workspace-menus {
+    order: 0;
+    flex-basis: auto;
+    flex-shrink: 0;
+  }
+  .workspace-menus button,
+  .app-header > #commands,
+  .app-header > #mobile-focus {
+    min-height: 44px;
+    padding: 6px;
+  }
+  body:has(#app.focus-writing) #mobile-focus {
+    display: block;
+  }
+  .documentbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 10px;
+  }
+  .documentbar .filebar,
+  .documentbar .toolbar {
+    display: contents;
+  }
+  .documentbar .filename {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .documentbar .filename input {
+    min-height: 44px;
+  }
+  .documentbar .file-actions,
+  .documentbar #outline-toggle,
+  .documentbar #preview-toggle,
+  .documentbar #focus-mode,
+  .documentbar #counts {
+    display: none;
+  }
+  .documentbar #element-action {
+    grid-column: 2;
+    grid-row: 1;
+    width: 110px;
+    min-height: 44px;
+  }
+  .documentbar #retry-preview:not([hidden]) {
+    grid-column: 1 / -1;
+    min-height: 44px;
+  }
+}
+@media (max-height: 550px) and (max-width: 700px) {
+  #app.mobile-preview .documentbar,
+  #app.mobile-preview .preview-hint,
+  #app.mobile-preview > footer {
+    display: none;
+  }
+  #app.mobile-preview .studio-side-tabs,
+  #app.mobile-preview .page-controls {
+    padding-block: 0;
+  }
+  #app.focus-writing .documentbar {
+    padding: 0;
+  }
+  #app.focus-writing .documentbar:has(#retry-preview:not([hidden])) {
+    padding: 2px 10px;
+  }
+}
+@media (max-height: 550px) and (max-width: 559px) {
+  .app-header .brand {
+    display: none;
+  }
+  body:has(#app.focus-writing) .brand {
+    display: block;
   }
 }

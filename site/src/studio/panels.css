@@ -16,6 +16,16 @@
   inset: 0 3px;
   background: var(--border, #d5dbd2);
 }
+.workspace-separator::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 16px);
+  left: 2px;
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  background: var(--muted, #5b6963);
+}
 .workspace-separator:hover::before,
 .workspace-separator:focus-visible::before {
   inset-inline: 2px;

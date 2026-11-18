@@ -21,6 +21,7 @@ import { mountBackup } from "./backup";
 import { mountBreakdown } from "./breakdown-dialog";
 import { mountCoach } from "./coach";
 import { mountCompareDialog } from "./compare-dialog";
+import { keepDialogFocusVisible } from "./dialog-layout";
 import { mountFileDrop } from "./drop-files";
 import { mountFdxExport } from "./fdx-dialog";
 import { mountFdxImport } from "./fdx-import-dialog";
@@ -133,7 +134,9 @@ const editorExtensions: Extension = [
   EditorView.lineWrapping,
   highlightActiveLine(),
   markField,
-  placeholder("INT. SOMEWHERE - DAY\n\nStart a scene, or open a Fountain screenplay."),
+  placeholder(
+    "Start your screenplay here.\n\nBegin a scene with INT. or EXT., or open a Fountain file. Find a sample and writing tips in Help.",
+  ),
   EditorView.contentAttributes.of({
     "aria-label": "Fountain screenplay",
     tabindex: "0",
@@ -431,6 +434,11 @@ const storageHealth = mountStorageHealth(document.body, {
   backup: () => backup.open(),
   recover: () => library.open(),
 });
+for (const id of ["preferences-dialog", "guide"]) {
+  const dialog = $<HTMLDialogElement>(id);
+  const header = dialog.querySelector<HTMLElement>(".dialog-heading");
+  if (header) keepDialogFocusVisible(dialog, header);
+}
 $("storage-health").addEventListener("click", () => {
   $<HTMLDialogElement>("preferences-dialog").close();
   $("commands").focus();
@@ -1229,6 +1237,22 @@ $("preview-toggle").addEventListener("click", () => {
   updatePreviewToggle();
 });
 matchMedia("(max-width: 700px)").addEventListener("change", updatePreviewToggle);
+document.addEventListener("keydown", (event) => {
+  if (
+    event.key !== "Escape" ||
+    event.defaultPrevented ||
+    event.isComposing ||
+    app.inert ||
+    !matchMedia("(max-width: 700px)").matches ||
+    !app.classList.contains("mobile-preview") ||
+    document.querySelector("dialog[open]")
+  )
+    return;
+  event.preventDefault();
+  app.classList.remove("mobile-preview");
+  updatePreviewToggle();
+  view.focus();
+});
 updatePreviewToggle();
 $("outline-toggle").addEventListener("click", () => {
   previewSpace.restore(false);

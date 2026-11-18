@@ -130,6 +130,37 @@ describe("shared Studio dialog layout", () => {
       }
     });
   }
+  it("keeps keyboard focus below sticky titles when traversing long phone dialogs", async () => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    for (const id of ["rename", "replace", "sides", "rehearsal"]) {
+      await page.evaluate((id) => Reflect.get(window, "dialogs")[id].open(), id);
+      for (const key of ["Tab", "Shift+Tab"]) {
+        for (let step = 0; step < 14; step++) {
+          await page.keyboard.press(key);
+          const visible = await page.evaluate(async () => {
+            await new Promise(requestAnimationFrame);
+            const focused = document.activeElement as HTMLElement;
+            const dialog = document.querySelector("dialog[open]");
+            if (!dialog?.contains(focused) || focused === dialog) return true;
+            const header = dialog.querySelector(".studio-dialog-header");
+            if (header?.contains(focused)) return true;
+            const rect = focused.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2,
+            );
+            return (
+              rect.top >= (header?.getBoundingClientRect().bottom ?? 0) &&
+              !!hit &&
+              (hit === focused || focused.contains(hit))
+            );
+          });
+          expect(visible, `${id}: ${key} step ${step}`).toBe(true);
+        }
+      }
+      await page.keyboard.press("Escape");
+    }
+  });
   it("groups portable backup saving and opening without changing action names", async () => {
     await page.evaluate(() => Reflect.get(window, "dialogs").backup.open());
     const sections = page.locator("dialog[open] .studio-dialog-section");

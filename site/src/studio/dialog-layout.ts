@@ -12,7 +12,32 @@ export function arrangeDialogHeader(
   dialog.classList.add("studio-dialog-layout");
   close.classList.add("studio-dialog-close");
   if (previous && previous !== dialog && !previous.childNodes.length) previous.remove();
+  keepDialogFocusVisible(dialog, header);
   return header;
+}
+
+/** Native focus scrolling does not consistently account for sticky dialog titles. */
+export function keepDialogFocusVisible(dialog: HTMLDialogElement, header: HTMLElement) {
+  const reveal = () => {
+    const focused = dialog.ownerDocument.activeElement;
+    if (!dialog.open || !(focused instanceof HTMLElement) || !dialog.contains(focused)) return;
+    if (focused === dialog || header.contains(focused)) return;
+    const field = focused.getBoundingClientRect();
+    const top = header.getBoundingClientRect().bottom + 8;
+    const bottom = dialog.getBoundingClientRect().bottom - 8;
+    if (field.top < top) {
+      dialog.scrollTop -= top - field.top;
+    } else if (field.bottom > bottom) {
+      dialog.scrollTop += Math.min(field.bottom - bottom, field.top - top);
+    }
+  };
+  const observer = new ResizeObserver(() => {
+    dialog.style.scrollPaddingTop = `${header.getBoundingClientRect().height + 8}px`;
+    reveal();
+  });
+  observer.observe(header);
+  observer.observe(dialog);
+  dialog.addEventListener("focusin", () => requestAnimationFrame(reveal));
 }
 
 export function dialogActions(...buttons: HTMLButtonElement[]) {

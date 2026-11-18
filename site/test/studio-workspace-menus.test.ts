@@ -48,6 +48,56 @@ async function start(source = "!Alpha beta") {
   await ready();
 }
 describe("integrated workspace navigation", () => {
+  it("keeps preferences fields visible during backward keyboard traversal", async () => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await start();
+    await page.locator("#view-menu").click();
+    await page.locator("#preferences").click();
+    for (const key of ["Tab", "Shift+Tab"]) {
+      for (let step = 0; step < 24; step++) {
+        await page.keyboard.press(key);
+        expect(
+          await page.evaluate(async () => {
+            await new Promise(requestAnimationFrame);
+            const field = document.activeElement as HTMLElement;
+            const dialog = document.querySelector("#preferences-dialog");
+            const header = dialog?.querySelector(".dialog-heading");
+            if (field === dialog || !dialog?.contains(field) || header?.contains(field))
+              return true;
+            const rect = field.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2,
+            );
+            return (
+              rect.top >= (header?.getBoundingClientRect().bottom ?? 0) &&
+              !!hit &&
+              (hit === field || field.contains(hit))
+            );
+          }),
+          `${key} step ${step}`,
+        ).toBe(true);
+      }
+    }
+  });
+  it("keeps the focused preferences field on screen when the viewport shrinks", async () => {
+    await start();
+    await page.locator("#view-menu").click();
+    await page.locator("#preferences").click();
+    const field = page.locator("#preferences-dialog select").last();
+    await field.focus();
+    await page.setViewportSize({ width: 320, height: 300 });
+    await page.waitForFunction(() => {
+      const field = document.activeElement as HTMLElement;
+      const dialog = field.closest("dialog");
+      if (!dialog) return false;
+      const rect = field.getBoundingClientRect();
+      const top = dialog.querySelector(".dialog-heading")?.getBoundingClientRect().bottom ?? 0;
+      const bottom = dialog.getBoundingClientRect().bottom;
+      return rect.top >= top && rect.bottom <= bottom;
+    });
+    expect(await field.evaluate((field) => field === document.activeElement)).toBe(true);
+  });
   it("exposes panel states and returns dialog focus to the visible menu trigger", async () => {
     await start();
     await page.locator("#view-menu").click();

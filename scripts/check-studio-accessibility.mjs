@@ -283,15 +283,69 @@ try {
   await page.setViewportSize({ width: 320, height: 256 });
   const shortViewport = await page.evaluate(() => ({
     editorHeight: document.querySelector(".cm-scroller").getBoundingClientRect().height,
-    bodyOverflow: getComputedStyle(document.body).overflowY,
+    editorBottom: document.querySelector(".cm-scroller").getBoundingClientRect().bottom,
+    bodyHeight: document.body.scrollHeight,
     pageOverflow: document.documentElement.scrollWidth > innerWidth,
   }));
-  record(shortViewport.editorHeight >= 100, "400% zoom / short viewport collapses the editor");
   record(
-    shortViewport.bodyOverflow !== "hidden",
-    "Short viewport prevents scrolling to controls and editor",
+    shortViewport.editorHeight >= 70,
+    "400% zoom / short viewport collapses the visible editor",
+  );
+  record(
+    shortViewport.editorBottom <= 256 && shortViewport.bodyHeight <= 256,
+    "Short viewport places the writing surface or controls below the screen",
   );
   record(!shortViewport.pageOverflow, "Short viewport causes horizontal page overflow");
+  for (const id of [
+    "file-menu",
+    "view-menu",
+    "tools-menu",
+    "help-menu",
+    "commands",
+    "element-action",
+  ]) {
+    const bounds = await page.locator(`#${id}`).boundingBox();
+    record(
+      bounds && bounds.height >= 44 && bounds.y >= 0 && bounds.y + bounds.height <= 256,
+      `Short viewport clips or shrinks ${id}`,
+    );
+  }
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+End");
+  await page.waitForFunction(() => document.querySelector(".cm-scroller").scrollTop > 0);
+  record(
+    await page.locator(".cm-content").evaluate((node) => node === document.activeElement),
+    "Short viewport loses editor focus while scrolling to the caret",
+  );
+  await page.locator("#commands").click();
+  await page.getByRole("searchbox", { name: "Find a command" }).fill("Focus writing");
+  await page.keyboard.press("Enter");
+  const exitFocus = page.getByRole("button", { name: "Exit focus writing", exact: true });
+  const exitBounds = await exitFocus.boundingBox();
+  record(
+    exitBounds && exitBounds.height >= 44 && exitBounds.y + exitBounds.height <= 256,
+    "Short viewport clips the explicit Focus exit",
+  );
+  record(
+    await page.locator("#editor").evaluate((node) => node.getBoundingClientRect().height >= 120),
+    "Focus writing does not provide additional visible editing space",
+  );
+  await exitFocus.click();
+  await page.locator("#view-menu").click();
+  await page.getByRole("button", { name: "Preview panel", exact: true }).click();
+  const previewBounds = await page.locator("#page-scroll").boundingBox();
+  record(
+    previewBounds && previewBounds.height >= 110 && previewBounds.y + previewBounds.height <= 256,
+    "Short viewport clips the scrollable screenplay preview",
+  );
+  await page.locator("#page-scroll").hover();
+  await page.mouse.wheel(0, 400);
+  await page.waitForFunction(() => document.querySelector("#page-scroll").scrollTop > 0);
+  await page.keyboard.press("Escape");
+  record(
+    await page.locator(".cm-content").isVisible(),
+    "Escape does not return from short-screen preview to writing",
+  );
   await audit("320×256px viewport (400% reflow equivalent)");
   assert.deepEqual(failures, [], `Accessibility regressions:\n${failures.join("\n")}`);
   console.log(

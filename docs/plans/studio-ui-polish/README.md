@@ -41,7 +41,7 @@ Final integration: [independent review](../studio-uiux-review-pass-04.md), **UI 
 
 ## Optional skills
 
-Recommended, not installed: Anthropic frontend-design and Vercel web-design-guidelines. Their availability is not a prerequisite for this authorized local work.
+Installed with user approval: frontend-design and web-design-guidelines. A [fresh skills-informed pass](skills-follow-up.md) found additional keyboard and short-viewport issues; the earlier scores cover the earlier review scope.
 
 ## Final validation
 
@@ -55,3 +55,7 @@ Recommended, not installed: Anthropic frontend-design and Vercel web-design-guid
 - The final review's minor FDX singular-wording follow-up was corrected after review, without changing XML generation.
 
 Changes remain local. Physical-device/assistive-technology sessions and native screenplay-app acceptance are separate from this browser review.
+
+## Skills-informed follow-up
+
+A fresh independent review lowered the starting assessment to UI 9.2 / UX 8.8 after finding focus occlusion and cramped short-screen layouts. Four further focused rounds addressed dialog focus during traversal and resize, compact writing chrome, instructional empty states and resizing grips, and short-screen preview with nested Escape behavior. The [fifth independent review](../studio-uiux-review-pass-05.md) returned UI 9.5 / UX 9.5 for the expanded reviewed scope. See the [implementation and validation record](skills-follow-up.md).

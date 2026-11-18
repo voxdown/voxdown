@@ -147,19 +147,66 @@ describe("explicit mobile focus writing", () => {
         .focus,
     ).toBe(false);
   });
-  it("keeps short viewports scrollable with a usable editor and an operable exit", async () => {
+  it("fits short viewports with a usable editor and an operable exit", async () => {
     await start();
     await page.locator("#mobile-focus").click();
     await page.setViewportSize({ width: 320, height: 280 });
     const current = await geometry();
     expect(current.width).toBe(320);
-    expect(current.height).toBeGreaterThanOrEqual(200);
-    expect(current.overflow).toBe("auto");
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
+    expect(current.top).toBeLessThanOrEqual(100);
+    expect(current.height).toBeGreaterThanOrEqual(140);
+    expect(current.overflow).toBe("hidden");
+    expect(await page.evaluate(() => document.body.scrollHeight)).toBe(280);
+    const exit = await page
+      .getByRole("button", { name: "Exit focus writing", exact: true })
+      .boundingBox();
+    expect(exit?.height).toBeGreaterThanOrEqual(44);
+    expect((exit?.y ?? 280) + (exit?.height ?? 0)).toBeLessThan(280);
     await page.getByRole("button", { name: "Exit focus writing", exact: true }).click();
     expect(await page.locator(".filebar").isVisible()).toBe(true);
   });
+  it.each([
+    { width: 667, height: 375, minimumEditor: 200 },
+    { width: 375, height: 300, minimumEditor: 125 },
+  ])(
+    "keeps menus, file identity, selection and writing available at $width×$height",
+    async ({ width, height, minimumEditor }) => {
+      const source = "!Alpha beta";
+      await start(source);
+      await page.locator(".cm-content").click();
+      await page.keyboard.press("Control+Home");
+      await page.keyboard.press("ArrowRight");
+      for (let i = 0; i < 5; i++) await page.keyboard.press("Shift+ArrowRight");
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => getSelection()?.toString())).toBe("Alpha");
+      expect(
+        await page.locator(".cm-content").evaluate((element) => document.activeElement === element),
+      ).toBe(true);
+      const current = await geometry();
+      expect(current.width).toBe(width);
+      expect(current.top).toBeLessThanOrEqual(145);
+      expect(current.height).toBeGreaterThanOrEqual(minimumEditor);
+      expect(await page.evaluate(() => document.body.scrollHeight)).toBe(height);
+      expect(await page.locator("#name").isVisible()).toBe(true);
+      expect(await page.locator("#element-action").isVisible()).toBe(true);
+      expect(
+        await page
+          .locator("#app")
+          .evaluate((element) => element.classList.contains("focus-writing")),
+      ).toBe(false);
+      for (const id of ["file-menu", "view-menu", "tools-menu", "help-menu", "commands"]) {
+        const button = page.locator(`#${id}`);
+        expect(await button.isVisible()).toBe(true);
+        expect((await button.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+      }
+      await page.locator("#view-menu").click();
+      await page.getByRole("button", { name: "Preview panel", exact: true }).click();
+      expect(await page.locator("#preview").isVisible()).toBe(true);
+      await page.keyboard.press("Escape");
+      expect(await page.locator(".cm-content").isVisible()).toBe(true);
+      expect(await downloadSource()).toBe(source);
+    },
+  );
   it("keeps malformed-source diagnostics visible and the exact source downloadable", async () => {
     const source = "INT. ROOM\n\n[[Unclosed private note";
     await start(source);

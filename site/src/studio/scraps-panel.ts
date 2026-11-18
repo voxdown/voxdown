@@ -58,6 +58,24 @@ function button(text: string, run: () => void) {
   return result;
 }
 
+function markPinned(label: HTMLElement, pinned: boolean) {
+  if (!pinned) return;
+  label.classList.add("studio-scrap-pinned-label");
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("focusable", "false");
+  icon.setAttribute("fill", "none");
+  icon.setAttribute("stroke", "currentColor");
+  icon.setAttribute("stroke-width", "1.75");
+  icon.setAttribute("stroke-linecap", "round");
+  icon.setAttribute("stroke-linejoin", "round");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M16 9V3H8v6l-3 4v3h14v-3l-3-4ZM12 16v6");
+  icon.append(path);
+  label.prepend(icon);
+}
+
 /** Writer's portable scrap format, kept separately for each Studio browser draft. */
 export function mountStudioScraps(
   host: HTMLElement,
@@ -274,7 +292,9 @@ export function mountStudioScraps(
         const heading = node("div");
         heading.className = "studio-scrap-preview-heading";
         const close = button("Close preview", () => popup.close(true));
-        heading.append(node("strong", scrap.pinned ? "Pinned scrap" : "Scrap"), close);
+        const title = node("strong", scrap.pinned ? "Pinned scrap" : "Scrap");
+        markPinned(title, !!scrap.pinned);
+        heading.append(title, close);
         const passage = node("div");
         passage.className = "studio-scrap-full-text";
         renderScrapPreview(passage, scrap.text, true);
@@ -308,6 +328,7 @@ export function mountStudioScraps(
       controls.className = "studio-scrap-heading";
       const label = node("span", scrap.pinned ? "Pinned scrap" : "Scrap");
       label.className = "studio-scrap-label";
+      markPinned(label, !!scrap.pinned);
       const menu = button("⋯", () => openMenu());
       menu.setAttribute("aria-label", "Scrap actions");
       menu.setAttribute("aria-haspopup", "menu");

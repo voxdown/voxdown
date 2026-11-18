@@ -34,12 +34,12 @@
 .studio-page-guides {
   color: var(--muted);
   background: transparent;
-  width: 40px;
-  font: 11px / 1.4 "Courier Prime", monospace;
+  width: 52px;
+  font: 13px / 1.4 "Courier Prime", monospace;
   user-select: none;
 }
 .studio-page-guides .cm-gutterElement {
-  width: 40px;
+  width: 52px;
   padding: 0 8px 0 0;
   text-align: right;
 }
@@ -48,7 +48,16 @@
   width: 100%;
   padding-top: 3px;
   border-top: 1px solid var(--border);
+  color: var(--studio-page-number, #6b6b6b);
   font-variant-numeric: tabular-nums;
+}
+:root[data-theme="dark"] {
+  --studio-page-number: #aaa;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --studio-page-number: #aaa;
+  }
 }
 /* Page guides have their own margin, separated from the manuscript's scene labels. */
 #editor .cm-gutters.cm-gutters-after:has(.studio-page-guides) {
@@ -57,7 +66,7 @@
 @media (max-width: 700px) {
   .studio-page-guides,
   .studio-page-guides .cm-gutterElement {
-    width: 28px;
+    width: 36px;
   }
   .studio-page-guides .cm-gutterElement {
     padding-right: 4px;

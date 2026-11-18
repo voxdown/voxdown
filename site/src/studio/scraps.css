@@ -73,6 +73,17 @@
 .studio-scrap-label {
   font-size: 11px;
 }
+.studio-scrap-pinned-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.studio-scrap-pinned-label svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--accent);
+}
 #preview .studio-scrap-heading button {
   border: 0;
   background: transparent;

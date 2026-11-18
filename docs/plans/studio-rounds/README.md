@@ -73,10 +73,12 @@ previews, single-step undo, source/omission preservation, EOF moves, bounded ren
 | 32 | Explicit mobile focus mode with more room for writing | Verified |
 | 33 | Discoverable mobile File menu using the existing task palette | Verified |
 | 34 | Temporary expanded tablet/desktop screenplay preview with safe return | Verified |
-| 35 | Successful-action notices yield writing space on next accepted edit | Implementing |
-| 36 | Reject unrecoverable NUL input without changing the existing draft | Implementing |
-| 37 | Export fidelity audit and evidence-led repair | Investigating |
-| 38 | Reach every workbench result through bounded pagination | Implementing |
+| 35 | Successful-action notices yield writing space on next accepted edit | Verified |
+| 36 | Atomic NUL-input rejection and exact emergency recovery for invalid legacy drafts | Verified |
+| 37 | Corrupt PDF font responses release cached bytes for an explicit fresh retry | Verified |
+| 38 | Reach every workbench result through bounded pagination | Verified |
+| 39 | Verify offline font bytes and repair damaged cache entries without losing good fallbacks | Verified |
+| 40 | Explicit printed-Unicode positioning preflight and keyboard-readable warnings | Verified |
 
 Validation for the first seven rounds:
 - `pnpm check`: lint, typechecks, 2,376 tests in 89 files, package builds passed.
@@ -238,3 +240,51 @@ Expanded active-session regression now exercises adaptation workers, breakdown, 
 preview and comparison alongside the earlier tools:27 cycles/123seconds,2.27MiB retained
 page-heap growth, bounded DOM, one reused parser worker and zero adaptation workers left
 alive after tools close. It does not measure worker heap or prove hours-long stability.
+
+
+Rounds35–40 close findings from complete-task and failure audits. Success-only notices clear
+on the next accepted source edit; important messages remain. NUL paste is rejected atomically,
+and invalid legacy records can be downloaded unchanged as explicit emergency recovery JSON.
+Workbench Characters/Private notes/Diagnostics now page through every match while retaining
+at most100 rows. Font embedding/subsetting failures invalidate only their own rejected bytes;
+HTTP cache reload and worker cache repair are explicit, bounded and preserve good fallbacks.
+Build-specific SHA256 checks detect damaged offline fonts. Printed combining marks and format
+controls receive a bounded warning and block PDF before fetching fonts; precomposed supported
+letters and private omissions retain their intended behavior. Both scrolling warning panels
+are keyboard accessible. No source normalization or unsupported shaping claim was added.
+
+Independent final-batch audit:54 targeted tests and live nested-private handoff/hostileFDX
+flows passed, with no external requests or private-tail leakage. Native320×300/320×700
+warning panels pass keyboard and axe checks. Candid reviewed-scope ratings: UX9.0/design8.9/
+accessibility9.1/reliability9.3/security9.3. Remaining mobile chrome density and advanced-tool
+discovery are usability tradeoffs. These judgments do not certify physical input, screenreaders,
+OS file permissions, external screenplay applications or printed pages. Final built regressions
+and quiet performance results follow when completed.
+
+
+## Validated local checkpoint:40 rounds
+
+Final `pnpm check` passes2,909 tests in134files, lint, typechecks and package builds. Built
+Chromium, Firefox and WPE WebKit complete regression gates pass;47 accessibility states,
+direct-file failure/race tests and root/nested offline gates pass. Offline acceptance includes
+real corrupted-font repair, subsequent offline PDF, first-use voice adaptation, failed updates,
+stalled headers/bodies and old-client retention. Build: `ad733cedc71e2b377486f2bb`.
+
+Quiet4×CPU final performance: sustained typing keydown-to-next-frame p95=16.0ms/max20.6ms;
+typing across worker updates p95=16.8ms/max17.4ms; zero observed main-thread long tasks in
+those flows. Three near-limit adaptations had maximum frame gaps16.7ms with zero long tasks.
+Editor/outline/workbench/recovery DOM bounds all pass. These are desktop regression measurements,
+not physical-phone latency promises. The expanded27-cycle/123-second soak remains the active-
+session check; it is not an hours-long endurance or worker-heap claim.
+
+One initial full-suite run timed out in the new notes-pagination browser test, while2,908
+others passed. Isolated checks and the complete rerun passed; a shorter Playwright locator
+timeout now yields useful call-site diagnostics before the overall test deadline. No product
+cause was reproduced, so this remains a recorded intermittent test observation, not a claimed
+product repair. No acceptance failures were suppressed or budgets relaxed.
+
+All40 rounds are implemented and independently reviewed. The100-round authorization is a
+ceiling;60 rounds remain unspent. This is a strong experimental release with documented
+manual acceptance gates, not a claim that every dimension has reached9.5 or that physical
+browser/OS/native-app testing occurred. See [hands-on walkthrough](../studio-hands-on.md).
+No push, publication, account backend or Writer migration occurred.

@@ -31,6 +31,7 @@ import { mountLibrary } from "./library";
 import { LocalFileController } from "./local-file";
 import { mountLocations } from "./location-dialog";
 import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } from "./navigation";
+import { type NoticeLifetime, createNoticePresenter } from "./notice";
 import { mountNumberingDialog } from "./numbering-dialog";
 import { createStudioOffline } from "./offline";
 import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
@@ -46,14 +47,8 @@ import { mountSceneBoard } from "./scene-board";
 import { ScreenplayScheduler, type WorkerResult, isSupersededRequest } from "./scheduler";
 import { screenplayKeymap } from "./screenplay-keymap";
 import { mountActorSides } from "./sides-dialog";
-import {
-  MAX_LINES,
-  MAX_SOURCE,
-  encodeUtf8Losslessly,
-  fountainName,
-  readSource,
-  writeSource,
-} from "./source";
+import { MAX_SOURCE, encodeUtf8Losslessly, fountainName, readSource, writeSource } from "./source";
+import { sourceEditProblem } from "./source-input";
 import { mountSpeechEditor } from "./speech-dialog";
 import { type StudioDraft, getDraft, keepDraft, listDrafts } from "./storage";
 import { mountStorageHealth } from "./storage-health";
@@ -81,6 +76,7 @@ const pairConfiguration = new Compartment();
 const pageGuideConfiguration = new Compartment();
 const screenplayKeyConfiguration = new Compartment();
 const localFile = new LocalFileController();
+const notices = createNoticePresenter($("notice"));
 let fileSavedRevision = -1;
 try {
   pairs.checked = localStorage.getItem("studio-smart-pairs") !== "off";
@@ -139,10 +135,9 @@ const editorExtensions: Extension = [
     autocorrect: "off",
   }),
   EditorState.transactionFilter.of((tr) => {
-    if (tr.newDoc.length > MAX_SOURCE || tr.newDoc.lines > MAX_LINES) {
-      notice(
-        "This draft has reached the 500,000-character or 20,000-line limit. Download it and continue in a new file.",
-      );
+    const problem = sourceEditProblem(tr);
+    if (problem) {
+      notice(problem);
       return [];
     }
     return tr;
@@ -170,6 +165,7 @@ const editorExtensions: Extension = [
   ]),
   EditorView.updateListener.of((update) => {
     if (update.docChanged && !recovering) {
+      notices.sourceEdited();
       revision++;
       hasWork = true;
       keptRevision = -1;
@@ -240,7 +236,7 @@ const scopedReplace = mountScopedReplace(document.body, {
     )
       return false;
     view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
-    notice(`Replaced ${plan.changes.length} matches. Undo restores the previous text.`);
+    notice(`Replaced ${plan.changes.length} matches. Undo restores the previous text.`, "success");
     return true;
   },
 });
@@ -263,6 +259,7 @@ const rename = mountRename(document.body, {
     view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
     notice(
       `Renamed ${plan.changes.length} character cues. ${plan.skipped.length} cues were left unchanged. Undo restores the original names.`,
+      plan.skipped.length ? "important" : "success",
     );
     return true;
   },
@@ -282,6 +279,7 @@ const sceneBoard = mountSceneBoard(document.body, {
       plan.kind === "synopsis"
         ? `Updated scene ${plan.sceneIndex + 1} synopsis. Undo restores the previous outline.`
         : `Moved scene ${plan.moved.fromIndex + 1} to position ${plan.moved.toIndex + 1}. Undo restores the previous order.`,
+      "success",
     );
     return true;
   },
@@ -303,7 +301,10 @@ const locations = mountLocations(document.body, {
     )
       return false;
     view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
-    notice(`Renamed ${plan.changes.length} scene locations. Undo restores the previous headings.`);
+    notice(
+      `Renamed ${plan.changes.length} scene locations. Undo restores the previous headings.`,
+      "success",
+    );
     return true;
   },
   jump: (snapshot, line) => {
@@ -380,7 +381,7 @@ const speechEditor = mountSpeechEditor(document.body, {
     )
       return false;
     view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
-    notice("Updated the selected speech. Undo restores its previous words.");
+    notice("Updated the selected speech. Undo restores its previous words.", "success");
     return true;
   },
 });
@@ -808,9 +809,8 @@ $("element-action").addEventListener("change", () => {
   view.focus();
 });
 
-function notice(message: string): void {
-  $("notice").textContent = message;
-  $("notice").hidden = !message;
+function notice(message: string, lifetime: NoticeLifetime = "important"): void {
+  notices.show(message, lifetime);
 }
 function text(): string {
   return writeSource(source, view.state.doc.toString());
@@ -843,6 +843,7 @@ function downloadSource(): void {
   lastDownload = value;
   notice(
     "Fountain download started. Keep the downloaded file as an independent copy of your screenplay.",
+    "success",
   );
 }
 function updateFileControls(): void {
@@ -880,6 +881,7 @@ async function saveToFile(saveAs = false): Promise<void> {
       revision === capturedRevision
         ? `Saved to ${result.filename}.`
         : `Saved an earlier version to ${result.filename}. Your newer edits are still in the editor; save again.`,
+      revision === capturedRevision ? "success" : "important",
     );
   } else if (result.status === "conflict") {
     notice(
@@ -1265,6 +1267,7 @@ $("example").addEventListener("click", async () => {
   if (await mayReplace()) showSource(example, "The Last Light.fountain");
 });
 const library = mountLibrary(document.body, {
+  download,
   current: () => ({ name: title(), source: text(), draftId }),
   replace: async (value, fileName) => {
     if (!(await mayReplace())) return false;
@@ -1286,7 +1289,10 @@ pdfButton.addEventListener("click", async () => {
     const { screenplayPdf } = await import("./pdf");
     const bytes = await screenplayPdf(result.layout, result.document?.title.title);
     download(new Uint8Array(bytes).buffer, fileName, "application/pdf");
-    notice("PDF download started. It contains the screenplay as it was when you chose Export PDF.");
+    notice(
+      "PDF download started. It contains the screenplay as it was when you chose Export PDF.",
+      "success",
+    );
   } catch (error) {
     notice(
       error instanceof Error
@@ -1317,6 +1323,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 async function start(): Promise<void> {
+  let unreadableSavedSource = false;
   // Prevent typing into a draft which is about to be replaced by recovery.
   setWorkspaceLocked(true);
   try {
@@ -1338,14 +1345,21 @@ async function start(): Promise<void> {
       ),
     ]);
     if (recovered) {
-      source = readSource(recovered.source);
+      try {
+        source = readSource(recovered.source);
+      } catch (error) {
+        unreadableSavedSource = true;
+        throw error;
+      }
       name.value = recovered.name;
       view.setState(editingState(source.normalized));
       hasWork = false;
       $("recovery").textContent = "Recovered draft · edits will be kept as a new copy";
     } else $("recovery").textContent = "Local recovery ready · download to keep a file";
   } catch {
-    $("recovery").textContent = "Recovery unavailable — download your Fountain file";
+    $("recovery").textContent = unreadableSavedSource
+      ? "This saved draft could not be reopened. It remains unchanged under Recover. Open its entry there to download recovery JSON."
+      : "Recovery unavailable — download your Fountain file";
   }
   recovering = false;
   setWorkspaceLocked(false);

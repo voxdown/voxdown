@@ -77,7 +77,9 @@ describe("actor sides snapshots", () => {
     expect(packet.segments).toHaveLength(2);
     expect(text(packet)).toContain("Together.");
     expect(text(packet)).toContain("(V.O.)");
-    expect(packet.layout.warnings).toEqual([]);
+    expect(packet.layout.warnings).toHaveLength(1);
+    expect(packet.layout.warnings[0]).toContain("U+0301 (combining mark)");
+    expect(text(packet)).toContain("E\u0301lise");
   });
 
   it("treats comment-fragmented cue identities using the same visible cast index", () => {

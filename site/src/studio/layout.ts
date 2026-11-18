@@ -1,5 +1,6 @@
 import type { FountainDocument, FountainElement, FountainKind } from "./fountain";
 import { type FountainRun, fountainRuns } from "./inline";
+import { printedTypographyProblem } from "./typography";
 
 export interface LayoutLine {
   text: string;
@@ -425,5 +426,7 @@ export function layoutScreenplay(
     }
   }
   if (!pages.length) newPage();
+  const typographyProblem = printedTypographyProblem(layout);
+  if (typographyProblem) warn(typographyProblem);
   return layout;
 }

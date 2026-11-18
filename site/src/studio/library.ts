@@ -1,4 +1,6 @@
 import { type SourceComparison, compareSources } from "./comparison";
+import { filenameStem } from "./filename";
+import { readSource } from "./source";
 import {
   type DraftCursor,
   type SnapshotCursor,
@@ -18,6 +20,7 @@ type LibraryCallbacks = {
   /** Replace with a new draft id, after preserving/confirming the current document. */
   replace(source: string, name: string): Promise<boolean>;
   notice(message: string): void;
+  download(content: string, filename: string, type: string): void;
 };
 type Kind = "drafts" | "snapshots";
 type Entry = StudioDraftMetadata | StudioSnapshotMetadata;
@@ -81,6 +84,35 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   status.setAttribute("aria-atomic", "true");
+  const emergency = element("section");
+  emergency.hidden = true;
+  const emergencyDescription = element("p");
+  const emergencyDownload = button("Download recovery JSON", () => {
+    if (!emergencySource || busy) return;
+    try {
+      const content = JSON.stringify(
+        {
+          format: "voxdown-studio-raw-recovery",
+          version: 1,
+          name: emergencySource.name,
+          source: emergencySource.source,
+        },
+        null,
+        2,
+      );
+      callbacks.download(
+        content,
+        `${filenameStem(emergencySource.name)}.recovery.json`,
+        "application/json",
+      );
+      report(
+        "Recovery JSON downloaded. It preserves the exact saved source, including private text. This emergency copy cannot be imported as a Studio backup.",
+      );
+    } catch (error) {
+      fail(error);
+    }
+  });
+  emergency.append(emergencyDescription, emergencyDownload);
   const list = element("ul");
   list.className = "library-list";
   list.setAttribute("aria-label", "Saved work");
@@ -152,7 +184,17 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
     "p",
     "Deleting saved work cannot be undone. Your active draft cannot be deleted here. Another open Studio tab may recreate its own automatic recovery copy.",
   );
-  dialog.append(heading, explanation, controls, status, list, more, comparison, deletionHelp);
+  dialog.append(
+    heading,
+    explanation,
+    controls,
+    status,
+    emergency,
+    list,
+    more,
+    comparison,
+    deletionHelp,
+  );
   host.append(dialog);
 
   let kind: Kind = "drafts";
@@ -165,6 +207,12 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
   let reloadWhenIdle = false;
   let epoch = 0;
   let opener: HTMLElement | null = null;
+  let emergencySource: { name: string; source: string } | undefined;
+  function clearEmergency() {
+    emergencySource = undefined;
+    emergency.hidden = true;
+    emergencyDescription.textContent = "";
+  }
   let compared: { kind: Kind; id: string } | undefined;
 
   let diff: SourceComparison | undefined;
@@ -249,6 +297,7 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
     for (const node of list.querySelectorAll("button"))
       node.disabled = value || node.dataset.activeDraft === "true";
     restoreCompared.disabled = value;
+    emergencyDownload.disabled = value;
     if (!value && reloadWhenIdle) {
       reloadWhenIdle = false;
       if (dialog.open) void load(true);
@@ -285,6 +334,7 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
     if (busy) return;
     setBusy(true);
     const ticket = epoch;
+    if (reset) clearEmergency();
     status.textContent = "Loading saved work…";
     try {
       const page =
@@ -371,6 +421,22 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
     try {
       const value = await readEntry(entryKind, id);
       if (ticket !== epoch || !dialog.open) return;
+      clearEmergency();
+      try {
+        readSource(value.source);
+      } catch {
+        emergencySource = { name: value.name, source: value.source };
+        emergencyDescription.textContent = `“${value.name || "Untitled"}” cannot be opened because its saved text contains unsupported characters or exceeds Studio's size limits. Download recovery JSON to preserve its exact source, including private text. This emergency copy is for manual recovery; it cannot be imported as a Studio backup.`;
+        emergency.hidden = false;
+        report(
+          "The saved version is unchanged. Download recovery JSON below to keep an independent copy.",
+        );
+        // Focus after the finally block re-enables this control.
+        queueMicrotask(() => {
+          if (ticket === epoch && dialog.open) emergencyDownload.focus();
+        });
+        return;
+      }
       closeDialog();
       closedForReplacement = true;
       if (await callbacks.replace(value.source, value.name))
@@ -452,6 +518,7 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
     epoch++;
     reloadWhenIdle = false;
     clearComparison();
+    clearEmergency();
     dialog.close();
     opener?.focus();
   }

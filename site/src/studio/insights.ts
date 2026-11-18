@@ -205,31 +205,44 @@ function search<T>(
   query: string,
   text: (item: T) => string,
   limit: number,
+  offset: number,
 ): InsightSearchResult<T> {
   const needle = query.trim().normalize("NFC").toLowerCase();
   const maximum = Number.isFinite(limit) ? Math.max(0, Math.min(500, Math.floor(limit))) : 100;
+  const start = Number.isSafeInteger(offset) ? Math.max(0, offset) : 0;
   const matches: T[] = [];
   let total = 0;
   for (const item of items) {
     if (needle && !text(item).normalize("NFC").toLowerCase().includes(needle)) continue;
     total++;
-    if (matches.length < maximum) matches.push(item);
+    if (total > start && matches.length < maximum) matches.push(item);
   }
   return { items: matches, total };
 }
 
-export function searchCharacters(items: readonly CharacterInsight[], query: string, limit = 100) {
-  return search(items, query, (item) => item.name, limit);
+export function searchCharacters(
+  items: readonly CharacterInsight[],
+  query: string,
+  limit = 100,
+  offset = 0,
+) {
+  return search(items, query, (item) => item.name, limit, offset);
 }
 
 export function searchPrivateNotes(
   items: readonly PrivateNoteInsight[],
   query: string,
   limit = 100,
+  offset = 0,
 ) {
-  return search(items, query, (item) => item.text, limit);
+  return search(items, query, (item) => item.text, limit, offset);
 }
 
-export function searchDiagnostics(items: readonly DiagnosticInsight[], query: string, limit = 100) {
-  return search(items, query, (item) => item.message, limit);
+export function searchDiagnostics(
+  items: readonly DiagnosticInsight[],
+  query: string,
+  limit = 100,
+  offset = 0,
+) {
+  return search(items, query, (item) => item.message, limit, offset);
 }

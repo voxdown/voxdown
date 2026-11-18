@@ -59,6 +59,35 @@ export function mountWorkbench(
     const value = Number(localStorage.getItem("studio-word-goal"));
     if (Number.isSafeInteger(value) && value >= 0 && value <= 1e6) goal.value = String(value);
   } catch {}
+  let resultOffset = 0;
+  const resultPages = document.createElement("div");
+  resultPages.className = "character-pages";
+  const previousResults = document.createElement("button");
+  previousResults.type = "button";
+  previousResults.textContent = "Previous 100 results";
+  const nextResults = document.createElement("button");
+  nextResults.type = "button";
+  nextResults.textContent = "Next 100 results";
+  resultPages.append(previousResults, nextResults);
+  function pageResults(total: number, label: string) {
+    summary.textContent = total
+      ? `${total} ${label} · showing ${resultOffset + 1}–${Math.min(resultOffset + 100, total)}`
+      : `No matching ${label}.`;
+    resultPages.hidden = total <= 100;
+    previousResults.disabled = resultOffset === 0;
+    nextResults.disabled = resultOffset + 100 >= total;
+  }
+  function moveResults(direction: number) {
+    resultOffset = Math.max(0, resultOffset + direction * 100);
+    render();
+    // The content is replaced; move focus to its first result, not a now-disabled pager.
+    (
+      content.querySelector<HTMLElement>("details > summary") ??
+      content.querySelector<HTMLElement>("button")
+    )?.focus();
+  }
+  previousResults.onclick = () => moveResults(-1);
+  nextResults.onclick = () => moveResults(1);
   let data: ReturnType<typeof screenplayInsights> | undefined;
   let pending: { document: FountainDocument; source: string } | undefined;
   const node = (tag: "p" | "button" | "pre", text: string) => {
@@ -79,6 +108,7 @@ export function mountWorkbench(
     if (!data && pending) data = screenplayInsights(pending.document, pending.source);
     content.replaceChildren();
     summary.textContent = "";
+    resultPages.hidden = true;
     goalLabel.hidden = select.value !== "statistics";
     search.hidden = select.value === "statistics";
     if (!data) {
@@ -132,8 +162,8 @@ export function mountWorkbench(
         };
         content.append(sidesButton);
       }
-      const found = searchCharacters(data.characters, search.value);
-      summary.textContent = `${found.total} characters · showing up to 100`;
+      const found = searchCharacters(data.characters, search.value, 100, resultOffset);
+      pageResults(found.total, "characters");
       const excerpts = pending ? dialogueExcerpts(pending.document) : new Map();
       for (const character of found.items) {
         const details = document.createElement("details");
@@ -207,8 +237,8 @@ export function mountWorkbench(
         content.append(details);
       }
     } else if (select.value === "notes") {
-      const found = searchPrivateNotes(data.notes, search.value);
-      summary.textContent = `${found.total} private passages · showing up to 100`;
+      const found = searchPrivateNotes(data.notes, search.value, 100, resultOffset);
+      pageResults(found.total, "private passages");
       for (const note of found.items) {
         const card = document.createElement("article");
         card.append(
@@ -223,8 +253,8 @@ export function mountWorkbench(
         content.append(card);
       }
     } else {
-      const found = searchDiagnostics(data.diagnostics, search.value);
-      summary.textContent = `${found.total} parser warnings · showing up to 100`;
+      const found = searchDiagnostics(data.diagnostics, search.value, 100, resultOffset);
+      pageResults(found.total, "parser warnings");
       for (const issue of found.items)
         content.append(link(`Line ${issue.line}: ${issue.message}`, issue.line));
       if (!found.total)
@@ -244,15 +274,20 @@ export function mountWorkbench(
     } catch {}
     render();
   });
-  search.oninput = render;
+  search.oninput = () => {
+    resultOffset = 0;
+    render();
+  };
   select.onchange = () => {
+    resultOffset = 0;
     search.value = "";
     render();
   };
-  dialog.append(heading, close, select, search, goalLabel, summary, content);
+  dialog.append(heading, close, select, search, goalLabel, summary, content, resultPages);
   host.append(dialog);
   return {
     update(document: FountainDocument, source: string) {
+      resultOffset = 0;
       pending = { document, source };
       data = undefined;
       if (dialog.open) render();
@@ -263,6 +298,8 @@ export function mountWorkbench(
       if (dialog.open) render();
     },
     open(section = "statistics") {
+      resultOffset = 0;
+      search.value = "";
       select.value = section;
       render();
       dialog.showModal();

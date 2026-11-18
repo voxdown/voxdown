@@ -26,7 +26,7 @@ beforeAll(async () => {
     } else if (request.url === "/stub.js") {
       response.writeHead(200, { "content-type": "text/javascript" });
       response.end(
-        'export default "/font";export const PDFDocument={},rgb=()=>{},SCREENPLAY_FONT_SIZE=12,SCREENPLAY_PITCH=10;',
+        'export default "/font";export const PDFDocument={},rgb=()=>{},SCREENPLAY_FONT_SIZE=12,SCREENPLAY_PITCH=10,printedTypographyProblem=()=>undefined;',
       );
     } else if (request.url?.startsWith("/font")) {
       requests++;
@@ -49,7 +49,10 @@ beforeAll(async () => {
         response.end();
         return;
       }
-      response.writeHead(200, { "content-type": "font/ttf" });
+      response.writeHead(200, {
+        "content-type": "font/ttf",
+        ...(request.url === "/font-cache" ? { "cache-control": "public, max-age=3600" } : {}),
+      });
       response.end(Buffer.from([0, 1, 2, 3]));
     } else {
       response.writeHead(200, { "content-type": "text/html" });
@@ -166,6 +169,29 @@ describe("bounded screenplay PDF font transport", () => {
     });
     expect(await load()).toEqual({ bytes: [0, 1, 2, 3] });
     expect(requests).toBe(1);
+  });
+  it("bypasses the HTTP cache after rejected bytes and ignores late invalidation by an old consumer", async () => {
+    const result = await page.evaluate(async () => {
+      const loader = Reflect.get(window, "loadTestFont");
+      const [first, otherConsumer] = await Promise.all([
+        loader("/font-cache"),
+        loader("/font-cache"),
+      ]);
+      loader.invalidate("/font-cache", first);
+      const retry = loader("/font-cache");
+      // Another export can report the same corrupt bytes while the retry is pending.
+      loader.invalidate("/font-cache", otherConsumer);
+      const repaired = await retry;
+      // It can also finish after the retry succeeds. Neither may evict the new bytes.
+      loader.invalidate("/font-cache", otherConsumer);
+      return {
+        shared: first === otherConsumer,
+        fresh: repaired !== first,
+        kept: repaired === (await loader("/font-cache")),
+      };
+    });
+    expect(result).toEqual({ shared: true, fresh: true, kept: true });
+    expect(requests).toBe(2);
   });
   it("rejects invalid timeout configuration", async () => {
     expect(

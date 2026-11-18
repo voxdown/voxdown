@@ -12,6 +12,7 @@ declare global {
     libraryCurrent: { name: string; source: string; draftId: string };
     libraryReplacement?: { name: string; source: string };
     libraryAccept: boolean;
+    libraryDownload?: { content: string; filename: string; type: string };
   }
 }
 function compile(file: string): string {
@@ -24,10 +25,16 @@ function moduleURL(text: string): string {
 }
 const storageURL = moduleURL(compile("../src/studio/storage.ts"));
 const comparisonURL = moduleURL(compile("../src/studio/comparison.ts"));
+const filenameURL = moduleURL(compile("../src/studio/filename.ts"));
+const sourceURL = moduleURL(
+  compile("../src/studio/source.ts").replace('"./filename"', JSON.stringify(filenameURL)),
+);
 const libraryURL = moduleURL(
   compile("../src/studio/library.ts")
     .replace('"./storage"', JSON.stringify(storageURL))
-    .replace('"./comparison"', JSON.stringify(comparisonURL)),
+    .replace('"./comparison"', JSON.stringify(comparisonURL))
+    .replace('"./filename"', JSON.stringify(filenameURL))
+    .replace('"./source"', JSON.stringify(sourceURL)),
 );
 let browser: Browser;
 let context: BrowserContext;
@@ -55,6 +62,7 @@ beforeEach(async () => {
     window.libraryUI = mountLibrary(document.body, {
       current: () => window.libraryCurrent,
       replace: async (source, name) => { if (!window.libraryAccept) return false; window.libraryReplacement = {source,name}; return true; },
+      download: (content, filename, type) => { window.libraryDownload = { content, filename, type }; },
       notice: () => {}
     });
     document.querySelector('#opener').onclick = () => window.libraryUI.open();
@@ -307,5 +315,84 @@ describe("Studio recovery library", () => {
         .getByRole("button", { name: "Open Draft 129 as a new draft", exact: true })
         .isVisible(),
     ).toBe(true);
+  });
+});
+
+describe("emergency recovery of previously saved unsupported source", () => {
+  it("offers exact private-inclusive JSON only after an invalid entry is chosen, without replacing or deleting it", async () => {
+    const source = "\uFEFF!Original\r\n[[PRIVATE]]\rA\0B\ud800";
+    await page.evaluate(async (source) => {
+      await window.libraryStore.keepDraft({
+        id: "invalid",
+        name: "../Saved.txt",
+        source,
+        updated: 2,
+      });
+      await window.libraryStore.keepDraft({
+        id: "valid",
+        name: "Valid",
+        source: "!Valid source",
+        updated: 1,
+      });
+    }, source);
+    await page.getByRole("button", { name: "Library", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Open ../Saved.txt as a new draft", exact: true })
+      .waitFor();
+    expect(
+      await page.getByRole("button", { name: "Download recovery JSON", exact: true }).isVisible(),
+    ).toBe(false);
+    await page
+      .getByRole("button", { name: "Open ../Saved.txt as a new draft", exact: true })
+      .click();
+    const download = page.getByRole("button", { name: "Download recovery JSON", exact: true });
+    await download.waitFor();
+    expect(await page.evaluate(() => window.libraryReplacement)).toBeUndefined();
+    expect(await page.locator("dialog").textContent()).toContain(
+      "cannot be imported as a Studio backup",
+    );
+    expect(await download.evaluate((element) => document.activeElement === element)).toBe(true);
+    await download.click();
+    const result = await page.evaluate(() => window.libraryDownload);
+    expect(result?.filename).toBe("-Saved.recovery.json");
+    expect(result?.type).toBe("application/json");
+    expect(JSON.parse(result?.content ?? "null")).toEqual({
+      format: "voxdown-studio-raw-recovery",
+      version: 1,
+      name: "../Saved.txt",
+      source,
+    });
+    expect(
+      await page.evaluate(async () => (await window.libraryStore.getDraft("invalid"))?.source),
+    ).toBe(source);
+    expect(await page.evaluate(() => window.libraryCurrent.source)).toBe("Current source");
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    expect(await download.isVisible()).toBe(false);
+    await page.getByRole("button", { name: "Open Valid as a new draft", exact: true }).click();
+    await page.waitForFunction(() => window.libraryReplacement?.source === "!Valid source");
+  });
+
+  it("retains invalid snapshots and clears the recovery action on close", async () => {
+    await page.evaluate(async () => {
+      await window.libraryStore.createSnapshot({
+        name: "Unsupported snapshot",
+        source: "x\0y",
+        draftId: "legacy",
+      });
+    });
+    await page.getByRole("button", { name: "Library", exact: true }).click();
+    await page.getByLabel("Show").selectOption("snapshots");
+    await page
+      .getByRole("button", { name: "Open Unsupported snapshot as a new draft", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Download recovery JSON", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("button", { name: "Library", exact: true }).click();
+    expect(
+      await page.getByRole("button", { name: "Download recovery JSON", exact: true }).isVisible(),
+    ).toBe(false);
+    expect(
+      await page.evaluate(async () => (await window.libraryStore.listSnapshots()).items.length),
+    ).toBe(1);
   });
 });

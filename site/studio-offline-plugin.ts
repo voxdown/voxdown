@@ -73,22 +73,32 @@ export function studioOffline(): Plugin {
         `<meta name="studio-offline-build" content="${version}">\n</head>`,
       );
       const resources = [...files.map((file) => `../${file}`), "../icon.svg"];
+      const fontHashes: Record<string, string> = {};
+      for (const file of files.filter((file) => file.endsWith(".ttf"))) {
+        const output = bundle[file];
+        if (output?.type !== "asset") throw new Error("Studio font asset is missing.");
+        fontHashes[`../${file}`] = createHash("sha256").update(output.source).digest("hex");
+      }
       this.emitFile({
         type: "asset",
         fileName: "studio/offline-worker.js",
-        source: workerSource(version, resources),
+        source: workerSource(version, resources, fontHashes),
       });
       this.emitFile({
         type: "asset",
         fileName: "studio/offline-manifest.json",
-        source: JSON.stringify({ version, resources }, null, 2),
+        source: JSON.stringify({ version, resources, fontHashes }, null, 2),
       });
     },
   };
 }
 
-function workerSource(version: string, resources: string[]): string {
-  return `"use strict";\nconst VERSION = ${JSON.stringify(version)};\nconst RESOURCE_PATHS = ${JSON.stringify(resources)};\n${String.raw`
+function workerSource(
+  version: string,
+  resources: string[],
+  fontHashes: Record<string, string>,
+): string {
+  return `"use strict";\nconst VERSION = ${JSON.stringify(version)};\nconst RESOURCE_PATHS = ${JSON.stringify(resources)};\nconst FONT_PATH_HASHES = ${JSON.stringify(fontHashes)};\n${String.raw`
 const SCOPE = self.registration.scope;
 const PREFIX = "voxdown-studio-offline:" + new URL(SCOPE).pathname + ":";
 const CACHE = PREFIX + VERSION;
@@ -97,6 +107,24 @@ const SHELL = new URL("index.html", SCOPE).href;
 const URLS = RESOURCE_PATHS.map(path => new URL(path, SCOPE).href);
 const ASSETS = new Set(URLS);
 const READY = new URL("offline-ready", SCOPE).href;
+const FONT_INDEX = new URL("offline-font-integrity", SCOPE).href;
+const FONT_HASHES = Object.fromEntries(Object.entries(FONT_PATH_HASHES).map(([path, hash]) => [new URL(path, SCOPE).href, hash]));
+
+async function verifiedFont(response, hash) {
+  if (!response?.ok || !hash) return false;
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", await response.clone().arrayBuffer());
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("") === hash;
+  } catch { return false; }
+}
+async function cacheIntact(cache) {
+  if (!await cache.match(READY) || !await cache.match(FONT_INDEX)) return false;
+  for (const url of URLS) {
+    const response = await cache.match(url);
+    if (!response || (FONT_HASHES[url] && !await verifiedFont(response, FONT_HASHES[url]))) return false;
+  }
+  return true;
+}
 
 let preparing;
 function prepare() {
@@ -109,7 +137,7 @@ function prepare() {
       existed = await caches.has(CACHE);
       const cache = await caches.open(CACHE);
       // A completed version is immutable. Never damage its fallback during a retry.
-      if (!await cache.match(READY)) {
+      if (!await cacheIntact(cache)) {
         // Stage complete responses separately so repair failure preserves the existing shell.
         await caches.delete(STAGING);
         const staging = await caches.open(STAGING);
@@ -120,10 +148,12 @@ function prepare() {
           if (url !== SHELL && /text\/html/.test(mime)) throw new Error("An offline resource returned a fallback page.");
           if (url.endsWith(".js") && !/javascript/.test(mime)) throw new Error("Offline script response was not JavaScript.");
           if (url.endsWith(".css") && !/text\/css/.test(mime)) throw new Error("Offline stylesheet response was not CSS.");
+          if (FONT_HASHES[url] && !await verifiedFont(response, FONT_HASHES[url])) throw new Error("An offline font did not match this Studio build.");
           if (url === SHELL && !(await response.clone().text()).includes('name="studio-offline-build" content="' + VERSION + '"')) throw new Error("Studio changed while preparing offline. Retry when the update finishes.");
           await staging.put(url, response);
         }
         for (const url of URLS) await cache.put(url, await staging.match(url));
+        await cache.put(FONT_INDEX, new Response(JSON.stringify(FONT_HASHES), { headers: { "Content-Type": "application/json" } }));
         await cache.put(READY, new Response(VERSION));
       }
 
@@ -187,7 +217,7 @@ self.addEventListener("message", event => {
       try {
         const cache = await caches.open(CACHE);
         // A partially evicted cache is not a completed version.
-        const intact = (await Promise.all(URLS.map(url => cache.match(url)))).every(Boolean);
+        const intact = await cacheIntact(cache);
         if (!intact) await cache.delete(READY);
         await prepare();
       } catch (error) {
@@ -197,11 +227,56 @@ self.addEventListener("message", event => {
     }
     const cache = await caches.open(CACHE);
     // Browser eviction may remove a cache independently of its worker registration.
-    const checks = await Promise.all([READY, ...URLS].map(url => cache.match(url)));
-    event.ports[0].postMessage({ version: VERSION, ready: checks.every(Boolean), count: URLS.length });
+    const intact = await cacheIntact(cache);
+    event.ports[0].postMessage({ version: VERSION, ready: intact, count: URLS.length });
     await retireUnusedVersions();
   })());
 });
+
+async function fontResponse(request) {
+  const url = request.url;
+  let hash = FONT_HASHES[url];
+  const names = (await caches.keys()).filter(name => name.startsWith(PREFIX) && !name.endsWith(":preparing"));
+  names.sort((a, b) => Number(b === CACHE) - Number(a === CACHE));
+  const targets = [];
+  for (const name of names) {
+    const cache = await caches.open(name);
+    const response = await cache.match(request);
+    if (!hash) {
+      try {
+        const recorded = await (await cache.match(FONT_INDEX))?.json();
+        if (typeof recorded?.[url] === "string" && /^[a-f0-9]{64}$/.test(recorded[url])) hash = recorded[url];
+      } catch {}
+    }
+    if (!response) continue;
+    targets.push({ name, cache, response });
+  }
+  if (request.cache !== "reload") {
+    for (const target of targets) {
+      // Legacy active clients may predate font-integrity metadata. Their exact
+      // hashed URLs retain their prior fallback behavior; new versions verify.
+      if (!hash || await verifiedFont(target.response, hash)) return target.response;
+    }
+  }
+  const abort = new AbortController();
+  const timeout = setTimeout(() => abort.abort(), 15000);
+  try {
+    const response = await fetch(request, { cache: "reload", mode: "same-origin", credentials: "same-origin", redirect: "error", signal: abort.signal });
+    if (!response.ok) throw new Error("Font response failed.");
+    await response.clone().arrayBuffer();
+    if (hash && !await verifiedFont(response, hash)) throw new Error("Font response did not match its build.");
+    // Preserve fallback bytes until a complete, verified replacement is ready.
+    // A cache-write failure must not prevent this online PDF from using valid bytes.
+    if (hash) for (const target of targets) {
+      try { if (await caches.has(target.name)) await target.cache.put(request, response.clone()); } catch {}
+    }
+    return response;
+  } catch {
+    // The caller explicitly rejected its prior bytes, or verification found bad
+    // bytes. Replaying them would turn retry into a permanently failing loop.
+    return new Response("Reconnect and retry the screenplay font download.", { status: 503, headers: { "Content-Type": "text/plain" } });
+  } finally { clearTimeout(timeout); }
+}
 
 self.addEventListener("fetch", event => {
   const request = event.request;
@@ -226,14 +301,19 @@ self.addEventListener("fetch", event => {
     })());
     return;
   }
+  // Verify cached fonts and respect an explicit retry's rejected prior bytes.
+  const assetRoot = new URL("../assets/", SCOPE).href;
+  const workerRoot = new URL("assets/", SCOPE).href;
+  if (url.origin === self.location.origin && url.pathname.endsWith(".ttf") && (ASSETS.has(url.href) || url.href.startsWith(assetRoot))) {
+    event.respondWith(fontResponse(request));
+    return;
+  }
   // Exact immutable asset URLs only. Never cache imported scripts, documents or downloads.
   if (ASSETS.has(url.href) && url.href !== SHELL) {
     event.respondWith((async () => (await (await caches.open(CACHE)).match(request)) || fetch(request))());
     return;
   }
   // An already-open editor may still use a prior version's hashed lazy chunks.
-  const assetRoot = new URL("../assets/", SCOPE).href;
-  const workerRoot = new URL("assets/", SCOPE).href;
   if ((url.href.startsWith(assetRoot) || url.href.startsWith(workerRoot)) && url.origin === self.location.origin) {
     event.respondWith((async () => {
       for (const name of await caches.keys()) {

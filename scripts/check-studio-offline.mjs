@@ -1,5 +1,6 @@
 // Built-site acceptance: scoped offline shell, first-use adaptation/PDF, repair and safe updates.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
@@ -11,6 +12,14 @@ const { PDFDocument } = createRequire(resolve("site/package.json"))("pdf-lib");
 const dist = resolve("site/dist");
 const manifest = JSON.parse(readFileSync(resolve(dist, "studio/offline-manifest.json"), "utf8"));
 assert.equal(manifest.resources.filter((path) => path.endsWith(".ttf")).length, 4);
+assert.equal(Object.keys(manifest.fontHashes).length, 4);
+for (const [path, hash] of Object.entries(manifest.fontHashes))
+  assert.equal(
+    hash,
+    createHash("sha256")
+      .update(readFileSync(resolve(dist, "studio", path)))
+      .digest("hex"),
+  );
 assert.ok(
   manifest.resources.some((path) => /pdf-.*\.js$/.test(path)),
   "Lazy PDF chunk is cached",
@@ -114,6 +123,20 @@ const preferences = async (page) => {
   if (!(await page.locator("#preferences-dialog").isVisible()))
     await page.locator("#preferences").click();
 };
+const offlineStatus = (page) =>
+  page.evaluate(async () => {
+    const channel = new MessageChannel();
+    const reply = new Promise((resolve) => {
+      channel.port1.onmessage = (event) => {
+        channel.port1.close();
+        resolve(event.data);
+      };
+    });
+    navigator.serviceWorker.controller.postMessage({ type: "STUDIO_OFFLINE_STATUS" }, [
+      channel.port2,
+    ]);
+    return reply;
+  });
 const download = async (page, selector, expectedName) => {
   const pending = page.waitForEvent("download");
   void pending.catch(() => {});
@@ -196,7 +219,7 @@ try {
       }
       return result;
     });
-    assert.equal(entries.length, manifest.resources.length + 2);
+    assert.equal(entries.length, manifest.resources.length + 3);
     assert.equal(
       entries.some((entry) => entry.text.includes("Private offline marker 274816")),
       false,
@@ -342,8 +365,60 @@ try {
     }
     await page.locator("#offline-prepare").click();
     await state(page, "ready");
+    await page.keyboard.press("Escape");
+    // A cached response can exist yet be unusable. Validate first-use PDF after
+    // a reload, so the PDF module's successful in-memory bytes cannot mask it.
+    await context.setOffline(true);
+    await page.evaluate(async () => {
+      for (const name of await caches.keys()) {
+        if (name.endsWith(":preparing")) continue;
+        const cache = await caches.open(name);
+        for (const request of await cache.keys()) {
+          if (request.url.endsWith(".ttf"))
+            await cache.put(
+              request,
+              new Response("damaged cached font", { headers: { "Content-Type": "font/ttf" } }),
+            );
+        }
+      }
+    });
+    await page.reload();
+    await ready(page);
+    assert.equal(
+      (await offlineStatus(page)).ready,
+      false,
+      "Present but corrupt fonts are not offline-ready",
+    );
+    await page.locator("#pdf").click();
+    await page.waitForFunction(
+      () =>
+        !document.getElementById("pdf").disabled &&
+        document.getElementById("notice").textContent.includes("font could not be loaded"),
+    );
+    await context.setOffline(false);
+    failAsset = true;
+    await page.locator("#pdf").click();
+    await page.waitForFunction(
+      () =>
+        !document.getElementById("pdf").disabled &&
+        document.getElementById("notice").textContent.includes("font could not be loaded"),
+    );
+    assert.equal((await offlineStatus(page)).ready, false);
+    failAsset = false;
+    assert.ok((await PDFDocument.load(await download(page, "#pdf"))).getPageCount() > 0);
+    assert.equal(
+      (await offlineStatus(page)).ready,
+      true,
+      "Verified font replacement repairs readiness",
+    );
+    await context.setOffline(true);
+    await page.reload();
+    await ready(page);
+    assert.ok((await PDFDocument.load(await download(page, "#pdf"))).getPageCount() > 0);
+    assert.match((await download(page, "#download")).toString(), /Offline continuation/);
+    await context.setOffline(false);
     console.log(
-      `Studio offline: ${prefix || "/"} opt-in, isolated scope, offline reload/edit/download/first adaptation/first PDF, eviction repair: passed`,
+      `Studio offline: ${prefix || "/"} opt-in, isolated scope, offline reload/edit/download/first adaptation/first PDF, eviction and corrupt-font repair: passed`,
     );
     if (!prefix) {
       const oldPage = await context.newPage();

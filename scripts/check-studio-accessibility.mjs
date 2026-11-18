@@ -126,11 +126,32 @@ try {
     "Import Final Draft XML (FDX)",
     "Rehearsal cue cards",
     "Practice Fountain step by step",
+    "Number scenes",
+    "Scene and cast breakdown",
+    "Compare with local Fountain file",
+    "Adapt screenplay to VoxDown",
   ]) {
     await page.locator("#commands").click();
     await page.getByRole("searchbox", { name: "Find a command" }).fill(command);
     await page.keyboard.press("Enter");
+    if (command === "Adapt screenplay to VoxDown")
+      await page
+        .getByRole("button", { name: "Download adapted .vxd", exact: true })
+        .waitFor({ state: "visible" });
     await audit(command);
+    if (command === "Number scenes") {
+      await page.getByRole("button", { name: "Preview scene numbering", exact: true }).click();
+      await audit("scene numbering preview");
+    }
+    if (command === "Compare with local Fountain file") {
+      await page.getByLabel("Baseline Fountain or text file", { exact: true }).setInputFiles({
+        name: "Previous.fountain",
+        mimeType: "text/plain",
+        buffer: Buffer.from("INT. LIGHTHOUSE - NIGHT\n\nA light fades."),
+      });
+      await page.getByRole("button", { name: "Compare source", exact: true }).click();
+      await audit("local source comparison excerpts");
+    }
     if (command === "Rehearsal cue cards") {
       await page.getByRole("button", { name: "Start rehearsing", exact: true }).click();
       await page.getByRole("button", { name: "Reveal speech", exact: true }).click();
@@ -217,6 +238,43 @@ try {
   await page.locator("#help").click();
   await audit("mobile Fountain guide");
   await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 320, height: 844 });
+  for (const appearance of ["light", "dark"]) {
+    await page.locator("#commands").click();
+    await page.getByRole("searchbox", { name: "Find a command" }).fill("Preferences");
+    await page.keyboard.press("Enter");
+    await page.locator("#theme").selectOption(appearance);
+    await audit(`320px preferences, ${appearance}`);
+    record(
+      await page.locator("#preferences-dialog").evaluate((d) => d.scrollWidth <= d.clientWidth),
+      `320px preferences overflow in ${appearance}`,
+    );
+    await page.keyboard.press("Escape");
+    for (const command of [
+      "Number scenes",
+      "Scene and cast breakdown",
+      "Adapt screenplay to VoxDown",
+      "Compare with local Fountain file",
+      "Rehearsal cue cards",
+      "Practice Fountain step by step",
+    ]) {
+      await page.locator("#commands").click();
+      await page.getByRole("searchbox", { name: "Find a command" }).fill(command);
+      await page.keyboard.press("Enter");
+      if (command === "Number scenes")
+        await page.getByRole("button", { name: "Preview scene numbering", exact: true }).click();
+      if (command === "Adapt screenplay to VoxDown")
+        await page
+          .getByRole("button", { name: "Download adapted .vxd", exact: true })
+          .waitFor({ state: "visible" });
+      await audit(`320px ${command}, ${appearance}`);
+      record(
+        await page.locator("dialog[open]").evaluate((d) => d.scrollWidth <= d.clientWidth),
+        `320px ${command} overflow in ${appearance}`,
+      );
+      await page.keyboard.press("Escape");
+    }
+  }
   await page.setViewportSize({ width: 320, height: 256 });
   const shortViewport = await page.evaluate(() => ({
     editorHeight: document.querySelector(".cm-scroller").getBoundingClientRect().height,

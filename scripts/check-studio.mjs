@@ -43,7 +43,17 @@ const context = await browser.newContext({
   viewport: { width: 1440, height: 1000 },
   acceptDownloads: true,
 });
-context.on("page", (page) => page.on("pageerror", (error) => errors.push(error.message)));
+const recentDownloads = new WeakMap();
+context.on("page", (page) => {
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("download", () => {
+    const now = Date.now();
+    recentDownloads.set(page, [
+      ...(recentDownloads.get(page) ?? []).filter((at) => now - at < 1100),
+      now,
+    ]);
+  });
+});
 context.on("request", (request) => {
   if (!request.url().startsWith(base) && !request.url().startsWith("blob:"))
     external.push(request.url());
@@ -64,7 +74,14 @@ const open = async (p, source, name = "Test.fountain") => {
   await ready(p);
 };
 const save = async (p) => {
+  // This suite downloads after nearly every edit. Blink silently throttles bursts
+  // of 10 downloads within one second (LocalFrame::ShouldThrottleDownload).
+  // Pace the test's inspection downloads, keeping real browser download coverage.
+  const recent = (recentDownloads.get(p) ?? []).filter((at) => Date.now() - at < 1100);
+  if (recent.length >= 7)
+    await new Promise((done) => setTimeout(done, Math.max(0, 1100 - (Date.now() - recent[0]))));
   const event = p.waitForEvent("download");
+  void event.catch(() => {});
   await p.locator("#download").click();
   return readFileSync(await (await event).path(), "utf8");
 };
@@ -378,6 +395,57 @@ try {
   assert.match(await page.locator("#page").innerText(), /Stay\./);
   assert(!imported.includes("private Stay."));
   await open(page, reviseSource, "Revisions-after-import.fountain");
+  await runCommand("Number scenes");
+  await page.getByRole("button", { name: "Preview scene numbering", exact: true }).click();
+  await page.getByRole("button", { name: "Apply scene numbering", exact: true }).click();
+  assert.equal(await save(page), reviseSource.replace("INT. ROOM - DAY", "INT. ROOM - DAY #1#"));
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Compare with local Fountain file");
+  await page.getByLabel("Baseline Fountain or text file", { exact: true }).setInputFiles({
+    name: "Previous.fountain",
+    mimeType: "text/plain",
+    buffer: Buffer.from(reviseSource.replaceAll("Stay.", "Wait.")),
+  });
+  await page.getByRole("button", { name: "Compare source", exact: true }).click();
+  assert(
+    (await page.locator(".comparison-word-added").allTextContents()).some((text) =>
+      text.includes("Stay"),
+    ),
+  );
+  await page.keyboard.press("Escape");
+  await runCommand("Adapt screenplay to VoxDown");
+  const adaptedDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download adapted .vxd", exact: true }).click();
+  const adapted = readFileSync(await (await adaptedDownload).path(), "utf8");
+  assert(adapted.includes("Cast1"));
+  assert(!adapted.includes("private Stay."));
+  await page.keyboard.press("Escape");
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Scene and cast breakdown");
+  const breakdownDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download filtered CSV", exact: true }).click();
+  const csv = readFileSync(await (await breakdownDownload).path(), "utf8");
+  assert(csv.includes("MARA"));
+  assert(!csv.includes("private Stay."));
+  await page.keyboard.press("Escape");
+  assert.equal(await save(page), reviseSource);
+  // A real File/DataTransfer drop follows the same source/recovery guards as Open.
+  const dropSource = "\uFEFFINT. DROP - DAY\r\n\r\nA safe landing.\r\n";
+  await page.evaluate((source) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([source], "Dropped.fountain", { type: "text/plain" }));
+    document
+      .querySelector(".cm-content")
+      .dispatchEvent(
+        new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }),
+      );
+  }, dropSource);
+  await page.waitForFunction(() => document.getElementById("name").value === "Dropped.fountain");
+  await ready(page);
+  assert.equal(await save(page), dropSource);
+  await open(page, reviseSource, "Revisions-after-drop.fountain");
   console.log(
     "Studio: location rename, speech editing, scoped replacement, performer PDF, storage information and separate literal reference: passed",
   );
@@ -679,9 +747,15 @@ try {
         throw new Error("Worker blocked");
       }
     };
-    indexedDB.open = () => {
-      throw new Error("Storage disabled");
-    };
+    // WebKit can replace the indexedDB host wrapper and lose an instance override.
+    // Patch the prototype so storage remains unavailable throughout this scenario.
+    Object.defineProperty(IDBFactory.prototype, "open", {
+      configurable: true,
+      writable: true,
+      value() {
+        throw new Error("Storage disabled");
+      },
+    });
   });
   await degraded.goto(`${base}/studio/`);
   await ready(degraded);
@@ -713,6 +787,46 @@ try {
   );
   await degraded.keyboard.press("Escape");
   assert.equal(await save(degraded), "Keep this unsaved screenplay.");
+  // JSON can losslessly carry a lone UTF-16 surrogate; UTF-8 text files cannot.
+  // A rejected text download must never satisfy the recovery-loss escape hatch.
+  const incompleteUnicode = "INT. ROOM\n\n!A\ud800B";
+  const unicodeBackup = {
+    format: "voxdown-studio-project",
+    version: 1,
+    draft: { name: "Unicode.fountain", source: incompleteUnicode },
+    snapshots: [],
+  };
+  await degraded.locator("#commands").click();
+  await degraded.getByRole("button", { name: "Portable backup and restore", exact: true }).click();
+  await degraded.getByLabel("Open Studio backup file").setInputFiles({
+    name: "unicode.studio.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(unicodeBackup)),
+  });
+  await degraded
+    .getByRole("button", { name: "Open selected item as a new draft", exact: true })
+    .click();
+  await degraded.waitForFunction(
+    () => document.getElementById("name").value === "Unicode.fountain",
+  );
+  let lossyDownloads = 0;
+  const countLossy = () => lossyDownloads++;
+  degraded.on("download", countLossy);
+  await degraded.locator("#download").click();
+  assert.match(await degraded.locator("#notice").textContent(), /incomplete Unicode character/);
+  const cancelLoss = degraded.waitForEvent("dialog").then((dialog) => dialog.dismiss());
+  await degraded.locator("#new").click();
+  await cancelLoss;
+  assert.equal(await degraded.locator("#name").inputValue(), "Unicode.fountain");
+  assert.equal(lossyDownloads, 0);
+  degraded.off("download", countLossy);
+  await degraded.locator("#commands").click();
+  await degraded.getByRole("button", { name: "Portable backup and restore", exact: true }).click();
+  const exactBackup = degraded.waitForEvent("download");
+  await degraded.getByRole("button", { name: "Download backup", exact: true }).click();
+  const preserved = JSON.parse(readFileSync(await (await exactBackup).path(), "utf8"));
+  assert.equal(preserved.draft.source, incompleteUnicode);
+  await degraded.keyboard.press("Escape");
   await degradedContext.close();
   console.log("Studio: blocked worker and unavailable storage preserve editing/download: passed");
 

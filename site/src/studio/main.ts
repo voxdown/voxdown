@@ -16,8 +16,12 @@ import {
   keymap,
   placeholder,
 } from "@codemirror/view";
+import { mountAdaptation } from "./adaptation-dialog";
 import { mountBackup } from "./backup";
+import { mountBreakdown } from "./breakdown-dialog";
 import { mountCoach } from "./coach";
+import { mountCompareDialog } from "./compare-dialog";
+import { mountFileDrop } from "./drop-files";
 import { mountFdxExport } from "./fdx-dialog";
 import { mountFdxImport } from "./fdx-import-dialog";
 import type { FountainDocument } from "./fountain";
@@ -27,6 +31,7 @@ import { mountLibrary } from "./library";
 import { LocalFileController } from "./local-file";
 import { mountLocations } from "./location-dialog";
 import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } from "./navigation";
+import { mountNumberingDialog } from "./numbering-dialog";
 import { createStudioOffline } from "./offline";
 import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
 import { mountPalette } from "./palette";
@@ -40,7 +45,14 @@ import { mountSceneBoard } from "./scene-board";
 import { ScreenplayScheduler, type WorkerResult, isSupersededRequest } from "./scheduler";
 import { screenplayKeymap } from "./screenplay-keymap";
 import { mountActorSides } from "./sides-dialog";
-import { MAX_LINES, MAX_SOURCE, fountainName, readSource, writeSource } from "./source";
+import {
+  MAX_LINES,
+  MAX_SOURCE,
+  encodeUtf8Losslessly,
+  fountainName,
+  readSource,
+  writeSource,
+} from "./source";
 import { mountSpeechEditor } from "./speech-dialog";
 import { type StudioDraft, getDraft, keepDraft, listDrafts } from "./storage";
 import { mountStorageHealth } from "./storage-health";
@@ -287,6 +299,21 @@ const locations = mountLocations(document.body, {
     return true;
   },
 });
+const numbering = mountNumberingDialog(document.body, {
+  current: () => ({ source: view.state.doc.toString(), id: draftId }),
+  apply: (snapshot, plan) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
+    notice(`Numbered ${plan.changes.length} scene headings. Undo restores the previous labels.`);
+    return true;
+  },
+});
 const actorSides = mountActorSides(document.body, {
   current: () => ({
     source: view.state.doc.toString(),
@@ -296,6 +323,17 @@ const actorSides = mountActorSides(document.body, {
   download,
 });
 const fdxExport = mountFdxExport(document.body, {
+  current: () => ({ source: view.state.doc.toString(), name: title() }),
+  download,
+});
+const breakdown = mountBreakdown(document.body, {
+  current: () => ({ source: view.state.doc.toString(), name: title() }),
+  download,
+});
+const comparison = mountCompareDialog(document.body, {
+  current: () => ({ source: text(), name: title() }),
+});
+const adaptation = mountAdaptation(document.body, {
   current: () => ({ source: view.state.doc.toString(), name: title() }),
   download,
 });
@@ -381,6 +419,30 @@ const offline = createStudioOffline((status) => {
 });
 $("offline-prepare").addEventListener("click", () => void offline.prepare());
 const palette = mountPalette(document.body, [
+  {
+    label: "Scene and cast breakdown",
+    category: "Plan and revise",
+    keywords: "production roles scenes csv report dialogue action",
+    run: () => breakdown.open(),
+  },
+  {
+    label: "Number scenes",
+    category: "Plan and revise",
+    keywords: "numbering renumber labels production",
+    run: () => numbering.open(),
+  },
+  {
+    label: "Compare with local Fountain file",
+    category: "Plan and revise",
+    keywords: "diff changes versions word revision",
+    run: () => comparison.open(),
+  },
+  {
+    label: "Adapt screenplay to VoxDown",
+    category: "Export and perform",
+    keywords: "vxd voice audiobook writer conversion",
+    run: () => adaptation.open(),
+  },
   {
     label: "Import Final Draft XML (FDX)",
     category: "Files and recovery",
@@ -745,7 +807,16 @@ function download(bytes: BlobPart, fileName: string, type: string): void {
 }
 function downloadSource(): void {
   const value = text();
-  download(value, title(), "text/plain;charset=utf-8");
+  try {
+    download(encodeUtf8Losslessly(value), title(), "text/plain;charset=utf-8");
+  } catch (error) {
+    notice(
+      error instanceof Error
+        ? error.message
+        : "Could not prepare an exact Fountain download. Your screenplay is unchanged.",
+    );
+    return;
+  }
   lastDownload = value;
   notice(
     "Fountain download started. Keep the downloaded file as an independent copy of your screenplay.",
@@ -912,8 +983,9 @@ function applyResult(result: Result): void {
     $("scene-count").textContent = String(scenes.length);
     outlineItems = outlineOf(document);
     renderOutline();
+    const scriptPages = result.layout?.pages.filter((p) => p.number !== null).length;
     $("counts").textContent =
-      `${scenes.length} ${scenes.length === 1 ? "scene" : "scenes"} · ${result.layout?.pages.filter((p) => p.number !== null).length ?? "—"} pages`;
+      `${scenes.length} ${scenes.length === 1 ? "scene" : "scenes"} · ${scriptPages ?? "—"} script ${scriptPages === 1 ? "page" : "pages"}`;
   }
   const messages = [
     ...(document?.warnings.map((w) => `Line ${w.line}: ${w.message}`) ?? []),
@@ -1119,12 +1191,8 @@ $("help").addEventListener("click", () => $<HTMLDialogElement>("guide").showModa
 for (const button of document.querySelectorAll<HTMLButtonElement>("dialog .close"))
   button.addEventListener("click", () => button.closest("dialog")?.close());
 $("open").addEventListener("click", () => $<HTMLInputElement>("file").click());
-$("file").addEventListener("change", async () => {
-  const input = $<HTMLInputElement>("file");
-  const file = input.files?.[0];
+async function openFountainFile(file: File) {
   const ticket = ++fileGeneration;
-  input.value = "";
-  if (!file) return;
   try {
     if (!/\.(fountain|txt)$/i.test(file.name))
       throw new Error(
@@ -1141,12 +1209,25 @@ $("file").addEventListener("change", async () => {
       if (ticket === fileGeneration) showSource(value, file.name);
     }
   } catch (error) {
+    if (ticket !== fileGeneration) return;
     notice(
       error instanceof Error
         ? error.message
         : "Could not open the file. Use a UTF-8 Fountain file.",
     );
   }
+}
+$("file").addEventListener("change", () => {
+  const input = $<HTMLInputElement>("file");
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) void openFountainFile(file);
+  else fileGeneration++;
+});
+mountFileDrop(document, {
+  open: (file) => void openFountainFile(file),
+  notice,
+  locked: () => recovering || replacing,
 });
 $("new").addEventListener("click", async () => {
   if (await mayReplace()) showSource("", "Untitled.fountain");

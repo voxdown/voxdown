@@ -8,6 +8,7 @@ import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
 
 const budgets = { inputP95: 250, inputMax: 1500, commandP95: 500, commandMax: 2000, ready: 15000 };
+const adaptationFrameBudget = 150;
 const dist = resolve("site/dist");
 let server;
 let url = process.env.STUDIO_PERF_URL;
@@ -54,6 +55,7 @@ const report = {
   mode: process.env.STUDIO_PERF_URL ? "existing-server" : "production-build",
   budgets,
   cpuRate,
+  adaptationFrameBudget,
   measurements: {},
   dom: {},
 };
@@ -121,6 +123,22 @@ async function measure(label, action, command = false) {
 try {
   await page.addInitScript(() => {
     window.__studioPerf = { inputs: [], longTasks: [], events: [] };
+    // Delegate to native Worker; record lifecycle only, never replace its work.
+    window.__studioAdaptationWorkers = [];
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url, options) {
+        super(url, options);
+        if (String(url).includes("adaptation-worker")) {
+          this.adaptationRecord = { terminated: 0 };
+          window.__studioAdaptationWorkers.push(this.adaptationRecord);
+        }
+      }
+      terminate() {
+        if (this.adaptationRecord) this.adaptationRecord.terminated++;
+        super.terminate();
+      }
+    };
     addEventListener(
       "keydown",
       () => {
@@ -323,6 +341,140 @@ try {
   await page.keyboard.press("Control+End");
   await page.keyboard.press("Enter");
   assert.equal(await save(), maximumLines, "Maximum-line rejection must leave the original intact");
+
+  // Separate explicit-operation regression: conversion must not recreate the
+  // former 400–600 ms main-thread stalls at 4× CPU slowdown. Elapsed conversion
+  // time is reported, not narrowly budgeted; frame availability is the contract.
+  const adaptationSource = `INT. LANTERN ROOM\n\n${Array.from(
+    { length: 4900 },
+    (_, i) =>
+      `@ROLE${i % 30}\nI found the small lantern beside the water. Keep it safe until we return at dawn.\n\n`,
+  ).join("")}[[Private performance marker.]]\n`;
+  assert.ok(adaptationSource.length > 440000 && adaptationSource.length < 500000);
+  await open(adaptationSource, "Adaptation-performance.fountain");
+  await page.waitForFunction(
+    () => document.getElementById("recovery").textContent === "Draft kept in this browser",
+  );
+  const adaptationCommand = async () => {
+    await page.locator("#commands").click();
+    await page.getByLabel("Find a command", { exact: true }).fill("Adapt screenplay to VoxDown");
+  };
+  const adapted = () =>
+    page.waitForFunction(
+      () =>
+        document
+          .querySelector('.adaptation-dialog [role="status"]')
+          ?.textContent?.startsWith("Validated 4900 spoken rows"),
+      undefined,
+      { timeout: budgets.ready + 1000 },
+    );
+  // Warm the worker module/cache without relying on a first-load network duration.
+  await adaptationCommand();
+  await page.locator(".command-list button").click();
+  await adapted();
+  await page.locator('.adaptation-dialog button:text-is("Close")').click();
+  await ready();
+  await page.waitForTimeout(250);
+
+  report.measurements.adaptation = {
+    characters: adaptationSource.length,
+    spokenRows: 4900,
+    samples: [],
+  };
+  for (let sample = 0; sample < 3; sample++) {
+    await adaptationCommand();
+    await page.evaluate(() => {
+      const state = { gaps: [], longTasks: [], started: 0, completed: 0, stopped: false };
+      window.__studioAdaptationFrames = state;
+      let previous;
+      const frame = (now) => {
+        if (previous !== undefined) state.gaps.push(now - previous);
+        previous = now;
+        if (!state.stopped) requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+      state.observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries())
+          if (state.started && entry.startTime >= state.started)
+            state.longTasks.push(entry.duration);
+      });
+      state.observer.observe({ type: "longtask" });
+    });
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
+    await page.evaluate(() => {
+      window.__studioAdaptationFrames.started = performance.now();
+      document.querySelector(".command-list button").click();
+    });
+    await adapted();
+    await page.evaluate(() => {
+      window.__studioAdaptationFrames.completed = performance.now();
+    });
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
+    const sampleMetrics = await page.evaluate(() => {
+      const state = window.__studioAdaptationFrames;
+      state.stopped = true;
+      state.observer.disconnect();
+      return {
+        elapsedMs: state.completed - state.started,
+        frameGaps: state.gaps,
+        longTasks: state.longTasks,
+      };
+    });
+    const measurement = {
+      elapsedMs: sampleMetrics.elapsedMs,
+      frameGapMs: stats(sampleMetrics.frameGaps),
+      longTasksMs: stats(sampleMetrics.longTasks),
+    };
+    report.measurements.adaptation.samples.push(measurement);
+    console.log(`adaptation preparation ${sample + 1}: ${JSON.stringify(measurement)}`);
+    assert.ok(measurement.frameGapMs.samples > 2, "Actual animation frames must be observed");
+    assert.ok(
+      measurement.frameGapMs.max <= adaptationFrameBudget,
+      `Adaptation frame gap ${measurement.frameGapMs.max.toFixed(1)}ms exceeds ${adaptationFrameBudget}ms budget`,
+    );
+    await page.locator('.adaptation-dialog button:text-is("Close")').click();
+  }
+  // Opening and closing in the same task guarantees a pending request, without
+  // artificial parser delays. A real worker is constructed and then terminated.
+  await adaptationCommand();
+  const cancellation = await page.evaluate(() => {
+    const before = window.__studioAdaptationWorkers.length;
+    document.querySelector(".command-list button").click();
+    const dialog = document.querySelector(".adaptation-dialog");
+    const pending = dialog.querySelector('[role="status"]').textContent.startsWith("Preparing");
+    const started = performance.now();
+    [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Close").click();
+    return {
+      pending,
+      created: window.__studioAdaptationWorkers.length - before,
+      terminated: window.__studioAdaptationWorkers.at(-1)?.terminated,
+      closeMs: performance.now() - started,
+      closed: !dialog.open,
+      cleared: dialog.querySelector("textarea").value === "",
+    };
+  });
+  report.measurements.adaptation.cancellation = cancellation;
+  assert.equal(cancellation.pending, true);
+  assert.equal(cancellation.created, 1, "Preparation uses an actual dedicated worker");
+  assert.equal(cancellation.terminated, 1, "Close terminates pending native worker work");
+  assert.equal(cancellation.closed && cancellation.cleared, true);
+  assert.ok(cancellation.closeMs <= adaptationFrameBudget, "Cancellation remains responsive");
+  assert.equal(
+    await save(),
+    adaptationSource,
+    "Preparing/cancelling adaptation never edits source",
+  );
+  assert.equal(
+    await page.evaluate(() =>
+      window.__studioAdaptationWorkers.every((worker) => worker.terminated === 1),
+    ),
+    true,
+    "Closing each adaptation dialog releases every worker",
+  );
   assert.deepEqual(errors, [], "No page exceptions during maximum-source editing");
   report.passed = true;
   console.log(`Studio performance: passed; bounded DOM ${JSON.stringify(report.dom)}`);

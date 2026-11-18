@@ -1,10 +1,11 @@
-// Built-site acceptance: opt-in scoped offline shell, first offline PDF, repair and safe updates.
+// Built-site acceptance: scoped offline shell, first-use adaptation/PDF, repair and safe updates.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
+import { lines, parse } from "../packages/core/dist/index.js";
 
 const { PDFDocument } = createRequire(resolve("site/package.json"))("pdf-lib");
 const dist = resolve("site/dist");
@@ -14,6 +15,8 @@ assert.ok(
   manifest.resources.some((path) => /pdf-.*\.js$/.test(path)),
   "Lazy PDF chunk is cached",
 );
+const adaptationChunks = manifest.resources.filter((path) => /\/adaptation-.*\.js$/.test(path));
+assert.ok(adaptationChunks.length, "Lazy adaptation chunk is cached");
 assert.ok(
   manifest.resources.some((path) => /worker.*\.js$/.test(path)),
   "Parser worker is cached",
@@ -111,12 +114,14 @@ const preferences = async (page) => {
   if (!(await page.locator("#preferences-dialog").isVisible()))
     await page.locator("#preferences").click();
 };
-const download = async (page, selector) => {
+const download = async (page, selector, expectedName) => {
   const pending = page.waitForEvent("download");
   void pending.catch(() => {});
   try {
     await page.locator(selector).click({ timeout: 10000 });
-    return readFileSync(await (await pending).path());
+    const file = await pending;
+    if (expectedName) assert.equal(file.suggestedFilename(), expectedName);
+    return readFileSync(await file.path());
   } catch (error) {
     console.error(
       "Download failed",
@@ -134,6 +139,20 @@ try {
     const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();
     const errors = [];
+    const adaptationRequests = [];
+    const adaptationWorkers = [];
+    const adaptationURLs = new Set(
+      adaptationChunks.map((path) => new URL(path, `${origin}${prefix}/studio/`).href),
+    );
+    // Worker cache population is not a page script import. Track executable page
+    // script requests separately to prove adaptation was not warmed online.
+    page.on("request", (request) => {
+      if (request.resourceType() === "script" && adaptationURLs.has(request.url()))
+        adaptationRequests.push(request.url());
+    });
+    page.on("worker", (worker) => {
+      if (adaptationURLs.has(worker.url())) adaptationWorkers.push(worker.url());
+    });
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`${origin}${prefix}/studio/`);
     await ready(page);
@@ -191,10 +210,67 @@ try {
     await page.waitForFunction(
       () => document.getElementById("recovery").textContent === "Draft kept in this browser",
     );
+    assert.deepEqual(adaptationRequests, [], "Adaptation has never been imported online");
+    assert.deepEqual(adaptationWorkers, [], "Adaptation worker has never been started online");
     await context.setOffline(true);
     await page.reload();
     await ready(page);
     assert.equal((await download(page, "#download")).toString(), source);
+    assert.deepEqual(adaptationRequests, [], "Offline reload does not eagerly import adaptation");
+    assert.deepEqual(adaptationWorkers, [], "Offline reload does not start an adaptation worker");
+    await page.locator("#commands").click();
+    await page.getByLabel("Find a command", { exact: true }).fill("Adapt screenplay to VoxDown");
+    await page.locator(".command-list button").click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector('.adaptation-dialog [role="status"]')
+        ?.textContent?.startsWith("Validated"),
+    );
+    assert.ok(
+      adaptationRequests.length || adaptationWorkers.length,
+      "First adaptation module or worker starts while offline",
+    );
+    const adapted = (
+      await download(
+        page,
+        '.adaptation-dialog button:text-is("Download adapted .vxd")',
+        "Offline.vxd",
+      )
+    ).toString();
+    assert.doesNotMatch(adapted, /Private offline marker 274816|Offline assurance/);
+    const adaptedStory = parse(adapted);
+    assert.deepEqual(adaptedStory.warnings, []);
+    assert.deepEqual(adaptedStory.groups, []);
+    assert.deepEqual(
+      adaptedStory.cast.map(({ handle, name }) => ({ handle, name })),
+      [{ handle: "Cast1", name: "MARA" }],
+    );
+    assert.deepEqual(
+      lines(adaptedStory).map(({ kind, speaker, text, direction, heading, together }) => ({
+        kind,
+        speaker,
+        text,
+        direction,
+        heading,
+        together,
+      })),
+      [
+        {
+          kind: "speech",
+          speaker: "Cast1",
+          text: "A bold, quiet and strong offline line.",
+          direction: null,
+          heading: null,
+          together: undefined,
+        },
+      ],
+    );
+    await page.locator('.adaptation-dialog button:text-is("Close")').click();
+    assert.equal(
+      (await download(page, "#download")).toString(),
+      source,
+      "Offline adaptation leaves exact Fountain source unchanged",
+    );
     // PDF has never been opened online: lazy chunks and all four font faces must be ready.
     const pdf = await PDFDocument.load(await download(page, "#pdf"));
     assert.ok(pdf.getPageCount() > 0);
@@ -267,7 +343,7 @@ try {
     await page.locator("#offline-prepare").click();
     await state(page, "ready");
     console.log(
-      `Studio offline: ${prefix || "/"} opt-in, isolated scope, offline reload/edit/download/first PDF, eviction repair: passed`,
+      `Studio offline: ${prefix || "/"} opt-in, isolated scope, offline reload/edit/download/first adaptation/first PDF, eviction repair: passed`,
     );
     if (!prefix) {
       const oldPage = await context.newPage();

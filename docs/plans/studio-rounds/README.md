@@ -59,11 +59,19 @@ previews, single-step undo, source/omission preservation, EOF moves, bounded ren
 | 18 | Self-paced performer rehearsal cards | Verified |
 | 19 | Guided Fountain practice isolated from the writer's screenplay | Verified |
 | 20 | Consistent private-comment preflight across public handoffs | Verified |
-| 21 | Explicit, validated VoxDown voice adaptation | Implementing/reviewing |
-| 22 | Read-only local-file comparison with bounded word highlighting | Implementing/reviewing |
-| 23 | Reproducible interchange against an actual pinned Screenplain exporter | Independently verified; batch checks pending |
-| 24 | Previewed, collision-safe Fountain scene numbering | Implemented; independent review pending |
-| 25 | Public scene/cast breakdown with explicit spreadsheet-safe CSV | Implementing |
+| 21 | Explicit, validated VoxDown voice adaptation | Verified |
+| 22 | Read-only local-file comparison with bounded word highlighting | Verified |
+| 23 | Reproducible interchange against an actual pinned Screenplain exporter | Verified |
+| 24 | Previewed, collision-safe Fountain scene numbering | Verified |
+| 25 | Public scene/cast breakdown with explicit spreadsheet-safe CSV | Verified |
+| 26 | Guarded local screenplay drops using the same safe Open path | Verified |
+| 27 | Cancellable worker preparation for VoxDown adaptation | Verified |
+| 28 | Command names outrank incidental category matches; stable task ordering | Verified |
+| 29 | Narrow-dialog reflow and light/dark accessibility coverage | Verified |
+| 30 | Lossless UTF-8 source download preserves recovery-loss safeguards | Verified |
+| 31 | Bounded PDF font headers/body loading with clean retry | Verified |
+| 32 | Explicit mobile focus mode with more room for writing | Implementing |
+| 33 | Discoverable mobile File menu using the existing task palette | Implementing |
 
 Validation for the first seven rounds:
 - `pnpm check`: lint, typechecks, 2,376 tests in 89 files, package builds passed.
@@ -143,3 +151,71 @@ rerun passed that check and the complete suite. The expanded session
 soak passed 30 measured cycles over 121.8 seconds, rotating new tools against a 499k-character
 screenplay: 3.74 MiB retained page-heap growth, stable DOM and one reused worker. This is a
 short active regression, not proof of hours-long or physical-device stability.
+
+
+## Review evidence for rounds 21–29
+
+Adaptation validates the generated text through the actual VoxDown core, preserves literal
+text/cast attribution, omits private/title/contact fields and requires acknowledgment for
+sequential delivery of dual dialogue. File comparison is read-only and bounded; scene
+numbering preserves exact source bytes outside intended markers and supports atomic undo.
+Breakdown reports distinguish actual scene occurrences and speaking roles, explain complete-
+scene filter counts, and protect exported CSV cells from formula interpretation. File drops
+reuse recovery confirmation, strict decoding, limits and stale-read guards.
+
+Independent review repairs: empty comparison excerpts now have named region semantics;
+nested ambiguous private comments block numbering before preview; unnamed-cue dialogue
+contributes words without inventing cast roles. Native-worker preparation cancels obsolete
+jobs and releases its worker on close, with explicit Retry and no blocking fallback.
+Exact command-name search now chooses the requested tool rather than a category match.
+320px Preferences and populated rehearsal selects now fit their dialogs; both appearance
+modes receive dialog-level geometry checks beyond page-level overflow and axe.
+
+Actual Screenplain0.12.0 interchange is reproducible from a pinned, hash-verified producer;
+root independently regenerated its fixture. It does not substitute for native Final Draft
+acceptance. Workerless/blocked-worker editing and Fountain downloads remain available.
+
+Intermediate batch evidence: `pnpm check` passed 2,806 tests in121files, lint, typechecks and
+package builds. Built Chromium passed after pacing the test's burst of inspection downloads:
+Blink silently throttles10 downloads within one second, and the expanded test exceeded that
+rate. Product downloads were unchanged. Full root/nested offline checks proved first-use
+adaptation after network disconnection. The final worker build is under full verification.
+
+Measured before worker isolation at4×CPU: near-limit adaptation caused400–600ms main-thread
+frame gaps; comparison30ms, numbering109ms, and breakdown296ms on their documented fixtures.
+These fixture measurements guide prioritization, not device guarantees. Final post-worker
+measurements and cross-browser results are recorded after the gates finish.
+
+
+Release-audit findings became rounds30–31: malformed Unicode from an exact JSON backup must
+not silently become a lossy Fountain download or satisfy the recovery escape hatch; stalled
+PDF font headers/body must time out and release the export action for retry. Both have
+regressions, with independent acceptance recorded as each finishes.
+
+The intermittent WPE backup-confirmation test was traced to its fault injection: the browser
+replaced the IndexedDB instance wrapper, restoring native `open` and allowing a legitimate
+successful save. A prototype-level override remains effective across wrapper replacements;
+isolated0/1s/2s checks confirm both expected prompts and exact cancel preservation. This is
+a test repair, not a new round or evidence of a product data-loss bug.
+
+Post-worker quiet4×CPU performance: three near-limit adaptation samples had16.7–16.8ms
+maximum animation-frame gaps and zero main-thread long tasks; pending Close took7.3ms and
+terminated the worker. Ordinary sustained typing p9511.5ms. Full root/nested offline first-
+worker adaptation passes. Final browser tests and remaining findings remain in progress.
+
+
+Final validation for rounds21–31: `pnpm check` passed2,841 tests in123files, lint,
+typechecks and package builds. Built Chromium, Firefox and WPE WebKit regression suites
+passed, including malformed-Unicode source/download/replacement/JSON-backup preservation.
+Direct-file failure/race gate passed.47 accessibility states passed; prototype-level WPE
+storage denial is now durable. Font deadlines were independently exercised against real
+stalled HTTP headers and bodies in allthree engines, with shared rejection and successful
+retry. All work remains local; no publication or push.
+
+Independent journey review passed desktop1440,tablet768 and320px workflows from six practice
+lessons through writing/revision, downloads, rehearsal, snapshots, reload and older-version
+recovery.21 populated phase accessibility audits had no violations. Scoped judgments were
+UX8.8/design8.6/accessibility9.0, performance9.4, and provisional reliability9.2/security9.3;
+these are candid reviews, not production certification. Identified mobile-control density
+and file-action discovery are being addressed in32–33. Physical input/screenreader/native
+file and print gates remain unverified; code-only rounds do not substitute for them.

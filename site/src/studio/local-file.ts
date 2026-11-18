@@ -1,4 +1,4 @@
-import { fountainName, readSource } from "./source";
+import { encodeUtf8Losslessly, fountainName, readSource } from "./source";
 
 /** Minimal interfaces also allow deterministic permission/race tests without disk access. */
 export interface LocalFileHandle {
@@ -52,13 +52,7 @@ async function bytes(handle: LocalFileHandle): Promise<Uint8Array> {
 
 function encode(source: string): Uint8Array {
   readSource(source);
-  // TextEncoder replaces unpaired surrogates. Refuse instead of silently changing source.
-  const encoded = new TextEncoder().encode(source);
-  if (new TextDecoder("utf-8", { ignoreBOM: true }).decode(encoded) !== source)
-    throw new Error(
-      "This text contains an incomplete Unicode character. Finish composing it before saving.",
-    );
-  return encoded;
+  return encodeUtf8Losslessly(source);
 }
 
 /**

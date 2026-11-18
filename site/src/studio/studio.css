@@ -1443,3 +1443,135 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.studio-file-comparison {
+  width: min(1000px, calc(100vw - 24px));
+  max-width: min(1000px, calc(100vw - 24px));
+}
+.adaptation-dialog {
+  width: min(760px, calc(100vw - 24px));
+  max-width: min(760px, calc(100vw - 24px));
+}
+:is(.studio-file-comparison, .adaptation-dialog) :is(p, li, label, h3) {
+  overflow-wrap: anywhere;
+}
+:is(.studio-file-comparison, .adaptation-dialog) :is(input, select, textarea) {
+  max-width: 100%;
+  font-size: 16px;
+}
+:is(.studio-file-comparison, .adaptation-dialog) button {
+  margin: 4px 8px 4px 0;
+}
+.adaptation-dialog label {
+  display: block;
+  min-height: 44px;
+  margin-block: 12px;
+}
+.adaptation-preview,
+.file-comparison-columns pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 45vh;
+  overflow: auto;
+}
+.adaptation-preview {
+  width: 100%;
+  min-height: 180px;
+  font: 16px / 1.5 "Courier Prime", monospace;
+}
+.adaptation-cast {
+  max-height: 25vh;
+  overflow: auto;
+}
+.file-comparison-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.comparison-word-added {
+  background: #dff5e5;
+  color: #154f31;
+  text-decoration: underline;
+}
+.comparison-word-removed {
+  background: #ffe7e7;
+  color: #7a2020;
+  text-decoration: line-through;
+}
+@media (max-width: 700px) {
+  .file-comparison-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.studio-scene-numbering {
+  width: min(760px, calc(100vw - 24px));
+  max-width: min(760px, calc(100vw - 24px));
+}
+.studio-scene-numbering :is(p, li, label, h3) {
+  overflow-wrap: anywhere;
+}
+.studio-scene-numbering label {
+  display: block;
+  margin-block: 12px 4px;
+  min-height: 24px;
+}
+.studio-scene-numbering :is(input, select) {
+  max-width: 100%;
+  font-size: 16px;
+  min-height: 44px;
+}
+.studio-scene-numbering input[type="checkbox"] {
+  min-height: auto;
+}
+.studio-scene-numbering button {
+  margin: 4px 8px 4px 0;
+}
+.scene-numbering-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.breakdown-dialog {
+  width: min(850px, calc(100vw - 24px));
+  max-width: min(850px, calc(100vw - 24px));
+}
+.breakdown-dialog :is(p, li, label, h3) {
+  overflow-wrap: anywhere;
+}
+.breakdown-dialog label {
+  display: block;
+  margin-block: 12px 4px;
+}
+.breakdown-dialog input {
+  max-width: 100%;
+  font-size: 16px;
+  min-height: 44px;
+}
+.breakdown-dialog button {
+  margin: 4px 8px 4px 0;
+}
+.breakdown-rows {
+  max-height: 45vh;
+  overflow: auto;
+  padding-inline-start: 24px;
+}
+.breakdown-rows > li {
+  padding-block: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Preferences must reflow their native select rather than clip it on a phone. */
+.preference:has(select) {
+  flex-wrap: wrap;
+}
+.preference select {
+  max-width: 100%;
+}
+.studio-scene-numbering label:has(input[type="checkbox"]) {
+  min-height: 44px;
+}
+.rehearsal-filters :is(input, select) {
+  min-width: 0;
+  width: 100%;
+}

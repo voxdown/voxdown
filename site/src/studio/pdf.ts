@@ -9,37 +9,56 @@ import { SCREENPLAY_FONT_SIZE, SCREENPLAY_PITCH, type ScreenplayLayout } from ".
 
 const urls = { regular: regularUrl, bold: boldUrl, italic: italicUrl, boldItalic: boldItalicUrl };
 type Face = keyof typeof urls;
-const fontBytes = new Map<string, Promise<Uint8Array>>();
-function loadFont(path: string): Promise<Uint8Array> {
-  const url = new URL(path, globalThis.location.href);
-  if (url.origin !== globalThis.location.origin)
-    throw new Error(
-      "The screenplay font must be loaded from this site. Reload Studio and try again.",
-    );
-  let loading = fontBytes.get(url.href);
-  if (!loading) {
-    loading = fetch(url.href, {
-      mode: "same-origin",
-      credentials: "same-origin",
-      redirect: "error",
-    })
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(
-            "The screenplay font could not be loaded. Connect to the internet, reload Studio, and try again.",
-          );
-        return new Uint8Array(await response.arrayBuffer());
-      })
-      .catch((error: unknown) => {
-        fontBytes.delete(url.href);
-        throw new Error("The screenplay font could not be loaded. Reload Studio and try again.", {
-          cause: error,
+/** One cache per loader; the deadline includes headers and the complete body.
+ * A failed response is evicted so an explicit export retry can start fresh. */
+export function createFontLoader(timeoutMs = 15_000): (path: string) => Promise<Uint8Array> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
+    throw new RangeError("The font timeout must be a positive finite duration.");
+  const fontBytes = new Map<string, Promise<Uint8Array>>();
+  return function load(path: string): Promise<Uint8Array> {
+    const url = new URL(path, globalThis.location.href);
+    if (url.origin !== globalThis.location.origin)
+      return Promise.reject(
+        new Error(
+          "The screenplay font must be loaded from this site. Reload Studio and try again.",
+        ),
+      );
+    const cached = fontBytes.get(url.href);
+    if (cached) return cached;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    const loading = Promise.resolve().then(async () => {
+      try {
+        const response = await fetch(url.href, {
+          mode: "same-origin",
+          credentials: "same-origin",
+          redirect: "error",
+          signal: controller.signal,
         });
-      });
+        if (!response.ok) throw new Error("Font response was unsuccessful.");
+        return new Uint8Array(await response.arrayBuffer());
+      } catch (error) {
+        controller.abort();
+        fontBytes.delete(url.href);
+        throw new Error(
+          timedOut
+            ? "The screenplay font download timed out. Check your connection and try Export PDF again. Your screenplay is unchanged."
+            : "The screenplay font could not be loaded. Check your connection and try exporting again. Your screenplay is unchanged.",
+          { cause: error },
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    });
     fontBytes.set(url.href, loading);
-  }
-  return loading;
+    return loading;
+  };
 }
+const loadFont = createFontLoader();
 const faceFor = (run: FountainRun): Face =>
   run.bold ? (run.italic ? "boldItalic" : "bold") : run.italic ? "italic" : "regular";
 

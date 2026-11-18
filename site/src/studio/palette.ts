@@ -6,7 +6,23 @@ export type StudioCommand = {
   run(): void;
   enabled?(): boolean;
 };
+// Stable task order; adding a tool must not reshuffle the whole menu.
+const categoryOrder = [
+  "Files and recovery",
+  "Writing space",
+  "Navigate",
+  "Plan and revise",
+  "Export and perform",
+  "Learn and inspect",
+];
+const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+
 export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
+  const present = [...new Set(commands.map((command) => command.category ?? "Other"))];
+  const groups = [
+    ...categoryOrder.filter((group) => present.includes(group)),
+    ...present.filter((group) => !categoryOrder.includes(group)),
+  ];
   const dialog = document.createElement("dialog");
   dialog.setAttribute("aria-labelledby", "commands-title");
   const title = document.createElement("h2");
@@ -23,7 +39,7 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
   const categoryLabel = document.createElement("label");
   categoryLabel.textContent = "Show commands ";
   const category = document.createElement("select");
-  for (const value of ["", ...new Set(commands.map((command) => command.category ?? "Other"))]) {
+  for (const value of ["", ...groups]) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = value || "All tools";
@@ -36,14 +52,14 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
   list.className = "command-list";
   const help = document.createElement("p");
   help.textContent =
-    "Type to filter, use ↓ to reach results, Enter to run, Escape to close. Ctrl/⌘ K opens Commands.";
-  const groups = [...new Set(commands.map((command) => command.category ?? "Other"))];
+    "Type to filter. Use ↓ to reach results; Enter runs the first available result. Escape closes. Ctrl/⌘ K opens Commands.";
   const ordered = groups.flatMap((group) =>
     commands.filter((command) => (command.category ?? "Other") === group),
   );
   function render() {
     list.replaceChildren();
-    const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const query = normalize(search.value);
+    const words = query.split(" ").filter(Boolean);
     const filtered = ordered.filter((command) => {
       const group = command.category ?? "Other";
       const text = `${command.label} ${group} ${command.keywords ?? ""}`.toLowerCase();
@@ -51,9 +67,33 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
         (!category.value || category.value === group) && words.every((word) => text.includes(word))
       );
     });
+    // Names outrank incidental category/keyword matches. Keep each category together,
+    // ordered by its strongest result, so Enter runs the best match without repeated headings.
+    const rank = (command: StudioCommand) => {
+      if (!query) return 0;
+      const label = normalize(command.label);
+      if (label === query) return 0;
+      if (label.startsWith(query)) return 1;
+      if (words.every((word) => label.includes(word))) return 2;
+      return 3;
+    };
+    const resultGroups = groups
+      .map((group) => ({
+        group,
+        commands: filtered
+          .filter((command) => (command.category ?? "Other") === group)
+          .sort((a, b) => rank(a) - rank(b)),
+      }))
+      .filter((group) => group.commands.length > 0)
+      .sort((a, b) => {
+        const firstA = a.commands[0];
+        const firstB = b.commands[0];
+        return firstA && firstB ? rank(firstA) - rank(firstB) : 0;
+      });
+    const results = resultGroups.flatMap((group) => group.commands);
     count.textContent = `${filtered.length} commands${filtered.some((command) => command.enabled?.() === false) ? "; unavailable tools are disabled" : ""}.`;
     let previousGroup = "";
-    for (const command of filtered) {
+    for (const command of results) {
       const group = command.category ?? "Other";
       if (group !== previousGroup) {
         const heading = document.createElement("h3");

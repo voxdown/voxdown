@@ -43,3 +43,13 @@ export function writeSource(file: SourceFile, text: string): string {
 export function fountainName(name: string): string {
   return `${filenameStem(name)}.fountain`;
 }
+
+/** UTF-8 cannot represent lone UTF-16 surrogates. Refuse a lossy text-file copy. */
+export function encodeUtf8Losslessly(text: string): Uint8Array<ArrayBuffer> {
+  const bytes = new TextEncoder().encode(text);
+  if (new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes) !== text)
+    throw new Error(
+      "This text contains an incomplete Unicode character. Finish composing or correct it before saving a text file. A Studio backup preserves the current text.",
+    );
+  return bytes;
+}

@@ -56,6 +56,7 @@ export default defineConfig({
         cheatsheet: resolve(here, "cheatsheet.html"),
         listen: resolve(here, "listen.html"),
         writer: resolve(here, "writer/index.html"),
+        screenplayStudio: resolve(here, "studio/index.html"),
         // The landing page directions not chosen, built but not linked (site/landing/*).
         stage: resolve(here, "landing/stage/index.html"),
         manuscript: resolve(here, "landing/manuscript/index.html"),

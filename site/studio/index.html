@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f6f5f0">
+  <title>VoxDown Studio — Screenplay workspace</title>
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+</head>
+<body>
+  <a class="skip" href="#editor">Skip to screenplay</a>
+  <header class="app-header">
+    <a class="brand" href="../writer/" title="Open VoxDown Writer">VoxDown <span>Studio</span></a>
+    <span class="badge">Experimental</span>
+    <span class="private">On your device. No account.</span>
+    <button id="help" type="button">Fountain guide <span aria-hidden="true">?</span></button>
+  </header>
+  <main id="app" aria-label="Screenplay workspace">
+    <div class="filebar">
+      <label class="filename"><span class="sr-only">File name</span><input id="name" value="Untitled.fountain" maxlength="180" spellcheck="false" aria-label="File name"></label>
+      <div class="file-actions">
+        <button id="new" type="button">New</button>
+        <button id="open" type="button">Open…</button>
+        <button id="recent" type="button">Recover…</button>
+        <button id="download" type="button" title="Download Fountain (Ctrl or Command + S)">Download Fountain</button>
+        <button id="pdf" class="primary" type="button" disabled>Export PDF</button>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button id="outline-toggle" type="button" aria-expanded="false" aria-controls="outline">Scenes</button>
+      <label><input id="margins" type="checkbox" checked> Live margins</label>
+      <button id="preview-toggle" type="button" aria-pressed="true">Page preview</button>
+      <label class="paper">Paper <select id="paper"><option value="letter">US Letter</option><option value="a4">A4</option></select></label>
+      <span id="counts" class="counts">Ready to write</span>
+    </div>
+    <div id="issues" role="status" aria-live="polite" hidden></div>
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+    <div class="workspace">
+      <aside id="outline" aria-label="Scene outline">
+        <div class="panel-heading"><h2>Scenes</h2><span id="scene-count">0</span></div>
+        <nav id="scene-list" aria-label="Jump to scene"></nav>
+        <p class="outline-hint">Start a scene with <code>INT.</code> or <code>EXT.</code> to find it here.</p>
+        <button id="example" type="button">Try a short screenplay</button>
+        <a class="writer-link" href="../writer/">Writing a VoxDown story? Open Writer ↗</a>
+      </aside>
+      <section class="writing" aria-label="Fountain editor">
+        <div class="panel-heading"><h2>Screenplay</h2><span>Fountain · plain text</span></div>
+        <div id="editor" tabindex="-1"></div>
+      </section>
+      <section id="preview" class="preview" aria-label="Screenplay page preview">
+        <div class="panel-heading"><h2>On the page</h2><span>Same layout as PDF</span></div>
+        <div class="page-controls">
+          <button id="previous" type="button" aria-label="Previous preview page">←</button>
+          <span id="page-label" aria-live="polite">Page preview</span>
+          <button id="next" type="button" aria-label="Next preview page">→</button>
+          <button id="zoom" type="button" aria-pressed="false">Full size</button>
+        </div>
+        <div id="page-scroll"><div id="page" aria-label="Current screenplay page"></div></div>
+        <p class="preview-hint">Notes, outlines, and omitted passages stay in your Fountain file. They do not print.</p>
+      </section>
+    </div>
+    <footer><span id="recovery" role="status">Opening local recovery…</span><span id="position">Line 1</span></footer>
+  </main>
+  <input id="file" type="file" accept=".fountain,.txt,text/plain" hidden>
+  <dialog id="guide" aria-labelledby="guide-title">
+    <div class="dialog-heading"><h2 id="guide-title">Write a screenplay, naturally.</h2><button class="close" type="button" aria-label="Close guide">×</button></div>
+    <p>Fountain is plain text. Leave a blank line between paragraphs. Studio displays the margins; your file keeps the words you type.</p>
+    <pre>INT. LIGHTHOUSE - NIGHT
+
+A light moves across the water.
+
+MARA
+(quietly)
+Someone is still out there.
+
+JONAH
+Then we leave the light on.</pre>
+    <dl><dt>Scene</dt><dd><code>INT. ROOM - DAY</code> or <code>.A FORCED SCENE</code></dd><dt>Dialogue</dt><dd>A NAME on its own line, followed immediately by speech.</dd><dt>Parenthetical</dt><dd><code>(under her breath)</code> between the name and speech.</dd><dt>Simultaneous speech</dt><dd>Put <code>^</code> after the second character’s name.</dd><dt>Emphasis</dt><dd><code>*italic*</code>, <code>**bold**</code>, <code>_underline_</code>.</dd><dt>Private note</dt><dd><code>[[A note that will not print.]]</code></dd><dt>Omitted passage</dt><dd><code>/* Keep this out of the PDF. */</code></dd><dt>Outline</dt><dd><code># Act one</code> and <code>= A synopsis</code> do not print.</dd><dt>New page</dt><dd><code>===</code> on a line of its own.</dd><dt>Keyboard</dt><dd>Ctrl/⌘ S downloads Fountain; Ctrl/⌘ F searches; Ctrl/⌘ Z undoes. Escape closes dialogs.</dd></dl>
+    <p>This first Studio is for Fountain. Use <a href="../writer/">VoxDown Writer</a> for <code>.vxd</code> files. PDF uses bundled Courier Prime; unsupported characters are reported before export.</p>
+    <p>Your draft stays in this browser. Download a file to keep an independent copy. Clearing site data removes browser recovery.</p>
+    <a href="https://fountain.io/syntax/" target="_blank" rel="noopener noreferrer">Full Fountain syntax ↗</a>
+  </dialog>
+  <dialog id="recovery-dialog" aria-labelledby="recovery-title">
+    <div class="dialog-heading"><h2 id="recovery-title">Recover a draft</h2><button class="close" type="button" aria-label="Close recovery">×</button></div>
+    <p>Opening a draft makes a new working copy. Other tabs and earlier drafts are kept.</p>
+    <div id="draft-list"></div>
+  </dialog>
+  <noscript>Studio needs JavaScript to edit locally. No screenplay is sent to a server.</noscript>
+  <script type="module" src="../src/studio/main.ts"></script>
+</body>
+</html>

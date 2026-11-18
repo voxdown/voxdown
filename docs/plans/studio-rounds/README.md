@@ -70,8 +70,13 @@ previews, single-step undo, source/omission preservation, EOF moves, bounded ren
 | 29 | Narrow-dialog reflow and light/dark accessibility coverage | Verified |
 | 30 | Lossless UTF-8 source download preserves recovery-loss safeguards | Verified |
 | 31 | Bounded PDF font headers/body loading with clean retry | Verified |
-| 32 | Explicit mobile focus mode with more room for writing | Implementing |
-| 33 | Discoverable mobile File menu using the existing task palette | Implementing |
+| 32 | Explicit mobile focus mode with more room for writing | Verified |
+| 33 | Discoverable mobile File menu using the existing task palette | Verified |
+| 34 | Temporary expanded tablet/desktop screenplay preview with safe return | Verified |
+| 35 | Successful-action notices yield writing space on next accepted edit | Implementing |
+| 36 | Reject unrecoverable NUL input without changing the existing draft | Implementing |
+| 37 | Export fidelity audit and evidence-led repair | Investigating |
+| 38 | Reach every workbench result through bounded pagination | Implementing |
 
 Validation for the first seven rounds:
 - `pnpm check`: lint, typechecks, 2,376 tests in 89 files, package builds passed.
@@ -219,3 +224,17 @@ UX8.8/design8.6/accessibility9.0, performance9.4, and provisional reliability9.2
 these are candid reviews, not production certification. Identified mobile-control density
 and file-action discovery are being addressed in32–33. Physical input/screenreader/native
 file and print gates remain unverified; code-only rounds do not substitute for them.
+
+
+Rounds32–34 independent native-browser checks: Focus recovers168px at320×700; File tools
+fit the existing44px row at320/375px and preserve exact source/keyboard return. Expanded
+preview grows tablet text6.19→14.33px, caps desktop paper at816px and preserves source,
+selection, zoom and outline preferences. Reference tab changes, source navigation, Focus
+and mobile resizing safely leave expansion. No horizontal overflow or axe violations.
+Built Chromium and47-state accessibility gates pass after the layout changes. Full pnpm
+check passes; physical-device input and screenreader acceptance remain unverified.
+
+Expanded active-session regression now exercises adaptation workers, breakdown, numbering
+preview and comparison alongside the earlier tools:27 cycles/123seconds,2.27MiB retained
+page-heap growth, bounded DOM, one reused parser worker and zero adaptation workers left
+alive after tools close. It does not measure worker heap or prove hours-long stability.

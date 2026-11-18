@@ -223,3 +223,47 @@ it("keeps a disabled exact match visible and skips it when running the first ava
     "sides",
   ]);
 });
+
+it("opens directly in a valid task category and returns focus to its own opener", async () => {
+  await navigationFixture();
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => {
+    const file = document.createElement("button");
+    file.textContent = "File…";
+    file.id = "file-menu";
+    file.onclick = () =>
+      (window as unknown as { palette: { open(category?: string): void } }).palette.open(
+        "Files and recovery",
+      );
+    document.body.append(file);
+  });
+  await page.locator("#file-menu").click();
+  expect(await page.getByLabel("Show commands").inputValue()).toBe("Files and recovery");
+  expect(await page.locator(".command-list h3").allTextContents()).toEqual(["Files and recovery"]);
+  expect(
+    await page.getByRole("searchbox").evaluate((node) => node === document.activeElement),
+  ).toBe(true);
+  await page.getByRole("searchbox").fill("open");
+  expect(await page.locator(".command-list button").first().textContent()).toBe(
+    "Open Fountain file",
+  );
+  await page.keyboard.press("Escape");
+  expect(await page.locator("#file-menu").evaluate((node) => node === document.activeElement)).toBe(
+    true,
+  );
+  await page.locator("#opener").click();
+  expect(await page.getByLabel("Show commands").inputValue()).toBe("");
+  expect(await page.getByRole("searchbox").inputValue()).toBe("");
+});
+
+it("falls back to all tools for an unknown initial category", async () => {
+  await navigationFixture();
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => {
+    (window as unknown as { palette: { open(category?: string): void } }).palette.open(
+      "Missing category",
+    );
+  });
+  expect(await page.getByLabel("Show commands").inputValue()).toBe("");
+  expect(await page.locator(".command-list button").count()).toBe(10);
+});

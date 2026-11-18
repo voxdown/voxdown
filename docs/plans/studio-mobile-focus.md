@@ -1,0 +1,13 @@
+# Explicit mobile focus writing
+
+Round 32 addresses measured phone workspace crowding: at 320×700 CSS pixels the editor previously began 270px below the top of the viewport. A mobile header Focus button now provides a direct, reversible writing view. Focus is explicit; typing never automatically hides controls.
+
+The header button shares the existing `preferences.focus` state with desktop Focus and Commands → Focus writing. It changes to Exit focus while active, exposes `aria-pressed`, and remains beside Commands. Toggling returns focus to CodeMirror without dispatching an edit or changing its selection/undo history. The preference survives reload when local storage is available; resizing changes presentation, not the stored preference. Desktop keeps its Guide and toolbar Focus controls.
+
+At widths up to 700px, focused writing hides the filename/file-action bar and normal page toolbar. Commands retains access to file actions, preferences and Fountain guide; the redundant mobile Guide header button is removed. The formatting row, recovery/file status, actual diagnostics and notices remain visible. A failed preview restores its Retry preview button in a normal-flow toolbar containing only that action, so failure is recoverable without leaving focus mode.
+
+The existing short-height layout remains scrollable instead of locking page overflow. Its workspace minimum gives the editor useful height even when the viewport becomes very short; the header/exit can be reached by scrolling. There is no keyboard detection or claim about physical iPhone visual-viewport/IME behavior.
+
+Measured Chromium geometry at 320×700: editor top 270→102px, available editor height 398→566px, and document width stays 320px. At 320×300 in focus, the editor retains 255px height and the body scrolls. All retained writing/header buttons have at least 44px height. These are deterministic CSS geometry checks, not physical-device usability certification.
+
+Six integration tests launch the actual app on an isolated Vite development server (no build required). They assert the editor-space gain, visible exit/formatting/recovery controls, Guide access through Commands, exact source and selected-text preservation, unchanged undo behavior, preference reload, desktop/mobile transitions, short-viewport scrolling, visible malformed-source diagnostics, disabled unsafe PDF export and available worker-failure retry. A live 320px focus accessibility scan reported zero axe violations. Independent mobile and product review remain separate; physical keyboard/IME, screen-reader and phone browser testing are manual gates.

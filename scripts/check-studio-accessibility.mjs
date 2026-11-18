@@ -235,7 +235,9 @@ try {
     await page.locator("#commands").evaluate((node) => document.activeElement === node),
     "Mobile command-opened preferences did not return focus to Commands",
   );
-  await page.locator("#help").click();
+  await page.locator("#commands").click();
+  await page.getByRole("searchbox", { name: "Find a command" }).fill("Fountain guide");
+  await page.keyboard.press("Enter");
   await audit("mobile Fountain guide");
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 320, height: 844 });

@@ -883,7 +883,9 @@ try {
   await mobile.locator("#scene-list button").click();
   assert.equal(await mobile.locator("#outline-toggle").getAttribute("aria-expanded"), "false");
   await mobile.screenshot({ path: "/tmp/voxdown-studio/mobile-editor.png" });
-  await mobile.locator("#help").click();
+  await mobile.locator("#commands").click();
+  await mobile.getByRole("searchbox", { name: "Find a command" }).fill("Fountain guide");
+  await mobile.keyboard.press("Enter");
   await mobile.keyboard.press("Escape");
   assert.equal(await mobile.locator("#guide").isVisible(), false);
   await context.setOffline(true);

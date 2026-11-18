@@ -18,6 +18,7 @@
     <span class="badge">Experimental</span>
     <span class="private">On your device. No account.</span>
     <button id="commands" type="button" title="Commands (Ctrl/⌘ K)">Commands</button>
+    <button id="mobile-focus" type="button" aria-pressed="false" aria-controls="editor" aria-label="Focus writing">Focus</button>
     <button id="workbench" type="button">Workbench</button>
     <button id="preferences" type="button">Preferences</button>
     <button id="help" type="button" aria-label="Fountain guide"><span class="help-long">Fountain guide</span><span class="help-short">Guide</span> <span aria-hidden="true">?</span></button>
@@ -26,6 +27,7 @@
     <div class="filebar">
       <label class="filename"><span class="sr-only">File name</span><input id="name" value="Untitled.fountain" maxlength="180" spellcheck="false" aria-label="File name"></label>
       <div class="file-actions">
+        <button id="file-menu" type="button" title="Open, save and recover screenplays">File…</button>
         <button id="new" type="button">New</button>
         <button id="open" type="button">Open…</button>
         <button id="recent" type="button">Recover…</button>
@@ -61,7 +63,7 @@
         <button id="example" type="button">Try a short screenplay</button>
         <a class="writer-link" href="../writer/">Writing a VoxDown story? Open Writer ↗</a>
       </aside>
-      <section class="writing" aria-label="Fountain editor">
+      <section id="writing" class="writing" aria-label="Fountain editor">
         <div class="panel-heading"><h2>Screenplay</h2><div class="writing-tools" role="group" aria-label="Text formatting">
           <button type="button" data-writing-mark="bold" aria-label="Bold" title="Bold (Ctrl/⌘ B)"><strong>B</strong></button>
           <button type="button" data-writing-mark="italic" aria-label="Italic" title="Italic (Ctrl/⌘ I)"><em>I</em></button>
@@ -78,6 +80,7 @@
           <span id="page-label" aria-live="polite">Page preview</span>
           <button id="next" type="button" aria-label="Next preview page">→</button>
           <button id="caret-page" type="button">Show caret</button><button id="page-source" type="button">Go to source</button>
+          <button id="expand-preview" type="button" aria-pressed="false">Expand preview</button>
           <button id="zoom" type="button" aria-pressed="false">Full size</button>
         </div>
         <div id="page-scroll" role="region" aria-label="Scrollable screenplay preview" tabindex="0"><div id="page" role="document" aria-label="Current screenplay page"></div></div>
@@ -98,7 +101,7 @@
     <label class="preference"><input id="typewriter" type="checkbox"> Keep the typing line near the centre</label>
     <label class="preference"><input id="page-guides" type="checkbox"> Show printed page starts beside the text</label>
     <p>Page numbers follow the current paper size. A + means several pages begin within the same source passage. Page preview shows the exact printed wrapping.</p>
-    <p>Focus hides the outline and preview. Use Focus again (in Commands on phones) to return. Bracket pairing can be switched off above.</p>
+    <p>Focus hides the outline and preview. On phones it also hides file and page controls; Commands keeps those actions available. Use Exit focus in the phone header, or Focus again on desktop, to return. Bracket pairing can be switched off above.</p>
     <h3>Your files</h3>
     <button id="storage-health" type="button">Storage and backups…</button>
     <h3>Work offline</h3>

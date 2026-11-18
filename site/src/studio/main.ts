@@ -36,6 +36,7 @@ import { createStudioOffline } from "./offline";
 import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
 import { mountPalette } from "./palette";
 import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
+import { mountPreviewSpace } from "./preview-space";
 import { assertUnambiguousOmissions } from "./public-source";
 import { mountReference } from "./reference";
 import { mountRehearsal } from "./rehearsal-dialog";
@@ -200,6 +201,7 @@ const view = new EditorView({
 
 document.querySelector<HTMLAnchorElement>(".skip")?.addEventListener("click", (event) => {
   event.preventDefault();
+  previewSpace.restore(false);
   view.focus();
 });
 const referencePanel = mountReference(preview, () => {
@@ -211,6 +213,17 @@ const referencePanel = mountReference(preview, () => {
   else app.classList.remove("no-preview");
   updatePreviewToggle();
 });
+const previewSpace = mountPreviewSpace(
+  {
+    app,
+    preview,
+    writing: $("writing"),
+    outline: $("outline"),
+    button: $<HTMLButtonElement>("expand-preview"),
+  },
+  () => view.focus(),
+);
+
 const scopedReplace = mountScopedReplace(document.body, {
   current: () => ({
     source: view.state.doc.toString(),
@@ -622,6 +635,7 @@ const palette = mountPalette(document.body, [
     },
   },
 ]);
+$("file-menu").addEventListener("click", () => palette.open("Files and recovery"));
 $("commands").addEventListener("click", () => palette.open());
 document.addEventListener("keydown", (event) => {
   if (recovering || replacing) return;
@@ -657,11 +671,18 @@ function editingState(doc = ""): EditorState {
 }
 
 function applyPreferences(): void {
+  if (preferences.focus) previewSpace.restore(false);
   document.documentElement.dataset.theme = preferences.theme;
   if (preferences.focus) app.classList.remove("mobile-preview", "outline-open");
   document.documentElement.style.setProperty("--editor-size", `${preferences.textSize}px`);
   app.classList.toggle("focus-writing", preferences.focus);
   $("focus-mode").setAttribute("aria-pressed", String(preferences.focus));
+  $("mobile-focus").setAttribute("aria-pressed", String(preferences.focus));
+  $("mobile-focus").setAttribute(
+    "aria-label",
+    preferences.focus ? "Exit focus writing" : "Focus writing",
+  );
+  $("mobile-focus").textContent = preferences.focus ? "Exit focus" : "Focus";
   $<HTMLSelectElement>("theme").value = preferences.theme;
   $<HTMLSelectElement>("text-size").value = String(preferences.textSize);
   $<HTMLInputElement>("typewriter").checked = preferences.typewriter;
@@ -675,10 +696,12 @@ function keepPreferences(): void {
   if (!savePreferences(preferences))
     notice("Preferences apply for this session; browser storage is unavailable.");
 }
-$("focus-mode").addEventListener("click", () => {
-  preferences.focus = !preferences.focus;
-  keepPreferences();
-});
+for (const id of ["focus-mode", "mobile-focus"])
+  $(id).addEventListener("click", () => {
+    preferences.focus = !preferences.focus;
+    keepPreferences();
+    view.focus();
+  });
 $("preferences").addEventListener("click", () =>
   $<HTMLDialogElement>("preferences-dialog").showModal(),
 );
@@ -911,6 +934,7 @@ async function mayReplace(): Promise<boolean> {
 }
 
 function showSource(value: string, fileName: string): void {
+  previewSpace.restore(false);
   const next = readSource(value);
   localFile.disconnect();
   fileSavedRevision = -1;
@@ -1022,6 +1046,7 @@ function decorate(document: FountainDocument): void {
   view.dispatch({ effects: marks.of(Decoration.set(ranges, true)) });
 }
 function jumpToLine(line: number): void {
+  previewSpace.restore(false);
   const at = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines))).from;
   view.dispatch({
     selection: { anchor: at },
@@ -1134,6 +1159,7 @@ function updatePreviewToggle(): void {
   $("preview-toggle").textContent = mobile && shown ? "Back to writing" : "Preview / reference";
 }
 $("preview-toggle").addEventListener("click", () => {
+  previewSpace.restore(false);
   if (preferences.focus) {
     preferences.focus = false;
     keepPreferences();
@@ -1149,6 +1175,7 @@ $("preview-toggle").addEventListener("click", () => {
 matchMedia("(max-width: 700px)").addEventListener("change", updatePreviewToggle);
 updatePreviewToggle();
 $("outline-toggle").addEventListener("click", () => {
+  previewSpace.restore(false);
   if (preferences.focus) {
     preferences.focus = false;
     keepPreferences();

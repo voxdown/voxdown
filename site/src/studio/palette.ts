@@ -153,10 +153,10 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
   dialog.append(title, close, search, categoryLabel, count, help, list);
   host.append(dialog);
   return {
-    open() {
+    open(initialCategory?: string) {
       if (dialog.open) return;
       search.value = "";
-      category.value = "";
+      category.value = initialCategory && groups.includes(initialCategory) ? initialCategory : "";
       render();
       dialog.showModal();
       search.focus();

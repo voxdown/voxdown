@@ -145,6 +145,7 @@ async function checkpoint(label) {
   );
   assert.equal(workers.maximumPending, 1, "Scheduler must post only one active worker calculation");
   assert.equal(workers.created, 1, "Ordinary editing must reuse its one worker");
+  assert.equal(workers.adaptationActive, 0, "Closing adaptation must release its worker");
   console.log(`Soak checkpoint: ${JSON.stringify(result)}`);
   return result;
 }
@@ -197,6 +198,10 @@ async function cycle(index) {
     "Practice Fountain step by step",
     "Scoped find and replace",
     "Storage and backups",
+    "Adapt screenplay to VoxDown",
+    "Scene and cast breakdown",
+    "Number scenes",
+    "Compare with local Fountain file",
   ];
   const toolIndex = Number(String(index).match(/\d+$/)?.[0] ?? 0) % tools.length;
   await page.locator("#commands").click();
@@ -207,6 +212,14 @@ async function cycle(index) {
     await page.getByRole("button", { name: "Start rehearsing", exact: true }).click();
     await page.getByRole("button", { name: "Reveal speech", exact: true }).click();
   }
+  if (tools[toolIndex] === "Adapt screenplay to VoxDown")
+    await page.waitForFunction(() =>
+      document
+        .querySelector('.adaptation-dialog [role="status"]')
+        .textContent.startsWith("Validated"),
+    );
+  if (tools[toolIndex] === "Number scenes")
+    await page.getByRole("button", { name: "Preview scene numbering", exact: true }).click();
   await page.keyboard.press("Escape");
   await page.locator("dialog[open]").waitFor({ state: "hidden" });
   assert.equal(await save(), baselineSource, "Read-only tools must preserve the screenplay");
@@ -216,11 +229,26 @@ async function cycle(index) {
 try {
   await page.addInitScript(() => {
     const NativeWorker = window.Worker;
-    window.__studioSoak = { created: 0, posted: 0, returned: 0, pending: 0, maximumPending: 0 };
+    window.__studioSoak = {
+      created: 0,
+      posted: 0,
+      returned: 0,
+      pending: 0,
+      maximumPending: 0,
+      adaptationCreated: 0,
+      adaptationActive: 0,
+    };
     window.Worker = class extends NativeWorker {
       constructor(...args) {
         super(...args);
         const state = window.__studioSoak;
+        this.adaptation = String(args[0]).includes("adaptation-worker");
+        this.stopped = false;
+        if (this.adaptation) {
+          state.adaptationCreated++;
+          state.adaptationActive++;
+          return;
+        }
         state.created++;
         this.addEventListener("message", () => {
           state.returned++;
@@ -230,9 +258,15 @@ try {
       postMessage(...args) {
         const state = window.__studioSoak;
         super.postMessage(...args);
+        if (this.adaptation) return;
         state.posted++;
         state.pending++;
         state.maximumPending = Math.max(state.maximumPending, state.pending);
+      }
+      terminate() {
+        if (this.adaptation && !this.stopped) window.__studioSoak.adaptationActive--;
+        this.stopped = true;
+        super.terminate();
       }
     };
   });

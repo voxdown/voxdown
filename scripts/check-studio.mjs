@@ -245,6 +245,113 @@ try {
   console.log(
     "Studio: scene cards, exact scene move with notes/synopsis/title/numbering, EOF safety and atomic undo: passed",
   );
+  const reviseSource =
+    "INT. ROOM - DAY\n\nStay in the room.\n\nMARA\nStay. [[private Stay.]]\n\nJONAH\nStay.";
+  await open(page, reviseSource, "Revisions.fountain");
+  const runCommand = async (label) => {
+    await page.locator("#commands").click();
+    await page.getByRole("searchbox", { name: "Find a command" }).fill(label);
+    await page.keyboard.press("Enter");
+  };
+  const locationSource =
+    "Title: Locations\n\nINT. ROOM - DAY #1#\n\nROOM stays in action. [[ROOM private]]\n\nEXT. ROOM - NIGHT #2#\n\nA light.\n\n.MYSTERY\n\nUnqualified heading.";
+  await open(page, locationSource, "Locations.fountain");
+  await runCommand("Locations and location rename");
+  await page.getByLabel("New location name", { exact: true }).fill("HALL");
+  await page.getByRole("button", { name: "Preview location rename", exact: true }).click();
+  await page.getByRole("button", { name: "Apply location rename", exact: true }).click();
+  assert.equal(
+    await save(page),
+    locationSource.replace("INT. ROOM", "INT. HALL").replace("EXT. ROOM", "EXT. HALL"),
+  );
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), locationSource);
+  await open(page, reviseSource, "Revisions.fountain");
+  await runCommand("Scene cards and rearrangement");
+  await page.getByRole("button", { name: "Add synopsis…", exact: true }).first().click();
+  await page.getByLabel("Scene synopsis", { exact: true }).fill("Mara makes a decision.");
+  await page.getByRole("button", { name: "Preview synopsis", exact: true }).click();
+  await page.getByRole("button", { name: "Apply synopsis", exact: true }).click();
+  assert.equal(
+    await save(page),
+    reviseSource.replace("INT. ROOM - DAY", "INT. ROOM - DAY\n= Mara makes a decision."),
+  );
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Character dialogue");
+  await page.locator(".workbench-content details").first().locator("summary").click();
+  await page.getByRole("button", { name: "Edit this speech…", exact: true }).first().click();
+  await page
+    .getByRole("textbox", { name: "Speech source", exact: true })
+    .fill("Go. [[private Stay.]]");
+  await page.getByRole("button", { name: "Preview speech edit", exact: true }).click();
+  await page.getByRole("button", { name: "Apply speech edit", exact: true }).click();
+  assert.equal(await save(page), reviseSource.replace("Stay. [[", "Go. [["));
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Scoped find and replace");
+  await page.getByLabel("Find text", { exact: true }).fill("Stay.");
+  await page.getByLabel("Replacement text", { exact: true }).fill("Go.");
+  await page.getByLabel("Search scope", { exact: true }).selectOption("dialogue");
+  await page.getByRole("button", { name: "Preview replacements", exact: true }).click();
+  await page.getByRole("button", { name: "Apply replacements", exact: true }).click();
+  assert.equal(
+    await save(page),
+    reviseSource.replace("Stay. [[", "Go. [[").replace("JONAH\nStay.", "JONAH\nGo."),
+  );
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Actor sides PDF");
+  const sidesDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download actor sides PDF", exact: true }).click();
+  const sidesPdf = await PDFDocument.load(readFileSync(await (await sidesDownload).path()));
+  assert.match(sidesPdf.getTitle(), /MARA.*actor sides/);
+  assert(sidesPdf.getPageCount() >= 2);
+  await page
+    .getByRole("dialog", { name: "Actor sides", exact: true })
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Storage and backups");
+  assert.equal(
+    await page.getByRole("heading", { name: "Storage and backups", exact: true }).isVisible(),
+    true,
+  );
+  await page.keyboard.press("Escape");
+  await runCommand("Export Final Draft XML (FDX)");
+  const fdxDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download FDX", exact: true }).click();
+  const fdx = readFileSync(await (await fdxDownload).path(), "utf8");
+  assert.match(fdx, /<FinalDraft /);
+  assert.match(fdx, /<Paragraph Type="Scene Heading">/);
+  assert(!fdx.includes("private Stay."));
+  await page.keyboard.press("Escape");
+  assert.equal(await save(page), reviseSource);
+  await runCommand("Open text reference beside screenplay");
+  const referenceSource = "<script>literal text only</script>\n[[private reference]]";
+  await page.locator('.studio-reference input[type="file"]').setInputFiles({
+    name: "Research.md",
+    mimeType: "text/plain",
+    buffer: Buffer.from(referenceSource),
+  });
+  await page.waitForFunction(() =>
+    document.querySelector(".studio-reference textarea").value.includes("private reference"),
+  );
+  assert.equal(
+    await page
+      .getByRole("textbox", { name: "Reference text (read only)", exact: true })
+      .inputValue(),
+    referenceSource,
+  );
+  assert.equal(await save(page), reviseSource);
+  await page.getByRole("tab", { name: "Page preview", exact: true }).click();
+  console.log(
+    "Studio: location rename, speech editing, scoped replacement, performer PDF, storage information and separate literal reference: passed",
+  );
   await open(page, "/*secret tail*/", "Partial-private.fountain");
   await content.focus();
   await page.keyboard.press("Control+Home");

@@ -115,13 +115,32 @@ try {
     () => document.activeElement === document.querySelector(".cm-content"),
   );
 
-  for (const command of ["Rename a character", "Scene cards and rearrangement"]) {
+  for (const command of [
+    "Rename a character",
+    "Scene cards and rearrangement",
+    "Storage and backups",
+    "Actor sides PDF",
+    "Scoped find and replace",
+    "Locations and location rename",
+    "Export Final Draft XML (FDX)",
+  ]) {
     await page.locator("#commands").click();
     await page.getByRole("searchbox", { name: "Find a command" }).fill(command);
     await page.keyboard.press("Enter");
     await audit(command);
+    if (command === "Scene cards and rearrangement") {
+      await page.getByRole("button", { name: "Add synopsis…", exact: true }).first().click();
+      await page.getByLabel("Scene synopsis", { exact: true }).fill("A visitor arrives.");
+      await page.getByRole("button", { name: "Preview synopsis", exact: true }).click();
+      await audit("scene synopsis editing and preview");
+    }
     await page.keyboard.press("Escape");
   }
+  await page.locator("#commands").click();
+  await page.getByRole("searchbox", { name: "Find a command" }).fill("Open text reference");
+  await page.keyboard.press("Enter");
+  await audit("read-only text reference");
+  await page.getByRole("tab", { name: "Page preview", exact: true }).click();
   await audit("populated screenplay, light appearance");
   await page.locator("#preferences").click();
   await page.locator("#theme").selectOption("dark");

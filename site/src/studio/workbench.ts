@@ -10,7 +10,11 @@ import {
 export function mountWorkbench(
   host: HTMLElement,
   jump: (line: number) => void,
-  rename?: () => void,
+  actions: {
+    rename?(): void;
+    sides?(): void;
+    editSpeech?(line: number, source: string): void;
+  } = {},
 ) {
   const dialog = document.createElement("dialog");
   dialog.setAttribute("aria-labelledby", "workbench-title");
@@ -110,14 +114,23 @@ export function mountWorkbench(
           ),
         );
     } else if (select.value === "characters") {
-      if (rename) {
+      if (actions.rename) {
         const renameButton = node("button", "Rename a character") as HTMLButtonElement;
         renameButton.type = "button";
         renameButton.onclick = () => {
           dialog.close();
-          rename();
+          actions.rename?.();
         };
         content.append(renameButton);
+      }
+      if (actions.sides) {
+        const sidesButton = node("button", "Actor sides PDF") as HTMLButtonElement;
+        sidesButton.type = "button";
+        sidesButton.onclick = () => {
+          dialog.close();
+          actions.sides?.();
+        };
+        content.append(sidesButton);
       }
       const found = searchCharacters(data.characters, search.value);
       summary.textContent = `${found.total} characters · showing up to 100`;
@@ -139,6 +152,16 @@ export function mountWorkbench(
               link(`${excerpt?.scene ?? "Scene"} · line ${line}`, line),
               node("pre", excerpt?.text || "No dialogue follows this cue."),
             );
+            if (actions.editSpeech && pending) {
+              const original = pending.source;
+              const edit = node("button", "Edit this speech…") as HTMLButtonElement;
+              edit.type = "button";
+              edit.onclick = () => {
+                dialog.close();
+                actions.editSpeech?.(line, original);
+              };
+              article.append(edit);
+            }
             if (excerpt?.shortened)
               article.append(node("p", "Excerpt shortened. Open source for the complete speech."));
             speeches.append(article);

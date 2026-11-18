@@ -768,6 +768,31 @@ dialog > input {
 }
 .command-list button {
   text-align: left;
+  overflow-wrap: anywhere;
+}
+.command-list h3 {
+  font-size: 14px;
+  margin: 16px 0 2px;
+  color: var(--muted);
+}
+.scene-synopsis-editor {
+  min-width: 0;
+  margin-block: 16px;
+}
+.scene-synopsis-editor textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 120px;
+  font: 16px / 1.5 "Courier Prime", monospace;
+}
+.scene-synopsis-editor legend {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.scene-synopsis-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .app-header {
   height: auto;
@@ -1179,5 +1204,182 @@ body {
 @media (max-width: 700px) {
   .scene-card-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.actor-sides-dialog > label {
+  display: block;
+  margin-block: 12px;
+}
+.actor-sides-dialog input[type="search"],
+.actor-sides-dialog select {
+  width: 100%;
+  max-width: 100%;
+}
+.actor-sides-dialog p,
+.actor-sides-dialog li {
+  overflow-wrap: anywhere;
+}
+.actor-sides-scenes {
+  max-height: 30vh;
+  overflow: auto;
+}
+.storage-health-dialog button {
+  margin-block: 4px;
+}
+@media (max-width: 700px) {
+  .actor-sides-dialog label {
+    min-height: 44px;
+  }
+}
+
+.studio-speech-editor {
+  width: min(760px, calc(100vw - 24px));
+  max-width: min(760px, calc(100vw - 24px));
+}
+.studio-speech-editor h2,
+.studio-speech-editor p {
+  overflow-wrap: anywhere;
+}
+.studio-speech-editor textarea {
+  display: block;
+  font: 16px / 1.5 "Courier Prime", monospace;
+  padding: 12px;
+  resize: vertical;
+  min-height: 160px;
+  max-height: 55dvh;
+}
+.studio-speech-editor button {
+  margin: 4px 8px 4px 0;
+}
+
+.studio-side-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.studio-side-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.studio-reference {
+  padding: 12px;
+  gap: 8px;
+}
+.reference-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.studio-reference p {
+  font-size: 12px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.studio-reference textarea {
+  flex: 1;
+  min-height: 100px;
+  width: 100%;
+  resize: none;
+  font: 14px / 1.5 "Courier Prime", monospace;
+  padding: 10px;
+}
+.reference-name {
+  font-weight: 600;
+}
+.studio-scoped-replace {
+  width: min(760px, calc(100vw - 24px));
+  max-width: min(760px, calc(100vw - 24px));
+}
+.studio-scoped-replace label {
+  display: block;
+  margin-block: 10px;
+}
+.studio-scoped-replace :is(input:not([type="checkbox"]), select) {
+  max-width: 100%;
+}
+.studio-scoped-replace button {
+  margin: 4px 8px 4px 0;
+}
+.replace-preview {
+  max-height: 35vh;
+  overflow: auto;
+}
+.replace-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .studio-scoped-replace label {
+    min-height: 44px;
+  }
+}
+.studio-side-tabs [role="tab"] {
+  border-bottom: 3px solid transparent;
+}
+.studio-side-tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .studio-reference textarea {
+    font-size: 16px;
+  }
+}
+.studio-reference {
+  overflow: auto;
+}
+
+.location-dialog {
+  width: min(760px, calc(100vw - 24px));
+  max-width: min(760px, calc(100vw - 24px));
+}
+.studio-fdx-export {
+  width: min(680px, calc(100vw - 24px));
+  max-width: min(680px, calc(100vw - 24px));
+}
+.studio-fdx-export :is(p, li, label) {
+  overflow-wrap: anywhere;
+}
+.studio-fdx-export label {
+  display: block;
+  min-height: 44px;
+}
+.studio-fdx-export button {
+  margin: 4px 8px 4px 0;
+}
+.location-dialog label {
+  display: block;
+  margin-block: 12px;
+}
+.location-dialog input {
+  max-width: 100%;
+}
+.location-dialog :is(h3, p, li, button) {
+  overflow-wrap: anywhere;
+}
+.location-dialog button {
+  margin: 4px 8px 4px 0;
+}
+.location-directory,
+.location-appearances,
+.location-rename-preview,
+.location-exclusions {
+  max-height: 30vh;
+  overflow: auto;
+}
+.location-rename-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .location-dialog label {
+    min-height: 44px;
   }
 }

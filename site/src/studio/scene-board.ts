@@ -1,10 +1,19 @@
-import { type SceneCard, type SceneMovePlan, listSceneCards, planSceneMove } from "./scene-edits";
+import {
+  MAX_SCENE_SYNOPSIS,
+  type SceneCard,
+  type SceneEditPlan,
+  type SceneMovePlan,
+  type SceneSynopsisPlan,
+  listSceneCards,
+  planSceneMove,
+  planSceneSynopsis,
+} from "./scene-edits";
 type Snapshot = { source: string; id: string };
 export function mountSceneBoard(
   host: HTMLElement,
   actions: {
     current(): Snapshot;
-    apply(snapshot: Snapshot, plan: SceneMovePlan): boolean;
+    apply(snapshot: Snapshot, plan: SceneEditPlan): boolean;
     jump(snapshot: Snapshot, line: number): boolean;
   },
 ) {
@@ -68,6 +77,7 @@ export function mountSceneBoard(
   const order = node("ol");
   const apply = button("Apply scene move", () => {
     if (!plan?.changes.length) return;
+    if (!fresh()) return stale();
     if (actions.apply(snapshot, plan)) dialog.close();
     else stale();
   });
@@ -82,13 +92,61 @@ export function mountSceneBoard(
     order,
     apply,
   );
+  const synopsisEditor = node("fieldset");
+  synopsisEditor.className = "scene-synopsis-editor";
+  const synopsisLegend = node("legend", "Scene synopsis");
+  const synopsisLabel = node("label", "Scene synopsis");
+  const synopsisInput = node("textarea");
+  synopsisInput.id = "scene-synopsis-input";
+  synopsisLabel.htmlFor = synopsisInput.id;
+  synopsisInput.maxLength = MAX_SCENE_SYNOPSIS;
+  synopsisInput.rows = 5;
+  const synopsisHelp = node(
+    "p",
+    "Each line is saved as = synopsis in your Fountain file. Synopses stay out of screenplay exports. Private notes remain separate. Clear the text to remove the synopsis.",
+  );
+  synopsisHelp.id = "scene-synopsis-help";
+  synopsisInput.setAttribute("aria-describedby", synopsisHelp.id);
+  const synopsisResult = node("p");
+  synopsisResult.setAttribute("role", "status");
+  const sourcePreview = node("div");
+  sourcePreview.className = "scene-synopsis-preview";
+  const synopsisPreview = button("Preview synopsis", previewSynopsis);
+  const synopsisApply = button("Apply synopsis", () => {
+    if (!synopsisPlan?.changes.length) return;
+    if (!fresh()) return stale();
+    if (actions.apply(snapshot, synopsisPlan)) dialog.close();
+    else stale();
+  });
+  synopsisEditor.append(
+    synopsisLegend,
+    synopsisLabel,
+    synopsisHelp,
+    synopsisInput,
+    synopsisPreview,
+    synopsisResult,
+    sourcePreview,
+    synopsisApply,
+  );
   const close = button("Close", () => dialog.close());
-  dialog.append(title, intro, filter, status, cards, previous, next, move, close);
+  dialog.append(title, intro, filter, status, cards, previous, next, move, synopsisEditor, close);
   host.append(dialog);
   let snapshot: Snapshot;
   let scenes: SceneCard[] = [];
   let moving: number | undefined;
   let plan: SceneMovePlan | undefined;
+  let editingSynopsis: number | undefined;
+  let synopsisPlan: SceneSynopsisPlan | undefined;
+  function fresh() {
+    const now = actions.current();
+    return now.id === snapshot.id && now.source === snapshot.source;
+  }
+  function invalidateSynopsis() {
+    synopsisPlan = undefined;
+    synopsisApply.disabled = true;
+    synopsisResult.textContent = "";
+    sourcePreview.replaceChildren();
+  }
   function invalidate() {
     plan = undefined;
     apply.disabled = true;
@@ -97,8 +155,56 @@ export function mountSceneBoard(
   }
   function stale() {
     invalidate();
+    invalidateSynopsis();
     result.textContent =
       "The screenplay changed. Close and reopen Scene cards to work with its current order.";
+    synopsisResult.textContent = result.textContent;
+  }
+  function chooseSynopsis(scene: SceneCard) {
+    invalidate();
+    invalidateSynopsis();
+    move.hidden = true;
+    synopsisEditor.hidden = false;
+    editingSynopsis = scene.index;
+    synopsisLegend.textContent = `Synopsis for scene ${scene.index + 1}: ${short(scene.heading)}`;
+    synopsisInput.value = "";
+    synopsisInput.disabled = synopsisPreview.disabled = true;
+    if (!fresh()) return stale();
+    try {
+      planSceneSynopsis(snapshot.source, scene.index, scene.synopsis);
+      synopsisInput.value = scene.synopsis;
+      synopsisInput.disabled = synopsisPreview.disabled = false;
+      synopsisInput.focus();
+    } catch (error) {
+      synopsisResult.textContent =
+        error instanceof Error ? error.message : "Edit this synopsis in the screenplay.";
+      synopsisResult.tabIndex = -1;
+      synopsisResult.focus();
+    }
+    synopsisEditor.scrollIntoView({ block: "nearest" });
+  }
+  function previewSynopsis() {
+    invalidateSynopsis();
+    if (!fresh()) return stale();
+    if (editingSynopsis === undefined) return;
+    try {
+      synopsisPlan = planSceneSynopsis(snapshot.source, editingSynopsis, synopsisInput.value);
+      synopsisResult.textContent = synopsisPlan.changes.length
+        ? "Review the exact source replacement below. Apply makes one undoable edit."
+        : "The synopsis is unchanged.";
+      if (synopsisPlan.changes.length) {
+        sourcePreview.append(
+          node("h3", `Source removed (line ${synopsisPlan.preview.line})`),
+          node("pre", synopsisPlan.preview.before),
+          node("h3", "Source inserted"),
+          node("pre", synopsisPlan.preview.after),
+        );
+      }
+      synopsisApply.disabled = !synopsisPlan.changes.length;
+    } catch (error) {
+      synopsisResult.textContent =
+        error instanceof Error ? error.message : "This synopsis could not be prepared.";
+    }
   }
   function destinations() {
     invalidate();
@@ -122,6 +228,8 @@ export function mountSceneBoard(
     preview.disabled = !found.length;
   }
   function choose(scene: SceneCard) {
+    invalidateSynopsis();
+    synopsisEditor.hidden = true;
     moving = scene.index;
     legend.textContent = `Move scene ${scene.index + 1}: ${short(scene.heading)}`;
     targetFilter.value = "";
@@ -164,6 +272,7 @@ export function mountSceneBoard(
           }
         }),
         button("Move this scene…", () => choose(scene)),
+        button(scene.synopsis ? "Edit synopsis…" : "Add synopsis…", () => chooseSynopsis(scene)),
       );
       cards.append(card);
     }
@@ -201,19 +310,27 @@ export function mountSceneBoard(
   };
   targetFilter.oninput = destinations;
   target.onchange = placement.onchange = invalidate;
+  synopsisInput.oninput = invalidateSynopsis;
   dialog.addEventListener("close", () => {
+    if (dialog.open) return;
     scenes = [];
     plan = undefined;
+    invalidateSynopsis();
+    synopsisInput.value = "";
+    snapshot = { source: "", id: "" };
     cards.replaceChildren();
   });
   return {
     open() {
-      snapshot = actions.current();
+      snapshot = { ...actions.current() };
       scenes = listSceneCards(snapshot.source);
       filter.value = "";
       offset = 0;
       moving = undefined;
       move.hidden = true;
+      synopsisEditor.hidden = true;
+      editingSynopsis = undefined;
+      invalidateSynopsis();
       invalidate();
       render();
       dialog.showModal();

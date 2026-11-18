@@ -18,21 +18,28 @@ import {
 } from "@codemirror/view";
 import { mountBackup } from "./backup";
 import { mountCoach } from "./coach";
+import { mountFdxExport } from "./fdx-dialog";
 import type { FountainDocument } from "./fountain";
 import type { ScreenplayLayout } from "./layout";
 import { mountLibrary } from "./library";
 import { LocalFileController } from "./local-file";
+import { mountLocations } from "./location-dialog";
 import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } from "./navigation";
 import { createStudioOffline } from "./offline";
 import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
 import { mountPalette } from "./palette";
 import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
+import { mountReference } from "./reference";
 import { mountRename } from "./rename-dialog";
+import { mountScopedReplace } from "./replace-dialog";
 import { mountSceneBoard } from "./scene-board";
 import { ScreenplayScheduler, type WorkerResult, isSupersededRequest } from "./scheduler";
 import { screenplayKeymap } from "./screenplay-keymap";
+import { mountActorSides } from "./sides-dialog";
 import { MAX_LINES, MAX_SOURCE, fountainName, readSource, writeSource } from "./source";
+import { mountSpeechEditor } from "./speech-dialog";
 import { type StudioDraft, getDraft, keepDraft, listDrafts } from "./storage";
+import { mountStorageHealth } from "./storage-health";
 import { rememberParsedSource } from "./syntax";
 import { type WritingMark, smartPairs, toggleWritingMark } from "./typing";
 import { mountWorkbench } from "./workbench";
@@ -179,6 +186,35 @@ document.querySelector<HTMLAnchorElement>(".skip")?.addEventListener("click", (e
   event.preventDefault();
   view.focus();
 });
+const referencePanel = mountReference(preview, () => {
+  if (preferences.focus) {
+    preferences.focus = false;
+    keepPreferences();
+  }
+  if (matchMedia("(max-width: 700px)").matches) app.classList.add("mobile-preview");
+  else app.classList.remove("no-preview");
+  updatePreviewToggle();
+});
+const scopedReplace = mountScopedReplace(document.body, {
+  current: () => ({
+    source: view.state.doc.toString(),
+    id: draftId,
+    position: view.state.selection.main.head,
+    selection: { from: view.state.selection.main.from, to: view.state.selection.main.to },
+  }),
+  apply: (snapshot, plan) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
+    notice(`Replaced ${plan.changes.length} matches. Undo restores the previous text.`);
+    return true;
+  },
+});
 const coach = mountCoach(
   document.body,
   () => ({ source: view.state.doc.toString(), position: view.state.selection.main.head }),
@@ -214,7 +250,9 @@ const sceneBoard = mountSceneBoard(document.body, {
       return false;
     view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
     notice(
-      `Moved scene ${plan.moved.fromIndex + 1} to position ${plan.moved.toIndex + 1}. Undo restores the previous order.`,
+      plan.kind === "synopsis"
+        ? `Updated scene ${plan.sceneIndex + 1} synopsis. Undo restores the previous outline.`
+        : `Moved scene ${plan.moved.fromIndex + 1} to position ${plan.moved.toIndex + 1}. Undo restores the previous order.`,
     );
     return true;
   },
@@ -225,7 +263,66 @@ const sceneBoard = mountSceneBoard(document.body, {
   },
 });
 $("scene-cards").addEventListener("click", () => sceneBoard.open());
-const workbench = mountWorkbench(document.body, jumpToLine, () => rename.open());
+const locations = mountLocations(document.body, {
+  current: () => ({ source: view.state.doc.toString(), id: draftId }),
+  apply: (snapshot, plan) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
+    notice(`Renamed ${plan.changes.length} scene locations. Undo restores the previous headings.`);
+    return true;
+  },
+  jump: (snapshot, line) => {
+    if (snapshot.id !== draftId || snapshot.source !== view.state.doc.toString()) return false;
+    jumpToLine(line);
+    return true;
+  },
+});
+const actorSides = mountActorSides(document.body, {
+  current: () => ({
+    source: view.state.doc.toString(),
+    name: title(),
+    paper: paper.value as "letter" | "a4",
+  }),
+  download,
+});
+const fdxExport = mountFdxExport(document.body, {
+  current: () => ({ source: view.state.doc.toString(), name: title() }),
+  download,
+});
+const speechEditor = mountSpeechEditor(document.body, {
+  current: () => ({ source: view.state.doc.toString(), id: draftId }),
+  apply: (snapshot, plan) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
+    notice("Updated the selected speech. Undo restores its previous words.");
+    return true;
+  },
+});
+const workbench = mountWorkbench(document.body, jumpToLine, {
+  rename: () => rename.open(),
+  sides: () => actorSides.open(),
+  editSpeech: (line, original) => {
+    if (original !== view.state.doc.toString()) {
+      notice(
+        "The screenplay changed. Wait for the preview to update, then reopen Character dialogue.",
+      );
+      return;
+    }
+    speechEditor.open(line);
+  },
+});
 $("workbench").addEventListener("click", () => workbench.open());
 const backup = mountBackup(document.body, {
   current: () => ({ name: title(), source: text(), draftId }),
@@ -236,6 +333,16 @@ const backup = mountBackup(document.body, {
   },
   download,
   notice,
+});
+const storageHealth = mountStorageHealth(document.body, {
+  download: downloadSource,
+  backup: () => backup.open(),
+  recover: () => library.open(),
+});
+$("storage-health").addEventListener("click", () => {
+  $<HTMLDialogElement>("preferences-dialog").close();
+  $("commands").focus();
+  storageHealth.open();
 });
 const offline = createStudioOffline((status) => {
   $("offline-status").textContent = status.message;
@@ -251,22 +358,79 @@ const offline = createStudioOffline((status) => {
 });
 $("offline-prepare").addEventListener("click", () => void offline.prepare());
 const palette = mountPalette(document.body, [
-  { label: "Scene cards and rearrangement", run: () => sceneBoard.open() },
-  { label: "Rename a character", run: () => rename.open() },
-  { label: "Explain the current Fountain line", run: () => coach.open() },
+  {
+    label: "Locations and location rename",
+    category: "Plan and revise",
+    keywords: "setting place slugline",
+    run: () => locations.open(),
+  },
+  {
+    label: "Open text reference beside screenplay",
+    category: "Writing space",
+    keywords: "research notes split",
+    run: () => referencePanel.open(),
+  },
+  {
+    label: "Scoped find and replace",
+    category: "Plan and revise",
+    keywords: "search dialogue action replace all",
+    run: () => scopedReplace.open(),
+  },
+  {
+    label: "Storage and backups",
+    category: "Files and recovery",
+    keywords: "quota persistence disk",
+    run: () => storageHealth.open(),
+  },
+  {
+    label: "Actor sides PDF",
+    category: "Export and perform",
+    keywords: "cast role performer rehearsal",
+    run: () => actorSides.open(),
+  },
+  {
+    label: "Export Final Draft XML (FDX)",
+    category: "Export and perform",
+    keywords: "interchange screenplay",
+    run: () => fdxExport.open(),
+  },
+  {
+    label: "Scene cards and rearrangement",
+    category: "Plan and revise",
+    keywords: "index cards board reorder move synopsis",
+    run: () => sceneBoard.open(),
+  },
+  {
+    label: "Rename a character",
+    category: "Plan and revise",
+    keywords: "cast name cue",
+    run: () => rename.open(),
+  },
+  {
+    label: "Explain the current Fountain line",
+    category: "Learn and inspect",
+    keywords: "help syntax element",
+    run: () => coach.open(),
+  },
   {
     label: "Save Fountain to file",
+    category: "Files and recovery",
+    keywords: "write local",
     shortcut: "Ctrl/⌘ S",
     run: () => void saveToFile(),
     enabled: () => localFile.available && !localFile.busy,
   },
   {
     label: "Save Fountain as…",
+    category: "Files and recovery",
+    keywords: "write local",
     run: () => void saveToFile(true),
     enabled: () => localFile.available && !localFile.busy,
   },
   {
     label: "Prepare Studio for offline use",
+    category: "Files and recovery",
+    keywords: "internet cache install",
     run: () => {
       $<HTMLDialogElement>("preferences-dialog").showModal();
       $("offline-prepare").focus();
@@ -275,6 +439,8 @@ const palette = mountPalette(document.body, [
   },
   {
     label: "Toggle live margins",
+    category: "Writing space",
+    keywords: "indentation",
     run: () => {
       margins.checked = !margins.checked;
       margins.dispatchEvent(new Event("change"));
@@ -287,25 +453,39 @@ const palette = mountPalette(document.body, [
     ] as const
   ).map(([label, value]) => ({
     label,
+    category: "Export and perform",
+    keywords: "page setup print size",
     run: () => {
       paper.value = value;
       paper.dispatchEvent(new Event("change"));
     },
   })),
-  { label: "Portable backup and restore", run: () => backup.open() },
+  {
+    label: "Portable backup and restore",
+    category: "Files and recovery",
+    keywords: "archive import export",
+    run: () => backup.open(),
+  },
   ...[
-    ["New screenplay", "new"],
-    ["Open Fountain file", "open"],
-    ["Download Fountain", "download"],
-    ["Export PDF", "pdf"],
-    ["Recovery and snapshots", "recent"],
-    ["Focus writing", "focus-mode"],
-    ["Preferences", "preferences"],
-    ["Fountain guide", "help"],
-    ["Show caret on page", "caret-page"],
-    ["Go to preview source", "page-source"],
-  ].map(([label, id]) => ({
+    ["New screenplay", "new", "Files and recovery"],
+    ["Open Fountain file", "open", "Files and recovery"],
+    ["Download Fountain", "download", "Files and recovery"],
+    ["Export PDF", "pdf", "Export and perform", "print pages"],
+    ["Recovery and snapshots", "recent", "Files and recovery", "compare versions restore history"],
+    ["Focus writing", "focus-mode", "Writing space", "distraction free"],
+    [
+      "Preferences",
+      "preferences",
+      "Writing space",
+      "theme font text size typewriter brackets keyboard",
+    ],
+    ["Fountain guide", "help", "Learn and inspect"],
+    ["Show caret on page", "caret-page", "Navigate"],
+    ["Go to preview source", "page-source", "Navigate"],
+  ].map(([label, id, category, keywords]) => ({
     label: label ?? "",
+    category: category ?? "Other",
+    keywords: keywords ?? "",
     run: () => $(id ?? "").click(),
     enabled: () => !$<HTMLButtonElement>(id ?? "").disabled,
   })),
@@ -314,9 +494,16 @@ const palette = mountPalette(document.body, [
     ["Character dialogue", "characters"],
     ["Private notes", "notes"],
     ["Source diagnostics", "diagnostics"],
-  ].map(([label, section]) => ({ label: label ?? "", run: () => workbench.open(section) })),
+  ].map(([label, section]) => ({
+    label: label ?? "",
+    category: section === "characters" ? "Plan and revise" : "Learn and inspect",
+    keywords: section === "characters" ? "speech edit cast role" : "",
+    run: () => workbench.open(section),
+  })),
   {
     label: "Previous scene",
+    category: "Navigate",
+    keywords: "jump",
     shortcut: "Alt PageUp",
     run: () => {
       moveScene(-1);
@@ -324,6 +511,8 @@ const palette = mountPalette(document.body, [
   },
   {
     label: "Next scene",
+    category: "Navigate",
+    keywords: "jump",
     shortcut: "Alt PageDown",
     run: () => {
       moveScene(1);
@@ -772,6 +961,7 @@ function updateCurrentScene(line: number): void {
   activeOutline = next;
 }
 $("caret-page").addEventListener("click", () => {
+  referencePanel.showPage();
   if (!latest?.layout) return;
   previewPage = pageAtSource(
     latest.layout,
@@ -828,7 +1018,7 @@ function updatePreviewToggle(): void {
     (mobile ? app.classList.contains("mobile-preview") : !app.classList.contains("no-preview"));
   preview.hidden = !shown;
   $("preview-toggle").setAttribute("aria-pressed", String(shown));
-  $("preview-toggle").textContent = mobile && shown ? "Back to writing" : "Page preview";
+  $("preview-toggle").textContent = mobile && shown ? "Back to writing" : "Preview / reference";
 }
 $("preview-toggle").addEventListener("click", () => {
   if (preferences.focus) {

@@ -17,6 +17,7 @@ export interface SceneCard {
 }
 
 export interface SceneMovePlan {
+  kind: "move";
   /** One atomic replacement, or an empty list for an already-satisfied move. */
   changes: { from: number; to: number; insert: string }[];
   candidate: string;
@@ -143,6 +144,7 @@ export function planSceneMove(
   }
   const toIndex = order.indexOf(sceneIndex);
   const plan: SceneMovePlan = {
+    kind: "move",
     changes: [],
     candidate: source,
     order,
@@ -234,5 +236,161 @@ export function planSceneMove(
       insert: candidateBody.slice(first.from, final.to),
     },
   ];
+  return plan;
+}
+
+export const MAX_SCENE_SYNOPSIS = 10_000;
+export const MAX_SCENE_SYNOPSIS_LINES = 100;
+export interface SceneSynopsisPlan {
+  kind: "synopsis";
+  sceneIndex: number;
+  changes: { from: number; to: number; insert: string }[];
+  candidate: string;
+  preview: { line: number; before: string; after: string };
+  warnings: string[];
+}
+export type SceneEditPlan = SceneMovePlan | SceneSynopsisPlan;
+
+/** Edit one contiguous public synopsis block, or insert one immediately after the
+ * scene heading. Private comment fragments and dispersed blocks require source
+ * editing; no hidden text is reconstructed from rendered synopsis content.
+ */
+export function planSceneSynopsis(
+  source: string,
+  sceneIndex: number,
+  value: string,
+): SceneSynopsisPlan {
+  readSource(source);
+  const normalized = value.replace(/\r\n?/g, "\n");
+  if (
+    normalized.length > MAX_SCENE_SYNOPSIS ||
+    normalized.split("\n").length > MAX_SCENE_SYNOPSIS_LINES
+  )
+    throw new Error(
+      "Scene card synopses support up to 10,000 characters and 100 lines. Edit a longer synopsis directly in the screenplay.",
+    );
+  if (
+    /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(normalized.replace(/[\n\t]/g, "")) ||
+    /\[\[|\]\]|\/\*|\*\//u.test(normalized)
+  )
+    throw new Error(
+      "Use synopsis text without control characters or private-comment delimiters. Keep private notes separate in the screenplay.",
+    );
+  const text = normalized
+    .trim()
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n");
+  const document = parseFountain(source);
+  if (document.warnings.length)
+    throw new Error(
+      "Close incomplete private notes or omitted passages before editing a scene synopsis.",
+    );
+  const originalCards = cardsOf(document, source);
+  const scene = originalCards[sceneIndex];
+  if (!Number.isInteger(sceneIndex) || !scene)
+    throw new Error("Choose a scene from the current screenplay.");
+  const heading = document.elements[scene.line - 1] as FountainElement;
+  const synopsis = document.elements.filter(
+    (element) =>
+      element.kind === "synopsis" && element.from >= scene.from && element.to <= scene.to,
+  );
+  if (scene.synopsis.length > MAX_SCENE_SYNOPSIS || synopsis.length > MAX_SCENE_SYNOPSIS_LINES)
+    throw new Error(
+      "This synopsis is too long for scene cards. Edit it directly in the screenplay.",
+    );
+  const first = synopsis[0];
+  const last = synopsis.at(-1);
+  if (first && last && last.line - first.line + 1 !== synopsis.length)
+    throw new Error(
+      "This scene has separate synopsis blocks. Edit them directly in the screenplay so intervening words and private notes stay in place.",
+    );
+  if (
+    synopsis.some((element) =>
+      document.omissions.some((span) => span.from < element.to && span.to > element.from),
+    )
+  )
+    throw new Error(
+      "This synopsis contains a private comment. Edit it directly in the screenplay to preserve that private text.",
+    );
+  const original = synopsis.map((element) => element.text).join("\n");
+  const plan: SceneSynopsisPlan = {
+    kind: "synopsis",
+    sceneIndex,
+    changes: [],
+    candidate: source,
+    preview: { line: first?.line ?? heading.line, before: "", after: "" },
+    warnings: [],
+  };
+  if (original === text && (text !== "" || synopsis.length === 0)) return plan;
+  const newline =
+    source.slice(heading.to, document.elements[heading.line]?.from ?? heading.to) ||
+    /\r\n|\r|\n/.exec(source)?.[0] ||
+    "\n";
+  const replacement = text
+    ? text
+        .split("\n")
+        .map((line) => `= ${line}`)
+        .join(newline)
+    : "";
+  const from = first?.from ?? heading.to;
+  // Removing the complete final line terminator avoids inventing a blank line
+  // that could reclassify the following uppercase action as a character cue.
+  const to = last
+    ? !text
+      ? (document.elements[last.line]?.from ?? last.to)
+      : last.to
+    : heading.to;
+  const insert = first ? replacement : `${newline}${replacement}`;
+  if (
+    document.omissions.some(
+      (span) =>
+        (span.from < to && span.to > from) || (from === to && span.from <= from && span.to > from),
+    )
+  )
+    throw new Error(
+      "A private passage crosses this synopsis boundary. Edit the synopsis directly in the screenplay.",
+    );
+  const candidate = source.slice(0, from) + insert + source.slice(to);
+  readSource(candidate);
+  const after = parseFountain(candidate);
+  const delta = insert.length - (to - from);
+  const mapped = (position: number) => (position >= to ? position + delta : position);
+  const removed = new Set(synopsis.map((element) => element.line));
+  const byPosition = new Map(after.elements.map((element) => [element.from, element]));
+  if (
+    after.warnings.length ||
+    document.elements.some(
+      (element) =>
+        !removed.has(element.line) && !sameElement(element, byPosition.get(mapped(element.from))),
+    )
+  )
+    throw new Error(
+      "This synopsis edit would change the interpretation of surrounding screenplay text. Edit it directly in the screenplay.",
+    );
+  if (
+    document.omissions.length !== after.omissions.length ||
+    document.omissions.some((span, index) => {
+      const next = after.omissions[index];
+      return (
+        !next ||
+        next.kind !== span.kind ||
+        next.from !== mapped(span.from) ||
+        next.to !== (span.to <= from ? span.to : mapped(span.to)) ||
+        source.slice(span.from, span.to) !== candidate.slice(next.from, next.to)
+      );
+    })
+  )
+    throw new Error("This synopsis edit would alter a private passage. No changes applied.");
+  const updated = cardsOf(after, candidate);
+  if (updated.length !== originalCards.length || updated[sceneIndex]?.synopsis !== text)
+    throw new Error("This text cannot be represented safely as the selected scene’s synopsis.");
+  plan.changes = [{ from, to, insert }];
+  plan.candidate = candidate;
+  plan.preview = {
+    line: first?.line ?? heading.line,
+    before: source.slice(from, to),
+    after: insert,
+  };
   return plan;
 }

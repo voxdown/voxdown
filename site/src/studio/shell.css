@@ -239,8 +239,18 @@ button svg {
   flex: none;
 }
 .tool-group + .tool-group {
-  border-left: 1px solid var(--border);
+  position: relative;
   padding-left: 10px;
+}
+.tool-group + .tool-group::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 1.1rem;
+  transform: translateY(-50%);
+  background: var(--border);
 }
 #app .toolbar button,
 #app .toolbar select {
@@ -266,6 +276,12 @@ button svg {
 .writing-tools button {
   font-family: var(--story);
   font-size: 15px !important;
+}
+/* Match Writer: Literata's italic capital needs a clearer slant at icon size. */
+.writing-tools [data-writing-mark="italic"] em {
+  display: inline-block;
+  font-style: italic;
+  transform: skewX(-12deg);
 }
 #element-action {
   width: 128px;
@@ -487,8 +503,10 @@ button[aria-pressed="false"] .menu-check {
     padding-left: 3px;
   }
   #app .toolbar .writing-tools {
-    border-left: 0;
     padding-left: 0;
+  }
+  #app .toolbar .writing-tools::before {
+    display: none;
   }
   #app .toolbar button,
   #app .toolbar select {

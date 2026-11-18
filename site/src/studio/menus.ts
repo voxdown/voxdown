@@ -207,7 +207,9 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
             if (action.label === "Toolbar")
               button.setAttribute(
                 "aria-pressed",
-                String(document.documentElement.dataset.studioToolbar === "true"),
+                String(
+                  !button.disabled && document.documentElement.dataset.studioToolbar === "true",
+                ),
               );
             if (button.hasAttribute("aria-pressed") && !button.querySelector(".menu-check")) {
               const mark = document.createElement("span");
@@ -231,6 +233,17 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
           button.append(hint);
         }
         panel.append(button);
+        if (command?.label === "Toolbar") {
+          const hint = document.createElement("p");
+          hint.id = "toolbar-focus-hint";
+          hint.className = "menu-hint";
+          hint.textContent = "Hidden in Focus mode";
+          button.setAttribute("aria-describedby", hint.id);
+          panel.append(hint);
+          sync.push(() => {
+            hint.hidden = !button.disabled;
+          });
+        }
       }
     });
     document.body.append(panel);

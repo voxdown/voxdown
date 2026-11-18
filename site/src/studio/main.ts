@@ -530,7 +530,9 @@ const commands: StudioCommand[] = [
   {
     label: "Toolbar",
     category: "Writing space",
+    enabled: () => !preferences.focus,
     run: () => {
+      if (preferences.focus) return;
       preferences.toolbar = !preferences.toolbar;
       keepPreferences();
     },

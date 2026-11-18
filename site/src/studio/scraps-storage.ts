@@ -1,15 +1,17 @@
 import type { Scrap } from "../writer/scraps";
+import type { ScrapOrigin } from "./scrap-origin";
 
 /** Separate from Writer, and one atomic record per Studio browser draft. */
 export const STUDIO_SCRAPS_PREFIX = "vxd-studio-scraps:";
 export const MAX_SCRAPS = 500;
 export const MAX_SCRAP_CHARS = 500_000;
-export type ScrapBook = { version: 1; scraps: Scrap[]; deleted: Scrap[] };
+export type StudioScrap = Scrap & { pinned?: boolean; origin?: ScrapOrigin };
+export type ScrapBook = { version: 1; scraps: StudioScrap[]; deleted: StudioScrap[] };
 export type ScrapsKeeper = Pick<Storage, "getItem" | "setItem">;
 
-function validScrap(value: unknown): value is Scrap {
+function validScrap(value: unknown): value is StudioScrap {
   if (!value || typeof value !== "object") return false;
-  const scrap = value as Partial<Scrap>;
+  const scrap = value as Partial<StudioScrap>;
   return (
     typeof scrap.id === "string" &&
     scrap.id.length > 0 &&
@@ -21,6 +23,8 @@ function validScrap(value: unknown): value is Scrap {
     scrap.note.length <= 2_000 &&
     typeof scrap.from === "string" &&
     scrap.from.length <= 2_000 &&
+    (scrap.pinned === undefined || typeof scrap.pinned === "boolean") &&
+    (scrap.origin === undefined || validOrigin(scrap.origin)) &&
     typeof scrap.at === "number" &&
     Number.isFinite(scrap.at) &&
     Math.abs(scrap.at) <= 8.64e15 &&
@@ -31,7 +35,23 @@ function validScrap(value: unknown): value is Scrap {
   );
 }
 
-export function validateScraps(scraps: unknown): asserts scraps is Scrap[] {
+function validOrigin(origin: ScrapOrigin): boolean {
+  return (
+    !!origin &&
+    typeof origin === "object" &&
+    typeof origin.before === "string" &&
+    origin.before.length <= 160 &&
+    typeof origin.after === "string" &&
+    origin.after.length <= 160 &&
+    typeof origin.text === "string" &&
+    origin.text.length > 0 &&
+    origin.text.length <= MAX_SCRAP_CHARS &&
+    typeof origin.start === "boolean" &&
+    typeof origin.end === "boolean"
+  );
+}
+
+export function validateScraps(scraps: unknown): asserts scraps is StudioScrap[] {
   if (!Array.isArray(scraps) || scraps.length > MAX_SCRAPS || !scraps.every(validScrap))
     throw new Error("These scraps contain unsupported data or exceed the 500-scrap limit.");
   if (new Set(scraps.map((scrap) => scrap.id)).size !== scraps.length)
@@ -42,6 +62,12 @@ export function validateScraps(scraps: unknown): asserts scraps is Scrap[] {
   )
     throw new Error(
       "This collection exceeds 500,000 characters. Export some scraps before adding more.",
+    );
+  if (
+    scraps.reduce((total, scrap) => total + (scrap.origin?.text.length ?? 0), 0) > MAX_SCRAP_CHARS
+  )
+    throw new Error(
+      "This collection's saved source passages exceed 500,000 characters. Export some scraps first.",
     );
 }
 

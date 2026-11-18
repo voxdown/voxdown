@@ -199,10 +199,22 @@ try {
   await page.getByRole("button", { name: "Add scrap", exact: true }).click();
   await page.locator(".outline-comment-toggle").first().click();
   await audit("scraps and expanded outline comments, light");
+  await page.locator(".studio-scrap-text").click();
+  await audit("expanded scrap preview, light");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Scrap actions", exact: true }).click();
+  await audit("scrap actions menu, light");
+  await page.keyboard.press("Escape");
   await clickWorkspaceAction(page, "preferences");
   await page.locator("#theme").selectOption("night");
   await page.keyboard.press("Escape");
   await audit("scraps and expanded outline comments, dark");
+  await page.locator(".studio-scrap-text").click();
+  await audit("expanded scrap preview, dark");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Scrap actions", exact: true }).click();
+  await audit("scrap actions menu, dark");
+  await page.keyboard.press("Escape");
   await clickWorkspaceAction(page, "preferences");
   await page.locator("#theme").selectOption("paper");
   await page.keyboard.press("Escape");
@@ -251,6 +263,25 @@ try {
     smallTargets.length === 0,
     `Mobile controls below 44px target: ${smallTargets.join(", ")}`,
   );
+  await page.locator("#commands").click();
+  await page.getByRole("searchbox", { name: "Find a command" }).fill("Scraps");
+  await page.keyboard.press("Enter");
+  await audit("mobile scraps shelf");
+  await page.locator(".studio-scrap-text").click();
+  await audit("mobile expanded scrap preview");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Scrap actions", exact: true }).click();
+  await audit("mobile scrap actions menu");
+  const scrapTargets = await page.locator(".studio-scrap-popover button").evaluateAll((nodes) =>
+    nodes.every((node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.width >= 44 && rect.height >= 44;
+    }),
+  );
+  record(scrapTargets, "Mobile scrap menu controls below 44px");
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "Page preview", exact: true }).click();
+  await page.locator("#preview-toggle").click();
   await page.locator("#commands").click();
   await page.getByRole("searchbox", { name: "Find a command" }).fill("Preferences");
   await page.keyboard.press("Enter");

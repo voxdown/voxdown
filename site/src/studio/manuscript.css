@@ -225,6 +225,17 @@
   font-size: 12px;
 }
 @media (max-width: 700px) {
+  /* Leave room for the scene-number targets while keeping the screenplay's
+     dialogue, parenthetical and character indentation hierarchy on phones. */
+  #editor .cm-line.f-dialogue {
+    padding-left: max(56px, 14%) !important;
+  }
+  #editor .cm-line.f-parenthetical {
+    padding-left: max(68px, 20%) !important;
+  }
+  #editor .cm-line.f-character {
+    padding-left: max(80px, 28%) !important;
+  }
   #outline-close {
     min-width: 44px;
     min-height: 44px;

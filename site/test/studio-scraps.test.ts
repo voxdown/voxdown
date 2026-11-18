@@ -75,6 +75,10 @@ async function add(text: string) {
   await newScrap().fill(text);
   await page.getByRole("button", { name: "Add scrap", exact: true }).click();
 }
+async function scrapAction(name: string) {
+  await page.getByRole("button", { name: "Scrap actions", exact: true }).first().click();
+  await page.getByRole("menuitem", { name, exact: true }).click();
+}
 const choose = (text: string) =>
   page.locator("#studio-scraps-panel input[type=file]").setInputFiles({
     name: "other.scraps.md",
@@ -94,11 +98,11 @@ describe("Studio scraps workflow", () => {
     await page.evaluate(() => localStorage.setItem("vxd-writer-scraps", "writer sentinel"));
     await add("<img src=x onerror=alert(1)>\nNORA\nHello.");
     expect(await page.locator("img").count()).toBe(0);
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await scrapAction("Edit");
     await page.getByRole("textbox", { name: "Edit scrap text" }).fill("NORA\nAnother ending.");
     await page.getByRole("textbox", { name: "Edit scrap note" }).fill("For act two");
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await scrapAction("Delete");
     expect(await page.locator(".studio-scrap").count()).toBe(0);
     await page.reload();
     await mount();
@@ -110,18 +114,34 @@ describe("Studio scraps workflow", () => {
       "writer sentinel",
     );
   });
+  it("keeps unfinished edits when another scrap's Edit action is chosen", async () => {
+    await add("First scrap");
+    await add("Second scrap");
+    await scrapAction("Edit");
+    await page.getByRole("textbox", { name: "Edit scrap text" }).fill("Unfinished words");
+    await scrapAction("Edit");
+    expect(await page.getByRole("textbox", { name: "Edit scrap text" }).inputValue()).toBe(
+      "Unfinished words",
+    );
+    expect(await page.locator(".studio-scraps-status").innerText()).toContain("Save or cancel");
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect(await page.locator(".studio-scrap-text").allTextContents()).toEqual([
+      "Unfinished words",
+      "First scrap",
+    ]);
+  });
   it("copies a selection and inserts through the editor callback without consuming the scrap", async () => {
     await page.evaluate(() => {
       window.scrapsSelection = "NORA\nHello.";
     });
     await page.getByRole("button", { name: "Copy selection", exact: true }).click();
-    await page.getByRole("button", { name: "Insert at cursor" }).click();
+    await scrapAction("Insert at cursor");
     expect(await page.evaluate(() => window.scrapsInserted)).toEqual(["NORA\nHello."]);
     expect(await page.locator(".studio-scrap").count()).toBe(1);
     await page.evaluate(() => {
       window.scrapsInsert = false;
     });
-    await page.getByRole("button", { name: "Insert at cursor" }).click();
+    await scrapAction("Insert at cursor");
     expect(await page.locator(".studio-scraps-status").textContent()).toContain("Could not insert");
     expect(await page.evaluate(() => window.scrapsInserted.length)).toBe(1);
   });

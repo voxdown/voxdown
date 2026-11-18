@@ -1,15 +1,18 @@
 import {
-  type Scrap,
   mergeScraps,
   readScrapsFile,
   scrapsFile,
   scrapsFileName,
   searchScraps,
 } from "../writer/scraps";
+import type { ScrapOrigin } from "./scrap-origin";
+import { scrapPopover } from "./scrap-popover";
+import { renderScrapPreview } from "./scrap-preview";
 import {
   MAX_SCRAP_CHARS,
   type ScrapBook,
   type ScrapsKeeper,
+  type StudioScrap,
   readScrapBook,
   validateScraps,
   writeScrapBook,
@@ -19,6 +22,9 @@ import { encodeUtf8Losslessly } from "./source";
 export type StudioScrapsActions = {
   current(): { id: string; name: string };
   getSelection(): string;
+  selectionOrigin?(): ScrapOrigin;
+  removeSelection?(origin: ScrapOrigin): boolean;
+  returnToText?(scrap: StudioScrap): string;
   /** Insert through the authoritative editor, with its source validation and undo. */
   insert(text: string): boolean;
   download(text: string, name: string): void;
@@ -67,6 +73,7 @@ export function mountStudioScraps(
   let state: DraftState;
   let generation = 0;
   let shown = 30;
+  const popup = scrapPopover();
   const composer = node("textarea");
   composer.rows = 4;
   composer.maxLength = MAX_SCRAP_CHARS;
@@ -88,12 +95,31 @@ export function mountStudioScraps(
       say("Select words in your screenplay first, then choose Copy selection.");
       return;
     }
-    addScrap(selected, "");
+    addScrap(selected, "", actions.selectionOrigin?.());
   });
   selection.title = "Keep selected words here; leave them in the screenplay";
   const addActions = node("div");
   addActions.className = "studio-scraps-actions";
+  const moveSelection = button("Move selection", () => {
+    const selected = actions.getSelection();
+    if (!selected.trim()) {
+      say("Select words in your screenplay first, then choose Move selection.");
+      return;
+    }
+    const origin = actions.selectionOrigin?.();
+    if (!origin || !actions.removeSelection) return;
+    if (addScrap(selected, "", origin)) {
+      if (actions.removeSelection(origin))
+        say(
+          "Selection moved to scraps. Return to text puts it back; Undo also restores the source.",
+        );
+      else
+        say("Scrap saved, but the selection could not be removed. Your screenplay is unchanged.");
+    }
+  });
+  moveSelection.title = "Save selected words as a scrap, then remove them from the screenplay";
   addActions.append(add, selection);
+  if (actions.removeSelection) addActions.append(moveSelection);
   form.append(composer, note, addActions);
   form.onsubmit = (event) => {
     event.preventDefault();
@@ -191,17 +217,18 @@ export function mountStudioScraps(
       return false;
     }
   }
-  function addScrap(text: string, scrapNote: string) {
+  function addScrap(text: string, scrapNote: string, origin?: ScrapOrigin): boolean {
     if (!text.trim()) {
       composer.focus();
-      return;
+      return false;
     }
-    const scrap: Scrap = {
+    const scrap: StudioScrap = {
       id: crypto.randomUUID(),
       text,
       note: scrapNote,
       at: Date.now(),
       from: "",
+      ...(origin && origin.text === text ? { origin } : {}),
     };
     if (
       !commit(
@@ -209,7 +236,7 @@ export function mountStudioScraps(
         "Scrap kept. Your screenplay is unchanged.",
       )
     )
-      return;
+      return false;
     if (text === composer.value) {
       state.composer = "";
       state.note = "";
@@ -221,19 +248,53 @@ export function mountStudioScraps(
     renderList();
     add.disabled = !composer.value.trim();
     composer.focus();
+    return true;
   }
   function renderList() {
+    popup.close();
     list.replaceChildren();
-    const matches = searchScraps(state.book.scraps, search.value).reverse();
+    const matches = (searchScraps(state.book.scraps, search.value) as StudioScrap[])
+      .reverse()
+      .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
     for (const scrap of matches.slice(0, shown)) {
       const item = node("li");
       item.className = "studio-scrap";
       item.dataset.scrapId = scrap.id;
-      const text = node("div", scrap.text);
+      const text = node("button");
+      text.type = "button";
+      renderScrapPreview(text, scrap.text);
       text.className = "studio-scrap-text";
       text.tabIndex = 0;
-      text.setAttribute("role", "region");
-      text.setAttribute("aria-label", "Scrap text");
+      text.setAttribute("aria-label", `Preview scrap: ${scrap.text.slice(0, 80)}`);
+      text.setAttribute("aria-expanded", "false");
+      let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+      const showPreview = (persistent: boolean) => {
+        if (!text.isConnected || host.hidden) return;
+        const body = node("div");
+        const heading = node("div");
+        heading.className = "studio-scrap-preview-heading";
+        const close = button("Close preview", () => popup.close(true));
+        heading.append(node("strong", scrap.pinned ? "Pinned scrap" : "Scrap"), close);
+        const passage = node("div");
+        passage.className = "studio-scrap-full-text";
+        renderScrapPreview(passage, scrap.text, true);
+        body.append(heading, passage);
+        if (scrap.note) body.append(node("p", scrap.note));
+        popup.show(text, body, false, persistent);
+      };
+      text.onclick = () => {
+        clearTimeout(hoverTimer);
+        showPreview(true);
+      };
+      text.onpointerenter = (event) => {
+        popup.cancelClose();
+        if (event.pointerType === "mouse" && text.getAttribute("aria-expanded") !== "true")
+          hoverTimer = setTimeout(() => showPreview(false), 350);
+      };
+      text.onpointerleave = () => {
+        clearTimeout(hoverTimer);
+        popup.deferClose();
+      };
       text.draggable = true;
       text.addEventListener("dragstart", (event) => {
         if (!event.dataTransfer) return;
@@ -244,7 +305,19 @@ export function mountStudioScraps(
       annotation.className = "studio-scrap-note";
       annotation.hidden = !scrap.note;
       const controls = node("div");
-      controls.className = "studio-scraps-actions";
+      controls.className = "studio-scrap-heading";
+      const label = node("span", scrap.pinned ? "Pinned scrap" : "Scrap");
+      label.className = "studio-scrap-label";
+      const menu = button("⋯", () => openMenu());
+      menu.setAttribute("aria-label", "Scrap actions");
+      menu.setAttribute("aria-haspopup", "menu");
+      menu.setAttribute("aria-expanded", "false");
+      menu.onkeydown = (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          openMenu();
+        }
+      };
       const insert = button("Insert at cursor", () => {
         if (actions.current().id !== current) {
           refresh();
@@ -255,6 +328,13 @@ export function mountStudioScraps(
         else say("Could not insert this scrap. Check the screenplay notice; the scrap stays here.");
       });
       const edit = button("Edit", () => {
+        if (state.editing && state.editing !== scrap.id) {
+          say(
+            "Save or cancel the open scrap before editing another. Your unfinished words are still here.",
+          );
+          list.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+          return;
+        }
         state.editing = scrap.id;
         state.editText = scrap.text;
         state.editNote = scrap.note;
@@ -282,8 +362,84 @@ export function mountStudioScraps(
         deleted.open = true;
         deletedList.querySelector<HTMLButtonElement>("button")?.focus();
       });
-      controls.append(insert, edit, remove);
-      item.append(text, annotation, controls);
+      const copy = button("Copy", async () => {
+        const draft = current;
+        try {
+          await navigator.clipboard.writeText(scrap.text);
+          if (current === draft) say("Scrap copied.");
+        } catch {
+          if (current === draft)
+            say("Clipboard unavailable. Open Edit to select and copy the words.");
+        }
+      });
+      const returned = button("Return to text", () => {
+        if (actions.current().id !== current) {
+          refresh();
+          return;
+        }
+        say(
+          actions.returnToText?.(scrap) ??
+            "This scrap has no saved source location. Use Insert at cursor.",
+        );
+      });
+      returned.disabled = !scrap.origin || !actions.returnToText;
+      returned.title = scrap.origin
+        ? "Return to the original passage, or restore it if removed"
+        : "Available for selections saved from this screenplay";
+      const pin = button(scrap.pinned ? "Unpin" : "Pin to top", () => {
+        if (
+          commit(
+            {
+              ...state.book,
+              scraps: state.book.scraps.map((entry) =>
+                entry.id === scrap.id ? { ...entry, pinned: !entry.pinned } : entry,
+              ),
+            },
+            scrap.pinned ? "Scrap unpinned." : "Scrap pinned.",
+          )
+        ) {
+          renderList();
+          focusScrap(scrap.id);
+        }
+      });
+      const reorder = (top: boolean) => {
+        const rest = state.book.scraps.filter((entry) => entry.id !== scrap.id);
+        // Stored oldest first; display newest first, with pinned scraps grouped above.
+        const scraps = top ? [...rest, scrap] : [scrap, ...rest];
+        if (
+          commit(
+            { ...state.book, scraps },
+            `Scrap moved to the ${top ? "top" : "bottom"}${scrap.pinned ? " of pinned scraps" : " of unpinned scraps"}.`,
+          )
+        ) {
+          renderList();
+          focusScrap(scrap.id);
+        }
+      };
+      const top = button("Move to top", () => reorder(true));
+      const bottom = button("Move to bottom", () => reorder(false));
+      const group = [...state.book.scraps]
+        .reverse()
+        .filter((entry) => !!entry.pinned === !!scrap.pinned);
+      top.disabled = group[0]?.id === scrap.id;
+      bottom.disabled = group.at(-1)?.id === scrap.id;
+      const menuActions = [copy, insert, returned, edit, pin, top, bottom, remove];
+      for (const action of menuActions) {
+        action.setAttribute("role", "menuitem");
+        const run = action.onclick;
+        action.onclick = (event) => {
+          popup.close(true);
+          if (typeof run === "function") run.call(action, event);
+        };
+      }
+      function openMenu() {
+        clearTimeout(hoverTimer);
+        const choices = node("div");
+        choices.append(...menuActions);
+        popup.show(menu, choices, true, true);
+      }
+      controls.append(label, menu);
+      item.append(controls, text, annotation);
       if (state.editing === scrap.id) {
         const editForm = node("form");
         editForm.className = "studio-scrap-editor";
@@ -428,6 +584,7 @@ export function mountStudioScraps(
   });
 
   function refresh(copyFromId?: string) {
+    popup.close();
     generation++;
     current = actions.current().id;
     const cached = drafts.get(current);

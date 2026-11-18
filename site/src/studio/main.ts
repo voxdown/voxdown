@@ -62,6 +62,7 @@ import { mountRecentDrafts } from "./recent-drafts";
 import { mountReference } from "./reference";
 import { mountSceneContext } from "./scene-context";
 import { sceneNumberMargins } from "./scene-number-margins";
+import { captureScrapOrigin, locateScrapOrigin } from "./scrap-origin";
 import { type WorkspacePosition, createWorkspaceSession } from "./workspace-session";
 import "./scene-context.css";
 import { mountRehearsal } from "./rehearsal-dialog";
@@ -320,6 +321,58 @@ const referencePanel = mountReference(
     getSelection: () => {
       const { from, to } = view.state.selection.main;
       return view.state.doc.sliceString(from, to);
+    },
+    selectionOrigin: () => {
+      const { from, to } = view.state.selection.main;
+      return captureScrapOrigin(view.state.doc.toString(), from, to);
+    },
+    removeSelection: (origin) => {
+      if (recovering || replacing || view.state.readOnly) return false;
+      const { from, to } = view.state.selection.main;
+      const before = view.state.doc;
+      const source = view.state.doc.toString();
+      if (JSON.stringify(captureScrapOrigin(source, from, to)) !== JSON.stringify(origin))
+        return false;
+      view.dispatch({
+        changes: { from, to, insert: "" },
+        annotations: isolateHistory.of("full"),
+        userEvent: "delete.cut",
+      });
+      // Production locking may also reserve the removed heading's label in this
+      // transaction. A successful cut need not be an exact source splice.
+      return view.state.doc !== before;
+    },
+    returnToText: (scrap) => {
+      if (recovering || replacing || view.state.readOnly)
+        return "This screenplay is read only right now. The scrap stays here.";
+      const source = view.state.doc.toString();
+      const destination = scrap.origin && locateScrapOrigin(source, scrap.origin);
+      if (!destination)
+        return "The original location has changed or is ambiguous. Nothing was inserted. Place the cursor where you want it and choose Insert at cursor.";
+      if (destination.present) {
+        view.dispatch({
+          selection: { anchor: destination.from, head: destination.to },
+          effects: EditorView.scrollIntoView(destination.from, { y: "center" }),
+        });
+        revealWriting();
+        view.focus();
+        return "The original passage is still in your screenplay. Selected it without inserting a duplicate.";
+      }
+      view.dispatch({
+        changes: { from: destination.from, insert: scrap.text },
+        selection: { anchor: destination.from, head: destination.from + scrap.text.length },
+        annotations: isolateHistory.of("full"),
+        userEvent: "input.paste",
+      });
+      if (
+        view.state.doc.toString() !==
+        source.slice(0, destination.from) + scrap.text + source.slice(destination.from)
+      )
+        return "Could not return this scrap. Check the screenplay notice; the scrap stays here.";
+      view.dispatch({ effects: EditorView.scrollIntoView(destination.from, { y: "center" }) });
+      revealWriting();
+      view.focus();
+      return "Scrap returned to its original location. It stays here too; Undo reverses the insertion.";
     },
     insert: (value) => {
       if (recovering || replacing || view.state.readOnly) return false;

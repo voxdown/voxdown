@@ -28,8 +28,10 @@ class PageMarker extends GutterMarker {
   }
   toDOM(): Node {
     const marker = document.createElement("span");
+    marker.className = "studio-page-guide";
     marker.textContent = `${this.pages[0]}${this.pages.length > 1 ? "+" : ""}`;
     marker.title = `Printed page starts: ${this.pages.join(", ")}. A page may begin within this source passage; use Page preview for exact wrapping.`;
+    marker.setAttribute("aria-label", marker.title);
     return marker;
   }
 }
@@ -53,10 +55,16 @@ export const pageGuideField = StateField.define<RangeSet<GutterMarker>>({
   },
 });
 
-/** Informational gutter, opt-in; no source edits, padding, or extra keyboard stops. */
+/** A stable right-hand margin, opt-in; no source edits or extra keyboard stops. */
 export function pageGuides(): Extension {
   return [
     pageGuideField,
-    gutter({ class: "studio-page-guides", markers: (view) => view.state.field(pageGuideField) }),
+    gutter({
+      class: "studio-page-guides",
+      side: "after",
+      // Keep the margin even while stale page locations are hidden during typing.
+      initialSpacer: () => new PageMarker([1]),
+      markers: (view) => view.state.field(pageGuideField),
+    }),
   ];
 }

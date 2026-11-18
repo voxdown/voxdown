@@ -34,12 +34,34 @@
 .studio-page-guides {
   color: var(--muted);
   background: transparent;
-  font-size: 11px;
+  width: 40px;
+  font: 11px / 1.4 "Courier Prime", monospace;
+  user-select: none;
 }
 .studio-page-guides .cm-gutterElement {
-  min-width: 2.5em;
-  padding: 0 5px;
+  width: 40px;
+  padding: 0 8px 0 0;
   text-align: right;
+}
+.studio-page-guide {
+  display: block;
+  width: 100%;
+  padding-top: 3px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+/* Page guides have their own margin, separated from the manuscript's scene labels. */
+#editor .cm-gutters.cm-gutters-after:has(.studio-page-guides) {
+  border-left: 0;
+}
+@media (max-width: 700px) {
+  .studio-page-guides,
+  .studio-page-guides .cm-gutterElement {
+    width: 28px;
+  }
+  .studio-page-guides .cm-gutterElement {
+    padding-right: 4px;
+  }
 }
 * {
   box-sizing: border-box;

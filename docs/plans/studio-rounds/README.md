@@ -270,7 +270,7 @@ direct-file failure/race tests and root/nested offline gates pass. Offline accep
 real corrupted-font repair, subsequent offline PDF, first-use voice adaptation, failed updates,
 stalled headers/bodies and old-client retention. Build: `ad733cedc71e2b377486f2bb`.
 
-Quiet4×CPU final performance: sustained typing keydown-to-next-frame p95=16.0ms/max20.6ms;
+Quiet unthrottled final performance: sustained typing keydown-to-next-frame p95=16.0ms/max20.6ms;
 typing across worker updates p95=16.8ms/max17.4ms; zero observed main-thread long tasks in
 those flows. Three near-limit adaptations had maximum frame gaps16.7ms with zero long tasks.
 Editor/outline/workbench/recovery DOM bounds all pass. These are desktop regression measurements,
@@ -288,3 +288,10 @@ ceiling;60 rounds remain unspent. This is a strong experimental release with doc
 manual acceptance gates, not a claim that every dimension has reached9.5 or that physical
 browser/OS/native-app testing occurred. See [hands-on walkthrough](../studio-hands-on.md).
 No push, publication, account backend or Writer migration occurred.
+
+The separate final4×CPU run also passes: sustained typing p95=15.6ms/max38.8ms;
+across-worker typing p95=15.0ms/max27.0ms. The latter observed three52–54ms long tasks;
+bracket pairing and selection formatting each observed two long tasks (max73ms/67ms), so
+this is not a blanket no-jank claim. Three large adaptations retained16.7–16.8ms maximum
+frame gaps and zero main-thread long tasks. These measurements are recorded separately from
+the unthrottled run above; the default script runs at1×unless explicitly configured.

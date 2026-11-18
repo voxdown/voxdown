@@ -20,7 +20,11 @@ import { mountCoach } from "./coach";
 import { mountCompareDialog } from "./compare-dialog";
 import { keepDialogFocusVisible } from "./dialog-layout";
 import { mountFileDrop } from "./drop-files";
-import { presentScreenplay, screenplayPresentation } from "./editor-presentation";
+import {
+  dialogueContinuation,
+  presentScreenplay,
+  screenplayPresentation,
+} from "./editor-presentation";
 import { mountFdxExport } from "./fdx-dialog";
 import { mountFdxImport } from "./fdx-import-dialog";
 import { type FountainDocument, parseFountain } from "./fountain";
@@ -120,6 +124,7 @@ const scheduler = new ScreenplayScheduler(
   () => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
 );
 const markField = screenplayPresentation(() => margins.checked);
+const continuationField = dialogueContinuation(markField, () => margins.checked);
 
 type Result = WorkerResult;
 let source = readSource("");
@@ -158,6 +163,7 @@ const editorExtensions: Extension = [
   EditorView.lineWrapping,
   highlightActiveLine(),
   markField,
+  continuationField,
   placeholder(
     "Start your screenplay here.\n\nBegin a scene with INT. or EXT., or open a Fountain file. Find a sample and writing tips in Help.",
   ),
@@ -1177,7 +1183,11 @@ function notice(message: string, lifetime: NoticeLifetime = "important"): void {
 function updateElementLabel(line: number): void {
   const option = $<HTMLSelectElement>("element-action").options[0];
   if (!option) return;
-  const kind = latest ? parsedDocument?.elements[line - 1]?.kind : undefined;
+  const kind = view.state.field(continuationField).size
+    ? "dialogue"
+    : latest
+      ? parsedDocument?.elements[line - 1]?.kind
+      : undefined;
   const labels: Record<string, string> = {
     scene: "Scene heading",
     action: "Action",

@@ -49,6 +49,49 @@ async function start(source = "!Alpha beta") {
   await ready();
 }
 describe("Studio speech, comments and scraps", () => {
+  it("keeps a blank dialogue continuation aligned and coloured, then exits on a second Enter", async () => {
+    await start("INT. ROOM - DAY\n\n@JOHN\n(quietly)\nHello.");
+    await page.locator("#editor .cm-content").click();
+    await page.keyboard.press("Control+End");
+    const original = await page.locator(".cm-activeLine").evaluate((node) => ({
+      padding: getComputedStyle(node).paddingLeft,
+      color: getComputedStyle(node).backgroundImage,
+    }));
+    await page.keyboard.press("Enter");
+    const blank = page.locator(".cm-activeLine");
+    await page.waitForFunction(() =>
+      document.querySelector(".cm-activeLine")?.classList.contains("studio-dialogue-continuation"),
+    );
+    expect(await blank.evaluate((node) => getComputedStyle(node).paddingLeft)).toBe(
+      original.padding,
+    );
+    expect(await blank.evaluate((node) => getComputedStyle(node).backgroundImage)).toBe(
+      original.color,
+    );
+    await ready();
+    expect(await blank.getAttribute("class")).toContain("studio-dialogue-continuation");
+    expect(await page.locator("#element-action option").first().textContent()).toBe("Dialogue");
+    await page.keyboard.press("Enter");
+    expect(await blank.getAttribute("class")).not.toContain("studio-dialogue-continuation");
+    expect(await blank.evaluate((node) => getComputedStyle(node).backgroundImage)).toBe("none");
+    await page.keyboard.press("Control+z");
+    expect(await blank.getAttribute("class")).toContain("studio-dialogue-continuation");
+    await page.keyboard.type("Again.");
+    expect(await blank.getAttribute("class")).toContain("f-dialogue");
+    expect(await blank.evaluate((node) => getComputedStyle(node).backgroundImage)).toBe(
+      original.color,
+    );
+    await page.locator("#preferences").evaluate((node: HTMLButtonElement) => node.click());
+    await page.locator("#screenplay-keys").check();
+    await page.getByRole("button", { name: "Close preferences", exact: true }).click();
+    await page.locator("#editor .cm-content").focus();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.press("Enter");
+    expect(await blank.getAttribute("class")).not.toContain("studio-dialogue-continuation");
+    await page.keyboard.press("Control+z");
+    await page.keyboard.press("Shift+Enter");
+    expect(await blank.getAttribute("class")).toContain("studio-dialogue-continuation");
+  });
   it("layers character colours above the current line and remembers all three display modes", async () => {
     await start("INT. ROOM - DAY\n\nNORA\nHello.\n\nJORDAN\nH");
     const editor = page.locator("#editor .cm-content");

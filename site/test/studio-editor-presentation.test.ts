@@ -1,6 +1,7 @@
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
+  dialogueContinuation,
   presentScreenplay,
   screenplayPresentation,
   speakerHue,
@@ -81,5 +82,95 @@ describe("immediate screenplay presentation", () => {
     e.edit(at, at, "ello");
     expect(e.comments()[0]).toContain("Hello");
     expect(e.classes(e.state.doc.lineAt(at).number)).not.toContain("studio-speech");
+  });
+});
+
+describe("empty dialogue continuation", () => {
+  function continuation(source: string, margins = true) {
+    const syntax = screenplayPresentation(() => margins);
+    const pending = dialogueContinuation(syntax, () => margins);
+    let state = EditorState.create({
+      doc: source,
+      selection: { anchor: source.length },
+      extensions: [syntax, pending],
+    });
+    state = state.update({ effects: presentScreenplay.of(parseFountain(source)) }).state;
+    return {
+      get state() {
+        return state;
+      },
+      get active() {
+        return state.field(pending).size > 0;
+      },
+      type(insert: string) {
+        state = state.update(state.replaceSelection(insert)).state;
+      },
+      select(anchor: number) {
+        state = state.update({ selection: { anchor } }).state;
+      },
+      worker() {
+        state = state.update({
+          effects: presentScreenplay.of(parseFountain(state.doc.toString())),
+        }).state;
+      },
+      decoration() {
+        return state.field(pending).iter().value;
+      },
+    };
+  }
+  it("indents and colours the first empty continuation before and after worker parsing, without changing source", () => {
+    for (const prefix of ["", "An action.\n\n".repeat(2000)]) {
+      const source = `${prefix}@JOHN\n(quietly)\nHello.`;
+      const e = continuation(source);
+      e.type("\n");
+      expect(e.active).toBe(true);
+      expect(e.decoration()?.spec.class).toContain("f-dialogue");
+      expect(e.decoration()?.spec.attributes.style).toBe(
+        `--studio-speaker-hue: ${speakerHue("JOHN")}`,
+      );
+      e.worker();
+      expect(e.active).toBe(true);
+      expect(e.state.doc.toString()).toBe(`${source}\n`);
+      expect(parseFountain(e.state.doc.toString()).elements.at(-1)?.kind).toBe("blank");
+      e.type("\n");
+      expect(e.active).toBe(false);
+      e.worker();
+      expect(e.active).toBe(false);
+    }
+  });
+  it("leaves a blank after a natural or forced cue unresolved", () => {
+    for (const source of ["NORA\n", "@NORA\n", "Action.\n", "# Section\n", "INT. ROOM - DAY\n"])
+      expect(continuation(source).active).toBe(false);
+  });
+  it("continues after a parenthetical and yields to the actual next line type", () => {
+    const e = continuation("NORA\n(quietly)");
+    e.type("\n");
+    expect(e.active).toBe(true);
+    e.type("(louder)");
+    expect(e.active).toBe(false);
+    expect(parseFountain(e.state.doc.toString()).elements.at(-1)?.kind).toBe("parenthetical");
+    e.type("\n");
+    expect(e.active).toBe(true);
+    e.type("Hello");
+    expect(e.active).toBe(false);
+    expect(parseFountain(e.state.doc.toString()).elements.at(-1)?.kind).toBe("dialogue");
+  });
+  it("tracks the caret, respects margins and never formats an empty private line as speech", () => {
+    const e = continuation("NORA\nHi.\n", false);
+    expect(e.active).toBe(true);
+    expect(e.decoration()?.spec.class).not.toContain("f-dialogue");
+    e.select(0);
+    expect(e.active).toBe(false);
+    e.select(e.state.doc.length);
+    expect(e.active).toBe(true);
+    for (const marker of [
+      ["[[", "]]", "  "],
+      ["/*", "*/", ""],
+    ] as const) {
+      const source = `NORA\nHi.\n${marker[0]}\n${marker[2]}\n${marker[1]}`;
+      const note = continuation(source);
+      note.select(source.indexOf(marker[0]) + marker[0].length + 1);
+      expect(note.active).toBe(false);
+    }
   });
 });

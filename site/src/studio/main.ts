@@ -30,12 +30,14 @@ import { mountLearning } from "./learning-dialog";
 import { mountLibrary } from "./library";
 import { LocalFileController } from "./local-file";
 import { mountLocations } from "./location-dialog";
+import { mountWorkspaceMenus } from "./menus";
 import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } from "./navigation";
 import { type NoticeLifetime, createNoticePresenter } from "./notice";
 import { mountNumberingDialog } from "./numbering-dialog";
 import { createStudioOffline } from "./offline";
 import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
-import { mountPalette } from "./palette";
+import { type StudioCommand, mountPalette } from "./palette";
+import { mountWorkspacePanels } from "./panels";
 import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
 import { mountPreviewSpace } from "./preview-space";
 import { assertUnambiguousOmissions } from "./public-source";
@@ -57,6 +59,11 @@ import { type WritingMark, smartPairs, toggleWritingMark } from "./typing";
 import { mountWorkbench } from "./workbench";
 import { insertScreenplayParagraph, screenplayCompletions, setScreenplayLine } from "./writing";
 import "./studio.css";
+import "./workbench.css";
+import "./palette.css";
+import "./panels.css";
+import "./shell.css";
+import "./dialog-layout.css";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const app = $("app");
@@ -219,6 +226,16 @@ const previewSpace = mountPreviewSpace(
   },
   () => view.focus(),
 );
+
+const workspacePanels = mountWorkspacePanels({
+  app,
+  workspace: $("workspace"),
+  outline: $("outline"),
+  writing: $("writing"),
+  preview,
+  outlineToggle: $<HTMLButtonElement>("outline-toggle"),
+  outlineClose: $<HTMLButtonElement>("outline-close"),
+});
 
 const scopedReplace = mountScopedReplace(document.body, {
   current: () => ({
@@ -432,7 +449,17 @@ const offline = createStudioOffline((status) => {
         : "Prepare for offline use";
 });
 $("offline-prepare").addEventListener("click", () => void offline.prepare());
-const palette = mountPalette(document.body, [
+const commands: StudioCommand[] = [
+  {
+    label: "Toggle scene outline",
+    category: "Writing space",
+    run: () => $("outline-toggle").click(),
+  },
+  {
+    label: "Toggle page preview",
+    category: "Writing space",
+    run: () => $("preview-toggle").click(),
+  },
   {
     label: "Scene and cast breakdown",
     category: "Plan and revise",
@@ -635,8 +662,26 @@ const palette = mountPalette(document.body, [
       moveScene(1);
     },
   },
-]);
-$("file-menu").addEventListener("click", () => palette.open("Files and recovery"));
+];
+const fileOrder = [
+  "New screenplay",
+  "Open Fountain file",
+  "Save Fountain to file",
+  "Save Fountain as…",
+  "Download Fountain",
+  "Import Final Draft XML (FDX)",
+  "Recovery and snapshots",
+  "Portable backup and restore",
+  "Storage and backups",
+  "Prepare Studio for offline use",
+];
+commands.sort(
+  (a, b) =>
+    (fileOrder.includes(a.label) ? fileOrder.indexOf(a.label) : fileOrder.length) -
+    (fileOrder.includes(b.label) ? fileOrder.indexOf(b.label) : fileOrder.length),
+);
+const palette = mountPalette(document.body, commands);
+const workspaceMenus = mountWorkspaceMenus(commands);
 $("commands").addEventListener("click", () => palette.open());
 document.addEventListener("keydown", (event) => {
   if (recovering || replacing) return;
@@ -647,6 +692,7 @@ document.addEventListener("keydown", (event) => {
     !document.querySelector("dialog[open]")
   ) {
     event.preventDefault();
+    workspaceMenus.close(true);
     palette.open();
   }
 });
@@ -1084,7 +1130,15 @@ function renderOutline(): void {
       return button;
     }),
   );
-  if (!found.total) $("scene-list").append(documentNode("p", "No matching scenes or sections."));
+  if (!found.total)
+    $("scene-list").append(
+      documentNode(
+        "p",
+        outlineItems.length
+          ? "No matching scenes or sections."
+          : "Your scenes will appear here. Start a heading with INT. or EXT.",
+      ),
+    );
   if (found.total > found.items.length)
     $("scene-list").append(
       documentNode("p", "Showing 500 matches. Narrow your search to find later scenes."),
@@ -1158,7 +1212,7 @@ function updatePreviewToggle(): void {
     (mobile ? app.classList.contains("mobile-preview") : !app.classList.contains("no-preview"));
   preview.hidden = !shown;
   $("preview-toggle").setAttribute("aria-pressed", String(shown));
-  $("preview-toggle").textContent = mobile && shown ? "Back to writing" : "Preview / reference";
+  $("preview-toggle").textContent = mobile ? (shown ? "Writing" : "Preview") : "Preview";
 }
 $("preview-toggle").addEventListener("click", () => {
   previewSpace.restore(false);
@@ -1182,8 +1236,7 @@ $("outline-toggle").addEventListener("click", () => {
     preferences.focus = false;
     keepPreferences();
   }
-  const open = app.classList.toggle("outline-open");
-  $("outline-toggle").setAttribute("aria-expanded", String(open));
+  workspacePanels.toggleOutline();
 });
 margins.addEventListener("change", () => {
   if (latest?.document) decorate(latest.document);

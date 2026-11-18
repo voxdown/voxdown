@@ -215,9 +215,7 @@ it("keeps a disabled exact match visible and skips it when running the first ava
   expect(await dialog.getByRole("button", { name: "Export PDF", exact: true }).isDisabled()).toBe(
     true,
   );
-  expect(await dialog.getByRole("status").textContent()).toContain(
-    "unavailable tools are disabled",
-  );
+  expect(await dialog.getByRole("status").textContent()).toContain("1 unavailable");
   await page.keyboard.press("Enter");
   expect(await page.evaluate(() => (window as unknown as { calls: string[] }).calls)).toEqual([
     "sides",
@@ -266,4 +264,36 @@ it("falls back to all tools for an unknown initial category", async () => {
   });
   expect(await page.getByLabel("Show commands").inputValue()).toBe("");
   expect(await page.locator(".command-list button").count()).toBe(10);
+});
+
+it("keeps search and close visible above scrollable results at phone width", async () => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.addStyleTag({
+    content: readFileSync(new URL("../src/studio/studio.css", import.meta.url), "utf8"),
+  });
+  await page.addStyleTag({
+    content: readFileSync(new URL("../src/studio/palette.css", import.meta.url), "utf8"),
+  });
+  await navigationFixture();
+  const dialog = page.getByRole("dialog");
+  const list = page.locator(".command-list");
+  await list.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  expect(await list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await page.getByRole("searchbox").isVisible()).toBe(true);
+  const search = await page.getByRole("searchbox").boundingBox();
+  const close = await dialog.getByRole("button", { name: "Close", exact: true }).boundingBox();
+  expect(search?.y).toBeGreaterThanOrEqual(0);
+  expect(close?.height).toBeGreaterThanOrEqual(44);
+  await page.getByRole("searchbox").fill("Export PDF");
+  expect(await list.evaluate((element) => element.scrollTop)).toBe(0);
+  expect(await dialog.getByRole("status").textContent()).toBe("2 commands.");
+  await page.getByRole("searchbox").fill("Custom tool");
+  expect(await dialog.getByRole("status").textContent()).toBe("1 command.");
+  await page.keyboard.press("Escape");
+  expect(
+    await page.locator("#opener").evaluate((element) => element === document.activeElement),
+  ).toBe(true);
 });

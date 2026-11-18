@@ -23,10 +23,15 @@ declare global {
     healthResolvePersist?: (value: boolean) => void;
   }
 }
+const layoutCode = transpileModule(
+  readFileSync(new URL("../src/studio/dialog-layout.ts", import.meta.url), "utf8"),
+  { compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.ES2022 } },
+).outputText;
+const layoutURL = `data:text/javascript;base64,${Buffer.from(layoutCode).toString("base64")}`;
 const compiled = transpileModule(
   readFileSync(new URL("../src/studio/storage-health.ts", import.meta.url), "utf8"),
   { compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.ES2022 } },
-).outputText;
+).outputText.replace('"./dialog-layout"', JSON.stringify(layoutURL));
 const moduleURL = `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`;
 let browser: Browser;
 let context: BrowserContext;

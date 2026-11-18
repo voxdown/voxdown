@@ -1,5 +1,6 @@
 import type { VoxDownAdaptation } from "./adaptation";
 import { AdaptationClient } from "./adaptation-client";
+import { arrangeDialogHeader, countLabel, dialogActions, dialogDisclosure } from "./dialog-layout";
 import { filenameStem } from "./filename";
 
 let instance = 0;
@@ -18,21 +19,18 @@ export function mountAdaptation(
   };
   const dialog = node("dialog");
   dialog.className = "adaptation-dialog";
-  const title = node("h2", "Adapt screenplay to VoxDown");
+  const title = node("h2", "Adapt to VoxDown");
   title.id = `adaptation-title-${id}`;
   dialog.setAttribute("aria-labelledby", title.id);
   const explanation = node(
     "p",
-    "Prepare a separate .vxd file for voice performance in VoxDown Writer. Action becomes narration. This changes the presentation of your screenplay; your Fountain source stays untouched. Review the adaptation report before downloading.",
+    "Action becomes narration. Private notes, outlines and title/contact details stay out.",
   );
   const snapshotLabel = node("p");
   const sceneLabel = node("label");
   const readScenes = node("input");
   readScenes.type = "checkbox";
-  sceneLabel.append(
-    readScenes,
-    " Read scene headings aloud (otherwise keep them as hidden labels)",
-  );
+  sceneLabel.append(readScenes, " Read scene headings aloud");
   const report = node("ul");
   report.setAttribute("aria-label", "VoxDown adaptation report");
   const cast = node("ul");
@@ -65,21 +63,31 @@ export function mountAdaptation(
   retry.hidden = true;
   const close = node("button", "Close");
   download.type = close.type = "button";
-  dialog.append(
-    title,
-    explanation,
+  download.classList.add("primary");
+  const consequences = node(
+    "p",
+    "Formatting and timing change. Keep your original Fountain file and review the performance.",
+  );
+  const compatibility = dialogDisclosure(
+    "Adaptation details and cast",
     snapshotLabel,
-    sceneLabel,
     report,
     castNote,
     cast,
-    dualLabel,
-    details,
+  );
+  dialog.append(
+    title,
+    explanation,
+    sceneLabel,
     status,
-    download,
-    retry,
+    consequences,
+    dualLabel,
+    dialogActions(download, retry),
+    compatibility,
+    details,
     close,
   );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   const client = new AdaptationClient();
   let snapshot: { source: string; name: string } | undefined;
@@ -114,7 +122,7 @@ export function mountAdaptation(
       for (const message of prepared.report) report.append(node("li", message));
       for (const member of prepared.cast.slice(0, 30))
         cast.append(node("li", `${member.handle} → ${member.name}`));
-      castNote.textContent = `${prepared.cast.length} speaking roles${prepared.cast.length > 30 ? "; showing the first 30 handles" : ""}. Narrator reads action; cast handles keep every role distinct.`;
+      castNote.textContent = `${countLabel(prepared.cast.length, "speaking role")}${prepared.cast.length > 30 ? "; showing the first 30 handles" : ""}. Narrator reads action; cast handles keep every role distinct.`;
       dualLabel.hidden = !prepared.dualCues;
       download.disabled = prepared.dualCues > 0;
       details.hidden = false;
@@ -123,7 +131,7 @@ export function mountAdaptation(
         prepared.source.length > 8000
           ? "Preview limited to the first 8,000 characters. Download includes the complete validated adaptation."
           : "Complete generated text. This is a separate adaptation, not your original screenplay.";
-      status.textContent = `Validated ${prepared.spokenRows} spoken rows; ${prepared.bytes.toLocaleString()} UTF-8 bytes.${prepared.dualCues ? " Acknowledge sequential delivery of dual dialogue to download." : " Review the report, then download when ready."}`;
+      status.textContent = `Validated: ${countLabel(prepared.cast.length, "role")} · ${countLabel(prepared.spokenRows, "spoken line")}.${prepared.dualCues ? " Overlapping dialogue needs your acknowledgment below." : " Ready to download."}`;
     } catch (error) {
       if (ticket === generation && dialog.open) {
         retry.hidden = false;
@@ -186,6 +194,7 @@ export function mountAdaptation(
       opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
       readScenes.checked = false;
       details.open = false;
+      compatibility.open = false;
       try {
         snapshot = { ...actions.current() };
         snapshotLabel.textContent = `Snapshot of ${snapshot.name}. Close and reopen to include later edits.`;

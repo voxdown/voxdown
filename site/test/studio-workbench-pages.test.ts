@@ -62,6 +62,79 @@ async function downloaded() {
   return readFileSync((await (await pending).path()) as string, "utf8");
 }
 describe("bounded workbench result browsing", () => {
+  it("groups statistics, handles singular copy and keeps an optional target beside its own label", async () => {
+    await start("INT. ROOM - DAY\n\n@ALICE\nHello.\n");
+    await inspect("statistics");
+    const metrics = workbench().locator(".workbench-metrics");
+    expect(await metrics.locator("dt").allTextContents()).toEqual([
+      "Printable words",
+      "Scene",
+      "Speaking character",
+    ]);
+    expect(await metrics.locator("dd").allTextContents()).toEqual(["5", "1", "1"]);
+    expect(await workbench().locator(".workbench-speech").textContent()).toContain("1 spoken word");
+    expect(await workbench().locator(".workbench-speech").textContent()).toContain(
+      "Less than 1 minute of speech",
+    );
+    const goal = workbench().getByLabel("Draft word target (optional)", { exact: true });
+    expect(await goal.inputValue()).toBe("");
+    expect(await workbench().getByRole("progressbar").count()).toBe(0);
+    await goal.fill("10");
+    await goal.press("Tab");
+    expect(await workbench().getByRole("progressbar").getAttribute("value")).toBe("5");
+    expect(await workbench().locator(".workbench-goal-progress").textContent()).toContain(
+      "50% complete · 5 words to go",
+    );
+    await goal.fill("4");
+    await goal.press("Tab");
+    expect(await workbench().locator(".workbench-goal-progress").textContent()).toContain(
+      "Target reached",
+    );
+    await goal.fill("");
+    await goal.press("Tab");
+    expect(await workbench().getByRole("progressbar").count()).toBe(0);
+    expect(await page.evaluate(() => localStorage.getItem("studio-word-goal"))).toBe("0");
+    const explanation = workbench().locator(".workbench-explanation");
+    expect(await explanation.getAttribute("open")).toBeNull();
+    await explanation.locator("summary").click();
+    expect(await explanation.locator("p").isVisible()).toBe(true);
+    await goal.fill("20");
+    await goal.press("Tab");
+    expect(await explanation.getAttribute("open")).not.toBeNull();
+    expect(
+      await explanation
+        .locator("summary")
+        .evaluate((element) => element === document.activeElement),
+    ).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(
+      await workbench().evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+  });
+  it("keeps the header and navigation available while a long result list scrolls", async () => {
+    await start(Array.from({ length: 80 }, (_, i) => `[[Private item ${i + 1}]]\n\n`).join(""));
+    await inspect("notes");
+    const body = workbench().locator(".workbench-body");
+    await body.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    expect(await body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    const close = await workbench()
+      .getByRole("button", { name: "Close", exact: true })
+      .boundingBox();
+    const view = await workbench().getByLabel("Workbench view", { exact: true }).boundingBox();
+    expect(close?.y).toBeGreaterThanOrEqual(0);
+    expect(view?.y).toBeGreaterThanOrEqual(0);
+    expect(close?.height).toBeGreaterThanOrEqual(44);
+    expect(view?.height).toBeGreaterThanOrEqual(44);
+    await workbench().getByLabel("Workbench view", { exact: true }).selectOption("statistics");
+    expect(
+      await workbench().getByRole("heading", { name: "Screenplay workbench" }).isVisible(),
+    ).toBe(true);
+    expect(await workbench().locator(".workbench-metrics").isVisible()).toBe(true);
+  });
   it("reaches every private note without knowing its search text, with bounded DOM and exact source", async () => {
     const source = `\ufeffINT. ROOM - DAY\r\n\r\n${Array.from({ length: 205 }, (_, i) => `[[Private item ${i + 1}]]\r\n\r\n`).join("")}`;
     await start(source);
@@ -111,7 +184,7 @@ describe("bounded workbench result browsing", () => {
     expect(await workbench().locator(".character-speeches pre").textContent()).toBe("Hello.");
     await workbench().getByLabel("Workbench view", { exact: true }).selectOption("notes");
     expect(await workbench().getByRole("status").textContent()).toBe(
-      "No matching private passages.",
+      "No private notes or omitted passages in this draft.",
     );
     await workbench().getByLabel("Workbench view", { exact: true }).selectOption("characters");
     expect(await workbench().getByRole("status").textContent()).toContain("showing 1–100");

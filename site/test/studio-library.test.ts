@@ -29,12 +29,14 @@ const filenameURL = moduleURL(compile("../src/studio/filename.ts"));
 const sourceURL = moduleURL(
   compile("../src/studio/source.ts").replace('"./filename"', JSON.stringify(filenameURL)),
 );
+const layoutURL = moduleURL(compile("../src/studio/dialog-layout.ts"));
 const libraryURL = moduleURL(
   compile("../src/studio/library.ts")
     .replace('"./storage"', JSON.stringify(storageURL))
     .replace('"./comparison"', JSON.stringify(comparisonURL))
     .replace('"./filename"', JSON.stringify(filenameURL))
-    .replace('"./source"', JSON.stringify(sourceURL)),
+    .replace('"./source"', JSON.stringify(sourceURL))
+    .replace('"./dialog-layout"', JSON.stringify(layoutURL)),
 );
 let browser: Browser;
 let context: BrowserContext;

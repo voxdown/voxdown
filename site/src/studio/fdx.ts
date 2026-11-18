@@ -4,12 +4,15 @@ import { assertUnambiguousOmissions } from "./public-source";
 import { readSource } from "./source";
 
 export const MAX_FDX_BYTES = 8_000_000;
+const counted = (value: number, label: string) => `${value} ${label}${value === 1 ? "" : "s"}`;
 export interface FdxExport {
   xml: string;
   bytes: number;
   paragraphs: number;
   dualPairs: number;
   report: string[];
+  /** Source-specific conversion losses, separate from routine compatibility information. */
+  warnings: string[];
 }
 const types: Partial<Record<FountainKind, string>> = {
   scene: "Scene Heading",
@@ -177,26 +180,31 @@ export function exportFdx(source: string, options: { includeTitle?: boolean } = 
     (key) => !titleFields.includes(key),
   ).length;
   const report = [
-    `${paragraphs} screenplay paragraphs; ${dualPairs} linked dual-dialogue pairs. Bold, italic, underline and scene numbers are retained.`,
-    `Private notes and omitted passages are excluded (${document.omissions.length} completed passages). Outline headings and summaries are excluded (${count("section") + count("synopsis")} lines).`,
+    `${counted(paragraphs, "screenplay paragraph")}; ${counted(dualPairs, "linked dual-dialogue pair")}. Bold, italic, underline and scene numbers are retained.`,
+    `Private notes and omitted passages are excluded (${counted(document.omissions.length, "completed passage")}). Outline headings and summaries are excluded (${counted(count("section") + count("synopsis"), "line")}).`,
     includeTitle
-      ? `${fields.length} recognized title-page fields included, including author/contact details when present. Title-page layout is simplified.`
+      ? `${counted(fields.length, "recognized title-page field")} included, including author/contact details when present. Title-page layout is simplified.`
       : "All title-page fields are excluded by your choice.",
     "Pagination, paper size, margins, fonts, headers, footers and production revisions are not transferred. Blank separators use the receiving app's paragraph spacing. Review its layout before sharing. Keep your Fountain file for exact source and backups.",
     "FDX compatibility is based on public exporter implementations. Opening this file in Final Draft itself has not been verified here.",
   ];
-  if (unknownFields) report.push(`${unknownFields} unrecognized title-page fields omitted.`);
+  const warnings: string[] = [];
+  if (unknownFields)
+    warnings.push(`${counted(unknownFields, "unrecognized title-page field")} omitted.`);
   if (count("page-break"))
-    report.push(`${count("page-break")} explicit page breaks omitted; page positions may change.`);
+    warnings.push(
+      `${counted(count("page-break"), "explicit page break")} omitted; page positions may change.`,
+    );
   if (count("lyric"))
-    report.push(
-      `${count("lyric")} lyric lines converted to Dialogue without a dedicated lyric type.`,
+    warnings.push(
+      `${counted(count("lyric"), "lyric line")} converted to Dialogue without a dedicated lyric type.`,
     );
   if (count("centered"))
-    report.push(`${count("centered")} centered lines exported as centered Action.`);
+    warnings.push(`${counted(count("centered"), "centered line")} exported as centered Action.`);
   if (orphanDual)
-    report.push(
-      `${orphanDual} unpaired dual-dialogue cues exported as ordinary Character paragraphs.`,
+    warnings.push(
+      `${counted(orphanDual, "unpaired dual-dialogue cue")} exported without linked dual dialogue.`,
     );
-  return { xml, bytes, paragraphs, dualPairs, report };
+  report.push(...warnings);
+  return { xml, bytes, paragraphs, dualPairs, report, warnings };
 }

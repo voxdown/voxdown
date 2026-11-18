@@ -1,3 +1,4 @@
+import { arrangeDialogHeader } from "./dialog-layout";
 export const STORAGE_HEALTH_TIMEOUT_MS = 5000;
 let dialogNumber = 0;
 
@@ -91,6 +92,7 @@ export function mountStorageHealth(host: HTMLElement, actions: Actions = {}) {
     guidance,
     tools,
   );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let generation = 0;
   let disposed = false;

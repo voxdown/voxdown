@@ -32,7 +32,9 @@ const edit = url(
     .replace('"./source"', JSON.stringify(source)),
 );
 const dialog = url(
-  compile("../src/studio/speech-dialog.ts").replace('"./speech-edit"', JSON.stringify(edit)),
+  compile("../src/studio/speech-dialog.ts")
+    .replace('"./speech-edit"', JSON.stringify(edit))
+    .replace('"./dialog-layout"', JSON.stringify(url(compile("../src/studio/dialog-layout.ts")))),
 );
 let browser: Browser;
 let context: BrowserContext;

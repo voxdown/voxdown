@@ -134,7 +134,7 @@ describe("explicit scene numbering dialog", () => {
     await preview();
     expect(await page.locator(".scene-numbering-preview section").count()).toBe(50);
     expect(await page.locator("dialog").textContent()).toContain("120 headings will change");
-    expect(await page.locator("dialog").textContent()).toContain("1 headings skipped");
+    expect(await page.locator("dialog").textContent()).toContain("1 heading skipped");
     expect(await page.locator("dialog").textContent()).not.toContain("SECRET");
   });
   it("blocks nested private headings before any preview can expose them", async () => {

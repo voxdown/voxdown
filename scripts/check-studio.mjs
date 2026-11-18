@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, resolve } from "node:path";
 import { chromium, firefox, webkit } from "playwright";
+import { clickWorkspaceAction, openPreferences, selectPaper } from "./studio-ui.mjs";
 
 const { PDFDocument } = createRequire(resolve("site/package.json"))("pdf-lib");
 
@@ -119,7 +120,7 @@ try {
   await page.keyboard.press("Control+a");
   await page.locator('[data-writing-mark="note"]').click();
   assert.equal(await save(page), "before [[private]] after");
-  await page.locator("#preferences").click();
+  await clickWorkspaceAction(page, "preferences");
   await page.locator("#smart-pairs").uncheck();
   await page.keyboard.press("Escape");
   await open(page, "", "Pairs-off.fountain");
@@ -132,7 +133,7 @@ try {
   await content.focus();
   await page.keyboard.type("(");
   assert.equal(await save(page), "(");
-  await page.locator("#preferences").click();
+  await clickWorkspaceAction(page, "preferences");
   await page.locator("#smart-pairs").check();
   await page.keyboard.press("Escape");
   await open(page, "", "Paste.fountain");
@@ -150,7 +151,7 @@ try {
   console.log(
     "Studio: pairing, overtyping, selection formatting, undo, safe notes, pasted text and persistent opt-out: passed",
   );
-  await page.locator("#preferences").click();
+  await clickWorkspaceAction(page, "preferences");
   await page.locator("#screenplay-keys").check();
   await page.locator("#page-guides").check();
   await page.keyboard.press("Escape");
@@ -172,27 +173,37 @@ try {
   assert.equal(await content.evaluate((node) => node === document.activeElement), false);
   await open(page, "INT. ROOM\n\nAction.\n\n===\n\nEXT. PARK\n\nRain.", "Page-guides.fountain");
   assert.equal(await page.locator(".studio-page-guides span[title]").count(), 2);
-  assert.equal(
-    await page.evaluate(() => {
-      const paper = document.querySelector("#paper");
-      paper.value = "a4";
-      paper.dispatchEvent(new Event("change"));
-      return document.querySelectorAll(".studio-page-guides span[title]").length;
-    }),
-    0,
-  );
+  await openPreferences(page);
+  await page.locator("#paper").evaluate((paper) => {
+    paper.addEventListener(
+      "change",
+      () => {
+        window.guideCountOnChange = document.querySelectorAll(
+          ".studio-page-guides span[title]",
+        ).length;
+      },
+      { once: true },
+    );
+  });
+  await page.locator("#paper").selectOption("a4");
+  assert.equal(await page.evaluate(() => window.guideCountOnChange), 0);
+  await page.getByRole("button", { name: "Close preferences", exact: true }).click();
   await ready(page);
   assert.equal(await page.locator(".studio-page-guides span[title]").count(), 2);
-  await page.locator("#paper").selectOption("letter");
+  await selectPaper(page, "letter");
   await page.reload();
   await ready(page);
-  await page.locator("#preferences").click();
+  await clickWorkspaceAction(page, "preferences");
   assert(await page.locator("#screenplay-keys").isChecked());
   assert(await page.locator("#page-guides").isChecked());
   await page.locator("#screenplay-keys").uncheck();
   await page.locator("#page-guides").uncheck();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 800, height: 844 });
+  // The resize controller clamps saved panel widths on the next animation frame.
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  );
   const tablet = await page.evaluate(() => ({
     overflow: document.documentElement.scrollWidth > innerWidth,
     editor: document.querySelector(".writing").getBoundingClientRect().height,
@@ -485,7 +496,7 @@ try {
   await content.focus();
   await page.keyboard.press("Control+z");
   assert.equal(await save(page), "a room");
-  await page.locator("#preferences").click();
+  await clickWorkspaceAction(page, "preferences");
   await page.locator("#theme").selectOption("dark");
   await page.locator("#text-size").selectOption("20");
   await page.locator("#typewriter").check();
@@ -500,7 +511,7 @@ try {
   await page.locator("#focus-mode").click();
   assert.equal(await page.locator("#preview").isVisible(), false);
   await page.locator("#focus-mode").click();
-  await page.locator("#preferences").click();
+  await clickWorkspaceAction(page, "preferences");
   await page.locator("#theme").selectOption("light");
   await page.locator("#text-size").selectOption("16");
   await page.locator("#typewriter").uncheck();
@@ -510,16 +521,16 @@ try {
   await page.keyboard.press("Enter");
   assert.equal(await page.getByRole("heading", { name: "Screenplay workbench" }).isVisible(), true);
   await page.keyboard.press("Escape");
-  await page.locator("#example").click();
+  await clickWorkspaceAction(page, "example");
   await page.waitForFunction(() => document.getElementById("scene-count").textContent === "2");
   await ready(page);
   await page.locator("#scene-search").fill("HARBOR");
   assert.equal(await page.locator("#scene-list button").count(), 1);
   await page.locator("#scene-list button").click();
-  await page.locator("#caret-page").click();
+  await clickWorkspaceAction(page, "caret-page");
   assert.match(await page.locator("#page").innerText(), /HARBOR/);
   await page.locator("#scene-search").fill("");
-  await page.locator("#workbench").click();
+  await clickWorkspaceAction(page, "workbench");
   await page.getByRole("combobox", { name: "Workbench view" }).selectOption("notes");
   assert.match(await page.locator(".workbench-content").innerText(), /This note stays out/);
   await page.getByRole("combobox", { name: "Workbench view" }).selectOption("characters");
@@ -535,7 +546,7 @@ try {
     /This note stays out/,
   );
   await page.keyboard.press("Escape");
-  await page.locator("#recent").click();
+  await clickWorkspaceAction(page, "recent");
   await page.getByLabel("Snapshot name").fill("Before revision");
   await page.getByRole("button", { name: "Save snapshot of current draft" }).click();
   await page.getByRole("button", { name: "Compare Before revision with current draft" }).click();
@@ -588,10 +599,12 @@ try {
     "Studio: element undo, preference persistence, palette, navigator, workbench, snapshot comparison and portable backup: passed",
   );
   assert.equal((await page.locator(".f-character").count()) > 0, true);
+  await openPreferences(page);
   await page.locator("#margins").uncheck();
   assert.equal(await page.locator(".f-character").count(), 0);
   await page.locator("#margins").check();
   assert.equal((await page.locator(".f-character").count()) > 0, true);
+  await page.getByRole("button", { name: "Close preferences", exact: true }).click();
   await page.locator("#next").click();
   assert.match(await page.locator("#page").innerText(), /Someone is still out there/);
   assert.doesNotMatch(await page.locator("#page").innerText(), /This note/);
@@ -610,13 +623,13 @@ try {
   const letter = await PDFDocument.load(readFileSync(await pdf.path()));
   assert.equal(letter.getPageCount(), 2);
   assert.deepEqual(letter.getPage(1).getSize(), { width: 612, height: 792 });
-  await page.locator("#paper").selectOption("a4");
+  await selectPaper(page, "a4");
   await ready(page);
   const a4Event = page.waitForEvent("download");
   await page.locator("#pdf").click();
   const a4 = await PDFDocument.load(readFileSync(await (await a4Event).path()));
   assert.deepEqual(a4.getPage(1).getSize(), { width: 595.276, height: 841.89 });
-  await page.locator("#paper").selectOption("letter");
+  await selectPaper(page, "letter");
   await ready(page);
   const exact =
     "\uFEFFTitle: Café\r\n\r\nINT. ROOM - DAY #1A#\n\nADA\r\nA line.\r\n\r\n/* omitted */\r\n";
@@ -727,11 +740,11 @@ try {
   await recovery.evaluate(() => {
     window.delayStudioWrites = true;
   });
-  await recovery.locator("#new").click();
+  await clickWorkspaceAction(recovery, "new");
   assert.equal(await recovery.locator("#app").evaluate((app) => app.inert), true);
   await ready(recovery);
   assert.equal(await save(recovery), "");
-  await recovery.locator("#recent").click();
+  await clickWorkspaceAction(recovery, "recent");
   await recovery.getByRole("button", { name: /Open Safe.fountain/ }).click();
   await ready(recovery);
   assert.match(await save(recovery), /Keep this draft/);
@@ -766,7 +779,7 @@ try {
   assert.match(await save(degraded), /Still editable/);
   await degraded.locator(".cm-content").fill("INT. SAFE - DAY\n\nUndownloaded change.");
   const confirm = degraded.waitForEvent("dialog").then((dialog) => dialog.dismiss());
-  await degraded.locator("#new").click();
+  await clickWorkspaceAction(degraded, "new");
   await confirm;
   assert.match(await save(degraded), /Undownloaded change/);
   await degraded.locator(".cm-content").fill("Keep this unsaved screenplay.");
@@ -815,7 +828,7 @@ try {
   await degraded.locator("#download").click();
   assert.match(await degraded.locator("#notice").textContent(), /incomplete Unicode character/);
   const cancelLoss = degraded.waitForEvent("dialog").then((dialog) => dialog.dismiss());
-  await degraded.locator("#new").click();
+  await clickWorkspaceAction(degraded, "new");
   await cancelLoss;
   assert.equal(await degraded.locator("#name").inputValue(), "Unicode.fountain");
   assert.equal(lossyDownloads, 0);

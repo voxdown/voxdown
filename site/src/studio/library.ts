@@ -1,4 +1,5 @@
 import { type SourceComparison, compareSources } from "./comparison";
+import { arrangeDialogHeader } from "./dialog-layout";
 import { filenameStem } from "./filename";
 import { readSource } from "./source";
 import {
@@ -195,6 +196,7 @@ export function mountLibrary(host: HTMLElement, callbacks: LibraryCallbacks): { 
     comparison,
     deletionHelp,
   );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
 
   let kind: Kind = "drafts";

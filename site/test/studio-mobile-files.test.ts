@@ -48,107 +48,101 @@ async function start(source = "!Alpha beta") {
   );
   await ready();
 }
-const menu = () => page.getByRole("dialog", { name: "Commands", exact: true });
-const openFiles = () => page.getByRole("button", { name: "File…", exact: true }).click();
+const menu = () => page.locator("#file-dropdown");
+const openFiles = () => page.locator("#file-menu").click();
 async function downloadFromMenu() {
   const pending = page.waitForEvent("download");
   await menu().getByRole("button", { name: "Download Fountain", exact: true }).click();
   return readFileSync((await (await pending).path()) as string, "utf8");
 }
-describe("mobile File shortcut integration", () => {
+describe("mobile File menu integration", () => {
   it.each([320, 375])(
-    "fits the existing file row at %ipx and reveals file tools without adding a row",
+    "fits at %ipx and groups file actions in a real disclosure",
     async (width) => {
       await page.setViewportSize({ width, height: 700 });
       await start();
-      const geometry = await page.evaluate(() => {
-        const file = document.querySelector("#file-menu")?.getBoundingClientRect();
-        const download = document.querySelector("#download")?.getBoundingClientRect();
-        const pdf = document.querySelector("#pdf")?.getBoundingClientRect();
-        return {
-          width: document.documentElement.scrollWidth,
-          fileTop: file?.top,
-          downloadTop: download?.top,
-          pdfTop: pdf?.top,
-          height: file?.height,
-          inputWidth: document.querySelector("#name")?.getBoundingClientRect().width,
-        };
-      });
-      expect(geometry.width).toBe(width);
-      expect(geometry.fileTop).toBe(geometry.downloadTop);
-      expect(geometry.fileTop).toBe(geometry.pdfTop);
-      expect(geometry.height).toBeGreaterThanOrEqual(44);
-      expect(geometry.inputWidth).toBeGreaterThanOrEqual(100);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect((await page.locator("#file-menu").boundingBox())?.height).toBeGreaterThanOrEqual(44);
+      expect((await page.locator("#name").boundingBox())?.width).toBeGreaterThanOrEqual(100);
       await openFiles();
-      expect(await menu().getByRole("combobox").inputValue()).toBe("Files and recovery");
-      expect(
-        await menu()
-          .getByRole("searchbox")
-          .evaluate((element) => document.activeElement === element),
-      ).toBe(true);
+      expect(await page.locator("#file-menu").getAttribute("aria-expanded")).toBe("true");
+      expect(await page.getByRole("dialog", { name: "Commands", exact: true }).isVisible()).toBe(
+        false,
+      );
       for (const name of [
         "New screenplay",
-        "Open Fountain file",
-        "Recovery and snapshots",
-        "Portable backup and restore",
+        "Open Fountain…",
+        "Import Final Draft…",
         "Download Fountain",
-        "Import Final Draft XML (FDX)",
+        "Recovery and snapshots…",
+        "Backup and restore…",
       ])
         expect(await menu().getByRole("button", { name, exact: true }).isVisible()).toBe(true);
       expect(
-        await menu().getByRole("button", { name: "Rename a character", exact: true }).count(),
+        await menu().getByRole("button", { name: "Rename character…", exact: true }).count(),
       ).toBe(0);
       expect(await menu().evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );
+      expect(await menu().locator("hr").count()).toBeGreaterThanOrEqual(2);
       await page.keyboard.press("Escape");
+      expect(await menu().isVisible()).toBe(false);
       expect(
         await page.locator("#file-menu").evaluate((element) => document.activeElement === element),
       ).toBe(true);
+      await page.keyboard.press("ArrowDown");
+      expect(
+        await menu()
+          .getByRole("button", { name: "New screenplay", exact: true })
+          .evaluate((element) => document.activeElement === element),
+      ).toBe(true);
+      await page.keyboard.press("End");
+      expect(
+        await menu()
+          .getByRole("button")
+          .last()
+          .evaluate((element) => document.activeElement === element),
+      ).toBe(true);
+      await page.keyboard.press("Home");
+      expect(
+        await menu()
+          .getByRole("button", { name: "New screenplay", exact: true })
+          .evaluate((element) => document.activeElement === element),
+      ).toBe(true);
+      await page.keyboard.press("Escape");
     },
   );
-  it("resets category/search on normal Commands and keeps the focus-mode alternative usable", async () => {
+  it("preserves the Commands alternative in focus mode and restores desktop file menus", async () => {
     await start();
     await openFiles();
-    await menu().getByRole("searchbox").fill("backup");
-    await page.keyboard.press("Escape");
-    await page.locator("#commands").click();
-    expect(await menu().getByRole("combobox").inputValue()).toBe("");
-    expect(await menu().getByRole("searchbox").inputValue()).toBe("");
     await page.keyboard.press("Escape");
     await page.locator("#mobile-focus").click();
     expect(await page.locator("#file-menu").isVisible()).toBe(false);
     await page.locator("#commands").click();
-    await menu().getByRole("combobox").selectOption("Files and recovery");
-    expect(await downloadFromMenu()).toBe("!Alpha beta");
+    const commands = page.getByRole("dialog", { name: "Commands", exact: true });
+    await commands.getByRole("combobox").selectOption("Files and recovery");
+    const pending = page.waitForEvent("download");
+    await commands.getByRole("button", { name: "Download Fountain", exact: true }).click();
+    expect(readFileSync((await (await pending).path()) as string, "utf8")).toBe("!Alpha beta");
     expect(await page.locator("#mobile-focus").getAttribute("aria-pressed")).toBe("true");
     await page.setViewportSize({ width: 1280, height: 800 });
-    expect(await page.locator("#file-menu").isVisible()).toBe(false);
+    expect(await page.locator("#file-menu").isVisible()).toBe(true);
+    await openFiles();
+    expect(await downloadFromMenu()).toBe("!Alpha beta");
   });
-  it("leaves IME Enter inert and uses keyboard results without altering exact source", async () => {
+  it("downloads exact source through the File menu and restores focus after recovery", async () => {
     const original = "\uFEFFINT. ROOM\r\n\r\n!Exact source.\r\n";
     await start(original);
     await openFiles();
-    const search = menu().getByRole("searchbox");
-    await search.fill("New screenplay");
-    await search.dispatchEvent("keydown", {
-      key: "Enter",
-      code: "Enter",
-      isComposing: true,
-      bubbles: true,
-    });
-    expect(await menu().isVisible()).toBe(true);
-    expect(await page.locator("#name").inputValue()).toBe("Files.fountain");
-    await search.fill("download fountain");
-    await page.keyboard.press("ArrowDown");
-    expect(
-      await menu()
-        .getByRole("button", { name: "Download Fountain", exact: true })
-        .evaluate((element) => document.activeElement === element),
-    ).toBe(true);
-    const pending = page.waitForEvent("download");
-    await page.keyboard.press("Enter");
-    expect(readFileSync((await (await pending).path()) as string, "utf8")).toBe(original);
+    expect(await downloadFromMenu()).toBe(original);
     expect(await menu().isVisible()).toBe(false);
+    await openFiles();
+    await menu().getByRole("button", { name: "Recovery and snapshots…", exact: true }).click();
+    expect(await page.getByRole("dialog").isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    expect(
+      await page.locator("#file-menu").evaluate((element) => document.activeElement === element),
+    ).toBe(true);
+    expect(await page.locator("#name").inputValue()).toBe("Files.fountain");
   });
 });

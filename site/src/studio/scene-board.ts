@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, dialogActions } from "./dialog-layout";
 import {
   MAX_SCENE_SYNOPSIS,
   type SceneCard,
@@ -81,6 +82,7 @@ export function mountSceneBoard(
     if (actions.apply(snapshot, plan)) dialog.close();
     else stale();
   });
+  apply.classList.add("primary");
   move.append(
     legend,
     targetFilter,
@@ -118,6 +120,7 @@ export function mountSceneBoard(
     if (actions.apply(snapshot, synopsisPlan)) dialog.close();
     else stale();
   });
+  synopsisApply.classList.add("primary");
   synopsisEditor.append(
     synopsisLegend,
     synopsisLabel,
@@ -129,7 +132,18 @@ export function mountSceneBoard(
     synopsisApply,
   );
   const close = button("Close", () => dialog.close());
-  dialog.append(title, intro, filter, status, cards, previous, next, move, synopsisEditor, close);
+  dialog.append(
+    title,
+    intro,
+    filter,
+    status,
+    cards,
+    dialogActions(previous, next),
+    move,
+    synopsisEditor,
+    close,
+  );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let snapshot: Snapshot;
   let scenes: SceneCard[] = [];

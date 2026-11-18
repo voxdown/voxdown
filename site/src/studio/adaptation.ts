@@ -242,8 +242,8 @@ export function adaptToVoxDown(
       "This screenplay could not be adapted without changing spoken words, attribution or directions. No VoxDown file was prepared. Keep the Fountain source and simplify the affected structure.",
     );
   const report = [
-    `${expected.length} spoken rows validated against the VoxDown core parser; ${cast.length} speaking roles use deterministic Cast1, Cast2… handles with their original cast names. Action is narration; a character named Narrator remains a separate role.`,
-    `${headings.length} scene headings ${options.readSceneHeadings ? "are read by the narrator" : "are hidden labels, not spoken"}.`,
+    `${expected.length} spoken ${expected.length === 1 ? "row" : "rows"} validated against the VoxDown core parser; ${cast.length} speaking ${cast.length === 1 ? "role uses" : "roles use"} deterministic Cast1, Cast2… handles with their original cast names. Action is narration; a character named Narrator remains a separate role.`,
+    `${headings.length} scene ${headings.length === 1 ? "heading" : "headings"} ${headings.length === 1 ? "is" : "are"} ${options.readSceneHeadings ? "read by the narrator" : headings.length === 1 ? "a hidden label, not spoken" : "hidden labels, not spoken"}.`,
     `Private passages (${document.omissions.length}), all title fields including author/contact details, and all outline headings/summaries are excluded.`,
     "Narration and dialogue words and speaker attribution are preserved after Fountain rendering and whitespace normalization. Fountain emphasis is flattened; each nonempty physical spoken/action line becomes a separate VoxDown paragraph. Empty dialogue lines do not create timed pauses.",
     "Cue extensions and parentheticals become performance directions for following lines until another direction or cue. Consecutive parentheticals are combined. Lyric lines receive a sung direction. These instructions require performer review.",

@@ -63,9 +63,9 @@ describe("FDX compatibility dialog", () => {
   it("shows report before explicit download and exports captured snapshot despite later edits", async () => {
     await open();
     expect(await page.evaluate(() => window.fdxDownloads)).toEqual([]);
-    expect(
-      await page.getByRole("list", { name: "FDX compatibility report" }).textContent(),
-    ).toContain("Pagination");
+    expect(await page.locator('ul[aria-label="FDX compatibility report"]').textContent()).toContain(
+      "Pagination",
+    );
     expect(await page.getByRole("dialog").textContent()).toContain("author and contact details");
     await page.evaluate(() => {
       window.fdxCurrent.source = "@BOB\nNew draft.";
@@ -90,7 +90,9 @@ describe("FDX compatibility dialog", () => {
     const xml = await page.evaluate(() => window.fdxDownloads[0]?.xml);
     expect(xml).not.toContain("TitlePage");
     expect(xml).not.toContain("author@example.test");
-    expect(await page.getByRole("list").textContent()).toContain("excluded by your choice");
+    expect(await page.locator('ul[aria-label="FDX compatibility report"]').textContent()).toContain(
+      "excluded by your choice",
+    );
   });
   it("Escape clears retained source/report and no delayed download can happen", async () => {
     await open();
@@ -144,5 +146,42 @@ describe("FDX compatibility dialog", () => {
     });
     await download().click();
     expect(await page.evaluate(() => window.fdxDownloads.length)).toBe(1);
+  });
+  it("keeps export reachable on short phones and leaves source-specific conversion losses visible", async () => {
+    for (const name of ["studio.css", "dialog-layout.css"]) {
+      await page.addStyleTag({
+        content: readFileSync(new URL(`../src/studio/${name}`, import.meta.url), "utf8"),
+      });
+    }
+    for (const height of [568, 700]) {
+      await page.setViewportSize({ width: 320, height });
+      await open();
+      const within = await page.locator("dialog[open]").evaluate((dialog) => {
+        const bounds = dialog.getBoundingClientRect();
+        const button = [...dialog.querySelectorAll("button")]
+          .find((e) => e.textContent === "Download FDX")
+          ?.getBoundingClientRect();
+        return !!button && button.top >= bounds.top && button.bottom <= bounds.bottom;
+      });
+      expect(within).toBe(true);
+      expect(await page.locator("dialog[open]").innerText()).toContain(
+        "author and contact details",
+      );
+      expect(await page.locator("dialog[open]").innerText()).toContain(
+        "production revisions are not preserved",
+      );
+      await page.getByText("Compatibility details", { exact: true }).click();
+      expect(await page.getByRole("list", { name: "FDX compatibility report" }).isVisible()).toBe(
+        true,
+      );
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+    }
+    await page.evaluate(() => {
+      window.fdxCurrent.source = "INT. ROOM\n\n===\n\nMARA\nA line.";
+    });
+    await open();
+    expect(await page.getByRole("list", { name: "FDX conversion warnings" }).innerText()).toContain(
+      "explicit page break omitted",
+    );
   });
 });

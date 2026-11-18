@@ -6,15 +6,20 @@ independent copy. Browser recovery and an installed offline copy are convenience
 
 ## Start writing
 
-Use Commands → Practice Fountain step by step for six short exercises in a separate practice
-buffer. Use Example for an editable screenplay. Optional screenplay Enter/Tab behavior lives
-in Preferences; ordinary text editing remains available. Select a phrase and use Bold,
+Use Help → Guided practice for six short exercises in a separate practice
+buffer. Use Help → Try a short screenplay for an editable example. Optional screenplay Enter/Tab behavior lives
+in View → Preferences; ordinary text editing remains available. Select a phrase and use Bold,
 Italic, Underline or Note; the Fountain text remains authoritative and Undo restores it.
 
-On a phone, Focus gives the text more room; Exit focus is always in the header. File… groups
+On a phone, Focus gives the text more room; Exit focus is always in the header. File groups
 Open, Download and recovery tools. Commands remains available in Focus. On a tablet, Expand
 preview makes the screenplay page readable; Return to writing or Escape restores the editor.
-Go to source takes you from the page to its source line.
+Preview actions (•••) → Go to page source takes you from the page to its source line.
+
+On desktop, drag the dividers to resize Scenes and preview. Focus a divider and use arrow
+keys to resize it with the keyboard; double-click to reset. Close Scenes with its × button,
+then reopen it from the Scenes toolbar button or View menu. View also shows current panel
+and Focus states. Tools groups revision, planning and inspection commands.
 
 ## Revise a scene
 
@@ -38,7 +43,7 @@ excluded from public handoffs. Ambiguous unclosed/nested omissions block unsafe 
 
 ## Protect a revision
 
-Recover contains drafts and named snapshots; restoring opens a separate draft with fresh undo
+File → Recovery and snapshots contains drafts and named snapshots; restoring opens a separate draft with fresh undo
 history. Compare with local Fountain file is read-only. Download a Studio backup for portable
 recovery. Where the browser offers direct local-file access, Save detects external changes;
 other browsers retain ordinary Fountain download. Prepare offline is explicit and scoped to

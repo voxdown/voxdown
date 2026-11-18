@@ -668,7 +668,8 @@ dialog dd {
   background: #17231f;
   color: #e5eee7;
 }
-:root[data-theme="dark"] :is(.writing, dialog, button, select, input, #app.outline-open #outline) {
+:root[data-theme="dark"]
+  :where(.writing, dialog, button, select, input, #app.outline-open #outline) {
   background: #21322b;
   color: #e5eee7;
 }
@@ -709,7 +710,7 @@ dialog dd {
     color: #e5eee7;
   }
   :root[data-theme="system"]
-    :is(.writing, dialog, button, select, input, #app.outline-open #outline) {
+    :where(.writing, dialog, button, select, input, #app.outline-open #outline) {
     background: #21322b;
     color: #e5eee7;
   }

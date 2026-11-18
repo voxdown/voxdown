@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, dialogActions } from "./dialog-layout";
 import { type FdxImportResult, MAX_FDX_IMPORT_BYTES, importFdx } from "./fdx-import";
 import { filenameStem } from "./filename";
 
@@ -44,7 +45,19 @@ export function mountFdxImport(
   open.type = "button";
   const close = node("button", "Close");
   close.type = "button";
-  dialog.append(title, description, label, file, status, report, details, open, close);
+  open.classList.add("primary");
+  dialog.append(
+    title,
+    description,
+    label,
+    file,
+    status,
+    report,
+    details,
+    dialogActions(open),
+    close,
+  );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let generation = 0;
   let captured: { result: FdxImportResult; name: string } | undefined;

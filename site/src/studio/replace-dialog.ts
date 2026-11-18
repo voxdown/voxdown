@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, dialogActions } from "./dialog-layout";
 import {
   MAX_REPLACE_QUERY,
   MAX_REPLACE_TEXT,
@@ -71,6 +72,7 @@ export function mountScopedReplace(
   preview.type = "button";
   const apply = node("button", "Apply replacements");
   apply.type = "button";
+  apply.classList.add("primary");
   const cancel = node("button", "Cancel");
   cancel.type = "button";
   cancel.onclick = () => dialog.close();
@@ -85,9 +87,10 @@ export function mountScopedReplace(
     preview,
     status,
     results,
-    apply,
+    dialogActions(apply),
     cancel,
   );
+  arrangeDialogHeader(dialog, heading, cancel);
   host.append(dialog);
   let snapshot: ReplaceSnapshot | undefined;
   let plan: ScopedReplacePlan | undefined;

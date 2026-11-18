@@ -115,7 +115,7 @@ describe("conservative FDX export", () => {
       const result = exportFdx(`@MARA\nLeft.\n\n${boundary}\n\n@JON ^\nRight.`);
       expect(result.dualPairs).toBe(0);
       expect((await parse(result.xml)).dual).toEqual([]);
-      expect(result.report.join(" ")).toContain("1 unpaired dual-dialogue cues");
+      expect(result.report.join(" ")).toContain("1 unpaired dual-dialogue cue");
     },
   );
   it("pairs a dual chain once and retains the remaining unpaired speech", async () => {
@@ -129,7 +129,7 @@ describe("conservative FDX export", () => {
       "Right.",
     ]);
     expect(doc.body.slice(-2).map((paragraph) => paragraph.text)).toEqual(["ELSE", "Last."]);
-    expect(result.report.join(" ")).toContain("1 unpaired dual-dialogue cues");
+    expect(result.report.join(" ")).toContain("1 unpaired dual-dialogue cue");
   });
   it("excludes private text from inline elements, title fields and scene numbers", async () => {
     const result = exportFdx(
@@ -140,7 +140,7 @@ describe("conservative FDX export", () => {
     expect(result.xml).not.toContain("PRIVATE");
     expect(doc.text).not.toContain("SECRET");
     expect(result.report.join(" ")).not.toContain("PRIVATE");
-    expect(result.report.join(" ")).toContain("1 unrecognized title-page fields omitted");
+    expect(result.report.join(" ")).toContain("1 unrecognized title-page field omitted");
   });
   it.each([
     "!Public [[PRIVATE [[NESTED]] PRIVATE TAIL]]",
@@ -178,10 +178,15 @@ describe("conservative FDX export", () => {
     expect(doc.title).toBe("");
     expect(result.xml).not.toContain("Hidden");
     expect(doc.body[0]).toMatchObject({ type: "Action", alignment: "Center", text: "Centered" });
-    expect(result.report.join(" ")).toMatch(/page breaks omitted/);
-    expect(result.report.join(" ")).toMatch(/lyric lines converted/);
+    expect(result.report.join(" ")).toContain("1 explicit page break omitted");
+    expect(result.report.join(" ")).toMatch(/lyric lines? converted/);
     expect(result.report.join(" ")).toMatch(/unpaired dual-dialogue/);
     expect(result.report.join(" ")).toMatch(/Pagination, paper size/);
+    expect(result.warnings.join(" ")).toContain("1 explicit page break omitted");
+    expect(result.warnings.join(" ")).toMatch(/lyric lines? converted/);
+    expect(result.warnings.join(" ")).toMatch(/unpaired dual-dialogue/);
+    expect(result.warnings.join(" ")).not.toMatch(/Pagination, paper size/);
+    expect(result.warnings.every((warning) => result.report.includes(warning))).toBe(true);
   });
   it.each(["\u0001", "\uD800", "\uDC00", "\uFFFE", "\uFFFF"])(
     "rejects printable XML-invalid code point %j",

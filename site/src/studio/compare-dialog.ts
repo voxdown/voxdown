@@ -1,4 +1,5 @@
 import { type SourceComparison, compareSources } from "./comparison";
+import { arrangeDialogHeader, dialogDisclosure } from "./dialog-layout";
 import { MAX_SOURCE, readSource } from "./source";
 import { type WordSegment, compareWords } from "./word-comparison";
 const MAX_BYTES = MAX_SOURCE * 4 + 4;
@@ -28,7 +29,7 @@ export function mountCompareDialog(
   dialog.setAttribute("aria-labelledby", title.id);
   const intro = node(
     "p",
-    "Read-only source comparison: private notes, omitted passages and title/contact fields are included in the excerpts. Nothing is changed, saved, uploaded or exported. Line endings are normalized for comparison; this does not establish byte equality.",
+    "Compare a local file with your current draft. Read-only: private notes, omitted passages and title/contact details are visible here. Nothing is uploaded.",
   );
   const snapshotLabel = node("p");
   const file = node("input");
@@ -91,9 +92,17 @@ export function mountCompareDialog(
     navigation,
     columns,
     excerptNotice,
-    help,
+    dialogDisclosure(
+      "How to read the comparison",
+      help,
+      node(
+        "p",
+        "Nothing is changed, saved or exported. Line endings are normalized for comparison; this does not establish byte equality. Close and reopen to include later edits.",
+      ),
+    ),
     close,
   );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let snapshot: { source: string; name: string } | undefined;
   let baseline: { source: string; name: string } | undefined;
@@ -307,7 +316,7 @@ export function mountCompareDialog(
       try {
         snapshot = { ...actions.current() };
         readSource(snapshot.source);
-        snapshotLabel.textContent = `Current snapshot: ${short(snapshot.name)}. Close and reopen to include later edits.`;
+        snapshotLabel.textContent = `Current draft: ${short(snapshot.name)}`;
         status.textContent = "Choose a local baseline file.";
       } catch (error) {
         snapshot = undefined;

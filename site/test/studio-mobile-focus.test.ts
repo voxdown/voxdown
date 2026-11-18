@@ -73,9 +73,9 @@ describe("explicit mobile focus writing", () => {
     const normal = await geometry();
     await page.getByRole("button", { name: "Focus writing", exact: true }).click();
     const focused = await geometry();
-    expect(normal.top - focused.top).toBeGreaterThanOrEqual(140);
+    expect(normal.top - focused.top).toBeGreaterThanOrEqual(100);
     expect(focused.top).toBeLessThanOrEqual(110);
-    expect(focused.height).toBeGreaterThan(normal.height + 140);
+    expect(focused.height).toBeGreaterThan(normal.height + 100);
     expect(focused.width).toBe(320);
     expect(await page.locator(".filebar").isVisible()).toBe(false);
     expect(await page.locator(".toolbar").isVisible()).toBe(false);
@@ -131,7 +131,10 @@ describe("explicit mobile focus writing", () => {
     expect(await page.locator(".filebar").isVisible()).toBe(false);
     await page.setViewportSize({ width: 1280, height: 800 });
     expect(await page.locator("#mobile-focus").isVisible()).toBe(false);
+    expect(await page.locator("#help-menu").isVisible()).toBe(true);
+    await page.locator("#help-menu").click();
     expect(await page.locator("#help").isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
     expect(await page.locator(".filebar").isVisible()).toBe(true);
     expect(await page.locator(".toolbar").isVisible()).toBe(true);
     expect(await page.locator("#focus-mode").getAttribute("aria-pressed")).toBe("true");

@@ -1,3 +1,4 @@
+import { arrangeDialogHeader } from "./dialog-layout";
 import { type FountainKind, parseFountain } from "./fountain";
 
 type Advice = { title: string; explanation: string; next: string; example: string };
@@ -142,6 +143,7 @@ export function mountCoach(
   close.onclick = () => dialog.close();
   dialog.append(heading, explanation, warnings, next, label, example, close);
   dialog.addEventListener("close", returnToWriting);
+  arrangeDialogHeader(dialog, heading, close);
   host.append(dialog);
   return {
     open() {

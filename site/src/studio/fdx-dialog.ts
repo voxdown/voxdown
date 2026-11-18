@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, countLabel, dialogActions, dialogDisclosure } from "./dialog-layout";
 import { type FdxExport, exportFdx } from "./fdx";
 import { filenameStem } from "./filename";
 
@@ -13,18 +14,15 @@ export function mountFdxExport(
   dialog.setAttribute("aria-labelledby", "fdx-export-title");
   const title = document.createElement("h2");
   title.id = "fdx-export-title";
-  title.textContent = "Export Final Draft XML (.fdx)";
+  title.textContent = "Export Final Draft (.fdx)";
   const description = document.createElement("p");
   description.textContent =
-    "Export an editable screenplay snapshot. Private notes, omitted passages and outlines stay out. This is an interchange file, not an exact Fountain backup. Review the compatibility report before downloading.";
+    "Create an editable screenplay file. Private notes, omitted passages and outlines stay out.";
   const snapshotLabel = document.createElement("p");
   const label = document.createElement("label");
   const includeTitle = document.createElement("input");
   includeTitle.type = "checkbox";
-  label.append(
-    includeTitle,
-    " Include recognized title fields, including author and contact details",
-  );
+  label.append(includeTitle, " Include title fields, including author and contact details");
   const report = document.createElement("ul");
   report.setAttribute("aria-label", "FDX compatibility report");
   const status = document.createElement("p");
@@ -35,7 +33,25 @@ export function mountFdxExport(
   const close = document.createElement("button");
   close.type = "button";
   close.textContent = "Close";
-  dialog.append(title, description, snapshotLabel, label, report, status, download, close);
+  download.classList.add("primary");
+  const consequences = document.createElement("p");
+  consequences.textContent =
+    "Layout and production revisions are not preserved. Check the receiving app and keep your Fountain original.";
+  const warnings = document.createElement("ul");
+  warnings.setAttribute("aria-label", "FDX conversion warnings");
+  const compatibility = dialogDisclosure("Compatibility details", snapshotLabel, report);
+  dialog.append(
+    title,
+    description,
+    label,
+    status,
+    consequences,
+    warnings,
+    dialogActions(download),
+    compatibility,
+    close,
+  );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let snapshot: { source: string; name: string } | undefined;
   let result: FdxExport | undefined;
@@ -44,6 +60,7 @@ export function mountFdxExport(
     snapshot = undefined;
     result = undefined;
     report.replaceChildren();
+    warnings.replaceChildren();
     status.textContent = snapshotLabel.textContent = "";
     download.disabled = true;
   }
@@ -55,6 +72,7 @@ export function mountFdxExport(
   function prepare() {
     result = undefined;
     report.replaceChildren();
+    warnings.replaceChildren();
     download.disabled = true;
     if (!snapshot) return;
     try {
@@ -64,7 +82,13 @@ export function mountFdxExport(
         item.textContent = message;
         report.append(item);
       }
-      status.textContent = `Ready: ${result.bytes.toLocaleString()} UTF-8 bytes. Your Fountain screenplay remains unchanged.`;
+      // Source-specific conversion losses stay visible; routine mechanics live in details.
+      for (const message of result.warnings) {
+        const item = document.createElement("li");
+        item.textContent = message;
+        warnings.append(item);
+      }
+      status.textContent = `Ready: ${countLabel(result.paragraphs, "screenplay paragraph")}. Fountain source unchanged.`;
       download.disabled = false;
     } catch (error) {
       status.textContent =
@@ -101,6 +125,7 @@ export function mountFdxExport(
       clear();
       opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
       includeTitle.checked = true;
+      compatibility.open = false;
       try {
         snapshot = { ...actions.current() };
         snapshotLabel.textContent = `Snapshot of ${snapshot.name}. Close and reopen to include later edits.`;

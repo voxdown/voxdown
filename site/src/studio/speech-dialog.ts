@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, dialogActions } from "./dialog-layout";
 import {
   MAX_SPEECH_LENGTH,
   type SpeechEditPlan,
@@ -45,7 +46,9 @@ export function mountSpeechEditor(
   cancel.type = "button";
   cancel.textContent = "Cancel";
   cancel.onclick = () => dialog.close();
-  dialog.append(title, description, label, help, status, preview, apply, cancel);
+  apply.classList.add("primary");
+  dialog.append(title, description, label, help, status, dialogActions(preview, apply), cancel);
+  arrangeDialogHeader(dialog, title, cancel);
   host.append(dialog);
   let snapshot: Snapshot | undefined;
   let cueLine = 0;

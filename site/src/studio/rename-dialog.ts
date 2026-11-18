@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, dialogActions } from "./dialog-layout";
 import { parseFountain } from "./fountain";
 import { screenplayInsights } from "./insights";
 import { type CharacterRenamePlan, planCharacterRename } from "./rename";
@@ -57,6 +58,7 @@ export function mountRename(
   );
   const apply = node("button", "Apply rename");
   apply.type = "button";
+  apply.classList.add("primary");
   const close = node("button", "Cancel");
   close.type = "button";
   close.onclick = () => dialog.close();
@@ -71,9 +73,10 @@ export function mountRename(
     status,
     preview,
     mergeLabel,
-    apply,
+    dialogActions(apply),
     close,
   );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let snapshot: Snapshot;
   let cast: string[] = [];

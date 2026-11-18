@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, dialogActions } from "./dialog-layout";
 import {
   type LocationDirectory,
   type LocationRenamePlan,
@@ -100,10 +101,11 @@ export function mountLocations(
     previewSummary,
     previewList,
     collisionLabel,
-    applyButton,
+    dialogActions(applyButton),
     excluded,
     status,
   );
+  arrangeDialogHeader(dialog, heading, close);
   host.append(dialog);
   let snapshot: LocationSnapshot | undefined;
   let directory: LocationDirectory | undefined;

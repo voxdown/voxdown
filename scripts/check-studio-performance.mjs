@@ -6,6 +6,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
+import { clickWorkspaceAction } from "./studio-ui.mjs";
 
 const budgets = { inputP95: 250, inputMax: 1500, commandP95: 500, commandMax: 2000, ready: 15000 };
 const adaptationFrameBudget = 150;
@@ -278,7 +279,7 @@ try {
   report.dom.outlineButtons = await page.locator("#scene-list button").count();
   assert.ok(report.dom.editorLines < 250, "CodeMirror must render a bounded viewport");
   assert.equal(report.dom.outlineButtons, 500, "Outline should cap rendering at 500 matches");
-  await page.locator("#workbench").click();
+  await clickWorkspaceAction(page, "workbench");
   await page.getByLabel("Workbench view", { exact: true }).selectOption("characters");
   report.dom.characterRows = await page.locator(".workbench-content > details").count();
   assert.equal(report.dom.characterRows, 100);
@@ -309,7 +310,7 @@ try {
     });
     db.close();
   });
-  await page.locator("#recent").click();
+  await clickWorkspaceAction(page, "recent");
   const library = page.locator(".studio-library");
   await library.locator("fieldset select").selectOption("snapshots");
   await page.waitForFunction(

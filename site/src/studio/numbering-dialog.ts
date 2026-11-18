@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, countLabel, dialogActions, dialogDisclosure } from "./dialog-layout";
 import {
   type SceneNumberingMode,
   type SceneNumberingPlan,
@@ -29,7 +30,7 @@ export function mountNumberingDialog(
   dialog.setAttribute("aria-labelledby", title.id);
   const intro = node(
     "p",
-    "Preview ordinary Fountain #N# scene labels in source order. This does not sort scenes or lock production numbering. Existing labels are preserved by default; ambiguous, formatted and private-comment headings are skipped.",
+    "Add scene numbers in source order. Existing numbers stay unchanged by default; private and ambiguous headings are skipped.",
   );
   const summary = node("p");
   const mode = node("select");
@@ -81,6 +82,7 @@ export function mountNumberingDialog(
     if (actions.apply(snapshot as Snapshot, plan)) dismiss();
     else stale();
   });
+  apply.classList.add("primary");
   const close = button("Close", dismiss);
   dialog.append(
     title,
@@ -90,15 +92,23 @@ export function mountNumberingDialog(
     mode,
     startLabel,
     start,
-    startHelp,
     acknowledgment,
     preview,
     result,
     listing,
     excluded,
-    apply,
+    dialogActions(apply),
+    dialogDisclosure(
+      "How numbering works",
+      startHelp,
+      node(
+        "p",
+        "Numbers use ordinary Fountain #N# labels. This does not sort scenes or lock production numbering. Formatted and ambiguous headings are skipped. Close and reopen to include later edits.",
+      ),
+    ),
     close,
   );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let snapshot: Snapshot | undefined;
   let plan: SceneNumberingPlan | undefined;
@@ -148,7 +158,7 @@ export function mountNumberingDialog(
         mode: mode.value as SceneNumberingMode,
         start: Number(start.value),
       });
-      result.textContent = `${plan.changes.length} headings will change; ${plan.preserved} existing labels preserved; ${plan.skipped.length} headings skipped. ${plan.warnings.join(" ")}${plan.preview.length > 50 ? " Showing the first 50 exact source changes; Apply includes all changes." : ""}${mode.value === "renumber" ? " Confirm replacement of existing eligible labels before Apply." : ""}${!plan.changes.length ? " No changes are needed." : ""}`;
+      result.textContent = `${countLabel(plan.changes.length, "heading")} will change; ${countLabel(plan.preserved, "existing label")} preserved; ${countLabel(plan.skipped.length, "heading")} skipped. ${plan.warnings.join(" ")}${plan.preview.length > 50 ? " Showing the first 50 exact source changes; Apply includes all changes." : ""}${mode.value === "renumber" ? " Confirm replacement of existing eligible labels before Apply." : ""}${!plan.changes.length ? " No changes are needed." : ""}`;
       for (const item of plan.preview.slice(0, 50)) {
         const section = node("section");
         section.append(
@@ -215,7 +225,7 @@ export function mountNumberingDialog(
         snapshot = { ...actions.current() };
         const info = sceneNumberingSummary(snapshot.source);
         suggested = info.suggestedStart;
-        summary.textContent = `${info.scenes} scenes; ${info.numbered} already numbered; ${info.eligible} eligible headings; ${info.skipped.length} headings skipped. Close and reopen to include later edits.`;
+        summary.textContent = `${countLabel(info.scenes, "scene")} · ${info.numbered} numbered · ${info.eligible} eligible${info.skipped.length ? ` · ${info.skipped.length} skipped` : ""}`;
         start.value = suggested === undefined ? "" : String(suggested);
         if (suggested === undefined)
           result.textContent =

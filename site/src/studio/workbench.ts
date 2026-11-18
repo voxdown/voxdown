@@ -17,7 +17,10 @@ export function mountWorkbench(
   } = {},
 ) {
   const dialog = document.createElement("dialog");
+  dialog.className = "workbench-dialog";
   dialog.setAttribute("aria-labelledby", "workbench-title");
+  const header = document.createElement("header");
+  header.className = "workbench-header";
   const heading = document.createElement("h2");
   heading.id = "workbench-title";
   heading.textContent = "Screenplay workbench";
@@ -25,6 +28,11 @@ export function mountWorkbench(
   close.type = "button";
   close.textContent = "Close";
   close.onclick = () => dialog.close();
+  header.append(heading, close);
+  const navigation = document.createElement("div");
+  navigation.className = "workbench-navigation";
+  const viewLabel = document.createElement("label");
+  viewLabel.textContent = "View";
   const select = document.createElement("select");
   select.setAttribute("aria-label", "Workbench view");
   for (const [value, label] of [
@@ -38,26 +46,48 @@ export function mountWorkbench(
     option.textContent = label ?? "";
     select.append(option);
   }
+  viewLabel.append(select);
+  const searchLabel = document.createElement("label");
+  searchLabel.textContent = "Filter results";
   const search = document.createElement("input");
   search.type = "search";
   search.placeholder = "Filter this view…";
   search.setAttribute("aria-label", "Filter workbench");
+  searchLabel.append(search);
+  navigation.append(viewLabel, searchLabel);
+  const body = document.createElement("div");
+  body.className = "workbench-body";
   const content = document.createElement("div");
   content.className = "workbench-content";
   const summary = document.createElement("p");
   summary.setAttribute("role", "status");
+  summary.className = "workbench-results-summary";
+  const goalSection = document.createElement("section");
+  goalSection.className = "workbench-goal";
+  goalSection.setAttribute("aria-label", "Draft word target");
   const goalLabel = document.createElement("label");
-  goalLabel.textContent = "Draft word target (optional) ";
+  goalLabel.textContent = "Draft word target (optional)";
   const goal = document.createElement("input");
   goal.type = "number";
   goal.min = "0";
   goal.max = "1000000";
   goal.step = "100";
-  goal.value = "0";
+  goal.value = "";
+  goal.placeholder = "e.g. 10,000";
+  goal.inputMode = "numeric";
+  goal.setAttribute("aria-describedby", "workbench-goal-hint");
   goalLabel.append(goal);
+  const goalHint = document.createElement("p");
+  goalHint.id = "workbench-goal-hint";
+  goalHint.className = "workbench-secondary";
+  goalHint.textContent = "Set a word target for this browser. Clear it to turn it off.";
+  const goalProgress = document.createElement("div");
+  goalProgress.className = "workbench-goal-progress";
+  goalProgress.setAttribute("aria-live", "polite");
+  goalSection.append(goalLabel, goalHint, goalProgress);
   try {
     const value = Number(localStorage.getItem("studio-word-goal"));
-    if (Number.isSafeInteger(value) && value >= 0 && value <= 1e6) goal.value = String(value);
+    if (Number.isSafeInteger(value) && value > 0 && value <= 1e6) goal.value = String(value);
   } catch {}
   let resultOffset = 0;
   const resultPages = document.createElement("div");
@@ -72,7 +102,13 @@ export function mountWorkbench(
   function pageResults(total: number, label: string) {
     summary.textContent = total
       ? `${total} ${label} · showing ${resultOffset + 1}–${Math.min(resultOffset + 100, total)}`
-      : `No matching ${label}.`;
+      : search.value.trim()
+        ? `No matching ${label}.`
+        : label === "characters"
+          ? "No speaking characters yet."
+          : label === "private passages"
+            ? "No private notes or omitted passages in this draft."
+            : "No parser warnings.";
     resultPages.hidden = total <= 100;
     previousResults.disabled = resultOffset === 0;
     nextResults.disabled = resultOffset + 100 >= total;
@@ -104,46 +140,83 @@ export function mountWorkbench(
     };
     return button;
   }
+  function updateGoalProgress(words: number) {
+    goalProgress.replaceChildren();
+    const target = Number(goal.value);
+    if (target > 0 && target <= 1e6) {
+      const percent = Math.min(100, Math.floor((words / target) * 100));
+      const progress = document.createElement("progress");
+      progress.max = target;
+      progress.value = Math.min(words, target);
+      progress.setAttribute("aria-label", "Draft word target progress");
+      const remaining = Math.max(0, target - words);
+      goalProgress.append(
+        progress,
+        node(
+          "p",
+          remaining
+            ? `${percent}% complete · ${remaining.toLocaleString()} ${remaining === 1 ? "word" : "words"} to go`
+            : "Target reached",
+        ),
+      );
+    }
+  }
   function render() {
     if (!data && pending) data = screenplayInsights(pending.document, pending.source);
     content.replaceChildren();
     summary.textContent = "";
     resultPages.hidden = true;
-    goalLabel.hidden = select.value !== "statistics";
-    search.hidden = select.value === "statistics";
+    searchLabel.hidden = select.value === "statistics";
+    summary.hidden = select.value === "statistics";
     if (!data) {
       content.append(node("p", "Wait for the screenplay preview to finish updating."));
       return;
     }
     if (select.value === "statistics") {
       const stats = data.statistics;
-      content.append(
+      const metrics = document.createElement("dl");
+      metrics.className = "workbench-metrics";
+      for (const [value, label] of [
+        [stats.words, stats.words === 1 ? "Printable word" : "Printable words"],
+        [stats.scenes, stats.scenes === 1 ? "Scene" : "Scenes"],
+        [stats.characters, stats.characters === 1 ? "Speaking character" : "Speaking characters"],
+      ] as const) {
+        const metric = document.createElement("div");
+        const term = document.createElement("dt");
+        term.textContent = label;
+        const number = document.createElement("dd");
+        number.textContent = value.toLocaleString();
+        metric.append(term, number);
+        metrics.append(metric);
+      }
+      const minutes = Math.ceil(stats.estimatedSpokenSeconds / 60);
+      const speech = document.createElement("div");
+      speech.className = "workbench-speech";
+      const speechValue = document.createElement("strong");
+      speechValue.textContent = `${stats.dialogueWords.toLocaleString()} spoken ${stats.dialogueWords === 1 ? "word" : "words"}`;
+      const speechEstimate = document.createElement("span");
+      speechEstimate.textContent = stats.dialogueWords
+        ? stats.estimatedSpokenSeconds < 60
+          ? "Less than 1 minute of speech"
+          : `About ${minutes} ${minutes === 1 ? "minute" : "minutes"} of speech`
+        : "No spoken dialogue yet";
+      speech.append(speechValue, speechEstimate);
+      updateGoalProgress(stats.words);
+      const explanation = document.createElement("details");
+      explanation.className = "workbench-explanation";
+      const explanationTitle = document.createElement("summary");
+      explanationTitle.textContent = "How these numbers are calculated";
+      explanation.append(
+        explanationTitle,
         node(
           "p",
-          `${stats.words.toLocaleString()} printable words · ${stats.scenes} scenes · ${stats.characters} speaking characters`,
+          `Speech time uses ${stats.wordsPerMinute} words per minute. It excludes action, pauses, and overlapping dialogue. Word counts for unspaced languages are approximate. Private notes and outlines do not count.`,
         ),
       );
-      content.append(
-        node(
-          "p",
-          `${stats.dialogueWords.toLocaleString()} spoken words · about ${Math.ceil(stats.estimatedSpokenSeconds / 60)} minutes at ${stats.wordsPerMinute} words per minute.`,
-        ),
-      );
-      content.append(
-        node(
-          "p",
-          "Speech time is an estimate. It excludes action, pauses, and overlapping dialogue. Word counts for unspaced languages are approximate. Private notes and outlines do not count.",
-        ),
-      );
-      const target = Number(goal.value);
-      if (target > 0 && target <= 1e6)
-        content.append(
-          node(
-            "p",
-            `${Math.min(100, Math.floor((stats.words / target) * 100))}% of your ${target.toLocaleString()}-word draft target · ${Math.max(0, target - stats.words).toLocaleString()} words remaining.`,
-          ),
-        );
+      content.append(metrics, speech, goalSection, explanation);
     } else if (select.value === "characters") {
+      const characterActions = document.createElement("div");
+      characterActions.className = "workbench-actions";
       if (actions.rename) {
         const renameButton = node("button", "Rename a character") as HTMLButtonElement;
         renameButton.type = "button";
@@ -151,7 +224,7 @@ export function mountWorkbench(
           dialog.close();
           actions.rename?.();
         };
-        content.append(renameButton);
+        characterActions.append(renameButton);
       }
       if (actions.sides) {
         const sidesButton = node("button", "Actor sides PDF") as HTMLButtonElement;
@@ -160,15 +233,16 @@ export function mountWorkbench(
           dialog.close();
           actions.sides?.();
         };
-        content.append(sidesButton);
+        characterActions.append(sidesButton);
       }
+      if (characterActions.childElementCount) content.append(characterActions);
       const found = searchCharacters(data.characters, search.value, 100, resultOffset);
       pageResults(found.total, "characters");
       const excerpts = pending ? dialogueExcerpts(pending.document) : new Map();
       for (const character of found.items) {
         const details = document.createElement("details");
         const title = document.createElement("summary");
-        title.textContent = `${character.name} · ${character.blocks} cues · ${character.words} spoken words`;
+        title.textContent = `${character.name} · ${character.blocks} ${character.blocks === 1 ? "cue" : "cues"} · ${character.words} spoken ${character.words === 1 ? "word" : "words"}`;
         details.append(title);
         const speeches = document.createElement("div");
         speeches.className = "character-speeches";
@@ -259,31 +333,31 @@ export function mountWorkbench(
         content.append(link(`Line ${issue.line}: ${issue.message}`, issue.line));
       if (!found.total)
         content.append(
-          node(
-            "p",
-            "No matching parser warnings. Export may still report layout or unsupported font characters.",
-          ),
+          node("p", "Export checks may also report layout issues or unsupported font characters."),
         );
     }
   }
   goal.addEventListener("change", () => {
     const value = Math.max(0, Math.min(1e6, Math.round(Number(goal.value) || 0)));
-    goal.value = String(value);
+    goal.value = value ? String(value) : "";
     try {
       localStorage.setItem("studio-word-goal", String(value));
     } catch {}
-    render();
+    if (data) updateGoalProgress(data.statistics.words);
   });
   search.oninput = () => {
     resultOffset = 0;
+    body.scrollTop = 0;
     render();
   };
   select.onchange = () => {
     resultOffset = 0;
+    body.scrollTop = 0;
     search.value = "";
     render();
   };
-  dialog.append(heading, close, select, search, goalLabel, summary, content, resultPages);
+  body.append(summary, content, resultPages);
+  dialog.append(header, navigation, body);
   host.append(dialog);
   return {
     update(document: FountainDocument, source: string) {
@@ -303,6 +377,7 @@ export function mountWorkbench(
       select.value = section;
       render();
       dialog.showModal();
+      body.scrollTop = 0;
     },
   };
 }

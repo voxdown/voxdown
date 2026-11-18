@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, countLabel, dialogActions, dialogDisclosure } from "./dialog-layout";
 import { filenameStem } from "./filename";
 import { type ActorSidesProject, type ActorSidesResult, prepareActorSides } from "./sides";
 
@@ -25,7 +26,10 @@ export function mountActorSides(
   close.textContent = "Close";
   const explanation = document.createElement("p");
   explanation.textContent =
-    "Export complete scenes where a character speaks, including other characters and action for context. Pages are repaginated, not locked to the original screenplay. Private notes, outlines and original author/contact fields are excluded.";
+    "Create a PDF of complete scenes for one character. Private notes, outlines and original author/contact fields are excluded.";
+  const details = document.createElement("p");
+  details.textContent =
+    "Other characters and action are included for context. Pages are repaginated, not locked to the original screenplay. This uses a snapshot; close and reopen to include later edits.";
   const snapshotLabel = document.createElement("p");
   const searchLabel = document.createElement("label");
   searchLabel.textContent = "Find a character ";
@@ -68,8 +72,10 @@ export function mountActorSides(
     summary,
     preview,
     status,
-    exportButton,
+    dialogActions(exportButton),
+    dialogDisclosure("About actor sides", details),
   );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let snapshot: ActorSidesSnapshot | undefined;
   let project: ActorSidesProject | undefined;
@@ -155,7 +161,7 @@ export function mountActorSides(
       if (found > 100) continue;
       const option = document.createElement("option");
       option.value = String(index);
-      option.textContent = `${character.name.slice(0, 160)} · ${character.segments} segments`;
+      option.textContent = `${character.name.slice(0, 160)} · ${countLabel(character.segments, "segment")}`;
       select.append(option);
     }
     if ([...select.options].some((option) => option.value === previous)) select.value = previous;
@@ -203,7 +209,7 @@ export function mountActorSides(
       includeTitle.checked = false;
       try {
         snapshot = { ...actions.current() };
-        snapshotLabel.textContent = `Snapshot of ${snapshot.name}. Close and reopen to include later edits. Paper: ${snapshot.paper === "a4" ? "A4" : "US Letter"}.`;
+        snapshotLabel.textContent = `${snapshot.name} · ${snapshot.paper === "a4" ? "A4" : "US Letter"}`;
         project = prepareActorSides(snapshot.source);
         filter();
         if (!project.characters.length)

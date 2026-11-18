@@ -6,6 +6,7 @@ import {
   prepareBreakdown,
   summarizeBreakdown,
 } from "./breakdown";
+import { arrangeDialogHeader, countLabel, dialogActions, dialogDisclosure } from "./dialog-layout";
 import { filenameStem } from "./filename";
 
 let instance = 0;
@@ -30,7 +31,7 @@ export function mountBreakdown(
   dialog.setAttribute("aria-labelledby", title.id);
   const explanation = node(
     "p",
-    "Read-only scene occurrences and speaking roles. Private notes, omitted passages, title/contact fields and outline are excluded. A role appears only when its cue has nonempty dialogue or lyrics; this does not identify silent characters, props, shooting schedules or runtime.",
+    "Explore scenes and speaking roles, then export a CSV. Read-only; private notes, omitted passages, title/contact fields and outlines are excluded.",
   );
   const snapshotLabel = node("p");
   const queryLabel = node("label", "Scene heading or number contains");
@@ -62,22 +63,24 @@ export function mountBreakdown(
   navigation.append(previous, next);
   const notes = node(
     "p",
-    "Counts cover complete matching scenes, including all their roles. Dialogue words include lyrics and unnamed cues (which do not create roles); action words include centered action. Cue names, headings, directions and transitions do not add words. Unicode word counts are approximate for unspaced languages. Dual cues count explicit ^ marks on speaking cues, not overlapping pairs. CSV contains every matching row with full names/headings, even when the display is shortened; formula-like fields receive an apostrophe for spreadsheet safety. It is not an exact-source backup.",
+    "A role appears only when its cue has nonempty dialogue or lyrics. This does not identify silent characters, props, shooting schedules or runtime. Counts cover complete matching scenes, including all their roles. Dialogue words include lyrics and unnamed cues (which do not create roles); action words include centered action. Cue names, headings, directions and transitions do not add words. Unicode word counts are approximate for unspaced languages. Dual cues count explicit ^ marks on speaking cues, not overlapping pairs. CSV contains every matching row with full names/headings, even when the display is shortened; formula-like fields receive an apostrophe for spreadsheet safety. It is not an exact-source backup.",
   );
+  download.classList.add("primary");
   dialog.append(
     title,
     explanation,
     snapshotLabel,
     queryLabel,
     roleLabel,
+    dialogActions(download),
     totals,
     status,
     rows,
     navigation,
-    notes,
-    download,
+    dialogDisclosure("About counts and CSV", notes),
     close,
   );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let report: BreakdownReport | undefined;
   let filtered: readonly BreakdownScene[] = [];
@@ -92,7 +95,7 @@ export function mountBreakdown(
     if (!report) return;
     const summary = summarizeBreakdown(filtered);
     const all = report.summary;
-    totals.textContent = `Filtered: ${summary.scenes} scene occurrences${summary.beforeFirst ? " + before-first-scene content" : ""}, ${summary.roles} speaking roles, ${summary.dialogueWords} dialogue words, ${summary.actionWords} action words, ${summary.speeches} speech blocks, ${summary.dualCues} explicit dual cues. Whole snapshot: ${all.scenes} scene occurrences${all.beforeFirst ? " + before-first-scene content" : ""}, ${all.roles} speaking roles, ${all.dialogueWords} dialogue words, ${all.actionWords} action words.`;
+    totals.textContent = `Filtered: ${countLabel(summary.scenes, "scene occurrence")}${summary.beforeFirst ? " + before-first-scene content" : ""}, ${countLabel(summary.roles, "speaking role")}, ${summary.dialogueWords} dialogue words, ${summary.actionWords} action words, ${countLabel(summary.speeches, "speech block")}, ${countLabel(summary.dualCues, "explicit dual cue")}. Whole snapshot: ${countLabel(all.scenes, "scene occurrence")}${all.beforeFirst ? " + before-first-scene content" : ""}, ${countLabel(all.roles, "speaking role")}, ${all.dialogueWords} dialogue words, ${all.actionWords} action words.`;
     status.textContent = filtered.length
       ? `Showing ${page * 50 + 1}–${Math.min((page + 1) * 50, filtered.length)} of ${filtered.length} matching rows. CSV includes all ${filtered.length}.`
       : "No matching scenes or public content.";
@@ -111,7 +114,7 @@ export function mountBreakdown(
         .slice(0, 10)
         .map(
           (member) =>
-            `${clipped(member.name, 80)} (${member.speeches} speeches, ${member.words} words)`,
+            `${clipped(member.name, 80)} (${countLabel(member.speeches, "speech", "speeches")}, ${countLabel(member.words, "word")})`,
         )
         .join("; ");
       const cast = node(
@@ -122,7 +125,7 @@ export function mountBreakdown(
       );
       const counts = node(
         "p",
-        `${row.dialogueWords} dialogue words · ${row.actionWords} action words · ${row.speeches} speech blocks · ${row.dualCues} explicit dual cues`,
+        `${countLabel(row.dialogueWords, "dialogue word")} · ${countLabel(row.actionWords, "action word")} · ${countLabel(row.speeches, "speech block")} · ${countLabel(row.dualCues, "explicit dual cue")}`,
       );
       item.append(heading, location, cast, counts);
       rows.append(item);

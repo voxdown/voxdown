@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, countLabel, dialogDisclosure } from "./dialog-layout";
 import { type RehearsalCard, type RehearsalProject, prepareRehearsal } from "./rehearsal";
 
 let instance = 0;
@@ -70,7 +71,7 @@ export function mountRehearsal(
   nav.append(previous, reveal, next, restart);
   const help = node(
     "p",
-    "Use Previous/Next or the left/right arrow keys while reading a card. Arrow keys keep their normal behavior in filters. Changing a role, scene or cue hides the speech again. Filters show up to 100 choices; narrow the search for later entries.",
+    "Use Previous/Next or the left/right arrow keys while reading a card. Arrow keys keep their normal behavior in filters. Changing a role, scene or cue hides the speech again. Filters show up to 100 choices; narrow the search for later entries. All scenes includes every cue for the selected role.",
   );
   const status = node("p");
   status.setAttribute("role", "status");
@@ -85,8 +86,17 @@ export function mountRehearsal(
     card.focus();
     card.scrollIntoView({ block: "nearest" });
   };
-  setup.append(setupSummary, description, snapshot, controls, matches, begin, help);
+  setup.append(
+    setupSummary,
+    description,
+    snapshot,
+    controls,
+    matches,
+    begin,
+    dialogDisclosure("Rehearsal controls", help),
+  );
   dialog.append(title, close, setup, progress, card, nav, status);
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let project: RehearsalProject | undefined;
   let cards: readonly RehearsalCard[] = [];
@@ -165,7 +175,10 @@ export function mountRehearsal(
       sceneSelect.append(option);
     }
     // Scene search filters choices, never silently changes the scope of All scenes.
-    matches.textContent = `${project?.roles.filter((entry) => query(entry.name).includes(query(roleSearch.value))).length ?? 0} matching roles; ${found.length} matching scene choices. Lists show at most 100 each. All scenes includes every cue for the selected role.`;
+    const roleCount =
+      project?.roles.filter((entry) => query(entry.name).includes(query(roleSearch.value)))
+        .length ?? 0;
+    matches.textContent = `${countLabel(roleCount, "matching role")} · ${countLabel(found.length, "matching scene")}${roleCount > 100 || found.length > 100 ? ". Lists show up to 100; narrow the search for more." : ""}`;
     sceneSelect.disabled = !roleCards.length;
     selectCards();
   }
@@ -174,7 +187,7 @@ export function mountRehearsal(
     for (const [index, role] of (project?.roles ?? []).entries()) {
       if (!query(role.name).includes(query(roleSearch.value))) continue;
       if (roleSelect.options.length >= 100) break;
-      const option = node("option", `${shorten(role.name)} · ${role.cues} cues`);
+      const option = node("option", `${shorten(role.name)} · ${countLabel(role.cues, "cue")}`);
       option.value = String(index);
       roleSelect.append(option);
     }

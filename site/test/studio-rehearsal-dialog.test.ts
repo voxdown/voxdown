@@ -67,7 +67,7 @@ describe("self-paced rehearsal dialog", () => {
     await page.keyboard.press("ArrowRight");
     await reveal();
     expect(await page.locator(".rehearsal-answer").textContent()).toBe("Second answer.");
-    await page.locator(".rehearsal-setup summary").click();
+    await page.locator(".rehearsal-setup > summary").click();
     expect(await page.getByLabel("Rehearsal role", { exact: true }).isVisible()).toBe(true);
     expect(await page.locator(".rehearsal-answer").textContent()).toBe("Second answer.");
   });

@@ -1,3 +1,4 @@
+import { arrangeDialogHeader } from "./dialog-layout";
 import { MAX_PRACTICE_LENGTH, PRACTICE_LESSONS, assessPractice } from "./learning";
 
 export function mountLearning(
@@ -135,6 +136,7 @@ export function mountLearning(
     }),
   );
   dialog.append(title, privacy, close, exercise, completion);
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   let index = 0;
   let drafts: string[] = [];

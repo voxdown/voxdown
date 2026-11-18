@@ -26,7 +26,8 @@ export function mountPreviewSpace(
   let previousInert = { writing: false, outline: false };
   const update = () => {
     button.hidden = mobile?.matches ?? false;
-    button.textContent = active ? "Return to writing" : "Expand preview";
+    button.textContent = active ? "Return to writing" : "Expand";
+    button.setAttribute("aria-label", active ? "Return to writing" : "Expand preview");
     button.setAttribute("aria-pressed", String(active));
     if (preview.id) button.setAttribute("aria-controls", preview.id);
   };

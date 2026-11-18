@@ -16,7 +16,13 @@
     <h1 class="sr-only">VoxDown Studio screenplay editor</h1>
     <a class="brand" href="../writer/" title="Open VoxDown Writer">VoxDown <span>Studio</span></a>
     <span class="badge">Experimental</span>
-    <span class="private">On your device. No account.</span>
+    <nav class="workspace-menus" aria-label="Studio menus">
+      <button id="file-menu" type="button" aria-expanded="false" aria-controls="file-dropdown">File</button>
+      <button id="view-menu" type="button" aria-expanded="false" aria-controls="view-dropdown">View</button>
+      <button id="tools-menu" type="button" aria-expanded="false" aria-controls="tools-dropdown">Tools</button>
+      <button id="help-menu" type="button" aria-expanded="false" aria-controls="help-dropdown">Help</button>
+    </nav>
+    <span class="private">Saved on this device</span>
     <button id="commands" type="button" title="Commands (Ctrl/⌘ K)">Commands</button>
     <button id="mobile-focus" type="button" aria-pressed="false" aria-controls="editor" aria-label="Focus writing">Focus</button>
     <button id="workbench" type="button">Workbench</button>
@@ -24,10 +30,10 @@
     <button id="help" type="button" aria-label="Fountain guide"><span class="help-long">Fountain guide</span><span class="help-short">Guide</span> <span aria-hidden="true">?</span></button>
   </header>
   <main id="app" aria-label="Screenplay workspace">
+    <div class="documentbar">
     <div class="filebar">
       <label class="filename"><span class="sr-only">File name</span><input id="name" value="Untitled.fountain" maxlength="180" spellcheck="false" aria-label="File name"></label>
       <div class="file-actions">
-        <button id="file-menu" type="button" title="Open, save and recover screenplays">File…</button>
         <button id="new" type="button">New</button>
         <button id="open" type="button">Open…</button>
         <button id="recent" type="button">Recover…</button>
@@ -38,7 +44,7 @@
     </div>
     <div class="toolbar">
       <button id="outline-toggle" type="button" aria-expanded="false" aria-controls="outline">Scenes</button>
-      <label><input id="margins" type="checkbox" checked> Live margins</label>
+
       <label class="sr-only" for="element-action">Change current line element</label>
       <select id="element-action" title="Change the current source line without retyping its words">
         <option value="">Element…</option><option value="scene">Scene heading</option>
@@ -47,16 +53,16 @@
       </select>
       <button id="preview-toggle" type="button" aria-pressed="true">Page preview</button>
       <button id="focus-mode" type="button" aria-pressed="false">Focus</button>
-      <label class="paper">Paper <select id="paper"><option value="letter">US Letter</option><option value="a4">A4</option></select></label>
       <button id="retry-preview" type="button" hidden>Retry preview</button>
       <span id="counts" class="counts">Ready to write</span>
     </div>
+    </div>
     <div id="issues" tabindex="0" aria-label="Screenplay warnings" role="status" aria-live="polite" hidden></div>
     <div id="notice" tabindex="0" aria-label="Studio notification" role="status" aria-live="polite" hidden></div>
-    <div class="workspace">
+    <div id="workspace" class="workspace">
       <aside id="outline" aria-label="Scene outline">
-        <div class="panel-heading"><h2>Scenes</h2><span id="scene-count">0</span></div>
-        <label class="sr-only" for="scene-search">Find scenes and sections</label><input id="scene-search" type="search" placeholder="Find scenes and sections…">
+        <div class="panel-heading"><h2>Scenes <span id="scene-count">0</span></h2><button id="outline-close" type="button" aria-label="Close scenes" title="Close scenes">×</button></div>
+        <label class="sr-only" for="scene-search">Find scenes and sections</label><input id="scene-search" type="search" placeholder="Find a scene…">
         <nav id="scene-list" aria-label="Jump to scene"></nav>
         <p class="outline-hint">Start a scene with <code>INT.</code> or <code>EXT.</code> to find it here.</p>
         <button id="scene-cards" type="button">Scene cards…</button>
@@ -82,6 +88,7 @@
           <button id="caret-page" type="button">Show caret</button><button id="page-source" type="button">Go to source</button>
           <button id="expand-preview" type="button" aria-pressed="false">Expand preview</button>
           <button id="zoom" type="button" aria-pressed="false">Full size</button>
+          <button id="preview-menu" type="button" aria-label="Preview actions" title="Preview actions" aria-expanded="false" aria-controls="preview-dropdown">•••</button>
         </div>
         <div id="page-scroll" role="region" aria-label="Scrollable screenplay preview" tabindex="0"><div id="page" role="document" aria-label="Current screenplay page"></div></div>
         <p class="preview-hint">Notes, outlines, and omitted passages stay in your Fountain file. They do not print.</p>
@@ -92,16 +99,18 @@
   <input id="file" type="file" accept=".fountain,.txt,text/plain" hidden>
   <dialog id="preferences-dialog" aria-labelledby="preferences-title">
     <div class="dialog-heading"><h2 id="preferences-title">Your writing space</h2><button class="close" type="button" aria-label="Close preferences">×</button></div>
-    <p>These settings change your workspace, not your screenplay or its printed pages.</p>
+    <p>Choose your writing preferences and the paper size used for preview and PDF.</p>
+    <label class="preference">Paper size <select id="paper"><option value="letter">US Letter</option><option value="a4">A4</option></select></label>
+    <label class="preference"><input id="margins" type="checkbox" checked> Live screenplay margins</label>
     <label class="preference">Appearance <select id="theme"><option value="system">Use device setting</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <label class="preference">Editor text size <select id="text-size"><option>14</option><option>16</option><option>18</option><option>20</option></select></label>
     <label class="typing-option"><input id="smart-pairs" type="checkbox" checked> Automatically close brackets and parentheses</label>
     <label class="preference"><input id="screenplay-keys" type="checkbox"> Use screenplay Enter and Tab shortcuts</label>
-    <p>Enter after a scene heading or dialogue starts a new paragraph. Tab cycles empty character, scene, action and transition templates; Shift Tab goes back. Existing words stay intact. Use Escape, then Tab to move focus out of the editor.</p>
+    <details class="preference-detail"><summary>How screenplay shortcuts work</summary><p>Enter after a scene heading or dialogue starts a new paragraph. Tab cycles empty character, scene, action and transition templates; Shift Tab goes back. Existing words stay intact. Use Escape, then Tab to move focus out of the editor.</p></details>
     <label class="preference"><input id="typewriter" type="checkbox"> Keep the typing line near the centre</label>
     <label class="preference"><input id="page-guides" type="checkbox"> Show printed page starts beside the text</label>
-    <p>Page numbers follow the current paper size. A + means several pages begin within the same source passage. Page preview shows the exact printed wrapping.</p>
-    <p>Focus hides the outline and preview. On phones it also hides file and page controls; Commands keeps those actions available. Use Exit focus in the phone header, or Focus again on desktop, to return. Bracket pairing can be switched off above.</p>
+    <details class="preference-detail"><summary>About page guides</summary><p>Page numbers follow the current paper size. A + means several pages begin within the same source passage. Page preview shows the exact printed wrapping.</p></details>
+    <details class="preference-detail"><summary>About focus mode</summary><p>Focus hides the outline and preview. On phones it also hides file and page controls; Commands keeps those actions available. Use Exit focus in the phone header, or Focus again on desktop, to return. Bracket pairing can be switched off above.</p></details>
     <h3>Your files</h3>
     <button id="storage-health" type="button">Storage and backups…</button>
     <h3>Work offline</h3>
@@ -111,26 +120,34 @@
   </dialog>
   <dialog id="guide" aria-labelledby="guide-title">
     <div class="dialog-heading"><h2 id="guide-title">Write a screenplay, naturally.</h2><button class="close" type="button" aria-label="Close guide">×</button></div>
-    <p>Fountain is plain text. Leave a blank line between paragraphs. Studio displays the margins; your file keeps the words you type.</p>
-    <button id="practice-fountain" type="button">Try guided practice…</button>
-    <p>The Element menu changes the current line while preserving its words. Ctrl/⌘ Enter starts a separated paragraph. Preferences can enable screenplay Enter/Tab assistance; it starts switched off. Type <code>@</code> or start a scene heading to suggest names and locations already in your screenplay. Ctrl Space requests suggestions; Escape dismisses them.</p>
-    <p>Type <code>[[</code> to get <code>[[|]]</code>, with the caret inside. Typing the closing brackets moves past the generated ones. Backspace removes an empty pair, one layer at a time. Select text and use Note, B, I, or U to wrap it; repeat to remove the marks. Pasted text and ordinary quotation marks are left as typed. Change pairing in Preferences (also available from Commands).</p>
+    <p>Fountain is plain text. Write a scene heading, leave a blank line, then describe the action. Put a character’s name directly above their dialogue.</p>
+    <button id="practice-fountain" class="primary" type="button">Try guided practice…</button>
     <pre>INT. LIGHTHOUSE - NIGHT
 
 A light moves across the water.
 
 MARA
 (quietly)
-Someone is still out there.
-
-JONAH
-Then we leave the light on.</pre>
+Someone is still out there.</pre>
+    <details class="guide-section"><summary>Common Fountain marks</summary>
     <dl><dt>Scene</dt><dd><code>INT. ROOM - DAY</code> or <code>.A FORCED SCENE</code></dd><dt>Dialogue</dt><dd>A NAME on its own line, followed immediately by speech.</dd><dt>Parenthetical</dt><dd><code>(under her breath)</code> between the name and speech.</dd><dt>Simultaneous speech</dt><dd>Put <code>^</code> after the second character’s name.</dd><dt>Emphasis</dt><dd><code>*italic*</code>, <code>**bold**</code>, <code>_underline_</code>.</dd><dt>Private note</dt><dd><code>[[A note that will not print.]]</code></dd><dt>Omitted passage</dt><dd><code>/* Keep this out of the PDF. */</code></dd><dt>Outline</dt><dd><code># Act one</code> and <code>= A synopsis</code> do not print.</dd><dt>New page</dt><dd><code>===</code> on a line of its own.</dd><dt>Keyboard</dt><dd>Ctrl/⌘ S saves to a chosen file where supported, or downloads Fountain; use Commands → Save Fountain as… to choose another file; Ctrl/⌘ F searches; Ctrl/⌘ Z undoes. Escape closes dialogs.</dd></dl>
-    <p>This first Studio is for Fountain. Use <a href="../writer/">VoxDown Writer</a> for <code>.vxd</code> files. PDF uses bundled Courier Prime; unsupported characters are reported before export.</p>
-    <p>Commands includes Final Draft XML import and export, with a compatibility report before you continue. Keep your original file: interchange does not preserve every production or layout feature.</p>
-    <p>Open a <code>.fountain</code> or <code>.txt</code> file with Open, or drop one onto the writing area. Use Commands for file comparison, scene numbering, cast breakdowns, rehearsal, and a separate VoxDown adaptation.</p>
-    <p>Your draft stays in this browser. Download a file to keep an independent copy. Clearing site data removes browser recovery.</p>
     <a href="https://fountain.io/syntax/" target="_blank" rel="noopener noreferrer">Full Fountain syntax ↗</a>
+    </details>
+    <details class="guide-section"><summary>Writing shortcuts and assistance</summary>
+      <p>The Element menu changes the current line while preserving its words. Ctrl/⌘ Enter starts a new paragraph.</p>
+      <p>Type <code>@</code> or start a scene heading to suggest names and locations from your screenplay. Ctrl Space requests suggestions; Escape dismisses them.</p>
+      <p>Type <code>[[</code> to get <code>[[|]]</code>, with the caret inside. Type closing brackets to move past them. Select text and use Note, B, I or U to wrap it; repeat to remove the marks.</p>
+      <p>View → Preferences controls bracket pairing and optional screenplay Enter/Tab shortcuts. Escape, then Tab moves focus out of the editor.</p>
+      <p>Ctrl/⌘ F searches, Ctrl/⌘ Z undoes, and Ctrl/⌘ K opens Commands. Escape closes dialogs.</p>
+    </details>
+    <details class="guide-section"><summary>Saving, privacy and other formats</summary>
+      <p>Open a <code>.fountain</code> or <code>.txt</code> file from File, or drop one onto the writing area. Download Fountain keeps an independent copy outside this browser.</p>
+      <p>Your draft stays in this browser. Clearing site data removes browser recovery. File → Backup and restore keeps a portable backup.</p>
+      <p>Ctrl/⌘ S saves to a chosen file where supported, or downloads Fountain. File → Save Fountain as… chooses another file.</p>
+      <p>Final Draft XML import and export include a compatibility report. Keep your original file: interchange does not preserve every production or layout feature.</p>
+      <p>PDF uses bundled Courier Prime; unsupported characters are reported before export. Private notes, outlines and omitted passages stay out of the PDF.</p>
+      <p>Use <a href="../writer/">VoxDown Writer</a> for <code>.vxd</code> stories. File → Adapt to VoxDown creates a separate adaptation.</p>
+    </details>
   </dialog>
   <noscript>Studio needs JavaScript to edit locally. No screenplay is sent to a server.</noscript>
   <script type="module" src="../src/studio/main.ts"></script>

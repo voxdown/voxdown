@@ -1,3 +1,4 @@
+import { arrangeDialogHeader, dialogActions, dialogSection } from "./dialog-layout";
 import {
   MAX_PROJECT_BYTES,
   type StudioProject,
@@ -171,7 +172,17 @@ export function mountBackup(
       restore.disabled = false;
     }
   };
-  dialog.append(title, close, explanation, label, save, file, status, choices, restore);
+  save.classList.add("primary");
+  restore.classList.add("primary");
+  dialog.append(
+    title,
+    close,
+    explanation,
+    dialogSection("Save a backup", label, dialogActions(save)),
+    dialogSection("Open a backup", file, choices, dialogActions(restore)),
+    status,
+  );
+  arrangeDialogHeader(dialog, title, close);
   host.append(dialog);
   return {
     open() {

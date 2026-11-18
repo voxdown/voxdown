@@ -6,6 +6,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
+import { clickWorkspaceAction } from "./studio-ui.mjs";
 
 const budgets = {
   minimumCycles: 25,
@@ -110,7 +111,7 @@ const libraryReady = () =>
     () => document.querySelector(".library-list").getAttribute("aria-busy") === "false",
   );
 const snapshotRestore = async () => {
-  await page.locator("#recent").click();
+  await clickWorkspaceAction(page, "recent");
   await libraryReady();
   await page.locator(".studio-library fieldset select").selectOption("snapshots");
   await libraryReady();
@@ -177,7 +178,7 @@ async function cycle(index) {
   for (let undo = 0; undo < 3; undo++) await page.keyboard.press("Control+z");
   await ready();
   assert.equal(await save(), source, "Undo must exactly restore this document");
-  await page.locator("#new").click();
+  await clickWorkspaceAction(page, "new");
   await ready();
   await content.focus();
   await page.keyboard.press("Control+z");
@@ -185,7 +186,7 @@ async function cycle(index) {
   await snapshotRestore();
   // Exercise DOM creation/teardown and syntax cache lookups without retaining
   // historical source strings in test instrumentation inside the page.
-  await page.locator("#workbench").click();
+  await clickWorkspaceAction(page, "workbench");
   await page.getByLabel("Workbench view", { exact: true }).selectOption("notes");
   assert.equal(await page.locator(".workbench-content > article").count(), 100);
   await page.keyboard.press("Escape");
@@ -273,7 +274,7 @@ try {
   await page.goto(url);
   await ready();
   await open(baselineSource, "Soak-baseline.fountain");
-  await page.locator("#recent").click();
+  await clickWorkspaceAction(page, "recent");
   await libraryReady();
   await page.getByLabel("Snapshot name").fill(snapshotName);
   await page.getByRole("button", { name: "Save snapshot of current draft", exact: true }).click();

@@ -111,7 +111,7 @@ describe("explicit VoxDown adaptation dialog", () => {
     await ready();
     expect(await page.evaluate(() => window.adaptationDownloads)).toEqual([]);
     expect(
-      await page.getByRole("list", { name: "VoxDown adaptation report" }).textContent(),
+      await page.locator('ul[aria-label="VoxDown adaptation report"]').textContent(),
     ).toContain("not a screenplay backup");
     await page.evaluate(() => {
       window.adaptationCurrent.source = "@OTHER\nNew text.";
@@ -143,8 +143,8 @@ describe("explicit VoxDown adaptation dialog", () => {
       "{hidden}",
     );
     expect(
-      await page.getByRole("list", { name: "VoxDown adaptation report" }).textContent(),
-    ).toContain("are read by the narrator");
+      await page.locator('ul[aria-label="VoxDown adaptation report"]').textContent(),
+    ).toContain("is read by the narrator");
   });
   it("requires explicit dual overlap acknowledgment and resets it after option changes", async () => {
     await page.evaluate(() => {
@@ -155,8 +155,8 @@ describe("explicit VoxDown adaptation dialog", () => {
     const button = page.getByRole("button", { name: "Download adapted .vxd", exact: true });
     expect(await button.isDisabled()).toBe(true);
     await page.evaluate(() =>
-      document
-        .querySelector<HTMLButtonElement>(".adaptation-dialog button")
+      [...document.querySelectorAll<HTMLButtonElement>(".adaptation-dialog button")]
+        .find((button) => button.textContent === "Download adapted .vxd")
         ?.dispatchEvent(new MouseEvent("click")),
     );
     expect(await page.evaluate(() => window.adaptationDownloads)).toEqual([]);
@@ -173,6 +173,7 @@ describe("explicit VoxDown adaptation dialog", () => {
     await page.waitForFunction(() =>
       document.querySelector('[role="status"]')?.textContent?.startsWith("Preparing"),
     );
+    await expect.poll(() => Boolean(releaseModule)).toBe(true);
     await page.keyboard.press("Escape");
     await page.evaluate(() => {
       window.adaptationCurrent.source = "@NEW\nCurrent.";
@@ -202,8 +203,8 @@ describe("explicit VoxDown adaptation dialog", () => {
       true,
     );
     await page.evaluate(() =>
-      document
-        .querySelector<HTMLButtonElement>(".adaptation-dialog button")
+      [...document.querySelectorAll<HTMLButtonElement>(".adaptation-dialog button")]
+        .find((button) => button.textContent === "Download adapted .vxd")
         ?.dispatchEvent(new MouseEvent("click")),
     );
     expect(await page.evaluate(() => window.adaptationDownloads)).toEqual([]);
@@ -296,6 +297,7 @@ describe("explicit VoxDown adaptation dialog", () => {
     expect(
       await page.getByRole("button", { name: "Download adapted .vxd", exact: true }).isDisabled(),
     ).toBe(true);
+    await expect.poll(() => Boolean(releaseModule)).toBe(true);
     delayModule = false;
     await page.getByLabel("Read scene headings aloud", { exact: false }).check();
     releaseModule?.();
@@ -321,5 +323,40 @@ describe("explicit VoxDown adaptation dialog", () => {
     });
     await download();
     expect(await page.evaluate(() => window.adaptationDownloads)).toHaveLength(1);
+  });
+  it("keeps the validated download above technical detail on short phones", async () => {
+    for (const name of ["studio.css", "dialog-layout.css"]) {
+      await page.addStyleTag({
+        content: readFileSync(new URL(`../src/studio/${name}`, import.meta.url), "utf8"),
+      });
+    }
+    for (const height of [568, 700]) {
+      await page.setViewportSize({ width: 320, height });
+      await open();
+      await ready();
+      const geometry = await page.locator("dialog[open]").evaluate((dialog) => {
+        const bounds = dialog.getBoundingClientRect();
+        const button = [...dialog.querySelectorAll("button")]
+          .find((e) => e.textContent === "Download adapted .vxd")
+          ?.getBoundingClientRect();
+        return {
+          within: !!button && button.top >= bounds.top && button.bottom <= bounds.bottom,
+          overflow: dialog.scrollWidth - dialog.clientWidth,
+        };
+      });
+      expect(geometry).toEqual({ within: true, overflow: 0 });
+      expect(await page.locator("dialog[open]").innerText()).not.toContain("Cast1");
+      expect(await page.locator("dialog[open]").innerText()).toContain("Private notes");
+      expect(await page.locator("dialog[open]").innerText()).toContain(
+        "Formatting and timing change",
+      );
+      await page.getByText("Adaptation details and cast", { exact: true }).click();
+      expect(await page.getByRole("list", { name: "VoxDown adaptation report" }).isVisible()).toBe(
+        true,
+      );
+      expect(await page.locator("dialog[open]").textContent()).not.toContain("1 speaking roles");
+      expect(await page.locator("dialog[open]").textContent()).not.toContain("1 scene headings");
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+    }
   });
 });

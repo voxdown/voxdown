@@ -8,6 +8,7 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
+import { clickWorkspaceAction } from "./studio-ui.mjs";
 
 const axePath =
   process.env.AXE_PATH ?? createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -68,7 +69,8 @@ async function audit(name) {
   console.log(`Studio accessibility: ${name}: ${violations.length} axe violations`);
 }
 async function dialog(button) {
-  await page.locator(`#${button}`).click();
+  if (button === "commands") await page.locator("#commands").click();
+  else await clickWorkspaceAction(page, button);
   const active = page.locator("dialog[open]");
   await active.waitFor();
   await audit(`dialog ${button}`);
@@ -82,8 +84,12 @@ async function dialog(button) {
     );
   }
   await page.keyboard.press("Escape");
+  const opener =
+    { preferences: "view-menu", help: "help-menu", workbench: "tools-menu", recent: "file-menu" }[
+      button
+    ] ?? button;
   record(
-    await page.locator(`#${button}`).evaluate((node) => document.activeElement === node),
+    await page.locator(`#${opener}`).evaluate((node) => document.activeElement === node),
     `Dialog ${button}: Escape did not restore opener focus`,
   );
 }
@@ -171,11 +177,11 @@ try {
   await audit("read-only text reference");
   await page.getByRole("tab", { name: "Page preview", exact: true }).click();
   await audit("populated screenplay, light appearance");
-  await page.locator("#preferences").click();
+  await clickWorkspaceAction(page, "preferences");
   await page.locator("#theme").selectOption("dark");
   await page.keyboard.press("Escape");
   await audit("populated screenplay, dark appearance");
-  await page.locator("#preferences").click();
+  await clickWorkspaceAction(page, "preferences");
   await page.locator("#theme").selectOption("light");
   await page.keyboard.press("Escape");
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -214,17 +220,14 @@ try {
     smallTargets.length === 0,
     `Mobile controls below 44px target: ${smallTargets.join(", ")}`,
   );
-  const checkboxTarget = await page
-    .locator("#margins")
-    .evaluate((node) => node.closest("label").getBoundingClientRect().height);
-  record(
-    !(await page.locator("#margins").isVisible()) || checkboxTarget >= 44,
-    "Live margins checkbox label is below the 44px touch target",
-  );
   await page.locator("#commands").click();
   await page.getByRole("searchbox", { name: "Find a command" }).fill("Preferences");
   await page.keyboard.press("Enter");
   await page.locator("#preferences-dialog[open]").waitFor();
+  const checkboxTarget = await page
+    .locator("#margins")
+    .evaluate((node) => node.closest("label").getBoundingClientRect().height);
+  record(checkboxTarget >= 44, "Live margins checkbox label is below the 44px touch target");
   const pairingTarget = await page
     .locator("#smart-pairs")
     .evaluate((node) => node.closest("label").getBoundingClientRect().height);

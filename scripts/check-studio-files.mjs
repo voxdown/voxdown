@@ -4,6 +4,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
+import { clickWorkspaceAction } from "./studio-ui.mjs";
 
 const dist = resolve("site/dist");
 const server = createServer((request, response) => {
@@ -39,7 +40,7 @@ const open = async (page, source, name = "Source.fountain") => {
 const text = (page) =>
   page.locator(".cm-line").evaluateAll((nodes) => nodes.map((node) => node.textContent).join("\n"));
 const save = async (page) => {
-  await page.locator("#save-file").click();
+  await clickWorkspaceAction(page, "save-file");
   await page.waitForFunction(() => !document.getElementById("save-file").disabled);
 };
 const makeContext = async ({ blockedRecovery = false, supported = true } = {}) => {
@@ -135,7 +136,7 @@ try {
   await page.evaluate(() => {
     studioFileTest.delayClose = true;
   });
-  await page.locator("#save-file").click();
+  await clickWorkspaceAction(page, "save-file");
   await page.waitForFunction(() => studioFileTest.closes === 2);
   await page.locator(".cm-content").focus();
   await page.keyboard.type(" Newer edit.");
@@ -172,7 +173,7 @@ try {
     studioFileTest.fail = null;
     studioFileTest.delayClose = true;
   });
-  await page.locator("#save-file").click();
+  await clickWorkspaceAction(page, "save-file");
   await page.waitForFunction(() => studioFileTest.closes === 3);
   await open(page, "INT. NEW - DAY\n\nReplacement.", "New.fountain");
   await page.evaluate(() => studioFileTest.release());
@@ -205,7 +206,7 @@ try {
     confirmations++;
     await dialog.dismiss();
   });
-  await guarded.locator("#new").click();
+  await clickWorkspaceAction(guarded, "new");
   await guarded.waitForFunction(() => !document.getElementById("app").inert);
   assert.equal(confirmations, 1, "Replacing an unprotected draft requires confirmation");
   assert.equal(await text(guarded), "A");
@@ -213,7 +214,7 @@ try {
   const download = guarded.waitForEvent("download");
   await guarded.locator("#download").click();
   assert.equal(readFileSync(await (await download).path(), "utf8"), "A");
-  await guarded.locator("#new").click();
+  await clickWorkspaceAction(guarded, "new");
   await guarded.waitForFunction(
     () => document.getElementById("name").value === "Untitled.fountain",
   );

@@ -24,7 +24,10 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
     ...present.filter((group) => !categoryOrder.includes(group)),
   ];
   const dialog = document.createElement("dialog");
+  dialog.className = "studio-command-palette";
   dialog.setAttribute("aria-labelledby", "commands-title");
+  const header = document.createElement("header");
+  header.className = "palette-header";
   const title = document.createElement("h2");
   title.id = "commands-title";
   title.textContent = "Commands";
@@ -32,12 +35,15 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
   close.type = "button";
   close.textContent = "Close";
   close.onclick = () => dialog.close();
+  header.append(title, close);
+  const controls = document.createElement("div");
+  controls.className = "palette-controls";
   const search = document.createElement("input");
   search.type = "search";
   search.setAttribute("aria-label", "Find a command");
   search.placeholder = "Find a command…";
   const categoryLabel = document.createElement("label");
-  categoryLabel.textContent = "Show commands ";
+  categoryLabel.textContent = "Show commands";
   const category = document.createElement("select");
   for (const value of ["", ...groups]) {
     const option = document.createElement("option");
@@ -48,11 +54,18 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
   categoryLabel.append(category);
   const count = document.createElement("p");
   count.setAttribute("role", "status");
+  count.className = "palette-count";
+  const filterRow = document.createElement("div");
+  filterRow.className = "palette-filter-row";
+  filterRow.append(categoryLabel, count);
+  controls.append(search, filterRow);
   const list = document.createElement("div");
   list.className = "command-list";
   const help = document.createElement("p");
-  help.textContent =
-    "Type to filter. Use ↓ to reach results; Enter runs the first available result. Escape closes. Ctrl/⌘ K opens Commands.";
+  help.className = "palette-help";
+  help.textContent = "↑ ↓ Navigate · Enter Run · Esc Close";
+  help.id = "palette-keyboard-help";
+  search.setAttribute("aria-describedby", help.id);
   const ordered = groups.flatMap((group) =>
     commands.filter((command) => (command.category ?? "Other") === group),
   );
@@ -91,7 +104,8 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
         return firstA && firstB ? rank(firstA) - rank(firstB) : 0;
       });
     const results = resultGroups.flatMap((group) => group.commands);
-    count.textContent = `${filtered.length} commands${filtered.some((command) => command.enabled?.() === false) ? "; unavailable tools are disabled" : ""}.`;
+    const unavailable = filtered.filter((command) => command.enabled?.() === false).length;
+    count.textContent = `${filtered.length} ${filtered.length === 1 ? "command" : "commands"}${unavailable ? ` · ${unavailable} unavailable` : ""}.`;
     let previousGroup = "";
     for (const command of results) {
       const group = command.category ?? "Other";
@@ -103,7 +117,15 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
       }
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = command.label + (command.shortcut ? ` · ${command.shortcut}` : "");
+      const label = document.createElement("span");
+      label.textContent = command.label;
+      button.append(label);
+      if (command.shortcut) {
+        const shortcut = document.createElement("kbd");
+        shortcut.textContent = command.shortcut;
+        button.append(shortcut);
+        button.setAttribute("aria-label", `${command.label} · ${command.shortcut}`);
+      }
       button.disabled = command.enabled?.() === false;
       button.onclick = () => {
         if (command.enabled?.() === false) {
@@ -122,8 +144,14 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
       list.append(empty);
     }
   }
-  search.oninput = render;
-  category.onchange = render;
+  search.oninput = () => {
+    render();
+    list.scrollTop = 0;
+  };
+  category.onchange = () => {
+    render();
+    list.scrollTop = 0;
+  };
   search.onkeydown = (event) => {
     if (event.isComposing) return;
     if (event.key === "Escape") {
@@ -150,7 +178,7 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
     if (next < 0) search.focus();
     else buttons[Math.min(next, buttons.length - 1)]?.focus();
   };
-  dialog.append(title, close, search, categoryLabel, count, help, list);
+  dialog.append(header, controls, list, help);
   host.append(dialog);
   return {
     open(initialCategory?: string) {
@@ -160,6 +188,7 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
       render();
       dialog.showModal();
       search.focus();
+      list.scrollTop = 0;
     },
   };
 }

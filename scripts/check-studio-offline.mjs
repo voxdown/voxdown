@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
 import { lines, parse } from "../packages/core/dist/index.js";
+import { clickWorkspaceAction } from "./studio-ui.mjs";
 
 const { PDFDocument } = createRequire(resolve("site/package.json"))("pdf-lib");
 const dist = resolve("site/dist");
@@ -121,7 +122,7 @@ const state = (page, expected) =>
     });
 const preferences = async (page) => {
   if (!(await page.locator("#preferences-dialog").isVisible()))
-    await page.locator("#preferences").click();
+    await clickWorkspaceAction(page, "preferences");
 };
 const offlineStatus = (page) =>
   page.evaluate(async () => {

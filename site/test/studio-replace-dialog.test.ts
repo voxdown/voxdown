@@ -31,7 +31,9 @@ const replace = url(
     .replace('"./source"', JSON.stringify(source)),
 );
 const dialog = url(
-  compile("../src/studio/replace-dialog.ts").replace('"./scoped-replace"', JSON.stringify(replace)),
+  compile("../src/studio/replace-dialog.ts")
+    .replace('"./scoped-replace"', JSON.stringify(replace))
+    .replace('"./dialog-layout"', JSON.stringify(url(compile("../src/studio/dialog-layout.ts")))),
 );
 const original =
   "INT. ROOM - DAY\n\n!light [[private light]]\n\n@MARA\nLight light.\n\nEXT. ROAD - DAY\n\n!light";

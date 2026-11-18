@@ -14,6 +14,8 @@ export interface ScreenplayLayout {
   height: number;
   pages: { number: number | null; lines: LayoutLine[] }[];
   warnings: string[];
+  /** Malformed source remains visible in preview, but must never be exported silently. */
+  exportBlocked: boolean;
 }
 export const SCREENPLAY_FONT_SIZE = 12;
 export const SCREENPLAY_LEADING = 12;
@@ -41,7 +43,13 @@ export function layoutScreenplay(
     if (!warnings.includes(message)) warnings.push(message);
   };
   const pages: ScreenplayLayout["pages"] = [];
-  const layout: ScreenplayLayout = { width, height, pages, warnings };
+  const layout: ScreenplayLayout = {
+    width,
+    height,
+    pages,
+    warnings,
+    exportBlocked: document.warnings.length > 0,
+  };
 
   function wrapped(
     text: string,

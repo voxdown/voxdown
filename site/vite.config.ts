@@ -20,6 +20,18 @@ function markdownPages(): Plugin {
 }
 
 /** Match static hosting's directory redirect before Vite's index.html fallback. */
+function studioSecurity(): Plugin {
+  return {
+    name: "voxdown-studio-security",
+    apply: "build",
+    transformIndexHtml(html) {
+      return html.replace(
+        "<!--studio-csp-->",
+        `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+      );
+    },
+  };
+}
 function studioDirectory(): Plugin {
   return {
     name: "voxdown-studio-directory",
@@ -53,7 +65,7 @@ function buildOf(): { commit: string; date: string } {
 export default defineConfig({
   base: "./",
   define: { __WRITER_BUILD__: JSON.stringify(buildOf()) },
-  plugins: [studioDirectory(), markdownPages()],
+  plugins: [studioDirectory(), studioSecurity(), markdownPages()],
   resolve: { alias: workspaceAliases },
   server: { fs: { allow: [".."] } },
   // The Writer draws a long story's script and book in a worker, which imports the packages.

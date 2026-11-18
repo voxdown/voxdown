@@ -48,6 +48,10 @@ export async function screenplayPdf(
   layout: ScreenplayLayout,
   title = "Screenplay",
 ): Promise<Uint8Array> {
+  if (layout.exportBlocked)
+    throw new Error(
+      "Fix the unclosed notes or boneyards before exporting PDF. Their text remains visible in the preview so you can repair the source.",
+    );
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   pdf.setTitle(title);

@@ -1,6 +1,13 @@
+import { autocompletion, startCompletion } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
-import { EditorState, type Extension, StateEffect, StateField } from "@codemirror/state";
+import {
+  Compartment,
+  EditorState,
+  type Extension,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -9,24 +16,44 @@ import {
   keymap,
   placeholder,
 } from "@codemirror/view";
+import { mountBackup } from "./backup";
 import type { FountainDocument } from "./fountain";
 import type { ScreenplayLayout } from "./layout";
+import { mountLibrary } from "./library";
+import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } from "./navigation";
+import { mountPalette } from "./palette";
+import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
+import { ScreenplayScheduler, type WorkerResult, isSupersededRequest } from "./scheduler";
 import { MAX_LINES, MAX_SOURCE, fountainName, readSource, writeSource } from "./source";
-import { type StudioDraft, keepDraft, recentDrafts } from "./storage";
+import { type StudioDraft, getDraft, keepDraft, listDrafts } from "./storage";
+import { rememberParsedSource } from "./syntax";
+import { type WritingMark, smartPairs, toggleWritingMark } from "./typing";
+import { mountWorkbench } from "./workbench";
+import { insertScreenplayParagraph, screenplayCompletions, setScreenplayLine } from "./writing";
 import "./studio.css";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const app = $("app");
+function setWorkspaceLocked(locked: boolean): void {
+  app.inert = locked;
+  const header = document.querySelector<HTMLElement>(".app-header");
+  if (header) header.inert = locked;
+}
 const name = $<HTMLInputElement>("name");
 const margins = $<HTMLInputElement>("margins");
 const pdfButton = $<HTMLButtonElement>("pdf");
 const paper = $<HTMLSelectElement>("paper");
 const preview = $("preview");
 const page = $("page");
-let worker: Worker | undefined;
+const pairs = $<HTMLInputElement>("smart-pairs");
+const pairConfiguration = new Compartment();
 try {
-  worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+  pairs.checked = localStorage.getItem("studio-smart-pairs") !== "off";
 } catch {}
+const preferences = readPreferences();
+const scheduler = new ScreenplayScheduler(
+  () => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
+);
 const marks = StateEffect.define<DecorationSet>();
 const markField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
@@ -38,12 +65,7 @@ const markField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
-type Result = {
-  id: number;
-  document?: FountainDocument;
-  layout?: ScreenplayLayout;
-  error?: string;
-};
+type Result = WorkerResult;
 let source = readSource("");
 let draftId = crypto.randomUUID();
 let revision = 0;
@@ -51,33 +73,32 @@ let keptRevision = -1;
 let lastDownload = "";
 let hasWork = false;
 let latest: Result | undefined;
-let requestId = 0;
-let currentRequest = 0;
+let parsedDocument: FountainDocument | undefined;
+let outlineItems: ReturnType<typeof outlineOf> = [];
+let activeOutline: HTMLButtonElement | undefined;
+const outlineButtons = new Map<number, HTMLButtonElement>();
 let parseGeneration = 0;
 let previewPage = 0;
 let saving: ReturnType<typeof setTimeout> | undefined;
 let parsing: ReturnType<typeof setTimeout> | undefined;
 let recovering = true;
 let exporting = false;
-let workerFailed = !worker;
 let replacing = false;
-const pending = new Map<
-  number,
-  {
-    resolve: (result: Result) => void;
-    reject: (error: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-  }
->();
+let fileGeneration = 0;
 const editorExtensions: Extension = [
   history(),
   search(),
+  autocompletion({
+    override: [screenplayCompletions(() => parsedDocument)],
+    maxRenderedOptions: 10,
+  }),
   EditorView.lineWrapping,
   highlightActiveLine(),
   markField,
   placeholder("INT. SOMEWHERE - DAY\n\nStart a scene, or open a Fountain screenplay."),
   EditorView.contentAttributes.of({
     "aria-label": "Fountain screenplay",
+    tabindex: "0",
     spellcheck: "true",
     autocapitalize: "off",
     autocorrect: "off",
@@ -92,6 +113,14 @@ const editorExtensions: Extension = [
     return tr;
   }),
   keymap.of([
+    { key: "Alt-PageUp", run: () => moveScene(-1) },
+    { key: "Alt-PageDown", run: () => moveScene(1) },
+    { key: "Mod-Enter", run: insertScreenplayParagraph },
+    { key: "Ctrl-Space", run: startCompletion },
+    { key: "Mod-b", run: () => format("bold") },
+    { key: "Mod-i", run: () => format("italic") },
+    { key: "Mod-u", run: () => format("underline") },
+    { key: "Mod-Shift-m", run: () => format("note") },
     {
       key: "Mod-s",
       run: () => {
@@ -117,12 +146,235 @@ const editorExtensions: Extension = [
       const line = update.state.doc.lineAt(update.state.selection.main.head).number;
       $("position").textContent = `Line ${line}`;
       updateCurrentScene(line);
+      if (preferences.typewriter && update.docChanged && !view.compositionStarted) {
+        requestAnimationFrame(() => {
+          if (preferences.typewriter)
+            view.dispatch({
+              effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: "center" }),
+            });
+        });
+      }
     }
   }),
 ];
 const view = new EditorView({
   parent: $("editor"),
-  state: EditorState.create({ extensions: editorExtensions }),
+  state: editingState(),
+});
+
+document.querySelector<HTMLAnchorElement>(".skip")?.addEventListener("click", (event) => {
+  event.preventDefault();
+  view.focus();
+});
+const workbench = mountWorkbench(document.body, jumpToLine);
+$("workbench").addEventListener("click", () => workbench.open());
+const backup = mountBackup(document.body, {
+  current: () => ({ name: title(), source: text(), draftId }),
+  replace: async (value, fileName) => {
+    if (!(await mayReplace())) return false;
+    showSource(value, fileName);
+    return true;
+  },
+  download,
+  notice,
+});
+const palette = mountPalette(document.body, [
+  {
+    label: "Toggle live margins",
+    run: () => {
+      margins.checked = !margins.checked;
+      margins.dispatchEvent(new Event("change"));
+    },
+  },
+  ...(
+    [
+      ["Use A4 paper", "a4"],
+      ["Use US Letter paper", "letter"],
+    ] as const
+  ).map(([label, value]) => ({
+    label,
+    run: () => {
+      paper.value = value;
+      paper.dispatchEvent(new Event("change"));
+    },
+  })),
+  { label: "Portable backup and restore", run: () => backup.open() },
+  ...[
+    ["New screenplay", "new"],
+    ["Open Fountain file", "open"],
+    ["Download Fountain", "download"],
+    ["Export PDF", "pdf"],
+    ["Recovery and snapshots", "recent"],
+    ["Focus writing", "focus-mode"],
+    ["Preferences", "preferences"],
+    ["Fountain guide", "help"],
+    ["Show caret on page", "caret-page"],
+    ["Go to preview source", "page-source"],
+  ].map(([label, id]) => ({
+    label: label ?? "",
+    run: () => $(id ?? "").click(),
+    enabled: () => !$<HTMLButtonElement>(id ?? "").disabled,
+  })),
+  ...[
+    ["Writing statistics", "statistics"],
+    ["Character dialogue", "characters"],
+    ["Private notes", "notes"],
+    ["Source diagnostics", "diagnostics"],
+  ].map(([label, section]) => ({ label: label ?? "", run: () => workbench.open(section) })),
+  {
+    label: "Previous scene",
+    shortcut: "Alt PageUp",
+    run: () => {
+      moveScene(-1);
+    },
+  },
+  {
+    label: "Next scene",
+    shortcut: "Alt PageDown",
+    run: () => {
+      moveScene(1);
+    },
+  },
+]);
+$("commands").addEventListener("click", () => palette.open());
+document.addEventListener("keydown", (event) => {
+  if (recovering || replacing) return;
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    event.key.toLowerCase() === "k" &&
+    !event.isComposing &&
+    !document.querySelector("dialog[open]")
+  ) {
+    event.preventDefault();
+    palette.open();
+  }
+});
+
+function editingState(doc = ""): EditorState {
+  return EditorState.create({
+    doc,
+    extensions: [
+      pairConfiguration.of(
+        pairs.checked
+          ? smartPairs(() =>
+              notice(
+                "Bracket wrapping cannot cross a private comment. Select ordinary text or turn pairing off in Preferences.",
+              ),
+            )
+          : [],
+      ),
+      editorExtensions,
+    ],
+  });
+}
+
+function applyPreferences(): void {
+  document.documentElement.dataset.theme = preferences.theme;
+  if (preferences.focus) app.classList.remove("mobile-preview", "outline-open");
+  document.documentElement.style.setProperty("--editor-size", `${preferences.textSize}px`);
+  app.classList.toggle("focus-writing", preferences.focus);
+  $("focus-mode").setAttribute("aria-pressed", String(preferences.focus));
+  $<HTMLSelectElement>("theme").value = preferences.theme;
+  $<HTMLSelectElement>("text-size").value = String(preferences.textSize);
+  $<HTMLInputElement>("typewriter").checked = preferences.typewriter;
+  updatePreviewToggle();
+  view.requestMeasure();
+}
+function keepPreferences(): void {
+  applyPreferences();
+  if (!savePreferences(preferences))
+    notice("Preferences apply for this session; browser storage is unavailable.");
+}
+$("focus-mode").addEventListener("click", () => {
+  preferences.focus = !preferences.focus;
+  keepPreferences();
+});
+$("preferences").addEventListener("click", () =>
+  $<HTMLDialogElement>("preferences-dialog").showModal(),
+);
+$("theme").addEventListener("change", () => {
+  preferences.theme = $<HTMLSelectElement>("theme").value as StudioPreferences["theme"];
+  keepPreferences();
+});
+$("text-size").addEventListener("change", () => {
+  preferences.textSize = Number(
+    $<HTMLSelectElement>("text-size").value,
+  ) as StudioPreferences["textSize"];
+  keepPreferences();
+});
+$("typewriter").addEventListener("change", () => {
+  preferences.typewriter = $<HTMLInputElement>("typewriter").checked;
+  keepPreferences();
+});
+applyPreferences();
+
+function format(mark: WritingMark): boolean {
+  if (view.compositionStarted) return false;
+  if (
+    mark !== "note" &&
+    view.state.selection.ranges.some((range) =>
+      view.state.sliceDoc(range.from, range.to).includes("\n"),
+    )
+  ) {
+    notice(
+      "Fountain emphasis belongs within one source line. Select the words on one line to format them.",
+    );
+    view.focus();
+    return true;
+  }
+  if (
+    mark === "note" &&
+    view.state.selection.ranges.some((range) =>
+      /\n[ \t]?\n/.test(view.state.sliceDoc(range.from, range.to)),
+    )
+  ) {
+    notice(
+      "A note cannot cross an empty paragraph. Select one paragraph, or use /* … */ to omit several.",
+    );
+    view.focus();
+    return true;
+  }
+  const handled = toggleWritingMark(mark)(view);
+  if (!handled && mark !== "note")
+    notice(
+      "Select a single text span outside private comments to change its emphasis. Private comments and mixed formatting have been kept unchanged.",
+    );
+  if (!handled && mark === "note")
+    notice(
+      "Select text outside an existing note, or select one complete note to remove its brackets. Notes cannot be nested.",
+    );
+  view.focus();
+  return handled;
+}
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-writing-mark]")) {
+  button.addEventListener("click", () => format(button.dataset.writingMark as WritingMark));
+}
+pairs.addEventListener("change", () => {
+  view.dispatch({
+    effects: pairConfiguration.reconfigure(
+      pairs.checked
+        ? smartPairs(() =>
+            notice(
+              "Bracket wrapping cannot cross a private comment. Select ordinary text or turn pairing off in Preferences.",
+            ),
+          )
+        : [],
+    ),
+  });
+  try {
+    localStorage.setItem("studio-smart-pairs", pairs.checked ? "on" : "off");
+  } catch {}
+});
+$("element-action").addEventListener("change", () => {
+  const select = $<HTMLSelectElement>("element-action");
+  const type = select.value as "scene" | "action" | "character" | "parenthetical" | "transition";
+  if (type && !setScreenplayLine(type)(view)) {
+    notice(
+      "Place the caret on one ordinary source line to change its element. Notes, title fields, and outline markers are kept intact.",
+    );
+  }
+  select.value = "";
+  view.focus();
 });
 
 function notice(message: string): void {
@@ -176,7 +428,7 @@ async function persist(): Promise<boolean> {
 async function mayReplace(): Promise<boolean> {
   if (replacing || recovering) return false;
   replacing = true;
-  app.inert = true;
+  setWorkspaceLocked(true);
   try {
     if (await persist()) return true;
     return (
@@ -186,23 +438,25 @@ async function mayReplace(): Promise<boolean> {
       )
     );
   } finally {
-    app.inert = false;
+    setWorkspaceLocked(false);
     replacing = false;
   }
 }
 
 function showSource(value: string, fileName: string): void {
   const next = readSource(value);
+  fileGeneration++;
   clearTimeout(saving);
   clearTimeout(parsing);
   recovering = true;
   source = next;
+  parsedDocument = undefined;
   draftId = crypto.randomUUID();
   revision = 0;
   keptRevision = -1;
   name.value = fountainName(fileName);
   // A new document starts a fresh undo history, so Undo never reveals another screenplay.
-  view.setState(EditorState.create({ doc: next.normalized, extensions: editorExtensions }));
+  view.setState(editingState(next.normalized));
   recovering = false;
   hasWork = true;
   lastDownload = "";
@@ -217,64 +471,28 @@ function showSource(value: string, fileName: string): void {
   view.focus();
 }
 
-function askWorker(): Promise<Result> {
-  if (workerFailed)
-    return Promise.reject(
-      new Error("The screenplay worker stopped. Download your Fountain file, then reload Studio."),
-    );
-  const id = ++requestId;
-  currentRequest = id;
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(
-        new Error("Layout took too long. Your source is safe; shorten the draft or reload Studio."),
-      );
-    }, 15_000);
-    pending.set(id, { resolve, reject, timer });
-    worker?.postMessage({ id, source: view.state.doc.toString(), paper: paper.value });
-  });
-}
-if (worker)
-  worker.onmessage = (event: MessageEvent<Result>) => {
-    const result = event.data;
-    const job = pending.get(result.id);
-    if (!job) return;
-    clearTimeout(job.timer);
-    pending.delete(result.id);
-    job.resolve(result);
-  };
-if (worker)
-  worker.onerror = () => {
-    workerFailed = true;
-    for (const job of pending.values()) {
-      clearTimeout(job.timer);
-      job.reject(
-        new Error(
-          "Screenplay layout stopped. Your text is safe; download Fountain and reload to try again.",
-        ),
-      );
-    }
-    pending.clear();
-    pdfButton.disabled = true;
-    notice(
-      "Screenplay layout stopped. Your text is safe; download Fountain and reload to try again.",
-    );
-  };
+$("retry-preview").addEventListener("click", () => {
+  scheduler.restart();
+  scheduleParse(0);
+});
 function scheduleParse(delay = 180): void {
   clearTimeout(parsing);
   const generation = ++parseGeneration;
   latest = undefined;
-  currentRequest = ++requestId;
+  workbench.stale();
   pdfButton.disabled = true;
   $("counts").textContent = "Updating pages…";
   parsing = setTimeout(async () => {
     try {
-      const result = await askWorker();
-      if (result.id !== currentRequest) return;
+      const result = await scheduler.request(
+        view.state.doc.toString(),
+        paper.value === "a4" ? "a4" : "letter",
+      );
+      if (generation !== parseGeneration) return;
       applyResult(result);
     } catch (error) {
-      if (generation !== parseGeneration) return;
+      if (generation !== parseGeneration || isSupersededRequest(error)) return;
+      $("retry-preview").hidden = false;
       $("counts").textContent = "Preview unavailable";
       notice(error instanceof Error ? error.message : "Could not update the preview.");
     }
@@ -282,37 +500,17 @@ function scheduleParse(delay = 180): void {
 }
 function applyResult(result: Result): void {
   latest = result;
+  $("retry-preview").hidden = true;
   const document = result.document;
   if (document) {
+    parsedDocument = document;
+    rememberParsedSource(view.state.doc, document);
+    workbench.update(document, view.state.doc.toString());
     decorate(document);
     const scenes = document.elements.filter((element) => element.kind === "scene");
     $("scene-count").textContent = String(scenes.length);
-    const buttons = scenes.slice(0, 500).map((scene) => {
-      const button = documentNode("button", scene.text);
-      button.type = "button";
-      button.dataset.line = String(scene.line);
-      button.addEventListener("click", () => {
-        const at = view.state.doc.line(Math.min(scene.line, view.state.doc.lines)).from;
-        view.dispatch({
-          selection: { anchor: at },
-          effects: EditorView.scrollIntoView(at, { y: "start" }),
-        });
-        app.classList.remove("outline-open", "mobile-preview");
-        $("outline-toggle").setAttribute("aria-expanded", "false");
-        updatePreviewToggle();
-        view.focus();
-      });
-      return button;
-    });
-    $("scene-list").replaceChildren(...buttons);
-    if (scenes.length > 500)
-      $("scene-list").append(
-        documentNode(
-          "p",
-          "Showing the first 500 scenes. Use Find (Ctrl/⌘ F) to reach later scenes.",
-        ),
-      );
-    updateCurrentScene(view.state.doc.lineAt(view.state.selection.main.head).number);
+    outlineItems = outlineOf(document);
+    renderOutline();
     $("counts").textContent =
       `${scenes.length} ${scenes.length === 1 ? "scene" : "scenes"} · ${result.layout?.pages.filter((p) => p.number !== null).length ?? "—"} pages`;
   }
@@ -344,14 +542,73 @@ function decorate(document: FountainDocument): void {
     : [];
   view.dispatch({ effects: marks.of(Decoration.set(ranges, true)) });
 }
-function updateCurrentScene(line: number): void {
-  const buttons = [...$("scene-list").querySelectorAll<HTMLButtonElement>("button")];
-  const current = buttons.filter((button) => Number(button.dataset.line) <= line).at(-1);
-  for (const button of buttons) {
-    const next = String(button === current);
-    if (button.getAttribute("aria-current") !== next) button.setAttribute("aria-current", next);
-  }
+function jumpToLine(line: number): void {
+  const at = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines))).from;
+  view.dispatch({
+    selection: { anchor: at },
+    effects: EditorView.scrollIntoView(at, { y: "center" }),
+  });
+  app.classList.remove("outline-open", "mobile-preview");
+  $("outline-toggle").setAttribute("aria-expanded", "false");
+  updatePreviewToggle();
+  view.focus();
 }
+function moveScene(direction: -1 | 1): boolean {
+  if (!parsedDocument) return false;
+  const line = adjacentScene(
+    parsedDocument,
+    view.state.doc.lineAt(view.state.selection.main.head).number,
+    direction,
+  );
+  if (line !== undefined) jumpToLine(line);
+  return true;
+}
+function renderOutline(): void {
+  const found = filterOutline(outlineItems, $<HTMLInputElement>("scene-search").value);
+  outlineButtons.clear();
+  activeOutline = undefined;
+  $("scene-list").replaceChildren(
+    ...found.items.map((item) => {
+      const button = documentNode("button", item.text);
+      button.type = "button";
+      button.dataset.line = String(item.line);
+      button.classList.toggle("section-link", item.kind === "section");
+      button.addEventListener("click", () => jumpToLine(item.line));
+      outlineButtons.set(item.line, button);
+      return button;
+    }),
+  );
+  if (!found.total) $("scene-list").append(documentNode("p", "No matching scenes or sections."));
+  if (found.total > found.items.length)
+    $("scene-list").append(
+      documentNode("p", "Showing 500 matches. Narrow your search to find later scenes."),
+    );
+  updateCurrentScene(view.state.doc.lineAt(view.state.selection.main.head).number);
+}
+$("scene-search").addEventListener("input", renderOutline);
+function updateCurrentScene(line: number): void {
+  const item = outlineItems[itemAtLine(outlineItems, line)];
+  const next = item ? outlineButtons.get(item.line) : undefined;
+  if (next === activeOutline) return;
+  activeOutline?.removeAttribute("aria-current");
+  next?.setAttribute("aria-current", "true");
+  activeOutline = next;
+}
+$("caret-page").addEventListener("click", () => {
+  if (!latest?.layout) return;
+  previewPage = pageAtSource(
+    latest.layout,
+    view.state.doc.lineAt(view.state.selection.main.head).number,
+  );
+  renderPage();
+});
+$("page-source").addEventListener("click", () => {
+  const line = latest?.layout?.pages[previewPage]?.lines.find(
+    (row) => row.sourceLine > 0,
+  )?.sourceLine;
+  if (line) jumpToLine(line);
+  else notice("This page has no screenplay source line. Choose a screenplay page first.");
+});
 function renderPage(): void {
   const layout = latest?.layout;
   if (!layout) {
@@ -389,14 +646,22 @@ function renderPage(): void {
 }
 function updatePreviewToggle(): void {
   const mobile = matchMedia("(max-width: 700px)").matches;
-  const shown = mobile
-    ? app.classList.contains("mobile-preview")
-    : !app.classList.contains("no-preview");
+  const shown =
+    !preferences.focus &&
+    (mobile ? app.classList.contains("mobile-preview") : !app.classList.contains("no-preview"));
   preview.hidden = !shown;
   $("preview-toggle").setAttribute("aria-pressed", String(shown));
   $("preview-toggle").textContent = mobile && shown ? "Back to writing" : "Page preview";
 }
 $("preview-toggle").addEventListener("click", () => {
+  if (preferences.focus) {
+    preferences.focus = false;
+    keepPreferences();
+    if (matchMedia("(max-width: 700px)").matches) app.classList.add("mobile-preview");
+    else app.classList.remove("no-preview");
+    updatePreviewToggle();
+    return;
+  }
   if (matchMedia("(max-width: 700px)").matches) app.classList.toggle("mobile-preview");
   else app.classList.toggle("no-preview");
   updatePreviewToggle();
@@ -404,6 +669,10 @@ $("preview-toggle").addEventListener("click", () => {
 matchMedia("(max-width: 700px)").addEventListener("change", updatePreviewToggle);
 updatePreviewToggle();
 $("outline-toggle").addEventListener("click", () => {
+  if (preferences.focus) {
+    preferences.focus = false;
+    keepPreferences();
+  }
   const open = app.classList.toggle("outline-open");
   $("outline-toggle").setAttribute("aria-expanded", String(open));
 });
@@ -431,7 +700,9 @@ $("download").addEventListener("click", downloadSource);
 name.addEventListener("change", () => {
   name.value = title();
   revision++;
+  keptRevision = -1;
   hasWork = true;
+  $("recovery").textContent = "Keeping this draft…";
   void persist();
 });
 $("help").addEventListener("click", () => $<HTMLDialogElement>("guide").showModal());
@@ -441,6 +712,7 @@ $("open").addEventListener("click", () => $<HTMLInputElement>("file").click());
 $("file").addEventListener("change", async () => {
   const input = $<HTMLInputElement>("file");
   const file = input.files?.[0];
+  const ticket = ++fileGeneration;
   input.value = "";
   if (!file) return;
   try {
@@ -454,7 +726,10 @@ $("file").addEventListener("change", async () => {
       await file.arrayBuffer(),
     );
     readSource(value);
-    if (await mayReplace()) showSource(value, file.name);
+    if (ticket !== fileGeneration) return;
+    if (await mayReplace()) {
+      if (ticket === fileGeneration) showSource(value, file.name);
+    }
   } catch (error) {
     notice(
       error instanceof Error
@@ -471,40 +746,16 @@ const example =
 $("example").addEventListener("click", async () => {
   if (await mayReplace()) showSource(example, "The Last Light.fountain");
 });
-$("recent").addEventListener("click", async () => {
-  try {
-    const drafts = await recentDrafts();
-    $("draft-list").replaceChildren(
-      ...drafts.map((draft) => {
-        const button = documentNode("button", draft.name);
-        button.type = "button";
-        button.append(
-          documentNode(
-            "small",
-            `${new Date(draft.updated).toLocaleString()} · ${draft.source.length.toLocaleString()} characters`,
-          ),
-        );
-        button.addEventListener("click", async () => {
-          if (!(await mayReplace())) return;
-          try {
-            showSource(draft.source, draft.name);
-            $<HTMLDialogElement>("recovery-dialog").close();
-          } catch (error) {
-            notice(String(error));
-          }
-        });
-        return button;
-      }),
-    );
-    if (!drafts.length)
-      $("draft-list").append(
-        documentNode("p", "No drafts yet. Your work will appear here as you write."),
-      );
-    $<HTMLDialogElement>("recovery-dialog").showModal();
-  } catch {
-    notice("Browser recovery is unavailable. You can still open and download Fountain files.");
-  }
+const library = mountLibrary(document.body, {
+  current: () => ({ name: title(), source: text(), draftId }),
+  replace: async (value, fileName) => {
+    if (!(await mayReplace())) return false;
+    showSource(value, fileName);
+    return true;
+  },
+  notice,
 });
+$("recent").addEventListener("click", () => library.open());
 pdfButton.addEventListener("click", async () => {
   const result = latest;
   if (!result?.layout || result.document?.warnings.length || exporting) return;
@@ -525,7 +776,11 @@ pdfButton.addEventListener("click", async () => {
     );
   } finally {
     exporting = false;
-    pdfButton.textContent = "Export PDF";
+    const fullLabel = documentNode("span", "Export PDF");
+    fullLabel.className = "desktop-label";
+    const smallLabel = documentNode("span", "PDF");
+    smallLabel.className = "mobile-label";
+    pdfButton.replaceChildren(fullLabel, smallLabel);
     pdfButton.disabled = !latest?.layout || Boolean(latest?.document?.warnings.length);
   }
 });
@@ -544,23 +799,29 @@ document.addEventListener("visibilitychange", () => {
 
 async function start(): Promise<void> {
   // Prevent typing into a draft which is about to be replaced by recovery.
-  app.inert = true;
+  setWorkspaceLocked(true);
   try {
-    const drafts = await Promise.race([
-      recentDrafts(),
+    const recovered = await Promise.race([
+      (async () => {
+        let id: string | null = null;
+        try {
+          id = sessionStorage.getItem("studio-recovery-id");
+        } catch {}
+        if (id) {
+          const draft = await getDraft(id);
+          if (draft) return draft;
+        }
+        const first = (await listDrafts({ limit: 1 })).items[0];
+        return first ? getDraft(first.id) : undefined;
+      })(),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Recovery timed out")), 3000),
       ),
     ]);
-    let id: string | null = null;
-    try {
-      id = sessionStorage.getItem("studio-recovery-id");
-    } catch {}
-    const recovered = drafts.find((draft) => draft.id === id) ?? drafts[0];
     if (recovered) {
       source = readSource(recovered.source);
       name.value = recovered.name;
-      view.setState(EditorState.create({ doc: source.normalized, extensions: editorExtensions }));
+      view.setState(editingState(source.normalized));
       hasWork = false;
       $("recovery").textContent = "Recovered draft · edits will be kept as a new copy";
     } else $("recovery").textContent = "Local recovery ready · download to keep a file";
@@ -568,7 +829,7 @@ async function start(): Promise<void> {
     $("recovery").textContent = "Recovery unavailable — download your Fountain file";
   }
   recovering = false;
-  app.inert = false;
+  setWorkspaceLocked(false);
   scheduleParse(0);
 }
 void start();

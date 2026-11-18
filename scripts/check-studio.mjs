@@ -5,7 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, resolve } from "node:path";
-import { chromium } from "playwright";
+import { chromium, firefox, webkit } from "playwright";
 
 const { PDFDocument } = createRequire(resolve("site/package.json"))("pdf-lib");
 
@@ -29,7 +29,14 @@ const server = createServer((req, res) => {
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await chromium.launch();
+const engine = process.env.STUDIO_BROWSER ?? "chromium";
+const browserType = { chromium, webkit, firefox }[engine];
+if (!browserType) throw new Error(`Unknown browser ${engine}`);
+const browser = await browserType.launch({
+  ...(process.env.STUDIO_BROWSER_EXECUTABLE
+    ? { executablePath: process.env.STUDIO_BROWSER_EXECUTABLE }
+    : {}),
+});
 const errors = [];
 const external = [];
 const context = await browser.newContext({
@@ -65,9 +72,191 @@ try {
   await page.goto(`${base}/studio/`);
   await ready(page);
   assert.equal(await page.locator("#pdf").isEnabled(), true);
+  await open(page, "", "Typing.fountain");
+  const content = page.locator(".cm-content");
+  await content.focus();
+  await page.keyboard.type("[[");
+  assert.equal(await save(page), "[[]]");
+  await content.focus();
+  await page.keyboard.type("a note]] after");
+  assert.equal(await save(page), "[[a note]] after");
+  await open(page, "", "Empty-pair.fountain");
+  await content.focus();
+  await page.keyboard.type("[[");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  assert.equal(await save(page), "");
+  await open(page, "words", "Formatting.fountain");
+  await content.focus();
+  await page.keyboard.press("Control+a");
+  await page.getByRole("button", { name: "Bold", exact: true }).click();
+  assert.equal(await save(page), "**words**");
+  await content.focus();
+  await page.keyboard.press("Control+i");
+  assert.equal(await save(page), "***words***");
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), "**words**");
+  await open(page, "before [[private]] after", "Private.fountain");
+  await content.focus();
+  await page.keyboard.press("Control+a");
+  await page.locator('[data-writing-mark="note"]').click();
+  assert.equal(await save(page), "before [[private]] after");
+  await page.locator("#preferences").click();
+  await page.locator("#smart-pairs").uncheck();
+  await page.keyboard.press("Escape");
+  await open(page, "", "Pairs-off.fountain");
+  await content.focus();
+  await page.keyboard.type("[[");
+  assert.equal(await save(page), "[[");
+  await page.reload();
+  await ready(page);
+  await open(page, "", "Still-off.fountain");
+  await content.focus();
+  await page.keyboard.type("(");
+  assert.equal(await save(page), "(");
+  await page.locator("#preferences").click();
+  await page.locator("#smart-pairs").check();
+  await page.keyboard.press("Escape");
+  await open(page, "", "Paste.fountain");
+  await content.focus();
+  await content.evaluate((node) => {
+    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    // Firefox intentionally strips data from synthetic ClipboardEvents; provide a deterministic
+    // clipboard fixture while still exercising CodeMirror's actual paste handler.
+    Object.defineProperty(event, "clipboardData", {
+      value: { getData: (type) => (type === "text/plain" ? "[[pasted" : "") },
+    });
+    node.dispatchEvent(event);
+  });
+  assert.equal(await save(page), "[[pasted");
+  console.log(
+    "Studio: pairing, overtyping, selection formatting, undo, safe notes, pasted text and persistent opt-out: passed",
+  );
+  await open(page, "/*secret tail*/", "Partial-private.fountain");
+  await content.focus();
+  await page.keyboard.press("Control+Home");
+  for (let i = 0; i < 8; i++) await page.keyboard.press("Shift+ArrowRight");
+  await page.keyboard.type("[[");
+  assert.equal(await save(page), "/*secret tail*/");
+  await open(page, "words", "Note-button.fountain");
+  await content.focus();
+  await page.keyboard.press("Control+a");
+  await page.locator('[data-writing-mark="note"]').click();
+  await content.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.type("]]");
+  assert.equal(await save(page), "[[words]]");
+  await open(page, "a room", "Element.fountain");
+  await content.focus();
+  await page.keyboard.press("Control+Home");
+  await page.locator("#element-action").selectOption("scene");
+  assert.equal(await save(page), ".a room");
+  await content.focus();
+  await page.keyboard.press("Control+z");
+  assert.equal(await save(page), "a room");
+  await page.locator("#preferences").click();
+  await page.locator("#theme").selectOption("dark");
+  await page.locator("#text-size").selectOption("20");
+  await page.locator("#typewriter").check();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await ready(page);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  assert.equal(
+    await page.locator(".cm-editor").evaluate((el) => getComputedStyle(el).fontSize),
+    "20px",
+  );
+  await page.locator("#focus-mode").click();
+  assert.equal(await page.locator("#preview").isVisible(), false);
+  await page.locator("#focus-mode").click();
+  await page.locator("#preferences").click();
+  await page.locator("#theme").selectOption("light");
+  await page.locator("#text-size").selectOption("16");
+  await page.locator("#typewriter").uncheck();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+k");
+  await page.getByRole("searchbox", { name: "Find a command" }).fill("Writing statistics");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.getByRole("heading", { name: "Screenplay workbench" }).isVisible(), true);
+  await page.keyboard.press("Escape");
   await page.locator("#example").click();
   await page.waitForFunction(() => document.getElementById("scene-count").textContent === "2");
   await ready(page);
+  await page.locator("#scene-search").fill("HARBOR");
+  assert.equal(await page.locator("#scene-list button").count(), 1);
+  await page.locator("#scene-list button").click();
+  await page.locator("#caret-page").click();
+  assert.match(await page.locator("#page").innerText(), /HARBOR/);
+  await page.locator("#scene-search").fill("");
+  await page.locator("#workbench").click();
+  await page.getByRole("combobox", { name: "Workbench view" }).selectOption("notes");
+  assert.match(await page.locator(".workbench-content").innerText(), /This note stays out/);
+  await page.getByRole("combobox", { name: "Workbench view" }).selectOption("characters");
+  assert.match(await page.locator(".workbench-content").innerText(), /MARA/);
+  await page.locator(".workbench-content summary").filter({ hasText: "MARA" }).click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector(".character-speeches")
+      ?.textContent.includes("Someone is still out there."),
+  );
+  assert.doesNotMatch(
+    await page.locator(".character-speeches").first().innerText(),
+    /This note stays out/,
+  );
+  await page.keyboard.press("Escape");
+  await page.locator("#recent").click();
+  await page.getByLabel("Snapshot name").fill("Before revision");
+  await page.getByRole("button", { name: "Save snapshot of current draft" }).click();
+  await page.getByRole("button", { name: "Compare Before revision with current draft" }).click();
+  await page.waitForFunction(() =>
+    document.querySelector(".library-comparison").textContent.includes("texts are identical"),
+  );
+  await page.keyboard.press("Escape");
+  await page.locator("#commands").click();
+  await page.getByRole("button", { name: "Portable backup and restore", exact: true }).click();
+  const backupEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download backup", exact: true }).click();
+  const backupData = readFileSync(await (await backupEvent).path(), "utf8");
+  assert.match(JSON.parse(backupData).draft.source, /This note stays out/);
+  await page.getByLabel("Open Studio backup file").setInputFiles({
+    name: "test.studio.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(backupData),
+  });
+  await page.getByRole("button", { name: "Open selected item as a new draft" }).click();
+  await ready(page);
+  await page.locator("#commands").click();
+  await page.getByRole("button", { name: "Portable backup and restore", exact: true }).click();
+  await page.evaluate(() => {
+    const original = File.prototype.arrayBuffer;
+    File.prototype.arrayBuffer = async function () {
+      const bytes = await original.call(this);
+      if (this.name === "abandoned.studio.json")
+        await new Promise((resolve) => {
+          window.finishBackupRead = resolve;
+        });
+      return bytes;
+    };
+  });
+  await page.getByLabel("Open Studio backup file").setInputFiles({
+    name: "abandoned.studio.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(backupData),
+  });
+  await page.waitForFunction(() => Boolean(window.finishBackupRead));
+  await page.keyboard.press("Escape");
+  await page.evaluate(async () => {
+    window.finishBackupRead();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  await page.locator("#commands").click();
+  await page.getByRole("button", { name: "Portable backup and restore", exact: true }).click();
+  assert.equal(await page.getByLabel("Draft or snapshot to open").isVisible(), false);
+  await page.keyboard.press("Escape");
+  console.log(
+    "Studio: element undo, preference persistence, palette, navigator, workbench, snapshot comparison and portable backup: passed",
+  );
   assert.equal((await page.locator(".f-character").count()) > 0, true);
   await page.locator("#margins").uncheck();
   assert.equal(await page.locator(".f-character").count(), 0);
@@ -159,6 +348,11 @@ try {
   const started = Date.now();
   await open(page, long, "Long.fountain");
   assert.equal(await page.locator("#scene-count").textContent(), "250");
+  assert.equal(
+    await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1),
+    true,
+    "Long editor stays inside the workspace",
+  );
   const elapsed = Date.now() - started;
   assert.ok(elapsed < 8000, `Long script took ${elapsed}ms`);
   await page.locator(".cm-content").click();
@@ -170,12 +364,12 @@ try {
   await open(page, Array.from({ length: 501 }, (_, i) => `INT. ROOM ${i} - DAY\n`).join("\n"));
   assert.equal(await page.locator("#scene-count").textContent(), "501");
   assert.equal(await page.locator("#scene-list button").count(), 500);
-  assert.match(await page.locator("#scene-list p").innerText(), /first 500/);
+  assert.match(await page.locator("#scene-list p").innerText(), /Showing 500/);
 
   const recovery = await context.newPage();
   await recovery.addInitScript(() => {
-    const original = IDBObjectStore.prototype.getAll;
-    IDBObjectStore.prototype.getAll = function (...args) {
+    const original = indexedDB.open;
+    indexedDB.open = function (...args) {
       const request = original.apply(this, args);
       Object.defineProperty(request, "onsuccess", {
         set(callback) {
@@ -208,7 +402,7 @@ try {
   await ready(recovery);
   assert.equal(await save(recovery), "");
   await recovery.locator("#recent").click();
-  await recovery.getByRole("button", { name: /Safe.fountain/ }).click();
+  await recovery.getByRole("button", { name: /Open Safe.fountain/ }).click();
   await ready(recovery);
   assert.match(await save(recovery), /Keep this draft/);
   console.log(
@@ -230,7 +424,7 @@ try {
   await degraded.goto(`${base}/studio/`);
   await ready(degraded);
   assert.match(await degraded.locator("#recovery").innerText(), /Recovery unavailable/);
-  assert.match(await degraded.locator("#notice").innerText(), /worker stopped/);
+  assert.match(await degraded.locator("#notice").innerText(), /worker could not start/);
   assert.equal(await degraded.locator("#pdf").isDisabled(), true);
   await degraded.locator(".cm-content").fill("INT. SAFE - DAY\n\nStill editable.");
   assert.match(await save(degraded), /Still editable/);
@@ -239,6 +433,24 @@ try {
   await degraded.locator("#new").click();
   await confirm;
   assert.match(await save(degraded), /Undownloaded change/);
+  await degraded.locator(".cm-content").fill("Keep this unsaved screenplay.");
+  await degraded.locator("#commands").click();
+  await degraded.getByRole("button", { name: "Portable backup and restore", exact: true }).click();
+  await degraded.getByLabel("Open Studio backup file").setInputFiles({
+    name: "cancel.studio.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(backupData),
+  });
+  const cancelRestore = degraded.waitForEvent("dialog").then((dialog) => dialog.dismiss());
+  await degraded.getByRole("button", { name: "Open selected item as a new draft" }).click();
+  await cancelRestore;
+  await degraded.getByLabel("Draft or snapshot to open").waitFor({ state: "visible" });
+  assert.equal(
+    await degraded.getByRole("button", { name: "Open selected item as a new draft" }).isVisible(),
+    true,
+  );
+  await degraded.keyboard.press("Escape");
+  assert.equal(await save(degraded), "Keep this unsaved screenplay.");
   await degradedContext.close();
   console.log("Studio: blocked worker and unavailable storage preserve editing/download: passed");
 

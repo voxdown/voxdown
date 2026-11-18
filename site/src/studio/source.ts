@@ -1,3 +1,4 @@
+import { filenameStem } from "./filename";
 /** Saving uses original source, never reconstructed parser elements. */
 export const MAX_SOURCE = 500_000;
 export const MAX_LINES = 20_000;
@@ -40,11 +41,5 @@ export function writeSource(file: SourceFile, text: string): string {
   return `${file.bom ? "\uFEFF" : ""}${text.replace(/\n/g, file.newline)}`;
 }
 export function fountainName(name: string): string {
-  return `${
-    [...name]
-      .map((char) => (char.charCodeAt(0) < 32 || char === "/" || char === "\\" ? "-" : char))
-      .join("")
-      .replace(/\.(fountain|txt)$/i, "")
-      .trim() || "Untitled"
-  }.fountain`;
+  return `${filenameStem(name)}.fountain`;
 }

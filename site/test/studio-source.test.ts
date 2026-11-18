@@ -31,7 +31,10 @@ describe("Studio source files", () => {
     expect(writeSource(file, file.normalized)).toBe(value);
   });
   it("makes a portable Fountain download name", () => {
-    expect(fountainName("../draft\u0001.txt")).toBe("..-draft-.fountain");
+    expect(fountainName("../draft\u0001.txt")).toBe("-draft-.fountain");
     expect(fountainName(" ")).toBe("Untitled.fountain");
+    expect(fountainName("CON.txt")).toBe("_CON.fountain");
+    expect(fountainName("name\u202efile.txt")).toBe("name-file.fountain");
+    expect(new TextEncoder().encode(fountainName("龍".repeat(200))).length).toBeLessThan(200);
   });
 });

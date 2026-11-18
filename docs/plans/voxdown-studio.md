@@ -118,3 +118,14 @@ read the downloaded files and verify their page counts and Letter/A4 dimensions.
 - Next UX sprint: screenplay element shortcuts/completion, stronger scene/page navigation,
   preview accessibility, and clearer import/export feedback. Measure changes against a short
   writing task; keep optional UI out of Writer until it proves useful there.
+
+
+## Production-hardening follow-up — 2026-11-18
+
+The baseline status above is historical. The [production sprint log](studio-production-sprints.md)
+tracks the subsequent 26 focused outcomes, independent review findings and release gates. Recovery
+now uses indexed metadata pages and explicit deletion; Studio adds typing tools, completion,
+navigation, workbenches, snapshots, portable backups, preferences and a command palette. Cross-engine,
+accessibility, performance, security and sustained-session checks are repeatable. Studio remains
+Experimental until the documented physical-device, assistive-technology and screenplay acceptance
+gates are met; no publication is authorized by this local work.

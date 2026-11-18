@@ -35,6 +35,7 @@ export interface FountainDocument {
   elements: FountainElement[];
   title: Record<string, string>;
   warnings: { line: number; message: string }[];
+  omissions: FountainOmission[];
 }
 
 interface SourceLine {
@@ -46,7 +47,7 @@ interface SourceLine {
   omitted?: "note" | "boneyard";
 }
 
-interface Omission {
+export interface FountainOmission {
   from: number;
   to: number;
   kind: "note" | "boneyard";
@@ -78,7 +79,7 @@ function removeComments(
   lines: SourceLine[],
   warnings: FountainDocument["warnings"],
 ) {
-  const omissions: Omission[] = [];
+  const omissions: FountainOmission[] = [];
   let active: { from: number; line: number; kind: "note" | "boneyard" } | undefined;
   const incomplete = () => {
     if (!active) return;
@@ -116,7 +117,7 @@ function removeComments(
     while ((omissions[cursor]?.to ?? Number.POSITIVE_INFINITY) <= line.from) cursor++;
     let from = line.from;
     let text = "";
-    let hidden: Omission["kind"] | undefined;
+    let hidden: FountainOmission["kind"] | undefined;
     for (let i = cursor; i < omissions.length; i++) {
       const omission = omissions[i];
       if (!omission || omission.from > line.to) break;
@@ -129,6 +130,7 @@ function removeComments(
     line.text = text;
     if (hidden && !text.trim()) line.omitted = hidden;
   }
+  return omissions;
 }
 
 function uppercaseCue(text: string): boolean {
@@ -139,9 +141,14 @@ function uppercaseCue(text: string): boolean {
 }
 
 export function parseFountain(source: string): FountainDocument {
-  const document: FountainDocument = { elements: [], title: Object.create(null), warnings: [] };
+  const document: FountainDocument = {
+    elements: [],
+    title: Object.create(null),
+    warnings: [],
+    omissions: [],
+  };
   const lines = sourceLines(source);
-  removeComments(source, lines, document.warnings);
+  document.omissions = removeComments(source, lines, document.warnings);
   const first = lines[0];
   if (first) first.text = first.text.replace(/^\uFEFF/, "");
   const following: (SourceLine | undefined)[] = new Array(lines.length);
@@ -176,7 +183,7 @@ export function parseFountain(source: string): FountainDocument {
     if (titlePage) {
       const field = /^([\p{L}_][\p{L}\p{N} _-]*):(?:[ \t]*(.*))$/u.exec(line.text);
       // CUT TO: at the beginning is a transition, not title metadata.
-      if (field && !/TO:$/.test(line.text)) {
+      if (field && !(/TO:$/.test(line.text.trimEnd()) && uppercaseCue(line.text))) {
         titleKey = (field[1] ?? "").trim().toLowerCase();
         const value = field[2] ?? "";
         document.title[titleKey] = document.title[titleKey]
@@ -210,7 +217,8 @@ export function parseFountain(source: string): FountainDocument {
     const forcedScene = /^\.[\p{L}\p{N}]/u.test(text);
     const scene = /^(?:INT\.?\/EXT|INT|EXT|EST|I\/E)(?:[. ]|$)/i.test(text);
     const section = /^(#+)\s*(.*)$/.exec(text);
-    const cue = text.endsWith("^") ? text.slice(0, -1).trimEnd() : text;
+    const dual = text.endsWith("^") && !escaped(text, text.length - 1);
+    const cue = dual ? text.slice(0, -1).trimEnd() : text;
     const next = following[index];
     if (text.startsWith("!")) {
       element.text = line.text.replace("!", "").replace(/\t/g, "    ");
@@ -258,7 +266,7 @@ export function parseFountain(source: string): FountainDocument {
     ) {
       element.kind = "character";
       element.text = cue.startsWith("@") ? cue.slice(1).trim() : cue;
-      if (text.endsWith("^")) element.dual = true;
+      if (dual) element.dual = true;
       dialogue = true;
     } else if (dialogue) {
       element.kind = text.startsWith("(") && text.endsWith(")") ? "parenthetical" : "dialogue";

@@ -49,7 +49,7 @@ async function start(source = "!Alpha beta") {
   await ready();
 }
 async function command(name: string) {
-  await page.locator("#commands").click();
+  await page.keyboard.press("Control+k");
   await page
     .getByRole("dialog", { name: "Commands", exact: true })
     .getByRole("button", { name, exact: true })

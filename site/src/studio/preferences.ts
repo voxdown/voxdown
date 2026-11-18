@@ -1,23 +1,35 @@
+import { type StudioTheme, normalizeStudioTheme } from "./appearance";
+
 export type StudioPreferences = {
-  theme: "system" | "light" | "dark";
+  theme: StudioTheme;
   textSize: 14 | 16 | 18 | 20;
   typewriter: boolean;
   focus: boolean;
   pageGuides: boolean;
   screenplayKeys: boolean;
+  toolbar: boolean;
+  margins: boolean;
+  paper: "letter" | "a4";
+  outline: boolean;
+  preview: boolean;
 };
 export const defaultPreferences: StudioPreferences = {
-  theme: "system",
+  theme: "auto",
   textSize: 16,
   typewriter: false,
   focus: false,
   pageGuides: false,
   screenplayKeys: false,
+  toolbar: true,
+  margins: true,
+  paper: "letter",
+  outline: true,
+  preview: false,
 };
 export function parsePreferences(value: unknown): StudioPreferences {
   const data = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   return {
-    theme: data.theme === "light" || data.theme === "dark" ? data.theme : "system",
+    theme: normalizeStudioTheme(data.theme),
     textSize: [14, 16, 18, 20].includes(data.textSize as number)
       ? (data.textSize as StudioPreferences["textSize"])
       : 16,
@@ -25,6 +37,11 @@ export function parsePreferences(value: unknown): StudioPreferences {
     focus: data.focus === true,
     pageGuides: data.pageGuides === true,
     screenplayKeys: data.screenplayKeys === true,
+    toolbar: data.toolbar !== false,
+    margins: data.margins !== false,
+    paper: data.paper === "a4" ? "a4" : "letter",
+    outline: data.outline !== false,
+    preview: data.preview === true,
   };
 }
 export function readPreferences(): StudioPreferences {

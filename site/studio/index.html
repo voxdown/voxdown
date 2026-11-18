@@ -12,7 +12,7 @@
 </head>
 <body class="studio">
   <a class="skip" href="#editor">Skip to screenplay</a>
-  <header class="app-header">
+  <header id="app-header" class="app-header">
     <h1 class="sr-only">VoxDown Studio screenplay editor</h1>
     <a class="brand" href="../writer/" title="Open VoxDown Writer"><img src="../icon.svg" width="24" height="24" alt=""><span class="word">VoxDown <em>Studio</em></span></a>
     <nav class="workspace-menus" aria-label="Studio menus">
@@ -26,9 +26,10 @@
       <label class="filename"><span class="sr-only">File name</span><input id="name" value="Untitled.fountain" maxlength="180" spellcheck="false" autocomplete="off" aria-label="File name"></label>
     </div>
     <button id="save-primary" class="primary" type="button" title="Save Fountain (Ctrl/⌘ S)">Save</button>
+    <button id="appearance" type="button" aria-label="Appearance">◐ Auto</button>
     <div class="panel-toggles" role="group" aria-label="Panels">
-      <button id="outline-toggle" type="button" aria-label="Scenes" title="Scenes" aria-expanded="false" aria-controls="outline"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg></button>
-      <button id="preview-toggle" type="button" aria-label="Page preview" title="Page preview" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M10 2.5v11"/></svg></button>
+      <button id="outline-toggle" type="button" aria-label="Scenes" title="Scenes" aria-expanded="false" aria-controls="outline"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect class="strip" x="1.5" y="2.5" width="4.5" height="11" rx="1.5"/><path class="edge" d="M6 2.5v11"/></svg></button>
+      <button id="preview-toggle" type="button" aria-label="Page preview" title="Page preview" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect class="strip" x="10" y="2.5" width="4.5" height="11" rx="1.5"/><path class="edge" d="M10 2.5v11"/></svg></button>
     </div>
     <button id="mobile-focus" type="button" aria-pressed="false" aria-controls="editor" aria-label="Focus writing">Focus</button>
     <button id="workbench" type="button">Workbench</button>
@@ -36,8 +37,8 @@
     <button id="help" type="button" aria-label="Fountain guide">Fountain guide</button>
   </header>
   <main id="app" class="no-preview" aria-label="Screenplay workspace">
-    <div class="documentbar">
-      <div class="toolbar" aria-label="Writing tools">
+    <div id="documentbar" class="documentbar">
+      <div class="toolbar" role="group" aria-label="Writing tools">
         <div class="history-tools tool-group" role="group" aria-label="History">
           <button id="undo" type="button" disabled aria-label="Undo" title="Undo (Ctrl/⌘ Z)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 2.5 7 6 10.5M2.5 7h7a3.5 3.5 0 0 1 0 7H8"/></svg></button>
           <button id="redo" type="button" disabled aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 13.5 7 10 10.5M13.5 7h-7a3.5 3.5 0 0 0 0 7H8"/></svg></button>
@@ -58,7 +59,6 @@
           <button id="commands" type="button" aria-label="Commands" title="Commands (Ctrl/⌘ K)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span>Commands</span></button>
         </div>
         <button id="pdf" type="button" aria-label="Export PDF" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2m-3 3 3-3 3 3M3 9v5h10V9"/></svg><span class="desktop-label">Export PDF</span><span class="mobile-label">PDF</span></button>
-        <button id="retry-preview" type="button" hidden>Retry preview</button>
       </div>
     </div>
     <div class="file-actions" hidden>
@@ -66,6 +66,7 @@
       <button id="save-file" type="button" hidden>Save to file…</button>
       <button id="download" type="button" aria-label="Download Fountain">Download Fountain</button>
     </div>
+    <button id="retry-preview" type="button" hidden>Retry preview</button>
     <div id="issues" tabindex="0" aria-label="Screenplay warnings" role="status" aria-live="polite" hidden></div>
     <div id="notice" tabindex="0" aria-label="Studio notification" role="status" aria-live="polite" hidden></div>
     <div id="workspace" class="workspace">
@@ -106,7 +107,7 @@
   </dialog>
   <dialog id="preferences-dialog" aria-labelledby="preferences-title">
     <div class="dialog-heading"><h2 id="preferences-title">Your writing space</h2><button class="close" type="button" aria-label="Close preferences">×</button></div>
-    <p>Choose your writing preferences and the paper size used for preview and PDF.</p>
+    <p>Choose your writing preferences and the paper size used for preview and PDF. Changes apply immediately and are saved in this browser.</p>
     <h3>Appearance</h3>
     <label class="preference">Appearance <select id="theme"><option value="system">Use device setting</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <label class="preference">Editor text size <select id="text-size"><option>14</option><option>16</option><option>18</option><option>20</option></select></label>
@@ -116,7 +117,7 @@
     <label class="preference"><input id="screenplay-keys" type="checkbox"> Use screenplay Enter and Tab shortcuts</label>
     <details class="preference-detail"><summary>How screenplay shortcuts work</summary><p>Enter after a scene heading or dialogue starts a new paragraph. Tab cycles empty character, scene, action and transition templates; Shift Tab goes back. Existing words stay intact. Use Escape, then Tab to move focus out of the editor.</p></details>
     <label class="preference"><input id="typewriter" type="checkbox"> Keep the typing line near the centre</label>
-    <details class="preference-detail"><summary>About focus mode</summary><p>Focus hides the outline and preview. On phones it also hides file and page controls; Commands keeps those actions available. Use Exit focus in the phone header, or Focus again on desktop, to return.</p></details>
+    <details class="preference-detail"><summary>About focus mode</summary><p>Focus hides the toolbar, scenes and preview while keeping menus available. Press Escape or Ctrl/⌘ Shift F, or choose Leave focus, to return. Your previous toolbar and panel choices are restored.</p></details>
     <h3>Printed pages</h3>
     <label class="preference">Paper size <select id="paper"><option value="letter">US Letter</option><option value="a4">A4</option></select></label>
     <label class="preference"><input id="page-guides" type="checkbox"> Show printed page starts beside the text</label>

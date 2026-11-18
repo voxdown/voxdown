@@ -185,11 +185,11 @@ try {
   await page.getByRole("tab", { name: "Page preview", exact: true }).click();
   await audit("populated screenplay, light appearance");
   await clickWorkspaceAction(page, "preferences");
-  await page.locator("#theme").selectOption("dark");
+  await page.locator("#theme").selectOption("night");
   await page.keyboard.press("Escape");
   await audit("populated screenplay, dark appearance");
   await clickWorkspaceAction(page, "preferences");
-  await page.locator("#theme").selectOption("light");
+  await page.locator("#theme").selectOption("paper");
   await page.keyboard.press("Escape");
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const width of [720, 390, 320]) {
@@ -251,7 +251,7 @@ try {
   await audit("mobile Fountain guide");
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 320, height: 844 });
-  for (const appearance of ["light", "dark"]) {
+  for (const appearance of ["paper", "night", "sepia", "slate", "contrast", "auto"]) {
     await page.locator("#commands").click();
     await page.getByRole("searchbox", { name: "Find a command" }).fill("Preferences");
     await page.keyboard.press("Enter");
@@ -276,6 +276,9 @@ try {
       "Compare with local Fountain file",
       "Rehearsal cue cards",
       "Practice Fountain step by step",
+      "Keyboard shortcuts",
+      "About Studio",
+      "Appearance",
     ]) {
       await page.locator("#commands").click();
       await page.getByRole("searchbox", { name: "Find a command" }).fill(command);
@@ -344,7 +347,8 @@ try {
     await page.locator("#editor").evaluate((node) => node.getBoundingClientRect().height >= 120),
     "Focus writing does not provide additional visible editing space",
   );
-  await page.locator("#commands").click();
+  record(!(await page.locator(".toolbar").isVisible()), "Focus keeps the writing toolbar visible");
+  await page.keyboard.press("Control+k");
   await page.getByRole("searchbox", { name: "Find a command" }).fill("Review layout notes");
   await page.keyboard.press("Enter");
   record(

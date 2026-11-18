@@ -147,7 +147,7 @@ describe("read-only local source comparison", () => {
     await page
       .getByLabel("Baseline Fountain or text file", { exact: true })
       .setInputFiles({ name: "broken.txt", mimeType: "text/plain", buffer: Buffer.from([0xff]) });
-    expect(await page.locator("dialog").textContent()).toContain("not valid UTF-8");
+    await expect.poll(() => page.locator("dialog").textContent()).toContain("not valid UTF-8");
     await choose("x".repeat(2_000_005));
     expect(await page.locator("dialog").textContent()).toContain("2 MB input limit");
   });

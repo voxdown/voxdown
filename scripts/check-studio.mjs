@@ -506,7 +506,7 @@ try {
   await page.keyboard.press("Control+z");
   assert.equal(await save(page), "a room");
   await clickWorkspaceAction(page, "preferences");
-  await page.locator("#theme").selectOption("dark");
+  await page.locator("#theme").selectOption("night");
   await page.locator("#text-size").selectOption("20");
   await page.locator("#typewriter").check();
   await page.keyboard.press("Escape");
@@ -517,11 +517,14 @@ try {
     await page.locator(".cm-editor").evaluate((el) => getComputedStyle(el).fontSize),
     "20px",
   );
-  await page.locator("#focus-mode").click();
+  await page.keyboard.press("Control+Shift+f");
   assert.equal(await page.locator("#preview").isVisible(), false);
-  await page.locator("#focus-mode").click();
+  assert.equal(await page.locator(".toolbar").isVisible(), false);
+  assert.equal(await page.locator("#mobile-focus").isVisible(), true);
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".toolbar").isVisible(), true);
   await clickWorkspaceAction(page, "preferences");
-  await page.locator("#theme").selectOption("light");
+  await page.locator("#theme").selectOption("paper");
   await page.locator("#text-size").selectOption("16");
   await page.locator("#typewriter").uncheck();
   await page.keyboard.press("Escape");

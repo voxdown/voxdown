@@ -47,6 +47,35 @@ function file(initial = "", name = "Draft.fountain") {
 }
 
 describe("Studio direct local file saving", () => {
+  it("saves back to an opened file without another picker and detects external changes", async () => {
+    const original = "\uFEFFINT. ROOM - DAY\r\n\r\nCafé.\r\n";
+    const disk = file(original);
+    const controller = new LocalFileController(disk.picker);
+    controller.connectOpened(disk.handle, original);
+    expect(await controller.save(`${original}More.`)).toEqual({
+      status: "saved",
+      filename: "Draft.fountain",
+    });
+    expect(disk.picker).not.toHaveBeenCalled();
+    expect(disk.text()).toBe(`${original}More.`);
+    disk.external("External revision");
+    expect(await controller.save("My revision")).toEqual({
+      status: "conflict",
+      filename: "Draft.fountain",
+    });
+    expect(disk.text()).toBe("External revision");
+  });
+  it("keeps the opened snapshot as its baseline even if the file changes before linking", async () => {
+    const disk = file("External revision");
+    const controller = new LocalFileController(disk.picker);
+    controller.connectOpened(disk.handle, "Opened snapshot");
+    expect(await controller.save("My revision")).toEqual({
+      status: "conflict",
+      filename: "Draft.fountain",
+    });
+    expect(disk.handle.createWritable).not.toHaveBeenCalled();
+  });
+
   it("progressively detects unsupported and unlinked sessions", async () => {
     const unsupported = new LocalFileController(null);
     expect(unsupported.available).toBe(false);

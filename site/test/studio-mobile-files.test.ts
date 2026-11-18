@@ -112,7 +112,7 @@ describe("mobile File menu integration", () => {
       await page.keyboard.press("Escape");
     },
   );
-  it("preserves the Commands alternative in focus mode and restores desktop file menus", async () => {
+  it("keeps File and keyboard Commands available in Focus on phone and desktop", async () => {
     await start();
     await openFiles();
     await page.keyboard.press("Escape");
@@ -121,8 +121,9 @@ describe("mobile File menu integration", () => {
       .locator("#view-dropdown")
       .getByRole("button", { name: "Focus writing", exact: true })
       .click();
-    expect(await page.locator("#file-menu").isVisible()).toBe(false);
-    await page.locator("#commands").click();
+    expect(await page.locator("#file-menu").isVisible()).toBe(true);
+    expect(await page.locator("#commands").isVisible()).toBe(false);
+    await page.keyboard.press("Control+k");
     const commands = page.getByRole("dialog", { name: "Commands", exact: true });
     await commands.getByRole("combobox").selectOption("Files and recovery");
     const pending = page.waitForEvent("download");

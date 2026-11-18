@@ -85,6 +85,13 @@ export class LocalFileController {
     this.connection = null;
   }
 
+  /** Link only the exact validated snapshot that was placed in the editor. */
+  connectOpened(handle: LocalFileHandle, exactSource: string): void {
+    const baseline = encode(exactSource);
+    this.disconnect();
+    this.connection = { handle, baseline };
+  }
+
   saveAs(exactSource: string, suggestedName: string): Promise<LocalFileResult> {
     return this.perform(exactSource, suggestedName);
   }

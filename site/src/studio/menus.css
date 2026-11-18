@@ -1,0 +1,7 @@
+.workspace-dropdown .menu-shortcut {
+  float: right;
+  margin-left: 12px;
+  padding-top: 1px;
+  font: 400 11px / 1.5 var(--ui, system-ui, sans-serif);
+  color: var(--muted);
+}

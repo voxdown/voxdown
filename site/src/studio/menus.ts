@@ -33,7 +33,11 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
       name: "edit",
       groups: [
         [{ command: "Undo" }, { command: "Redo" }],
-        [{ command: "Scoped find and replace", label: "Find and replace…" }],
+        [
+          { command: "Find", label: "Find…" },
+          { command: "Go to scene", label: "Go to scene…" },
+          { command: "Scoped find and replace", label: "Scoped find and replace…" },
+        ],
         [
           { command: "Italic" },
           { command: "Bold" },
@@ -49,7 +53,14 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
           { command: "Focus writing", label: "Focus writing" },
           { command: "Toggle scene outline", label: "Scenes panel" },
           { command: "Toggle page preview", label: "Preview panel" },
+          { command: "Toolbar" },
+          { command: "Commands", label: "Commands…" },
+        ],
+        [
+          { command: "Appearance", label: "Appearance…" },
           { command: "Toggle live margins", label: "Toggle live margins" },
+          { command: "Typewriter scrolling" },
+          { command: "Page guides" },
           { command: "Open text reference beside screenplay", label: "Text reference…" },
         ],
         [
@@ -88,11 +99,13 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
       name: "help",
       groups: [
         [
+          { command: "Keyboard shortcuts", label: "Keyboard shortcuts…" },
           { id: "help", label: "Fountain guide…" },
           { command: "Explain the current Fountain line", label: "Line help…" },
           { command: "Practice Fountain step by step", label: "Guided practice…" },
           { id: "example", label: "Try a short screenplay…" },
         ],
+        [{ command: "About Studio", label: "About VoxDown Studio…" }],
       ],
     },
   ];
@@ -108,6 +121,19 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
   let active: { button: HTMLButtonElement; panel: HTMLElement } | undefined;
   const openers = new Map<HTMLButtonElement, () => void>();
   const sync: (() => void)[] = [];
+  const apple = /Mac|iPad|iPhone|iPod/.test(`${navigator.platform} ${navigator.userAgent}`);
+  const shortcutLabel = (value: string) =>
+    value
+      .replace(/Ctrl\/⌘\s*/g, "Mod ")
+      .trim()
+      .replace(/\s+/g, "+")
+      .replaceAll("Mod", apple ? "⌘" : "Ctrl")
+      .replaceAll("Alt", apple ? "Option" : "Alt");
+  const visible = (element: HTMLElement | null): element is HTMLElement =>
+    Boolean(element?.getClientRects().length && !element.closest("[hidden], [inert]"));
+  const focusFirst = (candidates: (HTMLElement | null)[]) => {
+    candidates.find(visible)?.focus();
+  };
   function close(restore = false) {
     if (!active) return;
     const { button, panel } = active;
@@ -130,32 +156,58 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
       if (index) panel.append(document.createElement("hr"));
       for (const entry of entries) {
         let button: HTMLButtonElement;
+        let command: StudioCommand | undefined;
         if ("id" in entry) {
           button = document.getElementById(entry.id) as HTMLButtonElement;
+          const label = {
+            new: "New screenplay",
+            open: "Open Fountain file",
+            download: "Download Fountain",
+            recent: "Recovery and snapshots",
+            preferences: "Preferences",
+            help: "Fountain guide",
+            workbench: "Writing statistics",
+            "caret-page": "Show caret on page",
+            "page-source": "Go to preview source",
+          }[entry.id];
+          command = commands.find((candidate) => candidate.label === label);
         } else {
-          const command = commands.find((candidate) => candidate.label === entry.command);
+          command = commands.find((candidate) => candidate.label === entry.command);
           if (!command) throw new Error(`Unknown Studio command: ${entry.command}`);
+          const action = command;
           button = document.createElement("button");
           button.type = "button";
           button.textContent = entry.label ?? command.label;
           const update = () => {
-            button.disabled = command.enabled?.() === false;
+            button.disabled = action.enabled?.() === false;
             const state = (
               {
                 "Focus writing": ["focus-mode", "aria-pressed"],
                 "Toggle scene outline": ["outline-toggle", "aria-expanded"],
                 "Toggle page preview": ["preview-toggle", "aria-pressed"],
               } as Record<string, [string, string]>
-            )[command.label];
+            )[action.label];
             if (state)
               button.setAttribute(
                 "aria-pressed",
                 document.getElementById(state[0])?.getAttribute(state[1]) ?? "false",
               );
-            if (command.label === "Toggle live margins")
+            const checkbox = {
+              "Toggle live margins": "margins",
+              "Typewriter scrolling": "typewriter",
+              "Page guides": "page-guides",
+            }[action.label];
+            if (checkbox)
               button.setAttribute(
                 "aria-pressed",
-                String((document.getElementById("margins") as HTMLInputElement).checked),
+                String(
+                  (document.getElementById(checkbox) as HTMLInputElement | null)?.checked ?? false,
+                ),
+              );
+            if (action.label === "Toolbar")
+              button.setAttribute(
+                "aria-pressed",
+                String(document.documentElement.dataset.studioToolbar === "true"),
               );
             if (button.hasAttribute("aria-pressed") && !button.querySelector(".menu-check")) {
               const mark = document.createElement("span");
@@ -167,10 +219,17 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
           };
           sync.push(update);
           button.addEventListener("click", () => {
-            if (command.enabled?.() !== false) command.run();
+            if (action.enabled?.() !== false) action.run();
           });
         }
         if (entry.label) button.textContent = entry.label;
+        if (command?.shortcut) {
+          const hint = document.createElement("kbd");
+          hint.className = "menu-shortcut";
+          hint.textContent = shortcutLabel(command.shortcut);
+          hint.setAttribute("aria-hidden", "true");
+          button.append(hint);
+        }
         panel.append(button);
       }
     });
@@ -247,11 +306,18 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
         close();
         if (event.shiftKey) trigger.focus();
         else {
-          const nav = [...document.querySelectorAll<HTMLButtonElement>(".workspace-menus button")];
-          (definition.name === "preview"
-            ? document.getElementById("page-scroll")
-            : (nav[nav.indexOf(trigger) + 1] ?? document.getElementById("commands"))
-          )?.focus();
+          const nav = [
+            ...document.querySelectorAll<HTMLButtonElement>(".workspace-menus button"),
+          ].filter(visible);
+          focusFirst([
+            definition.name === "preview"
+              ? document.getElementById("page-scroll")
+              : (nav[nav.indexOf(trigger) + 1] ?? null),
+            document.getElementById("name"),
+            document.getElementById("save-primary"),
+            document.getElementById("commands"),
+            document.querySelector<HTMLElement>(".cm-content"),
+          ]);
         }
         return;
       }

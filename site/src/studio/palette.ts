@@ -122,9 +122,13 @@ export function mountPalette(host: HTMLElement, commands: StudioCommand[]) {
       button.append(label);
       if (command.shortcut) {
         const shortcut = document.createElement("kbd");
-        shortcut.textContent = command.shortcut;
+        shortcut.textContent = command.shortcut.replaceAll(
+          "Mod",
+          /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? "⌘" : "Ctrl",
+        );
+        shortcut.setAttribute("aria-hidden", "true");
         button.append(shortcut);
-        button.setAttribute("aria-label", `${command.label} · ${command.shortcut}`);
+        button.setAttribute("aria-description", shortcut.textContent);
       }
       button.disabled = command.enabled?.() === false;
       button.onclick = () => {

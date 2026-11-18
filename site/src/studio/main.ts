@@ -9,7 +9,7 @@ import {
   undo,
   undoDepth,
 } from "@codemirror/commands";
-import { search, searchKeymap } from "@codemirror/search";
+import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import {
   Compartment,
   EditorState,
@@ -26,6 +26,7 @@ import {
   placeholder,
 } from "@codemirror/view";
 import { mountAdaptation } from "./adaptation-dialog";
+import { mountStudioAppearance } from "./appearance";
 import { mountBackup } from "./backup";
 import { mountBreakdown } from "./breakdown-dialog";
 import { mountCoach } from "./coach";
@@ -35,10 +36,11 @@ import { mountFileDrop } from "./drop-files";
 import { mountFdxExport } from "./fdx-dialog";
 import { mountFdxImport } from "./fdx-import-dialog";
 import type { FountainDocument } from "./fountain";
+import { mountStudioHelp } from "./help";
 import type { ScreenplayLayout } from "./layout";
 import { mountLearning } from "./learning-dialog";
 import { mountLibrary } from "./library";
-import { LocalFileController } from "./local-file";
+import { LocalFileController, type LocalFileHandle } from "./local-file";
 import { mountLocations } from "./location-dialog";
 import { mountWorkspaceMenus } from "./menus";
 import { adjacentScene, filterOutline, itemAtLine, outlineOf, pageAtSource } from "./navigation";
@@ -75,6 +77,9 @@ import "./panels.css";
 import "./shell.css";
 import "./dialog-layout.css";
 import "./manuscript.css";
+import "./help.css";
+import "./menus.css";
+import "./appearance.css";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const app = $("app");
@@ -100,6 +105,20 @@ try {
   pairs.checked = localStorage.getItem("studio-smart-pairs") !== "off";
 } catch {}
 const preferences = readPreferences();
+margins.checked = preferences.margins;
+paper.value = preferences.paper;
+app.classList.toggle("outline-collapsed", !preferences.outline);
+app.classList.toggle("no-preview", !preferences.preview);
+const studioHelp = mountStudioHelp(document.body);
+const appearance = mountStudioAppearance({
+  root: document.documentElement,
+  select: $<HTMLSelectElement>("theme"),
+  button: $<HTMLButtonElement>("appearance"),
+  onChange(theme) {
+    preferences.theme = theme;
+    keepPreferences();
+  },
+});
 const scheduler = new ScreenplayScheduler(
   () => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
 );
@@ -220,7 +239,7 @@ const view = new EditorView({
 
 document.querySelector<HTMLAnchorElement>(".skip")?.addEventListener("click", (event) => {
   event.preventDefault();
-  previewSpace.restore(false);
+  revealWriting();
   view.focus();
 });
 const referencePanel = mountReference(preview, () => {
@@ -230,6 +249,7 @@ const referencePanel = mountReference(preview, () => {
   }
   if (matchMedia("(max-width: 700px)").matches) app.classList.add("mobile-preview");
   else app.classList.remove("no-preview");
+  rememberPreview();
   updatePreviewToggle();
 });
 const previewSpace = mountPreviewSpace(
@@ -251,6 +271,12 @@ const workspacePanels = mountWorkspacePanels({
   preview,
   outlineToggle: $<HTMLButtonElement>("outline-toggle"),
   outlineClose: $<HTMLButtonElement>("outline-close"),
+  onOutlineChange(open) {
+    if (matchMedia("(min-width: 1101px)").matches) {
+      preferences.outline = open;
+      savePreferences(preferences);
+    }
+  },
 });
 
 const scopedReplace = mountScopedReplace(document.body, {
@@ -480,7 +506,46 @@ const offline = createStudioOffline((status) => {
         : "Prepare for offline use";
 });
 $("offline-prepare").addEventListener("click", () => void offline.prepare());
+function findInScreenplay(): void {
+  revealWriting();
+  view.focus();
+  openSearchPanel(view);
+}
+function revealWriting(): void {
+  previewSpace.restore(false);
+  app.classList.remove("mobile-preview", "outline-open");
+  updatePreviewToggle();
+}
+function goToScene(): void {
+  previewSpace.restore(false);
+  preferences.focus = false;
+  app.classList.remove("mobile-preview");
+  keepPreferences();
+  workspacePanels.setOutline(true);
+  $("scene-search").focus();
+}
 const commands: StudioCommand[] = [
+  { label: "Find", category: "Write and edit", shortcut: "Mod F", run: findInScreenplay },
+  { label: "Go to scene", category: "Navigate", shortcut: "Mod Shift O", run: goToScene },
+  {
+    label: "Toolbar",
+    category: "Writing space",
+    run: () => {
+      preferences.toolbar = !preferences.toolbar;
+      keepPreferences();
+    },
+  },
+  { label: "Typewriter scrolling", category: "Writing space", run: () => $("typewriter").click() },
+  { label: "Page guides", category: "Writing space", run: () => $("page-guides").click() },
+  { label: "Appearance", category: "Writing space", run: () => appearance.open() },
+  { label: "Commands", category: "Navigate", shortcut: "Mod Shift P", run: () => palette.open() },
+  {
+    label: "Keyboard shortcuts",
+    category: "Learn and inspect",
+    shortcut: "Mod /",
+    run: () => studioHelp.openShortcuts(),
+  },
+  { label: "About Studio", category: "Learn and inspect", run: () => studioHelp.openAbout() },
   {
     label: "Review layout notes",
     category: "Export and perform",
@@ -634,7 +699,7 @@ const commands: StudioCommand[] = [
     category: "Files and recovery",
     keywords: "write local",
     run: () => void saveToFile(true),
-    enabled: () => localFile.available && !localFile.busy,
+    enabled: () => !localFile.busy,
   },
   {
     label: "Prepare Studio for offline use",
@@ -728,6 +793,23 @@ const commands: StudioCommand[] = [
     },
   },
 ];
+const workspaceBindings: Record<string, string> = {
+  "Open Fountain file": "Mod O",
+  "Save Fountain to file": "Mod S",
+  "Save Fountain as…": "Mod Shift S",
+  "Focus writing": "Mod Shift F",
+  "Toggle scene outline": "Mod Shift \\",
+  "Toggle page preview": "Mod \\",
+  "Export PDF": "Mod P",
+  Bold: "Mod B",
+  Italic: "Mod I",
+  Underline: "Mod U",
+  "Private note": "Mod Shift M",
+};
+for (const command of commands) {
+  const shortcut = workspaceBindings[command.label];
+  if (shortcut) command.shortcut ??= shortcut;
+}
 const fileOrder = [
   "New screenplay",
   "Open Fountain file",
@@ -748,19 +830,58 @@ commands.sort(
 const palette = mountPalette(document.body, commands);
 const workspaceMenus = mountWorkspaceMenus(commands);
 $("commands").addEventListener("click", () => palette.open());
-document.addEventListener("keydown", (event) => {
-  if (recovering || replacing) return;
-  if (
-    (event.ctrlKey || event.metaKey) &&
-    event.key.toLowerCase() === "k" &&
-    !event.isComposing &&
-    !document.querySelector("dialog[open]")
-  ) {
+document.addEventListener(
+  "keydown",
+  (event) => {
+    if (
+      recovering ||
+      replacing ||
+      event.isComposing ||
+      event.altKey ||
+      document.querySelector("dialog[open]")
+    )
+      return;
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    let action: (() => void) | undefined;
+    if (mod) {
+      if (key === "s") action = () => void saveToFile(event.shiftKey);
+      else if (key === "o") action = event.shiftKey ? goToScene : () => $("open").click();
+      else if (key === "f")
+        action = event.shiftKey ? () => $("focus-mode").click() : findInScreenplay;
+      else if (event.code === "Backslash" || key === "\\" || key === "|")
+        action = () => $(event.shiftKey ? "outline-toggle" : "preview-toggle").click();
+      else if (key === "/" || (event.code === "Slash" && !event.shiftKey))
+        action = () => studioHelp.openShortcuts();
+      else if (key === "k" || (key === "p" && event.shiftKey)) action = () => palette.open();
+      else if (key === "p") action = () => pdfButton.click();
+    } else if (key === "f10" && !event.shiftKey) action = () => $("file-menu").focus();
+    else if (key === "f6") action = () => cycleWorkspace(event.shiftKey ? -1 : 1);
+    if (!action) return;
     event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat) return;
     workspaceMenus.close(true);
-    palette.open();
-  }
-});
+    action();
+  },
+  true,
+);
+function cycleWorkspace(direction: number): void {
+  const regions = [
+    { region: $("writing"), target: view.contentDOM },
+    { region: $("outline"), target: $("scene-search") },
+    { region: preview, target: $("page-scroll") },
+    { region: $("documentbar"), target: $("element-action") },
+    { region: $("app-header"), target: $("file-menu") },
+  ].filter(
+    ({ region, target }) =>
+      !region.closest("[inert], [aria-hidden=true]") &&
+      region.getClientRects().length &&
+      target.getClientRects().length,
+  );
+  const current = regions.findIndex(({ region }) => region.contains(document.activeElement));
+  regions[(current + direction + regions.length) % regions.length]?.target.focus();
+}
 
 function editingState(doc = ""): EditorState {
   return EditorState.create({
@@ -784,7 +905,7 @@ function editingState(doc = ""): EditorState {
 
 function applyPreferences(): void {
   if (preferences.focus) previewSpace.restore(false);
-  document.documentElement.dataset.theme = preferences.theme;
+  appearance.apply(preferences.theme);
   if (preferences.focus) app.classList.remove("mobile-preview", "outline-open");
   document.documentElement.style.setProperty("--editor-size", `${preferences.textSize}px`);
   app.classList.toggle("focus-writing", preferences.focus);
@@ -794,8 +915,9 @@ function applyPreferences(): void {
     "aria-label",
     preferences.focus ? "Exit focus writing" : "Focus writing",
   );
-  $("mobile-focus").textContent = preferences.focus ? "Exit focus" : "Focus";
-  $<HTMLSelectElement>("theme").value = preferences.theme;
+  $("mobile-focus").textContent = preferences.focus ? "Leave focus" : "Focus";
+  $("documentbar").hidden = preferences.focus || !preferences.toolbar;
+  document.documentElement.dataset.studioToolbar = String(preferences.toolbar);
   $<HTMLSelectElement>("text-size").value = String(preferences.textSize);
   $<HTMLInputElement>("typewriter").checked = preferences.typewriter;
   $<HTMLInputElement>("page-guides").checked = preferences.pageGuides;
@@ -817,10 +939,6 @@ for (const id of ["focus-mode", "mobile-focus"])
 $("preferences").addEventListener("click", () =>
   $<HTMLDialogElement>("preferences-dialog").showModal(),
 );
-$("theme").addEventListener("change", () => {
-  preferences.theme = $<HTMLSelectElement>("theme").value as StudioPreferences["theme"];
-  keepPreferences();
-});
 $("text-size").addEventListener("change", () => {
   preferences.textSize = Number(
     $<HTMLSelectElement>("text-size").value,
@@ -1185,7 +1303,7 @@ function jumpToLine(line: number): void {
     effects: EditorView.scrollIntoView(at, { y: "center" }),
   });
   app.classList.remove("outline-open", "mobile-preview");
-  $("outline-toggle").setAttribute("aria-expanded", "false");
+
   updatePreviewToggle();
   view.focus();
 }
@@ -1289,6 +1407,12 @@ function renderPage(): void {
   $<HTMLButtonElement>("previous").disabled = previewPage <= 0;
   $<HTMLButtonElement>("next").disabled = previewPage >= layout.pages.length - 1;
 }
+function rememberPreview(): void {
+  if (!matchMedia("(max-width: 700px)").matches) {
+    preferences.preview = !app.classList.contains("no-preview");
+    savePreferences(preferences);
+  }
+}
 function updatePreviewToggle(): void {
   const mobile = matchMedia("(max-width: 700px)").matches;
   const shown =
@@ -1307,11 +1431,13 @@ $("preview-toggle").addEventListener("click", () => {
     keepPreferences();
     if (matchMedia("(max-width: 700px)").matches) app.classList.add("mobile-preview");
     else app.classList.remove("no-preview");
+    rememberPreview();
     updatePreviewToggle();
     return;
   }
   if (matchMedia("(max-width: 700px)").matches) app.classList.toggle("mobile-preview");
   else app.classList.toggle("no-preview");
+  rememberPreview();
   updatePreviewToggle();
 });
 matchMedia("(max-width: 700px)").addEventListener("change", updatePreviewToggle);
@@ -1321,15 +1447,20 @@ document.addEventListener("keydown", (event) => {
     event.defaultPrevented ||
     event.isComposing ||
     app.inert ||
-    !matchMedia("(max-width: 700px)").matches ||
-    !app.classList.contains("mobile-preview") ||
     document.querySelector("dialog[open]")
   )
     return;
-  event.preventDefault();
-  app.classList.remove("mobile-preview");
-  updatePreviewToggle();
-  view.focus();
+  if (app.classList.contains("mobile-preview")) {
+    event.preventDefault();
+    app.classList.remove("mobile-preview");
+    updatePreviewToggle();
+    view.focus();
+  } else if (preferences.focus) {
+    event.preventDefault();
+    preferences.focus = false;
+    keepPreferences();
+    view.focus();
+  }
 });
 updatePreviewToggle();
 $("outline-toggle").addEventListener("click", () => {
@@ -1337,13 +1468,17 @@ $("outline-toggle").addEventListener("click", () => {
   if (preferences.focus) {
     preferences.focus = false;
     keepPreferences();
-  }
-  workspacePanels.toggleOutline();
+    workspacePanels.setOutline(true);
+  } else workspacePanels.toggleOutline();
 });
 margins.addEventListener("change", () => {
+  preferences.margins = margins.checked;
+  keepPreferences();
   if (latest?.document) decorate(latest.document);
 });
 paper.addEventListener("change", () => {
+  preferences.paper = paper.value === "a4" ? "a4" : "letter";
+  keepPreferences();
   previewPage = 0;
   scheduleParse(0);
   updatePageGuides();
@@ -1374,9 +1509,50 @@ name.addEventListener("change", () => {
 $("help").addEventListener("click", () => $<HTMLDialogElement>("guide").showModal());
 for (const button of document.querySelectorAll<HTMLButtonElement>("dialog .close"))
   button.addEventListener("click", () => button.closest("dialog")?.close());
-$("open").addEventListener("click", () => $<HTMLInputElement>("file").click());
-async function openFountainFile(file: File) {
+$("open").addEventListener("click", () => void chooseFountainFile());
+async function chooseFountainFile(): Promise<void> {
+  if (recovering || replacing) return;
+  const picker = (
+    window as unknown as {
+      showOpenFilePicker?: (options: {
+        multiple: false;
+        types: { description: string; accept: Record<string, string[]> }[];
+      }) => Promise<LocalFileHandle[]>;
+    }
+  ).showOpenFilePicker;
+  if (!localFile.available || !picker) {
+    $<HTMLInputElement>("file").click();
+    return;
+  }
   const ticket = ++fileGeneration;
+  try {
+    const [handle] = await picker.call(window, {
+      multiple: false,
+      types: [
+        { description: "Fountain screenplay", accept: { "text/plain": [".fountain", ".txt"] } },
+      ],
+    });
+    if (!handle || ticket !== fileGeneration) return;
+    const file = await handle.getFile();
+    if (ticket !== fileGeneration) return;
+    await openFountainFile(
+      { name: handle.name, size: file.size, arrayBuffer: () => file.arrayBuffer() },
+      handle,
+      ticket,
+    );
+  } catch (error) {
+    if (ticket !== fileGeneration || (error instanceof Error && error.name === "AbortError"))
+      return;
+    notice(
+      "Could not open this file. Your current screenplay is unchanged. Check file access and try again.",
+    );
+  }
+}
+async function openFountainFile(
+  file: Pick<File, "name" | "size" | "arrayBuffer">,
+  handle?: LocalFileHandle,
+  ticket = ++fileGeneration,
+) {
   try {
     if (!/\.(fountain|txt)$/i.test(file.name))
       throw new Error(
@@ -1390,7 +1566,14 @@ async function openFountainFile(file: File) {
     readSource(value);
     if (ticket !== fileGeneration) return;
     if (await mayReplace()) {
-      if (ticket === fileGeneration) showSource(value, file.name);
+      if (ticket === fileGeneration) {
+        showSource(value, file.name);
+        if (handle) {
+          localFile.connectOpened(handle, value);
+          fileSavedRevision = revision;
+          updateFileControls();
+        }
+      }
     }
   } catch (error) {
     if (ticket !== fileGeneration) return;

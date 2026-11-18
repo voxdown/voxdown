@@ -31,7 +31,7 @@ beforeEach(async () => {
   await page.addStyleTag({ content: styles });
   await page.addScriptTag({
     type: "module",
-    content: `${code}\nconst get=id=>document.getElementById(id); window.mount=()=>window.panels=mountWorkspacePanels({app:get('app'),workspace:document.querySelector('.workspace'),outline:get('outline'),writing:get('writing'),preview:get('preview'),outlineToggle:get('outline-toggle'),outlineClose:get('outline-close')});window.mount();get('outline-toggle').onclick=()=>window.panels.toggleOutline();const editor=document.querySelector('textarea');editor.focus();editor.setSelectionRange(5,12,'backward');`,
+    content: `${code}\nconst get=id=>document.getElementById(id); window.mount=()=>window.panels=mountWorkspacePanels({app:get('app'),workspace:document.querySelector('.workspace'),outline:get('outline'),writing:get('writing'),preview:get('preview'),outlineToggle:get('outline-toggle'),outlineClose:get('outline-close'),onOutlineChange:open=>(window.outlineChanges??=[]).push(open)});window.mount();get('outline-toggle').onclick=()=>window.panels.toggleOutline();const editor=document.querySelector('textarea');editor.focus();editor.setSelectionRange(5,12,'backward');`,
   });
   await page.waitForFunction(() => Reflect.get(window, "panels"));
 });
@@ -69,6 +69,34 @@ describe("resizable workspace panels", () => {
     await page.getByRole("button", { name: "Scenes", exact: true }).click();
     expect((await geometry()).outline.width).toBe(224);
     expect(await source()).toEqual(original);
+  });
+  it("reports explicit outline choices and keeps pressed state aligned with responsive visibility", async () => {
+    const toggle = page.locator("#outline-toggle");
+    expect(await toggle.getAttribute("aria-pressed")).toBe("true");
+    await toggle.click();
+    expect(await toggle.getAttribute("aria-pressed")).toBe("false");
+    await toggle.click();
+    await page.evaluate(() => document.getElementById("app")?.classList.add("focus-writing"));
+    await page.waitForFunction(
+      () => document.getElementById("outline-toggle")?.getAttribute("aria-pressed") === "false",
+    );
+    expect(await page.evaluate(() => Reflect.get(window, "outlineChanges"))).toEqual([false, true]);
+    await page.evaluate(() => document.getElementById("app")?.classList.remove("focus-writing"));
+    await page.setViewportSize({ width: 768, height: 900 });
+    await page.waitForFunction(
+      () => document.getElementById("outline-toggle")?.getAttribute("aria-expanded") === "false",
+    );
+    expect(await toggle.getAttribute("aria-pressed")).toBe("false");
+    await toggle.click();
+    expect(await toggle.getAttribute("aria-pressed")).toBe("true");
+    await page.keyboard.press("Escape");
+    expect(await toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(await page.evaluate(() => Reflect.get(window, "outlineChanges"))).toEqual([
+      false,
+      true,
+      true,
+      false,
+    ]);
   });
   it("supports keyboard bounds, physical divider direction and reset", async () => {
     const scenes = page.getByRole("separator", { name: "Resize Scenes panel" });

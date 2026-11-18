@@ -49,7 +49,7 @@ async function start(source = "!Alpha beta") {
   await ready();
 }
 async function command(name: string) {
-  await page.locator("#commands").click();
+  await page.keyboard.press("Control+k");
   await page
     .getByRole("dialog", { name: "Commands", exact: true })
     .getByRole("button", { name, exact: true })
@@ -78,15 +78,15 @@ describe("explicit mobile focus writing", () => {
     expect(focused.height).toBeGreaterThanOrEqual(normal.height + 44);
     expect(focused.width).toBe(320);
     expect(await page.locator(".filebar").isVisible()).toBe(false);
-    expect(await page.locator(".toolbar").isVisible()).toBe(true);
-    for (const name of ["Commands", "Exit focus writing", "Bold", "Italic", "Note"]) {
+    expect(await page.locator(".toolbar").isVisible()).toBe(false);
+    for (const name of ["File", "Edit", "View", "Tools", "Help", "Exit focus writing"]) {
       const button = page.getByRole("button", { name, exact: true });
       expect(await button.isVisible()).toBe(true);
       expect((await button.boundingBox())?.height).toBeGreaterThanOrEqual(44);
     }
     expect(await page.locator("#recovery").isVisible()).toBe(true);
     expect(await page.locator("#help").isVisible()).toBe(false);
-    await page.locator("#commands").click();
+    await page.keyboard.press("Control+k");
     await page.getByRole("searchbox", { name: "Find a command" }).fill("Underline");
     expect(
       await page
@@ -122,7 +122,7 @@ describe("explicit mobile focus writing", () => {
     expect(
       await page.locator(".cm-content").evaluate((element) => document.activeElement === element),
     ).toBe(true);
-    await page.getByRole("button", { name: "Bold", exact: true }).click();
+    await page.keyboard.press("Control+b");
     expect(await downloadSource()).toBe("!**Alpha** beta");
     await page.locator("#mobile-focus").click();
     await command("Focus writing");
@@ -138,15 +138,15 @@ describe("explicit mobile focus writing", () => {
     expect(await page.locator("#mobile-focus").getAttribute("aria-pressed")).toBe("true");
     expect(await page.locator(".filebar").isVisible()).toBe(false);
     await page.setViewportSize({ width: 1280, height: 800 });
-    expect(await page.locator("#mobile-focus").isVisible()).toBe(false);
+    expect(await page.locator("#mobile-focus").isVisible()).toBe(true);
     expect(await page.locator("#help-menu").isVisible()).toBe(true);
     await page.locator("#help-menu").click();
     expect(await page.locator("#help").isVisible()).toBe(true);
     await page.keyboard.press("Escape");
     expect(await page.locator(".filebar").isVisible()).toBe(true);
-    expect(await page.locator(".toolbar").isVisible()).toBe(true);
+    expect(await page.locator(".toolbar").isVisible()).toBe(false);
     expect(await page.locator("#focus-mode").getAttribute("aria-pressed")).toBe("true");
-    await page.locator("#focus-mode").click();
+    await page.locator("#mobile-focus").click();
     await page.setViewportSize({ width: 320, height: 700 });
     expect(await page.locator("#mobile-focus").getAttribute("aria-pressed")).toBe("false");
     expect(await page.locator(".filebar").isVisible()).toBe(true);

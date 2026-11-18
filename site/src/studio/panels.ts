@@ -6,6 +6,8 @@ type PanelElements = {
   preview: HTMLElement;
   outlineToggle?: HTMLButtonElement;
   outlineClose?: HTMLButtonElement;
+  /** Explicit open/close requests only; responsive and Focus layout changes do not persist. */
+  onOutlineChange?: (open: boolean) => void;
 };
 type Widths = { outline: number; preview: number | null };
 const STORAGE_KEY = "voxdown.studio.panel-widths.v1";
@@ -97,6 +99,7 @@ export function mountWorkspacePanels(elements: PanelElements) {
     outlineHandle.hidden = !desktop() || !scenes || single;
     previewHandle.hidden = !hasPreview || window.innerWidth < 760;
     outlineToggle?.setAttribute("aria-expanded", String(scenes));
+    outlineToggle?.setAttribute("aria-pressed", String(scenes));
     if (outlineClose) outlineClose.hidden = !scenes;
     updateValue(outlineHandle, outlineWidth, 180, 360);
     updateValue(previewHandle, previewWidth, 280, previewMax);
@@ -107,6 +110,7 @@ export function mountWorkspacePanels(elements: PanelElements) {
     if (desktop()) app.classList.toggle("outline-collapsed", !open);
     else app.classList.toggle("outline-open", open);
     refreshLayouts();
+    elements.onOutlineChange?.(open);
   };
   const closeOutline = () => {
     setOutline(false);

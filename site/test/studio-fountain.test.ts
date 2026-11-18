@@ -42,6 +42,14 @@ describe("native Fountain", () => {
       sceneNumber: "I-1.A",
     });
     expect(parseFountain("...a distant memory").elements[0]?.kind).toBe("action");
+    expect(parseFountain("IN/EX. CAR - DAY").elements[0]?.kind).toBe("action");
+    expect(parseFountain(".IN/EX. CAR - DAY").elements[0]).toMatchObject({
+      kind: "scene",
+      text: "IN/EX. CAR - DAY",
+    });
+    expect(parseFountain("NORA\nI/E. is the abbreviation I use.").elements[1]?.kind).toBe(
+      "dialogue",
+    );
     expect(parseFountain("!INT. ROOM\nA lamp.").elements[0]).toMatchObject({
       kind: "action",
       text: "INT. ROOM",

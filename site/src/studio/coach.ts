@@ -5,7 +5,8 @@ type Advice = { title: string; explanation: string; next: string; example: strin
 const advice: Record<FountainKind, Advice> = {
   scene: {
     title: "Scene heading",
-    explanation: "This establishes where and when the scene takes place.",
+    explanation:
+      "This establishes where and when the scene takes place. INT/EXT., INT./EXT. and I/E. are recognized automatically at a paragraph boundary. For another spelling such as IN/EX, choose Scene heading in the toolbar or add a leading period: .IN/EX. CAR - DAY. Your wording is preserved.",
     next: "Leave a blank line, then describe what the audience can see or hear.",
     example: "INT. LIGHTHOUSE - NIGHT\n\nA light moves across the water.",
   },
@@ -114,8 +115,17 @@ export function explainFountainAt(
   const omission = document.omissions.find((item) => item.from <= offset && offset < item.to);
   const kind = omission?.kind ?? element?.kind ?? "blank";
   const line = element?.line ?? 1;
+  const shorthand = kind === "action" && /^(?:I|IN|IN\/EX)\.[ \t]/i.test(element?.text ?? "");
   return {
     ...advice[kind],
+    ...(shorthand
+      ? {
+          explanation:
+            "This abbreviation is not an automatic Fountain scene prefix. I/E., INT/EXT. and INT./EXT. are recognized at a paragraph boundary.",
+          next: "To keep this spelling, choose Scene heading in the toolbar or add a leading period. Studio preserves your words and formats the line as a scene.",
+          example: `.${element?.text ?? "IN. ROOM - DAY"}`,
+        }
+      : {}),
     line,
     warnings: document.warnings.filter((item) => item.line === line).map((item) => item.message),
   };

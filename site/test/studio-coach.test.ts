@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { explainFountainAt } from "../src/studio/coach";
 
 describe("on-demand Fountain help", () => {
+  it("explains how to explicitly format ambiguous scene abbreviations", () => {
+    for (const prefix of ["I.", "IN.", "IN/EX."]) {
+      const source = `${prefix} ROOM - DAY`;
+      const help = explainFountainAt(source, 0);
+      expect(help.title).toBe("Action");
+      expect(help.next).toContain("choose Scene heading");
+      expect(help.example).toBe(`.${source}`);
+    }
+    expect(explainFountainAt("NORA\nI. is the first item.", 10).title).toBe("Dialogue");
+  });
   it("explains actual context rather than guessing from uppercase text", () => {
     const source = "INT. ROOM - DAY\n\nMARA\nHELLO THERE.\n\nAction.";
     expect(explainFountainAt(source, source.indexOf("MARA")).title).toBe("Character cue");

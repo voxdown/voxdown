@@ -90,6 +90,7 @@ export function mountWorkspaceMenus(commands: StudioCommand[]) {
           { command: "Scoped find and replace", label: "Find and replace…" },
           { command: "Compare with local Fountain file", label: "Compare drafts…" },
           { command: "Number scenes", label: "Scene numbering…" },
+          { command: "Accept suggested scene number" },
         ],
         [
           { command: "Scene and cast breakdown", label: "Scene and cast breakdown…" },

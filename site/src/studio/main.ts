@@ -46,10 +46,22 @@ import { type StudioCommand, mountPalette } from "./palette";
 import { mountWorkspacePanels } from "./panels";
 import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
 import { mountPreviewSpace } from "./preview-space";
+import {
+  productionGuard,
+  productionGuardMessage,
+  productionNumberingAction,
+} from "./production-guard";
+import {
+  planCommitSceneNumber,
+  planLock,
+  planReleaseProductionLock,
+  readProduction,
+} from "./production-numbering";
 import { assertUnambiguousOmissions } from "./public-source";
 import { mountRecentDrafts } from "./recent-drafts";
 import { mountReference } from "./reference";
 import { mountSceneContext } from "./scene-context";
+import { sceneNumberMargins } from "./scene-number-margins";
 import { type WorkspacePosition, createWorkspaceSession } from "./workspace-session";
 import "./scene-context.css";
 import { mountRehearsal } from "./rehearsal-dialog";
@@ -64,7 +76,7 @@ import { sourceEditProblem } from "./source-input";
 import { mountSpeechEditor } from "./speech-dialog";
 import { type StudioDraft, getDraft, keepDraft, listDrafts } from "./storage";
 import { mountStorageHealth } from "./storage-health";
-import { rememberParsedSource } from "./syntax";
+import { parsedSource, rememberParsedSource } from "./syntax";
 import { learnTransitions } from "./transition-learning";
 import { type WritingMark, smartPairs, toggleWritingMark } from "./typing";
 import { mountWorkbench } from "./workbench";
@@ -82,6 +94,7 @@ import "./appearance.css";
 import "./editor-presentation.css";
 import "./outline-comments.css";
 import "./scraps.css";
+import "./scene-number-margins.css";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const app = $("app");
@@ -157,6 +170,8 @@ let fileGeneration = 0;
 const editorExtensions: Extension = [
   history(),
   learnTransitions(),
+  productionGuard(() => notice(productionGuardMessage)),
+  sceneNumberMargins((line, number) => acceptSceneNumber(line, number)),
   search(),
   autocompletion({
     override: [screenplayCompletions(() => parsedDocument)],
@@ -193,6 +208,7 @@ const editorExtensions: Extension = [
     { key: "Mod-i", run: () => format("italic") },
     { key: "Mod-u", run: () => format("underline") },
     { key: "Mod-Shift-m", run: () => format("note") },
+    { key: "Mod-Alt-n", run: () => acceptSceneNumber() },
     {
       key: "Mod-s",
       run: () => {
@@ -453,6 +469,38 @@ const locations = mountLocations(document.body, {
 });
 const numbering = mountNumberingDialog(document.body, {
   current: () => ({ source: view.state.doc.toString(), id: draftId }),
+  releaseLock: (snapshot) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    const plan = planReleaseProductionLock(snapshot.source);
+    view.dispatch({
+      changes: plan.changes,
+      annotations: [isolateHistory.of("full"), productionNumberingAction.of(true)],
+    });
+    if (view.state.doc.toString() !== plan.candidate) return false;
+    notice("Production lock released. Existing numbers are unchanged. Undo restores the lock.");
+    return true;
+  },
+  setLocked: (snapshot, locked) => {
+    if (
+      snapshot.id !== draftId ||
+      snapshot.source !== view.state.doc.toString() ||
+      recovering ||
+      replacing
+    )
+      return false;
+    const plan = planLock(snapshot.source, locked);
+    view.dispatch({
+      changes: plan.changes,
+      annotations: [isolateHistory.of("full"), productionNumberingAction.of(true)],
+    });
+    return view.state.doc.toString() === plan.candidate;
+  },
   apply: (snapshot, plan) => {
     if (
       snapshot.id !== draftId ||
@@ -461,8 +509,12 @@ const numbering = mountNumberingDialog(document.body, {
       replacing
     )
       return false;
-    view.dispatch({ changes: plan.changes, annotations: isolateHistory.of("full") });
-    notice(`Numbered ${plan.changes.length} scene headings. Undo restores the previous labels.`);
+    view.dispatch({
+      changes: plan.changes,
+      annotations: [isolateHistory.of("full"), productionNumberingAction.of(true)],
+    });
+    if (view.state.doc.toString() !== plan.candidate) return false;
+    notice(`Numbered ${plan.preview.length} scene headings. Undo restores the previous labels.`);
     return true;
   },
 });
@@ -474,6 +526,38 @@ const actorSides = mountActorSides(document.body, {
   }),
   download,
 });
+$("production-status").addEventListener("click", () => numbering.open());
+function acceptSceneNumber(line?: number, expected?: string): boolean {
+  if (recovering || replacing || view.state.readOnly) return true;
+  try {
+    const source = view.state.doc.toString();
+    let targetLine = line;
+    if (targetLine === undefined) {
+      const caretLine = view.state.doc.lineAt(view.state.selection.main.head).number;
+      for (const element of parsedSource(view.state.doc).elements) {
+        if (element.line > caretLine) break;
+        if (element.kind === "scene") targetLine = element.line;
+      }
+    }
+    if (!targetLine) throw new Error("Place the caret in a scene to accept its suggested number.");
+    // Recompute against the exact source at click time, never a stale worker suggestion.
+    const plan = planCommitSceneNumber(source, targetLine);
+    if (expected && !plan.changes.some((change) => change.insert === ` #${expected}#`))
+      throw new Error("The suggested number changed. Review the current number and try again.");
+    if (!plan.changes.length)
+      throw new Error("This scene already has a number, or has no safe suggestion.");
+    view.dispatch({
+      changes: plan.changes,
+      annotations: [isolateHistory.of("full"), productionNumberingAction.of(true)],
+    });
+    if (view.state.doc.toString() === plan.candidate)
+      notice("Scene number committed. Undo restores the previous source.", "success");
+  } catch (error) {
+    notice(error instanceof Error ? error.message : "Could not number this scene.");
+  }
+  view.focus();
+  return true;
+}
 const fdxExport = mountFdxExport(document.body, {
   current: () => ({ source: view.state.doc.toString(), name: title() }),
   download,
@@ -734,6 +818,15 @@ const commands: StudioCommand[] = [
     category: "Plan and revise",
     keywords: "numbering renumber labels production",
     run: () => numbering.open(),
+  },
+  {
+    label: "Accept suggested scene number",
+    category: "Plan and revise",
+    shortcut: "Mod Alt N",
+    keywords: "commit heading production number",
+    run: () => {
+      acceptSceneNumber();
+    },
   },
   {
     label: "Compare with local Fountain file",
@@ -1499,6 +1592,14 @@ function applyResult(result: Result): void {
   if (document) {
     parsedDocument = document;
     rememberParsedSource(view.state.doc, document);
+    const productionStatus = $("production-status");
+    try {
+      productionStatus.hidden = !readProduction(view.state.doc.toString(), document).locked;
+      productionStatus.textContent = "Scene numbers locked";
+    } catch {
+      productionStatus.hidden = false;
+      productionStatus.textContent = "Check scene numbering";
+    }
     workbench.update(document, view.state.doc.toString());
     decorate(document);
     finishPositionRestore();

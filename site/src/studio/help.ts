@@ -169,6 +169,7 @@ export function mountStudioHelp(host: HTMLElement) {
       ["Mod+Enter", "Start a new screenplay paragraph"],
       ["Ctrl+Space", "Suggest character names or scene headings"],
       ["Alt+PageUp / Alt+PageDown", "Go to the previous or next scene"],
+      ["Mod+Alt+N", "Accept the current scene’s suggested number"],
     ]),
     dialogDisclosure(
       "Optional screenplay keys",

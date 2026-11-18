@@ -23,6 +23,7 @@ describe("Studio workspace preferences", () => {
         outline: null,
         preview: "true",
         paper: "A3",
+        previewMode: "invalid",
         textSize: "20",
       }),
     ).toEqual(defaultPreferences);
@@ -40,6 +41,7 @@ describe("Studio workspace preferences", () => {
         margins: false,
         outline: false,
         preview: true,
+        previewMode: "continuous" as const,
         paper: "a4" as const,
       };
       expect(savePreferences({ ...value, screenplay: "private" } as typeof value)).toBe(true);

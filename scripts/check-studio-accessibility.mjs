@@ -421,6 +421,7 @@ try {
     previewBounds && previewBounds.height >= 110 && previewBounds.y + previewBounds.height <= 256,
     "Short viewport clips the scrollable screenplay preview",
   );
+  await page.locator("#zoom").click();
   await page.locator("#page-scroll").hover();
   await page.mouse.wheel(0, 400);
   await page.waitForFunction(() => document.querySelector("#page-scroll").scrollTop > 0);

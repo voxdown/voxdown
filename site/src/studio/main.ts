@@ -42,6 +42,7 @@ import { mountNumberingDialog } from "./numbering-dialog";
 import { createStudioOffline } from "./offline";
 import { mountOutlineComments } from "./outline-comments";
 import { pageGuideLocations, pageGuides, setPageGuides } from "./page-guides";
+import { mountPagePreview } from "./page-preview";
 import { type StudioCommand, mountPalette } from "./palette";
 import { mountWorkspacePanels } from "./panels";
 import { type StudioPreferences, readPreferences, savePreferences } from "./preferences";
@@ -161,6 +162,23 @@ let activeOutline: HTMLButtonElement | undefined;
 const outlineButtons = new Map<number, HTMLButtonElement>();
 let parseGeneration = 0;
 let previewPage = 0;
+const pagePreview = mountPagePreview({
+  page,
+  scroll: $("page-scroll"),
+  label: $("page-label"),
+  previous: $<HTMLButtonElement>("previous"),
+  next: $<HTMLButtonElement>("next"),
+  zoom: $<HTMLButtonElement>("zoom"),
+  mode: $<HTMLSelectElement>("preview-mode"),
+  initialMode: preferences.previewMode,
+  onPage(index) {
+    previewPage = index;
+  },
+  onMode(mode) {
+    preferences.previewMode = mode;
+    keepPreferences();
+  },
+});
 let layoutNoteMessages: string[] = [];
 let saving: ReturnType<typeof setTimeout> | undefined;
 let parsing: ReturnType<typeof setTimeout> | undefined;
@@ -1258,18 +1276,6 @@ updateFileControls();
 function format(mark: WritingMark): boolean {
   if (view.compositionStarted) return false;
   if (
-    mark !== "note" &&
-    view.state.selection.ranges.some((range) =>
-      view.state.sliceDoc(range.from, range.to).includes("\n"),
-    )
-  ) {
-    notice(
-      "Fountain emphasis belongs within one source line. Select the words on one line to format them.",
-    );
-    view.focus();
-    return true;
-  }
-  if (
     mark === "note" &&
     view.state.selection.ranges.some((range) =>
       /\n[ \t]?\n/.test(view.state.sliceDoc(range.from, range.to)),
@@ -1284,7 +1290,7 @@ function format(mark: WritingMark): boolean {
   const handled = toggleWritingMark(mark)(view);
   if (!handled && mark !== "note")
     notice(
-      "Select a single text span outside private comments to change its emphasis. Private comments and mixed formatting have been kept unchanged.",
+      "The selection could not be formatted. Select printable text; notes and Fountain syntax stay unchanged.",
     );
   if (!handled && mark === "note")
     notice(
@@ -1779,7 +1785,7 @@ $("caret-page").addEventListener("click", () => {
     latest.layout,
     view.state.doc.lineAt(view.state.selection.main.head).number,
   );
-  renderPage();
+  renderPage(true);
 });
 $("page-source").addEventListener("click", () => {
   const line = latest?.layout?.pages[previewPage]?.lines.find(
@@ -1788,40 +1794,13 @@ $("page-source").addEventListener("click", () => {
   if (line) jumpToLine(line);
   else notice("This page has no screenplay source line. Choose a screenplay page first.");
 });
-function renderPage(): void {
-  const layout = latest?.layout;
-  if (!layout) {
-    page.replaceChildren();
-    $("page-label").textContent = latest?.error ? "Preview needs attention" : "Updating…";
-    $<HTMLButtonElement>("previous").disabled = true;
-    $<HTMLButtonElement>("next").disabled = true;
-    return;
-  }
-  previewPage = Math.max(0, Math.min(previewPage, layout.pages.length - 1));
-  const current = layout.pages[previewPage];
-  page.style.aspectRatio = `${layout.width} / ${layout.height}`;
-  page.style.setProperty("--page-width", String(layout.width));
-  page.style.setProperty("--full-width", `${layout.width * (4 / 3)}px`);
-  page.replaceChildren(
-    ...(current?.lines ?? []).map((line) => {
-      const row = document.createElement("div");
-      row.className = "page-line";
-      row.style.left = `${(line.x / layout.width) * 100}%`;
-      row.style.top = `${(line.y / layout.height) * 100}%`;
-      for (const run of line.runs) {
-        const span = documentNode("span", run.text);
-        if (run.bold) span.style.fontWeight = "700";
-        if (run.italic) span.style.fontStyle = "italic";
-        if (run.underline) span.style.textDecoration = "underline";
-        row.append(span);
-      }
-      return row;
-    }),
+function renderPage(jump = false): void {
+  pagePreview.update(
+    latest?.layout,
+    previewPage,
+    latest?.error ? "Preview needs attention" : "Updating…",
+    jump,
   );
-  $("page-label").textContent =
-    `${current?.number === null ? "Title page" : `Page ${current?.number}`} · ${previewPage + 1} of ${layout.pages.length}`;
-  $<HTMLButtonElement>("previous").disabled = previewPage <= 0;
-  $<HTMLButtonElement>("next").disabled = previewPage >= layout.pages.length - 1;
 }
 function rememberPreview(): void {
   if (!matchMedia("(max-width: 700px)").matches) {
@@ -1903,19 +1882,6 @@ paper.addEventListener("change", () => {
   previewPage = 0;
   scheduleParse(0);
   updatePageGuides();
-});
-$("previous").addEventListener("click", () => {
-  previewPage--;
-  renderPage();
-});
-$("next").addEventListener("click", () => {
-  previewPage++;
-  renderPage();
-});
-$("zoom").addEventListener("click", () => {
-  const full = page.classList.toggle("full-size");
-  $("zoom").setAttribute("aria-pressed", String(full));
-  $("zoom").textContent = full ? "Fit page" : "Full size";
 });
 $("download").addEventListener("click", downloadSource);
 name.addEventListener("change", () => {

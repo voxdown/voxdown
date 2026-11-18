@@ -20,7 +20,12 @@ const compile = (file: string) =>
   }).outputText;
 const url = (source: string) =>
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
-const fountain = url(compile("../src/studio/fountain.ts"));
+const fountain = url(
+  compile("../src/studio/fountain.ts").replace(
+    '"./inline"',
+    JSON.stringify(url(compile("../src/studio/inline.ts"))),
+  ),
+);
 const filename = url(compile("../src/studio/filename.ts"));
 const source = url(
   compile("../src/studio/source.ts").replace('"./filename"', JSON.stringify(filename)),

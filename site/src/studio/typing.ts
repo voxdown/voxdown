@@ -11,6 +11,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import { planEmphasis } from "./emphasis";
 import { parsedSource } from "./syntax";
 
 const noteClosers = StateEffect.define<number[]>({
@@ -87,6 +88,53 @@ export function toggleWritingMark(mark: WritingMark): StateCommand {
     if (state.readOnly) return false;
     const parsed = parsedSource(state.doc);
     if (parsed.warnings.length) return false;
+    if (mark !== "note" && state.selection.ranges.every((range) => !range.empty)) {
+      const plan = planEmphasis(state, parsed, mark);
+      if (!plan) return false;
+      const selection = EditorSelection.create(
+        state.selection.ranges.map((range) => {
+          const mapped = plan.mapRange(range);
+          return EditorSelection.range(
+            range.anchor <= range.head ? mapped.from : mapped.to,
+            range.anchor <= range.head ? mapped.to : mapped.from,
+          );
+        }),
+        state.selection.mainIndex,
+      );
+      const transaction = state.update({
+        changes: plan.changes,
+        selection,
+        scrollIntoView: true,
+        userEvent: "input.format",
+        annotations: isolateHistory.of("full"),
+      });
+      const candidate = parsedSource(transaction.newDoc);
+      if (
+        candidate.warnings.length ||
+        candidate.elements.some((element, index) => {
+          const before = parsed.elements[index];
+          return (
+            !before ||
+            element.kind !== before.kind ||
+            element.sceneNumber !== before.sceneNumber ||
+            element.dual !== before.dual
+          );
+        }) ||
+        candidate.omissions.length !== parsed.omissions.length ||
+        parsed.omissions.some((span, index) => {
+          const next = candidate.omissions[index];
+          return (
+            !next ||
+            next.kind !== span.kind ||
+            state.sliceDoc(span.from, span.to) !==
+              transaction.newDoc.sliceString(next.from, next.to)
+          );
+        })
+      )
+        return false;
+      dispatch(transaction);
+      return true;
+    }
     if (
       state.selection.ranges.some((range) =>
         parsed.omissions.some((span) => {

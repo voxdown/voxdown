@@ -58,9 +58,8 @@ function button(text: string, run: () => void) {
   return result;
 }
 
-function markPinned(label: HTMLElement, pinned: boolean) {
-  if (!pinned) return;
-  label.classList.add("studio-scrap-pinned-label");
+const pinPath = "M16 9V3H8v6l-3 4v3h14v-3l-3-4ZM12 16v6";
+function scrapIcon(d: string) {
   const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   icon.setAttribute("viewBox", "0 0 24 24");
   icon.setAttribute("aria-hidden", "true");
@@ -71,9 +70,14 @@ function markPinned(label: HTMLElement, pinned: boolean) {
   icon.setAttribute("stroke-linecap", "round");
   icon.setAttribute("stroke-linejoin", "round");
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "M16 9V3H8v6l-3 4v3h14v-3l-3-4ZM12 16v6");
+  path.setAttribute("d", d);
   icon.append(path);
-  label.prepend(icon);
+  return icon;
+}
+function markPinned(label: HTMLElement, pinned: boolean) {
+  if (!pinned) return;
+  label.classList.add("studio-scrap-pinned-label");
+  label.prepend(scrapIcon(pinPath));
 }
 
 /** Writer's portable scrap format, kept separately for each Studio browser draft. */
@@ -445,7 +449,18 @@ export function mountStudioScraps(
       top.disabled = group[0]?.id === scrap.id;
       bottom.disabled = group.at(-1)?.id === scrap.id;
       const menuActions = [copy, insert, returned, edit, pin, top, bottom, remove];
-      for (const action of menuActions) {
+      const paths = [
+        "M9 8h11v13H9zM15 8V3H4v13h5",
+        "M14 4h6v16h-6M3 12h12m-4-4 4 4-4 4",
+        "m8 4-5 5 5 5M3 9h11a6 6 0 0 1 0 12h-3",
+        "m15 4 5 5M4 20l1-6L16 3a2 2 0 0 1 5 5L10 19z",
+        scrap.pinned ? `${pinPath}M3 3l18 18` : pinPath,
+        "M4 3h16M12 21V7m-6 6 6-6 6 6",
+        "M4 21h16M12 3v14m-6-6 6 6 6-6",
+        "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7",
+      ];
+      for (const [index, action] of menuActions.entries()) {
+        action.append(scrapIcon(paths[index] ?? ""));
         action.setAttribute("role", "menuitem");
         const run = action.onclick;
         action.onclick = (event) => {

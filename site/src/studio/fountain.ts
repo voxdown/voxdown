@@ -1,3 +1,5 @@
+import { fountainRuns } from "./inline";
+
 /** Native Fountain interpretation. The source remains the document of record.
  * Syntax reference: https://fountain.io/syntax/
  * Each physical line has an element; offsets address the original UTF-16 source,
@@ -134,7 +136,13 @@ function removeComments(
 }
 
 function uppercaseCue(text: string): boolean {
-  const trimmed = text.trim();
+  const trimmed = (
+    /[*_]/.test(text)
+      ? fountainRuns(text)
+          .map((run) => run.text)
+          .join("")
+      : text
+  ).trim();
   const extension = trimmed.endsWith(")") ? trimmed.lastIndexOf("(") : -1;
   const name = (extension < 0 ? trimmed : trimmed.slice(0, extension)).trim();
   return /\p{Lu}/u.test(name) && !/\p{Ll}/u.test(name);
@@ -214,8 +222,13 @@ export function parseFountain(source: string): FountainDocument {
       continue;
     }
 
-    const forcedScene = /^\.[\p{L}\p{N}]/u.test(text);
-    const scene = /^(?:INT\.?\/EXT|INT|EXT|EST|I\/E)(?:[. ]|$)/i.test(text);
+    const plain = /[*_]/.test(text)
+      ? fountainRuns(text)
+          .map((run) => run.text)
+          .join("")
+      : text;
+    const forcedScene = text.startsWith(".") && /^\.[\p{L}\p{N}]/u.test(plain);
+    const scene = /^(?:INT\.?\/EXT|INT|EXT|EST|I\/E)(?:[. ]|$)/i.test(plain);
     const section = /^(#+)\s*(.*)$/.exec(text);
     const dual = text.endsWith("^") && !escaped(text, text.length - 1);
     const cue = dual ? text.slice(0, -1).trimEnd() : text;
@@ -252,7 +265,13 @@ export function parseFountain(source: string): FountainDocument {
     } else if (text.startsWith("~")) {
       element.kind = "lyric";
       element.text = text.slice(1);
-    } else if (boundary && /TO:$/.test(line.text) && uppercaseCue(text) && !next?.text.trim()) {
+    } else if (
+      boundary &&
+      !/\s$/.test(line.text) &&
+      /TO:$/.test(plain) &&
+      uppercaseCue(plain) &&
+      !next?.text.trim()
+    ) {
       element.kind = "transition";
       element.text = text;
       dialogue = false;

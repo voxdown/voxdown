@@ -363,3 +363,58 @@
     display: flex;
   }
 }
+
+/* Preview sheets share the PDF's geometry in both reading modes. */
+#preview #page {
+  margin-inline: auto;
+}
+#preview #page.continuous-pages {
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.preview-sheet {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: white;
+  color: black;
+  container-type: inline-size;
+}
+.preview-sheet.has-next-page::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  border-bottom: 1px solid var(--border);
+}
+#preview-mode {
+  min-height: 32px;
+  max-width: 100%;
+  padding: 3px 6px;
+  font-size: 11px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+@media (max-width: 700px) {
+  #preview-mode {
+    min-height: 44px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 700px) and (max-height: 550px) {
+  /* Preserve room to read when the phone keyboard or browser zoom reduces height. */
+  #preview .page-controls {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-shrink: 0;
+    scrollbar-width: thin;
+  }
+  #preview .page-controls > * {
+    flex-shrink: 0;
+  }
+}

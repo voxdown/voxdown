@@ -114,8 +114,10 @@ describe("Studio typing assistance", () => {
   });
   it("does not damage separate emphasis spans when toggling a mixed selection", () => {
     const e = editor("**one** and **two**", 0, 19);
-    expect(e.run(toggleWritingMark("bold"))).toBe(false);
-    expect(e.state.doc.toString()).toBe("**one** and **two**");
+    expect(e.run(toggleWritingMark("bold"))).toBe(true);
+    expect(e.state.doc.toString()).toBe("**one and two**");
+    e.run(toggleWritingMark("bold"));
+    expect(e.state.doc.toString()).toBe("one and two");
   });
   it("protects comment delimiters for every formatting command and rejects partial boneyards", () => {
     for (const mark of ["bold", "italic", "underline", "note"] as const) {
@@ -214,5 +216,135 @@ describe("Studio typing assistance", () => {
     expect(e.state.doc.toString()).toBe("words");
     e.run(undo);
     expect(e.state.doc.toString()).toBe("**words**");
+  });
+  it("bolds the author's mixed Fountain selection line by line without touching notes or syntax", () => {
+    const source =
+      "I was trying to type [[sdfdfsd]] sdfsdf [[sdfsd]]\n\n@JOHN\n(sffsd)\n*sdfsdfsdf*\ndfaggfd\ndfagdafgdfgdsfg\n**sdsdgsgs**\nsadgsg\ndgdsgf\n\n\n*safgdfg*";
+    const expected =
+      "**I was trying to type** [[sdfdfsd]] **sdfsdf** [[sdfsd]]\n\n@**JOHN**\n(**sffsd**)\n***sdfsdfsdf***\n**dfaggfd**\n**dfagdafgdfgdsfg**\n**sdsdgsgs**\n**sadgsg**\n**dgdsgf**\n\n\n***safgdfg***";
+    const e = editor(source, 0, source.length);
+    expect(e.run(toggleWritingMark("bold"))).toBe(true);
+    expect(e.state.doc.toString()).toBe(expected);
+    expect(parseFountain(expected).elements.map((element) => element.kind)).toEqual(
+      parseFountain(source).elements.map((element) => element.kind),
+    );
+    e.run(toggleWritingMark("bold"));
+    expect(e.state.doc.toString()).toBe(source.replace("**sdsdgsgs**", "sdsdgsgs"));
+    e.run(undo);
+    expect(e.state.doc.toString()).toBe(expected);
+  });
+  it("uses the same independent-line, syntax-aware behavior for italic and underline", () => {
+    for (const [mark, delimiter] of [
+      ["italic", "*"],
+      ["underline", "_"],
+    ] as const) {
+      const source = `@JOHN\n(quietly)\nAlready ${delimiter}styled${delimiter} and **bold** [[private]]\n\nNext`;
+      const e = editor(source, 0, source.length);
+      expect(e.run(toggleWritingMark(mark))).toBe(true);
+      const result = e.state.doc.toString();
+      expect(result).toContain(`@${delimiter}JOHN${delimiter}\n(${delimiter}quietly${delimiter})`);
+      expect(result).toContain("[[private]]");
+      expect(result).toContain(`\n\n${delimiter}Next${delimiter}`);
+      for (const line of result.split("\n")) {
+        if (!line || line.startsWith("@") || line.startsWith("(")) continue;
+        expect(
+          fountainRuns(line.split("[[")[0]?.trim() ?? "")
+            .filter((run) => /\S/.test(run.text))
+            .every((run) => run[mark]),
+        ).toBe(true);
+      }
+      e.run(toggleWritingMark(mark));
+      expect(e.state.doc.toString()).toBe(
+        source.replace(`${delimiter}styled${delimiter}`, "styled"),
+      );
+    }
+  });
+  it("preserves scene, title, section, transition, lyric and dual-dialogue syntax", () => {
+    const source =
+      "Title: Test\n\n.INT. ROOM #15#\n\nINT. HALL #16#\n\n# Act One\n= A synopsis\n> THE END <\n> CUT TO:\n\nCUT TO:\n\n~A song\n\n@JOHN ^\n(quietly)\nHello\n\n===\n/*private*/";
+    const e = editor(source, 0, source.length);
+    expect(e.run(toggleWritingMark("bold"))).toBe(true);
+    expect(e.state.doc.toString()).toContain(".**INT. ROOM** #15#");
+    expect(e.state.doc.toString()).toContain("@**JOHN** ^");
+    expect(e.state.doc.toString()).toContain("> **THE END** <");
+    expect(e.state.doc.toString()).toContain("Title: **Test**");
+    expect(
+      parseFountain(e.state.doc.toString()).elements.map((el) => [
+        el.kind,
+        el.sceneNumber,
+        el.dual,
+      ]),
+    ).toEqual(parseFountain(source).elements.map((el) => [el.kind, el.sceneNumber, el.dual]));
+  });
+  it("removes emphasis from a partial span and leaves surrounding words styled", () => {
+    const e = editor("**one two three**", 6, 9);
+    expect(e.run(toggleWritingMark("bold"))).toBe(true);
+    expect(e.state.doc.toString()).toBe("**one** two **three**");
+    expect(e.state.sliceDoc(e.state.selection.main.from, e.state.selection.main.to)).toBe("two");
+    e.run(toggleWritingMark("bold"));
+    expect(e.state.doc.toString()).toBe("**one two three**");
+  });
+  it("preserves reversed selections, escaped characters, comments and blank lines", () => {
+    const source = "one \\*literal\\* [[note]] two\n\n/*secret*/\nthree";
+    const e = editor(source, source.length, 0);
+    expect(e.run(toggleWritingMark("underline"))).toBe(true);
+    expect(e.state.selection.main.anchor).toBeGreaterThan(e.state.selection.main.head);
+    expect(e.state.doc.toString()).toBe(
+      "_one \\*literal\\*_ [[note]] _two_\n\n/*secret*/\n_three_",
+    );
+    e.run(toggleWritingMark("underline"));
+    expect(e.state.doc.toString()).toBe(source);
+  });
+  it("adds each style around mixed emphasis even when the first word already has another style", () => {
+    for (const mark of ["bold", "italic", "underline"] as const) {
+      for (const source of [
+        "**bold** and *italic* and _underlined_",
+        "*italic* and **bold**",
+        "_underlined_ and plain",
+      ]) {
+        const e = editor(source, 0, source.length);
+        expect(e.run(toggleWritingMark(mark)), `${mark}: ${source}`).toBe(true);
+        expect(fountainRuns(e.state.doc.toString()).every((run) => run[mark])).toBe(true);
+        e.run(toggleWritingMark(mark));
+        expect(fountainRuns(e.state.doc.toString()).some((run) => run[mark])).toBe(false);
+      }
+    }
+  });
+  it("preserves emphasis across private notes and supports partial toggles on either side", () => {
+    const bold = editor("**one [[note]] two**", 0, 20);
+    expect(bold.run(toggleWritingMark("bold"))).toBe(true);
+    expect(bold.state.doc.toString()).toBe("one [[note]] two");
+    const italic = editor("*one [[note]] two*", 0, 18);
+    expect(italic.run(toggleWritingMark("bold"))).toBe(true);
+    expect(italic.state.doc.toString()).toBe("***one*** [[note]] ***two***");
+    const partial = editor("**one [[note]] two**", 2, 5);
+    expect(partial.run(toggleWritingMark("bold"))).toBe(true);
+    expect(partial.state.doc.toString()).toBe("one [[note]] **two**");
+    expect(
+      partial.state.sliceDoc(partial.state.selection.main.from, partial.state.selection.main.to),
+    ).toBe("one");
+  });
+  it("finds Fountain syntax after leading comments and retains lowercase character extensions", () => {
+    for (const source of [
+      "[[note]] @JOHN\nhello",
+      "[[note]] .I. ROOM",
+      "JOHN (cont'd)\nHello",
+      "JOHN (whispering)\nHello",
+    ]) {
+      const e = editor(source, 0, source.length);
+      expect(e.run(toggleWritingMark("bold")), source).toBe(true);
+      expect(parseFountain(e.state.doc.toString()).elements.map((el) => el.kind)).toEqual(
+        parseFountain(source).elements.map((el) => el.kind),
+      );
+      if (source.includes("@JOHN"))
+        expect(e.state.doc.toString()).toBe("[[note]] @**JOHN**\n**hello**");
+      if (source.includes(".I. ROOM")) expect(e.state.doc.toString()).toBe("[[note]] .**I. ROOM**");
+    }
+  });
+  it("styles complete indented title values, including colon-containing continuations", () => {
+    const source = "Title: Test\n   Written by: Someone";
+    const e = editor(source, 0, source.length);
+    expect(e.run(toggleWritingMark("bold"))).toBe(true);
+    expect(e.state.doc.toString()).toBe("Title: **Test**\n   **Written by: Someone**");
   });
 });

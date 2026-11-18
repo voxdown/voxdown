@@ -13,6 +13,7 @@ export type StudioPreferences = {
   paper: "letter" | "a4";
   outline: boolean;
   preview: boolean;
+  previewMode: "single" | "continuous";
 };
 export const defaultPreferences: StudioPreferences = {
   theme: "auto",
@@ -27,6 +28,7 @@ export const defaultPreferences: StudioPreferences = {
   paper: "letter",
   outline: true,
   preview: false,
+  previewMode: "single",
 };
 export function parsePreferences(value: unknown): StudioPreferences {
   const data = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -48,6 +50,7 @@ export function parsePreferences(value: unknown): StudioPreferences {
     paper: data.paper === "a4" ? "a4" : "letter",
     outline: data.outline !== false,
     preview: data.preview === true,
+    previewMode: data.previewMode === "continuous" ? "continuous" : "single",
   };
 }
 export function readPreferences(): StudioPreferences {

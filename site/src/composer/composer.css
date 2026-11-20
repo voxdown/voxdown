@@ -1685,14 +1685,24 @@ body.focus-mode .rail {
   .brand .word {
     display: none;
   }
+  .brand img {
+    width: 26px;
+    height: 26px;
+  }
   .workspace-menus {
     flex: 1;
+    min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
   }
   .workspace-menus button {
     min-height: 40px;
-    padding-inline: 8px;
+    padding-inline: 6px;
+    font-size: 13.5px;
+  }
+  /* Appearance lives in View › Appearance on a phone. */
+  #appearance {
+    display: none;
   }
   .filebar {
     display: none;
@@ -1700,15 +1710,6 @@ body.focus-mode .rail {
   #save-primary {
     min-height: 36px;
     padding-inline: 10px;
-  }
-  #appearance {
-    font-size: 0;
-    width: 40px;
-    min-height: 40px;
-  }
-  #appearance::before {
-    content: "◐";
-    font-size: 16px;
   }
   #layout-toggle {
     display: none;
@@ -1786,8 +1787,20 @@ body.focus-mode .rail {
   }
   .transport {
     flex-wrap: wrap;
-    gap: 6px 8px;
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    gap: 2px 4px;
+    padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+  }
+  .transport-main,
+  .transport-side {
+    gap: 0;
+  }
+  /* Metronome and count-in stay in the Play menu on a phone. */
+  #metronome,
+  #count-in {
+    display: none;
+  }
+  .tempo {
+    margin-right: 2px;
   }
   .transport button {
     min-height: 40px;
@@ -1800,6 +1813,7 @@ body.focus-mode .rail {
   .position {
     order: 3;
     flex-basis: 100%;
+    gap: 8px;
   }
   .transport-side {
     margin-left: auto;
@@ -1826,6 +1840,12 @@ body.focus-mode .rail {
   }
   .look-choices {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .brand {
+    display: none;
   }
 }
 

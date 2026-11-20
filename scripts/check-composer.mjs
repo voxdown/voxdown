@@ -353,7 +353,84 @@ await page.locator("#undo").click();
 assert.equal(await docText(), beforeTranspose, "one undo restores both voices");
 console.log("Composer: transpose applies to every range as one undoable step: passed");
 
-/* 9. Phone: Text | Score switch with the transport at hand. */
+/* 9. Redraws keep the reader's place; editing while playing keeps playing. */
+await openExample("Greensleeves");
+await page.locator("#score-scroll").evaluate((element) => {
+  element.scrollTop = 260;
+});
+await settle(100);
+const topBefore = await page.locator("#score-scroll").evaluate((element) => element.scrollTop);
+const heightBefore = await page.locator("#score").evaluate((element) => element.offsetHeight);
+// A change that redraws the score without changing its height (a note's length elsewhere).
+await setCaret((await docText()).indexOf("e>fe") + 4);
+await page.locator(".cm-content").focus();
+await page.keyboard.press("Backspace");
+await page.keyboard.type("d");
+await settle(900);
+const topAfter = await page.locator("#score-scroll").evaluate((element) => element.scrollTop);
+assert(
+  Math.abs(topAfter - topBefore) < 2,
+  `the score stays where the reader left it (${topBefore} → ${topAfter})`,
+);
+assert.equal(
+  await page.locator("#score").evaluate((element) => element.offsetHeight),
+  heightBefore,
+  "no layout shift",
+);
+await page.locator("#play").click();
+await page.waitForFunction(() => window.composer.state().scheduled > 0);
+await page.evaluate(() => {
+  const view = window.composer.view;
+  view.dispatch({ selection: { anchor: view.state.doc.length } });
+  view.focus();
+});
+await page.keyboard.type("% more");
+await settle(1200);
+assert.equal((await state()).status, "playing", "editing does not stop playback");
+await page.locator("#stop").click();
+console.log(
+  "Composer: redraws keep the reader's place without layout shift; editing while playing keeps playing: passed",
+);
+
+/* 10. Help while writing: a long bar is noted after a pause; completion offers keys. */
+await page.evaluate(() => {
+  const view = window.composer.view;
+  const text = view.state.doc.toString();
+  const at = text.indexOf('| "G"d2 B G>AB |');
+  view.dispatch({ changes: { from: at + 2, insert: "c " } });
+  view.dispatch({ selection: { anchor: 0 } });
+});
+await page.waitForFunction(() => !document.getElementById("problems").hidden, null, {
+  timeout: 5000,
+});
+assert.match(
+  await page.locator("#problems").textContent(),
+  /1 note to check/,
+  await page.locator("#problems").textContent(),
+);
+assert(await page.locator(".abc-bar-issue").count(), "the long bar is marked in the text");
+await page.locator("#problems").click();
+assert.match(
+  await page.locator("#problems-dialog").textContent(),
+  /This bar has 7 eighths; M:6\/8 holds 6 eighths/,
+);
+await page.keyboard.press("Escape");
+await page.evaluate(() => {
+  const view = window.composer.view;
+  const end = view.state.doc.length;
+  const insert = "\nX:9\nT:New\nK:";
+  view.dispatch({ changes: { from: end, insert }, selection: { anchor: end + insert.length } });
+  view.focus();
+});
+await page.keyboard.type("E");
+await page.locator(".cm-tooltip-autocomplete").waitFor();
+assert.match(await page.locator(".cm-tooltip-autocomplete").textContent(), /Em/);
+await page.keyboard.press("Escape");
+console.log(
+  "Composer: bar check notes a long bar after a pause, with a problems list; key completion: passed",
+);
+
+/* 11. Phone: Text | Score switch with the transport at hand. */
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

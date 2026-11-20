@@ -526,33 +526,34 @@ async function render(force = false) {
   }
 }
 
-function topSystem(): { line: number; offset: number } | null {
-  const systems = scoreElement.querySelectorAll("svg");
-  const top = scoreScroll.scrollTop;
-  if (!systems.length || top < 4) return null;
-  // abcjs draws one SVG; systems are told apart by their staff groups' line classes.
-  const marks = scoreElement.querySelectorAll<SVGGraphicsElement>(".abcjs-staff");
+/** Each system's top, in the score's scrolling coordinates, keyed by abcjs line number. */
+function systemTops(): Map<number, number> {
+  const tops = new Map<number, number>();
   const origin =
     scoreElement.getBoundingClientRect().top -
     scoreScroll.getBoundingClientRect().top +
     scoreScroll.scrollTop;
-  let best: { line: number; offset: number } | null = null;
-  for (const mark of marks) {
+  const scoreTop = scoreElement.getBoundingClientRect().top;
+  for (const mark of scoreElement.querySelectorAll<SVGGraphicsElement>(".abcjs-staff")) {
     const line = Number(/abcjs-l(\d+)/.exec(mark.getAttribute("class") ?? "")?.[1] ?? -1);
-    const y = mark.getBoundingClientRect().top - scoreElement.getBoundingClientRect().top + origin;
-    if (y >= top - 40 && (!best || line < best.line)) best = { line, offset: y - top };
+    if (line < 0) continue;
+    const y = mark.getBoundingClientRect().top - scoreTop + origin;
+    tops.set(line, Math.min(tops.get(line) ?? Number.POSITIVE_INFINITY, y));
   }
+  return tops;
+}
+function topSystem(): { line: number; offset: number } | null {
+  const top = scoreScroll.scrollTop;
+  if (top < 4) return null;
+  let best: { line: number; offset: number } | null = null;
+  for (const [line, y] of systemTops())
+    if (y >= top - 40 && (!best || line < best.line)) best = { line, offset: y - top };
   return best;
 }
 function restoreSystem(anchor: { line: number; offset: number } | null) {
   if (!anchor) return;
-  const mark = scoreElement.querySelector<SVGGraphicsElement>(`.abcjs-staff.abcjs-l${anchor.line}`);
-  if (!mark) return;
-  const origin =
-    scoreElement.getBoundingClientRect().top -
-    scoreScroll.getBoundingClientRect().top +
-    scoreScroll.scrollTop;
-  const y = mark.getBoundingClientRect().top - scoreElement.getBoundingClientRect().top + origin;
+  const y = systemTops().get(anchor.line);
+  if (y === undefined) return;
   scoreScroll.scrollTop = Math.max(0, y - anchor.offset);
 }
 
@@ -1731,8 +1732,10 @@ function applyLayout() {
   const layout = resolvedLayout();
   workspace.dataset.layout = layout;
   body.dataset.layout = layout;
-  workspace.dataset.rail = prefs.rail ? "open" : "closed";
-  $("rail-toggle").setAttribute("aria-pressed", String(prefs.rail));
+  // On a phone the rail is an overlay, closed until asked for.
+  const railOpen = phone.matches ? phoneRail : prefs.rail;
+  workspace.dataset.rail = railOpen ? "open" : "closed";
+  $("rail-toggle").setAttribute("aria-pressed", String(railOpen));
   $("layout-toggle").setAttribute(
     "aria-label",
     layout === "beside"
@@ -1755,11 +1758,19 @@ function setLayout(layout: "beside" | "below") {
 $("layout-toggle").addEventListener("click", () =>
   setLayout(resolvedLayout() === "beside" ? "below" : "beside"),
 );
-$("rail-toggle").addEventListener("click", () => {
-  prefs.rail = !prefs.rail;
-  savePrefs();
+let phoneRail = false;
+function toggleRail() {
+  if (phone.matches) phoneRail = !phoneRail;
+  else {
+    prefs.rail = !prefs.rail;
+    savePrefs();
+  }
   applyLayout();
-});
+  if (workspace.dataset.rail === "open" && phone.matches)
+    $("tune-list").querySelector<HTMLElement>("button")?.focus();
+}
+$("rail-toggle").addEventListener("click", toggleRail);
+phone.addEventListener("change", applyLayout);
 function setFocusMode(on: boolean) {
   body.classList.toggle("focus-mode", on);
   $("focus-mode").setAttribute("aria-pressed", String(on));
@@ -1918,7 +1929,8 @@ function goTo(position: number) {
     effects: EditorView.scrollIntoView(position, { y: "start", yMargin: 40 }),
   });
   if (phone.matches) {
-    prefs.rail = false;
+    phoneRail = false;
+    show("text");
     applyLayout();
   } else view.focus();
 }
@@ -2501,7 +2513,7 @@ const menus = mountMenus(
         run: () => setLayout("below"),
         checked: () => resolvedLayout() === "below",
       },
-      { label: "Tunes panel", run: () => $("rail-toggle").click(), checked: () => prefs.rail },
+      { label: "Tunes panel", run: toggleRail, checked: () => workspace.dataset.rail === "open" },
       {
         label: "Focus",
         run: () => setFocusMode(!body.classList.contains("focus-mode")),

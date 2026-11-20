@@ -566,6 +566,7 @@ export function editorState(text: string, hooks: EditorHooks): EditorState {
     EditorView.lineWrapping,
     EditorView.contentAttributes.of({
       "aria-label": "ABC music text",
+      tabindex: "0",
       spellcheck: "false",
       autocapitalize: "off",
       autocorrect: "off",

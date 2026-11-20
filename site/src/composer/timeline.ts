@@ -41,7 +41,10 @@ export type Timeline = {
   offset: number;
 };
 
-export type NoteLookup = (start: number) => { time: number; voice: number } | undefined;
+/** Finds the drawn note for a document offset from abcjs (which may start at a space). */
+export type NoteLookup = (
+  start: number,
+) => { time: number; voice: number; start: number; end: number } | undefined;
 
 /** Builds a tune's timeline from abcjs's `setUpAudio()` description. */
 export function buildTimeline(
@@ -92,6 +95,8 @@ export function buildTimeline(
     const found = lookup(note.start);
     if (!found) continue;
     note.written = found.time;
+    note.start = found.start;
+    note.end = found.end;
     if (!anchors.length || (anchors[anchors.length - 1] as Anchor).time !== note.time)
       anchors.push({ time: note.time, written: found.time });
   }

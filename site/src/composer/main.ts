@@ -26,6 +26,7 @@ import { SHORTCUTS, cheatsheet, createDialog, shortcutTable } from "./help";
 import { INSTRUMENTS, INSTRUMENT_ORDER, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
 import { type MenuItem, mountMenus, popupMenu } from "./menus";
+import { offlineStatus, prepareOffline } from "./offline";
 import { Player, encodeWav } from "./player";
 import {
   type Region,
@@ -585,7 +586,12 @@ function buildPlayback(index: ScoreIndex) {
   }
   const byStart = new Map<number, ScoreNote>();
   for (const note of index.notes) if (!byStart.has(note.start)) byStart.set(note.start, note);
-  const lookup = (start: number) => byStart.get(start);
+  const doc = text();
+  const lookup = (start: number) => {
+    let at = start;
+    while (at < doc.length && /\s/.test(doc[at] as string)) at += 1;
+    return byStart.get(at) ?? byStart.get(start);
+  };
   const meta = {
     bpm: audio.tempo || visual.getBpm?.() || 120,
     beat: visual.getBeatLength?.() || 0.25,
@@ -2337,6 +2343,58 @@ const looks = createDialog("looks", "Appearance");
 }
 $("appearance").addEventListener("click", () => looks.open());
 applyLook(prefs.look);
+
+const offlineDialog = createDialog("offline-dialog", "Work offline");
+{
+  const intro = document.createElement("p");
+  intro.textContent =
+    "Composer can open without a connection once it is prepared. Your music is kept in this browser either way; save files to keep copies elsewhere.";
+  const status = document.createElement("p");
+  status.id = "offline-status";
+  status.setAttribute("role", "status");
+  const prepare = document.createElement("button");
+  prepare.type = "button";
+  prepare.className = "primary";
+  prepare.textContent = "Prepare for offline use";
+  const sounds = document.createElement("button");
+  sounds.type = "button";
+  sounds.textContent = "Keep every instrument offline (2.6 MB)";
+  const actions = document.createElement("div");
+  actions.className = "dialog-actions";
+  actions.append(sounds, prepare);
+  offlineDialog.body.append(intro, status, actions);
+  const refresh = async () => {
+    status.textContent = "Checking…";
+    const state = await offlineStatus().catch(() => ({
+      ready: false,
+      message: "Offline status is unavailable.",
+    }));
+    status.textContent = state.message;
+  };
+  prepare.addEventListener("click", async () => {
+    status.textContent = "Preparing…";
+    const state = await prepareOffline().catch(() => ({
+      ready: false,
+      message: "Offline files could not be saved. Check your connection and storage, then retry.",
+    }));
+    status.textContent = state.message;
+  });
+  sounds.addEventListener("click", async () => {
+    sounds.disabled = true;
+    try {
+      for (const id of INSTRUMENT_ORDER) await player.load(id);
+      status.textContent = "Every instrument is kept in this browser.";
+    } catch {
+      status.textContent =
+        "Some instruments could not be downloaded. Check your connection and retry.";
+    } finally {
+      sounds.disabled = false;
+    }
+  });
+  offlineDialog.dialog.addEventListener("toggle", () => {
+    if (offlineDialog.dialog.open) void refresh();
+  });
+}
 
 const problemsDialog = createDialog("problems-dialog", "Notes to check");
 function openProblems() {

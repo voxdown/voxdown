@@ -178,6 +178,9 @@ importers:
       '@voxdown/render':
         specifier: workspace:^
         version: link:../packages/render
+      abcjs:
+        specifier: 6.7.3
+        version: 6.7.3
       pdf-lib:
         specifier: 1.17.1
         version: 1.17.1
@@ -1054,6 +1057,9 @@ packages:
     resolution: {integrity: sha512-XSxMosEEDO6vLxELAHVkwmhC0qe0ijZni2jB9Rcs8kQsW4lhTDQ/wMzmwFs/buotAWSnpmUp/dRWD2ufG3UYKA==}
     engines: {node: '>= 20'}
     hasBin: true
+
+  abcjs@6.7.3:
+    resolution: {integrity: sha512-yAf6kPrhwJuH4Amy1ZynX01rH74wWXJRULPpn4KpBur5aUr+NzZP9OZCNsN6thfH83NXJS00WB2mrg9hXNesbQ==}
 
   acorn@8.19.0:
     resolution: {integrity: sha512-oJlA3XiRm7Cyk6qFD2Jn8ak9B7jSy0qy00ADO3+8dpT0LSjFihQYv4C02LFCSYJV3Q37xYwwRy5m+IpIiUzqWw==}
@@ -3244,6 +3250,8 @@ snapshots:
     transitivePeerDependencies:
       - kerberos
       - supports-color
+
+  abcjs@6.7.3: {}
 
   acorn@8.19.0: {}
 

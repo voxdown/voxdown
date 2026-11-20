@@ -31,6 +31,7 @@
     "@voxdown/editor": "workspace:^",
     "@voxdown/produce": "workspace:^",
     "@voxdown/render": "workspace:^",
+    "abcjs": "6.7.3",
     "pdf-lib": "1.17.1",
     "voxdown": "workspace:^"
   },

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <!--composer-csp-->
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f6f5f0">
+  <title>VoxDown Composer — ABC music editor</title>
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <script src="./look.js"></script>
+</head>
+<body class="composer">
+  <a class="skip" href="#editor">Skip to the ABC text</a>
+  <a class="skip" href="#score-scroll">Skip to the score</a>
+  <header id="app-header" class="app-header">
+    <h1 class="sr-only">VoxDown Composer, an ABC music editor</h1>
+    <a class="brand" href="../writer/" title="Open VoxDown Writer"><img src="../icon.svg" width="24" height="24" alt=""><span class="word">VoxDown <em>Composer</em></span></a>
+    <nav class="workspace-menus" aria-label="Composer menus">
+      <button id="file-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="file">File</button>
+      <button id="edit-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="edit">Edit</button>
+      <button id="insert-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="insert">Insert</button>
+      <button id="view-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="view">View</button>
+      <button id="play-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="play">Play</button>
+      <button id="help-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="help">Help</button>
+    </nav>
+    <div class="filebar">
+      <label class="filename"><span class="sr-only">File name</span><input id="name" value="Untitled.abc" maxlength="180" spellcheck="false" autocomplete="off" aria-label="File name"></label>
+      <span id="saved-state" class="saved-state" aria-live="polite"></span>
+    </div>
+    <button id="save-primary" class="primary" type="button" title="Save (Ctrl/⌘ S)">Save</button>
+    <button id="appearance" type="button" aria-label="Appearance: Auto" title="Appearance">◐ Auto</button>
+    <div class="panel-toggles" role="group" aria-label="Panels">
+      <button id="rail-toggle" type="button" aria-label="Tunes" title="Tunes and voices" aria-pressed="true" aria-controls="rail"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg></button>
+      <button id="layout-toggle" type="button" aria-label="Score beside the text" title="Score beside or below (Ctrl/⌘ Alt L)"><svg class="beside" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8.5 2.5v11"/><path d="M10.5 6h2M10.5 8h2M10.5 10h2"/></svg><svg class="below" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 8.5h13"/><path d="M4 10.5h8M4 12h8"/></svg></button>
+    </div>
+  </header>
+  <main id="app" aria-label="Composer workspace">
+    <div class="documentbar">
+      <div class="toolbar" role="toolbar" aria-label="Music tools">
+        <div class="tool-group" role="group" aria-label="History">
+          <button id="undo" type="button" disabled aria-label="Undo" title="Undo (Ctrl/⌘ Z)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 2.5 7 6 10.5M2.5 7h7a3.5 3.5 0 0 1 0 7H8"/></svg></button>
+          <button id="redo" type="button" disabled aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 13.5 7 10 10.5M13.5 7h-7a3.5 3.5 0 0 0 0 7H8"/></svg></button>
+        </div>
+        <div class="tool-group" role="group" aria-label="Transpose">
+          <button type="button" data-command="transpose-down" aria-label="Down a semitone" title="Down a semitone (Alt ↓)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4.5 9.5 8 13l3.5-3.5"/></svg><span class="tool-label">♭</span></button>
+          <button type="button" data-command="transpose-up" aria-label="Up a semitone" title="Up a semitone (Alt ↑)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M4.5 6.5 8 3l3.5 3.5"/></svg><span class="tool-label">♯</span></button>
+          <button type="button" data-command="octave-down" class="wide-only" aria-label="Down an octave" title="Down an octave (Alt Shift ↓)"><span class="tool-text">8va↓</span></button>
+          <button type="button" data-command="octave-up" class="wide-only" aria-label="Up an octave" title="Up an octave (Alt Shift ↑)"><span class="tool-text">8va↑</span></button>
+        </div>
+        <div class="tool-group" role="group" aria-label="Lengths">
+          <button type="button" data-command="halve" aria-label="Halve lengths" title="Halve lengths (Alt [)"><span class="tool-text">½×</span></button>
+          <button type="button" data-command="double" aria-label="Double lengths" title="Double lengths (Alt ])"><span class="tool-text">2×</span></button>
+          <button type="button" data-command="dot" aria-label="Add a dot" title="Add a dot (Alt .)"><svg class="note-icon" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="6" cy="11.5" rx="2.6" ry="1.9" transform="rotate(-20 6 11.5)"/><path d="M8.4 11V2.5"/><circle class="fill" cx="12" cy="11.5" r="1.1"/></svg></button>
+          <button type="button" data-command="undot" class="wide-only" aria-label="Remove a dot" title="Remove a dot (Alt ,)"><svg class="note-icon" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="6" cy="11.5" rx="2.6" ry="1.9" transform="rotate(-20 6 11.5)"/><path d="M8.4 11V2.5"/><path d="m10.5 9.5 3 3m0-3-3 3"/></svg></button>
+        </div>
+        <div class="tool-group marks" role="group" aria-label="Marks">
+          <button type="button" data-command="bar" aria-label="Insert a bar line" title="Insert a bar line"><span class="tool-text">|</span></button>
+          <button type="button" data-command="tie" aria-label="Tie" title="Tie or untie (Alt T)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5c2.5 3 8.5 3 11 0"/></svg></button>
+          <button type="button" data-command="slur" aria-label="Slur" title="Slur or unslur (Alt S)"><span class="tool-text">( )</span></button>
+          <button type="button" data-command="decoration" aria-label="Decoration" title="Add a decoration (Alt D)" aria-haspopup="menu"><span class="tool-text">!f!</span><svg class="caret" viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6.5 3 3 3-3"/></svg></button>
+        </div>
+        <div class="tool-group wide-only" role="group" aria-label="Tunes">
+          <button type="button" data-command="new-tune" aria-label="New tune" title="Add a new tune at the end"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span>Tune</span></button>
+        </div>
+        <div class="tool-group view-switch" role="group" aria-label="Show">
+          <button id="show-text" type="button" aria-pressed="true">Text</button>
+          <button id="show-score" type="button" aria-pressed="false">Score</button>
+        </div>
+        <div class="tool-group end" role="group" aria-label="View">
+          <button id="focus-mode" type="button" aria-pressed="false" title="Focus (Ctrl/⌘ Shift F)">Focus</button>
+          <button id="cheatsheet-open" type="button" title="ABC cheat sheet (F1)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M6.2 5.9a1.8 1.8 0 1 1 3.3 1C8.5 7.5 8 8 8 9M8 11v.2"/></svg><span>ABC help</span></button>
+        </div>
+      </div>
+    </div>
+    <div id="notice" class="notice" tabindex="-1" hidden></div>
+    <div id="workspace" class="workspace" data-layout="beside">
+      <div id="start" class="start" hidden>
+        <div class="start-inner">
+          <h2>Write music<br>as plain text.</h2>
+          <p>ABC is a small notation for melodies: letters for notes, bar lines for bars. Type on the left; the score draws itself as you go, and plays back as you write. Everything stays in this browser until you save it.</p>
+          <div class="start-actions">
+            <button id="start-new" class="primary" type="button">Start a new tune</button>
+            <button id="start-open" type="button">Open a file…</button>
+          </div>
+          <p class="start-label">Or begin from an example:</p>
+          <div id="examples" class="examples"></div>
+          <div id="recent-start" class="recent-start" hidden>
+            <p class="start-label">Recent drafts in this browser:</p>
+            <div id="recent-list" class="examples"></div>
+          </div>
+        </div>
+      </div>
+      <aside id="rail" class="rail" aria-label="Tunes and voices">
+        <div class="panel-heading"><h2>Tunes <span id="tune-count">0</span></h2></div>
+        <nav id="tune-list" aria-label="Tunes in this file"></nav>
+        <p class="rail-hint">Each <code>X:</code> line starts a tune. Its voices (<code>V:</code>) and parts (<code>P:</code>) appear under it.</p>
+      </aside>
+      <section id="writing" class="writing" aria-label="ABC text">
+        <div id="editor"></div>
+      </section>
+      <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize the score" tabindex="0" aria-valuemin="25" aria-valuemax="75" aria-valuenow="50"></div>
+      <section id="score-panel" class="score-panel" aria-label="Score">
+        <div class="score-heading">
+          <p id="score-summary" class="score-summary" aria-live="polite">No tune yet</p>
+          <button id="follow" class="follow" type="button" hidden title="Follow the music again">Follow ↓</button>
+          <button id="announce" class="quiet-button" type="button" title="Read the note at the caret (Alt N)">Say note</button>
+        </div>
+        <div id="score-scroll" class="score-scroll" tabindex="0" role="group" aria-roledescription="score" aria-label="Score. Arrow keys move by note, Shift extends, Enter goes to the text.">
+          <div id="score-bands" class="score-bands" aria-hidden="true"></div>
+          <div id="score" class="score" aria-hidden="true"></div>
+          <div id="score-stage" class="score-stage" aria-hidden="true"></div>
+          <p id="score-empty" class="score-empty" hidden>Write a tune with an <code>X:</code> line and a <code>K:</code> line, then notes. The score draws itself here.</p>
+        </div>
+        <p id="score-live" class="sr-only" aria-live="polite"></p>
+      </section>
+    </div>
+    <div id="transport" class="transport" role="toolbar" aria-label="Playback">
+      <div class="transport-main">
+        <button id="play" class="play" type="button" aria-label="Play" title="Play or pause (Ctrl/⌘ Enter)"><svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.8 8z"/></svg><svg class="icon-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9M11 3.5v9"/></svg></button>
+        <button id="stop" type="button" aria-label="Stop" title="Stop (Ctrl/⌘ .)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1"/></svg></button>
+        <button id="from-caret" type="button" aria-label="Play from the caret" title="Play from the caret (Ctrl/⌘ Shift Enter)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3v10"/><path d="M6.5 4v8L12.5 8z"/></svg><span class="transport-label">From caret</span></button>
+        <button id="loop" type="button" aria-pressed="false" aria-label="Loop the selection" title="Loop the selection, or the bar at the caret (Ctrl/⌘ Shift L)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7V6a2 2 0 0 1 2-2h7.5M10.5 2l2 2-2 2M13 9v1a2 2 0 0 1-2 2H3.5M5.5 14l-2-2 2-2"/></svg><span class="transport-label">Loop</span></button>
+      </div>
+      <div class="position">
+        <div id="timeline" class="timeline" role="slider" tabindex="0" aria-label="Playback position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="Bar 1">
+          <div id="timeline-passes" class="timeline-passes"></div>
+          <div id="timeline-loop" class="timeline-loop" hidden></div>
+          <div id="timeline-ticks" class="timeline-ticks"></div>
+          <div id="timeline-head" class="timeline-head"></div>
+        </div>
+        <span id="clock" class="clock" aria-live="off">Bar 1 · 0:00</span>
+      </div>
+      <div class="transport-side">
+        <div class="tempo" role="group" aria-label="Tempo">
+          <button id="tempo-down" type="button" aria-label="Slower" title="Slower (Ctrl/⌘ Alt −)">−</button>
+          <label class="tempo-value"><input id="tempo" type="number" min="20" max="400" value="120" inputmode="numeric" aria-label="Tempo, beats per minute"><span id="tempo-unit">bpm</span></label>
+          <button id="tempo-up" type="button" aria-label="Faster" title="Faster (Ctrl/⌘ Alt =)">+</button>
+          <button id="tap" class="wide-only" type="button" title="Tap the beat to set the tempo">Tap</button>
+        </div>
+        <button id="metronome" type="button" aria-pressed="false" aria-label="Metronome" title="Metronome (Ctrl/⌘ Alt M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 14h5l-1.8-11H7.3z"/><path d="m8 10 3.5-5.5"/></svg></button>
+        <button id="count-in" type="button" class="wide-only" aria-pressed="false" aria-label="Count in one bar" title="Count in one bar before playing"><span class="tool-text">1 2 3</span></button>
+        <button id="voices-button" type="button" aria-haspopup="dialog" aria-label="Voices" title="Mute and solo voices" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5h10M3 8h10M3 11h10"/><circle cx="6" cy="5" r="1.2"/><circle cx="10" cy="8" r="1.2"/><circle cx="5" cy="11" r="1.2"/></svg><span class="transport-label">Voices</span></button>
+        <button id="sound-button" type="button" aria-haspopup="dialog" aria-label="Sound" title="Instrument, volume, room"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6v4h2.5l3.5 3V3L5 6z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4"/></svg><span id="instrument-label" class="transport-label">Piano</span></button>
+      </div>
+      <p id="sound-status" class="sound-status" role="status" aria-live="polite"></p>
+    </div>
+    <footer>
+      <span id="explain" class="explain" role="status" aria-live="off">Ready</span>
+      <button id="problems" class="problems" type="button" hidden>No problems</button>
+      <span id="recovery" class="recovery" role="status">Opening local recovery…</span>
+      <span id="position" class="caret-position">Line 1</span>
+    </footer>
+  </main>
+  <input id="file" type="file" accept=".abc,.txt,text/plain,text/vnd.abc" hidden>
+  <div id="print-score" class="print-score" aria-hidden="true"></div>
+  <noscript>Composer needs JavaScript to edit locally. No music is sent to a server.</noscript>
+  <script type="module" src="../src/composer/main.ts"></script>
+</body>
+</html>

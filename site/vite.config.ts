@@ -26,10 +26,16 @@ function studioSecurity(): Plugin {
     name: "voxdown-studio-security",
     apply: "build",
     transformIndexHtml(html) {
-      return html.replace(
-        "<!--studio-csp-->",
-        `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">`,
-      );
+      return html
+        .replace(
+          "<!--studio-csp-->",
+          `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+        )
+        .replace(
+          "<!--composer-csp-->",
+          // Composer: everything from this site; samples are fetched from it, audio is local.
+          `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+        );
     },
   };
 }
@@ -38,9 +44,9 @@ function studioDirectory(): Plugin {
     name: "voxdown-studio-directory",
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        const match = /^\/studio(\?.*)?$/.exec(request.url ?? "");
+        const match = /^\/(studio|composer)(\?.*)?$/.exec(request.url ?? "");
         if (!match) return next();
-        response.writeHead(302, { Location: `/studio/${match[1] ?? ""}` });
+        response.writeHead(302, { Location: `/${match[1]}/${match[2] ?? ""}` });
         response.end();
       });
     },
@@ -85,6 +91,7 @@ export default defineConfig({
         listen: resolve(here, "listen.html"),
         writer: resolve(here, "writer/index.html"),
         screenplayStudio: resolve(here, "studio/index.html"),
+        composer: resolve(here, "composer/index.html"),
         // The landing page directions not chosen, built but not linked (site/landing/*).
         stage: resolve(here, "landing/stage/index.html"),
         manuscript: resolve(here, "landing/manuscript/index.html"),

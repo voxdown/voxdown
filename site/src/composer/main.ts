@@ -350,7 +350,8 @@ function load(
   showStart(false);
   const at = options.caretAt ?? firstMusicPosition();
   view.dispatch({ selection: { anchor: at }, scrollIntoView: true });
-  if (!phone.matches) view.focus();
+  // A page arriving restores its draft without taking focus; opening something does.
+  if (!phone.matches && !options.keepDraft) view.focus();
   updateAll(true);
   updateSavedState();
 }
@@ -607,7 +608,7 @@ function updateSummary() {
   $("score-summary").textContent = parts.join(" · ");
   scoreScroll.setAttribute(
     "aria-label",
-    `Score of ${parts.join(", ")}. Arrow keys move by note, Shift extends, Space plays, Enter goes to the text.`,
+    `Score of ${parts.join(", ")}. ← and → move by note, ↑ and ↓ change voice, Home and End go along the line, Shift extends, Space plays, Enter goes to the text.`,
   );
 }
 

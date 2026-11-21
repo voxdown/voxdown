@@ -644,6 +644,275 @@ console.log(
   "Composer: bar check notes a long bar after a pause, with a problems list; key completion: passed",
 );
 
+/* 10b. Round 2 fixes: decorations, ties, menus, loop mode, count-in, shortcuts, score keys. */
+await openExample("Ode to Joy");
+{
+  // 1. Dynamics are written !f!, never as a bare letter that would be a note.
+  const at = (await docText()).indexOf("E E F D");
+  await setCaret(at);
+  await page.locator('[data-command="decoration"]').click();
+  const hint = await page.getByRole("menuitem", { name: /f — loud/ }).textContent();
+  assert.match(hint, /!f!/, "the menu shows !f!");
+  await page.getByRole("menuitem", { name: /f — loud/ }).click();
+  const decorated = await docText();
+  assert(
+    decorated.includes('"A"!f!E E F D') || decorated.includes("!f!E E F D"),
+    "!f! goes before the note",
+  );
+  assert(!/[^!]fE E F D/.test(decorated), "no bare f note");
+  await page.locator("#undo").click();
+  // 2. A tie between different pitches is refused with a reason.
+  const before = await docText();
+  await setCaret((await docText()).indexOf("F G A |"));
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Alt+t");
+  assert.equal(await docText(), before, "no tie between F and G");
+  assert.match(await page.locator("#notice").textContent(), /different pitch/);
+}
+console.log(
+  "Composer: dynamics are written !f!; ties between different pitches are refused with a reason: passed",
+);
+
+// 3. Menu bar: a click on another title switches; on the open title closes; Escape closes.
+await page.locator("#file-menu").click();
+await page.locator("#edit-menu").hover();
+await page.locator("#edit-menu").click();
+assert(
+  await page.locator("#edit-dropdown").isVisible(),
+  "Edit stays open after a click on its title",
+);
+assert.equal(await page.locator("#file-dropdown").count(), 0, "File closed");
+await page.locator("#edit-menu").click();
+assert.equal(
+  await page.locator("#edit-dropdown").count(),
+  0,
+  "a click on the open title closes it",
+);
+await page.locator("#view-menu").click();
+await page.keyboard.press("Escape");
+assert.equal(await page.locator("#view-dropdown").count(), 0, "Escape closes a mouse-opened menu");
+assert.equal(
+  await page.evaluate(() => document.activeElement?.id),
+  "view-menu",
+  "focus returns to its title",
+);
+// Undo is disabled in the Edit menu when there is nothing to undo.
+await openExample("Twinkle, Twinkle, Little Star");
+await page.locator("#edit-menu").click();
+assert(
+  await page.getByRole("menuitem", { name: "Undo" }).isDisabled(),
+  "Undo disabled without history",
+);
+await page.keyboard.press("Escape");
+console.log("Composer: menu bar switches, closes and returns focus like a menu bar: passed");
+
+// 5 and 14. Loop is a mode; count-in shows its beats.
+await setCaret(0);
+await page.locator("#play").click();
+await page.waitForFunction(() => window.composer.state().scheduled > 0);
+await page.locator("#loop").click();
+await page.waitForFunction(() => window.composer.state().region);
+assert.equal(
+  (await state()).status,
+  "playing",
+  "turning Loop on while playing keeps playing, now looping",
+);
+await page.locator("#loop").click();
+await page.locator("#stop").click();
+await page.locator("#count-in").click();
+await page.locator("#play").click();
+await page.waitForFunction(() =>
+  document.getElementById("clock").textContent.startsWith("Count-in"),
+);
+assert.equal(await page.locator("#clock .count.lit").count(), 1, "one beat is lit");
+assert(
+  !(await page.locator("#clock").textContent()).includes("Bar"),
+  "no bar or time while counting in",
+);
+await page.waitForFunction(
+  () => document.getElementById("clock").textContent.startsWith("Bar"),
+  null,
+  { timeout: 8000 },
+);
+await page.locator("#stop").click();
+await page.locator("#count-in").click();
+console.log("Composer: Loop is a mode; count-in shows its beats, not a bar and time: passed");
+
+{
+  // 11. Every shortcut named in a title is a real one: listed in a menu, and working.
+  const titles = await page.evaluate(() =>
+    [...document.querySelectorAll("[aria-keyshortcuts]")]
+      .filter((element) => !element.closest(".workspace-dropdown"))
+      .map((element) => element.getAttribute("aria-keyshortcuts")),
+  );
+  const listed = new Set();
+  for (const name of ["file", "edit", "insert", "view", "play", "help"]) {
+    await page.locator(`[data-menu="${name}"]`).click();
+    for (const value of await page
+      .locator(".workspace-dropdown [aria-keyshortcuts]")
+      .evaluateAll((items) => items.map((item) => item.getAttribute("aria-keyshortcuts"))))
+      for (const one of value.split(/\+\/\+|\s\/\s/)) listed.add(one);
+    await page.keyboard.press("Escape");
+  }
+  const normal = (value) =>
+    value
+      .replace(/Meta/g, "Control")
+      .replace(/↑/g, "ArrowUp")
+      .replace(/↓/g, "ArrowDown")
+      .replace(/←/g, "ArrowLeft")
+      .replace(/→/g, "ArrowRight")
+      .replace(/−/g, "-");
+  const known = new Set([...listed].map(normal));
+  for (const title of titles)
+    assert(known.has(normal(title)), `the shortcut ${title} in a title is in a menu`);
+  // And they work.
+  const layout = await page.evaluate(() => document.body.dataset.layout);
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+\\");
+  assert.notEqual(
+    await page.evaluate(() => document.body.dataset.layout),
+    layout,
+    "Ctrl \\ moves the score",
+  );
+  await page.keyboard.press("Control+\\");
+  await page.keyboard.press("Control+Shift+F");
+  assert(
+    await page.evaluate(() => document.body.classList.contains("focus-mode")),
+    "Ctrl Shift F focuses",
+  );
+  await page.keyboard.press("Control+Shift+F");
+  await page.keyboard.press("Control+Alt+M");
+  assert.equal(
+    await page.locator("#metronome").getAttribute("aria-pressed"),
+    "true",
+    "Ctrl Alt M: metronome",
+  );
+  await page.keyboard.press("Control+Alt+M");
+  await page.keyboard.press("F1");
+  assert(await page.locator("#cheatsheet").isVisible(), "F1: cheat sheet");
+  await page.keyboard.press("Escape");
+}
+console.log("Composer: shortcuts in titles are listed in the menus and work: passed");
+
+{
+  // 16. The tune is a short Tab path away, and the toolbar is one stop.
+  await page.reload();
+  await page.waitForFunction(() => (window.composer?.state().timeline?.notes ?? 0) > 0);
+  // Arriving by keyboard: the draft comes back without taking focus.
+  assert(
+    !(await page.evaluate(() => document.activeElement?.classList.contains("cm-content"))),
+    "nothing steals focus on arrival",
+  );
+  await page.keyboard.press("Tab");
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.textContent),
+    "Skip to the tune",
+    "skip link first",
+  );
+  await page.keyboard.press("Enter");
+  assert(
+    await page.evaluate(() => document.activeElement?.classList.contains("cm-content")),
+    "the skip link lands in the tune",
+  );
+  // Counted again from a fresh arrival.
+  await page.reload();
+  await page.waitForFunction(() => (window.composer?.state().timeline?.notes ?? 0) > 0);
+  let stops = 0;
+  while (stops < 40) {
+    await page.keyboard.press("Tab");
+    stops += 1;
+    if (await page.evaluate(() => document.activeElement?.classList.contains("cm-content"))) break;
+  }
+  assert(stops <= 12, `the editor is ${stops} Tab stops in`);
+  const toolbarStops = await page.evaluate(
+    () =>
+      [...document.querySelectorAll(".documentbar .toolbar button")].filter(
+        (button) => button.tabIndex === 0,
+      ).length,
+  );
+  assert.equal(toolbarStops, 1, "the toolbar is one Tab stop");
+  await page.locator('.documentbar .toolbar button[tabindex="0"]').focus();
+  const first = await page.evaluate(
+    () => document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent,
+  );
+  await page.keyboard.press("ArrowRight");
+  const second = await page.evaluate(
+    () => document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent,
+  );
+  assert.notEqual(first, second, "arrows move along the toolbar");
+}
+console.log("Composer: skip to the tune, a short Tab path, one stop for the toolbar: passed");
+
+{
+  // 17. The score's keyboard says where it is; ↑/↓ change voice; Home/End go along the line.
+  await openExample("Frère Jacques");
+  const geo = await page.evaluate(
+    () =>
+      window.composer.scoreIndex().byVoice[0].find((note) => Math.abs(note.time - 2) < 1e-6).start,
+  );
+  await setCaret(geo);
+  await page.locator("#score-scroll").focus();
+  await page.keyboard.press("ArrowRight");
+  assert.match(await page.locator("#score-live").textContent(), /Bar 3, First\./);
+  await page.keyboard.press("ArrowDown");
+  const voice = await page.evaluate(() => {
+    const index = window.composer.scoreIndex();
+    const head = window.composer.view.state.selection.main.head;
+    return index.notes.find((note) => note.start <= head && head < note.end)?.voice;
+  });
+  assert.equal(voice, 1, "↓ goes to the second voice");
+  assert.match(await page.locator("#score-live").textContent(), /Second/);
+  await page.keyboard.press("End");
+  const last = await page.evaluate(() => {
+    const index = window.composer.scoreIndex();
+    const head = window.composer.view.state.selection.main.head;
+    const note = index.notes.find((each) => each.start <= head && head < each.end);
+    const line = index.byVoice[note.voice].filter((each) => each.line === note.line);
+    return note === line[line.length - 1];
+  });
+  assert(last, "End goes to the last note of the line");
+}
+console.log(
+  "Composer: score keys announce note, bar and voice; ↑/↓ change voice; End goes along the line: passed",
+);
+
+{
+  // 12. On the start screen the toolbar and transport rest.
+  const fresh = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  watch(fresh);
+  const start = await fresh.newPage();
+  await start.goto(url);
+  await start.getByRole("heading", { name: /Write music/ }).waitFor();
+  assert(await start.locator("#transport").evaluate((element) => element.inert), "transport inert");
+  assert(await start.locator(".documentbar").evaluate((element) => element.inert), "toolbar inert");
+  assert.match(await start.locator(".start p").first().textContent(), /Type your tune/);
+  // 4. Offline: prepare, go offline, reload, open an example and play.
+  await start.locator("#view-menu").click();
+  await start.getByRole("menuitem", { name: "Work offline…" }).click();
+  await start.getByRole("button", { name: "Prepare for offline use" }).click();
+  await start.waitForFunction(
+    () => /kept too/.test(document.getElementById("offline-status")?.textContent ?? ""),
+    null,
+    { timeout: 30000 },
+  );
+  await start.keyboard.press("Escape");
+  await fresh.setOffline(true);
+  await start.reload();
+  await start.getByRole("heading", { name: /Write music/ }).waitFor();
+  await start.getByRole("button", { name: "Greensleeves" }).click();
+  await start.waitForFunction(() => (window.composer.state().timeline?.notes ?? 0) > 0);
+  await start.locator("#play").click();
+  await start.waitForFunction(() => window.composer.state().scheduled > 0, null, {
+    timeout: 10000,
+  });
+  await start.locator("#stop").click();
+  await fresh.setOffline(false);
+  await fresh.close();
+}
+console.log(
+  "Composer: start screen rests the tools; prepared offline, it reloads, opens an example and plays: passed",
+);
+
 /* 11. Phone: Text | Score switch with the transport at hand. */
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
@@ -664,8 +933,44 @@ const overflow = await small.evaluate(
   () => document.documentElement.scrollWidth - window.innerWidth,
 );
 assert(overflow <= 0, "no sideways scroll on a phone");
+// 18. Touch targets, the More menu and the tunes panel.
+await small.locator("#show-text").click();
+const small40 = await small.evaluate(() =>
+  [
+    ...document.querySelectorAll(
+      "header button, .toolbar button, #transport button, #transport input",
+    ),
+  ]
+    .filter(
+      (element) =>
+        element.getClientRects().length && getComputedStyle(element).visibility !== "hidden",
+    )
+    .map((element) => ({
+      id: element.id || element.getAttribute("aria-label") || element.textContent.trim(),
+      box: element.getBoundingClientRect(),
+    }))
+    .filter(({ box }) => box.height < 40 || box.width < 40)
+    .map(({ id, box }) => `${id} ${Math.round(box.width)}×${Math.round(box.height)}`),
+);
+assert.deepEqual(small40, [], "every touch target is at least 40 px");
+await small.locator("#more-tools").click();
+for (const name of ["Focus", "ABC cheat sheet", "Tie or untie", "Up an octave"])
+  assert(await small.getByRole("menuitem", { name }).isVisible(), `More has ${name}`);
+await small.keyboard.press("Escape");
+await small.locator("#rail-toggle").click();
+assert(await small.locator("#rail-close").isVisible(), "the tunes panel has a close button");
+const row = await small.locator(".tune-item").first().boundingBox();
+assert(row.height >= 40, "tune rows are at least 40 px tall");
+await small.locator("#rail-close").click();
+assert.equal(
+  await small.locator("#workspace").getAttribute("data-rail"),
+  "closed",
+  "the close button closes it",
+);
 await phone.close();
-console.log("Composer: phone layout switches Text and Score with the transport visible: passed");
+console.log(
+  "Composer: phone layout switches Text and Score; 40 px targets, More menu, closable tunes panel: passed",
+);
 
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");

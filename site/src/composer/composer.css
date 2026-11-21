@@ -2039,6 +2039,17 @@ body.starting #transport {
   }
   .tempo-value input {
     min-height: 40px;
+    width: 40px;
+  }
+  .tempo button {
+    min-width: 40px !important;
+    min-height: 40px !important;
+  }
+  .workspace-menus button {
+    min-width: 40px;
+  }
+  #save-primary {
+    min-height: 40px;
   }
   .score-heading button,
   .problems,

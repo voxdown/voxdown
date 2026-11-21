@@ -133,6 +133,8 @@ describe("the HTML tune book", () => {
     const html = htmlBook(entries, { name: "B", abc: "closed", player: true });
     const page = read(html);
     expect(page.querySelectorAll("button.play")).toHaveLength(1);
+    expect(page.querySelector("button.play")?.getAttribute("aria-label")).toBe("Play Jumps");
+    expect(html).toContain("font:16px/1.5 Literata,");
     expect(JSON.parse(page.getElementById("tune-2-notes")?.textContent ?? "[]")).toEqual([
       [0, 0.5, 60, 80],
     ]);

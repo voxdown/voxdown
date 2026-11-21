@@ -92,6 +92,18 @@ describe("tune-book commands", () => {
     expect(out.split("\n").sort()).toEqual(BOOK.split("\n").sort());
     expect(titleKey("The Àfter")).toBe("after");
   });
+  it("puts one blank line between tunes a sort would make touch, and no more", () => {
+    const touching = "X:2\nT:B\nK:C\nC|\nX:1\nT:A\nK:C\nD|\n\nX:3\nT:C\nK:C\nE|\n";
+    const out = applyChanges(touching, [
+      sortChange(touching, indexFile(touching), "title") as Change,
+    ]);
+    expect(out).toBe("X:1\nT:A\nK:C\nD|\n\nX:2\nT:B\nK:C\nC|\n\nX:3\nT:C\nK:C\nE|\n");
+    // Tunes already apart keep their own gaps.
+    const apart = "X:2\nT:B\nK:C\nC|\n\n\nX:1\nT:A\nK:C\nD|\n";
+    expect(applyChanges(apart, [sortChange(apart, indexFile(apart), "title") as Change])).toBe(
+      "X:1\nT:A\nK:C\nD|\n\n\nX:2\nT:B\nK:C\nC|\n",
+    );
+  });
   it("sorts by X: and by key", () => {
     const byNumber = applyChanges(BOOK, [sortChange(BOOK, indexFile(BOOK), "number") as Change]);
     expect(indexFile(byNumber).tunes.map((tune) => tune.number)).toEqual(["3", "7", "12"]);

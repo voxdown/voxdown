@@ -196,7 +196,7 @@ timer=setTimeout(stop,(end+0.3)*1000)})})();`;
 const BOOK_STYLE = `
 :root{color-scheme:light;--ink:#1d1d1f;--muted:#5f6368;--rule:#d9d9de;--accent:#1f5f5b}
 *{box-sizing:border-box}
-body{margin:0;font:16px/1.5 Georgia,"Times New Roman",serif;color:var(--ink);background:#fff}
+body{margin:0;font:16px/1.5 Literata,"Literata Variable","Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;color:var(--ink);background:#fff}
 header,nav,main{max-width:920px;margin:0 auto;padding:0 24px}
 header{padding-top:40px}
 h1{font-size:2rem;margin:0 0 4px}
@@ -211,11 +211,11 @@ nav .meta{color:var(--muted);font:12px system-ui,sans-serif;margin-left:6px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .tune .sub{margin:0 0 8px;color:var(--muted)}
 .tune svg{display:block;width:100%;height:auto;max-width:100%}
-.tools{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-top:8px}
-button.play{font:14px system-ui,sans-serif;padding:6px 14px;border:1px solid var(--accent);border-radius:6px;background:#fff;color:var(--accent);cursor:pointer}
+.tools{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-top:8px}
+button.play{font:14px/20px system-ui,sans-serif;padding:6px 14px;border:1px solid var(--accent);border-radius:6px;background:#fff;color:var(--accent);cursor:pointer}
 button.play[aria-pressed=true]{background:var(--accent);color:#fff}
 details{flex:1 1 300px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-summary{cursor:pointer;color:var(--accent);font:14px system-ui,sans-serif}
+summary{cursor:pointer;color:var(--accent);font:14px/20px system-ui,sans-serif;padding:7px 0}
 pre{white-space:pre-wrap;margin:8px 0 0;padding:12px;background:#f6f6f7;border-radius:6px;overflow:auto}
 .top{font:13px system-ui,sans-serif;color:var(--accent)}
 footer{max-width:920px;margin:0 auto;padding:24px;color:var(--muted);font:12px system-ui,sans-serif}
@@ -245,7 +245,7 @@ export function htmlBook(entries: BookEntry[], options: BookOptions): string {
       const tools: string[] = [];
       if (options.player && entry.notes?.length)
         tools.push(
-          `<button type="button" class="play" data-notes="${id}-notes" aria-pressed="false">&#9654; Play</button><script type="application/json" id="${id}-notes">${JSON.stringify(entry.notes)}</script>`,
+          `<button type="button" class="play" data-notes="${id}-notes" aria-pressed="false" aria-label="Play ${escapeHtml(entry.title)}">&#9654; Play</button><script type="application/json" id="${id}-notes">${JSON.stringify(entry.notes)}</script>`,
         );
       if (options.abc !== "none")
         tools.push(

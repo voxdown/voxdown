@@ -107,7 +107,13 @@ export function sortChange(text: string, index: FileIndex, by: SortBy): Change |
     .map((chunk, at) => {
       const body =
         at < ordered.length - 1 && !chunk.body.endsWith("\n") ? `${chunk.body}\n` : chunk.body;
-      return (chunks[at] as (typeof chunks)[number]).lead + body;
+      let lead = (chunks[at] as (typeof chunks)[number]).lead;
+      // Where a tune now follows one it did not follow before, with no blank line between
+      // them, one goes in: two tunes never touch. Where they were apart, the gap stays.
+      const before = ordered[at - 1];
+      if (at > 0 && !lead && before && chunks.indexOf(before) !== chunks.indexOf(chunk) - 1)
+        lead = "\n";
+      return lead + body;
     })
     .join("");
   return { from: start, to: end, insert: out };
@@ -407,7 +413,7 @@ export function openSort(make: DialogMaker, tunes: number, sort: (by: SortBy) =>
   const note = document.createElement("p");
   note.className = "dialog-note";
   note.textContent =
-    "The file's own header, before the first tune, stays first. Comments or other text between two tunes move with the tune after them. One undo puts the old order back.";
+    "The file's own header, before the first tune, stays first. Comments or other text between two tunes move with the tune after them. Where two tunes would touch, one blank line goes between them. One undo puts the old order back.";
   dialog.body.replaceChildren(
     dialogForm(dialog, [lead, options, note], "Sort", () =>
       sort((options.querySelector<HTMLInputElement>("input:checked")?.value ?? "title") as SortBy),

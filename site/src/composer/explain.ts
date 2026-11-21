@@ -15,7 +15,8 @@ import {
   pitchName,
   value,
 } from "./abc";
-import { DECORATIONS, describeKey, describeMeter } from "./names";
+import { DECORATIONS } from "./decorations";
+import { describeKey, describeMeter } from "./names";
 import { describePassDynamics, passDynamics } from "./passes";
 import { type FileIndex, type TuneInfo, tuneAt } from "./tunes";
 import { type WalkState, tuneItems, walkTune } from "./walk";

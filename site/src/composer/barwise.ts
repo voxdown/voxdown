@@ -121,9 +121,20 @@ export function replaceKeepingBars(
     }
     if (at < range.to) gaps.push({ from: at, to: range.to });
     if (!gaps.length) changes.push({ from: range.from, to: range.from, insert });
-    gaps.forEach((gap, index) => changes.push({ ...gap, insert: index ? "" : insert }));
+    gaps.forEach((gap, index) =>
+      changes.push({ ...gap, insert: index || !insert ? apart(text, gap) : insert }),
+    );
   }
   return any ? changes : null;
+}
+
+/**
+ * What a deleted stretch leaves: nothing, or a space when it would put two bar lines together
+ * (`|` and `:|` would read as `|:|`, `|` and `|` as a double bar): an empty bar, each bar line
+ * as it was.
+ */
+function apart(text: string, gap: Range): string {
+  return /[|:\]]$/.test(text.slice(0, gap.from)) && /^[|:[]/.test(text.slice(gap.to)) ? " " : "";
 }
 
 /** The notes' starts each range selects whole (the one rule), and every event's start per line. */
@@ -205,7 +216,7 @@ export function cutKeepingBars(
       merged.push({ from, to });
     }
   }
-  return union(merged).map((cut) => ({ ...cut, insert: "" }));
+  return union(merged).map((cut) => ({ ...cut, insert: apart(text, cut) }));
 }
 
 function union(ranges: Range[]): Range[] {
@@ -287,4 +298,86 @@ export function pasteKeepingBars(
     return { from: range.from, to: range.to, insert };
   });
   return changed ? changes : null;
+}
+
+/** What typing `"`, `[` or `{` over selected music does, or why it can't. */
+export type Bracketed = { changes: Change[]; caret?: number } | { refused: string };
+
+/**
+ * `"`, `[` and `{` typed over selected music act on its notes rather than wrapping the text:
+ * - `"` writes an empty chord symbol before the first selected note, the caret inside it;
+ * - `[` makes the selected notes one chord, when they are notes side by side in one bar of one
+ *   voice: spaces go, and the chord takes the first note's length;
+ * - `{` makes them grace notes, when they have no lengths of their own and sit in one bar.
+ * Null when the selection isn't music (it is typed as usual).
+ */
+export function bracketOver(
+  text: string,
+  ranges: Range[],
+  typed: string,
+  file: FileIndex = indexFile(text),
+): Bracketed | null {
+  if (!['"', "[", "{"].includes(typed)) return null;
+  const selected = ranges.filter((range) => range.to > range.from);
+  if (!selected.length || !inMusic(text, selected, file)) return null;
+  const picked = selectedNotes(text, selected, file);
+  const notes = picked.filter((each) => !each.event.rest);
+  const first = notes[0];
+  if (!first) return null;
+  if (typed === '"')
+    return {
+      changes: [{ from: first.span.from, to: first.span.from, insert: '""' }],
+      caret: first.span.from + 1,
+    };
+  const what = typed === "[" ? "A chord" : "Grace notes";
+  const last = picked[picked.length - 1] as (typeof picked)[number];
+  const between = tokenizeMusic(text.slice(first.span.from, last.span.to), first.span.from);
+  const voices = new Set(picked.map((each) => each.event.voice));
+  if (voices.size > 1 || between.some((token) => token.kind === "bar"))
+    return { refused: `${what} can only be made from notes in one bar of one voice.` };
+  if (picked.some((each) => each.event.rest))
+    return { refused: `${what} can't hold a rest: select notes only.` };
+  const loose = between.filter((token) =>
+    ["tuplet", "slur", "inline-field", "grace-open", "grace-close", "chord-symbol"].includes(
+      token.kind,
+    ),
+  );
+  if (loose.length && typed === "{")
+    return {
+      refused: "Grace notes are made from plain notes: these have marks or groups between them.",
+    };
+  const tones = notes.flatMap((each) => each.event.notes);
+  if (typed === "{") {
+    if (tones.some((tone) => tone.length) || notes.some((each) => each.event.notes.length > 1))
+      return {
+        refused:
+          "Grace notes have no lengths of their own: select single notes written without a length.",
+      };
+    return {
+      changes: [
+        { from: first.event.from, to: first.event.from, insert: "{" },
+        { from: last.event.to, to: last.event.to, insert: "}" },
+      ],
+    };
+  }
+  if (loose.some((token) => token.kind !== "chord-symbol"))
+    return {
+      refused:
+        "A chord is made from notes side by side: these have a tuplet, slur or field between them.",
+    };
+  // The first note's marks stay before the chord; the chord takes its length.
+  const lead = text.slice(first.span.from, first.event.from);
+  const length =
+    first.event.notes.length > 1
+      ? (tokenizeMusic(text.slice(first.event.from, first.event.to), first.event.from).find(
+          (token) => token.kind === "chord-close",
+        )?.length ?? "")
+      : (first.event.notes[0] as (typeof tones)[number]).length;
+  const pitches = tones.map((tone) => `${tone.accidental}${tone.letter}${tone.octave}`).join("");
+  const tail = text.slice(last.event.to, last.span.to);
+  return {
+    changes: [
+      { from: first.span.from, to: last.span.to, insert: `${lead}[${pitches}]${length}${tail}` },
+    ],
+  };
 }

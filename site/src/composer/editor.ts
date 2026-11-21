@@ -26,7 +26,6 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { fieldOf, lineKind, tokenizeMusic } from "./abc";
-import { DECORATIONS } from "./names";
 import { type FileIndex, indexFile } from "./tunes";
 
 /* The file's tunes, kept current for highlighting and completion. */
@@ -560,7 +559,7 @@ const DECORATION_ORDER = [
   "upbow",
   "downbow",
 ];
-export function decorationOptions(): Completion[] {
+export function decorationOptions(DECORATIONS: Record<string, string>): Completion[] {
   const rest = Object.keys(DECORATIONS)
     .filter((name) => !DECORATION_ORDER.includes(name))
     .sort((a, b) => a.localeCompare(b));
@@ -613,7 +612,12 @@ function abcCompletions(context: CompletionContext) {
   }
   const decoration = /!([\w().<>]*)$/.exec(before);
   if (decoration && (before.match(/!/g)?.length ?? 0) % 2 === 1)
-    return { from: after(decoration), options: decorationOptions(), validFor: /^[\w().<>]*$/ };
+    // The names load with the first `!` typed.
+    return import("./decorations").then(({ DECORATIONS }) => ({
+      from: after(decoration),
+      options: decorationOptions(DECORATIONS),
+      validFor: /^[\w().<>]*$/,
+    }));
   const field = /^([A-Za-z%]{0,2})$/.exec(before);
   if (
     field &&

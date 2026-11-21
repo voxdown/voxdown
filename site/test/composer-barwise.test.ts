@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bracketOver,
   copyWithBars,
   cutKeepingBars,
   pasteKeepingBars,
@@ -29,10 +30,10 @@ describe("typing over selected music keeps its bar lines", () => {
       `${head}c d | b c'|c' b a g|f e d c|]\n`,
     );
   });
-  it("typing z4 over bar 1 and bar 2 writes it once, the bar line kept", () => {
+  it("typing z4 over bar 1 and bar 2 writes it once, the bar lines kept apart", () => {
     const range = span(tune, "c d e f|g a b c'");
     expect(apply(tune, replaceKeepingBars(tune, [range], "z4"))).toBe(
-      `${head}z4||c' b a g|f e d c|]\n`,
+      `${head}z4| |c' b a g|f e d c|]\n`,
     );
   });
   it("repeats, final bars and endings stay", () => {
@@ -113,5 +114,37 @@ describe("paste fits the bars around it", () => {
   it("notes pasted over a selection with a bar line keep it", () => {
     const out = apply(tune, pasteKeepingBars(tune, [span(tune, "e f|g a")], "B B"));
     expect(out).toBe(`${head}c d B B| b c'|c' b a g|f e d c|]\n`);
+  });
+});
+
+describe('", [ and { typed over selected music act on its notes (round 3)', () => {
+  const eighths = `X:1\nT:t\nM:4/4\nL:1/8\nK:C\nc2 d2 e2 f2|g a b c'|]\n`;
+  it('" writes an empty chord symbol before the first note, the caret inside', () => {
+    const result = bracketOver(eighths, [span(eighths, "d2 e2")], '"');
+    expect(result && "changes" in result && apply(eighths, result.changes)).toContain(
+      'c2 ""d2 e2 f2|',
+    );
+    expect(result && "caret" in result && result.caret).toBe(at(eighths, "d2") + 1);
+  });
+  it("[ makes one chord with the first note's length, spaces gone", () => {
+    const result = bracketOver(eighths, [span(eighths, "c2 d2 e2")], "[");
+    expect(result && "changes" in result && apply(eighths, result.changes)).toContain(
+      "\n[cde]2 f2|",
+    );
+  });
+  it("[ across a bar line is refused, saying why", () => {
+    const result = bracketOver(eighths, [span(eighths, "f2|g")], "[");
+    expect(result && "refused" in result && result.refused).toMatch(/one bar of one voice/);
+  });
+  it("{ makes grace notes of notes without lengths, in one bar", () => {
+    const result = bracketOver(eighths, [span(eighths, "g a b")], "{");
+    expect(result && "changes" in result && apply(eighths, result.changes)).toContain(
+      "|{g a b} c'|",
+    );
+    const long = bracketOver(eighths, [span(eighths, "c2 d2")], "{");
+    expect(long && "refused" in long && long.refused).toMatch(/no lengths of their own/);
+  });
+  it("outside music it is typed as usual", () => {
+    expect(bracketOver(eighths, [span(eighths, "T:t")], "[")).toBeNull();
   });
 });

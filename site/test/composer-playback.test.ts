@@ -1,6 +1,7 @@
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
 import { humanDate } from "../src/composer/dates";
+import { DECORATIONS } from "../src/composer/decorations";
 import { KEYS, METERS, decorationOptions, inOrder } from "../src/composer/editor";
 import { INSTRUMENTS, findLoop, nearestSample, velocityGain } from "../src/composer/instruments";
 import { applyPassDynamics, passDynamics, passMarks } from "../src/composer/passes";
@@ -572,7 +573,7 @@ describe("completion order", () => {
     const boosts = inOrder([{ label: "b" }, { label: "a" }]).map((option) => option.boost ?? 0);
     expect(boosts[0]).toBeGreaterThan(boosts[1] as number);
     expect(
-      decorationOptions()
+      decorationOptions(DECORATIONS)
         .slice(0, 3)
         .map((option) => option.label),
     ).toEqual(["p", "mf", "f"]);

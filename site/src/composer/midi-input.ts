@@ -10,10 +10,13 @@ import "./midi.css";
 import { isolateHistory } from "@codemirror/commands";
 import { StateEffect, StateField } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
-import { type Fraction, frac, mul, parseKey } from "./abc";
+import { type Fraction, frac, mul, parseKey, value } from "./abc";
+import { barAt } from "./barcheck";
+import { replaceKeepingBars } from "./barwise";
 import { dockPanel, undockPanel } from "./dock";
 import { STEP_LENGTHS, type StepReading, pitchText, stepInsert } from "./stepentry";
 import { indexFile } from "./tunes";
+import { tuneItems } from "./walk";
 
 export type KeyboardContext = {
   view: EditorView;
@@ -146,27 +149,59 @@ function length(): Fraction {
   return dotted ? mul(base, frac(3, 2)) : base;
 }
 
-/** Writes a step at the caret: one undo, a space where beams should break, a bar line when full. */
+/**
+ * Writes a step at the caret: one undo, a space where beams should break, a bar line when full.
+ * Over a selection it replaces the selected notes of the main range (its bar lines kept), in that
+ * one voice, and says so; other selected places are left as they are. A bar it overfills is said.
+ */
 function enter(pitches: number[] | "rest") {
   if (!context) return;
   const { view } = context;
   const text = view.state.doc.toString();
-  const at = view.state.selection.main.head;
-  const step = stepInsert(text, indexFile(text), at, pitches, length());
+  const main = view.state.selection.main;
+  const others = view.state.selection.ranges.filter((range) => range !== main && !range.empty);
+  const at = main.empty ? main.head : main.from;
+  // The selected notes go first; the step is worked out on what is left.
+  const cleared = main.empty
+    ? null
+    : (replaceKeepingBars(text, [main], "") ?? [{ from: main.from, to: main.to, insert: "" }]);
+  const left = cleared ? applied(text, cleared) : text;
+  const step = stepInsert(left, indexFile(left), at, pitches, length());
   if (!step) {
     say("Put the caret in a tune's music (after K:) to write there.");
     return;
   }
+  const changes = cleared
+    ? cleared.map((change, index) => (index ? change : { ...change, insert: step.insert }))
+    : [{ from: at, to: at, insert: step.insert }];
   view.dispatch({
-    changes: { from: at, insert: step.insert },
+    changes,
     selection: { anchor: at + step.insert.length },
     annotations: isolateHistory.of("full"),
     userEvent: "input.midi",
     scrollIntoView: true,
   });
+  const after = view.state.doc.toString();
+  const file = indexFile(after);
+  const tune = file.tunes.find((each) => at >= each.bodyFrom && at <= each.to);
+  const bar = tune ? barAt(tuneItems(after, tune, file), at) : null;
+  const over =
+    bar?.expected && value(bar.filled) > value(bar.expected) + 1e-9
+      ? ` Bar ${bar.bar} is now longer than the meter allows.`
+      : "";
+  const where = cleared
+    ? ` in place of the selected notes${others.length ? `; the other ${others.length === 1 ? "place" : `${others.length} places`} selected ${others.length === 1 ? "was" : "were"} left as ${others.length === 1 ? "it was" : "they were"}` : ""}`
+    : "";
   say(
-    `Wrote ${step.written}${step.bars ? ` and ${step.bars === 1 ? "a bar line" : `${step.bars} bar lines`}` : ""}.`,
+    `Wrote ${step.written}${step.bars ? ` and ${step.bars === 1 ? "a bar line" : `${step.bars} bar lines`}` : ""}${where}.${over}`,
   );
+}
+/** Text with changes made (given in the text's own positions). */
+function applied(text: string, changes: { from: number; to: number; insert: string }[]): string {
+  let out = text;
+  for (const change of [...changes].sort((a, b) => b.from - a.from))
+    out = out.slice(0, change.from) + change.insert + out.slice(change.to);
+  return out;
 }
 
 function meter() {

@@ -67,6 +67,25 @@ export function eventSpans(text: string, events: MusicEvent[]): Map<MusicEvent, 
   return spans;
 }
 
+/** Each tune's events and spans, kept for the text they were read from (a drag asks often). */
+let memo: {
+  text: string;
+  tunes: Map<number, { events: MusicEvent[]; spans: Map<MusicEvent, Range> }>;
+} | null = null;
+function tuneEvents(text: string, tune: TuneInfo, file: FileIndex) {
+  if (memo?.text !== text) memo = { text, tunes: new Map() };
+  const key = tune.from * 1e7 + tune.to;
+  let found = memo.tunes.get(key);
+  if (!found) {
+    const events = tuneItems(text, tune, file).filter(
+      (item): item is MusicEvent => item.type === "event",
+    );
+    found = { events, spans: eventSpans(text, events) };
+    memo.tunes.set(key, found);
+  }
+  return found;
+}
+
 /** The tunes a set of ranges touches (a caret counts as touching its tune). */
 function tunesOf(file: FileIndex, ranges: Range[]): TuneInfo[] {
   return file.tunes.filter((tune) =>
@@ -86,10 +105,7 @@ export function selectedNotes(
 ): Picked[] {
   const picked: Picked[] = [];
   for (const tune of tunesOf(file, ranges)) {
-    const events = tuneItems(text, tune, file).filter(
-      (item): item is MusicEvent => item.type === "event",
-    );
-    const spans = eventSpans(text, events);
+    const { events, spans } = tuneEvents(text, tune, file);
     const chosen = new Map<MusicEvent, { tones: Set<NoteToken>; whole: boolean }>();
     const take = (event: MusicEvent, tones: NoteToken[] | null) => {
       const entry = chosen.get(event) ?? { tones: new Set<NoteToken>(), whole: false };

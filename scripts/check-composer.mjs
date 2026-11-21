@@ -297,7 +297,7 @@ await page.mouse.up();
 await settle(150);
 assert.deepEqual(
   await selection(),
-  ["B c d2 | B c d2 |", "!mp!G, A, B, G, | G, A, B, G, |"],
+  ["B c d2 | B c d2", "!mp!G, A, B, G, | G, A, B, G,"],
   "a two-voice region selects one range per voice",
 );
 assert(
@@ -321,8 +321,8 @@ await page.locator(".cm-content").focus();
 await page.keyboard.press("Alt+Shift+ArrowRight");
 assert.deepEqual(
   await selection(),
-  ["!mp!G A B G | G A B G |"],
-  "Shift Alt → adds the next note, with its bar line",
+  ["!mp!G A B G | G A B G"],
+  "Shift Alt → adds the next note, stopping before the bar line",
 );
 console.log(
   "Composer: caret lights its note; click selects text; drags select regions per voice or across voices; Shift Alt → extends: passed",
@@ -4523,7 +4523,7 @@ console.log(
     await shiftClick(await at(3, where));
     assert.deepEqual(
       await selection(p),
-      ['"C"C C | G G |'],
+      ['"C"C C | G G'],
       `Shift+click on the 4th note's ${where} takes it`,
     );
     await p.waitForFunction(() =>
@@ -4533,7 +4533,7 @@ console.log(
     const fourth = await at(3, "head");
     await p.mouse.click(fourth.x, fourth.y);
     await shiftClick(await at(0, where));
-    assert.deepEqual(await selection(p), ['"C"C C | G G |'], `and back to the 1st note's ${where}`);
+    assert.deepEqual(await selection(p), ['"C"C C | G G'], `and back to the 1st note's ${where}`);
   }
   console.log(
     "Composer: Shift+click in the score takes the note clicked, head, stem or middle: passed",
@@ -4823,7 +4823,7 @@ console.log(
   await pull(...span);
   assert.deepEqual(
     await texts(),
-    ["fed|cdeg fedc:|", "d2fd"],
+    ["fed|cdeg fedc", "d2fd"],
     "a drag stops at P:B and goes on after",
   );
   await p.keyboard.press(".");
@@ -4833,14 +4833,21 @@ console.log(
     "a mark typed in the score marks the notes, P:B as it was",
   );
   await p.keyboard.press("Control+z");
-  // Ctrl/⌘ X in the score; Delete and Backspace once Enter has taken the selection to the text.
-  for (const keys of [["Control+x"], ["Enter", "Delete"], ["Enter", "Backspace"]]) {
+  // Ctrl/⌘ X and Delete in the score take the whole bar out (the repeat's end kept), and the
+  // part of a bar only its notes; Delete and Backspace in the text (after Enter) keep every bar
+  // line, an emptied bar kept apart from the next bar line. P:B stays either way.
+  for (const [keys, left] of [
+    [["Control+x"], "|:dfaf g:|"],
+    [["Delete"], "|:dfaf g:|"],
+    [["Enter", "Delete"], "|:dfaf g| :|"],
+    [["Enter", "Backspace"], "|:dfaf g| :|"],
+  ]) {
     await put(reel);
     await pull(...span);
     for (const key of keys) await p.keyboard.press(key);
     assert.equal(
       await docText(p),
-      "X:1\nT:Reel with parts\nM:4/4\nL:1/8\nK:D\nP:A\n|:dfaf g\nP:B\n|: ad fd|e2ge be ge:|\n",
+      `X:1\nT:Reel with parts\nM:4/4\nL:1/8\nK:D\nP:A\n${left}\nP:B\n|: ad fd|e2ge be ge:|\n`,
       `${keys.join(" then ")} on a score selection deletes its music and leaves P:B`,
     );
   }
@@ -4852,15 +4859,15 @@ console.log(
   await pull({ x: all[0].head + 3, y: all[0].y }, { x: all.at(-1).head + 3, y: all.at(-1).y });
   assert.deepEqual(
     await texts(),
-    ["C D E F |", "G A B c |"],
+    ["C D E F", "G A B c"],
     "the lyric and comment lines aren't taken",
   );
   await p.keyboard.press("Enter");
   await p.keyboard.press("Backspace");
   assert.equal(
     await docText(p),
-    "X:1\nT:Words\nM:4/4\nL:1/4\nK:C\n\nw: one two three four\n% important comment\n\nw: five six se-ven eight\n",
-    "Backspace deletes the music, not the words or the comment",
+    "X:1\nT:Words\nM:4/4\nL:1/4\nK:C\n |\nw: one two three four\n% important comment\n |\nw: five six se-ven eight\n",
+    "Backspace deletes the music, not the words, the comment or the bar lines",
   );
   // Ctrl/⌘ A in the score: every voice's music, no header.
   await put(reel);
@@ -4868,7 +4875,7 @@ console.log(
   await p.keyboard.press("Control+a");
   assert.deepEqual(
     await texts(),
-    ["dfaf gfed|cdeg fedc:|", "d2fd ad fd|e2ge be ge:|"],
+    ["dfaf gfed|cdeg fedc", "d2fd ad fd|e2ge be ge"],
     "Ctrl A in the score takes the music only",
   );
   // A selection made in the text across P:B: . marks the notes and leaves P:B.
@@ -4904,13 +4911,11 @@ console.log(
   const d2 = geo.notes.find((box) => Math.abs(box.time - 0.5) < 1e-6);
   await p.mouse.click(d2.head + 3, d2.y);
   for (let step = 0; step < 3; step++) await p.keyboard.press("Shift+Alt+ArrowRight");
-  assert.deepEqual(await texts(), ["d2 c2|B4 A4|"], "three steps right");
-  for (let step = 0; step < 5; step++) await p.keyboard.press("Shift+Alt+ArrowLeft");
-  assert.deepEqual(
-    await texts(),
-    ["f2 e2 d2"],
-    "five back: shrinks to the anchor, then grows left",
-  );
+  assert.deepEqual(await texts(), ["d2 c2|B4 A4"], "three steps right");
+  for (let step = 0; step < 4; step++) await p.keyboard.press("Shift+Alt+ArrowLeft");
+  assert.deepEqual(await texts(), [], "four back: at the anchor, a caret again (as in text)");
+  await p.keyboard.press("Shift+Alt+ArrowLeft");
+  assert.deepEqual(await texts(), ["e2"], "one more: grows left from the anchor");
   // 6. A spacer voice isn't selected or counted.
   geo = await put(
     "X:1\nT:Six\nM:4/4\nL:1/4\n%%score {1 (2 3)}\nK:C\nV:1\nc d e f|\nV:2 clef=bass\nC, D, E, F,|\nV:3 clef=bass\nx4|\n",
@@ -4934,7 +4939,7 @@ console.log(
       window.composer.view.state.sliceDoc(
         window.composer.view.state.selection.main.from,
         window.composer.view.state.selection.main.to,
-      ) === ".C .D .E .F|",
+      ) === ".C .D .E .F",
   );
   // 4. A drag held by the bottom edge scrolls on its own, and a wheel scroll moves its end.
   const long = Array.from(

@@ -1,7 +1,7 @@
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
+import { DECORATIONS } from "../src/composer/decorations";
 import { decorationOptions } from "../src/composer/editor";
-import { DECORATIONS } from "../src/composer/explain";
 import { writeMidi } from "../src/composer/midi";
 import { bar, followOrder, playOrder, structureOf } from "../src/composer/playorder";
 import { type ScoreNote, indexScore } from "../src/composer/score";
@@ -153,7 +153,7 @@ describe("the play order", () => {
     expect(notes.every((note) => note.length === 456)).toBe(true);
   });
   it("offers the jumps where segno, coda and fine are, and says what each does", () => {
-    const labels = decorationOptions().map((option) => option.label);
+    const labels = decorationOptions(DECORATIONS).map((option) => option.label);
     const at = labels.indexOf("segno");
     expect(labels.slice(at, at + 10)).toEqual([
       "segno",

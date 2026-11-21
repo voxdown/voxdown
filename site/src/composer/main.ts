@@ -62,7 +62,6 @@ import { describeKey } from "./names";
 import { applyPassDynamics, passMarks } from "./passes";
 import { plainMessage } from "./plain";
 import { Player } from "./player";
-import { checkSlurs, plainWarnings } from "./problems";
 import { roving } from "./roving";
 import {
   type Attachment,
@@ -334,12 +333,20 @@ function clipboard(kind: "cut" | "copy") {
  */
 let barwise: typeof import("./barwise") | null = null;
 let paster: typeof import("./paste") | null = null;
+/** abcjs's warnings and unclosed slurs as problems (./problems), loaded with the rest. */
+let problemChecks: typeof import("./problems") | null = null;
 let editingLoading: Promise<unknown> | null = null;
 function loadEditing() {
-  editingLoading ??= Promise.all([import("./barwise"), import("./paste")]).then(
-    ([bars, paste]) => {
+  editingLoading ??= Promise.all([
+    import("./barwise"),
+    import("./paste"),
+    import("./problems"),
+  ]).then(
+    ([bars, paste, checks]) => {
       barwise = bars;
       paster = paste;
+      problemChecks = checks;
+      runChecks();
     },
     () => {
       editingLoading = null;
@@ -811,11 +818,41 @@ function replaceMusic(target: EditorView, typed: string): boolean {
   });
   return true;
 }
+/** `"`, `[` or `{` typed over selected music: a chord symbol, a chord, grace notes (./barwise). */
+function bracketMusic(target: EditorView, typed: string): boolean {
+  if (!barwise || target.state.selection.ranges.every((range) => range.empty)) return false;
+  const state = target.state;
+  const result = barwise.bracketOver(
+    state.doc.toString(),
+    state.selection.ranges.map((range) => ({ from: range.from, to: range.to })),
+    typed,
+    state.field(fileIndexField),
+  );
+  if (!result) return false;
+  if ("refused" in result) {
+    sayAboutSelection(result.refused);
+    return true;
+  }
+  const set = state.changes(result.changes);
+  target.dispatch({
+    changes: set,
+    selection:
+      result.caret === undefined
+        ? EditorSelection.range(
+            set.mapPos(state.selection.main.from, -1),
+            set.mapPos(state.selection.main.to, 1),
+          )
+        : { anchor: result.caret },
+    userEvent: "input.music",
+    scrollIntoView: true,
+  });
+  return true;
+}
 const typedMarks = [
   Prec.highest(
     EditorView.inputHandler.of((target, _from, _to, typed) => {
       if (target.composing || target.compositionStarted) return false;
-      return typeMark(target, typed) || replaceMusic(target, typed);
+      return typeMark(target, typed) || bracketMusic(target, typed) || replaceMusic(target, typed);
     }),
   ),
   Prec.highest(
@@ -1187,6 +1224,11 @@ function onUpdate(update: ViewUpdate) {
     updateRail();
     updateSavedState();
   }
+  if (update.docChanged && loopRanges)
+    loopRanges = loopRanges.map((range) => ({
+      from: update.changes.mapPos(range.from, 1),
+      to: Math.max(update.changes.mapPos(range.from, 1), update.changes.mapPos(range.to, -1)),
+    }));
   if (update.docChanged || update.selectionSet) {
     $<HTMLButtonElement>("undo").disabled = undoDepth(update.state) === 0;
     $<HTMLButtonElement>("redo").disabled = redoDepth(update.state) === 0;
@@ -1252,9 +1294,15 @@ function explainCaret(update: ViewUpdate) {
   if (!view.state.selection.main.empty) {
     // Counted by the one rule, from the text itself, so it is right even before the score is
     // redrawn, and it agrees with what is lit.
-    const said = describePicked(selectedNotes(text(), ranges(), fileIndex()));
+    const picked = selectedNotes(text(), ranges(), fileIndex());
+    const said = describePicked(picked);
     const count = said.count;
-    const where = selectionWhere();
+    // Across tunes: commands change each tune by its own key and meter; one tune is drawn.
+    const tunes = new Set(picked.map((each) => tuneAt(fileIndex(), each.event.from)?.from)).size;
+    const where =
+      tunes > 1
+        ? ` in ${tunes} tunes (commands change each; the score shows one)`
+        : selectionWhere();
     if (count === 0) {
       // Header or lyric text: no music to play, so no play hint.
       const characters = view.state.selection.ranges.reduce(
@@ -1421,6 +1469,8 @@ async function render(force = false) {
       linkFromText();
       runChecks();
       refreshPlace();
+      // The status read the old drawing ("in 2 places" before it knew the voices): read again.
+      explainCaret({ transactions: [], selectionSet: false } as unknown as ViewUpdate);
     }, 0);
   } catch (error) {
     console.warn("Composer could not draw this tune.", error);
@@ -1547,9 +1597,10 @@ function buildPlayback(index: ScoreIndex) {
   timeline = applyPassDynamics(timeline, marks.rules, marks.written);
   player.setTimeline(timeline);
   player.hint = [...new Set(timeline.notes.map((note) => note.pitch))];
+  if (loopRanges) loopRegion = selectedRegion(loopRanges) ?? loopRegion;
   if (player.loopingRegion && loopRegion) {
     const next = regionTimelineFor(loopRegion);
-    if (next) player.setRegion(next);
+    if (next?.notes.length) player.setRegion(next);
   }
   applyTempo();
   updateVoices();
@@ -1855,16 +1906,17 @@ function runChecks(caretLeft = false) {
         kind: "lyrics",
         label: `lyrics — ${issue.extra} ${issue.extra === 1 ? "syllable has" : "syllables have"} no notes`,
       });
-  if (scoreIndex)
-    for (const warning of plainWarnings(scoreIndex.warnings, doc))
+  if (!problemChecks) void loadEditing();
+  if (scoreIndex && problemChecks)
+    for (const warning of problemChecks.plainWarnings(scoreIndex.warnings, doc))
       list.push({
         ...warning,
         to: Math.max(warning.to, warning.from + 1),
         severity: "error",
         kind: "parse",
       });
-  for (const tune of index.tunes)
-    for (const slur of checkSlurs(doc, tune, index))
+  for (const tune of problemChecks ? index.tunes : [])
+    for (const slur of (problemChecks as typeof import("./problems")).checkSlurs(doc, tune, index))
       list.push({ ...slur, severity: "warning", kind: "parse" });
   list.sort((a, b) => a.from - b.from);
   problems = list;
@@ -2030,10 +2082,13 @@ function measureBarLines(): Map<number, number[]> {
 }
 
 /** Every drawn note's head position, for reading the pointer in musical time. */
+/** Where each note is read, once per drawing. */
+let placedCache: { for: object; placed: Placed[] } | null = null;
 function placedNotes(): Placed[] {
   const geo = staffGeometry();
   if (!geo) return [];
-  return spanLoneNotes(
+  if (placedCache?.for === geo) return placedCache.placed;
+  const placed = spanLoneNotes(
     geo.notes.map((box) => ({
       note: box.note,
       line: box.note.line,
@@ -2042,6 +2097,8 @@ function placedNotes(): Placed[] {
     })),
     barLines(),
   );
+  placedCache = { for: geo, placed };
+  return placed;
 }
 
 /**
@@ -2282,7 +2339,23 @@ function dragTo(clientX: number, clientY: number) {
   const voices = drag.allVoices || !sameStaff ? allVoices() : voicesOnStaff(hit.staff);
   // What is drawn decides: each voice takes the notes dragged over, even where voices are drawn
   // out of line with each other (a multi-bar rest is drawn one bar wide).
-  const region = drawnRegion(scoreIndex, placedNotes(), drag.anchor, hit, voices);
+  const placed = placedNotes();
+  // A redraw mid-drag (the window resized, the score reflowed): the anchor's note as drawn now.
+  if (!placed.some((each) => each.note === drag?.anchor.note && each.line === drag.anchor.line)) {
+    const was = drag.anchor.note;
+    const now =
+      placed.find((each) => each.note === was) ??
+      placed.find((each) => each.note.start === was.start && each.note.voice === was.voice);
+    if (now)
+      drag.anchor = {
+        note: now.note,
+        line: now.line,
+        staff: now.staff,
+        x: now.x + 2,
+        reach: now.note.time,
+      };
+  }
+  const region = drawnRegion(scoreIndex, placed, drag.anchor, hit, voices);
   if (drag.base)
     selectRanges([...drag.base, ...regionRanges(scoreIndex, region, text())], hit.note.start);
   else selectRegion(region);
@@ -2319,9 +2392,18 @@ scoreScroll.addEventListener("pointermove", (event) => {
     }
     return;
   }
-  dragTo(event.clientX, event.clientY);
+  // One selection update a frame, however many moves the pointer sends (a big score paints
+  // slowly); the last place is read when it is let go.
+  drag.lastX = event.clientX;
+  drag.lastY = event.clientY;
+  if (!moveFrame)
+    moveFrame = requestAnimationFrame(() => {
+      moveFrame = 0;
+      if (drag) dragTo(drag.lastX, drag.lastY);
+    });
   if (!edgeFrame) edgeFrame = requestAnimationFrame(edgeScroll);
 });
+let moveFrame = 0;
 scoreScroll.addEventListener("scroll", () => {
   if (drag?.moved) dragTo(drag.lastX, drag.lastY);
 });
@@ -2336,7 +2418,9 @@ scoreScroll.addEventListener(
 const endDrag = (event: PointerEvent) => {
   if (!drag || event.pointerId !== drag.pointer) return;
   // Where it was let go counts (after a wheel scroll, too).
-  if (event.type === "pointerup" && drag.moved && (!drag.touch || drag.touch.armed))
+  cancelAnimationFrame(moveFrame);
+  moveFrame = 0;
+  if (event.type === "pointerup" && (!drag.touch || drag.touch.armed))
     dragTo(event.clientX, event.clientY);
   if (drag.touch) {
     clearTimeout(drag.touch.timer);
@@ -2642,29 +2726,39 @@ function moveByNote(direction: 1 | -1, extend: boolean): boolean {
     }
     return true;
   }
-  // As in text: an anchor that stays and an end that moves, so going back shrinks the selection
-  // before it grows the other way. A selection made some other way starts with its anchor at its
-  // first note and its moving end at its last.
+  // As in text: an anchor that stays and an end that moves, between notes, so going back
+  // shrinks the selection before it grows the other way, and back at the anchor it is a caret
+  // again. A selection made some other way is anchored at its first note, its end after its last.
+  const last = notes[notes.length - 1];
+  const bounds = [
+    ...new Set([...notes.map((note) => note.time), ...(last ? [last.time + last.duration] : [])]),
+  ].sort((a, b) => a - b);
   const kept = noteSpan?.selection.eq(view.state.selection) ? noteSpan : null;
   const span = kept ?? {
     anchor: region ? region.from : caretNote.time,
-    head: region ? (region.reach ?? region.from) : caretNote.time,
+    head: region
+      ? (bounds.find((time) => time > (region.reach ?? region.from) + eps) ?? region.to)
+      : caretNote.time,
     voices: region ? region.voices : [caretNote.voice],
     selection: view.state.selection,
   };
-  if (!kept && !region) {
-    selectRegion(spanRegion(index, span.anchor, span.head, span.voices));
-    noteSpan = { ...span, selection: view.state.selection };
-    return true;
-  }
-  const step =
+  const head =
     direction > 0
-      ? notes.find((note) => note.time > span.head + eps)
-      : [...notes].reverse().find((note) => note.time < span.head - eps);
-  const head = step ? step.time : span.head;
-  selectRegion(
-    spanRegion(index, Math.min(span.anchor, head), Math.max(span.anchor, head), span.voices),
-  );
+      ? (bounds.find((time) => time > span.head + eps) ?? span.head)
+      : ([...bounds].reverse().find((time) => time < span.head - eps) ?? span.head);
+  const low = Math.min(span.anchor, head);
+  const high = Math.max(span.anchor, head);
+  if (high - low < eps) {
+    const at = notes.find((note) => Math.abs(note.time - span.anchor) < eps);
+    view.dispatch({
+      selection: { anchor: at ? at.start : caret() },
+      scrollIntoView: true,
+      userEvent: "select.note",
+    });
+  } else {
+    const reach = [...notes].reverse().find((note) => note.time < high - eps)?.time ?? low;
+    selectRegion(spanRegion(index, low, reach, span.voices));
+  }
   noteSpan = { ...span, head, selection: view.state.selection };
   return true;
 }
@@ -2841,6 +2935,12 @@ const bookItems = (tune?: TuneInfo): MenuItem[] => {
 
 /* Playback. */
 let loopRegion: Region | null = null;
+/**
+ * The text a selection's loop plays, mapped through every edit: the loop's notes are found again
+ * from it whenever the score is rebuilt, so an edit before, inside or after it never leaves the
+ * loop with notes that moved (or nothing to play).
+ */
+let loopRanges: Range[] | null = null;
 let loopOn = false;
 
 function caretWritten(): { note: ScoreNote; written: number } | null {
@@ -2929,6 +3029,8 @@ async function playSelection(loop: boolean) {
     return;
   }
   loopRegion = region;
+  const selected = ranges().filter((range) => range.to > range.from);
+  loopRanges = selected.length ? selected : null;
   following.on = true;
   await player.play({ region: regionLine, loop });
 }
@@ -2941,6 +3043,7 @@ function setLoop(on: boolean) {
   $("loop").setAttribute("aria-pressed", String(on));
   if (!on) {
     loopRegion = null;
+    loopRanges = null;
     if (player.loopingRegion && player.status === "playing") {
       // Carry on through the tune from where the loop was.
       const at = player.timeline ? regionWritten(player.timeline, player.position()) : 0;
@@ -2962,6 +3065,7 @@ function toggleLoop() {
   const line = region ? regionTimelineFor(region) : null;
   if (!region || !line || !line.notes.length) return;
   loopRegion = region;
+  loopRanges = selected.length ? selected : null;
   const from = written >= region.from && written < region.to ? written - region.from : 0;
   drawTimeline();
   void player.play({ region: line, loop: true, from });

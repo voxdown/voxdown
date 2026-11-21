@@ -11,6 +11,7 @@ import {
   keyName,
 } from "../src/composer/musicxml/import";
 import { XmlError, parseXml } from "../src/composer/musicxml/xml";
+import { abcName } from "../src/composer/source";
 import { indexFile } from "../src/composer/tunes";
 
 /** A one-part score: measures of notes, with divisions and the first attributes. */
@@ -287,6 +288,12 @@ describe("MusicXML import", () => {
     expect(text).toContain(`"^50\\% slower 'rit.'"c4 d4 |]\nw:100\\% sure`);
     const injected = await imported("review-injection.musicxml");
     expect(injected.text.match(/^X:/gm)).toEqual(["X:"]);
+    // The title stays one line in the report, and the draft's file name is safe.
+    expect(injected.report.title).toBe("Evil X:2 T:<img src=x onerror=alert(1)>");
+    expect(abcName(injected.report.title)).toBe("Evil X-2 T-img src=x onerror=alert(1).abc");
+    const { report: awkward } = await imported("awkward-text.musicxml");
+    expect(abcName(awkward.title)).toBe("The Title T-Not a field X-9.abc");
+    expect(abcName("Line\none\ttwo // three")).toBe("Line one two - three.abc");
     expect(injected.text).toContain("w:a\\|b\\-c\\_d\\%e");
   });
   it("says in Good to know what playback and drawing do differently", async () => {

@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { extname, resolve } from "node:path";
+import { deflateRawSync } from "node:zlib";
 import { chromium } from "playwright";
 
 const dist = resolve("site/dist");
@@ -2662,6 +2663,8 @@ console.log(
 }
 console.log("Composer: a tune exported as MusicXML opens again as the same music: passed");
 
+let largeTimes = { report: 0, drawn: 0 };
+const bombTimes = [];
 {
   // Sprint B. A large score (12 parts × 300 bars, about 5 MB) imports with a progress line and
   // without holding the page: no task while importing runs as long as a quarter second.
@@ -2685,6 +2688,8 @@ console.log("Composer: a tune exported as MusicXML opens again as the same music
   await page.evaluate(() => {
     window.__tasks = [];
     window.__lines = [];
+    window.__reportPainted = 0;
+    window.__drawn = 0;
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) window.__tasks.push([entry.startTime, entry.duration]);
     }).observe({ type: "longtask" });
@@ -2692,6 +2697,21 @@ console.log("Composer: a tune exported as MusicXML opens again as the same music
     new MutationObserver(() =>
       window.__lines.push([performance.now(), status.textContent]),
     ).observe(status, { childList: true, characterData: true, subtree: true });
+    // When the report has been painted (a frame after it opens), and when the score is drawn.
+    const report = document.getElementById("import-report");
+    new MutationObserver(() => {
+      if (report.open && !window.__reportPainted)
+        requestAnimationFrame(() =>
+          setTimeout(() => {
+            window.__reportPainted = performance.now();
+          }, 0),
+        );
+    }).observe(report, { attributes: true, attributeFilter: ["open"] });
+    const summary = document.getElementById("score-summary");
+    new MutationObserver(() => {
+      if (/^Large Score/.test(summary.textContent) && !window.__drawn)
+        window.__drawn = performance.now();
+    }).observe(summary, { childList: true, characterData: true, subtree: true });
   });
   await page.locator("#file").setInputFiles({
     name: "large.musicxml",
@@ -2699,16 +2719,28 @@ console.log("Composer: a tune exported as MusicXML opens again as the same music
     buffer: Buffer.from(big),
   });
   await page.locator("#import-report[open]").waitFor({ timeout: 60000 });
+  await page.waitForFunction(() => window.__drawn > 0, null, { timeout: 60000 });
   await page.locator("#import-report").getByRole("button", { name: "OK" }).click();
-  const { tasks, lines } = await page.evaluate(() => ({
+  const { tasks, lines, reportPainted, drawnAt } = await page.evaluate(() => ({
     tasks: window.__tasks,
     lines: window.__lines,
+    reportPainted: window.__reportPainted,
+    drawnAt: window.__drawn,
   }));
   const shown = lines.filter(([, text]) => /^Importing large\.musicxml: \d+%$/.test(text));
   assert(shown.length >= 5, `a progress line while importing: ${shown.length} updates`);
   const finished = shown.at(-1)[0];
   const longest = Math.max(0, ...tasks.filter(([start]) => start < finished).map(([, ms]) => ms));
   assert(longest < 250, `the page is not held while importing: longest task ${longest} ms`);
+  // 12. The report shows as soon as the conversion is done; the score draws behind it.
+  assert(
+    reportPainted > 0 && reportPainted < drawnAt,
+    `the report was painted (${Math.round(reportPainted - finished)} ms after converting) before the score was drawn (${Math.round(drawnAt - finished)} ms)`,
+  );
+  largeTimes = {
+    report: Math.round(reportPainted - finished),
+    drawn: Math.round(drawnAt - finished),
+  };
   await page.waitForFunction(
     () => /^Large Score .* 300 bars/.test(document.getElementById("score-summary").textContent),
     null,
@@ -2716,8 +2748,159 @@ console.log("Composer: a tune exported as MusicXML opens again as the same music
   );
 }
 console.log(
-  "Composer: a 12-part, 300-bar score imports with a progress line, the page free: passed",
+  `Composer: a 12-part, 300-bar score imports with a progress line, the page free; the report is painted ${largeTimes.report} ms after converting, the score drawn behind it at ${largeTimes.drawn} ms: passed`,
 );
+
+{
+  // Sprint B fixes 1. Octave instruments play where they sound: what the player schedules for
+  // tenor, guitar, piccolo and double bass (an octave clef, or an octave transposition).
+  await page
+    .locator("#file")
+    .setInputFiles(resolve("site/test/fixtures/musicxml/octave-instruments.musicxml"));
+  await page.locator("#import-report[open]").waitFor();
+  await page.locator("#import-report").getByRole("button", { name: "OK" }).click();
+  await page.waitForFunction(() =>
+    /^Octave Instruments/.test(document.getElementById("score-summary").textContent),
+  );
+  await drawn();
+  assert.match(
+    await docText(),
+    /V:1 name="Tenor" clef=treble-8\nV:2 name="Guitar" clef=treble-8\nV:3 name="Piccolo" clef=treble transpose=12\n/,
+  );
+  const first = await page.evaluate(() => {
+    const byTrack = new Map();
+    for (const note of window.composer.timelineNotes())
+      if (!byTrack.has(note.track)) byTrack.set(note.track, note.pitch);
+    return [...byTrack.entries()].sort((a, b) => a[0] - b[0]).map(([, pitch]) => pitch);
+  });
+  // E4 tenor, E3 guitar, E6 piccolo (both ways), E2 double bass (both ways): the sounding E of each.
+  assert.deepEqual(first, [64, 52, 88, 88, 40, 40], `the first notes as played: ${first}`);
+  await page.waitForFunction(() => document.getElementById("problems").hidden, null, {
+    timeout: 3000,
+  });
+}
+console.log(
+  "Composer: tenor, guitar, piccolo and double bass import and play at their sounding pitch: passed",
+);
+
+{
+  // Sprint B fixes 6. A lone whole-bar rest is a rest of the bar, not a "1" bar rest; the
+  // player times it, and two bars of rest in another meter, as written.
+  await page
+    .locator("#file")
+    .setInputFiles(resolve("site/test/fixtures/musicxml/bar-rests.musicxml"));
+  await page.locator("#import-report[open]").waitFor();
+  await page.locator("#import-report").getByRole("button", { name: "OK" }).click();
+  await page.waitForFunction(() =>
+    /^Bar Rests/.test(document.getElementById("score-summary").textContent),
+  );
+  await drawn();
+  assert.match(await docText(), /c d e f \| z4 \| \[M:3\/4\] z3 \| z3 \|\nV:1\nz3 \| g f e \|\]/);
+  const length = await page.evaluate(() => window.composer.state().timeline.length);
+  assert(
+    Math.abs(length - 5) < 1e-9,
+    `two bars of 4/4 and four of 3/4 last five whole notes: ${length}`,
+  );
+  assert.equal(await page.locator("#score .abcjs-mmrest").count(), 0, "no multi-bar rest drawn");
+  await page.waitForFunction(() => document.getElementById("problems").hidden, null, {
+    timeout: 3000,
+  });
+}
+console.log("Composer: a whole-bar rest imports as a rest of the bar and plays its length: passed");
+
+{
+  // Sprint B fixes 3. Archives that would unpack to too much are refused plainly and quickly: by
+  // the sizes their directory gives, and while unpacking whatever the header claims.
+  const zipOf = (files) => {
+    const parts = [];
+    const central = [];
+    let offset = 0;
+    for (const { name, data, method = 0, claims = data.length } of files) {
+      const nameBytes = Buffer.from(name);
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x04034b50, 0);
+      local.writeUInt16LE(20, 4);
+      local.writeUInt16LE(method, 8);
+      local.writeUInt32LE(data.length, 18);
+      local.writeUInt32LE(claims, 22);
+      local.writeUInt16LE(nameBytes.length, 26);
+      const record = Buffer.alloc(46);
+      record.writeUInt32LE(0x02014b50, 0);
+      record.writeUInt16LE(20, 4);
+      record.writeUInt16LE(20, 6);
+      record.writeUInt16LE(method, 10);
+      record.writeUInt32LE(data.length, 20);
+      record.writeUInt32LE(claims, 24);
+      record.writeUInt16LE(nameBytes.length, 28);
+      record.writeUInt32LE(offset, 42);
+      parts.push(local, nameBytes, data);
+      central.push(record, nameBytes);
+      offset += 30 + nameBytes.length + data.length;
+    }
+    const size = central.reduce((sum, buffer) => sum + buffer.length, 0);
+    const end = Buffer.alloc(22);
+    end.writeUInt32LE(0x06054b50, 0);
+    end.writeUInt16LE(files.length, 8);
+    end.writeUInt16LE(files.length, 10);
+    end.writeUInt32LE(size, 12);
+    end.writeUInt32LE(offset, 16);
+    return Buffer.concat([...parts, ...central, end]);
+  };
+  const container = {
+    name: "META-INF/container.xml",
+    data: Buffer.from(
+      '<container><rootfiles><rootfile full-path="score.musicxml" media-type="application/vnd.recordare.musicxml+xml"/></rootfiles></container>',
+    ),
+  };
+  const bombs = [
+    // Honest: says it unpacks to 2 GB.
+    [
+      "honest.mxl",
+      zipOf([
+        container,
+        {
+          name: "score.musicxml",
+          data: deflateRawSync(Buffer.from("<x/>")),
+          method: 8,
+          claims: 2 ** 31,
+        },
+      ]),
+    ],
+    // Lying: says 1,000 bytes, unpacks to 80 MB.
+    [
+      "lying.mxl",
+      zipOf([
+        container,
+        {
+          name: "score.musicxml",
+          data: deflateRawSync(Buffer.alloc(80 * 1024 * 1024)),
+          method: 8,
+          claims: 1000,
+        },
+      ]),
+    ],
+  ];
+  const before = await docText();
+  for (const [name, buffer] of bombs) {
+    const started = Date.now();
+    await page
+      .locator("#file")
+      .setInputFiles({ name, mimeType: "application/octet-stream", buffer });
+    await page.locator("#notice", { hasText: `${name} could not be imported` }).waitFor();
+    const took = Date.now() - started;
+    assert(
+      (await page.locator("#notice").textContent()).includes(
+        `${name} could not be imported. This .mxl unpacks to more than 64 MB, too large to open here.`,
+      ),
+      `${name}: the plain message: ${await page.locator("#notice").textContent()}`,
+    );
+    assert(took < 5000, `${name} refused in ${took} ms`);
+    bombTimes.push(`${name} (${(buffer.length / 1024).toFixed(0)} KB) ${took} ms`);
+    assert.equal(await docText(), before, "the open draft stays");
+    await page.locator(".notice-close").click();
+  }
+}
+console.log(`Composer: zip bombs are refused plainly (${bombTimes.join(", ")}): passed`);
 
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },

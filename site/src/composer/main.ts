@@ -3598,11 +3598,14 @@ async function importScore(bytes: Uint8Array, name: string) {
         status.textContent = `Importing ${name}: ${percent}%`;
       }
     });
+    // The report first, painted, then the new draft behind it: a large score's drawing takes a
+    // moment, and the report should not wait for it.
+    status.textContent = musicxml.describeReport(result.report);
+    showImportReport(result.report, name, musicxml.describeReport(result.report));
+    await new Promise((painted) => requestAnimationFrame(() => setTimeout(painted, 0)));
     local.disconnect();
     load(newSource(result.text), abcName(result.report.title));
     void persist();
-    status.textContent = musicxml.describeReport(result.report);
-    showImportReport(result.report, name, musicxml.describeReport(result.report));
   } catch (error) {
     status.textContent = "Ready";
     noticeError(
@@ -4878,6 +4881,10 @@ void start();
       : null,
   }),
   scoreIndex: () => scoreIndex,
+  /** What the player schedules: each note's time, MIDI pitch and track, for checks. */
+  timelineNotes: () =>
+    timeline?.notes.map((note) => ({ time: note.time, pitch: note.pitch, track: note.track })) ??
+    [],
   breaks: () => breaks,
   /** Where a page point reads in the music: its note and how far it reached, for checks. */
   hit: (x: number, y: number) => {

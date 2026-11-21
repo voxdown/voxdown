@@ -90,11 +90,18 @@ export function encodeText(
 export function abcName(value: string): string {
   const cleaned = [...value]
     .map((char) =>
-      char.charCodeAt(0) < 32 || /[<>:"/\\|?*\u202a-\u202e\u2066-\u2069]/.test(char) ? "-" : char,
+      char.charCodeAt(0) < 32
+        ? " "
+        : /[<>:"/\\|?*\u202a-\u202e\u2066-\u2069]/.test(char)
+          ? "-"
+          : char,
     )
     .join("")
+    // One line, and no runs of dashes where several unsafe characters stood.
+    .replace(/\s+/g, " ")
+    .replace(/-+( ?-+)*/g, "-")
     .replace(/\.(?:abc|txt)$/i, "")
-    .replace(/^[. ]+|[. ]+$/g, "")
+    .replace(/^[. -]+|[. -]+$/g, "")
     .slice(0, 120);
   return `${cleaned || "Untitled"}.abc`;
 }

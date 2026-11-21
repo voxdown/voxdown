@@ -73,7 +73,9 @@ const plural = (count: number, one: string, many = `${one}s`) =>
 
 /** Text for a field line or an annotation: one line, spaces collapsed, % kept from starting a
  * comment. */
-export const fieldText = (text: string) => text.replace(/\s+/g, " ").trim().replace(/\\?%/g, "\\%");
+export const fieldText = (text: string) => oneLine(text).replace(/\\?%/g, "\\%");
+/** Text on one line, spaces collapsed. */
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 
 const DROP_LABELS: Record<string, string> = {
   fingering: "fingerings",
@@ -1186,11 +1188,11 @@ async function convertScore(
           type === null || children(credit, "credit-type").some((each) => each.text === type),
       )
       .flatMap((credit) => children(credit, "credit-words"))
-      .map((words) => fieldText(words.text))
+      .map((words) => oneLine(words.text))
       .filter(Boolean);
-  const movement = fieldText(textOf(score, "movement-title") ?? "");
+  const movement = oneLine(textOf(score, "movement-title") ?? "");
   const title =
-    fieldText(textOf(work, "work-title") ?? "") ||
+    oneLine(textOf(work, "work-title") ?? "") ||
     movement ||
     creditWords("title")[0] ||
     creditWords(null)[0] ||
@@ -1280,8 +1282,8 @@ async function convertScore(
     );
 
   // Header.
-  const lines: string[] = [`X:${number}`, `T:${title}`];
-  for (const subtitle of subtitles) lines.push(`T:${subtitle}`);
+  const lines: string[] = [`X:${number}`, `T:${fieldText(title)}`];
+  for (const subtitle of subtitles) lines.push(`T:${fieldText(subtitle)}`);
   if (composer) lines.push(`C:${composer}`);
   if (lyricist) lines.push(`C:Words: ${lyricist}`);
   if (arranger) lines.push(`Z:Arranged by ${arranger}`);

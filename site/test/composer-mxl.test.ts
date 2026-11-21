@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ZipError, crc32, mxlDocuments, readZip, writeZip } from "../src/composer/musicxml/zip";
 
-const fixture = (name: string) => readFileSync(`test/fixtures/musicxml/${name}`, "utf8");
+const fixture = (name: string) =>
+  readFileSync(new URL(`./fixtures/musicxml/${name}`, import.meta.url), "utf8");
 const encode = (text: string) => new TextEncoder().encode(text);
 
 describe("zip archives", () => {
@@ -58,7 +59,9 @@ describe("zip archives", () => {
     expect(() => readZip(encode("not a zip at all, just some words"))).toThrow(ZipError);
   });
   it("reads a real deflated .mxl, as MuseScore writes it", async () => {
-    const bytes = new Uint8Array(readFileSync("test/fixtures/musicxml/twinkle-two-parts.mxl"));
+    const bytes = new Uint8Array(
+      readFileSync(new URL("./fixtures/musicxml/twinkle-two-parts.mxl", import.meta.url)),
+    );
     const documents = await mxlDocuments(bytes);
     expect(documents.map((document) => document.name)).toEqual(["score.musicxml"]);
     expect(documents[0]?.text).toBe(fixture("twinkle-two-parts.musicxml"));

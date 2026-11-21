@@ -12,7 +12,8 @@ import {
 import { XmlError, parseXml } from "../src/composer/musicxml/xml";
 import { indexFile } from "../src/composer/tunes";
 
-const fixture = (name: string) => readFileSync(`test/fixtures/musicxml/${name}`, "utf8");
+const fixture = (name: string) =>
+  readFileSync(new URL(`./fixtures/musicxml/${name}`, import.meta.url), "utf8");
 const encode = (text: string) => new TextEncoder().encode(text);
 
 /** Imports and checks that the ABC draws without warnings and every bar adds up. */
@@ -105,6 +106,55 @@ describe("MusicXML import", () => {
     expect(report.dropped.map((item) => item.label)).toContain(
       "unpitched notes written at their display pitch",
     );
+  });
+  it("draws part brackets and braces, a brace inside a bracket, and reports what cannot nest", async () => {
+    const group = (number: number, type: string, symbol = "") =>
+      `<part-group number="${number}" type="${type}">${symbol ? `<group-symbol>${symbol}</group-symbol>` : ""}</part-group>`;
+    const part = (n: number) =>
+      `<score-part id="P${n}"><part-name>Part ${n}</part-name></score-part>`;
+    const list = [
+      group(1, "start", "bracket"),
+      part(1),
+      group(2, "start", "brace"),
+      part(2),
+      part(3),
+      group(2, "stop"),
+      group(1, "stop"),
+      group(3, "start", "bracket"),
+      part(4),
+      group(4, "start", "bracket"),
+      part(5),
+      part(6),
+      group(4, "stop"),
+      group(3, "stop"),
+    ].join("");
+    const music = [1, 2, 3, 4, 5, 6]
+      .map(
+        (n) =>
+          `<part id="P${n}"><measure number="1">${n === 1 ? "<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>" : "<attributes><divisions>1</divisions></attributes>"}<note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>whole</type></note></measure></part>`,
+      )
+      .join("");
+    const { text, report } = await importMusicXml([
+      `<score-partwise version="4.0"><part-list>${list}</part-list>${music}</score-partwise>`,
+    ]);
+    expect(text).toContain("%%score [1 {2 3}] [4 5 6]\n");
+    expect(report.dropped.map((item) => item.label)).toContain(
+      "part brackets and braces ABC cannot nest",
+    );
+    const staff =
+      (
+        abcjs.parseOnly(text)[0] as never as {
+          lines: { staff: { bracket?: string; brace?: string }[] }[];
+        }
+      ).lines[0]?.staff ?? [];
+    expect(staff.map((each) => `${each.bracket ?? ""}/${each.brace ?? ""}`)).toEqual([
+      "start/",
+      "continue/start",
+      "end/end",
+      "start/",
+      "continue/",
+      "end/",
+    ]);
   });
   it("turns several documents into several tunes", async () => {
     const { text, report } = await importMusicXml([

@@ -356,6 +356,36 @@ function wordsMark(text: string): string | null {
 const annotation = (text: string, below: boolean) =>
   `"${below ? "_" : "^"}${text.replace(/"/g, "'").replace(/\s+/g, " ").trim()}"`;
 
+/** The brackets and braces of a part-list, with the ids of the parts each one spans. */
+function partGroups(partList: XmlElement | undefined): { open: "[" | "{"; ids: string[] }[] {
+  const open = new Map<string, { open: "[" | "{" | null; ids: string[] }>();
+  const groups: { open: "[" | "{"; ids: string[] }[] = [];
+  for (const item of partList?.children ?? []) {
+    if (item.name === "score-part")
+      for (const group of open.values()) group.ids.push(item.attrs.id ?? "");
+    else if (item.name === "part-group") {
+      const number = item.attrs.number ?? "1";
+      if (item.attrs.type === "start") {
+        const symbol = textOf(item, "group-symbol");
+        open.set(number, {
+          open:
+            symbol === "brace"
+              ? "{"
+              : symbol === "bracket" || symbol === "square" || symbol === "line"
+                ? "["
+                : null,
+          ids: [],
+        });
+      } else if (item.attrs.type === "stop") {
+        const group = open.get(number);
+        open.delete(number);
+        if (group?.open) groups.push({ open: group.open, ids: group.ids });
+      }
+    }
+  }
+  return groups;
+}
+
 /** Turns a score-timewise document into the partwise shape. */
 function partwise(root: XmlElement): XmlElement {
   if (root.name !== "score-timewise") return root;
@@ -1009,7 +1039,46 @@ async function convertScore(
     });
     return staves.length > 1 ? `{${staffText.join(" ")}}` : staffText.join(" ");
   });
-  if (voices.length > 1) lines.push(`%%score ${groups.join(" ").trim()}`);
+  // Brackets and braces from the part-list. ABC draws a brace inside a bracket, nothing deeper.
+  type Span = { open: "[" | "{"; from: number; to: number };
+  const spans: Span[] = [];
+  const grandStaff = (index: number) =>
+    new Set(voices.filter((voice) => voice.part === index).map((voice) => voice.staff)).size > 1;
+  // The widest groups first, so an outer bracket wins over one nested inside it.
+  const placed = partGroups(partList)
+    .map((group) => ({
+      open: group.open,
+      at: group.ids
+        .map((id) => parts.findIndex((part) => part.id === id))
+        .filter((index) => index >= 0)
+        .sort((a, b) => a - b),
+    }))
+    .sort((a, b) => b.at.length - a.at.length);
+  for (const group of placed) {
+    const at = group.at;
+    if (at.length < 2) continue;
+    const from = at[0] as number;
+    const to = at[at.length - 1] as number;
+    const fits =
+      to - from + 1 === at.length &&
+      (group.open === "[" || !at.some(grandStaff)) &&
+      spans.every((other) => {
+        if (other.to < from || other.from > to) return true;
+        if (other.from === from && other.to === to) return false;
+        if (other.from <= from && to <= other.to) return other.open === "[" && group.open === "{";
+        if (from <= other.from && other.to <= to) return group.open === "[" && other.open === "{";
+        return false;
+      });
+    if (fits) spans.push({ open: group.open, from, to });
+    else dropped.add("part brackets and braces ABC cannot nest");
+  }
+  for (const span of spans) {
+    groups[span.from] = `${span.open}${groups[span.from]}`;
+    groups[span.to] = `${groups[span.to]}${span.open === "[" ? "]" : "}"}`;
+  }
+  // A bracket opens before a brace that starts on the same part, and closes after it.
+  const ordered = groups.map((text) => text.replace(/^\{\[/, "[{").replace(/\]\}$/, "}]"));
+  if (voices.length > 1) lines.push(`%%score ${ordered.join(" ").trim()}`);
   /** The key as it sounds: a transposing part's written key moved, in its simplest spelling. */
   const concertFifths = (part: Part, fifths: number) => {
     if (!part.transpose?.chromatic) return fifths;

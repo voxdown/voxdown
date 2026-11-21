@@ -33,7 +33,10 @@ describe("round trip: ABC → MusicXML → ABC gives back the same music", () =>
           async () =>
             (
               await importMusicXml([
-                readFileSync(`test/fixtures/musicxml/${name}.musicxml`, "utf8"),
+                readFileSync(
+                  new URL(`./fixtures/musicxml/${name}.musicxml`, import.meta.url),
+                  "utf8",
+                ),
               ])
             ).text,
         ] as [string, () => Promise<string>],

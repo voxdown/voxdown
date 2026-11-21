@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
 import { checkBars } from "../src/composer/barcheck";
@@ -8,7 +9,7 @@ import { importMusicXml } from "../src/composer/musicxml/import";
 import { indexFile } from "../src/composer/tunes";
 import { musicOf } from "./musicxml-music";
 
-const DIR = "test/fixtures/musicxml/lilypond-suite";
+const DIR = fileURLToPath(new URL("./fixtures/musicxml/lilypond-suite", import.meta.url));
 const FILES = readdirSync(DIR)
   .filter((name) => /\.(xml|mxl)$/.test(name))
   .sort();
@@ -54,7 +55,7 @@ describe("the unofficial MusicXML test suite", () => {
     const changed: string[] = [];
     for (const name of FILES) {
       const { text } = await readScore(new Uint8Array(readFileSync(`${DIR}/${name}`)));
-      for (const tune of abcjs.parseOnly(text) as never[]) {
+      for (const tune of abcjs.parseOnly(text) as unknown as never[]) {
         const back = await importMusicXml([exportMusicXml(tune)]);
         const again = abcjs.parseOnly(back.text)[0] as never;
         if (JSON.stringify(musicOf(tune).voices) !== JSON.stringify(musicOf(again).voices)) {

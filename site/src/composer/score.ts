@@ -807,12 +807,15 @@ export function noteAtTime(index: ScoreIndex, voice: number, time: number): Scor
 /* Geometry, measured lazily in the score's own coordinates. */
 export type NoteBox = {
   note: ScoreNote;
+  /** The note's own drawing (heads, stem, flags, accidentals, dots), without its words. */
   left: number;
   right: number;
   top: number;
   bottom: number;
   /** Left of the note head and its accidentals, without a chord symbol or text above it. */
   head: number;
+  /** Its chord symbols, annotations and other words, each where it is drawn. */
+  words: { left: number; right: number; top: number; bottom: number }[];
 };
 export type StaffBox = {
   line: number;
@@ -829,32 +832,58 @@ export function measure(
 ): { notes: NoteBox[]; staves: StaffBox[] } {
   const origin = container.getBoundingClientRect();
   const notes: NoteBox[] = [];
+  const isWords = (part: Element) =>
+    part.tagName.toLowerCase() === "text" ||
+    /^(chord|annotation)/.test(part.getAttribute("data-name") ?? "");
   for (const note of index.notes) {
-    let left = Number.POSITIVE_INFINITY;
-    let right = Number.NEGATIVE_INFINITY;
-    let top = Number.POSITIVE_INFINITY;
-    let bottom = Number.NEGATIVE_INFINITY;
-    let head = Number.POSITIVE_INFINITY;
+    // The note's own drawing and its words apart: abcjs groups a note's chord symbol and text
+    // with it, and they can be far wider than the note (a long annotation reaches across the bar).
+    const body = {
+      left: Number.POSITIVE_INFINITY,
+      right: Number.NEGATIVE_INFINITY,
+      top: Number.POSITIVE_INFINITY,
+      bottom: Number.NEGATIVE_INFINITY,
+    };
+    const all = { ...body };
+    const words: NoteBox["words"] = [];
+    const grow = (into: typeof body, rect: DOMRect) => {
+      into.left = Math.min(into.left, rect.left - origin.left);
+      into.right = Math.max(into.right, rect.right - origin.left);
+      into.top = Math.min(into.top, rect.top - origin.top);
+      into.bottom = Math.max(into.bottom, rect.bottom - origin.top);
+    };
     for (const element of note.elements) {
       const rect = element.getBoundingClientRect();
       if (!rect.width && !rect.height) continue;
-      left = Math.min(left, rect.left - origin.left);
-      right = Math.max(right, rect.right - origin.left);
-      top = Math.min(top, rect.top - origin.top);
-      bottom = Math.max(bottom, rect.bottom - origin.top);
-      // abcjs groups a note's chord symbol and text with it; they can reach over the bar line.
-      for (const part of element.children) {
-        if (
-          part.tagName.toLowerCase() === "text" ||
-          /^(chord|annotation)/.test(part.getAttribute("data-name") ?? "")
-        )
-          continue;
+      grow(all, rect);
+      const parts = [...element.children];
+      if (!parts.length) {
+        if (isWords(element))
+          words.push({
+            left: rect.left - origin.left,
+            right: rect.right - origin.left,
+            top: rect.top - origin.top,
+            bottom: rect.bottom - origin.top,
+          });
+        else grow(body, rect);
+        continue;
+      }
+      for (const part of parts) {
         const box = part.getBoundingClientRect();
-        if (box.width || box.height) head = Math.min(head, box.left - origin.left);
+        if (!box.width && !box.height) continue;
+        if (isWords(part))
+          words.push({
+            left: box.left - origin.left,
+            right: box.right - origin.left,
+            top: box.top - origin.top,
+            bottom: box.bottom - origin.top,
+          });
+        else grow(body, box);
       }
     }
-    if (!Number.isFinite(head)) head = left;
-    if (Number.isFinite(left)) notes.push({ note, left, right, top, bottom, head });
+    // A note drawn as words alone (rare) keeps its whole box.
+    const own = Number.isFinite(body.left) ? body : all;
+    if (Number.isFinite(own.left)) notes.push({ note, ...own, head: own.left, words });
   }
   const staves: StaffBox[] = [];
   const lines = container.querySelectorAll<SVGGraphicsElement>(".abcjs-staff");

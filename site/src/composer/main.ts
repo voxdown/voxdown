@@ -1833,7 +1833,17 @@ function placedNotes(): Placed[] {
  * Where the pointer is in the music: the staff under it, the note of a voice on that staff whose
  * head it has reached (a voice already being dragged is kept), and how far it reached in time.
  */
-function hitPoint(clientX: number, clientY: number, preferVoice?: number): ScorePoint | null {
+/**
+ * The note at a page point. A drag reads it as how far the pointer has reached (a note is reached
+ * once the pointer passes its head); a press (`nearest`) takes the nearest note head in the bar,
+ * so a click just left of a note takes that note, not the one before it.
+ */
+function hitPoint(
+  clientX: number,
+  clientY: number,
+  preferVoice?: number,
+  nearest = false,
+): ScorePoint | null {
   const geo = staffGeometry();
   if (!geo) return null;
   const origin = scoreElement.getBoundingClientRect();
@@ -1874,28 +1884,49 @@ function hitPoint(clientX: number, clientY: number, preferVoice?: number): Score
     barLines().get(staff.line) ?? [],
   );
   let reach = reachAt(placed, staff.line, x);
-  // A pointer over a note's own drawing (its head, stem, chord symbol or words) is on that note,
-  // even a hair left of its head: a click on a note always takes it. Overlapping, the nearest head.
-  // Its box stops at its bar's lines: words or a chord symbol reaching over one don't count.
+  // A pointer over a note's own drawing (its head, stem, accidentals) is on that note, even a hair
+  // left of its head: a click on a note always takes it. Overlapping, the nearest head. Its box
+  // stops at its bar's lines. Failing that, a pointer on a note's chord symbol or words (on the
+  // words themselves, not the space a long annotation spans) is on that note.
   const bars = barLines().get(staff.line) ?? [];
-  let over: (typeof geo.notes)[number] | null = null;
-  for (const box of geo.notes) {
-    if (box.note.line !== staff.line || box.note.staff !== staff.staff || box.note.voice !== voice)
-      continue;
+  const within = (
+    box: { left: number; right: number; top: number; bottom: number },
+    head: number,
+  ) => {
     let left = box.left;
     let right = box.right;
     for (const bar of bars) {
-      if (bar <= box.head) left = Math.max(left, bar);
+      if (bar <= head) left = Math.max(left, bar);
       else right = Math.min(right, bar);
     }
-    if (
-      x >= left &&
-      x <= right &&
-      y >= box.top &&
-      y <= box.bottom &&
-      (!over || Math.abs(box.head - x) < Math.abs(over.head - x))
-    )
+    return x >= left && x <= right && y >= box.top && y <= box.bottom;
+  };
+  let over: (typeof geo.notes)[number] | null = null;
+  const mine = geo.notes.filter(
+    (box) =>
+      box.note.line === staff.line && box.note.staff === staff.staff && box.note.voice === voice,
+  );
+  for (const box of mine)
+    if (within(box, box.head) && (!over || Math.abs(box.head - x) < Math.abs(over.head - x)))
       over = box;
+  if (!over)
+    for (const box of mine)
+      if (
+        box.words.some((words) => within(words, box.head)) &&
+        (!over || Math.abs(box.head - x) < Math.abs(over.head - x))
+      )
+        over = box;
+  if (!over && nearest) {
+    // The nearest head in the pointer's bar (heads are ~10 px wide; its middle is head + 5).
+    const left = Math.max(Number.NEGATIVE_INFINITY, ...bars.filter((bar) => bar <= x));
+    const right = Math.min(Number.POSITIVE_INFINITY, ...bars.filter((bar) => bar > x));
+    for (const box of mine)
+      if (
+        box.head >= left &&
+        box.head < right &&
+        (!over || Math.abs(box.head + 5 - x) < Math.abs(over.head + 5 - x))
+      )
+        over = box;
   }
   if (over) {
     note = over.note;
@@ -1931,7 +1962,7 @@ const allVoices = () => (scoreIndex ? scoreIndex.voices.map((_, index) => index)
 
 scoreScroll.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || !scoreIndex) return;
-  const hit = hitPoint(event.clientX, event.clientY);
+  const hit = hitPoint(event.clientX, event.clientY, undefined, true);
   if (!hit) return;
   event.preventDefault();
   scoreScroll.focus({ preventScroll: true });

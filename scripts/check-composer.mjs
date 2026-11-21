@@ -2662,6 +2662,63 @@ console.log(
 }
 console.log("Composer: a tune exported as MusicXML opens again as the same music: passed");
 
+{
+  // Sprint B. A large score (12 parts × 300 bars, about 5 MB) imports with a progress line and
+  // without holding the page: no task while importing runs as long as a quarter second.
+  const steps = "CDEFGAB";
+  const parts = Array.from({ length: 12 }, (_, part) => {
+    const measures = Array.from({ length: 300 }, (_, m) => {
+      const head =
+        m === 0
+          ? `<attributes><divisions>2</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>${part % 4 === 3 ? "F" : "G"}</sign><line>${part % 4 === 3 ? 4 : 2}</line></clef></attributes>`
+          : "";
+      const notes = Array.from(
+        { length: 8 },
+        (_, n) =>
+          `<note><pitch><step>${steps[(m * 3 + n + part) % 7]}</step><octave>${part % 4 === 3 ? 3 : 4}</octave></pitch><duration>1</duration><voice>1</voice><type>eighth</type>${part === 0 ? `<lyric number="1"><syllabic>single</syllabic><text>la</text></lyric>` : ""}</note>`,
+      ).join("");
+      return `<measure number="${m + 1}">${head}${notes}</measure>`;
+    }).join("");
+    return `<part id="P${part + 1}">${measures}</part>`;
+  });
+  const big = `<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><work><work-title>Large Score</work-title></work><part-list>${parts.map((_, part) => `<score-part id="P${part + 1}"><part-name>Part ${part + 1}</part-name></score-part>`).join("")}</part-list>${parts.join("")}</score-partwise>`;
+  await page.evaluate(() => {
+    window.__tasks = [];
+    window.__lines = [];
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) window.__tasks.push([entry.startTime, entry.duration]);
+    }).observe({ type: "longtask" });
+    const status = document.getElementById("explain");
+    new MutationObserver(() =>
+      window.__lines.push([performance.now(), status.textContent]),
+    ).observe(status, { childList: true, characterData: true, subtree: true });
+  });
+  await page.locator("#file").setInputFiles({
+    name: "large.musicxml",
+    mimeType: "application/xml",
+    buffer: Buffer.from(big),
+  });
+  await page.locator("#import-report[open]").waitFor({ timeout: 60000 });
+  await page.locator("#import-report").getByRole("button", { name: "OK" }).click();
+  const { tasks, lines } = await page.evaluate(() => ({
+    tasks: window.__tasks,
+    lines: window.__lines,
+  }));
+  const shown = lines.filter(([, text]) => /^Importing large\.musicxml: \d+%$/.test(text));
+  assert(shown.length >= 5, `a progress line while importing: ${shown.length} updates`);
+  const finished = shown.at(-1)[0];
+  const longest = Math.max(0, ...tasks.filter(([start]) => start < finished).map(([, ms]) => ms));
+  assert(longest < 250, `the page is not held while importing: longest task ${longest} ms`);
+  await page.waitForFunction(
+    () => /^Large Score .* 300 bars/.test(document.getElementById("score-summary").textContent),
+    null,
+    { timeout: 60000 },
+  );
+}
+console.log(
+  "Composer: a 12-part, 300-bar score imports with a progress line, the page free: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

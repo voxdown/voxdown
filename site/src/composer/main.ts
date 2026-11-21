@@ -3626,7 +3626,7 @@ function showImportReport(
   lead.textContent = summary;
   const source = document.createElement("p");
   source.className = "hint";
-  source.textContent = `From ${name}. It is now ABC text in a new draft: the score above is drawn from it, and ${name} is left as it was.`;
+  source.textContent = `From ${name}. It is now ABC text in a new draft: the score is drawn from it, and ${name} is left as it was.`;
   body.append(lead, source);
   const section = (title: string, items: string[]) => {
     if (!items.length) return;
@@ -4333,7 +4333,10 @@ const menus = mountMenus(
             enabled: () => fileIndex().tunes.length > 0,
           },
           {
-            label: `Every tune, ${fileIndex().tunes.length} files in one .zip…`,
+            label:
+              fileIndex().tunes.length > 1
+                ? `Every tune, ${fileIndex().tunes.length} files in one .zip…`
+                : "Every tune in one .zip (this file has one tune)",
             run: () => void exportMusicXmlFiles(true),
             enabled: () => fileIndex().tunes.length > 1,
           },

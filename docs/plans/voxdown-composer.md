@@ -206,3 +206,31 @@ now take a 30–48 ms engraving task and a 4–11 ms placing task (was one 60–
 long tune, or adding or removing bars, still does the full two-pass wrap (≈ 62–66 ms there).
 Breaks are not refreshed while bars only change inside; a bar that grows a lot keeps its line
 until the bar count or width changes.
+
+## Polish round 3 (after round 2: Claude 8.4, Codex 7.7 partial)
+
+Line breaks are now Composer's own, from the bar widths abcjs measures: the author's bars per
+source line when consistent and they fit, else 4 bars (8 when 4 leave lines sparse), 2, then 1; a
+pickup rides with the first line, abcjs's empty measure before a leading `|:` is skipped, and a
+short remainder line joins the line above when it fits. Measuring and drawing are separate tasks.
+
+Lyrics (owner's report: "this song," drawn as "thissong," in a narrow panel): abcjs reserves each
+lyric's measured width and nothing more, so at minimum spacing neighbours meet. Each syllable now
+carries a no-break space on both sides (and a narrow one before a hyphen) in the parsed tune before
+engraving, so abcjs itself reserves at least 0.5em between words; the source text, linking, the
+bar check and saving are untouched. The browser check sweeps every splitter position at 1440, and
+checks 1024 and 390, for a gap of at least 0.4em between lyric words.
+
+Also: bar checks return after typing pauses or the caret leaves the bar; only a short first bar is
+a pickup; the status line describes the bar at the caret; problems name their bar in a popover and
+F8 steps through them; notes are read before their dynamics; wrapped lines hang; region bands align
+across staves; notices sit above the transport and fade; the clock shows the written bar and the
+pass; Voices shows mutes; the stopped marker is hollow; 36 px toolbar targets; drawn ♯/♭; 2×2
+example cards; light motion; tablet widths put the score beside with the rail closed; the file
+handle is kept with the draft so Save reconnects after a reload; phone toolbar fits with More.
+
+Performance: unthrottled, opening a 200-bar tune is a 23–26 ms measuring task and a 37–48 ms
+drawing task; typing redraws are 32–40 ms plus a 3–11 ms placing task. With the CPU throttled 4×
+the drawing pass is 130–190 ms: abcjs engraves a tune in one synchronous pass, and splitting it
+needs per-system engraving (with ties, slurs, endings and lyrics across systems), planned as its
+own step. Redraws wait for a pause in typing, so keystrokes still reach the screen in 32–55 ms at 4×.

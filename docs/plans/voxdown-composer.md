@@ -1112,3 +1112,35 @@ The pieces:
   - it times a reference task like the importer's work just before importing;
   - it allows 250 ms or 7 times that reference, the best of up to three runs.
 - **First view.** 718.5 KB. The typing helpers, Voices and File › Recent now load when used.
+
+### Round 2 fixes (after Codex 7.5, Claude 7.0)
+
+**The one rule** (`selected.ts`). One function decides which notes a set of text ranges selects. Lighting, the status count, every command (transpose, lengths, marks, ties, slurs, Insert, Duplicate), Play and Loop, and Find melody all use it.
+- **What counts as touching a note.** A note is selected when a range touches any part of it:
+  - its letters, accidental, octave marks and length;
+  - what is attached before it: decorations, annotations, chord symbol, grace notes;
+  - what is attached after it: a tie, a broken-rhythm sign.
+- **A caret** stands for the note it is in, or the one just before it.
+- **Chord tones.** A range strictly inside a chord's brackets selects only the tones it covers. The chord is lit and the status says "1 chord tone selected": abcjs draws a chord's heads as one element, so single heads can't be lit.
+- **Typing over attachments.** Selected text inside an attachment (`trill`, `Am`, the `>` of `d>e`) counts as its note. A mark typed over it marks the note rather than replacing the text.
+- **Transpose** moves a selected note's chord symbol and grace notes with it.
+- **check-composer step 30** selects random stretches of a hard tune and checks that the notes lit, counted and moved an octave are the same.
+
+1. **Paste of a copy of several voices** (`paste.ts`):
+   - Each selected place takes its own voice's part, matched by `V:` id, else in order.
+   - At a caret or over one range, it takes the part of the voice there, else the music without its `V:` lines, and says so.
+   - Anything else is refused, with the reason in the status line. The paste is one undo step.
+2. **Double-clicked or partly selected notes** transpose and change length: the one rule.
+3. **Phone:**
+   - A finger's press no longer selects or plays; a tap does, or a long press.
+   - A scroll leaves the selection as it was before the press.
+4. **Play the selection and Loop** play exactly the selected notes, plus what sounds with them without text of its own (chord-symbol accompaniment, ornaments).
+   - **Decision:** a selection in several places plays its pieces back to back, a sixteenth note apart (`PIECE_GAP`), rather than keeping their times with silence between. The ruler shows a band per piece.
+5. **Find this melody** builds its query from the selected notes' sounding pitches and lengths in one voice (the main range's, else the highest), written in the tune's key. It no longer reads the selection's text.
+6. **Insert by the notes, not the head:**
+   - Triplet puts `(3` before each range's first selected note.
+   - Repeat wraps each range's notes, a bar line there becoming `|:` or `:|`.
+   - Chord symbol attaches to the first selected note.
+   - Bar line, lyrics line, 2nd-time dynamic and second voice use the selection's start or end, not its head.
+7. and 8. **A voice selected across `V:` blocks** is one passage (`passagesOf`). Duplicate copies it once after its end, in the voice's last block. A slur opens at its first note and closes at its last.
+9. **Lone notes.** Only a rest alone and drawn well inside its bar (a whole-bar rest) reads from the bar's start. A lone note is taken at its head, like the other voices' notes at that time.

@@ -18,9 +18,6 @@ import {
   decorationMark,
   duplicate,
   eventsIn,
-  insertChordSymbol,
-  insertRepeat,
-  insertTriplet,
   markSelection,
   newTuneTemplate,
   removeDots,
@@ -43,7 +40,7 @@ import {
   setMarks,
 } from "./editor";
 import { EXAMPLES, NEW_TUNE } from "./examples";
-import { describeKey, describeMeter, explainAt } from "./explain";
+import type { Explanation } from "./explain";
 import { INSTRUMENTS, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
 import { checkLyrics } from "./lyriccheck";
@@ -55,8 +52,8 @@ import {
   shortcutAria,
   shortcutLabel,
 } from "./menus";
+import { describeKey } from "./names";
 import { applyPassDynamics, passMarks } from "./passes";
-import { pasteVoiced, voiceAt, voicedParts } from "./paste";
 import { plainMessage } from "./plain";
 import { Player } from "./player";
 import { checkSlurs, plainWarnings } from "./problems";
@@ -79,6 +76,7 @@ import {
   loadAbcjs,
   loadedAbcjs,
   loadedPlayOrder,
+  loadedSelectionPlay,
   measure,
   noteAtTime,
   noteUnder,
@@ -115,10 +113,8 @@ import {
   barAt,
   buildTimeline,
   firstPlayOf,
-  piecesOf,
   regionTimeline,
   regionWritten,
-  selectionTimeline,
   soundingAt,
 } from "./timeline";
 import {
@@ -128,6 +124,7 @@ import {
   nextTuneNumber,
   tuneAt,
   tuneLabel,
+  voiceAt,
 } from "./tunes";
 import { tuneItems } from "./walk";
 
@@ -329,22 +326,32 @@ function clipboard(kind: "cut" | "copy") {
  * step, or it is refused with the reason in the status line. False when it isn't such a copy.
  */
 function pasteVoices(target: EditorView, pasted: string): boolean {
-  const parts = voicedParts(pasted);
-  if (!parts) return false;
-  const state = target.state;
-  const selected = state.selection.ranges.filter((range) => !range.empty);
-  const places = (selected.length ? selected : [state.selection.main]).map((range) => ({
-    from: range.from,
-    to: range.to,
-  }));
-  const plan = pasteVoiced(state.doc.toString(), places, parts);
-  if ("refused" in plan) {
-    sayAboutSelection(plan.refused);
-    notice(plan.refused);
-    return true;
-  }
-  target.dispatch({ changes: plan.changes, scrollIntoView: true, userEvent: "input.paste" });
-  notice(plan.message, "success");
+  // Told at once (the browser's own paste must be stopped now); worked out when ./paste loads.
+  if (!/^V:\s*\S/.test(pasted) || !/\nV:\s*\S/.test(pasted)) return false;
+  void import("./paste").then(({ pasteVoiced, voicedParts }) => {
+    const state = target.state;
+    const parts = voicedParts(pasted);
+    if (!parts) {
+      target.dispatch(state.replaceSelection(pasted), {
+        scrollIntoView: true,
+        userEvent: "input.paste",
+      });
+      return;
+    }
+    const selected = state.selection.ranges.filter((range) => !range.empty);
+    const places = (selected.length ? selected : [state.selection.main]).map((range) => ({
+      from: range.from,
+      to: range.to,
+    }));
+    const plan = pasteVoiced(state.doc.toString(), places, parts);
+    if ("refused" in plan) {
+      sayAboutSelection(plan.refused);
+      notice(plan.refused);
+      return;
+    }
+    target.dispatch({ changes: plan.changes, scrollIntoView: true, userEvent: "input.paste" });
+    notice(plan.message, "success");
+  });
   return true;
 }
 async function pasteText() {
@@ -1100,11 +1107,35 @@ function onUpdate(update: ViewUpdate) {
   }
 }
 
+/**
+ * What the caret is on, in words: the explainer loads once the editor is in use, not with the
+ * start screen.
+ */
+let explainer: typeof import("./explain") | null = null;
+let explainerLoading: Promise<unknown> | null = null;
+function explainAt(position: number): Explanation | null {
+  if (explainer) return explainer.explainAt(text(), fileIndex(), position);
+  explainerLoading ??= import("./explain").then(
+    (module) => {
+      explainer = module;
+    },
+    () => {
+      explainerFailed = true;
+    },
+  );
+  return null;
+}
+/** Offline with the explainer never fetched: the status line still counts selections. */
+let explainerFailed = false;
+
 function explainCaret(update: ViewUpdate) {
   const position = caret();
-  const explanation = view.state.selection.main.empty
-    ? explainAt(text(), fileIndex(), position)
-    : null;
+  if (!explainer && !explainerFailed) {
+    explainAt(position);
+    void explainerLoading?.then(() => explainCaret(update));
+    return;
+  }
+  const explanation = view.state.selection.main.empty ? explainAt(position) : null;
   const status = $("explain");
   status.replaceChildren();
   // What a typed mark just did stays said while its selection does.
@@ -1435,8 +1466,14 @@ function regionTimelineFor(region: Region): Timeline | null {
   if (!timeline || !scoreIndex) return null;
   const all = region.voices.length >= scoreIndex.voices.length;
   // A selection plays exactly its notes, piece after piece.
-  if (region.starts && region.pieces)
-    return selectionTimeline(timeline, region.pieces, region.starts, region.voices, all);
+  if (region.starts && region.pieces && loadedSelectionPlay)
+    return loadedSelectionPlay.selectionTimeline(
+      timeline,
+      region.pieces,
+      region.starts,
+      region.voices,
+      all,
+    );
   return regionTimeline(timeline, region, all);
 }
 /** The region a text selection makes, with its own notes and the pieces of time they cover. */
@@ -1446,7 +1483,7 @@ function selectedRegion(list: Range[]): Region | null {
   const region = regionOfNotes(scoreIndex, notes);
   if (!region) return null;
   region.starts = new Set(notes.map((note) => note.start));
-  region.pieces = piecesOf(notes);
+  region.pieces = loadedSelectionPlay?.piecesOf(notes);
   return region;
 }
 
@@ -2268,7 +2305,7 @@ function announceScore() {
       bars.length > 1 ? `bars ${Math.min(...bars)} to ${Math.max(...bars)}` : `bar ${bars[0]}`;
     message = `${notes.length} ${notes.length === 1 ? "note" : "notes"} selected${selectionWhere()}, ${span}.`;
   } else {
-    const explanation = explainAt(text(), fileIndex(), caret());
+    const explanation = explainAt(caret());
     message = explanation ? `${explanation.text}${placeOf(caret())}` : "No note here.";
   }
   live.textContent = message;
@@ -2337,7 +2374,7 @@ function showCursor(note: ScoreNote | null) {
   marker.style.width = `${box.right - box.head + 10}px`;
   marker.style.height = `${box.bottom - box.top + 10}px`;
   if (note) {
-    const explanation = explainAt(text(), fileIndex(), note.start);
+    const explanation = explainAt(note.start);
     const inside = ranges().some(
       (range) => note.start >= range.from && note.end <= range.to && range.to > range.from,
     );
@@ -3603,7 +3640,7 @@ function placeOf(position: number): string {
 }
 
 function sayNote() {
-  const explanation = explainAt(text(), fileIndex(), caret());
+  const explanation = explainAt(caret());
   const message = explanation
     ? `${explanation.token ? `${explanation.token} — ` : ""}${explanation.text}${placeOf(caret())}`
     : "The caret is not on a note.";
@@ -4696,28 +4733,31 @@ const menus = mountMenus(
 /* Insert › Chord symbol, Triplet and Repeat: over a selection, by its notes (./commands); at a
    caret, where it is. */
 function insertChordSymbolHere() {
-  const change = view.state.selection.main.empty
-    ? null
-    : insertChordSymbol(text(), ranges(), fileIndex());
-  if (!change) return insertAtCaret('""', 1);
-  view.dispatch({ changes: change, selection: { anchor: change.from + 1 }, userEvent: "input" });
-  view.focus();
+  if (view.state.selection.main.empty) return insertAtCaret('""', 1);
+  void import("./inserts").then(({ insertChordSymbol }) => {
+    const change = insertChordSymbol(text(), ranges(), fileIndex());
+    if (!change) return insertAtCaret('""', 1);
+    view.dispatch({ changes: change, selection: { anchor: change.from + 1 }, userEvent: "input" });
+    view.focus();
+  });
 }
 function insertTripletHere() {
-  const changes = view.state.selection.main.empty
-    ? null
-    : insertTriplet(text(), ranges(), fileIndex());
-  if (!changes) return insertAtCaret("(3", 2);
-  apply(changes, "Triplet");
-  view.focus();
+  if (view.state.selection.main.empty) return insertAtCaret("(3", 2);
+  void import("./inserts").then(({ insertTriplet }) => {
+    const changes = insertTriplet(text(), ranges(), fileIndex());
+    if (!changes) return insertAtCaret("(3", 2);
+    apply(changes, "Triplet");
+    view.focus();
+  });
 }
 function insertRepeatHere() {
-  const changes = view.state.selection.main.empty
-    ? null
-    : insertRepeat(text(), ranges(), fileIndex());
-  if (!changes) return insertAtCaret("|:  :|", 3);
-  apply(changes, "Repeat");
-  view.focus();
+  if (view.state.selection.main.empty) return insertAtCaret("|:  :|", 3);
+  void import("./inserts").then(({ insertRepeat }) => {
+    const changes = insertRepeat(text(), ranges(), fileIndex());
+    if (!changes) return insertAtCaret("|:  :|", 3);
+    apply(changes, "Repeat");
+    view.focus();
+  });
 }
 function insertAtCaret(insert: string, caretOffset: number) {
   const at = caret();

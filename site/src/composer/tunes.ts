@@ -202,3 +202,10 @@ export function nextTuneNumber(index: FileIndex): number {
   }
   return highest + 1;
 }
+
+/** The voice in force at a position: the last `V:` line or inline `[V:…]` before it. */
+export function voiceAt(text: string, position: number): string {
+  const before = text.slice(0, position);
+  const found = [...before.matchAll(/^V:\s*(\S+)|\[V:\s*([^\]\s]+)/gm)].at(-1);
+  return found ? (found[1] ?? found[2] ?? "") : "";
+}

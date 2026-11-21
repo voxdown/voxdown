@@ -25,16 +25,14 @@ import {
   spanLoneNotes,
   spanRegion,
 } from "../src/composer/score";
+import { PIECE_GAP, piecesOf, selectionTimeline } from "../src/composer/selection-play";
 import { encodeText, readBytes, readText, writeText } from "../src/composer/source";
 import {
-  PIECE_GAP,
   beatsBetween,
   buildTimeline,
   firstPlayOf,
-  piecesOf,
   regionTimeline,
   regionWritten,
-  selectionTimeline,
   soundingAt,
 } from "../src/composer/timeline";
 import { indexFile } from "../src/composer/tunes";

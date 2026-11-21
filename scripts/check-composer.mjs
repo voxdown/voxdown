@@ -21,7 +21,9 @@ const server = createServer((req, res) => {
   if (!file.startsWith(`${dist}/`)) return res.writeHead(403).end();
   if (existsSync(file) && statSync(file).isDirectory()) file = resolve(file, "index.html");
   if (!existsSync(file)) return res.writeHead(404).end();
-  served.set(path, statSync(file).size);
+  // Only what the browser asks for counts: other programs on the machine probing local ports
+  // (user agent "node", no referer) sometimes fetch "/" too.
+  if (/Chrome/.test(req.headers["user-agent"] ?? "")) served.set(path, statSync(file).size);
   res.writeHead(200, {
     "Content-Type":
       {

@@ -3,7 +3,7 @@
  * character ignored"); where the cause can be read from the text, say what is wrong and where.
  * abcjs's words are kept as a second line only when no reading fits.
  */
-import { DECORATIONS } from "./explain";
+import { DECORATIONS } from "./names";
 import type { FileIndex, TuneInfo } from "./tunes";
 import { walkTune } from "./walk";
 

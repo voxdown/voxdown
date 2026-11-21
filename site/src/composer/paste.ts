@@ -6,7 +6,10 @@
  *   without its `V:` lines;
  * - otherwise it is refused, saying why, rather than putting every voice into every range.
  */
+import { voiceAt } from "./tunes";
+
 export type Range = { from: number; to: number };
+export { voiceAt };
 export type VoicedPart = { voice: string; text: string };
 
 /** The parts of a copy of several voices, or null when it isn't one. */
@@ -24,13 +27,6 @@ export function voicedParts(copy: string): VoicedPart[] | null {
   }
   for (const part of parts) part.text = part.text.replace(/\n+$/, "");
   return parts.length > 1 ? parts : null;
-}
-
-/** The voice in force at a position: the last `V:` line or inline `[V:…]` before it. */
-export function voiceAt(text: string, position: number): string {
-  const before = text.slice(0, position);
-  const found = [...before.matchAll(/^V:\s*(\S+)|\[V:\s*([^\]\s]+)/gm)].at(-1);
-  return found ? (found[1] ?? found[2] ?? "") : "";
 }
 
 export type PastePlan =

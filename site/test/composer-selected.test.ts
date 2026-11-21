@@ -3,13 +3,11 @@ import { frac } from "../src/composer/abc";
 import {
   type Change,
   duplicate,
-  insertChordSymbol,
-  insertRepeat,
-  insertTriplet,
   scaleLengths,
   toggleSlur,
   transpose,
 } from "../src/composer/commands";
+import { insertChordSymbol, insertRepeat, insertTriplet } from "../src/composer/inserts";
 import { describePicked, selectedNotes } from "../src/composer/selected";
 
 const HEAD = "X:1\nT:Rule\nM:4/4\nL:1/8\nK:C\n";

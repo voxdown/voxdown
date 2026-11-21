@@ -1144,3 +1144,9 @@ The pieces:
    - Bar line, lyrics line, 2nd-time dynamic and second voice use the selection's start or end, not its head.
 7. and 8. **A voice selected across `V:` blocks** is one passage (`passagesOf`). Duplicate copies it once after its end, in the voice's last block. A slur opens at its first note and closes at its last.
 9. **Lone notes.** Only a rest alone and drawn well inside its bar (a whole-bar rest) reads from the bar's start. A lone note is taken at its head, like the other voices' notes at that time.
+
+**First view.** 716 KB, under its 720 KB check. To make room for this round:
+- Selection playback (`selection-play.ts`) loads with abcjs.
+- Voiced paste (`paste.ts`) and Insert › Triplet, Repeat and Chord symbol (`inserts.ts`) load on first use.
+- The caret explainer (`explain.ts`) loads when the editor is first used. The names the editor needs from the start (decorations, meters, keys) moved to `names.ts`.
+- check-composer step 1 counts only what the browser requests. Other programs probing local ports sometimes fetched `/` from its server and added 79 KB.

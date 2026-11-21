@@ -26,7 +26,7 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { fieldOf, lineKind, tokenizeMusic } from "./abc";
-import { DECORATIONS } from "./explain";
+import { DECORATIONS } from "./names";
 import { type FileIndex, indexFile } from "./tunes";
 
 /* The file's tunes, kept current for highlighting and completion. */

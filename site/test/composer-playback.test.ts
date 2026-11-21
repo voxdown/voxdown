@@ -8,11 +8,14 @@ import {
   type Placed,
   type ScoreNote,
   type ScorePoint,
+  authorBarsPerLine,
   breaksKey,
+  chooseBreaks,
   chosenBreaks,
   dragRegion,
   indexScore,
   noteUnder,
+  padLyrics,
   reachAt,
   regionOfRanges,
   regionRanges,
@@ -27,6 +30,7 @@ import {
   soundingAt,
 } from "../src/composer/timeline";
 import { indexFile } from "../src/composer/tunes";
+import { tuneItems } from "../src/composer/walk";
 
 /* biome-ignore lint/suspicious/noExplicitAny: abcjs objects. */
 type Any = any;
@@ -253,6 +257,77 @@ describe("redrawing in one pass", () => {
     expect(chosenBreaks("narrower than the margin")).toBeNull();
     expect(breaksKey("A B | c d | e f |", 600.4)).toBe("600:3");
     expect(breaksKey("A B c | c d | e f |", 600)).toBe(breaksKey("A B | c d | e f |", 600));
+  });
+});
+
+describe("phrase-aware line breaks", () => {
+  const even = (count: number, width = 80) => Array.from({ length: count }, () => width);
+  it("prefers four bars a line, two when four do not fit", () => {
+    expect(
+      chooseBreaks([{ left: 0, measureWidths: even(16) }], 600, { min: 1.35, max: 2.7 }),
+    ).toEqual([[3, 7, 11]]);
+    expect(
+      chooseBreaks([{ left: 0, measureWidths: even(8, 130) }], 600, { min: 1.35, max: 2.7 }),
+    ).toEqual([[1, 3, 5]]);
+  });
+  it("follows the author's bars per line when they fit, and lets a pickup ride with the first line", () => {
+    expect(
+      chooseBreaks(
+        [{ left: 0, measureWidths: [30, ...even(16, 40)] }],
+        900,
+        { min: 1.35, max: 2.7 },
+        { authorBars: 8, pickup: true },
+      ),
+    ).toEqual([[8]]);
+  });
+  it("joins a stranded short last line to the one above", () => {
+    expect(
+      chooseBreaks(
+        [{ left: 0, measureWidths: even(10, 60) }],
+        900,
+        { min: 1.35, max: 2.7 },
+        { authorBars: 4 },
+      ),
+    ).toEqual([[3]]);
+  });
+  it("skips abcjs's empty measure before a leading repeat", () => {
+    expect(
+      chooseBreaks(
+        [{ left: 0, measureWidths: [20, ...even(8)] }],
+        600,
+        { min: 1.35, max: 2.7 },
+        { filled: [[false, ...even(8).map(() => true)]] },
+      ),
+    ).toEqual([[4]]);
+  });
+  it("reads the author's bars per source line", () => {
+    const text =
+      "X:1\nM:4/4\nL:1/4\nK:C\nD | C D E F | G A B c | c B A G | F E D C |\nC D E F | G A B c | c B A G | F E D C |\n";
+    const file = indexFile(text);
+    expect(authorBarsPerLine(text, tuneItems(text, file.tunes[0] as never, file))).toBe(4);
+  });
+  it("pads lyric syllables so words never touch", () => {
+    const tune = {
+      lines: [
+        {
+          staff: [
+            {
+              voices: [
+                [
+                  { lyric: [{ syllable: "sec", divider: "-" }] },
+                  { lyric: [{ syllable: "onds", divider: " " }] },
+                ],
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    padLyrics(tune);
+    padLyrics(tune);
+    const [first, second] = tune.lines[0]?.staff[0]?.voices[0] ?? [];
+    expect(first?.lyric[0]).toMatchObject({ syllable: "\u00a0sec\u202f", divider: "-\u00a0" });
+    expect(second?.lyric[0]).toMatchObject({ syllable: "\u00a0onds", divider: "\u00a0" });
   });
 });
 

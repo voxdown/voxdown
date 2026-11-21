@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
 import { EXAMPLES } from "../src/composer/examples";
 import { exportMusicXml, harmonyXml, typeOf } from "../src/composer/musicxml/export";
+import { importMusicXml } from "../src/composer/musicxml/import";
 import { type XmlElement, parseXml } from "../src/composer/musicxml/xml";
 import { MORE } from "./musicxml-cases";
+import { musicOf } from "./musicxml-music";
 
 /**
  * Element order in MusicXML 4.0 (from the XSD's sequences), for the elements export writes:
@@ -218,6 +221,37 @@ describe("MusicXML export", () => {
     expect(xml).toContain('<score-part id="P1"><part-name>First</part-name></score-part>');
     const { xml: voices } = roundTrip((MORE[0] as [string, string])[1]);
     expect(voices).toContain("<backup>");
+  });
+  it("sends the piano fixture out as one part of two staves, and back in as a grand staff", async () => {
+    const xml = readFileSync(
+      new URL("./fixtures/musicxml/grand-staff-dorico.musicxml", import.meta.url),
+      "utf8",
+    );
+    const { text } = await importMusicXml([xml]);
+    expect(text).toContain("%%score {(1 2) 3}");
+    const out = parseXml(exportMusicXml(abcjs.parseOnly(text)[0] as never));
+    // As MuseScore reads it: one part (the piano), two staves, each note on its staff.
+    const list = out.children.find((each) => each.name === "part-list") as XmlElement;
+    expect(list.children.filter((each) => each.name === "score-part")).toHaveLength(1);
+    expect(list.children.filter((each) => each.name === "part-group")).toHaveLength(0);
+    const part = out.children.find((each) => each.name === "part") as XmlElement;
+    const attributes = (part.children[0] as XmlElement).children.find(
+      (each) => each.name === "attributes",
+    ) as XmlElement;
+    expect(attributes.children.find((each) => each.name === "staves")?.text).toBe("2");
+    const staves = new Set<string>();
+    for (const measure of part.children)
+      for (const note of measure.children.filter((each) => each.name === "note"))
+        staves.add(note.children.find((each) => each.name === "staff")?.text ?? "none");
+    expect([...staves].sort()).toEqual(["1", "2"]);
+    // And back in: the same grand staff, the same music.
+    const { text: again } = await importMusicXml([
+      exportMusicXml(abcjs.parseOnly(text)[0] as never),
+    ]);
+    expect(again.match(/%%score .*/)?.[0]).toBe(text.match(/%%score .*/)?.[0]);
+    expect(musicOf(abcjs.parseOnly(again)[0] as never).voices).toEqual(
+      musicOf(abcjs.parseOnly(text)[0] as never).voices,
+    );
   });
   it("writes a grand staff as one part of two staves, as MuseScore reads a piano", () => {
     // %%score {(1 2) 3}: a piano, named once, with two voices in the right hand.

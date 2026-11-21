@@ -894,6 +894,11 @@ body[data-layout="below"] #layout-toggle .beside {
 .score .is-selected.is-playing {
   color: var(--play);
 }
+/* While music plays, the selection is shown by its band alone: its notes go back to ink, so the
+   blue note being heard is the only coloured one (teal beside blue was hard to tell apart). */
+.score[data-playback="playing"] .is-selected:not(.is-playing) {
+  color: inherit;
+}
 .score svg .abcjs-cursor {
   stroke: var(--play);
 }

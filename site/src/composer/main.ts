@@ -1995,12 +1995,9 @@ scoreScroll.addEventListener("pointermove", (event) => {
   const hit = hitPoint(event.clientX, event.clientY, drag.anchor.note.voice);
   if (!hit) return;
   const sameStaff = hit.staff === drag.anchor.staff;
-  const voices =
-    drag.allVoices || !sameStaff
-      ? allVoices()
-      : drag.anchor.note.voice === hit.note.voice
-        ? [drag.anchor.note.voice]
-        : voicesOnStaff(hit.staff);
+  // A drag along a staff takes every voice drawn on it, as far as the pointer reached: what was
+  // dragged over is what is selected. (A click takes one note; Ctrl/⌘ click picks single notes.)
+  const voices = drag.allVoices || !sameStaff ? allVoices() : voicesOnStaff(hit.staff);
   const region = dragRegion(scoreIndex, drag.anchor, hit, voices);
   if (drag.base)
     selectRanges([...drag.base, ...regionRanges(scoreIndex, region, text())], hit.note.start);
@@ -2742,6 +2739,7 @@ $("follow").addEventListener("click", () => {
 player.onChange = () => {
   const status = player.status;
   transportElement.dataset.state = status;
+  scoreElement.dataset.playback = status;
   const play = $("play");
   play.setAttribute(
     "aria-label",

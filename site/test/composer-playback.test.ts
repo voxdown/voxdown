@@ -1,6 +1,9 @@
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
+import { humanDate } from "../src/composer/dates";
+import { KEYS, METERS, decorationOptions, inOrder } from "../src/composer/editor";
 import { INSTRUMENTS, findLoop, nearestSample, velocityGain } from "../src/composer/instruments";
+import { normalise } from "../src/composer/player";
 import {
   type Placed,
   type ScoreNote,
@@ -208,6 +211,58 @@ describe("reading the pointer in the score", () => {
     expect(
       regionRanges(index, region, text).map((range) => text.slice(range.from, range.to)),
     ).toEqual(["C D", "C, D,"]);
+  });
+});
+
+describe("files and dates", () => {
+  it("says when a draft was kept in words", () => {
+    const now = new Date(2026, 10, 20, 19, 30).getTime();
+    expect(humanDate(new Date(2026, 10, 20, 19, 5).getTime(), now)).toMatch(/^Today, 7:05/);
+    expect(humanDate(new Date(2026, 10, 19, 9, 12).getTime(), now)).toMatch(/^Yesterday, 9:12/);
+    expect(humanDate(new Date(2026, 10, 16, 9, 12).getTime(), now)).toMatch(/^Monday, /);
+    expect(humanDate(new Date(2026, 1, 3).getTime(), now)).toMatch(/3/);
+  });
+  it("brings an exported recording up to −1 dBFS", () => {
+    const data = [new Float32Array([0.1, -0.17, 0.05]), new Float32Array([0.02, 0.08, -0.1])];
+    normalise({ numberOfChannels: 2, getChannelData: (channel) => data[channel] as Float32Array });
+    expect(Math.max(...data.flatMap((channel) => [...channel].map(Math.abs)))).toBeCloseTo(
+      10 ** (-1 / 20),
+      5,
+    );
+  });
+});
+
+describe("completion order", () => {
+  it("offers the most used meters and keys first", () => {
+    expect(METERS.slice(0, 9).map(([label]) => label)).toEqual([
+      "4/4",
+      "3/4",
+      "6/8",
+      "2/4",
+      "2/2",
+      "C",
+      "C|",
+      "9/8",
+      "12/8",
+    ]);
+    expect(KEYS.slice(0, 9).map(([label]) => label)).toEqual([
+      "C",
+      "G",
+      "D",
+      "F",
+      "A",
+      "Bb",
+      "Am",
+      "Em",
+      "Dm",
+    ]);
+    const boosts = inOrder([{ label: "b" }, { label: "a" }]).map((option) => option.boost ?? 0);
+    expect(boosts[0]).toBeGreaterThan(boosts[1] as number);
+    expect(
+      decorationOptions()
+        .slice(0, 3)
+        .map((option) => option.label),
+    ).toEqual(["p", "mf", "f"]);
   });
 });
 

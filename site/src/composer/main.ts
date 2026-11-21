@@ -11,6 +11,7 @@ import {
   type Range,
   barLine,
   decorate,
+  decorationMark,
   duplicate,
   newTuneTemplate,
   removeDots,
@@ -19,6 +20,7 @@ import {
   toggleTies,
   transpose,
 } from "./commands";
+import { humanDate } from "./dates";
 import { editorState, fileIndexField, setMarks } from "./editor";
 import { EXAMPLES, NEW_TUNE } from "./examples";
 import { describeKey, describeMeter, explainAt } from "./explain";
@@ -27,7 +29,8 @@ import { INSTRUMENTS, INSTRUMENT_ORDER, type InstrumentId, isInstrument } from "
 import { LocalFiles, download } from "./local-file";
 import { type MenuItem, mountMenus, popupMenu } from "./menus";
 import { offlineStatus, prepareOffline } from "./offline";
-import { Player, encodeWav } from "./player";
+import { Player, encodeWav, normalise } from "./player";
+import { roving } from "./roving";
 import {
   type Placed,
   type Region,
@@ -37,6 +40,7 @@ import {
   dragRegion,
   loadAbcjs,
   measure,
+  noteAtTime,
   noteUnder,
   notesAt,
   notesInRanges,
@@ -356,9 +360,15 @@ function firstMusicPosition(): number {
   return Math.min(tune.bodyFrom, view.state.doc.length);
 }
 
+const rovers: { refresh: () => void }[] = [];
 function showStart(show: boolean) {
   $("start").hidden = !show;
   started = !show;
+  // Nothing to edit or play yet: the toolbar and transport rest instead of answering with notices.
+  body.classList.toggle("starting", show);
+  for (const element of [document.querySelector(".documentbar"), $("transport")])
+    element?.toggleAttribute("inert", show);
+  for (const rover of rovers) rover.refresh();
   if (show) void fillRecentStart();
 }
 
@@ -775,7 +785,7 @@ function runChecks() {
   view.dispatch({ effects: setMarks.of({ issues: list }) });
   const button = $<HTMLButtonElement>("problems");
   button.hidden = list.length === 0;
-  button.textContent = `${list.length} ${list.length === 1 ? "note to check" : "notes to check"}`;
+  button.textContent = problemsLabel(list);
   currentIssueNotes = scoreIndex
     ? notesInRanges(
         scoreIndex,
@@ -783,6 +793,16 @@ function runChecks() {
       )
     : [];
   linkFromText();
+}
+
+/** "1 bar to check", "2 problems", "1 bar to check · 1 problem". */
+function problemsLabel(list: Problem[]): string {
+  const bars = list.filter((problem) => problem.kind === "bar").length;
+  const others = list.length - bars;
+  const parts: string[] = [];
+  if (bars) parts.push(`${bars} ${bars === 1 ? "bar" : "bars"} to check`);
+  if (others) parts.push(`${others} ${others === 1 ? "problem" : "problems"}`);
+  return parts.join(" · ");
 }
 
 /* Score → text: click, drag, Shift+click, keyboard. */
@@ -951,11 +971,74 @@ const endDrag = (event: PointerEvent) => {
 scoreScroll.addEventListener("pointerup", endDrag);
 scoreScroll.addEventListener("pointercancel", endDrag);
 
+/** Says what the score's keyboard moved to: the note, its bar and voice, or the selection. */
+function announceScore() {
+  const live = $("score-live");
+  let message: string;
+  const selected = ranges().filter((range) => range.to > range.from);
+  if (selected.length && scoreIndex) {
+    const notes = notesInRanges(scoreIndex, selected).filter((note) => !note.rest);
+    const bars = [...new Set(notesInRanges(scoreIndex, selected).map((note) => note.measure + 1))];
+    const span =
+      bars.length > 1 ? `bars ${Math.min(...bars)} to ${Math.max(...bars)}` : `bar ${bars[0]}`;
+    message = `${notes.length} ${notes.length === 1 ? "note" : "notes"} selected, ${span}${selected.length > 1 ? `, ${selected.length} voices` : ""}.`;
+  } else {
+    const explanation = explainAt(text(), fileIndex(), caret());
+    message = explanation ? `${explanation.text}${placeOf(caret())}` : "No note here.";
+  }
+  live.textContent = message;
+}
+
+/** ↑/↓ in the score: the note sounding at the same time in the voice above or below. */
+function moveByVoice(direction: 1 | -1): boolean {
+  const index = scoreIndex;
+  if (!index || index.voices.length < 2) return false;
+  const note = notesAt(index, caret())[0] ?? index.notes.find((each) => each.start >= caret());
+  if (!note) return false;
+  const voice = note.voice + direction;
+  if (voice < 0 || voice >= index.voices.length) return true;
+  const target = noteAtTime(index, voice, note.time);
+  if (target)
+    view.dispatch({
+      selection: { anchor: target.start },
+      scrollIntoView: true,
+      userEvent: "select.note",
+    });
+  return true;
+}
+
+/** Home/End in the score: the first or last note of the voice on this line of music. */
+function moveToLineEnd(end: boolean): boolean {
+  const index = scoreIndex;
+  if (!index) return false;
+  const note = notesAt(index, caret())[0] ?? index.notes.find((each) => each.start >= caret());
+  if (!note) return false;
+  const line = (index.byVoice[note.voice] ?? []).filter((each) => each.line === note.line);
+  const target = end ? line[line.length - 1] : line[0];
+  if (target)
+    view.dispatch({
+      selection: { anchor: target.start },
+      scrollIntoView: true,
+      userEvent: "select.note",
+    });
+  return true;
+}
+
 scoreScroll.addEventListener("keydown", (event) => {
   if (!scoreIndex) return;
   if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
     event.preventDefault();
     moveByNote(event.key === "ArrowRight" ? 1 : -1, event.shiftKey);
+    announceScore();
+  } else if ((event.key === "ArrowUp" || event.key === "ArrowDown") && !event.shiftKey) {
+    if (moveByVoice(event.key === "ArrowDown" ? 1 : -1)) {
+      event.preventDefault();
+      announceScore();
+    }
+  } else if (event.key === "Home" || event.key === "End") {
+    event.preventDefault();
+    moveToLineEnd(event.key === "End");
+    announceScore();
   } else if (event.key === " ") {
     event.preventDefault();
     togglePlay();
@@ -1066,8 +1149,14 @@ function music(command: string): boolean {
       return apply(scaleLengths(doc, list, frac(3, 2), index), "Dot");
     case "undot":
       return apply(removeDots(doc, list, index), "Remove dot");
-    case "tie":
-      return apply(toggleTies(doc, list, index), "Tie");
+    case "tie": {
+      const tie = toggleTies(doc, list, index);
+      if (!tie.changes.length) {
+        notice(tie.reason ?? "Nothing to tie here.");
+        return true;
+      }
+      return apply(tie.changes, "Tie");
+    }
     case "slur":
       return apply(toggleSlur(doc, list, index), "Slur");
     case "bar":
@@ -1109,7 +1198,7 @@ function decorationMenu(anchor: HTMLElement) {
     anchor,
     choices.map(([name, label]) => ({
       label,
-      shortcut: name.length === 1 ? name : `!${name}!`,
+      shortcut: decorationMark(name),
       run: () => {
         apply(decorate(text(), ranges(), name, fileIndex()), "Decoration");
         view.focus();
@@ -1179,24 +1268,39 @@ async function playFromCaret() {
   await player.play({ from: place ? firstPlayOf(timeline, place.written) : 0 });
 }
 
+/** The bar around a written time, in every voice. */
+function barRegion(voice: number, written: number): Region | null {
+  if (!scoreIndex) return null;
+  const bars = scoreIndex.bars.filter((bar) => bar.voice === voice).map((bar) => bar.time);
+  const from = Math.max(0, ...bars.filter((time) => time <= written + 1e-6));
+  const after = bars.filter((time) => time > written + 1e-6);
+  const to = after.length
+    ? Math.min(...after)
+    : Math.max(...(scoreIndex.byVoice[voice] ?? []).map((note) => note.time + note.duration));
+  return { from, to, voices: scoreIndex.voices.map((_, index) => index) };
+}
+
 function selectionRegion(): Region | null {
   if (!scoreIndex) return null;
   const selected = ranges().filter((range) => range.to > range.from);
   if (selected.length) return regionOfRanges(scoreIndex, selected);
   // No selection: the bar at the caret, in every voice.
   const place = caretWritten();
-  if (!place) return null;
-  const bars = scoreIndex.bars
-    .filter((bar) => bar.voice === place.note.voice)
-    .map((bar) => bar.time);
-  const from = Math.max(0, ...bars.filter((time) => time <= place.written + 1e-6));
-  const after = bars.filter((time) => time > place.written + 1e-6);
-  const to = after.length
-    ? Math.min(...after)
-    : Math.max(
-        ...(scoreIndex.byVoice[place.note.voice] ?? []).map((note) => note.time + note.duration),
-      );
-  return { from, to, voices: scoreIndex.voices.map((_, index) => index) };
+  return place ? barRegion(place.note.voice, place.written) : null;
+}
+
+/** Where in the written music the tune is playing now. */
+function playingWritten(): number | null {
+  const line = player.timeline;
+  if (!line || player.status !== "playing") return null;
+  const position = player.position();
+  if (player.loopingRegion) return line.offset + Math.max(0, position);
+  let last: (typeof line.notes)[number] | undefined;
+  for (const note of line.notes) {
+    if (note.time > position) break;
+    if (note.start !== undefined) last = note;
+  }
+  return last ? last.written + (position - last.time) : 0;
 }
 
 async function playSelection(loop: boolean) {
@@ -1229,9 +1333,22 @@ function setLoop(on: boolean) {
   }
   drawTimeline();
 }
+/**
+ * Loop is a mode. Turned on while playing, it loops the selection, or the bar being played, and
+ * carries on from where the music is; turned on while stopped, Play starts the loop.
+ */
 function toggleLoop() {
   setLoop(!loopOn);
-  if (loopOn) startLoop();
+  if (!loopOn || player.status !== "playing" || !scoreIndex) return;
+  const written = playingWritten() ?? 0;
+  const selected = ranges().filter((range) => range.to > range.from);
+  const region = selected.length ? regionOfRanges(scoreIndex, selected) : barRegion(0, written);
+  const line = region ? regionTimelineFor(region) : null;
+  if (!region || !line || !line.notes.length) return;
+  loopRegion = region;
+  const from = written >= region.from && written < region.to ? written - region.from : 0;
+  drawTimeline();
+  void player.play({ region: line, loop: true, from });
 }
 function stop() {
   player.stop();
@@ -1255,7 +1372,7 @@ function applyTempo() {
           : Math.abs(beat - 0.125) < 1e-6
             ? "♪"
             : "beat";
-  $("tempo-unit").textContent = `${symbol}/min`;
+  $("tempo-unit").textContent = symbol === "beat" ? "Beat =" : `${symbol} =`;
   input.setAttribute(
     "aria-label",
     `Tempo: ${bpm} beats a minute${tempoOverride !== null && tempoOverride !== natural ? `; the tune says ${natural}` : ""}`,
@@ -1423,9 +1540,45 @@ function drawTimeline() {
   updateHead(player.status === "stopped" ? 0 : player.position());
 }
 
+let lastBeat = Number.NaN;
+/** The metronome button pulses on each beat it clicks, so the beat can be seen too. */
+function pulseBeat(index: number, down: boolean) {
+  if (index === lastBeat) return;
+  lastBeat = index;
+  const button = $("metronome");
+  button.classList.remove("beat", "downbeat");
+  void button.offsetWidth;
+  button.classList.add("beat");
+  if (down) button.classList.add("downbeat");
+}
+
 function updateHead(position: number) {
   const line = timeline;
   const head = $("timeline-head");
+  const count = player.counting();
+  const clockElement = $("clock");
+  if (count) {
+    // Counting in: the beats of the bar, the current one lit; no bar or time yet.
+    clockElement.replaceChildren("Count-in ");
+    for (let beat = 0; beat < count.beats; beat++) {
+      const mark = document.createElement("span");
+      mark.className = `count${beat === count.beat ? " lit" : ""}`;
+      mark.textContent = String(beat + 1);
+      clockElement.append(mark, beat + 1 < count.beats ? " " : "");
+    }
+    clockElement.dataset.counting = "true";
+    pulseBeat(count.beat - 100, count.beat === 0);
+    return;
+  }
+  delete clockElement.dataset.counting;
+  if (player.status === "playing" && prefs.metronome && player.timeline) {
+    const beat = player.timeline.beat > 0 ? player.timeline.beat : 0.25;
+    const bar = player.timeline.bar > 0 ? player.timeline.bar : beat * 4;
+    const origin = player.timeline.pickup > 1e-6 ? player.timeline.pickup : 0;
+    const index = Math.floor((position - origin) / beat + 1e-6);
+    const inBar = (((index * beat) % bar) + bar) % bar;
+    pulseBeat(index, inBar < 1e-6);
+  }
   if (!line || line.length <= 0) {
     head.style.left = "0%";
     $("clock").textContent = "Bar 1 · 0:00";
@@ -1532,8 +1685,9 @@ function voicesPopover(anchor: HTMLElement) {
   }
   const hint = document.createElement("p");
   hint.className = "hint";
-  hint.textContent =
-    "Chords play the tune's chord symbols. Mute and solo apply at once, even while playing.";
+  hint.textContent = tracks.some((track) => track.chords)
+    ? "Chords play the tune's chord symbols. Mute and solo apply at once, even while playing."
+    : "Mute and solo apply at once, even while playing.";
   panel.append(hint);
 }
 
@@ -1736,10 +1890,22 @@ $("sound-button").addEventListener("click", (event) =>
 $("problems").addEventListener("click", openProblems);
 $("announce").addEventListener("click", sayNote);
 
+/** " Bar 3, voice First." for the note at a position, when the score knows it. */
+function placeOf(position: number): string {
+  if (!scoreIndex) return "";
+  const note = notesAt(scoreIndex, position)[0];
+  if (!note) return "";
+  const voice =
+    scoreIndex.voices.length > 1
+      ? `, ${scoreIndex.voices[note.voice]?.name ?? `voice ${note.voice + 1}`}`
+      : "";
+  return ` Bar ${note.measure + 1}${voice}.`;
+}
+
 function sayNote() {
   const explanation = explainAt(text(), fileIndex(), caret());
   const message = explanation
-    ? `${explanation.token} ${explanation.text}`
+    ? `${explanation.token ? `${explanation.token} — ` : ""}${explanation.text}${placeOf(caret())}`
     : "The caret is not on a note.";
   const live = $("score-live");
   live.textContent = "";
@@ -2107,6 +2273,8 @@ async function exportWav() {
   );
   try {
     const buffer = await player.render(timeline);
+    // Playback leaves headroom for the room and the limiter; a file is brought up to −1 dBFS.
+    normalise(buffer);
     download(
       encodeWav(buffer),
       `${abcName(tuneLabel(scoreIndex.tune)).replace(/\.abc$/, "")}.wav`,
@@ -2223,7 +2391,7 @@ async function openRecover() {
       openButton.className = "open";
       openButton.textContent = draft.title || draft.name;
       const small = document.createElement("small");
-      small.textContent = `${draft.name} · ${new Date(draft.updated).toLocaleString()} · ${draft.characters.toLocaleString()} characters${draft.id === draftId ? " · open here" : ""}`;
+      small.textContent = `${draft.name} · ${humanDate(draft.updated)} · ${draft.characters.toLocaleString()} characters${draft.id === draftId ? " · open here" : ""}`;
       openButton.append(small);
       openButton.addEventListener("click", () => {
         recoverDialog.close();
@@ -2261,7 +2429,7 @@ async function fillRecentStart() {
       const title = document.createElement("strong");
       title.textContent = draft.title || draft.name;
       const meta = document.createElement("span");
-      meta.textContent = `${draft.name} · ${new Date(draft.updated).toLocaleDateString()}`;
+      meta.textContent = `${draft.name} · ${humanDate(draft.updated)}`;
       button.append(title, meta);
       button.addEventListener("click", () => void recoverDraft(draft.id));
       list.append(button);
@@ -2427,7 +2595,19 @@ const offlineDialog = createDialog("offline-dialog", "Work offline");
       ready: false,
       message: "Offline files could not be saved. Check your connection and storage, then retry.",
     }));
-    status.textContent = state.message;
+    if (!state.ready) {
+      status.textContent = state.message;
+      return;
+    }
+    // Playing offline needs the instrument too: keep the one in use.
+    const instrument = INSTRUMENTS[player.instrument].label.toLowerCase();
+    status.textContent = `${state.message} Keeping the ${instrument}…`;
+    try {
+      await player.load(player.instrument);
+      status.textContent = `${state.message} The ${instrument} is kept too, so tunes play offline.`;
+    } catch {
+      status.textContent = `${state.message} The ${instrument} could not be kept; reconnect and prepare again to play offline.`;
+    }
   });
   sounds.addEventListener("click", async () => {
     sounds.disabled = true;
@@ -2446,9 +2626,16 @@ const offlineDialog = createDialog("offline-dialog", "Work offline");
   });
 }
 
-const problemsDialog = createDialog("problems-dialog", "Notes to check");
+const problemsDialog = createDialog("problems-dialog", "Bars to check");
 function openProblems() {
   problemsDialog.body.replaceChildren();
+  const bars = problems.filter((problem) => problem.kind === "bar").length;
+  problemsDialog.heading.textContent =
+    bars === problems.length
+      ? "Bars to check"
+      : bars
+        ? "Bars and problems to check"
+        : "Problems to check";
   const intro = document.createElement("p");
   intro.textContent =
     "Bars whose length differs from the meter, and anything abcjs could not read. Choose one to go there.";
@@ -2510,8 +2697,18 @@ const menus = mountMenus(
       { label: "Print or save as PDF…", run: () => void printScore(), shortcut: "Mod P" },
     ],
     edit: () => [
-      { label: "Undo", run: () => undo(view), shortcut: "Mod Z" },
-      { label: "Redo", run: () => redo(view), shortcut: "Mod Shift Z" },
+      {
+        label: "Undo",
+        run: () => undo(view),
+        shortcut: "Mod Z",
+        enabled: () => undoDepth(view.state) > 0,
+      },
+      {
+        label: "Redo",
+        run: () => redo(view),
+        shortcut: "Mod Shift Z",
+        enabled: () => redoDepth(view.state) > 0,
+      },
       "-",
       { label: "Find and replace…", run: () => openSearchPanel(view), shortcut: "Mod F" },
       "-",
@@ -2570,6 +2767,7 @@ const menus = mountMenus(
       },
       "-",
       { label: "Appearance…", run: () => looks.open() },
+      { label: "Work offline…", run: () => offlineDialog.open() },
     ],
     play: () => [
       {
@@ -2799,6 +2997,70 @@ $("start-new").addEventListener("click", () => {
   load(newSource(NEW_TUNE), "Untitled.abc", { caretAt: NEW_TUNE.length });
 });
 $("start-open").addEventListener("click", () => void openFile());
+
+/* Keyboard paths: one Tab stop for the menu bar, the toolbar and the transport buttons. */
+for (const title of document.querySelectorAll(".workspace-menus button"))
+  title.setAttribute("role", "menuitem");
+rovers.push(
+  roving(document.querySelector(".workspace-menus") as HTMLElement, "button"),
+  roving(document.querySelector(".documentbar .toolbar") as HTMLElement, "button"),
+  roving(transportElement, ".transport-main button, .transport-side > button, .tempo button"),
+);
+$("skip-tune").addEventListener("click", (event) => {
+  event.preventDefault();
+  if (phone.matches) show("text");
+  view.focus();
+});
+$("skip-score").addEventListener("click", (event) => {
+  event.preventDefault();
+  if (phone.matches) show("score");
+  scoreScroll.focus();
+});
+$("rail-close").addEventListener("click", () => {
+  if (workspace.dataset.rail === "open") toggleRail();
+  $("rail-toggle").focus();
+});
+// Shortcuts named in titles are also given to assistive technology.
+for (const element of document.querySelectorAll<HTMLElement>("[title]")) {
+  const match = /\(([^)]+)\)\s*$/.exec(element.title);
+  if (!match || element.hasAttribute("aria-keyshortcuts")) continue;
+  const keys = (match[1] as string)
+    .replace(/Ctrl\/⌘/g, "Control")
+    .replace(/−/g, "-")
+    .split(/\s+/)
+    .map(
+      (part) =>
+        ({
+          Alt: "Alt",
+          Shift: "Shift",
+          Control: "Control",
+          "↑": "ArrowUp",
+          "↓": "ArrowDown",
+          "←": "ArrowLeft",
+          "→": "ArrowRight",
+        })[part] ?? part,
+    )
+    .join("+");
+  element.setAttribute("aria-keyshortcuts", keys);
+}
+// On a phone, the commands that do not fit the toolbar are one tap away.
+$("more-tools").addEventListener("click", (event) =>
+  popupMenu(event.currentTarget as HTMLElement, [
+    { label: "Up an octave", run: () => music("octave-up") },
+    { label: "Down an octave", run: () => music("octave-down") },
+    { label: "Remove a dot", run: () => music("undot") },
+    "-",
+    { label: "Bar line", run: () => music("bar") },
+    { label: "Tie or untie", run: () => music("tie") },
+    { label: "Slur or unslur", run: () => music("slur") },
+    { label: "Decoration…", run: () => decorationMenu($("more-tools")) },
+    { label: "New tune", run: newTune },
+    "-",
+    { label: "Focus", run: () => setFocusMode(!body.classList.contains("focus-mode")) },
+    { label: "ABC cheat sheet", run: () => sheet.open() },
+    { label: "Tunes panel", run: toggleRail },
+  ]),
+);
 
 applyLayout();
 setMetronome(prefs.metronome);

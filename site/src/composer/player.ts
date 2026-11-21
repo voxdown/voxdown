@@ -296,6 +296,21 @@ export class Player {
     return (timeline.bpm * this.tempoFactor * timeline.beat) / 60;
   }
 
+  private countFrom = 0;
+  /** During a count-in: which beat is sounding (0-based) of how many; otherwise null. */
+  counting(): { beat: number; beats: number } | null {
+    const timeline = this.current;
+    if (this.status !== "playing" || !timeline) return null;
+    const position = this.position();
+    if (position >= this.startPosition || this.countFrom >= this.startPosition) return null;
+    const beat = timeline.beat > 0 ? timeline.beat : 0.25;
+    const beats = Math.max(1, Math.round((this.startPosition - this.countFrom) / beat));
+    return {
+      beat: Math.max(0, Math.min(beats - 1, Math.floor((position - this.countFrom) / beat + 1e-6))),
+      beats,
+    };
+  }
+
   /** The place being heard now, in whole notes of the current timeline. */
   position(): number {
     if (this.status !== "playing" || !this.audio) return this.pausedAt;
@@ -349,6 +364,7 @@ export class Player {
     );
     this.startPosition = from >= timeline.length - 1e-6 ? 0 : from;
     const lead = this.countIn ? timeline.bar || timeline.beat * 4 : 0;
+    this.countFrom = this.startPosition - lead;
     this.anchorPosition = this.startPosition - lead;
     this.anchorTime = context.currentTime + START_DELAY;
     this.notesUntil = this.startPosition;
@@ -677,6 +693,28 @@ export class Player {
       );
     return context.startRendering();
   }
+}
+
+/** Scales audio so its loudest sample sits at `ceiling` (−1 dBFS by default); returns the gain. */
+export function normalise(
+  buffer: { numberOfChannels: number; getChannelData(channel: number): Float32Array },
+  ceiling = 10 ** (-1 / 20),
+): number {
+  let peak = 0;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let index = 0; index < data.length; index++) {
+      const value = Math.abs(data[index] as number);
+      if (value > peak) peak = value;
+    }
+  }
+  if (peak <= 1e-6) return 1;
+  const gain = ceiling / peak;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let index = 0; index < data.length; index++) data[index] = (data[index] as number) * gain;
+  }
+  return gain;
 }
 
 /** A 16-bit PCM WAV file. */

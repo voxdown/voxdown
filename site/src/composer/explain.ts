@@ -17,7 +17,7 @@ import {
   value,
 } from "./abc";
 import { type FileIndex, type TuneInfo, tuneAt } from "./tunes";
-import { type WalkState, walkTune } from "./walk";
+import { type WalkState, tuneItems, walkTune } from "./walk";
 
 /** What the caret is on, read aloud in a quiet status line. */
 export type Explanation = { token: string; text: string; midi?: number[] | undefined };
@@ -242,10 +242,14 @@ function tupletText(token: string): string {
   return `${name}: ${words[p ?? ""] ?? p} notes in the time of ${words[time] ?? time}`;
 }
 
-function describeNote(note: NoteToken, state: WalkState): { text: string; midi: number } {
+function describeNote(
+  note: NoteToken,
+  state: WalkState,
+  played?: { duration: Fraction; why: string },
+): { text: string; midi: number } {
   const { alter, source } = alterationOf(note, state.key, state.bar);
   const octave = octaveOf(note.letter, note.octave);
-  const duration = mul(parseLength(note.length), state.unit);
+  const duration = played?.duration ?? mul(parseLength(note.length), state.unit);
   const name = pitchName(note.letter, alter);
   const from =
     source === "key"
@@ -259,7 +263,7 @@ function describeNote(note: NoteToken, state: WalkState): { text: string; midi: 
     (octave + 1) * 12 +
     ({ C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[note.letter.toUpperCase()] ?? 0) +
     alter;
-  const length = note.inChord ? "" : `, ${lengthName(duration)}`;
+  const length = note.inChord ? "" : `, ${lengthName(duration)}${played?.why ?? ""}`;
   return { text: `${name}${from}, ${octavePhrase(note.letter, octave)}${length}`, midi };
 }
 
@@ -335,6 +339,10 @@ export function explainAt(text: string, file: FileIndex, position: number): Expl
     }
   }
   if (!tune) return null;
+  // Lengths as played: broken rhythm (f>g) and tuplets change what a note's letters say.
+  const played = new Map<number, Fraction>();
+  for (const item of tuneItems(text, tune, file))
+    if (item.type === "event" && item.notes.length === 1) played.set(item.from, item.duration);
   let found: Explanation | null = null;
   let chordNotes: string[] = [];
   let chordMidi: number[] = [];
@@ -363,6 +371,8 @@ export function explainAt(text: string, file: FileIndex, position: number): Expl
       token,
       state,
       chordFrom >= 0 ? { names: chordNotes, midi: chordMidi } : null,
+      text,
+      played,
     );
     if (token.kind === "chord-close") chordFrom = -1;
   });
@@ -373,10 +383,23 @@ function explainToken(
   token: MusicToken,
   state: WalkState,
   chord: { names: string[]; midi: number[] } | null,
+  text = "",
+  played = new Map<number, Fraction>(),
 ): Explanation | null {
   switch (token.kind) {
     case "note": {
-      const described = describeNote(token, state);
+      const written = mul(parseLength(token.length), state.unit);
+      const actual = token.inChord || token.inGrace ? undefined : played.get(token.from);
+      let why: { duration: Fraction; why: string } | undefined;
+      if (actual && value(actual) !== value(written)) {
+        const before = text.slice(0, token.from).trimEnd().slice(-1);
+        const broken = /[<>]/.test(text[token.to] ?? "") || /[<>]/.test(before);
+        // A broken rhythm makes a dotted note and a short one; a tuplet keeps the name it is written with.
+        why = broken
+          ? { duration: actual, why: " (broken rhythm)" }
+          : { duration: written, why: " in a tuplet" };
+      }
+      const described = describeNote(token, state, why);
       return {
         token: token.text,
         text: `${token.inGrace ? "Grace note " : ""}${described.text}.`,

@@ -6,7 +6,7 @@ import {
   completionKeymap,
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
+import { search, searchKeymap } from "@codemirror/search";
 import {
   EditorState,
   type Extension,
@@ -340,18 +340,24 @@ const issueGutter = gutter({
 });
 
 /* Completion: header fields, keys, meters, lengths, decorations, voices and directives. */
-const FIELD_COMPLETIONS: Completion[] = [
+
+/** Keeps a list in the order given (most used first), whatever the matcher's own scores. */
+export function inOrder(options: Completion[]): Completion[] {
+  return options.map((option, index) => ({ ...option, boost: Math.max(-99, 99 - index * 3) }));
+}
+
+const FIELDS: [string, string][] = [
   ["X:", "reference number — starts a tune"],
   ["T:", "title"],
   ["C:", "composer"],
-  ["O:", "origin"],
-  ["R:", "rhythm (reel, jig, hornpipe…)"],
   ["M:", "meter"],
   ["L:", "unit note length"],
   ["Q:", "tempo"],
   ["K:", "key — ends the header"],
   ["V:", "voice"],
   ["P:", "part"],
+  ["R:", "rhythm (reel, jig, hornpipe…)"],
+  ["O:", "origin"],
   ["w:", "lyrics under the notes"],
   ["W:", "words after the tune"],
   ["N:", "notes"],
@@ -359,171 +365,154 @@ const FIELD_COMPLETIONS: Completion[] = [
   ["Z:", "transcription"],
   ["%%score ", "voices on systems"],
   ["%%MIDI program ", "playback instrument"],
-].map(
-  ([label, detail]): Completion => ({
-    label: label as string,
-    detail: detail as string,
-    type: "keyword",
-  }),
+];
+export const FIELD_COMPLETIONS = inOrder(
+  FIELDS.map(([label, detail]): Completion => ({ label, detail, type: "keyword" })),
 );
 
-const KEYS = [
-  "C",
-  "G",
-  "D",
-  "A",
-  "E",
-  "B",
-  "F#",
-  "F",
-  "Bb",
-  "Eb",
-  "Ab",
-  "Db",
-  "Am",
-  "Em",
-  "Bm",
-  "F#m",
-  "C#m",
-  "Dm",
-  "Gm",
-  "Cm",
-  "Fm",
-  "Ddor",
-  "Edor",
-  "Ador",
-  "Gdor",
-  "Amix",
-  "Dmix",
-  "Gmix",
-  "Emin",
-  "none",
+/** Keys, most used first: the common majors, then their minors, then modes and the rest. */
+export const KEYS: [string, string][] = [
+  ["C", "major, no sharps or flats"],
+  ["G", "major, 1♯"],
+  ["D", "major, 2♯"],
+  ["F", "major, 1♭"],
+  ["A", "major, 3♯"],
+  ["Bb", "major, 2♭"],
+  ["Am", "minor, no sharps or flats"],
+  ["Em", "minor, 1♯"],
+  ["Dm", "minor, 1♭"],
+  ["E", "major, 4♯"],
+  ["Eb", "major, 3♭"],
+  ["Bm", "minor, 2♯"],
+  ["Gm", "minor, 2♭"],
+  ["Ador", "Dorian, 1♯"],
+  ["Edor", "Dorian, 2♯"],
+  ["Ddor", "Dorian, no sharps or flats"],
+  ["Dmix", "Mixolydian, 1♯"],
+  ["Amix", "Mixolydian, 2♯"],
+  ["Gmix", "Mixolydian, no sharps or flats"],
+  ["Ab", "major, 4♭"],
+  ["Db", "major, 5♭"],
+  ["B", "major, 5♯"],
+  ["F#", "major, 6♯"],
+  ["F#m", "minor, 3♯"],
+  ["C#m", "minor, 4♯"],
+  ["Cm", "minor, 3♭"],
+  ["Fm", "minor, 4♭"],
+  ["Gdor", "Dorian, 1♭"],
+  ["none", "no key signature"],
 ];
-const KEY_DETAIL: Record<string, string> = {
-  C: "no sharps or flats",
-  G: "1♯",
-  D: "2♯",
-  A: "3♯",
-  E: "4♯",
-  B: "5♯",
-  "F#": "6♯",
-  F: "1♭",
-  Bb: "2♭",
-  Eb: "3♭",
-  Ab: "4♭",
-  Db: "5♭",
-  Am: "minor, no sharps",
-  Em: "minor, 1♯",
-  Bm: "minor, 2♯",
-  "F#m": "minor, 3♯",
-  "C#m": "minor, 4♯",
-  Dm: "minor, 1♭",
-  Gm: "minor, 2♭",
-  Cm: "minor, 3♭",
-  Fm: "minor, 4♭",
-  Ddor: "Dorian, no sharps",
-  Edor: "Dorian, 2♯",
-  Ador: "Dorian, 1♯",
-  Gdor: "Dorian, 1♭",
-  Amix: "Mixolydian, 2♯",
-  Dmix: "Mixolydian, 1♯",
-  Gmix: "Mixolydian, none",
-  Emin: "minor, 1♯",
-  none: "no key signature",
-};
-const METERS: [string, string][] = [
+/** Meters, most used first. */
+export const METERS: [string, string][] = [
   ["4/4", "four quarters"],
   ["3/4", "waltz, three quarters"],
-  ["2/4", "march, polka"],
   ["6/8", "jig: two dotted beats"],
-  ["9/8", "slip jig"],
-  ["12/8", "slide"],
+  ["2/4", "march, polka"],
   ["2/2", "reel in cut time"],
   ["C", "common time"],
   ["C|", "cut time"],
+  ["9/8", "slip jig"],
+  ["12/8", "slide"],
   ["5/4", "five quarters"],
   ["7/8", "2+2+3"],
   ["none", "free time"],
 ];
-const LENGTHS: [string, string][] = [
+export const LENGTHS: [string, string][] = [
   ["1/8", "eighth note"],
   ["1/4", "quarter note"],
   ["1/16", "sixteenth note"],
   ["1/2", "half note"],
 ];
+export const TEMPI: [string, string][] = [
+  ["1/4=120", "120 quarter notes a minute"],
+  ["1/4=100", "100 quarter notes a minute"],
+  ["3/8=100", "jig: 100 dotted quarters"],
+  ["1/2=90", "reel: 90 half notes"],
+  ["1/4=60", "slow: 60 quarter notes"],
+];
+/** Decorations, the ones reached for most first; the rest follow alphabetically. */
+const DECORATION_ORDER = [
+  "p",
+  "mf",
+  "f",
+  "pp",
+  "ff",
+  "mp",
+  "trill",
+  "fermata",
+  "accent",
+  "staccato",
+  "tenuto",
+  "roll",
+  "crescendo(",
+  "crescendo)",
+  "diminuendo(",
+  "diminuendo)",
+  "mordent",
+  "turn",
+  "segno",
+  "coda",
+  "D.C.",
+  "D.S.",
+  "fine",
+  "breath",
+  "upbow",
+  "downbow",
+];
+export function decorationOptions(): Completion[] {
+  const rest = Object.keys(DECORATIONS)
+    .filter((name) => !DECORATION_ORDER.includes(name))
+    .sort((a, b) => a.localeCompare(b));
+  return inOrder(
+    [...DECORATION_ORDER.filter((name) => name in DECORATIONS), ...rest].map((label) => ({
+      label,
+      apply: `${label}!`,
+      detail: DECORATIONS[label] as string,
+      type: "function",
+    })),
+  );
+}
+const pairs = (list: [string, string][], type: string) =>
+  inOrder(list.map(([label, detail]) => ({ label, detail, type })));
 
 function abcCompletions(context: CompletionContext) {
   const line = context.state.doc.lineAt(context.pos);
   const before = line.text.slice(0, context.pos - line.from);
-  const value = (pattern: RegExp, options: Completion[], from: number) =>
-    pattern.test(before) ? { from, options, validFor: /^[\w#/|]*$/ } : null;
+  const after = (match: RegExpExecArray) => context.pos - (match[1] as string).length;
   const key = /^K:\s*(\S*)$/.exec(before);
-  if (key)
-    return {
-      from: context.pos - (key[1] as string).length,
-      options: KEYS.map(
-        (label): Completion => ({ label, detail: KEY_DETAIL[label] ?? "", type: "constant" }),
-      ),
-      validFor: /^[\w#]*$/,
-    };
+  if (key) return { from: after(key), options: pairs(KEYS, "constant"), validFor: /^[\w#]*$/ };
   const meter = /^M:\s*(\S*)$/.exec(before);
   if (meter)
-    return {
-      from: context.pos - (meter[1] as string).length,
-      options: METERS.map(([label, detail]) => ({ label, detail, type: "constant" })),
-      validFor: /^[\w/|]*$/,
-    };
+    return { from: after(meter), options: pairs(METERS, "constant"), validFor: /^[\w/|]*$/ };
   const length = /^L:\s*(\S*)$/.exec(before);
   if (length)
-    return {
-      from: context.pos - (length[1] as string).length,
-      options: LENGTHS.map(([label, detail]) => ({ label, detail, type: "constant" })),
-      validFor: /^[\w/]*$/,
-    };
+    return { from: after(length), options: pairs(LENGTHS, "constant"), validFor: /^[\w/]*$/ };
   const tempo = /^Q:\s*(\S*)$/.exec(before);
   if (tempo)
-    return value(
-      /^Q:/,
-      [
-        { label: "1/4=120", detail: "120 quarter notes a minute" },
-        { label: "3/8=100", detail: "jig: 100 dotted quarters" },
-        { label: "1/2=90", detail: "reel: 90 half notes" },
-      ],
-      context.pos - (tempo[1] as string).length,
-    );
+    return { from: after(tempo), options: pairs(TEMPI, "constant"), validFor: /^[\w/=]*$/ };
   const voice = /^V:\s*(\S*)$/.exec(before) ?? /\[V:\s*(\S*)$/.exec(before);
   if (voice) {
+    // The voices of the tune at the caret first, in their order; then new ones.
     const index = context.state.field(fileIndexField);
-    const ids = new Set(index.tunes.flatMap((tune) => tune.voices.map((each) => each.id)));
-    const options: Completion[] = [...ids].map((label) => ({
+    const tune = index.tunes.find((each) => context.pos >= each.from && context.pos <= each.to);
+    const ids = [
+      ...new Set(
+        (tune ? tune.voices : index.tunes.flatMap((each) => each.voices)).map((each) => each.id),
+      ),
+    ];
+    const next = String(Math.max(0, ...ids.map((id) => Number(id) || 0)) + 1);
+    const options: Completion[] = ids.map((label) => ({
       label,
-      detail: "existing voice",
+      detail: "a voice of this tune",
       type: "variable",
     }));
-    options.push({
-      label: `${ids.size + 1} name="Voice ${ids.size + 1}"`,
-      detail: "a new voice",
-      type: "keyword",
-    });
-    options.push({
-      label: `${ids.size + 1} clef=bass`,
-      detail: "a new bass voice",
-      type: "keyword",
-    });
-    return { from: context.pos - (voice[1] as string).length, options, validFor: /^[\w]*$/ };
+    options.push({ label: `${next} name="Voice ${next}"`, detail: "a new voice", type: "keyword" });
+    options.push({ label: `${next} clef=bass`, detail: "a new bass voice", type: "keyword" });
+    return { from: after(voice), options: inOrder(options), validFor: /^[\w]*$/ };
   }
   const decoration = /!([\w().<>]*)$/.exec(before);
   if (decoration && (before.match(/!/g)?.length ?? 0) % 2 === 1)
-    return {
-      from: context.pos - (decoration[1] as string).length,
-      options: Object.entries(DECORATIONS).map(([label, detail]) => ({
-        label,
-        apply: `${label}!`,
-        detail,
-        type: "function",
-      })),
-      validFor: /^[\w().<>]*$/,
-    };
+    return { from: after(decoration), options: decorationOptions(), validFor: /^[\w().<>]*$/ };
   const field = /^([A-Za-z%]{0,2})$/.exec(before);
   if (
     field &&
@@ -558,7 +547,6 @@ export function editorState(text: string, hooks: EditorHooks): EditorState {
     drawSelection(),
     EditorState.allowMultipleSelections.of(true),
     highlightActiveLine(),
-    highlightSelectionMatches(),
     closeBrackets(),
     autocompletion({ override: [abcCompletions], icons: false, activateOnTyping: true }),
     search({ top: true }),

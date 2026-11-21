@@ -225,19 +225,85 @@ export function eventsIn(text: string, ranges: Range[], file = indexFile(text)):
 }
 
 /** Ties each selected note to the next (or removes the ties when all have one). */
-export function toggleTies(text: string, ranges: Range[], file = indexFile(text)): Change[] {
-  const events = eventsIn(text, ranges, file).filter((event) => !event.rest);
-  const single = ranges.every((range) => range.from === range.to);
-  const targets = single ? events.slice(0, 1) : events.length > 1 ? events.slice(0, -1) : events;
-  const tied = (event: MusicEvent) => text[event.to] === "-";
-  const allTied = targets.length > 0 && targets.every(tied);
-  return targets
-    .filter((event) => (allTied ? tied(event) : !tied(event)))
-    .map((event) =>
-      allTied
-        ? { from: event.to, to: event.to + 1, insert: "" }
-        : { from: event.to, to: event.to, insert: "-" },
+/** Every note's sounding MIDI pitch in the tunes a selection touches, keyed by its offset. */
+function pitchesOf(text: string, ranges: Range[], file: FileIndex): Map<number, number> {
+  const pitches = new Map<number, number>();
+  for (const tune of file.tunes) {
+    if (!ranges.some((range) => range.from <= tune.to && range.to >= tune.bodyFrom)) continue;
+    walkTune(text, tune, file, (token, state) => {
+      if (token.kind !== "note") return;
+      const { alter } = alterationOf(token, state.key, state.bar);
+      pitches.set(token.from, midiOf(token.letter, octaveOf(token.letter, token.octave), alter));
+    });
+  }
+  return pitches;
+}
+
+export type TieResult = { changes: Change[]; reason?: string };
+
+/**
+ * Ties notes to the next note of the same pitch in their voice. In a selection, each note tied
+ * to an equal neighbour (or untied, when all already are); with none, the last selected note (or
+ * the note at the caret) to the note after it, when that note has the same pitch.
+ */
+export function toggleTies(text: string, ranges: Range[], file = indexFile(text)): TieResult {
+  const pitches = pitchesOf(text, ranges, file);
+  const all: MusicEvent[] = [];
+  for (const tune of file.tunes)
+    if (ranges.some((range) => range.from <= tune.to && range.to >= tune.bodyFrom))
+      for (const item of tuneItems(text, tune, file)) if (item.type === "event") all.push(item);
+  const set = (event: MusicEvent) =>
+    new Set(
+      event.notes.map((note) => pitches.get(note.from)).filter((pitch) => pitch !== undefined),
     );
+  const same = (a: MusicEvent, b: MusicEvent) => {
+    if (a.rest || b.rest) return false;
+    const right = set(b);
+    return [...set(a)].some((pitch) => right.has(pitch));
+  };
+  // Within one voice, text order is time order.
+  const next = (event: MusicEvent) =>
+    all.find((each) => each.voice === event.voice && each.from >= event.to);
+  const tied = (event: MusicEvent) => text[event.to] === "-";
+  const toggle = (targets: MusicEvent[]): Change[] => {
+    const allTied = targets.every(tied);
+    return targets
+      .filter((event) => (allTied ? tied(event) : !tied(event)))
+      .map((event) =>
+        allTied
+          ? { from: event.to, to: event.to + 1, insert: "" }
+          : { from: event.to, to: event.to, insert: "-" },
+      );
+  };
+  const selected = eventsIn(text, ranges, file).filter((event) => !event.rest);
+  const caret = ranges.every((range) => range.from === range.to);
+  if (!selected.length)
+    return { changes: [], reason: "Put the caret on a note, or select notes, to tie them." };
+  if (!caret) {
+    const pairs = selected.filter((event) => {
+      const following = next(event);
+      return (
+        following && selected.some((each) => each.from === following.from) && same(event, following)
+      );
+    });
+    if (pairs.length) return { changes: toggle(pairs) };
+  }
+  const last = selected[selected.length - 1] as MusicEvent;
+  if (tied(last)) return { changes: toggle([last]) };
+  const following = next(last);
+  if (!following || following.rest)
+    return {
+      changes: [],
+      reason:
+        "A tie joins a note to the next one of the same pitch, and there is no note after this one.",
+    };
+  if (!same(last, following))
+    return {
+      changes: [],
+      reason:
+        "A tie joins a note to the next one of the same pitch; the next note here has a different pitch. Use a slur for different notes.",
+    };
+  return { changes: toggle([last]) };
 }
 
 /** Wraps each selection in a slur, or removes the slur that already wraps it. */
@@ -274,13 +340,19 @@ function trimEnd(text: string, to: number): number {
 }
 
 /** Adds a decoration before each selected note (or the note at the caret). */
+/** Shorthands written bare; every named decoration, p and f included, is written !name!. */
+const BARE_DECORATIONS = new Set([".", "~"]);
+export function decorationMark(name: string): string {
+  return BARE_DECORATIONS.has(name) ? name : `!${name}!`;
+}
+
 export function decorate(
   text: string,
   ranges: Range[],
   decoration: string,
   file = indexFile(text),
 ): Change[] {
-  const mark = decoration.length === 1 ? decoration : `!${decoration}!`;
+  const mark = decorationMark(decoration);
   return eventsIn(text, ranges, file)
     .filter(
       (event) =>

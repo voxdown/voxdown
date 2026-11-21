@@ -219,23 +219,40 @@ export function mountMenus(
       } else if (event.key === "Tab") close();
     });
   };
+  // How the open menu was opened: a click on its title closes it only if a click opened it.
+  let openedBy: "hover" | "click" | "key" = "click";
   for (const button of buttons) {
-    button.addEventListener("click", () =>
-      open?.button === button ? close() : show(button, "none"),
-    );
+    button.addEventListener("click", () => {
+      if (open?.button === button && openedBy !== "hover") close();
+      else if (open?.button !== button) show(button, "none");
+      openedBy = "click";
+    });
     button.addEventListener("keydown", (event) => {
       if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         show(button, "first");
+        openedBy = "key";
       } else if (event.key === "ArrowUp") {
         event.preventDefault();
         show(button, "last");
+        openedBy = "key";
       }
     });
     button.addEventListener("pointerenter", () => {
-      if (open && open.button !== button) show(button, "none");
+      if (open && open.button !== button) {
+        show(button, "none");
+        openedBy = "hover";
+      }
     });
   }
+  // Escape closes a menu opened with the mouse too (focus is then on its title, not in it).
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !open) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (child) closeChild(true);
+    else close(true);
+  });
   document.addEventListener("pointerdown", (event) => {
     if (!open) return;
     const target = event.target as Node;

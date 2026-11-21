@@ -319,12 +319,17 @@ code {
   flex: 1;
   min-width: 0;
 }
+/* The name and its saved state read as one: "Ode to Joy.abc · Not saved to a file". */
 .filename {
-  flex: 0 1 300px;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 340px;
 }
 .filename input {
   width: 100%;
+  field-sizing: content;
+  min-width: 90px;
+  max-width: 340px;
   min-height: 30px;
   padding: 4px 6px;
   font-variation-settings: "MONO" 1;
@@ -342,7 +347,7 @@ code {
 }
 .saved-state {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 #save-primary {
@@ -418,7 +423,7 @@ body[data-layout="below"] #layout-toggle .beside {
 }
 .workspace-dropdown .menu-shortcut {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .workspace-dropdown .menu-check {
@@ -436,7 +441,7 @@ body[data-layout="below"] #layout-toggle .beside {
 }
 .workspace-dropdown .menu-heading {
   margin: 6px 10px 2px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -522,18 +527,33 @@ body[data-layout="below"] #layout-toggle .beside {
 }
 
 /* Workspace. */
+/* Notices float over the workspace's top edge, so nothing below them moves. */
+#app {
+  position: relative;
+}
 .notice {
-  flex: none;
-  padding: 8px 18px;
-  font-size: 12.5px;
-  background: var(--warn-soft);
-  border-bottom: 1px solid var(--border);
+  position: absolute;
+  z-index: 20;
+  top: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(720px, calc(100% - 24px));
+  padding: 7px 8px 7px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #18202c24;
   display: flex;
   align-items: center;
   gap: 12px;
 }
 .notice[data-tone="success"] {
-  background: var(--band);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 .notice .notice-close {
   margin-left: auto;
@@ -607,7 +627,7 @@ body[data-layout="below"] #layout-toggle .beside {
 .tune-item .tune-meta {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .tune-item[aria-current="true"] {
@@ -828,7 +848,7 @@ body[data-layout="below"] #layout-toggle .beside {
   color: var(--muted) !important;
 }
 .cm-lineNumbers .cm-gutterElement {
-  font-size: 11px;
+  font-size: 12px;
   padding: 0 6px 0 14px !important;
   min-width: 34px !important;
 }
@@ -915,10 +935,13 @@ body[data-layout="below"] #layout-toggle .beside {
 .abc-inline-field {
   color: var(--syn-field);
 }
-.abc-comment,
-.abc-directive {
+.abc-comment {
   color: var(--syn-comment);
   font-style: italic;
+}
+/* %%score, %%MIDI and other directives are instructions, so they read as such, not as comments. */
+.abc-directive {
+  color: var(--syn-field);
 }
 .abc-lyrics {
   color: var(--syn-lyrics);
@@ -1185,7 +1208,7 @@ body[data-layout="below"] #layout-toggle .beside {
   position: absolute;
   top: 16px;
   left: 3px;
-  font-size: 9.5px;
+  font-size: 11px;
   color: var(--muted);
 }
 .timeline-loop {
@@ -1233,7 +1256,7 @@ body[data-layout="below"] #layout-toggle .beside {
   display: flex;
   align-items: baseline;
   gap: 3px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .tempo-value input {
@@ -1253,14 +1276,14 @@ body[data-layout="below"] #layout-toggle .beside {
   appearance: none;
 }
 #tap {
-  font-size: 11.5px !important;
+  font-size: 12px !important;
   color: var(--muted);
 }
 .tool-text {
   font-variant-numeric: tabular-nums;
 }
 #count-in .tool-text {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 .sound-status {
@@ -1322,7 +1345,7 @@ body[data-layout="below"] #layout-toggle .beside {
 .composer-popover .hint {
   margin: 6px 0 0;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .instrument-choices {
@@ -1346,7 +1369,7 @@ body[data-layout="below"] #layout-toggle .beside {
 }
 .instrument-choices small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .voice-row {
   display: grid;
@@ -1382,7 +1405,7 @@ body[data-layout="below"] #layout-toggle .beside {
   background: var(--surface);
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .explain {
   flex: 1;
@@ -1399,7 +1422,7 @@ body[data-layout="below"] #layout-toggle .beside {
 .problems {
   min-height: 22px;
   padding: 1px 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   border-color: transparent;
   background: var(--warn-soft);
   color: var(--ink);
@@ -1551,7 +1574,7 @@ dialog.composer-dialog::backdrop {
 .cheatsheet kbd,
 .shortcut-table kbd {
   font-family: var(--ui);
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 0 4px;
   border: 1px solid var(--border);
   border-bottom-width: 2px;
@@ -1615,7 +1638,7 @@ dialog.composer-dialog::backdrop {
 .look-choice small {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* Focus mode: the music, the score and the transport. */
@@ -1893,5 +1916,138 @@ body.focus-mode .rail {
     width: 100%;
     height: auto;
     break-inside: avoid;
+  }
+}
+
+/* Count-in and the metronome's beat. */
+.clock .count {
+  display: inline-block;
+  min-width: 1.1em;
+  text-align: center;
+  border-radius: 3px;
+  color: var(--muted);
+}
+.clock .count.lit {
+  background: var(--play);
+  color: var(--surface);
+  font-weight: 700;
+}
+.clock[data-counting] {
+  color: var(--ink);
+}
+#metronome.beat {
+  animation: metronome-beat 0.18s ease-out;
+}
+#metronome.downbeat {
+  animation-name: metronome-downbeat;
+}
+@keyframes metronome-beat {
+  from {
+    background: color-mix(in srgb, var(--play) 28%, transparent);
+  }
+}
+@keyframes metronome-downbeat {
+  from {
+    background: color-mix(in srgb, var(--play) 55%, transparent);
+    color: var(--play);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #metronome.beat {
+    animation: none !important;
+    box-shadow: inset 0 -2px 0 var(--play);
+  }
+}
+
+/* Completion: the editor's own type, quiet details, the family's selection colour. */
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  font-family: var(--ui) !important;
+  font-variation-settings: "MONO" 1, "CASL" 0;
+  font-size: 13.5px;
+  max-height: 16em;
+}
+.cm-tooltip.cm-tooltip-autocomplete > ul > li {
+  padding: 3px 10px !important;
+  line-height: 1.5;
+}
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface)) !important;
+  color: var(--ink) !important;
+}
+.cm-tooltip-autocomplete .cm-completionDetail {
+  color: var(--muted);
+  font-size: 12px;
+  font-variation-settings: "MONO" 0, "CASL" 0.15;
+  opacity: 1;
+}
+.cm-tooltip-autocomplete ul li[aria-selected] .cm-completionDetail {
+  color: var(--ink);
+}
+.cm-completionMatchedText {
+  text-decoration: none !important;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* The saved state sits right after the file name. */
+.saved-state:not(:empty)::before {
+  content: "· ";
+}
+/* While the start screen shows, tools and transport rest. */
+body.starting .documentbar .toolbar,
+body.starting #transport {
+  opacity: 0.45;
+}
+/* More tools: only on narrow screens, where the toolbar cannot hold everything. */
+.more-group {
+  display: none !important;
+}
+.rail-close {
+  display: none;
+  margin-left: auto;
+  min-width: 40px;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  color: var(--muted);
+}
+.panel-heading {
+  display: flex;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .more-group {
+    display: flex !important;
+  }
+  .toolbar .marks,
+  .toolbar .tunes-group,
+  .toolbar .end,
+  .toolbar [data-command="octave-down"],
+  .toolbar [data-command="octave-up"],
+  .toolbar [data-command="undot"] {
+    display: none !important;
+  }
+  .rail-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tune-item,
+  .tune-sub button {
+    min-height: 44px;
+  }
+  .tempo-value input {
+    min-height: 40px;
+  }
+  .score-heading button,
+  .problems,
+  .dialog-header button,
+  .notice .notice-close,
+  .workspace-dropdown button {
+    min-height: 40px;
+  }
+  .notice {
+    top: 96px;
   }
 }

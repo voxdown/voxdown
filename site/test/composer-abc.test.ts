@@ -13,6 +13,7 @@ import { checkBars } from "../src/composer/barcheck";
 import {
   type Change,
   decorate,
+  decorationMark,
   duplicate,
   removeDots,
   scaleLengths,
@@ -128,6 +129,16 @@ describe("explaining the caret", () => {
   });
 });
 
+describe("lengths as played", () => {
+  it("explains broken rhythm and tuplets", () => {
+    const text = tune("f>g (3abc d2 |", "M:4/4\nL:1/8\nK:C");
+    expect(explain(text, "f>")?.text).toContain("a dotted eighth note (broken rhythm)");
+    expect(explain(text, "g ")?.text).toContain("a sixteenth note (broken rhythm)");
+    expect(explain(text, "a")?.text).toContain("an eighth note in a tuplet");
+    expect(explain(text, "d2")?.text).toContain("a quarter note.");
+  });
+});
+
 describe("bar check", () => {
   it("accepts correct bars, a pickup and a short last bar", () => {
     expect(bars(tune("D | G2 AB c2 BA | G4 z4 | G6 |]"))).toEqual([]);
@@ -206,18 +217,51 @@ describe("length commands", () => {
     const at = text.indexOf("B");
     expect(apply(text, scaleLengths(text, [{ from: at, to: at }], frac(2)))).toContain("A B2 c |");
   });
-  it("toggles ties, slurs and decorations", () => {
+  it("toggles slurs and decorations", () => {
     const text = tune("A B c d |");
     const range = rangeOf(text, "A B c");
-    const tied = apply(text, toggleTies(text, range));
-    expect(tied).toContain("A- B- c d |");
-    expect(apply(tied, toggleTies(tied, rangeOf(tied, "A- B- c")))).toContain("A B c d |");
     const slurred = apply(text, toggleSlur(text, range));
     expect(slurred).toContain("(A B c) d |");
     expect(apply(slurred, toggleSlur(slurred, rangeOf(slurred, "A B c")))).toContain("A B c d |");
     expect(apply(text, decorate(text, range, "."))).toContain(".A .B .c d |");
     expect(apply(text, decorate(text, range, "fermata"))).toContain(
       "!fermata!A !fermata!B !fermata!c d",
+    );
+  });
+  it("writes dynamics as !name!, never as a bare letter that would be a note", () => {
+    const text = tune("E2 G2 |");
+    const at = text.indexOf("E2");
+    for (const name of ["p", "f", "mp", "mf", "ff", "pp"]) {
+      expect(apply(text, decorate(text, [{ from: at, to: at }], name))).toContain(
+        `!${name}!E2 G2 |`,
+      );
+      expect(decorationMark(name)).toBe(`!${name}!`);
+    }
+    expect(decorationMark(".")).toBe(".");
+    expect(decorationMark("~")).toBe("~");
+  });
+  it("ties only notes of the same pitch", () => {
+    const text = tune("B2 c d e2 f2 | f2 f2 B2 B2 |");
+    // A selection of different pitches: nothing to tie, and a reason why.
+    const mixed = toggleTies(text, rangeOf(text, "B2 c d"));
+    expect(mixed.changes).toEqual([]);
+    expect(mixed.reason).toMatch(/different pitch/);
+    // ...unless its last note meets the same pitch after it.
+    const last = toggleTies(text, rangeOf(text, "e2 f2"));
+    expect(apply(text, last.changes)).toContain("e2 f2- | f2 f2");
+    // Equal neighbours in a selection are tied, and tied again toggles them off.
+    const pairs = apply(text, toggleTies(text, rangeOf(text, "f2 f2 B2 B2")).changes);
+    expect(pairs).toContain("| f2- f2 B2- B2 |");
+    expect(apply(pairs, toggleTies(pairs, rangeOf(pairs, "f2- f2 B2- B2")).changes)).toContain(
+      "| f2 f2 B2 B2 |",
+    );
+    // At the caret: the next note decides; an accidental from the key counts.
+    const at = text.indexOf("B2 c");
+    expect(toggleTies(text, [{ from: at, to: at }]).changes).toEqual([]);
+    const keyed = tune("F ^F | F2 |", "M:4/4\nL:1/4\nK:D");
+    const first = keyed.indexOf("F ^F");
+    expect(apply(keyed, toggleTies(keyed, [{ from: first, to: first }]).changes)).toContain(
+      "F- ^F |",
     );
   });
   it("duplicates a selection or the bar at the caret", () => {

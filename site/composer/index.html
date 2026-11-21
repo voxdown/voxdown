@@ -12,12 +12,12 @@
   <script src="./look.js"></script>
 </head>
 <body class="composer">
-  <a class="skip" href="#editor">Skip to the ABC text</a>
-  <a class="skip" href="#score-scroll">Skip to the score</a>
+  <a class="skip" id="skip-tune" href="#editor">Skip to the tune</a>
+  <a class="skip" id="skip-score" href="#score-scroll">Skip to the score</a>
   <header id="app-header" class="app-header">
     <h1 class="sr-only">VoxDown Composer, an ABC music editor</h1>
     <a class="brand" href="../writer/" title="Open VoxDown Writer"><img src="../icon.svg" width="24" height="24" alt=""><span class="word">VoxDown <em>Composer</em></span></a>
-    <nav class="workspace-menus" aria-label="Composer menus">
+    <nav class="workspace-menus" role="menubar" aria-label="Composer menus">
       <button id="file-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="file">File</button>
       <button id="edit-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="edit">Edit</button>
       <button id="insert-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="insert">Insert</button>
@@ -33,7 +33,7 @@
     <button id="appearance" type="button" aria-label="Appearance: Auto" title="Appearance">◐ Auto</button>
     <div class="panel-toggles" role="group" aria-label="Panels">
       <button id="rail-toggle" type="button" aria-label="Tunes" title="Tunes and voices" aria-pressed="true" aria-controls="rail"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg></button>
-      <button id="layout-toggle" type="button" aria-label="Score beside the text" title="Score beside or below (Ctrl/⌘ Alt L)"><svg class="beside" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8.5 2.5v11"/><path d="M10.5 6h2M10.5 8h2M10.5 10h2"/></svg><svg class="below" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 8.5h13"/><path d="M4 10.5h8M4 12h8"/></svg></button>
+      <button id="layout-toggle" type="button" aria-label="Score beside the text" title="Score beside or below (Ctrl/⌘ \)" aria-keyshortcuts="Control+\"><svg class="beside" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8.5 2.5v11"/><path d="M10.5 6h2M10.5 8h2M10.5 10h2"/></svg><svg class="below" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 8.5h13"/><path d="M4 10.5h8M4 12h8"/></svg></button>
     </div>
   </header>
   <main id="app" aria-label="Composer workspace">
@@ -61,8 +61,11 @@
           <button type="button" data-command="slur" aria-label="Slur" title="Slur or unslur (Alt S)"><span class="tool-text">( )</span></button>
           <button type="button" data-command="decoration" aria-label="Decoration" title="Add a decoration (Alt D)" aria-haspopup="menu"><span class="tool-text">!f!</span><svg class="caret" viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6.5 3 3 3-3"/></svg></button>
         </div>
-        <div class="tool-group wide-only" role="group" aria-label="Tunes">
+        <div class="tool-group wide-only tunes-group" role="group" aria-label="Tunes">
           <button type="button" data-command="new-tune" aria-label="New tune" title="Add a new tune at the end"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span>Tune</span></button>
+        </div>
+        <div class="tool-group more-group" role="group" aria-label="More tools">
+          <button id="more-tools" type="button" aria-haspopup="menu" aria-label="More tools" title="More tools"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.1"/><circle cx="8" cy="8" r="1.1"/><circle cx="12.5" cy="8" r="1.1"/></svg><span>More</span></button>
         </div>
         <div class="tool-group view-switch" role="group" aria-label="Show">
           <button id="show-text" type="button" aria-pressed="true">Text</button>
@@ -79,7 +82,7 @@
       <div id="start" class="start" hidden>
         <div class="start-inner">
           <h2>Write music<br>as plain text.</h2>
-          <p>ABC is a small notation for melodies: letters for notes, bar lines for bars. Type on the left; the score draws itself as you go, and plays back as you write. Everything stays in this browser until you save it.</p>
+          <p>ABC is a small notation for melodies: letters for notes, bar lines for bars. Type your tune; the score draws itself as you go, and each note sounds as you type it (you can turn that off in the Play menu). Everything stays in this browser until you save it.</p>
           <div class="start-actions">
             <button id="start-new" class="primary" type="button">Start a new tune</button>
             <button id="start-open" type="button">Open a file…</button>
@@ -93,7 +96,7 @@
         </div>
       </div>
       <aside id="rail" class="rail" aria-label="Tunes and voices">
-        <div class="panel-heading"><h2>Tunes <span id="tune-count">0</span></h2></div>
+        <div class="panel-heading"><h2>Tunes <span id="tune-count">0</span></h2><button id="rail-close" class="rail-close" type="button" aria-label="Close the tunes panel" title="Close">×</button></div>
         <nav id="tune-list" aria-label="Tunes in this file"></nav>
         <p class="rail-hint">Each <code>X:</code> line starts a tune. Its voices (<code>V:</code>) and parts (<code>P:</code>) appear under it.</p>
       </aside>
@@ -135,7 +138,7 @@
       <div class="transport-side">
         <div class="tempo" role="group" aria-label="Tempo">
           <button id="tempo-down" type="button" aria-label="Slower" title="Slower (Ctrl/⌘ Alt −)">−</button>
-          <label class="tempo-value"><input id="tempo" type="number" min="20" max="400" value="120" inputmode="numeric" aria-label="Tempo, beats per minute"><span id="tempo-unit">bpm</span></label>
+          <label class="tempo-value"><span id="tempo-unit" aria-hidden="true">♩ =</span><input id="tempo" type="number" min="20" max="400" value="120" inputmode="numeric" aria-label="Tempo, beats per minute"></label>
           <button id="tempo-up" type="button" aria-label="Faster" title="Faster (Ctrl/⌘ Alt =)">+</button>
           <button id="tap" class="wide-only" type="button" title="Tap the beat to set the tempo">Tap</button>
         </div>

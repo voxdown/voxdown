@@ -307,7 +307,12 @@ await page.mouse.up();
 const ranges = await page.evaluate(() =>
   window.composer.view.state.selection.ranges.map((range) => [range.from, range.to]),
 );
+// Loop is a mode: pressing it lights it and does not start playing; Play starts the loop.
 await page.locator("#loop").click();
+assert.equal(await page.locator("#loop").getAttribute("aria-pressed"), "true", "Loop is lit");
+await settle(200);
+assert.equal((await state()).status, "stopped", "Loop alone does not start playback");
+await page.locator("#play").click();
 await page.waitForFunction(() => window.composer.state().region);
 const regionNotes = await page.evaluate(() =>
   window.composer.player.timeline.notes.map((note) => note.start),
@@ -614,7 +619,7 @@ await page.waitForFunction(() => !document.getElementById("problems").hidden, nu
 });
 assert.match(
   await page.locator("#problems").textContent(),
-  /1 note to check/,
+  /^1 bar to check$/,
   await page.locator("#problems").textContent(),
 );
 assert(await page.locator(".abc-bar-issue").count(), "the long bar is marked in the text");

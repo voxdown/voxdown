@@ -800,6 +800,18 @@ body[data-layout="below"] #layout-toggle .beside {
   pointer-events: none;
   contain: layout paint;
 }
+/* Paused: where the music will go on from, a hollow outline like the timeline's head. */
+.score-place {
+  position: absolute;
+  width: 10px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 2px var(--play);
+  pointer-events: none;
+  z-index: 1;
+}
+.score-place[hidden] {
+  display: none;
+}
 .score-bands {
   position: absolute;
   inset: 0;

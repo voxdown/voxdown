@@ -66,6 +66,7 @@ import {
   regionRanges,
   renderTune,
   scoreFormat,
+  spanLoneNotes,
   spanRegion,
   tuneSource,
 } from "./score";
@@ -471,6 +472,7 @@ function load(
     void claimDraft(draftId);
   }
   nameInput.value = name;
+  nameFollowsTitle = false;
   view.setState(makeState(content));
   scoreIndex = null;
   timeline = null;
@@ -536,6 +538,10 @@ let checkTimer: ReturnType<typeof setTimeout> | undefined;
 let explainTimer: ReturnType<typeof setTimeout> | undefined;
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let lastTyped = 0;
+/** Whether a new tune's file name still follows its title (see startNewTune). */
+let nameFollowsTitle = false;
+/** Where the last edit ended, in the current text (kept mapped through later edits). */
+let lastEdit = -1;
 let lastHeard = "";
 
 /**
@@ -581,6 +587,12 @@ window.addEventListener("error", (event) => {
 function onUpdate(update: ViewUpdate) {
   if (update.docChanged) {
     lastTyped = performance.now();
+    let edited = -1;
+    update.changes.iterChangedRanges((_fromA, _toA, _fromB, toB) => {
+      edited = Math.max(edited, toB);
+    });
+    lastEdit = edited;
+    followTitle();
     noticeOnEdit();
     if (started) schedulePersist();
     scheduleRender();
@@ -598,7 +610,7 @@ function onUpdate(update: ViewUpdate) {
     explainTimer = setTimeout(() => explainCaret(update), 40);
     if (!update.docChanged && skippedBar) {
       const head = update.state.selection.main.head;
-      if (head < skippedBar.from || head > skippedBar.to + 1) {
+      if (head < skippedBar.from || head > skippedBar.to) {
         clearTimeout(checkTimer);
         checkTimer = setTimeout(() => runChecks(true), 0);
       }
@@ -776,6 +788,9 @@ async function render(force = false) {
     scoreIndex = result;
     geometry = null;
     attached = null;
+    // The lit notes and the place marker belong to the drawing just replaced: paint them again.
+    litPlaying = [];
+    playingKey = "~redrawn";
     updateSummary();
     // Timing and audio are built in a separate task, so the draw stays short.
     setTimeout(() => {
@@ -783,6 +798,7 @@ async function render(force = false) {
       buildPlayback(result);
       linkFromText();
       runChecks();
+      refreshPlace();
     }, 0);
   } catch (error) {
     console.warn("Composer could not draw this tune.", error);
@@ -1079,7 +1095,14 @@ function runChecks(caretLeft = false) {
   for (const tune of index.tunes) {
     for (const issue of checkBars(doc, tune, index)) {
       // Not while the bar is still being typed; it is checked once typing pauses or the caret leaves.
-      if (recentlyTyped && position >= issue.from && position <= issue.to + 1) {
+      // Only the bar being typed: the caret is in it and the last edit was in it.
+      if (
+        recentlyTyped &&
+        position >= issue.from &&
+        position <= issue.to &&
+        lastEdit >= issue.from &&
+        lastEdit <= issue.to
+      ) {
         skippedBar = { from: issue.from, to: issue.to };
         continue;
       }
@@ -1196,16 +1219,43 @@ type Drag = {
 };
 let drag: Drag | null = null;
 
+/** Bar lines' x on each system, in the score's coordinates (measured with the geometry). */
+let barCache: { for: unknown; bars: Map<number, number[]> } | null = null;
+function barLines(): Map<number, number[]> {
+  const geo = staffGeometry();
+  if (barCache && barCache.for === geo) return barCache.bars;
+  const bars = measureBarLines();
+  barCache = { for: geo, bars };
+  return bars;
+}
+function measureBarLines(): Map<number, number[]> {
+  const origin = scoreElement.getBoundingClientRect();
+  const byLine = new Map<number, number[]>();
+  for (const element of scoreElement.querySelectorAll(".abcjs-bar")) {
+    const line = Number(/abcjs-l(\d+)/.exec(element.getAttribute("class") ?? "")?.[1] ?? -1);
+    const rect = element.getBoundingClientRect();
+    if (line < 0 || !rect.height) continue;
+    const list = byLine.get(line) ?? [];
+    const x = Math.round(rect.left + rect.width / 2 - origin.left);
+    if (!list.some((each) => Math.abs(each - x) < 2)) list.push(x);
+    byLine.set(line, list);
+  }
+  return byLine;
+}
+
 /** Every drawn note's head position, for reading the pointer in musical time. */
 function placedNotes(): Placed[] {
   const geo = staffGeometry();
   if (!geo) return [];
-  return geo.notes.map((box) => ({
-    note: box.note,
-    line: box.note.line,
-    staff: box.note.staff,
-    x: box.head,
-  }));
+  return spanLoneNotes(
+    geo.notes.map((box) => ({
+      note: box.note,
+      line: box.note.line,
+      staff: box.note.staff,
+      x: box.head,
+    })),
+    barLines(),
+  );
 }
 
 /**
@@ -1250,6 +1300,7 @@ function hitPoint(clientX: number, clientY: number, preferVoice?: number): Score
     onStaff.filter((each) => each.note.voice === voice),
     staff.line,
     x,
+    barLines().get(staff.line) ?? [],
   );
   if (!note) return null;
   return { note, line: staff.line, staff: staff.staff, x, reach: reachAt(placed, staff.line, x) };
@@ -1756,6 +1807,7 @@ function toggleLoop() {
 }
 function stop() {
   player.stop();
+  refreshPlace();
 }
 
 function applyTempo() {
@@ -1809,13 +1861,21 @@ function playbackFrame() {
     const { notes, index } =
       position < 0 ? { notes: [], index: scanIndex } : soundingAt(line, position, scanIndex);
     scanIndex = index;
-    const key = playing ? notes.map((note) => note.start).join(",") : "";
+    // Only playing lights notes; paused, the place is a hollow marker; stopped, nothing.
+    const paused = player.status === "paused";
+    const starts = notes.map((note) => note.start).join(",");
+    const key = playing ? starts : paused ? `paused@${starts}@${position.toFixed(4)}` : "stopped";
     if (key !== playingKey) {
       playingKey = key;
       for (const element of litPlaying) element.classList.remove("is-playing");
       litPlaying = [];
-      const starts = new Set(notes.map((note) => note.start));
-      const lit = scoreIndex.notes.filter((note) => starts.has(note.start));
+      const heard = new Set(notes.map((note) => note.start));
+      placeMarker(
+        paused
+          ? (scoreIndex.notes.find((note) => heard.has(note.start)) ?? nextNoteAt(line, position))
+          : null,
+      );
+      const lit = playing ? scoreIndex.notes.filter((note) => heard.has(note.start)) : [];
       for (const note of lit)
         for (const element of note.elements) element.classList.add("is-playing");
       litPlaying = [...lit.flatMap((note) => note.elements), ...paintAttached(lit, "is-playing")];
@@ -1847,6 +1907,34 @@ function playbackFrame() {
     updateHead(position);
   }
   if (playing) frame = requestAnimationFrame(playbackFrame);
+}
+
+/** The note a paused position is at, or the next one to sound. */
+function nextNoteAt(line: Timeline, position: number): ScoreNote | null {
+  const next = line.notes.find((note) => note.start !== undefined && note.time >= position - 1e-9);
+  return next && scoreIndex
+    ? (scoreIndex.notes.find((note) => note.start === next.start) ?? null)
+    : null;
+}
+/** The hollow place marker over a paused note's staff (the timeline's head, in the score). */
+function placeMarker(note: ScoreNote | null) {
+  const marker = $("score-place");
+  const geo = note ? staffGeometry() : null;
+  const box = geo?.notes.find((each) => each.note === note);
+  const staff =
+    box && geo?.staves.find((each) => each.line === box.note.line && each.staff === box.note.staff);
+  if (!box || !staff) {
+    marker.hidden = true;
+    return;
+  }
+  marker.hidden = false;
+  marker.style.left = `${scoreElement.offsetLeft + box.head - 5}px`;
+  marker.style.top = `${scoreElement.offsetTop + staff.top - 8}px`;
+  marker.style.height = `${staff.bottom - staff.top + 16}px`;
+}
+/** After a seek or Stop: repaint what is lit at once, whether or not the music is playing. */
+function refreshPlace() {
+  if (player.status !== "playing") playbackFrame();
 }
 
 function setFollowing(on: boolean) {
@@ -2157,6 +2245,7 @@ function seekToClient(clientX: number) {
   if (loopOn) setLoop(false);
   player.seek(line.bars[bar] ?? 0);
   if (player.status !== "playing") updateHead(line.bars[bar] ?? 0);
+  refreshPlace();
 }
 /* The readout above the ruler: on hover it names the bar under the pointer; while scrubbing
    (larger on a phone, above the finger) it names the bar the music will start from. */
@@ -2215,6 +2304,7 @@ $("timeline").addEventListener("keydown", (event) => {
   target = Math.max(0, Math.min(line.bars.length - 1, target));
   player.seek(line.bars[target] ?? 0);
   updateHead(line.bars[target] ?? 0);
+  refreshPlace();
 });
 
 /* Voices: mute and solo. */
@@ -2883,6 +2973,7 @@ async function save(saveAs = false) {
     if (result.status === "saved") {
       void keepLink(encoded.bytes);
       savedText = text();
+      nameFollowsTitle = false;
       nameInput.value = result.name;
       updateSavedState();
       notice(
@@ -2905,6 +2996,7 @@ async function save(saveAs = false) {
     }
   }
   download(encoded.bytes, name, "text/vnd.abc;charset=utf-8");
+  nameFollowsTitle = false;
   savedText = text();
   updateSavedState();
   notice(`Downloaded ${name}.`, "success");
@@ -2913,12 +3005,17 @@ function downloadAbc() {
   const name = abcName(nameInput.value);
   try {
     download(encodeText(source, text()).bytes, name, "text/vnd.abc;charset=utf-8");
+    nameFollowsTitle = false;
   } catch (error) {
     noticeError(error instanceof Error ? error.message : "This text cannot be saved.");
   }
 }
 $("save-primary").addEventListener("click", () => void save());
+nameInput.addEventListener("input", () => {
+  nameFollowsTitle = false;
+});
 nameInput.addEventListener("change", () => {
+  nameFollowsTitle = false;
   nameInput.value = abcName(nameInput.value);
   schedulePersist();
   updateSavedState();
@@ -3669,9 +3766,29 @@ function insertLyrics() {
   view.focus();
 }
 
+/**
+ * A new tune's file name follows its first T: line ("Evening Song.abc") until the writer renames
+ * it or saves it; "Untitled tune" keeps "Untitled.abc".
+ */
+function nameFromTitle(): string {
+  const title = /^T:[ \t]*(.*?)\s*$/m.exec(text())?.[1] ?? "";
+  return !title || title === "Untitled tune" ? "Untitled.abc" : abcName(title);
+}
+function followTitle() {
+  if (!nameFollowsTitle) return;
+  const name = nameFromTitle();
+  if (nameInput.value !== name) {
+    nameInput.value = name;
+    updateSavedState();
+  }
+}
+function startNewTune() {
+  load(newSource(NEW_TUNE), "Untitled.abc", { caretAt: NEW_TUNE.length });
+  nameFollowsTitle = true;
+}
 function newFile() {
   local.disconnect();
-  load(newSource(NEW_TUNE), "Untitled.abc", { caretAt: NEW_TUNE.length });
+  startNewTune();
   notice("A new tune. Your previous draft is kept under File › Recover a draft.", "success");
 }
 function openExample(id: string) {
@@ -3788,9 +3905,7 @@ function fillExamples() {
     list.append(button);
   }
 }
-$("start-new").addEventListener("click", () => {
-  load(newSource(NEW_TUNE), "Untitled.abc", { caretAt: NEW_TUNE.length });
-});
+$("start-new").addEventListener("click", startNewTune);
 $("start-open").addEventListener("click", () => void openFile());
 
 /* Keyboard paths: one Tab stop for the menu bar, the toolbar and the transport buttons. */

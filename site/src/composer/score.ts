@@ -673,12 +673,54 @@ export function reachAt(placed: Placed[], line: number, x: number): number {
   return Number.isFinite(reach) ? reach : 0;
 }
 
-/** The note of one voice under the pointer: the last whose head is at or left of it. */
-export function noteUnder(placed: Placed[], line: number, x: number): ScoreNote | undefined {
+/**
+ * The note of one voice under the pointer: the last whose head is at or left of it. Past a bar
+ * line but before that bar's first note, the pointer is at the bar's start: its first note, never
+ * the last note of the bar before. `bars` are the bar lines' x on that system.
+ */
+export function noteUnder(
+  placed: Placed[],
+  line: number,
+  x: number,
+  bars: number[] = [],
+): ScoreNote | undefined {
   const onLine = placed.filter((each) => each.line === line).sort((a, b) => a.x - b.x);
-  let found = onLine[0]?.note;
-  for (const each of onLine) if (each.x <= x) found = each.note;
-  return found;
+  let found = onLine[0];
+  for (const each of onLine) if (each.x <= x) found = each;
+  if (found && found.x <= x) {
+    const crossed = bars.filter((bar) => bar > found.x && bar <= x);
+    const barline = crossed.length ? Math.max(...crossed) : null;
+    if (barline !== null) {
+      const next = onLine.find((each) => each.x > barline);
+      if (next) return next.note;
+    }
+  }
+  return found?.note;
+}
+
+/**
+ * Where the pointer reads each note: its head, except a note alone in its bar (a whole-bar rest,
+ * drawn mid-bar) is read from just after the bar line, so it spans its bar.
+ */
+export function spanLoneNotes(placed: Placed[], barsByLine: Map<number, number[]>): Placed[] {
+  const groups = new Map<string, Placed[]>();
+  const segment = (each: Placed) => {
+    const bars = barsByLine.get(each.line) ?? [];
+    const left = bars.filter((bar) => bar < each.x);
+    return left.length ? Math.max(...left) : Number.NEGATIVE_INFINITY;
+  };
+  for (const each of placed) {
+    const key = `${each.line}:${each.staff}:${each.note.voice}:${segment(each)}`;
+    const list = groups.get(key) ?? [];
+    list.push(each);
+    groups.set(key, list);
+  }
+  return placed.map((each) => {
+    const start = segment(each);
+    const alone =
+      (groups.get(`${each.line}:${each.staff}:${each.note.voice}:${start}`) ?? []).length === 1;
+    return alone && Number.isFinite(start) ? { ...each, x: Math.min(each.x, start + 12) } : each;
+  });
 }
 
 /** A point in a drag: the note under the pointer in its voice, and how far the pointer reached. */

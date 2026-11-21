@@ -523,6 +523,82 @@ console.log(
   "Composer: drags, a first press and Shift click in a long note's gap never take the next bar: passed",
 );
 
+// Tidy 2. Drags that start or end 2–10 px either side of a bar line, in one voice and in two
+// (Frère Jacques: voice 2 rests a whole bar, drawn mid-bar).
+await openExample("Frère Jacques");
+await drawn();
+await settle(300);
+{
+  const geo = await geometry();
+  const line = Math.min(...geo.notes.map((note) => note.line));
+  const onLine = (voice) =>
+    geo.notes
+      .filter((note) => note.voice === voice && note.line === line)
+      .sort((a, b) => a.time - b.time);
+  const top = onLine(0);
+  const bars = [
+    ...new Set(geo.bars.filter((bar) => bar.line === line).map((bar) => Math.round(bar.x))),
+  ]
+    .filter((x) => x > top[0].head)
+    .sort((a, b) => a - b);
+  const [bar1, bar2] = bars;
+  const inBar = (voice, left, right) =>
+    onLine(voice).filter((note) => note.head > left && note.head < right);
+  const bar1Notes = [...inBar(0, 0, bar1), ...inBar(1, 0, bar1)].map((note) => note.start);
+  const bar2Top = inBar(0, bar1, bar2);
+  const y0 = staffMiddle(geo, line, 0);
+  const y1 = staffMiddle(geo, line, 1);
+  const drag = async (from, to) => {
+    await page.mouse.move(from[0], from[1]);
+    await page.mouse.down();
+    await page.mouse.move(to[0], to[1], { steps: 6 });
+    await page.mouse.up();
+    return new Set(await selectedStarts());
+  };
+  const endOfBar2 = bar2Top.at(-1).head + 3;
+  for (const offset of [2, 6, 10]) {
+    for (const [label, from, to] of [
+      ["forward, one voice", [bar1 + offset, y0], [endOfBar2, y0]],
+      ["backward, one voice", [endOfBar2, y0], [bar1 + offset, y0]],
+      ["forward, two voices", [bar1 + offset, y0], [endOfBar2, y1]],
+      ["backward, two voices", [endOfBar2, y1], [bar1 + offset, y0]],
+    ]) {
+      const selected = await drag(from, to);
+      assert(
+        !bar1Notes.some((start) => selected.has(start)),
+        `${label}, ${offset} px past bar line 1: nothing of bar 1`,
+      );
+      assert(selected.has(bar2Top[0].start), `${label}, ${offset} px: bar 2 from its start`);
+    }
+  }
+  // Ending 2–10 px either side of bar line 2 keeps bar 2 and takes nothing of bar 3.
+  const bar3 = [
+    ...inBar(0, bar2, bars[2] ?? Number.POSITIVE_INFINITY),
+    ...inBar(1, bar2, bars[2] ?? Number.POSITIVE_INFINITY),
+  ];
+  for (const offset of [-10, -2, 2, 10]) {
+    const x = bar2 + offset;
+    if (bar3.some((note) => note.head <= x)) continue;
+    for (const [label, y] of [
+      ["one voice", y0],
+      ["two voices", y1],
+    ]) {
+      const selected = await drag([bar1 + 6, y0], [x, y]);
+      assert(
+        selected.has(bar2Top.at(-1).start),
+        `${label}, ending ${offset} px from bar line 2: bar 2 whole`,
+      );
+      assert(
+        !bar3.some((note) => selected.has(note.start)),
+        `${label}, ending ${offset} px from bar line 2: nothing of bar 3`,
+      );
+    }
+  }
+}
+console.log(
+  "Composer: drags starting or ending 2–10 px either side of a bar line take whole bars, one voice and two: passed",
+);
+
 /* 8c. File › Examples, by keyboard: each opens as a new draft; the open tune keeps its own. */
 await page.locator(".cm-content").focus();
 await page.keyboard.press("Control+End");
@@ -1789,6 +1865,90 @@ console.log(
 }
 console.log(
   "Composer: Tab hint stays; a blank line's music is a problem with a one-click fix; plain-word problems; characters selected; caret on music; 36 px transport: passed",
+);
+
+{
+  // Tidy 1. Paused, nothing glows: a hollow place marker shows where the music will go on, and
+  // follows every seek; Stop clears it.
+  await openExample("Greensleeves");
+  await page.locator("#play").click();
+  await page.waitForFunction(() => document.querySelectorAll("#score .is-playing").length > 0);
+  await page.waitForTimeout(1500);
+  await page.locator("#play").click();
+  await page.waitForFunction(() => window.composer.player.status === "paused");
+  const state = () =>
+    page.evaluate(() => {
+      const marker = document.getElementById("score-place");
+      return {
+        glow: document.querySelectorAll("#score .is-playing, .cm-content .abc-playing").length,
+        marker: !marker.hidden,
+        left: marker.style.left,
+      };
+    });
+  let now = await state();
+  assert.equal(now.glow, 0, "paused: no glow");
+  assert(now.marker, "paused: the hollow place marker shows");
+  let previous = now.left;
+  await page.locator("#timeline").focus();
+  for (const keys of [["End"], ["Home", "ArrowRight", "ArrowRight", "ArrowRight"]]) {
+    for (const key of keys) await page.keyboard.press(key);
+    now = await state();
+    assert.equal(now.glow, 0, `after ${keys.join(" ")}: no glow`);
+    assert(now.marker && now.left !== previous, `after ${keys.join(" ")}: the marker moved`);
+    previous = now.left;
+  }
+  const ruler = await page.locator("#timeline").boundingBox();
+  await page.mouse.click(ruler.x + ruler.width * 0.6, ruler.y + ruler.height / 2);
+  now = await state();
+  assert.equal(now.glow, 0, "after a click at 60%: no glow");
+  assert(now.marker && now.left !== previous, "after a click at 60%: the marker moved");
+  await page.locator("#stop").click();
+  now = await state();
+  assert.equal(now.glow, 0, "stopped: no glow");
+  assert(!now.marker, "stopped: no marker");
+}
+console.log(
+  "Composer: paused or stopped, nothing glows; the hollow marker follows seeks and Stop clears it: passed",
+);
+
+{
+  // Tidy 3 and 4. A new tune is named from its first T: until renamed; the bar check's grace
+  // covers only the bar being typed, not the empty line below it.
+  await page.locator('[data-menu="file"]').click();
+  await page.getByRole("menuitem", { name: "New tune file" }).click();
+  await page.waitForFunction(() => document.getElementById("name").value === "Untitled.abc");
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    const at = view.state.doc.toString().indexOf("Untitled tune");
+    view.dispatch({
+      changes: { from: at, to: at + "Untitled tune".length, insert: "Evening Song" },
+    });
+  });
+  await page.waitForFunction(() => document.getElementById("name").value === "Evening Song.abc");
+  await page.locator("#name").fill("My copy");
+  await page.locator("#name").press("Enter");
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    const at = view.state.doc.toString().indexOf("Evening Song");
+    view.dispatch({ changes: { from: at, to: at + "Evening Song".length, insert: "Night Song" } });
+  });
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator("#name").inputValue(), "My copy.abc", "renamed: the name stays");
+  // An overfull last bar, then Enter: flagged while the caret sits on the empty line below.
+  await page.locator(".cm-content").focus();
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+  });
+  await page.keyboard.type("C D E F G A B c d");
+  await page.waitForTimeout(1000);
+  assert(await page.locator("#problems").isHidden(), "the bar being typed is not flagged yet");
+  await page.keyboard.press("Enter");
+  await page.locator("#problems").waitFor({ timeout: 1500 });
+  assert.match(await page.locator("#problems").textContent(), /1 bar to check/);
+}
+console.log(
+  "Composer: a new tune is named from its title until renamed; the bar check's grace is the bar being typed: passed",
 );
 
 const phone = await browser.newContext({

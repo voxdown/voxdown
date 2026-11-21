@@ -20,6 +20,7 @@ import {
   reachAt,
   regionOfRanges,
   regionRanges,
+  spanLoneNotes,
   spanRegion,
 } from "../src/composer/score";
 import { encodeText, readBytes, readText, writeText } from "../src/composer/source";
@@ -194,6 +195,43 @@ describe("reading the pointer in the score", () => {
     expect(noteUnder(voice(0), 0, 480)?.time).toBe(0.5);
     expect(noteUnder(voice(0), 0, 515)?.time).toBe(0.5);
     expect(noteUnder(voice(0), 0, 40)?.time).toBe(0);
+  });
+  it("reads just past a bar line as the start of that bar, both ways", () => {
+    const bars = [510];
+    expect(noteUnder(voice(0), 0, 512, bars)?.time).toBe(1);
+    expect(noteUnder(voice(1), 0, 518, bars)?.time).toBe(1);
+    // The gap before the bar line stays with the bar's last note.
+    expect(noteUnder(voice(0), 0, 505, bars)?.time).toBe(0.5);
+    const at = (staff: number, x: number): ScorePoint => ({
+      note: noteUnder(voice(staff), 0, x, bars) as ScoreNote,
+      line: 0,
+      staff,
+      x,
+      reach: reachAt(placed, 0, x),
+    });
+    // Starting 2–10 px after the bar line takes nothing from the bar before.
+    for (const offset of [2, 6, 9]) {
+      expect(slices(at(0, 510 + offset), at(0, xOf(1.25) + 5), [0])).toEqual(["F G"]);
+      expect(slices(at(0, xOf(1.25) + 5), at(0, 510 + offset), [0])).toEqual(["F G"]);
+      expect(slices(at(0, 510 + offset), at(1, xOf(1.25) + 5))).toEqual(["F G", "G,4 |"]);
+    }
+    // Ending 2–10 px either side of the bar line keeps bar 1 whole and takes nothing of bar 2.
+    // (Bar 2's first head is 10 px past the bar line in this layout, so 8 is the last gap.)
+    for (const offset of [-10, -2, 2, 8]) {
+      expect(slices(at(0, xOf(0)), at(0, 510 + offset))).toEqual(["C D E2 |", "C, D, E, F, |"]);
+    }
+  });
+  it("reads a note alone in its bar (a whole-bar rest drawn mid-bar) from the bar's start", () => {
+    const moved = placed.map((each) =>
+      each.note.voice === 1 && each.note.time === 1 ? { ...each, x: 700 } : each,
+    );
+    const spanned = spanLoneNotes(moved, new Map([[0, [510, 900]]]));
+    const rest = spanned.find((each) => each.note.voice === 1 && each.note.time === 1);
+    expect(rest?.x).toBe(522);
+    // Bar 1's notes keep their heads.
+    expect(spanned.filter((each) => each.note.time < 1).map((each) => each.x)).toEqual(
+      moved.filter((each) => each.note.time < 1).map((each) => each.x),
+    );
   });
   it("does not let a long note pull the other voice ahead of the pointer", () => {
     const anchor = point(1, xOf(0));

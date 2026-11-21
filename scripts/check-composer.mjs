@@ -3168,6 +3168,169 @@ console.log(
   "Composer: SVG and HTML book exported (the book opens offline with every tune), every tune's MIDI in one .zip: passed",
 );
 
+{
+  // Sprint C fixes 1. A subtitle (or %% lines among the header) never makes bar 1 a pickup.
+  const rulerLabels = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll("#timeline-ticks .timeline-tick span:not([hidden])")].map(
+        (label) => label.textContent,
+      ),
+    );
+  for (const [text, title, bars] of [
+    ["X:1\nT:Waltz\nT:A subtitle\nM:3/4\nL:1/4\nK:C\nC D E|F G A|\n", "Waltz", "2 bars"],
+    [
+      "X:1\nT:Élan\n%%titlefont Times 20\nT:Second title\nM:6/8\nL:1/8\nK:Am\nV:1\nV:2 clef=bass\n[V:1] A2B c2d|e2f g3|a2g f2e|d6|\n[V:2] A,,3 E,3|A,,3 C,3|D,3 A,,3|D,6|\n",
+      "Élan",
+      "4 bars",
+    ],
+    ["X:1\nT:Slip\nT:jig\nM:9/8\nL:1/8\nK:G\nGAB c2B AGE|DGG GAB d3|\n", "Slip", "2 bars"],
+  ]) {
+    await setText(text, title);
+    const summary = await page.locator("#score-summary").textContent();
+    assert(summary.includes(` · ${bars}`) && !/pickup/.test(summary), `${title}: ${summary}`);
+    const labels = await rulerLabels();
+    assert.equal(labels[0], "1", `${title}'s ruler starts at bar 1: ${labels}`);
+    assert.equal(labels.at(-1), bars.split(" ")[0], `${title}'s ruler ends on its last bar`);
+  }
+  await setText("X:1\nT:Real\nT:pickup\nM:3/4\nL:1/4\nK:C\nC|D E F|G A B|\n", "Real");
+  assert.match(await page.locator("#score-summary").textContent(), /2 bars and a pickup/);
+}
+console.log("Composer: a subtitle or %% lines never make the first bar a pickup: passed");
+
+{
+  // Sprint C fixes 2. Line up bars: [V:1] |: and !segno!|: lead their lines; the voices of each
+  // system stand in the same columns (the monospaced editor shows them so; see Sprint C 2).
+  const tune =
+    'X:3\nT:Élan\nM:6/8\nL:1/8\nK:Am\nV:1 name="Fiddle"\nV:2 clef=bass\n[V:1] A2B c2d|e2f g3|a2g f2e|d6|\n[V:2] A,,3 E,3|A,,3 C,3|D,3 A,,3|D,6|\n[V:1] |:e2e d2B|c3 A3:|\n[V:2] |:A,3 G,3|A,6:|\n';
+  await setText(tune, "Élan");
+  await menu("tunes", "Line up bars");
+  await page.locator("#notice", { hasText: /Lined up \d+ lines? in 1 tune\./ }).waitFor();
+  const columns = await page.evaluate(() => {
+    const view = window.composer.view;
+    const doc = view.state.doc;
+    return [8, 9, 10, 11].map((number) => {
+      const line = doc.line(number);
+      const lead = line.text.indexOf("|:");
+      return [...line.text.matchAll(/\|/g)]
+        .filter((match) => lead < 0 || match.index > lead + 1)
+        .map((match) => match.index);
+    });
+  });
+  assert.deepEqual(columns[0], columns[1], `the first system lines up: ${JSON.stringify(columns)}`);
+  assert.deepEqual(
+    columns[2],
+    columns[3],
+    `the second system lines up: ${JSON.stringify(columns)}`,
+  );
+  await page.locator(".notice-close").click();
+  await menu("tunes", "Line up bars");
+  await page.locator("#notice", { hasText: "Bars already line up." }).waitFor();
+  await page.locator(".notice-close").click();
+}
+console.log("Composer: lined-up bars stand in columns per system, [V:1] |: leading: passed");
+
+{
+  // Sprint C fixes 3. The ruler with jumps: every band's first bar numbered, the Coda chip
+  // always there, a gap between bands; at 1440, 1024 and 390.
+  const DS =
+    'X:1\nT:D.S. al Coda\nM:4/4\nL:1/4\nK:C\nC D E F|!segno!G A B c|d e "^To Coda"f g|a g f e|!D.S.alcoda!d c B A||!coda!G F E D|C4|]\n';
+  const DC =
+    "X:1\nT:D.C. al Fine\nM:3/4\nL:1/4\nK:G\nG A B|c B A|!fine!G3||d e f|g f e|!D.C.alfine!d3|]\n";
+  const rulerOf = (p) =>
+    p.evaluate(() => {
+      const shown = (element) =>
+        !element.hidden &&
+        getComputedStyle(element).display !== "none" &&
+        element.getBoundingClientRect().width > 0;
+      const ticks = [...document.querySelectorAll("#timeline-ticks .timeline-tick")];
+      return {
+        starts: [...document.querySelectorAll("#timeline-ticks span[data-band-start]")].map(
+          (label) => shown(label),
+        ),
+        chips: [...document.querySelectorAll(".timeline-pass-tag")]
+          .filter(shown)
+          .map((chip) => chip.textContent),
+        bands: [...document.querySelectorAll("#timeline-passes .timeline-pass")]
+          .map((band) => band.getBoundingClientRect())
+          .map((box) => [box.left, box.right]),
+        ticks: ticks.length,
+      };
+    });
+  for (const width of [1440, 1024, 390]) {
+    const context = await browser.newContext({
+      viewport: { width, height: width === 390 ? 844 : 900 },
+    });
+    watch(context);
+    const p = await context.newPage();
+    await p.goto(url);
+    await p.getByRole("button", { name: "Ode to Joy" }).first().click();
+    await p.waitForFunction(() => (window.composer.state().timeline?.notes ?? 0) > 0);
+    for (const [text, title, chips] of [
+      [DS, "D.S. al Coda", ["D.S.", ["Coda", "𝄌"]]],
+      [DC, "D.C. al Fine", ["D.C."]],
+    ]) {
+      await p.evaluate((value) => {
+        const view = window.composer.view;
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+      }, text);
+      await p.waitForFunction(
+        (name) => document.getElementById("score-summary").textContent.startsWith(name),
+        title,
+      );
+      await p.waitForTimeout(500);
+      const ruler = await rulerOf(p);
+      assert(
+        ruler.starts.length >= 1 && ruler.starts.every(Boolean),
+        `${title} at ${width}: every band's first bar is numbered`,
+      );
+      assert.equal(ruler.chips.length, chips.length, `${title} at ${width}: ${ruler.chips}`);
+      chips.forEach((chip, at) =>
+        assert([chip].flat().includes(ruler.chips[at]), `${title} at ${width}: ${ruler.chips}`),
+      );
+      for (let at = 1; at < ruler.bands.length; at++)
+        assert(
+          ruler.bands[at][0] - ruler.bands[at - 1][1] >= 1.5,
+          `${title} at ${width}: a gap between bands ${JSON.stringify(ruler.bands)}`,
+        );
+    }
+    await context.close();
+  }
+}
+console.log(
+  "Composer: rulers with jumps number each band, keep the Coda chip and a gap at 1440, 1024 and 390: passed",
+);
+
+{
+  // Sprint C fixes 5 and 6. Tune-book commands say what they did; Enter confirms a dialog.
+  const book =
+    "X:7\nT:The Swallowtail\nK:Em\nGEE BEE|\n\nX:3\nT:Banish Misfortune\nK:Dmix\nfed cAG|\n\nX:12\nT:Àfter the Fair\nK:D\nDFA|\n";
+  await setText(book, "The Swallowtail");
+  await menu("tunes", "Sort tunes…");
+  await page.locator("#sort-tunes[open]").waitFor();
+  await page.keyboard.press("Enter");
+  await page.locator("#notice", { hasText: "Sorted 3 tunes by title." }).waitFor();
+  assert.match(await docText(), /^X:12\nT:Àfter the Fair/);
+  await page.locator(".notice-close").click();
+  await menu("tunes", "Renumber X: 1…n");
+  await page.locator("#notice", { hasText: "Renumbered 3 tunes (X:1–3)." }).waitFor();
+  await page.locator(".notice-close").click();
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf("Banish") } });
+  });
+  await menu("tunes", "Duplicate tune");
+  await page.locator("#notice", { hasText: "Duplicated Banish Misfortune as X:4." }).waitFor();
+  await page.locator(".notice-close").click();
+  await menu("tunes", "Incipits…");
+  await page.locator("#incipits[open]").waitFor();
+  await page.keyboard.press("Enter");
+  await page.locator("#notice", { hasText: "Made incipits of 4 tunes" }).waitFor();
+  await page.locator(".notice-close").click();
+}
+console.log(
+  "Composer: tune-book commands say what they did; Enter confirms Sort and Incipits: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

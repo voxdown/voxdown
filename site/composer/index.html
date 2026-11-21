@@ -82,10 +82,10 @@
       <div id="start" class="start" hidden>
         <div class="start-inner">
           <h2>Write music<br>as plain text.</h2>
-          <p>ABC is a small notation for melodies: letters for notes, bar lines for bars. Type your tune; the score draws itself as you go, and each note sounds as you type it (you can turn that off in the Play menu). Everything stays in this browser until you save it.</p>
+          <p>ABC is a small notation for melodies: letters for notes, bar lines for bars. Type your tune; the score draws itself as you go, and each note sounds as you type it (you can turn that off in the Play menu). Coming from MuseScore, Dorico or Finale? Open its MusicXML export here. Everything stays in this browser until you save it.</p>
           <div class="start-actions">
             <button id="start-new" class="primary" type="button">Start a new tune</button>
-            <button id="start-open" type="button">Open a file…</button>
+            <button id="start-open" type="button">Open ABC or MusicXML…</button>
           </div>
           <p class="start-label">Or begin from an example:</p>
           <div id="examples" class="examples"></div>
@@ -118,7 +118,7 @@
           <div id="score-cursor" class="score-cursor" aria-hidden="true" hidden></div>
           <div id="score" class="score" aria-hidden="true"></div>
           <div id="score-stage" class="score-stage" aria-hidden="true"></div>
-          <p id="score-empty" class="score-empty" hidden>Write a tune with an <code>X:</code> line and a <code>K:</code> line, then notes. The score draws itself here.</p>
+          <p id="score-empty" class="score-empty" hidden>Write a tune with an <code>X:</code> line and a <code>K:</code> line, then notes, or open a MusicXML file. The score draws itself here.</p>
         </div>
         <p id="score-live" class="sr-only" aria-live="polite"></p>
       </section>
@@ -162,7 +162,7 @@
       <span id="position" class="caret-position">Line 1</span>
     </footer>
   </main>
-  <input id="file" type="file" accept=".abc,.txt,text/plain,text/vnd.abc" hidden>
+  <input id="file" type="file" accept=".abc,.txt,.musicxml,.xml,.mxl,text/plain,text/vnd.abc,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml" hidden>
   <div id="focus-controls" class="focus-controls" role="group" aria-label="Focus" hidden>
     <button id="focus-score" type="button" aria-pressed="true" title="Show the score while focusing">Score</button>
     <button id="focus-exit" type="button" title="Exit focus: Escape also leaves">Exit focus</button>

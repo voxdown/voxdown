@@ -57,4 +57,10 @@ describe("zip archives", () => {
     expect(() => readZip(zip)).toThrow(/zip64/);
     expect(() => readZip(encode("not a zip at all, just some words"))).toThrow(ZipError);
   });
+  it("reads a real deflated .mxl, as MuseScore writes it", async () => {
+    const bytes = new Uint8Array(readFileSync("test/fixtures/musicxml/twinkle-two-parts.mxl"));
+    const documents = await mxlDocuments(bytes);
+    expect(documents.map((document) => document.name)).toEqual(["score.musicxml"]);
+    expect(documents[0]?.text).toBe(fixture("twinkle-two-parts.musicxml"));
+  });
 });

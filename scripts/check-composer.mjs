@@ -124,6 +124,12 @@ const abcjsChunk = readdirSync(resolve(dist, "assets")).find(
 );
 assert(abcjsChunk, "abcjs is a chunk of its own");
 assert(!served.has(`/assets/${abcjsChunk}`), "abcjs waits until there is a tune to draw");
+// Sprint B: the MusicXML converter loads on first use, never in the first view.
+assert(
+  ![...served.keys()].some((path) => /musicxml/i.test(path)),
+  "the MusicXML converter is not in the first view",
+);
+assert(firstView < 720 * 1024, `the first view stays light (${(firstView / 1024).toFixed(0)} KB)`);
 console.log(
   `Composer: start screen, ${(firstView / 1024).toFixed(0)} KB served uncompressed, no abcjs or samples: passed`,
 );
@@ -2556,6 +2562,63 @@ console.log(
 }
 console.log(
   "Composer: ( is not paired in music; endings and fields type as written; broken rhythm restores its gaps: passed",
+);
+
+{
+  // Sprint B. MusicXML in: an .mxl and a .musicxml with two parts and lyrics open as new drafts
+  // that draw, play and have no problems, with a report; a malformed file says why.
+  const fixtures = resolve("site/test/fixtures/musicxml");
+  const importFile = async (name) => {
+    await page.locator("#file").setInputFiles(resolve(fixtures, name));
+  };
+  for (const name of ["twinkle-two-parts.mxl", "twinkle-two-parts.musicxml"]) {
+    await importFile(name);
+    const dialog = page.locator("#import-report[open]");
+    await dialog.waitFor();
+    assert.match(
+      await dialog.textContent(),
+      /Imported “Twinkle, Twinkle, Little Star”: 2 parts, 8 bars\. Left out: page layout\./,
+    );
+    assert.match(await dialog.textContent(), /Page layout \(margins, spacing, fonts, credits\)/);
+    await dialog.getByRole("button", { name: "OK" }).click();
+    assert.match(await docText(), /^X:1\nT:Twinkle, Twinkle, Little Star\n/);
+    assert.equal(await page.locator("#name").inputValue(), "Twinkle, Twinkle, Little Star.abc");
+    await drawn();
+    await settle(600);
+    assert.equal(
+      await page.evaluate(() => window.composer.scoreIndex().voices.length),
+      2,
+      `${name}: two voices`,
+    );
+    assert(
+      (await page.locator("#score .abcjs-lyric").count()) >= 14,
+      `${name}: the lyrics are drawn`,
+    );
+    await page.waitForFunction(() => document.getElementById("problems").hidden, null, {
+      timeout: 3000,
+    });
+    await page.locator("#score-scroll").focus();
+    await page.keyboard.press("Control+Enter");
+    await page.waitForFunction(() => window.composer.state().lit > 0);
+    await page.keyboard.press("Control+Period");
+  }
+  assert(
+    [...served.keys()].some((path) => /musicxml/i.test(path)),
+    "the converter loaded when it was needed",
+  );
+  // A malformed file: a plain error, and the draft that was open stays.
+  const before = await docText();
+  await importFile("malformed.musicxml");
+  await page.locator("#notice", { hasText: "could not be imported" }).waitFor();
+  assert.match(
+    await page.locator("#notice").textContent(),
+    /malformed\.musicxml could not be imported\. This file is not well-formed XML/,
+  );
+  assert.equal(await docText(), before, "nothing replaced");
+  await page.locator(".notice-close").click();
+}
+console.log(
+  "Composer: .mxl and .musicxml open as drafts that draw, play and pass the checks, with a report; a malformed file says why: passed",
 );
 
 const phone = await browser.newContext({

@@ -81,6 +81,7 @@ import {
   spanRegion,
   tuneSource,
 } from "./score";
+import { isScoreFile } from "./score-files";
 import { type SourceFile, abcName, encodeText, newSource, readBytes, readText } from "./source";
 import {
   claimDraft,
@@ -3516,6 +3517,11 @@ async function openFile() {
     if (local.canOpen) {
       const picked = await local.pick();
       if (!picked) return;
+      // A MusicXML score becomes a new ABC draft; it is never linked, so Save writes ABC elsewhere.
+      if (isScoreFile(picked.name, picked.bytes)) {
+        void importScore(picked.bytes, picked.name);
+        return;
+      }
       openBytes(picked.bytes, picked.name);
       local.connect(picked.handle, picked.bytes);
       void keepLink(picked.bytes);
@@ -3529,6 +3535,10 @@ async function openFile() {
   $<HTMLInputElement>("file").click();
 }
 function openBytes(bytes: Uint8Array, name: string) {
+  if (isScoreFile(name, bytes)) {
+    void importScore(bytes, name);
+    return;
+  }
   try {
     const file = readBytes(bytes);
     local.disconnect();
@@ -3556,12 +3566,101 @@ document.addEventListener("drop", async (event) => {
   const file = event.dataTransfer?.files[0];
   if (!file) return;
   event.preventDefault();
-  if (!/\.(abc|txt)$/i.test(file.name) && file.type && !file.type.startsWith("text/")) {
-    notice("Composer opens ABC text files (.abc or .txt).");
+  if (
+    !/\.(abc|txt|musicxml|xml|mxl)$/i.test(file.name) &&
+    file.type &&
+    !file.type.startsWith("text/")
+  ) {
+    notice("Composer opens ABC text (.abc, .txt) and MusicXML (.musicxml, .xml, .mxl).");
     return;
   }
   openBytes(new Uint8Array(await file.arrayBuffer()), file.name);
 });
+
+/*
+ * MusicXML import: the converter loads on first use, reads the file into ABC, and the result
+ * opens as a new draft (the file it came from is never written to), with a report of what was
+ * brought in and what was left out.
+ */
+let importing = false;
+async function importScore(bytes: Uint8Array, name: string) {
+  if (importing) return;
+  importing = true;
+  const status = $("explain");
+  status.textContent = `Reading ${name}…`;
+  try {
+    const musicxml = await import("./musicxml");
+    let shown = -1;
+    const result = await musicxml.readScore(bytes, (done, total) => {
+      const percent = total ? Math.round((done / total) * 100) : 0;
+      if (percent !== shown) {
+        shown = percent;
+        status.textContent = `Importing ${name}: ${percent}%`;
+      }
+    });
+    local.disconnect();
+    load(newSource(result.text), abcName(result.report.title));
+    void persist();
+    status.textContent = musicxml.describeReport(result.report);
+    showImportReport(result.report, name, musicxml.describeReport(result.report));
+  } catch (error) {
+    status.textContent = "Ready";
+    noticeError(
+      error instanceof Error && error.message
+        ? `${name} could not be imported. ${error.message}`
+        : `${name} could not be imported.`,
+    );
+  } finally {
+    importing = false;
+  }
+}
+const importDialog = createDialog("import-report", "Imported from MusicXML");
+function showImportReport(
+  report: import("./musicxml").ImportReport,
+  name: string,
+  summary: string,
+) {
+  const body = importDialog.body;
+  body.replaceChildren();
+  const lead = document.createElement("p");
+  lead.textContent = summary;
+  const source = document.createElement("p");
+  source.className = "hint";
+  source.textContent = `From ${name}. It is now ABC text in a new draft: the score above is drawn from it, and ${name} is left as it was.`;
+  body.append(lead, source);
+  const section = (title: string, items: string[]) => {
+    if (!items.length) return;
+    const heading = document.createElement("h3");
+    heading.textContent = title;
+    const list = document.createElement("ul");
+    list.className = "import-list";
+    for (const item of items) {
+      const entry = document.createElement("li");
+      entry.textContent = item;
+      list.append(entry);
+    }
+    body.append(heading, list);
+  };
+  section(
+    "Left out",
+    report.dropped.map((item) =>
+      item.label === "page layout"
+        ? "Page layout (margins, spacing, fonts, credits)"
+        : `${item.count} ${item.label}`,
+    ),
+  );
+  section("Good to know", report.notes);
+  const done = document.createElement("button");
+  done.type = "button";
+  done.className = "primary";
+  done.textContent = "OK";
+  done.addEventListener("click", () => importDialog.close());
+  const row = document.createElement("div");
+  row.className = "dialog-actions";
+  row.append(done);
+  body.append(row);
+  importDialog.open();
+}
 
 async function save(saveAs = false) {
   const name = abcName(nameInput.value);
@@ -4163,7 +4262,7 @@ const menus = mountMenus(
   {
     file: () => [
       { label: "New tune file", run: newFile, shortcut: "" },
-      { label: "Open…", run: () => void openFile(), shortcut: "Mod O" },
+      { label: "Open ABC or MusicXML…", run: () => void openFile(), shortcut: "Mod O" },
       { label: "Recent…", run: () => void recentMenu($("file-menu")) },
       {
         label: "Examples",

@@ -129,6 +129,10 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
     ],
     note: "A region selects its text in each voice. Play, loop, transpose, change lengths, copy or delete it.",
   },
+  {
+    title: "Coming from MuseScore or Dorico?",
+    note: "Export MusicXML there (File › Export › MusicXML, .musicxml or .mxl) and open it here: it becomes ABC text in a new draft. Notes, rests, chords, ties, slurs, tuplets, grace notes, beams, keys, meters, clefs, voices and staves, repeats and endings, dynamics, hairpins, articulations, ornaments, chord symbols, words, lyrics, title, composer and tempo carry over. Page layout, fingerings, pedal marks, guitar notation and other specialist marks do not, and the import report lists each. File › Export MusicXML… sends a tune back.",
+  },
 ];
 
 export function cheatsheet(): HTMLElement {

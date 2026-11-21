@@ -29,6 +29,17 @@ export type SaveResult =
   | { status: "error"; message: string };
 
 const TYPES = [{ description: "ABC music", accept: { "text/plain": [".abc", ".txt"] } }];
+/** Opening also takes MusicXML, which becomes a new ABC draft. */
+const OPEN_TYPES = [
+  {
+    description: "ABC or MusicXML",
+    accept: {
+      "text/plain": [".abc", ".txt"],
+      "application/vnd.recordare.musicxml+xml": [".musicxml", ".xml"],
+      "application/vnd.recordare.musicxml": [".mxl"],
+    },
+  },
+];
 
 function equal(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
@@ -86,7 +97,7 @@ export class LocalFiles {
   async pick(): Promise<{ handle: FileHandleLike; bytes: Uint8Array; name: string } | null> {
     if (!this.openPicker) return null;
     try {
-      const [handle] = await this.openPicker({ multiple: false, types: TYPES });
+      const [handle] = await this.openPicker({ multiple: false, types: OPEN_TYPES });
       if (!handle) return null;
       const file = await handle.getFile();
       return { handle, bytes: new Uint8Array(await file.arrayBuffer()), name: handle.name };

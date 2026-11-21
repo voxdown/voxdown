@@ -2624,3 +2624,16 @@ dialog.composer-dialog[open]::backdrop {
 #writing .zoom-badge {
   top: 10px;
 }
+
+/* The MusicXML import report: what came in, what was left out. */
+#import-report h3 {
+  margin: 14px 0 4px;
+  font: 650 13.5px / 1.3 var(--story);
+  color: var(--accent);
+}
+.import-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}

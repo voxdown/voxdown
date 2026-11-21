@@ -107,7 +107,6 @@ export class Player {
   private audio: AudioContext | null = null;
   private graph: Graph | null = null;
   private samples = new Map<InstrumentId, Map<number, Sample>>();
-  private loading = new Map<InstrumentId, Promise<void>>();
   private main: Timeline | null = null;
   private current: Timeline | null = null;
   private loop = false;
@@ -127,69 +126,99 @@ export class Player {
 
   /** Starts loading the chosen instrument (after a user gesture shows intent to listen). */
   warm(): Promise<void> {
-    return this.load(this.instrument);
+    return this.load(this.instrument, this.needed(this.instrument, this.hint));
   }
+  /** Pitches of the tune on screen: their samples load first. */
+  hint: number[] = [];
 
   ready(id: InstrumentId = this.instrument): boolean {
     return (this.samples.get(id)?.size ?? 0) === INSTRUMENTS[id].notes.length;
   }
 
-  load(id: InstrumentId): Promise<void> {
-    if (this.ready(id)) return Promise.resolve();
-    const existing = this.loading.get(id);
+  private sampleTasks = new Map<string, Promise<void>>();
+  private decoder: OfflineAudioContext | null = null;
+  private soundCache: Promise<Cache | null> | null = null;
+
+  private loadSample(id: InstrumentId, midi: number): Promise<void> {
+    const key = `${id}:${midi}`;
+    const existing = this.sampleTasks.get(key);
     if (existing) return existing;
-    const def = INSTRUMENTS[id];
-    const started = performance.now();
-    const map = new Map<number, Sample>();
-    let done = 0;
-    const decoder = new OfflineAudioContext(1, 1, 44100);
-    const report = () =>
-      this.onLoading(
-        done < def.notes.length
-          ? `Loading ${def.label.toLowerCase()}… ${Math.round((done / def.notes.length) * 100)}%`
-          : "",
-      );
-    report();
+    this.decoder ??= new OfflineAudioContext(1, 1, 44100);
+    this.soundCache ??= ("caches" in globalThis ? caches.open(CACHE) : Promise.resolve(null)).catch(
+      () => null,
+    );
+    const decoder = this.decoder;
     const task = (async () => {
-      let cache: Cache | null = null;
-      try {
-        cache = "caches" in globalThis ? await caches.open(CACHE) : null;
-      } catch {
-        cache = null;
+      const cache = await this.soundCache;
+      const url = sampleUrl(id, midi, this.base);
+      let response = cache ? await cache.match(url).catch(() => undefined) : undefined;
+      if (!response) {
+        response = await fetch(url, { credentials: "same-origin" });
+        if (!response.ok) throw new Error(`Sample ${midi} could not be loaded.`);
+        if (cache) await cache.put(url, response.clone()).catch(() => undefined);
       }
-      await Promise.all(
-        def.notes.map(async (midi) => {
-          const url = sampleUrl(id, midi, this.base);
-          let response = cache ? await cache.match(url).catch(() => undefined) : undefined;
-          if (!response) {
-            response = await fetch(url, { credentials: "same-origin" });
-            if (!response.ok) throw new Error(`Sample ${midi} could not be loaded.`);
-            if (cache) await cache.put(url, response.clone()).catch(() => undefined);
-          }
-          const buffer = await decoder.decodeAudioData(await response.arrayBuffer());
-          map.set(midi, { buffer });
-          done += 1;
-          report();
-        }),
-      );
-      this.samples.set(id, map);
-      if (id === this.instrument && !this.metrics.coldLoad)
-        this.metrics.coldLoad = performance.now() - started;
+      const buffer = await decoder.decodeAudioData(await response.arrayBuffer());
+      let map = this.samples.get(id);
+      if (!map) {
+        map = new Map();
+        this.samples.set(id, map);
+      }
+      map.set(midi, { buffer });
+      this.report(id);
     })();
-    this.loading.set(id, task);
+    this.sampleTasks.set(key, task);
+    task.catch(() => this.sampleTasks.delete(key));
+    return task;
+  }
+
+  private report(id: InstrumentId) {
+    const def = INSTRUMENTS[id];
+    const done = this.samples.get(id)?.size ?? 0;
+    this.onLoading(
+      done < def.notes.length && (this.status === "loading" || id === this.instrument)
+        ? `Loading ${def.label.toLowerCase()}… ${Math.round((done / def.notes.length) * 100)}%`
+        : "",
+    );
+  }
+
+  /** The samples a set of pitches needs. */
+  private needed(id: InstrumentId, pitches: Iterable<number>): number[] {
+    return [...new Set([...pitches].map((pitch) => nearestSample(INSTRUMENTS[id], pitch)))];
+  }
+
+  /**
+   * Loads an instrument; the samples `first` needs are asked for first, so playback can start as
+   * soon as they arrive while the rest follow.
+   */
+  load(id: InstrumentId, first: number[] = []): Promise<void> {
+    if (this.ready(id)) return Promise.resolve();
+    const def = INSTRUMENTS[id];
+    this.report(id);
+    // The rest wait for the first, so they do not share the connection with them.
+    const task = Promise.all(first.map((midi) => this.loadSample(id, midi)))
+      .then(() => Promise.all(def.notes.map((midi) => this.loadSample(id, midi))))
+      .then(() => undefined);
     task.then(
-      () => {
-        this.loading.delete(id);
-        this.onLoading("");
-      },
-      () => {
-        this.loading.delete(id);
+      () => this.onLoading(""),
+      () =>
         this.onLoading(
           `The ${def.label.toLowerCase()} could not load. Check your connection and try again.`,
-        );
-      },
+        ),
     );
     return task;
+  }
+
+  /** Waits only for the samples these pitches need. */
+  async ensure(pitches: Iterable<number>, id: InstrumentId = this.instrument): Promise<void> {
+    const needed = this.needed(id, pitches);
+    const all = this.load(id, needed);
+    all.catch(() => {});
+    await Promise.all(needed.map((midi) => this.loadSample(id, midi)));
+  }
+
+  private has(pitches: Iterable<number>, id: InstrumentId = this.instrument): boolean {
+    const map = this.samples.get(id);
+    return this.needed(id, pitches).every((midi) => map?.has(midi));
   }
 
   async setInstrument(id: InstrumentId) {
@@ -288,12 +317,15 @@ export class Player {
     const context = this.ensureContext();
     const timeline = options.region ?? this.main;
     if (!timeline) return;
-    if (!this.ready()) {
+    const pitches = timeline.notes.map((note) => note.pitch);
+    if (!this.has(pitches)) {
       this.pending = options;
       this.status = "loading";
       this.onChange();
+      const started = performance.now();
       try {
-        await this.load(this.instrument);
+        await this.ensure(pitches);
+        if (!this.metrics.coldLoad) this.metrics.coldLoad = performance.now() - started;
       } catch {
         this.status = "stopped";
         this.onChange();
@@ -377,8 +409,9 @@ export class Player {
 
   /** Sounds a note or chord briefly, for hearing as you write. */
   audition(pitches: number[], velocity = 62, seconds = 0.42) {
-    if (!pitches.length || this.status === "playing" || !this.ready()) {
-      if (!this.ready()) void this.warm();
+    if (!pitches.length || this.status === "playing") return;
+    if (!this.has(pitches)) {
+      void this.ensure(pitches).catch(() => {});
       return;
     }
     const context = this.ensureContext();
@@ -533,8 +566,14 @@ export class Player {
     audition: boolean,
   ) {
     const def = INSTRUMENTS[this.instrument];
-    const sampleMidi = nearestSample(def, pitch);
-    const sample = this.samples.get(this.instrument)?.get(sampleMidi);
+    const loaded = this.samples.get(this.instrument);
+    let sampleMidi = nearestSample(def, pitch);
+    // While the rest of an instrument is still arriving, borrow the nearest sample already here.
+    if (!loaded?.has(sampleMidi) && loaded?.size)
+      sampleMidi = [...loaded.keys()].reduce((best, midi) =>
+        Math.abs(midi - pitch) < Math.abs(best - pitch) ? midi : best,
+      );
+    const sample = loaded?.get(sampleMidi);
     if (!sample) return;
     const context = graph.context;
     const source = context.createBufferSource();

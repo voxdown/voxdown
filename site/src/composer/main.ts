@@ -575,6 +575,7 @@ function updateSummary() {
 
 /* Playback data. */
 let tempoOverride: number | null = null;
+let tempoTune = -1;
 function buildPlayback(index: ScoreIndex) {
   const visual = index.visual;
   if (!visual) return;
@@ -600,9 +601,15 @@ function buildPlayback(index: ScoreIndex) {
     pickup: visual.getPickupLength?.() || 0,
     voices: index.voices.map((voice) => voice.name),
   };
+  // A tempo set by hand belongs to the tune it was set for.
+  if (index.tune.from !== tempoTune) {
+    tempoTune = index.tune.from;
+    tempoOverride = null;
+  }
   // Times in the description are whole notes at the starting tempo.
   timeline = buildTimeline(audio, meta, index.toDocument, lookup);
   player.setTimeline(timeline);
+  player.hint = [...new Set(timeline.notes.map((note) => note.pitch))];
   if (player.loopingRegion && loopRegion) {
     const next = regionTimelineFor(loopRegion);
     if (next) player.setRegion(next);
@@ -1260,7 +1267,9 @@ function playbackFrame() {
   const playing = player.status === "playing";
   if (line && scoreIndex) {
     const position = player.position();
-    const { notes, index } = soundingAt(line, Math.max(0, position), scanIndex);
+    // Nothing is lit during a count-in.
+    const { notes, index } =
+      position < 0 ? { notes: [], index: scanIndex } : soundingAt(line, position, scanIndex);
     scanIndex = index;
     const key = playing ? notes.map((note) => note.start).join(",") : "";
     if (key !== playingKey) {

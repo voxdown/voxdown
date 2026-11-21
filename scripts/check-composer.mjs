@@ -204,7 +204,7 @@ const warm = Date.now() - warmPress;
 const latency = (await state()).metrics.startLatency;
 await page.locator("#stop").click();
 console.log(
-  `Composer: playback schedules audio and the lit note advances; first sound ${cold} ms cold (samples loading), ${warm} ms warm (${latency.toFixed(0)} ms in the page): passed`,
+  `Composer: playback schedules audio and the lit note advances; first Play scheduled in ${cold} ms, a second in ${warm} ms (${latency.toFixed(0)} ms in the page): passed`,
 );
 
 /* 5. Play from the caret, and tempo. */

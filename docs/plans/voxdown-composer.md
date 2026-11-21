@@ -182,3 +182,27 @@ Measured with throwaway Playwright scripts (not committed) and the browser check
 - Desktop Chromium and emulated phone checks do not replace real iPhone/Android Safari, Firefox and
   screen-reader testing, which come before promotion. Safari's audio latency and MP3 decoding need
   a real-device pass.
+
+## Polish round 2 (after round 1: Codex 7.8, Claude 8.2)
+
+Fixed: named decorations are always `!name!` (only `.` and `~` are bare), so `!p!`/`!f!` no
+longer become notes; ties join same-pitch neighbours only, otherwise the next note when equal, or
+a notice says why; the menu bar switches on click and closes with Escape; View › Work offline is
+reachable and preparing also keeps the instrument (offline stays opt-in, as in Studio); Loop is a
+mode; count-in shows its beats and the metronome button pulses; WAV exports are normalised to
+−1 dBFS. Editor: no selection-match highlight; completions in the editor's type, ordered by use.
+Text ≥ 12 px (tick labels 11 px). Copy: broken rhythm and tuplets as played, bars versus problems,
+dates in words, directives styled as directives. Header: the saved state follows the name, and
+notices float without moving the workspace. Start screen: tools at rest, layout-neutral copy, the
+score's tempo style (♩ = 104). Keyboard: skip to the tune, one Tab stop each for the menu bar,
+toolbar and transport (a fresh visit reaches the editor in 12 stops), and score keys that announce
+the note, bar and voice, with ↑/↓ for voices and Home/End along the line. Phone: a More menu, a
+closable tunes panel, 40 px targets and a one-row transport.
+
+Redraws: edits that keep the bar count and width reuse abcjs's chosen line breaks (one engraving
+pass instead of measure, wrap, re-parse and draw), the reader's place is read before engraving,
+and the new score goes in on the next task. On a 200-bar tune, typing and edits while playing
+now take a 30–48 ms engraving task and a 4–11 ms placing task (was one 60–70 ms task). Opening a
+long tune, or adding or removing bars, still does the full two-pass wrap (≈ 62–66 ms there).
+Breaks are not refreshed while bars only change inside; a bar that grows a lot keeps its line
+until the bar count or width changes.

@@ -1,5 +1,5 @@
 import "./composer.css";
-import { redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
+import { isolateHistory, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
 import { EditorSelection, type EditorState, Prec, type TransactionSpec } from "@codemirror/state";
 import { EditorView, type KeyBinding, type ViewUpdate } from "@codemirror/view";
 import { frac, lineKind, parseKey } from "./abc";
@@ -33,6 +33,7 @@ import {
 } from "./editor";
 import { EXAMPLES, NEW_TUNE } from "./examples";
 import { describeKey, describeMeter, explainAt } from "./explain";
+import { barIsFull, nearestOctave } from "./helpers";
 import { INSTRUMENTS, INSTRUMENT_ORDER, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
 import { checkLyrics } from "./lyriccheck";
@@ -148,6 +149,9 @@ type Prefs = {
   look: string;
   /** Whether Focus keeps the score beside the text. */
   focusScore: boolean;
+  /** Typing helpers, off unless chosen in Edit › Typing helpers. */
+  barOnSpace: boolean;
+  autoOctave: boolean;
 };
 const PREFS_KEY = "vxd-composer-prefs";
 const prefs: Prefs = (() => {
@@ -165,6 +169,8 @@ const prefs: Prefs = (() => {
     textShare: 42,
     look: "auto",
     focusScore: true,
+    barOnSpace: false,
+    autoOctave: false,
   };
   try {
     const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
@@ -451,6 +457,93 @@ const typedMarks = Prec.highest(
     return typeMark(target, typed);
   }),
 );
+/*
+ * Typing helpers (Edit › Typing helpers, off by default). Each writes what was typed first, then
+ * its change as a separate undo step, so undo goes back to exactly what was typed.
+ */
+let lastOctave: { at: number; typed: string; written: string } | null = null;
+function helperOnce(key: string, message: string) {
+  try {
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+  } catch {
+    /* Without storage it may be said again next visit. */
+  }
+  notice(message, "info", { holdThroughEdits: 6000 });
+}
+const typingHelpers = Prec.highest(
+  EditorView.inputHandler.of((target, from, to, typed) => {
+    if (target.composing || target.compositionStarted) return false;
+    const state = target.state;
+    if (state.selection.ranges.length !== 1 || from !== to || !state.selection.main.empty)
+      return false;
+    const doc = state.doc.toString();
+    const file = state.field(fileIndexField);
+    // A field name typed at the start of a line ("C:") keeps the letter as it was typed.
+    if (typed === ":" && lastOctave && lastOctave.at + lastOctave.written.length === from) {
+      const line = state.doc.lineAt(lastOctave.at);
+      if (line.from === lastOctave.at) {
+        target.dispatch({
+          changes: { from: lastOctave.at, to: from, insert: `${lastOctave.typed}:` },
+          selection: { anchor: lastOctave.at + 2 },
+          userEvent: "input.type",
+        });
+        lastOctave = null;
+        return true;
+      }
+    }
+    lastOctave = null;
+    if (typed === " " && prefs.barOnSpace && barIsFull(doc, from, file)) {
+      target.dispatch({
+        changes: { from, insert: " " },
+        selection: { anchor: from + 1 },
+        userEvent: "input.type",
+      });
+      target.dispatch({
+        changes: { from: from + 1, insert: "| " },
+        selection: { anchor: from + 3 },
+        userEvent: "input.helper",
+        annotations: isolateHistory.of("full"),
+      });
+      helperOnce(
+        "vxd-composer-helper-bar",
+        `The bar was full, so Space wrote a bar line. Undo (${shortcutLabel("Mod Z")}) takes it back; Edit › Typing helpers turns this off.`,
+      );
+      return true;
+    }
+    if (prefs.autoOctave && /^[A-Ga-g]$/.test(typed)) {
+      const written = nearestOctave(doc, from, typed, file);
+      if (!written || written === typed) return false;
+      target.dispatch({
+        changes: { from, insert: typed },
+        selection: { anchor: from + 1 },
+        userEvent: "input.type",
+      });
+      target.dispatch({
+        changes: { from, to: from + 1, insert: written },
+        selection: { anchor: from + written.length },
+        userEvent: "input.helper",
+        annotations: isolateHistory.of("full"),
+      });
+      lastOctave = { at: from, typed, written };
+      helperOnce(
+        "vxd-composer-helper-octave",
+        `${typed} became ${written}, the octave nearest the note before (Shift takes the other side). Undo keeps what you typed; Edit › Typing helpers turns this off.`,
+      );
+      return true;
+    }
+    return false;
+  }),
+);
+function setHelper(key: "barOnSpace" | "autoOctave", on: boolean) {
+  prefs[key] = on;
+  savePrefs();
+  notice(
+    `${key === "barOnSpace" ? "Bar line on Space when the bar is full" : "Automatic octave"}: ${on ? "on" : "off"}.`,
+    "success",
+  );
+}
+
 /** A mark typed over selected music, from the text or the score; false when it is just typing. */
 function typeMark(target: EditorView, typed: string): boolean {
   const state = target.state;
@@ -501,7 +594,12 @@ function makeState(text: string): EditorState {
   return editorState(text, {
     onUpdate: safeUpdate,
     keys,
-    extra: [copyVoices, typedMarks, EditorView.exceptionSink.of((error) => recoverEditor(error))],
+    extra: [
+      copyVoices,
+      typedMarks,
+      typingHelpers,
+      EditorView.exceptionSink.of((error) => recoverEditor(error)),
+    ],
   });
 }
 
@@ -3917,6 +4015,21 @@ const menus = mountMenus(
       },
       "-",
       { label: "Find and replace…", run: openFind, shortcut: "Mod F" },
+      {
+        label: "Typing helpers",
+        submenu: () => [
+          {
+            label: "Bar line on Space when the bar is full",
+            run: () => setHelper("barOnSpace", !prefs.barOnSpace),
+            checked: () => prefs.barOnSpace,
+          },
+          {
+            label: "Automatic octave",
+            run: () => setHelper("autoOctave", !prefs.autoOctave),
+            checked: () => prefs.autoOctave,
+          },
+        ],
+      },
       { label: "Next bar or problem to check", run: () => stepProblem(1), shortcut: "F8" },
       {
         label: "Previous bar or problem to check",

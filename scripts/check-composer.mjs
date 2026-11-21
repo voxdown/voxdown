@@ -2169,6 +2169,63 @@ console.log(
   "Composer: Ctrl click and Ctrl drag select in several places; . marks only them; Ctrl arrows and Ctrl Space: passed",
 );
 
+{
+  // Sprint A 3. Typing helpers, off until chosen: a bar line on Space after a full bar, and the
+  // nearest octave for a typed letter. Each says once what it did; undo returns what was typed.
+  await page.locator('[data-menu="file"]').click();
+  await page.getByRole("menuitem", { name: "New tune file" }).click();
+  await page.waitForFunction(() => document.getElementById("name").value === "Untitled.abc");
+  const typeAtEnd = async (keys) => {
+    await page.locator(".cm-content").focus();
+    await page.evaluate(() => {
+      const view = window.composer.view;
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+    });
+    await page.keyboard.type(keys);
+  };
+  const lastLine = async () => (await docText()).trimEnd().split("\n").at(-1);
+  await typeAtEnd("L:1/4\nC D E F ");
+  assert.equal(await lastLine(), "C D E F", "off by default");
+  for (const name of ["Bar line on Space when the bar is full", "Automatic octave"]) {
+    await page.locator('[data-menu="edit"]').click();
+    await page.getByRole("menuitem", { name: "Typing helpers" }).click();
+    await page.getByRole("menuitemcheckbox", { name }).click();
+  }
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({
+      changes: { from: view.state.doc.length - 1, to: view.state.doc.length, insert: "" },
+    });
+  });
+  await typeAtEnd(" ");
+  assert.equal(
+    await docText().then((text) => text.endsWith("C D E F | ")),
+    true,
+    "Space wrote the bar line",
+  );
+  await page.locator("#notice", { hasText: "Space wrote a bar line" }).waitFor();
+  await page.keyboard.press("Control+z");
+  assert((await docText()).endsWith("C D E F "), "undo takes just the bar line back");
+  // After F, a typed "a" is the A just above it; undo keeps the "a" as typed.
+  await page.keyboard.type("| a");
+  assert((await docText()).endsWith("C D E F | A"), `nearest octave: ${await lastLine()}`);
+  await page.locator("#notice", { hasText: "the octave nearest the note before" }).waitFor();
+  await page.keyboard.press("Control+z");
+  assert((await docText()).endsWith("| a"), "undo returns what was typed");
+  // From that a (A5), g is the G just below; Shift takes the G above instead.
+  await page.keyboard.type(" g G");
+  assert((await docText()).endsWith("| a g g'"), `nearest and other side: ${await lastLine()}`);
+  // Off again, for what follows.
+  for (const name of ["Bar line on Space when the bar is full", "Automatic octave"]) {
+    await page.locator('[data-menu="edit"]').click();
+    await page.getByRole("menuitem", { name: "Typing helpers" }).click();
+    await page.getByRole("menuitemcheckbox", { name }).click();
+  }
+}
+console.log(
+  "Composer: typing helpers write a bar line on Space and the nearest octave; undo returns the typing: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

@@ -68,8 +68,11 @@ export function writeMidi(
   const meter: number[] = [];
   if (timeline.bar > 0) {
     // The bar as a time signature: in beats of the tune's beat where they divide it evenly.
-    const den = Math.round(1 / beat);
-    const num = Math.round(timeline.bar / beat);
+    // A dotted beat (6/8, 9/8, 12/8) counts the eighths it holds.
+    const whole = (x: number) => Math.abs(x - Math.round(x)) < 1e-6;
+    const dotted = !whole(1 / beat) && whole(3 / beat);
+    const den = dotted ? Math.round(3 / beat) : Math.round(1 / beat);
+    const num = Math.round(timeline.bar * den);
     if (num > 0 && num < 256 && [1, 2, 4, 8, 16, 32].includes(den))
       meter.push(0, 0xff, 0x58, 4, num, Math.log2(den), 24, 8);
   }

@@ -29,14 +29,15 @@ export type SaveResult =
   | { status: "error"; message: string };
 
 const TYPES = [{ description: "ABC music", accept: { "text/plain": [".abc", ".txt"] } }];
-/** Opening also takes MusicXML, which becomes a new ABC draft. */
+/** Opening also takes MusicXML and MIDI files, which become a new ABC draft. */
 const OPEN_TYPES = [
   {
-    description: "ABC or MusicXML",
+    description: "ABC, MusicXML or MIDI",
     accept: {
       "text/plain": [".abc", ".txt"],
       "application/vnd.recordare.musicxml+xml": [".musicxml", ".xml"],
       "application/vnd.recordare.musicxml": [".mxl"],
+      "audio/midi": [".mid", ".midi"],
     },
   },
 ];

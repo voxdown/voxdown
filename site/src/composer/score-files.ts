@@ -1,3 +1,12 @@
+/** A MIDI file, by its name or its header ("MThd", or RIFF-wrapped). */
+export function isMidiFile(name: string, bytes: Uint8Array): boolean {
+  if (/\.(mid|midi|kar|rmi)$/i.test(name)) return true;
+  const head = String.fromCharCode(...bytes.subarray(0, 4));
+  return (
+    head === "MThd" || (head === "RIFF" && String.fromCharCode(...bytes.subarray(8, 12)) === "RMID")
+  );
+}
+
 /** Telling a MusicXML score from ABC text, cheaply, before the converter is loaded. */
 export function isScoreFile(name: string, bytes: Uint8Array): boolean {
   if (/\.(musicxml|mxl)$/i.test(name)) return true;

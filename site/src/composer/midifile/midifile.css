@@ -1,0 +1,22 @@
+/* The MIDI import report's "Import again" row. */
+.midi-again {
+  margin-top: 4px;
+}
+.midi-again-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.midi-again-fields label {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.midi-again-fields select {
+  min-height: 34px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

@@ -83,7 +83,7 @@ import {
   spanRegion,
   tuneSource,
 } from "./score";
-import { isScoreFile } from "./score-files";
+import { isMidiFile, isScoreFile } from "./score-files";
 import { type SourceFile, abcName, encodeText, newSource, readBytes, readText } from "./source";
 import {
   claimDraft,
@@ -3681,7 +3681,12 @@ async function openFile() {
     if (local.canOpen) {
       const picked = await local.pick();
       if (!picked) return;
-      // A MusicXML score becomes a new ABC draft; it is never linked, so Save writes ABC elsewhere.
+      // A MusicXML score or a MIDI file becomes a new ABC draft; it is never linked, so Save
+      // writes ABC elsewhere.
+      if (isMidiFile(picked.name, picked.bytes)) {
+        void importMidi(picked.bytes, picked.name);
+        return;
+      }
       if (isScoreFile(picked.name, picked.bytes)) {
         void importScore(picked.bytes, picked.name);
         return;
@@ -3699,6 +3704,10 @@ async function openFile() {
   $<HTMLInputElement>("file").click();
 }
 function openBytes(bytes: Uint8Array, name: string) {
+  if (isMidiFile(name, bytes)) {
+    void importMidi(bytes, name);
+    return;
+  }
   if (isScoreFile(name, bytes)) {
     void importScore(bytes, name);
     return;
@@ -3731,11 +3740,13 @@ document.addEventListener("drop", async (event) => {
   if (!file) return;
   event.preventDefault();
   if (
-    !/\.(abc|txt|musicxml|xml|mxl)$/i.test(file.name) &&
+    !/\.(abc|txt|musicxml|xml|mxl|mid|midi|kar|rmi)$/i.test(file.name) &&
     file.type &&
     !file.type.startsWith("text/")
   ) {
-    notice("Composer opens ABC text (.abc, .txt) and MusicXML (.musicxml, .xml, .mxl).");
+    notice(
+      "Composer opens ABC text (.abc, .txt), MusicXML (.musicxml, .xml, .mxl) and MIDI files (.mid, .midi).",
+    );
     return;
   }
   openBytes(new Uint8Array(await file.arrayBuffer()), file.name);
@@ -3781,6 +3792,50 @@ async function importScore(bytes: Uint8Array, name: string) {
     importing = false;
   }
 }
+/*
+ * MIDI import (./midifile): read, quantised and written as notation on first use; the result opens
+ * as a new draft with a report, which can import again at another grid. While the draft is as the
+ * import left it, importing again replaces it rather than making another.
+ */
+let lastMidi: { text: string; draft: string } | null = null;
+async function importMidi(
+  bytes: Uint8Array,
+  name: string,
+  options?: import("./midifile").MidiOptions,
+): Promise<void> {
+  if (importing) return;
+  importing = true;
+  const status = $("explain");
+  status.textContent = `Reading ${name}…`;
+  try {
+    const midi = await import("./midifile");
+    const started = performance.now();
+    const result = await midi.readMidiFile(bytes, name, options);
+    const took = Math.round(performance.now() - started);
+    const summary = midi.describeMidi(result);
+    status.textContent = summary;
+    lastImportMs = took;
+    const replace = Boolean(lastMidi && lastMidi.draft === draftId && lastMidi.text === text());
+    midi.showMidiReport(result, name, summary, (again) => importMidi(bytes, name, again));
+    await new Promise((painted) => requestAnimationFrame(() => setTimeout(painted, 0)));
+    if (!replace) local.disconnect();
+    load(newSource(result.text), abcName(result.report.title), { keepDraft: replace });
+    lastMidi = { text: text(), draft: draftId };
+    void persist();
+  } catch (error) {
+    status.textContent = "Ready";
+    noticeError(
+      error instanceof Error && error.message
+        ? `${name} could not be imported. ${error.message}`
+        : `${name} could not be imported.`,
+    );
+  } finally {
+    importing = false;
+  }
+}
+/** How long the last MIDI import took, for checks. */
+let lastImportMs = 0;
+
 async function save(saveAs = false) {
   const name = abcName(nameInput.value);
   let encoded: { bytes: Uint8Array<ArrayBuffer>; upgraded: boolean };
@@ -4326,7 +4381,7 @@ function stepProblem(direction: 1 | -1): boolean {
 const menuDefinitions: Record<string, () => MenuItem[]> = {
   file: () => [
     { label: "New tune file", run: newFile, shortcut: "" },
-    { label: "Open ABC or MusicXML…", run: () => void openFile(), shortcut: "Mod O" },
+    { label: "Open ABC, MusicXML or MIDI…", run: () => void openFile(), shortcut: "Mod O" },
     { label: "Recent…", run: () => void recentMenu($("file-menu")) },
     {
       label: "Examples",
@@ -4936,6 +4991,7 @@ void start();
     zoom: { score: prefs.scoreZoom, editor: prefs.editorZoom },
     region: player.loopingRegion,
     notes: scoreIndex?.notes.length ?? 0,
+    importMs: lastImportMs,
     timeline: timeline
       ? { length: timeline.length, notes: timeline.notes.length, tracks: timeline.tracks.length }
       : null,

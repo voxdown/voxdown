@@ -185,6 +185,10 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
     title: "Coming from MuseScore or Dorico?",
     note: "Export MusicXML there (File › Export › MusicXML, .musicxml or .mxl) and open it here: it becomes ABC text in a new draft. Notes, rests, chords, ties, slurs, tuplets, grace notes, beams, keys, meters, clefs, voices and staves, repeats and endings, dynamics, hairpins, articulations, ornaments, chord symbols, words, lyrics, title, composer and tempo carry over. Transposing instruments come in at concert pitch; tenor, guitar, piccolo and double bass keep their written octave. Page layout, fingerings, pedal marks, guitar notation and other specialist marks do not, and the import report lists each. File › Export MusicXML… sends a tune back.",
   },
+  {
+    title: "Opening a MIDI file",
+    note: "File › Open (or drop it on the page) takes .mid and .midi: it becomes ABC in a new draft, with a report. Notes are placed on a grid chosen from their timing (eighths, sixteenths or 32nds, with triplets where two or more notes sit on thirds of a beat); the report can import again at another grid. Each track (each channel, in a one-track file) is a part, named by its track name or instrument; notes that overlap become voices. Key and meter come from the file, else the key is estimated and the meter is 4/4, and the report says so. Lyrics come along; drums are left out unless you ask for a percussion staff; pedal, controllers, pitch bends and loudness do not carry over.",
+  },
 ];
 
 export function cheatsheet(): HTMLElement {

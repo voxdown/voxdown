@@ -1072,3 +1072,43 @@ The pieces:
 - the reflow repair loads with abcjs;
 - the Appearance and Recover drafts dialogs fill when first opened;
 - the problems list and those dialogs' styles load with them.
+
+## Selection hardening
+
+### Round 1 fixes (after Codex 7.0, Claude 7.6)
+
+1. **A score selection takes only music.**
+   - A voice's range stops at every line that isn't its music (`breaksRun`): fields (P:, K:, T:, M:, L:), w: lyrics, %% directives, comment lines, and a comment at a line's end.
+   - So cutting, deleting or typing over a score selection never takes them.
+   - Ctrl/⌘ A in the score selects every voice's music, never the headers.
+   - A typed mark over a selection that mixes notes with other lines marks the notes and leaves the rest (`musicParts`); it is never typed over the selection.
+2. **A drag reads what is drawn, voice by voice** (`drawnRegion`). Each voice takes the notes whose heads lie between where the drag started and where the pointer is, in reading order, so voices drawn out of line take only what was dragged over. A multi-bar rest counts as the bars it stands for.
+   - Not done: expanding `Z4` into one-bar rests in the copy abcjs draws. It would mean mapping offsets back through the index, the timeline, the bar lines and the exports; reading the drawing gets the selection right whatever abcjs draws.
+3. **Touch.** A finger's drag scrolls, and the tap's selection stands when the browser takes the move. Held still for 400 ms, a finger selects instead: the band shows, the page stops panning, and the drag selects.
+4. **Scrolling while dragging.** Near the score's top or bottom edge a drag scrolls every frame, faster the nearer the edge, and the selection follows. A wheel scroll during a drag moves its end, and the release counts.
+5. **Shift Alt ←/→** keep an anchor and a moving end, so going back shrinks the selection first.
+6. **Hidden voices.** Voices of invisible rests (`x`) are left out of score selections and of "in N voices".
+7. **Redo** after a typed mark or a music command restores the selection it left.
+8. **Overlays.** An overlay's (`&`) closing bar line is no longer indexed as a note.
+
+**Also:**
+- **The sweep** (check-composer step 28) drags between many note pairs in six tunes:
+  - two voices on one staff;
+  - inline voices;
+  - interleaved V: blocks;
+  - lyrics with comments and parts;
+  - a grand staff with a spacer voice, shaped like the Moonlight sonata's import (a hand-written excerpt, not the owner's file);
+  - a multi-bar rest.
+
+  Every selection is checked:
+  - the notes lit are the notes selected;
+  - a range holds one voice and no header, V:, w:, %% or comment line;
+  - nothing is taken past the pointer or skipped before it.
+
+  Step 29 covers each finding as the reviewers found it.
+- **A `%%vskip` inside a tune** stopped the score redrawing: abcjs wants a list of line breaks per reflowed section. Each section now gets one.
+- **The large-import timing check:**
+  - it starts from a clean heap;
+  - it times a reference task like the importer's work just before importing;
+  - it allows 250 ms or 7 times that reference, the best of up to three runs.
+- **First view.** 718.5 KB. The typing helpers, Voices and File › Recent now load when used.

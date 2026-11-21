@@ -451,6 +451,36 @@ function showZoom(pane: Pane) {
   scoreScroll.addEventListener("pointercancel", lift);
 }
 
+/* Find melody (./melody-ui): typed, selected, or played on a MIDI keyboard. */
+let melodyPanel: typeof import("./melody-ui") | null = null;
+function findMelody(): boolean {
+  const fromSelection = view.state.selection.ranges.some((range) => !range.empty);
+  void import("./melody-ui").then((module) => {
+    melodyPanel = module;
+    return module.openMelody(
+      {
+        view,
+        file: fileIndex,
+        draftId: () => draftId,
+        openDraft: (id, ranges) =>
+          void recoverDraft(id).then(() =>
+            view.dispatch({
+              selection: EditorSelection.create(
+                ranges.map((range) => EditorSelection.range(range.from, range.to)),
+              ),
+              scrollIntoView: true,
+            }),
+          ),
+        keyboard: midiKeyboard,
+      },
+      fromSelection,
+    );
+  });
+  return true;
+}
+/** The MIDI keyboard, when it is on, for melody search to listen to. */
+const midiKeyboard = async () => null;
+
 /** Find and replace, loading it first if this is the first time. */
 function openFind(): boolean {
   void loadEditorExtras(view).then((extras) => extras.openSearchPanel(view));
@@ -458,6 +488,10 @@ function openFind(): boolean {
 }
 const keys: KeyBinding[] = [
   { key: "Mod-f", run: openFind, preventDefault: true },
+  { key: "Mod-Shift-m", run: findMelody, preventDefault: true },
+  // F3 steps through melody matches while they are listed; else it is the search's.
+  { key: "F3", run: () => melodyPanel?.stepMelody(1) ?? false },
+  { key: "Shift-F3", run: () => melodyPanel?.stepMelody(-1) ?? false },
   {
     key: "Tab",
     run: () => {
@@ -4359,6 +4393,11 @@ const menuDefinitions: Record<string, () => MenuItem[]> = {
     },
     "-",
     { label: "Find and replace…", run: openFind, shortcut: "Mod F" },
+    {
+      label: hasSelection() ? "Find this melody…" : "Find melody…",
+      run: () => void findMelody(),
+      shortcut: "Mod Shift M",
+    },
     {
       label: "Typing helpers",
       submenu: () => [

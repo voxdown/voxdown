@@ -19,6 +19,8 @@ export const SHORTCUTS: [string, string][] = [
   ["Say the note at the caret", "Alt N"],
   ["Duplicate the bar or selection", "Mod Shift D"],
   ["Find / replace", "Mod F"],
+  ["Find a melody, or the selected one", "Mod Shift M"],
+  ["Next / previous melody match", "F3 / Shift F3"],
   ["Next / previous bar to check", "F8 / Shift F8"],
   ["Complete a field, key or decoration", "Ctrl Space"],
   ["Score beside or below", "Mod Backslash"],
@@ -133,6 +135,15 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
       ["Score: Shift ← →", "select by note; Space plays, Enter goes to the text"],
     ],
     note: "A region selects its text in each voice. Play, loop, transpose, change lengths, copy or delete it.",
+  },
+  {
+    title: "Finding a melody",
+    rows: [
+      ["dfed cBAG", "type the notes: found in any key, octave and length"],
+      ["Notes selected", "Edit › Find this melody: where else is it played?"],
+      ["F3  Shift F3", "the next and previous match"],
+    ],
+    note: "Grace notes, ornaments, ties, broken rhythm and bar lines don't get in the way. Choose contour for a tune half remembered, Same rhythm to match lengths too, and search this tune, the file, or every draft in this browser. A MIDI keyboard can play the melody in.",
   },
   {
     title: "Tune book",

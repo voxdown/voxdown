@@ -3015,6 +3015,22 @@ console.log(
     columns(lines[6]).slice(0, 3),
     "the bar lines line up",
   );
+  // On screen too: the editor's font is monospaced, so the bar lines stand in columns.
+  const lefts = await page.evaluate(() => {
+    const view = window.composer.view;
+    const doc = view.state.doc;
+    return [6, 7].map((number) => {
+      const line = doc.line(number);
+      return [...line.text.matchAll(/\|/g)].map((match) =>
+        Math.round(view.coordsAtPos(line.from + match.index).left),
+      );
+    });
+  });
+  assert.deepEqual(
+    lefts[0].slice(1, 4),
+    lefts[1].slice(0, 3),
+    `bar lines in columns on screen: ${JSON.stringify(lefts)}`,
+  );
   await drawn();
   await settle(300);
   assert.deepEqual(

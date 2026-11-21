@@ -912,7 +912,14 @@ body[data-layout="below"] #layout-toggle .beside {
   cursor: col-resize;
 }
 
-/* Editor. */
+/* Editor: Recursive Mono, so ABC lines up in columns (fonts/README.md). */
+@font-face {
+  font-family: "Composer Mono";
+  src: url("./fonts/recursive-mono-latin.woff2") format("woff2");
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: swap;
+}
 .cm-editor {
   font-size: calc(15px * var(--editor-zoom, 1));
   background: var(--surface);
@@ -923,8 +930,12 @@ body[data-layout="below"] #layout-toggle .beside {
 }
 .cm-scroller {
   font-family: var(--ui) !important;
-  font-variation-settings: "MONO" 1, "CASL" 0;
+  font-variation-settings: normal;
   line-height: 1.65 !important;
+}
+/* Once something is open (never behind the start screen, so the first view stays light). */
+body.editing .cm-scroller {
+  font-family: "Composer Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace !important;
 }
 .cm-content {
   padding: 14px 0 40vh !important;
@@ -936,6 +947,9 @@ body[data-layout="below"] #layout-toggle .beside {
   text-indent: -2.5ch;
 }
 .cm-gutters {
+  /* Line numbers in the interface's font: the editor's own loads once there is text to show. */
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
   background: var(--surface) !important;
   border-right: 0 !important;
   color: var(--muted) !important;

@@ -858,6 +858,8 @@ function showStart(show: boolean) {
   started = !show;
   // Nothing to edit or play yet: the toolbar and transport rest instead of answering with notices.
   body.classList.toggle("starting", show);
+  // The editor's monospaced font loads once there is something to edit.
+  if (!show) body.classList.add("editing");
   for (const element of [document.querySelector(".documentbar"), $("transport")])
     element?.toggleAttribute("inert", show);
   for (const rover of rovers) rover.refresh();

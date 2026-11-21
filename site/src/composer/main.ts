@@ -29,16 +29,22 @@ import { type MenuItem, mountMenus, popupMenu } from "./menus";
 import { offlineStatus, prepareOffline } from "./offline";
 import { Player, encodeWav } from "./player";
 import {
+  type Placed,
   type Region,
   type ScoreIndex,
   type ScoreNote,
+  type ScorePoint,
+  dragRegion,
   loadAbcjs,
   measure,
+  noteUnder,
   notesAt,
   notesInRanges,
+  reachAt,
   regionOfRanges,
   regionRanges,
   renderTune,
+  spanRegion,
   tuneSource,
 } from "./score";
 import { type SourceFile, abcName, encodeText, newSource, readBytes, readText } from "./source";
@@ -319,6 +325,8 @@ function load(
   name: string,
   options: { keepDraft?: boolean; caretAt?: number; text?: string } = {},
 ) {
+  // The tune being replaced keeps its own draft, written now rather than after a delay.
+  if (started && !options.keepDraft) flushDraft();
   player.stop();
   source = next;
   const content = options.text ?? next.normalized;
@@ -779,7 +787,7 @@ function runChecks() {
 
 /* Score → text: click, drag, Shift+click, keyboard. */
 type Drag = {
-  anchor: ScoreNote;
+  anchor: ScorePoint;
   allVoices: boolean;
   moved: boolean;
   pointer: number;
@@ -788,10 +796,23 @@ type Drag = {
 };
 let drag: Drag | null = null;
 
-function hitNote(
-  clientX: number,
-  clientY: number,
-): { note: ScoreNote; staff: number; line: number } | null {
+/** Every drawn note's head position, for reading the pointer in musical time. */
+function placedNotes(): Placed[] {
+  const geo = staffGeometry();
+  if (!geo) return [];
+  return geo.notes.map((box) => ({
+    note: box.note,
+    line: box.note.line,
+    staff: box.note.staff,
+    x: box.head,
+  }));
+}
+
+/**
+ * Where the pointer is in the music: the staff under it, the note of a voice on that staff whose
+ * head it has reached (a voice already being dragged is kept), and how far it reached in time.
+ */
+function hitPoint(clientX: number, clientY: number, preferVoice?: number): ScorePoint | null {
   const geo = staffGeometry();
   if (!geo) return null;
   const origin = scoreElement.getBoundingClientRect();
@@ -809,24 +830,29 @@ function hitNote(
     }
   }
   if (!staff) return null;
-  const candidates = geo.notes.filter(
-    (box) => box.note.line === staff.line && box.note.staff === staff.staff,
-  );
-  if (!candidates.length) return null;
-  let best = candidates[0] as (typeof candidates)[number];
-  let distance = Number.POSITIVE_INFINITY;
-  for (const box of candidates) {
-    const d = x < box.left ? box.left - x : x > box.right ? x - box.right : 0;
-    if (
-      d < distance ||
-      (d === distance &&
-        Math.abs(y - (box.top + box.bottom) / 2) < Math.abs(y - (best.top + best.bottom) / 2))
-    ) {
-      distance = d;
-      best = box;
+  const placed = placedNotes();
+  const onStaff = placed.filter((each) => each.line === staff.line && each.staff === staff.staff);
+  if (!onStaff.length) return null;
+  let voice = preferVoice;
+  if (voice === undefined || !onStaff.some((each) => each.note.voice === voice)) {
+    // Several voices on one staff: the one whose notes are nearest the pointer vertically.
+    let nearest = Number.POSITIVE_INFINITY;
+    for (const box of geo.notes) {
+      if (box.note.line !== staff.line || box.note.staff !== staff.staff) continue;
+      const distance = Math.abs(y - (box.top + box.bottom) / 2) + Math.abs(x - box.head) / 4;
+      if (distance < nearest) {
+        nearest = distance;
+        voice = box.note.voice;
+      }
     }
   }
-  return { note: best.note, staff: staff.staff, line: staff.line };
+  const note = noteUnder(
+    onStaff.filter((each) => each.note.voice === voice),
+    staff.line,
+    x,
+  );
+  if (!note) return null;
+  return { note, line: staff.line, staff: staff.staff, x, reach: reachAt(placed, staff.line, x) };
 }
 
 function voicesOnStaff(staff: number): number[] {
@@ -851,17 +877,11 @@ function selectRegion(region: Region, focusText = false) {
   if (focusText) view.focus();
 }
 
-function regionBetween(a: ScoreNote, b: ScoreNote, voices: number[]): Region {
-  return {
-    from: Math.min(a.time, b.time),
-    to: Math.max(a.time + a.duration, b.time + b.duration),
-    voices,
-  };
-}
+const allVoices = () => (scoreIndex ? scoreIndex.voices.map((_, index) => index) : []);
 
 scoreScroll.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || !scoreIndex) return;
-  const hit = hitNote(event.clientX, event.clientY);
+  const hit = hitPoint(event.clientX, event.clientY);
   if (!hit) return;
   event.preventDefault();
   scoreScroll.focus({ preventScroll: true });
@@ -875,18 +895,18 @@ scoreScroll.addEventListener("pointerdown", (event) => {
       notesAt(scoreIndex, caret()).map((note) => ({ from: note.start, to: note.end })),
     );
   if (event.shiftKey && current) {
-    const voices = event.altKey
-      ? scoreIndex.voices.map((_, index) => index)
-      : [...new Set([...current.voices, hit.note.voice])];
-    selectRegion({
-      from: Math.min(current.from, hit.note.time),
-      to: Math.max(current.to, hit.note.time + hit.note.duration),
-      voices,
-    });
+    // Shift click extends to the place clicked: back to its note's start, or on to what it reached.
+    const voices = event.altKey ? allVoices() : [...new Set([...current.voices, hit.note.voice])];
+    const from = Math.min(current.from, hit.note.time);
+    const reach = Math.max(
+      current.reach ?? current.from,
+      hit.note.time < current.from ? current.from : hit.reach,
+    );
+    selectRegion(spanRegion(scoreIndex, from, reach, voices));
     return;
   }
   drag = {
-    anchor: hit.note,
+    anchor: hit,
     allVoices: event.altKey,
     moved: false,
     pointer: event.pointerId,
@@ -894,8 +914,8 @@ scoreScroll.addEventListener("pointerdown", (event) => {
     y: event.clientY,
   };
   scoreScroll.setPointerCapture(event.pointerId);
-  const voices = event.altKey ? scoreIndex.voices.map((_, index) => index) : [hit.note.voice];
-  selectRegion(regionBetween(hit.note, hit.note, voices));
+  const voices = event.altKey ? allVoices() : [hit.note.voice];
+  selectRegion(dragRegion(scoreIndex, hit, hit, voices));
   if (prefs.hear && !hit.note.rest && timeline) {
     const pitches = timeline.notes
       .filter((note) => note.start === hit.note.start)
@@ -908,16 +928,16 @@ scoreScroll.addEventListener("pointermove", (event) => {
   if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 4) return;
   drag.moved = true;
   scoreScroll.classList.add("dragging");
-  const hit = hitNote(event.clientX, event.clientY);
+  const hit = hitPoint(event.clientX, event.clientY, drag.anchor.note.voice);
   if (!hit) return;
   const sameStaff = hit.staff === drag.anchor.staff;
   const voices =
     drag.allVoices || !sameStaff
-      ? scoreIndex.voices.map((_, index) => index)
-      : drag.anchor.voice === hit.note.voice
-        ? [drag.anchor.voice]
+      ? allVoices()
+      : drag.anchor.note.voice === hit.note.voice
+        ? [drag.anchor.note.voice]
         : voicesOnStaff(hit.staff);
-  selectRegion(regionBetween(drag.anchor, hit.note, voices));
+  selectRegion(dragRegion(scoreIndex, drag.anchor, hit, voices));
   // Scroll while dragging near the edges.
   const frame = scoreScroll.getBoundingClientRect();
   if (event.clientY > frame.bottom - 30) scoreScroll.scrollTop += 12;
@@ -984,23 +1004,20 @@ function moveByNote(direction: 1 | -1, extend: boolean): boolean {
     }
     return true;
   }
-  const current = region ?? {
-    from: caretNote.time,
-    to: caretNote.time + caretNote.duration,
-    voices: [caretNote.voice],
-  };
   if (!region) {
-    selectRegion(current);
+    selectRegion(spanRegion(index, caretNote.time, caretNote.time, [caretNote.voice]));
     return true;
   }
+  let { from } = region;
+  let reach = region.reach ?? region.from;
   if (direction > 0) {
-    const next = notes.find((note) => note.time >= current.to - eps);
-    if (next) current.to = next.time + next.duration;
+    const next = notes.find((note) => note.time > reach + eps);
+    if (next) reach = next.time;
   } else {
-    const previous = [...notes].reverse().find((note) => note.time < current.from - eps);
-    if (previous) current.from = previous.time;
+    const previous = [...notes].reverse().find((note) => note.time < from - eps);
+    if (previous) from = previous.time;
   }
-  selectRegion(current);
+  selectRegion(spanRegion(index, from, reach, region.voices));
   return true;
 }
 
@@ -2122,6 +2139,18 @@ async function printScore() {
 }
 
 /* Recovery: this tab's draft, kept as you type. */
+function flushDraft() {
+  clearTimeout(persistTimer);
+  const { normalized: _normalized, ...meta } = source;
+  if (!text()) return;
+  void keepDraft({
+    id: draftId,
+    name: nameInput.value,
+    text: text(),
+    updated: Date.now(),
+    source: meta,
+  }).catch(() => {});
+}
 function schedulePersist() {
   clearTimeout(persistTimer);
   persistTimer = setTimeout(() => void persist(), 700);
@@ -2456,6 +2485,16 @@ const menus = mountMenus(
       { label: "New tune file", run: newFile, shortcut: "" },
       { label: "Open…", run: () => void openFile(), shortcut: "Mod O" },
       { label: "Recent…", run: () => void recentMenu($("file-menu")) },
+      {
+        label: "Examples",
+        id: "examples",
+        submenu: () =>
+          EXAMPLES.map((example) => ({
+            label: `${example.title} — ${example.blurb}`,
+            id: `example-${example.id}`,
+            run: () => openExample(example.id),
+          })),
+      },
       { label: "Recover a draft…", run: () => void openRecover() },
       "-",
       { label: "Save", run: () => void save(), shortcut: "Mod S" },
@@ -2659,8 +2698,16 @@ function newFile() {
 function openExample(id: string) {
   const example = EXAMPLES.find((each) => each.id === id);
   if (!example) return;
+  const hadWork = started && text().length > 0;
   local.disconnect();
   load(newSource(example.text), example.file);
+  // A new draft of its own: the tune that was open keeps its draft and stays recoverable.
+  void persist();
+  if (hadWork)
+    notice(
+      `Opened “${example.title}” as a new draft. Your previous tune is kept under File › Recover a draft.`,
+      "success",
+    );
 }
 
 /* Global keys that work outside the editor too. */
@@ -2801,5 +2848,36 @@ void start();
       : null,
   }),
   scoreIndex: () => scoreIndex,
+  /** Note heads and bar lines in page coordinates, for checks that drag across bars. */
+  geometry: () => {
+    const geo = staffGeometry();
+    if (!geo) return null;
+    const origin = scoreElement.getBoundingClientRect();
+    return {
+      notes: geo.notes.map((box) => ({
+        start: box.note.start,
+        end: box.note.end,
+        time: box.note.time,
+        voice: box.note.voice,
+        line: box.note.line,
+        staff: box.note.staff,
+        head: origin.left + box.head,
+        y: origin.top + (box.top + box.bottom) / 2,
+      })),
+      staves: geo.staves.map((box) => ({
+        line: box.line,
+        staff: box.staff,
+        top: origin.top + box.top,
+        bottom: origin.top + box.bottom,
+      })),
+      bars: [...scoreElement.querySelectorAll(".abcjs-bar")].map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          line: Number(/abcjs-l(\d+)/.exec(element.getAttribute("class") ?? "")?.[1] ?? -1),
+          x: rect.left + rect.width / 2,
+        };
+      }),
+    };
+  },
   menus,
 };

@@ -2,12 +2,21 @@
  * Examples: VoxDown's own transcriptions of public-domain melodies (traditional tunes, Beethoven,
  * and Jane Taylor's 1806 words), written for this app. Not copied from any collection.
  */
-export type Example = { id: string; title: string; about: string; file: string; text: string };
+export type Example = {
+  id: string;
+  title: string;
+  about: string;
+  /** For menus: what the example is, in a few words. */
+  blurb: string;
+  file: string;
+  text: string;
+};
 
 export const EXAMPLES: Example[] = [
   {
     id: "ode",
     title: "Ode to Joy",
+    blurb: "Beethoven's melody, with dynamics and chords",
     about: "Beethoven · dynamics and chords",
     file: "Ode to Joy.abc",
     text: `X:1
@@ -27,6 +36,7 @@ K:D
   {
     id: "greensleeves",
     title: "Greensleeves",
+    blurb: "a traditional tune in 6/8, with repeats and parts",
     about: "Traditional · 6/8, repeats",
     file: "Greensleeves.abc",
     text: `X:1
@@ -47,6 +57,7 @@ P:B
   {
     id: "twinkle",
     title: "Twinkle, Twinkle, Little Star",
+    blurb: "a song with lyrics under the notes",
     about: "Words by Jane Taylor · lyrics",
     file: "Twinkle Twinkle.abc",
     text: `X:1
@@ -67,6 +78,7 @@ w: Twin-kle, twin-kle, lit-tle star, how I won-der what you are!
   {
     id: "frere",
     title: "Frère Jacques",
+    blurb: "a round in two voices",
     about: "Traditional round · two voices",
     file: "Frere Jacques.abc",
     text: `X:1

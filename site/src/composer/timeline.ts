@@ -162,7 +162,7 @@ export function buildTimeline(
  */
 export function regionTimeline(
   timeline: Timeline,
-  region: { from: number; to: number; voices: number[] },
+  region: { from: number; to: number; voices: number[]; reach?: number | undefined },
   allVoices: boolean,
 ): Timeline {
   const eps = 1e-6;
@@ -170,6 +170,9 @@ export function regionTimeline(
   const notes: PlayNote[] = [];
   for (const note of timeline.notes) {
     if (note.written < region.from - eps || note.written >= region.to - eps) continue;
+    // A written note is in when the region reached its start; ornaments and chords follow time.
+    if (region.reach !== undefined && note.start !== undefined && note.written > region.reach + eps)
+      continue;
     const track = timeline.tracks[note.track];
     const wanted = track?.chords
       ? allVoices

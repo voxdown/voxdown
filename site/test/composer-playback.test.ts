@@ -1,7 +1,18 @@
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
 import { INSTRUMENTS, findLoop, nearestSample, velocityGain } from "../src/composer/instruments";
-import { type ScoreNote, indexScore, regionOfRanges, regionRanges } from "../src/composer/score";
+import {
+  type Placed,
+  type ScoreNote,
+  type ScorePoint,
+  dragRegion,
+  indexScore,
+  noteUnder,
+  reachAt,
+  regionOfRanges,
+  regionRanges,
+  spanRegion,
+} from "../src/composer/score";
 import { encodeText, readBytes, readText, writeText } from "../src/composer/source";
 import {
   beatsBetween,
@@ -117,7 +128,86 @@ describe("score regions", () => {
     const { index } = prepare(twoVoices);
     const start = twoVoices.indexOf("D |");
     const region = regionOfRanges(index, [{ from: start, to: start + 1 }]);
-    expect(region).toEqual({ from: 0.25, to: 0.5, voices: [0] });
+    expect(region).toEqual({ from: 0.25, to: 0.5, voices: [0], reach: 0.25 });
+  });
+});
+
+describe("reading the pointer in the score", () => {
+  // Two voices; voice 1 ends bar 1 with a half note while voice 2 still moves in quarters.
+  const text = "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nC D E2 | F G A B |\nV:2\nC, D, E, F, | G,4 |\n";
+  const { index } = prepare(text);
+  // A drawn layout: heads 400 px per whole note from x 100; the bar line at 510, bar 2 from 520.
+  const xOf = (time: number) => 100 + time * 400 + (time >= 1 ? 20 : 0);
+  const placed: Placed[] = index.notes.map((note) => ({
+    note,
+    line: 0,
+    staff: note.voice,
+    x: xOf(note.time),
+  }));
+  const voice = (n: number) => placed.filter((each) => each.note.voice === n);
+  const point = (staff: number, x: number): ScorePoint => ({
+    note: noteUnder(voice(staff), 0, x) as ScoreNote,
+    line: 0,
+    staff,
+    x,
+    reach: reachAt(placed, 0, x),
+  });
+  const slices = (anchor: ScorePoint, pointer: ScorePoint, voices = [0, 1]) =>
+    regionRanges(index, dragRegion(index, anchor, pointer, voices), text).map((range) =>
+      text.slice(range.from, range.to),
+    );
+
+  it("reaches a note only once the pointer gets to its head", () => {
+    expect(reachAt(placed, 0, xOf(0.5) + 10)).toBe(0.5);
+    expect(reachAt(placed, 0, xOf(0.75) - 1)).toBe(0.5);
+    expect(reachAt(placed, 0, xOf(0.75))).toBe(0.75);
+  });
+  it("stays in the bar until the pointer passes the bar line and reaches the next note", () => {
+    expect(reachAt(placed, 0, 505)).toBe(0.75);
+    expect(reachAt(placed, 0, 515)).toBe(0.75);
+    expect(reachAt(placed, 0, 520)).toBe(1);
+  });
+  it("belongs to a system's first note left of it, and takes earlier systems whole", () => {
+    expect(reachAt(placed, 0, 40)).toBe(0);
+    const second: Placed[] = [
+      ...placed,
+      {
+        note: { ...(index.byVoice[0]?.[4] as ScoreNote), time: 2, line: 1 },
+        line: 1,
+        staff: 0,
+        x: 120,
+      },
+    ];
+    expect(reachAt(second, 1, 60)).toBe(2);
+  });
+  it("picks the note of a voice whose head the pointer has passed, never the next bar's", () => {
+    expect(noteUnder(voice(0), 0, 480)?.time).toBe(0.5);
+    expect(noteUnder(voice(0), 0, 515)?.time).toBe(0.5);
+    expect(noteUnder(voice(0), 0, 40)?.time).toBe(0);
+  });
+  it("does not let a long note pull the other voice ahead of the pointer", () => {
+    const anchor = point(1, xOf(0));
+    expect(slices(anchor, point(0, xOf(0.5) + 10))).toEqual(["C D E2 |", "C, D, E,"]);
+    expect(slices(anchor, point(0, xOf(0.75) + 2))).toEqual(["C D E2 |", "C, D, E, F, |"]);
+  });
+  it("takes nothing from the next bar in the gap before or after the bar line", () => {
+    const anchor = point(0, xOf(0));
+    expect(slices(anchor, point(0, 505), [0])).toEqual(["C D E2 |"]);
+    expect(slices(anchor, point(1, 515))).toEqual(["C D E2 |", "C, D, E, F, |"]);
+    expect(slices(anchor, point(1, 521))).toEqual(["C D E2 | F", "C, D, E, F, | G,4 |"]);
+  });
+  it("drags backwards from where the pointer went down", () => {
+    expect(slices(point(0, xOf(0.75) + 5), point(0, xOf(0.25) + 5))).toEqual([
+      "D E2 |",
+      "D, E, F, |",
+    ]);
+  });
+  it("extends by reach, as Shift click and Alt Shift → do", () => {
+    const region = spanRegion(index, 0, 0.25, [0, 1]);
+    expect(region.to).toBe(0.5);
+    expect(
+      regionRanges(index, region, text).map((range) => text.slice(range.from, range.to)),
+    ).toEqual(["C D", "C, D,"]);
   });
 });
 

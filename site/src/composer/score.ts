@@ -261,7 +261,39 @@ export function notesInRanges(
 }
 
 /* Regions: a span of written time in some voices. */
-export type Region = { from: number; to: number; voices: number[] };
+/**
+ * A region of written time in some voices. `reach` is the latest note start it takes: a note is
+ * in the region when it starts at or after `from` and no later than `reach`. `to` is where the
+ * last note taken ends (for playback). Without `reach`, notes starting before `to` are taken.
+ */
+export type Region = { from: number; to: number; voices: number[]; reach?: number | undefined };
+
+const EPS = 1e-6;
+
+function takes(region: Region, note: ScoreNote): boolean {
+  if (note.time < region.from - EPS) return false;
+  return region.reach !== undefined ? note.time <= region.reach + EPS : note.time < region.to - EPS;
+}
+
+/** The notes a region takes, voice by voice. */
+export function regionNotes(index: ScoreIndex, region: Region): ScoreNote[] {
+  return region.voices.flatMap((voice) =>
+    (index.byVoice[voice] ?? []).filter((note) => takes(region, note)),
+  );
+}
+
+/** A region from a start, a reach and voices, with `to` where its last note ends. */
+export function spanRegion(
+  index: ScoreIndex,
+  from: number,
+  reach: number,
+  voices: number[],
+): Region {
+  const region: Region = { from, to: from, voices, reach };
+  const notes = regionNotes(index, region);
+  region.to = Math.max(from, ...notes.map((note) => note.time + note.duration));
+  return region;
+}
 
 /** The text ranges a region covers: one per voice, from its first note to its last. */
 export function regionRanges(
@@ -270,20 +302,18 @@ export function regionRanges(
   text: string,
 ): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = [];
-  const eps = 1e-6;
   for (const voice of region.voices) {
-    const notes = (index.byVoice[voice] ?? []).filter(
-      (note) => note.time >= region.from - eps && note.time < region.to - eps,
-    );
+    const notes = (index.byVoice[voice] ?? []).filter((note) => takes(region, note));
     if (!notes.length) continue;
     const from = Math.min(...notes.map((note) => note.start));
     let to = Math.max(...notes.map((note) => note.end));
+    const lastEnd = Math.max(...notes.map((note) => note.time + note.duration));
     while (to > from && /[ \t]/.test(text[to - 1] as string)) to -= 1;
-    // A region that ends with its bar takes the bar line, so copying or deleting keeps bars whole.
+    // When this voice's last note ends its bar, the bar line comes too, so bars stay whole.
     const bar = index.bars.find(
       (each) =>
         each.voice === voice &&
-        Math.abs(each.time - region.to) < eps &&
+        Math.abs(each.time - lastEnd) < EPS &&
         each.start >= to &&
         /^[ \t]*$/.test(text.slice(to, each.start)),
     );
@@ -302,8 +332,61 @@ export function regionOfRanges(
   if (!notes.length) return null;
   const from = Math.min(...notes.map((note) => note.time));
   const to = Math.max(...notes.map((note) => note.time + note.duration));
+  const reach = Math.max(...notes.map((note) => note.time));
   const voices = [...new Set(notes.map((note) => note.voice))].sort((a, b) => a - b);
-  return { from, to, voices };
+  return { from, to, voices, reach };
+}
+
+/* The pointer in the score, in musical terms. */
+
+/** A drawn note's place: its system (abcjs line) and the x of its head (not its chord symbol). */
+export type Placed = { note: ScoreNote; line: number; staff: number; x: number };
+
+function before(a: { line: number; x: number }, line: number, x: number): boolean {
+  return a.line < line || (a.line === line && a.x <= x);
+}
+
+/**
+ * How far the pointer has reached, as a written time: the latest start among notes (in any
+ * voice) whose head is at or left of the pointer on its system, or on an earlier system. Left
+ * of a system's first note, the pointer belongs to that first note. A note is never reached
+ * before the pointer gets to it, so a bar line the pointer has not crossed is never crossed.
+ */
+export function reachAt(placed: Placed[], line: number, x: number): number {
+  let reach = Number.NEGATIVE_INFINITY;
+  let first: Placed | undefined;
+  for (const each of placed) {
+    if (each.line === line && (!first || each.x < first.x)) first = each;
+    if (before(each, line, x)) reach = Math.max(reach, each.note.time);
+  }
+  if (first && x < first.x) reach = Math.max(reach, first.note.time);
+  return Number.isFinite(reach) ? reach : 0;
+}
+
+/** The note of one voice under the pointer: the last whose head is at or left of it. */
+export function noteUnder(placed: Placed[], line: number, x: number): ScoreNote | undefined {
+  const onLine = placed.filter((each) => each.line === line).sort((a, b) => a.x - b.x);
+  let found = onLine[0]?.note;
+  for (const each of onLine) if (each.x <= x) found = each.note;
+  return found;
+}
+
+/** A point in a drag: the note under the pointer in its voice, and how far the pointer reached. */
+export type ScorePoint = { note: ScoreNote; line: number; staff: number; x: number; reach: number };
+
+/** The region between where a drag started and where the pointer is now. */
+export function dragRegion(
+  index: ScoreIndex,
+  anchor: ScorePoint,
+  pointer: ScorePoint,
+  voices: number[],
+): Region {
+  const forward =
+    pointer.line > anchor.line || (pointer.line === anchor.line && pointer.x >= anchor.x);
+  const [start, end] = forward ? [anchor, pointer] : [pointer, anchor];
+  // The start snaps back to the start of the note it is in; the end takes what it reached.
+  const from = Math.min(start.note.time, end.note.time);
+  return spanRegion(index, from, Math.max(end.reach, start.note.time), voices);
 }
 
 /** Snaps a written time to note boundaries in a voice: never half a note. */
@@ -318,7 +401,15 @@ export function noteAtTime(index: ScoreIndex, voice: number, time: number): Scor
 }
 
 /* Geometry, measured lazily in the score's own coordinates. */
-export type NoteBox = { note: ScoreNote; left: number; right: number; top: number; bottom: number };
+export type NoteBox = {
+  note: ScoreNote;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  /** Left of the note head and its accidentals, without a chord symbol or text above it. */
+  head: number;
+};
 export type StaffBox = {
   line: number;
   staff: number;
@@ -339,6 +430,7 @@ export function measure(
     let right = Number.NEGATIVE_INFINITY;
     let top = Number.POSITIVE_INFINITY;
     let bottom = Number.NEGATIVE_INFINITY;
+    let head = Number.POSITIVE_INFINITY;
     for (const element of note.elements) {
       const rect = element.getBoundingClientRect();
       if (!rect.width && !rect.height) continue;
@@ -346,8 +438,19 @@ export function measure(
       right = Math.max(right, rect.right - origin.left);
       top = Math.min(top, rect.top - origin.top);
       bottom = Math.max(bottom, rect.bottom - origin.top);
+      // abcjs groups a note's chord symbol and text with it; they can reach over the bar line.
+      for (const part of element.children) {
+        if (
+          part.tagName.toLowerCase() === "text" ||
+          /^(chord|annotation)/.test(part.getAttribute("data-name") ?? "")
+        )
+          continue;
+        const box = part.getBoundingClientRect();
+        if (box.width || box.height) head = Math.min(head, box.left - origin.left);
+      }
     }
-    if (Number.isFinite(left)) notes.push({ note, left, right, top, bottom });
+    if (!Number.isFinite(head)) head = left;
+    if (Number.isFinite(left)) notes.push({ note, left, right, top, bottom, head });
   }
   const staves: StaffBox[] = [];
   const lines = container.querySelectorAll<SVGGraphicsElement>(".abcjs-staff");

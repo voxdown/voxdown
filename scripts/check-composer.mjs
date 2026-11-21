@@ -333,9 +333,15 @@ console.log(
 );
 
 /* 8. Musical commands on a region: one undo step. */
-await page.mouse.move(a.x, a.y);
+// Playback followed the music, so the score may have scrolled: measure again.
+await page.locator("#score-scroll").evaluate((element) => {
+  element.scrollTop = 0;
+});
+const a2 = await noteCenter(0, 2);
+const b2 = await noteCenter(1, 3.75);
+await page.mouse.move(a2.x, a2.y);
 await page.mouse.down();
-await page.mouse.move(b.x, b.y, { steps: 8 });
+await page.mouse.move(b2.x, b2.y, { steps: 8 });
 await page.mouse.up();
 const beforeTranspose = await docText();
 await page.locator('[data-command="transpose-up"]').click();
@@ -352,6 +358,204 @@ assert(
 await page.locator("#undo").click();
 assert.equal(await docText(), beforeTranspose, "one undo restores both voices");
 console.log("Composer: transpose applies to every range as one undoable step: passed");
+
+/* 8b. Dragging reads the pointer in time: a note joins only once the pointer reaches its head,
+   and nothing from the next bar joins until the pointer has passed the bar line and its note. */
+const geometry = () => page.evaluate(() => window.composer.geometry());
+const selectedStarts = () =>
+  page.evaluate(() => {
+    const view = window.composer.view;
+    const list = view.state.selection.ranges.filter((range) => !range.empty);
+    return window.composer
+      .scoreIndex()
+      .notes.filter((note) =>
+        list.some((range) => note.start >= range.from && note.end <= range.to),
+      )
+      .map((note) => note.start);
+  });
+const staffMiddle = (geo, line, staff) => {
+  const box = geo.staves.find((each) => each.line === line && each.staff === staff);
+  return (box.top + box.bottom) / 2;
+};
+/** Every note in the dragged voices on this system, from the region's start: in ⇔ head reached. */
+const expectReached = async (geo, voices, from, line, x, label) => {
+  const selected = new Set(await selectedStarts());
+  for (const note of geo.notes) {
+    if (!voices.includes(note.voice) || note.line !== line || note.time < from - 1e-6) continue;
+    assert.equal(
+      selected.has(note.start),
+      note.head <= x,
+      `${label}: note at ${note.time} (voice ${note.voice}, head ${note.head.toFixed(1)}, pointer ${x.toFixed(1)})`,
+    );
+  }
+};
+const barBetween = (geo, line, left, right) =>
+  geo.bars.find((bar) => bar.line === line && bar.x > left && bar.x < right);
+
+// Two voices: drag from voice 2's bar 3 up into voice 1's half note, then across the bar line.
+{
+  const geo = await geometry();
+  const at = (voice, time) =>
+    geo.notes.find((note) => note.voice === voice && Math.abs(note.time - time) < 1e-6);
+  const start = at(1, 2);
+  const half = at(0, 2.5);
+  const lastQuarter = at(1, 2.75);
+  const next = [at(0, 3), at(1, 3)];
+  assert.equal(half.line, next[0].line, "bars 3 and 4 share a system");
+  const line = half.line;
+  const bar = barBetween(geo, line, half.head, Math.min(...next.map((note) => note.head)));
+  const y = staffMiddle(geo, line, 0);
+  await page.mouse.move(start.head + 3, start.y);
+  await page.mouse.down();
+  const steps = [
+    ["inside the half note, before voice 2's last quarter", half.head + 3],
+    ["at voice 2's last quarter", lastQuarter.head + 2],
+    ["in the gap before the bar line", bar.x - 3],
+    ["just past the bar line", bar.x + 3],
+    ["at the next bar's first notes", Math.max(...next.map((note) => note.head)) + 2],
+  ];
+  for (const [label, x] of steps) {
+    await page.mouse.move(x, y, { steps: 4 });
+    await expectReached(geo, [0, 1], 2, line, x, `two voices, ${label}`);
+    const inNext = (await selectedStarts()).some((each) =>
+      next.some((note) => note.start === each),
+    );
+    assert.equal(
+      inNext,
+      x >= Math.min(...next.map((note) => note.head)),
+      `two voices, ${label}: next bar`,
+    );
+  }
+  await page.mouse.up();
+}
+console.log(
+  "Composer: a two-voice drag takes notes only as the pointer reaches them, and no next bar before its bar line: passed",
+);
+
+// One voice with a long last note (Greensleeves), the gap after it, Shift click, and a first press.
+await openExample("Greensleeves");
+{
+  const geo = await geometry();
+  const notes = geo.notes.filter((note) => note.voice === 0).sort((a, b) => a.time - b.time);
+  const durations = await page.evaluate(() =>
+    window.composer.scoreIndex().byVoice[0].map((note) => [note.start, note.duration]),
+  );
+  const length = new Map(durations);
+  // A bar whose last note is at least a dotted quarter, followed by a bar on the same system.
+  let pick;
+  for (let i = 0; i + 1 < notes.length && !pick; i++) {
+    const last = notes[i];
+    const first = notes[i + 1];
+    if (last.line !== first.line || length.get(last.start) < 0.375) continue;
+    const bar = barBetween(geo, last.line, last.head, first.head);
+    if (!bar) continue;
+    // The bar's first note: walk back while no bar line separates the notes.
+    let k = i;
+    while (
+      k > 0 &&
+      notes[k - 1].line === last.line &&
+      !barBetween(geo, last.line, notes[k - 1].head, notes[k].head)
+    )
+      k -= 1;
+    pick = { last, first, bar, line: last.line, start: notes[k] };
+  }
+  assert(pick, "found a bar ending in a long note");
+  const y = staffMiddle(geo, pick.line, 0);
+  await page.mouse.move(pick.start.head + 3, y);
+  await page.mouse.down();
+  const steps = [
+    ["on the long note", pick.last.head + 3],
+    ["in the gap after it", (pick.last.head + pick.bar.x) / 2],
+    ["just before the bar line", pick.bar.x - 2],
+    ["just past the bar line", Math.min(pick.bar.x + 3, pick.first.head - 1)],
+    ["at the next bar's first note", pick.first.head + 2],
+  ];
+  for (const [label, x] of steps) {
+    await page.mouse.move(x, y, { steps: 4 });
+    await expectReached(geo, [0], pick.start.time, pick.line, x, `long note, ${label}`);
+    const inNext = (await selectedStarts()).includes(pick.first.start);
+    assert.equal(inNext, x >= pick.first.head, `long note, ${label}: next bar`);
+  }
+  await page.mouse.up();
+  // A first press in the gap after the long note selects that note, not the next bar's.
+  await page.mouse.click((pick.last.head + pick.bar.x) / 2, y);
+  assert.deepEqual(
+    await selectedStarts(),
+    [pick.last.start],
+    "a press in the gap selects the note before it",
+  );
+  // Shift click in the gap extends to the long note and no further.
+  await page.mouse.click(pick.start.head + 3, y);
+  await page.keyboard.down("Shift");
+  await page.mouse.click(pick.bar.x - 2, y);
+  await page.keyboard.up("Shift");
+  const extended = await selectedStarts();
+  assert(
+    extended.includes(pick.last.start) && !extended.includes(pick.first.start),
+    "Shift click in the gap stops at the bar line",
+  );
+}
+console.log(
+  "Composer: drags, a first press and Shift click in a long note's gap never take the next bar: passed",
+);
+
+/* 8c. File › Examples, by keyboard: each opens as a new draft; the open tune keeps its own. */
+await page.locator(".cm-content").focus();
+await page.keyboard.press("Control+End");
+await page.keyboard.type("\n% kept in its own draft");
+const kept = await docText();
+await page.locator("#file-menu").focus();
+await page.keyboard.press("ArrowDown");
+let guard = 0;
+while (
+  !(await page.evaluate(() => document.activeElement?.dataset.item === "examples")) &&
+  guard++ < 20
+)
+  await page.keyboard.press("ArrowDown");
+assert.equal(
+  await page.getByRole("menuitem", { name: "Examples" }).getAttribute("aria-expanded"),
+  "false",
+);
+await page.keyboard.press("ArrowRight");
+const labels = await page.locator(".workspace-submenu [role=menuitem]").allTextContents();
+assert(
+  labels.some((label) => label.includes("Frère Jacques — a round in two voices")),
+  `labels: ${labels}`,
+);
+assert(labels.length >= 4, "every example is listed");
+await page.keyboard.press("ArrowLeft");
+assert.equal(
+  await page.evaluate(() => document.activeElement?.dataset.item),
+  "examples",
+  "← returns to Examples",
+);
+await page.keyboard.press("ArrowRight");
+while (
+  !(await page.evaluate(() => document.activeElement?.textContent ?? "")).startsWith("Twinkle") &&
+  guard++ < 40
+)
+  await page.keyboard.press("ArrowDown");
+await page.keyboard.press("Enter");
+await page.waitForFunction(() =>
+  document.getElementById("score-summary").textContent.startsWith("Twinkle"),
+);
+await drawn();
+await settle(300);
+const stored = await page.evaluate(
+  () =>
+    new Promise((done) => {
+      const request = indexedDB.open("voxdown-composer");
+      request.onsuccess = () => {
+        const all = request.result.transaction("drafts").objectStore("drafts").getAll();
+        all.onsuccess = () => done(all.result.map((draft) => draft.text));
+      };
+    }),
+);
+assert(stored.includes(kept), "the tune that was open keeps its draft");
+assert((await docText()).includes("T:Twinkle"), "the example opened");
+console.log(
+  "Composer: File › Examples opens by keyboard, labelled, as a new draft beside the kept one: passed",
+);
 
 /* 9. Redraws keep the reader's place; editing while playing keeps playing. */
 await openExample("Greensleeves");

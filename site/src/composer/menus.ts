@@ -8,6 +8,12 @@ export type MenuItem =
       enabled?: () => boolean;
       id?: string;
     }
+  | {
+      label: string;
+      /** A submenu, opened with →, Enter or a click, closed with ← or Escape. */
+      submenu: () => MenuItem[];
+      id?: string;
+    }
   | "-"
   | { heading: string };
 
@@ -32,7 +38,17 @@ export function mountMenus(
   definitions: Record<string, () => MenuItem[]>,
 ) {
   let open: { button: HTMLButtonElement; panel: HTMLElement } | null = null;
+  let child: { entry: HTMLButtonElement; panel: HTMLElement } | null = null;
+  const closeChild = (focusEntry = false) => {
+    if (!child) return;
+    const { entry, panel } = child;
+    panel.remove();
+    entry.setAttribute("aria-expanded", "false");
+    child = null;
+    if (focusEntry) entry.focus();
+  };
   const close = (focusButton = false) => {
+    closeChild();
     if (!open) return;
     const { button, panel } = open;
     panel.remove();
@@ -41,17 +57,31 @@ export function mountMenus(
     if (focusButton) button.focus();
   };
   const items = (panel: HTMLElement) => [
-    ...panel.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+    ...panel.querySelectorAll<HTMLButtonElement>(":scope > button:not(:disabled)"),
   ];
-  const show = (button: HTMLButtonElement, focus: "first" | "last" | "none" = "none") => {
-    close();
-    const name = button.dataset.menu as string;
-    const panel = document.createElement("div");
-    panel.className = "workspace-dropdown";
-    panel.setAttribute("role", "menu");
-    panel.setAttribute("aria-label", button.textContent ?? name);
-    panel.id = `${name}-dropdown`;
-    for (const item of definitions[name]?.() ?? []) {
+  const navigate = (event: KeyboardEvent, panel: HTMLElement): boolean => {
+    const entries = items(panel);
+    const at = entries.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      entries[(at + step + entries.length) % entries.length]?.focus();
+    } else if (event.key === "Home" || event.key === "End") {
+      (event.key === "Home" ? entries[0] : entries[entries.length - 1])?.focus();
+    } else if (event.key.length === 1 && /\S/.test(event.key)) {
+      const letter = event.key.toLowerCase();
+      const starts = (entry: HTMLButtonElement) =>
+        entry.querySelector(".menu-label")?.textContent?.toLowerCase().startsWith(letter);
+      (
+        entries.find((entry, index) => index > at && starts(entry)) ?? entries.find(starts)
+      )?.focus();
+      return true;
+    } else return false;
+    event.preventDefault();
+    return true;
+  };
+  /** Fills a panel with entries; returns the submenu openers. */
+  const fill = (panel: HTMLElement, list: MenuItem[], focusButton: () => void) => {
+    for (const item of list) {
       if (item === "-") {
         panel.append(document.createElement("hr"));
         continue;
@@ -67,16 +97,65 @@ export function mountMenus(
       entry.type = "button";
       entry.tabIndex = -1;
       if (item.id) entry.dataset.item = item.id;
-      const checked = item.checked?.();
-      entry.setAttribute("role", checked === undefined ? "menuitem" : "menuitemcheckbox");
-      if (checked !== undefined) entry.setAttribute("aria-checked", String(checked));
-      const check = document.createElement("span");
-      check.className = "menu-check";
-      check.setAttribute("aria-hidden", "true");
-      check.textContent = checked === undefined ? "" : "✓";
       const label = document.createElement("span");
       label.className = "menu-label";
       label.textContent = item.label;
+      const check = document.createElement("span");
+      check.className = "menu-check";
+      check.setAttribute("aria-hidden", "true");
+      if ("submenu" in item) {
+        entry.setAttribute("role", "menuitem");
+        entry.setAttribute("aria-haspopup", "menu");
+        entry.setAttribute("aria-expanded", "false");
+        const more = document.createElement("span");
+        more.className = "menu-shortcut";
+        more.setAttribute("aria-hidden", "true");
+        more.textContent = "▸";
+        entry.append(check, label, more);
+        const openChild = (focusFirst: boolean) => {
+          if (child?.entry === entry) {
+            if (focusFirst) items(child.panel)[0]?.focus();
+            return;
+          }
+          closeChild();
+          const sub = document.createElement("div");
+          sub.className = "workspace-dropdown workspace-submenu";
+          sub.setAttribute("role", "menu");
+          sub.setAttribute("aria-label", item.label);
+          fill(sub, item.submenu(), focusButton);
+          document.body.append(sub);
+          const rect = entry.getBoundingClientRect();
+          const right = rect.right + 2;
+          sub.style.left = `${right + sub.offsetWidth > window.innerWidth - 8 ? Math.max(8, rect.left - sub.offsetWidth - 2) : right}px`;
+          sub.style.top = `${Math.max(8, Math.min(rect.top - 5, window.innerHeight - sub.offsetHeight - 8))}px`;
+          entry.setAttribute("aria-expanded", "true");
+          child = { entry, panel: sub };
+          sub.addEventListener("keydown", (event) => {
+            if (navigate(event, sub)) return;
+            if (event.key === "ArrowLeft" || event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              closeChild(true);
+            } else if (event.key === "Tab") close();
+          });
+          if (focusFirst) items(sub)[0]?.focus();
+        };
+        entry.addEventListener("click", () => openChild(true));
+        entry.addEventListener("pointerenter", () => openChild(false));
+        entry.addEventListener("keydown", (event) => {
+          if (event.key === "ArrowRight" || event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            openChild(true);
+          }
+        });
+        panel.append(entry);
+        continue;
+      }
+      const checked = item.checked?.();
+      entry.setAttribute("role", checked === undefined ? "menuitem" : "menuitemcheckbox");
+      if (checked !== undefined) entry.setAttribute("aria-checked", String(checked));
+      check.textContent = checked === undefined ? "" : "✓";
       entry.append(check, label);
       if (item.shortcut) {
         const shortcut = document.createElement("span");
@@ -89,12 +168,26 @@ export function mountMenus(
         );
       }
       entry.disabled = item.enabled ? !item.enabled() : false;
+      entry.addEventListener("pointerenter", () => {
+        if (child && child.panel !== panel) closeChild();
+      });
       entry.addEventListener("click", () => {
-        close(true);
+        close();
+        focusButton();
         item.run();
       });
       panel.append(entry);
     }
+  };
+  const show = (button: HTMLButtonElement, focus: "first" | "last" | "none" = "none") => {
+    close();
+    const name = button.dataset.menu as string;
+    const panel = document.createElement("div");
+    panel.className = "workspace-dropdown";
+    panel.setAttribute("role", "menu");
+    panel.setAttribute("aria-label", button.textContent ?? name);
+    panel.id = `${name}-dropdown`;
+    fill(panel, definitions[name]?.() ?? [], () => button.focus());
     document.body.append(panel);
     const rect = button.getBoundingClientRect();
     panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - panel.offsetWidth - 8))}px`;
@@ -105,16 +198,8 @@ export function mountMenus(
     if (focus === "first") list[0]?.focus();
     if (focus === "last") list[list.length - 1]?.focus();
     panel.addEventListener("keydown", (event) => {
-      const entries = items(panel);
-      const at = entries.indexOf(document.activeElement as HTMLButtonElement);
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        const step = event.key === "ArrowDown" ? 1 : -1;
-        entries[(at + step + entries.length) % entries.length]?.focus();
-      } else if (event.key === "Home" || event.key === "End") {
-        event.preventDefault();
-        (event.key === "Home" ? entries[0] : entries[entries.length - 1])?.focus();
-      } else if (event.key === "Escape") {
+      if (navigate(event, panel)) return;
+      if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
         close(true);
@@ -132,19 +217,6 @@ export function mountMenus(
           .querySelector<HTMLButtonElement>("button:not(:disabled)")
           ?.focus();
       } else if (event.key === "Tab") close();
-      else if (event.key.length === 1 && /\S/.test(event.key)) {
-        const letter = event.key.toLowerCase();
-        const match =
-          entries.find(
-            (entry, index) =>
-              index > at &&
-              entry.querySelector(".menu-label")?.textContent?.toLowerCase().startsWith(letter),
-          ) ??
-          entries.find((entry) =>
-            entry.querySelector(".menu-label")?.textContent?.toLowerCase().startsWith(letter),
-          );
-        match?.focus();
-      }
     });
   };
   for (const button of buttons) {
@@ -167,7 +239,12 @@ export function mountMenus(
   document.addEventListener("pointerdown", (event) => {
     if (!open) return;
     const target = event.target as Node;
-    if (!open.panel.contains(target) && !open.button.contains(target)) close();
+    if (
+      !open.panel.contains(target) &&
+      !open.button.contains(target) &&
+      !child?.panel.contains(target)
+    )
+      close();
   });
   window.addEventListener("resize", () => close());
   return { close, isOpen: () => open !== null };
@@ -191,6 +268,7 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[], onClose?: () =
       panel.append(heading);
       continue;
     }
+    if ("submenu" in item) continue;
     const entry = document.createElement("button");
     entry.type = "button";
     entry.setAttribute("role", "menuitem");

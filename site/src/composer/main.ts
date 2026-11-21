@@ -41,7 +41,6 @@ import {
 } from "./editor";
 import { EXAMPLES, NEW_TUNE } from "./examples";
 import { describeKey, describeMeter, explainAt } from "./explain";
-import { barIsFull, nearestOctave } from "./helpers";
 import { INSTRUMENTS, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
 import { checkLyrics } from "./lyriccheck";
@@ -95,7 +94,6 @@ import { isMidiFile, isScoreFile } from "./score-files";
 import { type SourceFile, abcName, encodeText, newSource, readBytes, readText } from "./source";
 import {
   claimDraft,
-  forgetFile,
   getDraft,
   hashBytes,
   keepDraft,
@@ -705,83 +703,36 @@ const typedMarks = [
  * Typing helpers (Edit › Typing helpers, off by default). Each writes what was typed first, then
  * its change as a separate undo step, so undo goes back to exactly what was typed.
  */
-let lastOctave: { at: number; typed: string; written: string } | null = null;
-function helperOnce(key: string, message: string) {
-  try {
-    if (localStorage.getItem(key)) return;
-    localStorage.setItem(key, "1");
-  } catch {
-    /* Without storage it may be said again next visit. */
-  }
-  notice(message, "info", { holdThroughEdits: 6000 });
+/* The typing helpers (./typing-helpers) load when one is on: they are off by default. */
+let typingHelper: typeof import("./typing-helpers") | null = null;
+function loadTypingHelpers() {
+  if ((prefs.barOnSpace || prefs.autoOctave) && !typingHelper)
+    void import("./typing-helpers").then((module) => {
+      typingHelper = module;
+    });
 }
 const typingHelpers = Prec.highest(
   EditorView.inputHandler.of((target, from, to, typed) => {
-    if (target.composing || target.compositionStarted) return false;
-    const state = target.state;
-    if (state.selection.ranges.length !== 1 || from !== to || !state.selection.main.empty)
-      return false;
-    const doc = state.doc.toString();
-    const file = state.field(fileIndexField);
-    // A field name typed at the start of a line ("C:") keeps the letter as it was typed.
-    if (typed === ":" && lastOctave && lastOctave.at + lastOctave.written.length === from) {
-      const line = state.doc.lineAt(lastOctave.at);
-      if (line.from === lastOctave.at) {
-        target.dispatch({
-          changes: { from: lastOctave.at, to: from, insert: `${lastOctave.typed}:` },
-          selection: { anchor: lastOctave.at + 2 },
-          userEvent: "input.type",
-        });
-        lastOctave = null;
-        return true;
-      }
-    }
-    lastOctave = null;
-    if (typed === " " && prefs.barOnSpace && barIsFull(doc, from, file)) {
-      target.dispatch({
-        changes: { from, insert: " " },
-        selection: { anchor: from + 1 },
-        userEvent: "input.type",
-      });
-      target.dispatch({
-        changes: { from: from + 1, insert: "| " },
-        selection: { anchor: from + 3 },
-        userEvent: "input.helper",
-        annotations: isolateHistory.of("full"),
-      });
-      helperOnce(
-        "vxd-composer-helper-bar",
-        `The bar was full, so Space wrote a bar line. Undo (${shortcutLabel("Mod Z")}) takes it back; Edit › Typing helpers turns this off.`,
-      );
-      return true;
-    }
-    if (prefs.autoOctave && /^[A-Ga-g]$/.test(typed)) {
-      const written = nearestOctave(doc, from, typed, file);
-      if (!written || written === typed) return false;
-      target.dispatch({
-        changes: { from, insert: typed },
-        selection: { anchor: from + 1 },
-        userEvent: "input.type",
-      });
-      target.dispatch({
-        changes: { from, to: from + 1, insert: written },
-        selection: { anchor: from + written.length },
-        userEvent: "input.helper",
-        annotations: isolateHistory.of("full"),
-      });
-      lastOctave = { at: from, typed, written };
-      helperOnce(
-        "vxd-composer-helper-octave",
-        `${typed} became ${written}, the octave nearest the note before, whatever the case you type. Type ' or , after a note to move it an octave. Undo keeps what you typed; Edit › Typing helpers turns this off.`,
-      );
-      return true;
-    }
-    return false;
+    if (target.composing || target.compositionStarted || !typingHelper) return false;
+    if (!prefs.barOnSpace && !prefs.autoOctave) return false;
+    return typingHelper.helpTyping(
+      {
+        prefs,
+        notice: (message) => notice(message, "info", { holdThroughEdits: 6000 }),
+        shortcutLabel,
+      },
+      target,
+      from,
+      to,
+      typed,
+    );
   }),
 );
+loadTypingHelpers();
 function setHelper(key: "barOnSpace" | "autoOctave", on: boolean) {
   prefs[key] = on;
   savePrefs();
+  loadTypingHelpers();
   notice(
     `${key === "barOnSpace" ? "Bar line on Space when the bar is full" : "Automatic octave"}: ${on ? "on" : "off"}.`,
     "success",
@@ -3364,45 +3315,12 @@ function updateVoices() {
   // On a phone the voices live in the Sound sheet; its button carries the same mark.
   $("sound-button").dataset.state = button.dataset.state;
 }
+/** The Voices popover (./sound-panel, loaded with the Sound popover): mute and solo per voice. */
 function voicesPopover(anchor: HTMLElement) {
   const tracks = timeline?.tracks ?? [];
-  const panel = popover(anchor, "Voices");
-  for (const [index, track] of tracks.entries()) {
-    const row = document.createElement("div");
-    row.className = "voice-row";
-    const name = document.createElement("span");
-    name.textContent = track.name;
-    const mute = document.createElement("button");
-    mute.type = "button";
-    mute.textContent = "Mute";
-    mute.setAttribute("aria-label", `Mute ${track.name}`);
-    mute.setAttribute("aria-pressed", String(muted.has(index)));
-    mute.addEventListener("click", () => {
-      if (muted.has(index)) muted.delete(index);
-      else muted.add(index);
-      mute.setAttribute("aria-pressed", String(muted.has(index)));
-      updateVoices();
-    });
-    const solo = document.createElement("button");
-    solo.type = "button";
-    solo.textContent = "Solo";
-    solo.setAttribute("aria-label", `Solo ${track.name}`);
-    solo.setAttribute("aria-pressed", String(soloed.has(index)));
-    solo.addEventListener("click", () => {
-      if (soloed.has(index)) soloed.delete(index);
-      else soloed.add(index);
-      solo.setAttribute("aria-pressed", String(soloed.has(index)));
-      updateVoices();
-    });
-    row.append(name, mute, solo);
-    panel.append(row);
-  }
-  const hint = document.createElement("p");
-  hint.className = "hint";
-  hint.textContent = tracks.some((track) => track.chords)
-    ? "Chords play the tune's chord symbols. Mute and solo apply at once, even while playing."
-    : "Mute and solo apply at once, even while playing.";
-  panel.append(hint);
+  void import("./sound-panel").then((module) =>
+    module.fillVoices(popover(anchor, "Voices"), tracks, { muted, soloed, update: updateVoices }),
+  );
 }
 
 /* Popovers for the transport. */
@@ -4239,34 +4157,20 @@ async function fillRecentStart() {
   }
 }
 
+/** File › Recent (./recover, loaded when first opened): files opened before, and Recover a draft. */
 async function recentMenu(anchor: HTMLElement) {
-  const files = await recentFiles().catch(() => []);
-  const items: MenuItem[] = files.length
-    ? files.map((file) => ({
-        label: file.name,
-        run: async () => {
-          try {
-            const handle = file.handle as FileSystemFileHandle & {
-              requestPermission?: (options: { mode: string }) => Promise<string>;
-            };
-            if (
-              handle.requestPermission &&
-              (await handle.requestPermission({ mode: "readwrite" })) !== "granted"
-            )
-              return;
-            const bytes = new Uint8Array(await (await handle.getFile()).arrayBuffer());
-            openBytes(bytes, file.name);
-            local.connect(handle as never, bytes);
-            void rememberFile(file.name, handle);
-          } catch {
-            await forgetFile(file.id);
-            noticeError(`${file.name} could not be reopened. It may have moved; use Open.`);
-          }
-        },
-      }))
-    : [{ heading: "No recent files yet" }];
-  items.push("-", { label: "Recover a draft…", run: () => void openRecover() });
-  popupMenu(anchor, items);
+  const { recentItems } = await import("./recover");
+  popupMenu(
+    anchor,
+    await recentItems({
+      open: (bytes, name, handle) => {
+        openBytes(bytes, name);
+        local.connect(handle as never, bytes);
+      },
+      noticeError,
+      recover: () => void openRecover(),
+    }),
+  );
 }
 
 /* Help, shortcuts, appearance. */

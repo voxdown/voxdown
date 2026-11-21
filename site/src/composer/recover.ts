@@ -4,7 +4,8 @@
  */
 import "./recover.css";
 import { humanDate } from "./dates";
-import { deleteDraft, listDrafts } from "./storage";
+import type { MenuItem } from "./menus";
+import { deleteDraft, forgetFile, listDrafts, recentFiles, rememberFile } from "./storage";
 
 export async function fillRecover(
   dialog: { body: HTMLElement; close: () => void },
@@ -62,4 +63,38 @@ export async function fillRecover(
     failed.textContent = "Browser storage is unavailable here, so drafts cannot be listed.";
     dialog.body.append(failed);
   }
+}
+
+/** File › Recent's items: each file opened before (asked for again), then Recover a draft. */
+export async function recentItems(context: {
+  open: (bytes: Uint8Array, name: string, handle: FileSystemFileHandle) => void;
+  noticeError: (message: string) => void;
+  recover: () => void;
+}): Promise<MenuItem[]> {
+  const files = await recentFiles().catch(() => []);
+  const items: MenuItem[] = files.length
+    ? files.map((file) => ({
+        label: file.name,
+        run: async () => {
+          try {
+            const handle = file.handle as FileSystemFileHandle & {
+              requestPermission?: (options: { mode: string }) => Promise<string>;
+            };
+            if (
+              handle.requestPermission &&
+              (await handle.requestPermission({ mode: "readwrite" })) !== "granted"
+            )
+              return;
+            const bytes = new Uint8Array(await (await handle.getFile()).arrayBuffer());
+            context.open(bytes, file.name, handle);
+            void rememberFile(file.name, handle);
+          } catch {
+            await forgetFile(file.id);
+            context.noticeError(`${file.name} could not be reopened. It may have moved; use Open.`);
+          }
+        },
+      }))
+    : [{ heading: "No recent files yet" }];
+  items.push("-", { label: "Recover a draft…", run: context.recover });
+  return items;
 }

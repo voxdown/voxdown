@@ -116,3 +116,47 @@ export function fillSound(panel: HTMLElement, context: SoundContext) {
     "Instruments load the first time you choose them, then stay in this browser for offline use. Dynamics, accents, staccato and slurs in the score shape the playing.";
   panel.append(hint);
 }
+
+/** The Voices popover's rows: mute and solo for each voice, applied at once, even while playing. */
+export function fillVoices(
+  panel: HTMLElement,
+  tracks: { name: string; chords?: boolean }[],
+  context: { muted: Set<number>; soloed: Set<number>; update: () => void },
+) {
+  for (const [index, track] of tracks.entries()) {
+    const row = document.createElement("div");
+    row.className = "voice-row";
+    const name = document.createElement("span");
+    name.textContent = track.name;
+    const mute = document.createElement("button");
+    mute.type = "button";
+    mute.textContent = "Mute";
+    mute.setAttribute("aria-label", `Mute ${track.name}`);
+    mute.setAttribute("aria-pressed", String(context.muted.has(index)));
+    mute.addEventListener("click", () => {
+      if (context.muted.has(index)) context.muted.delete(index);
+      else context.muted.add(index);
+      mute.setAttribute("aria-pressed", String(context.muted.has(index)));
+      context.update();
+    });
+    const solo = document.createElement("button");
+    solo.type = "button";
+    solo.textContent = "Solo";
+    solo.setAttribute("aria-label", `Solo ${track.name}`);
+    solo.setAttribute("aria-pressed", String(context.soloed.has(index)));
+    solo.addEventListener("click", () => {
+      if (context.soloed.has(index)) context.soloed.delete(index);
+      else context.soloed.add(index);
+      solo.setAttribute("aria-pressed", String(context.soloed.has(index)));
+      context.update();
+    });
+    row.append(name, mute, solo);
+    panel.append(row);
+  }
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = tracks.some((track) => track.chords)
+    ? "Chords play the tune's chord symbols. Mute and solo apply at once, even while playing."
+    : "Mute and solo apply at once, even while playing.";
+  panel.append(hint);
+}

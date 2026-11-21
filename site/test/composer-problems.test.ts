@@ -17,7 +17,7 @@ describe("problems in plain words", () => {
   it("an unclosed decoration", () => {
     const { text, problems } = read("!fermat A B|");
     expect(problems).toHaveLength(1);
-    expect(problems[0]?.message).toBe("!fermat… is missing its closing !.");
+    expect(problems[0]?.message).toBe("!fermat… is missing its closing\u00a0!.");
     expect(text.slice(problems[0]?.from, problems[0]?.to)).toBe("!fermat");
     expect(problems[0]?.detail).toBeUndefined();
   });
@@ -32,21 +32,30 @@ describe("problems in plain words", () => {
     expect(nearestDecoration("tril")).toBe("trill");
   });
 
+  it("an unclosed decoration read on to the next one", () => {
+    const { text, problems } = read("!fermat A | !fermatta!B C|");
+    expect(problems.map((problem) => problem.message)).toEqual([
+      "!fermat… is missing its closing\u00a0!.",
+      "!fermatta! isn't a decoration abcjs knows (did you mean !fermata!?).",
+    ]);
+    expect(text.slice(problems[1]?.from, problems[1]?.to)).toBe("!fermatta!");
+  });
+
   it("an unclosed chord", () => {
     const { text, problems } = read("[CEG A B|");
-    expect(problems[0]?.message).toBe("This chord [CEG is missing its closing ].");
+    expect(problems[0]?.message).toBe("This chord [CEG is missing its closing\u00a0].");
     expect(text.slice(problems[0]?.from, problems[0]?.to)).toBe("[CEG");
   });
 
   it("an unclosed chord symbol", () => {
     const { problems } = read('"Am A B|');
-    expect(problems[0]?.message).toBe('The chord symbol "Am is missing its closing ".');
+    expect(problems[0]?.message).toBe('The chord symbol "Am is missing its closing\u00a0".');
   });
 
   it("unclosed grace notes", () => {
     const { problems } = read("A3 {g A|");
     expect(problems).toHaveLength(1);
-    expect(problems[0]?.message).toBe("The grace notes {g are missing their closing }.");
+    expect(problems[0]?.message).toBe("The grace notes {g are missing their closing\u00a0}.");
   });
 
   it("a stray character", () => {
@@ -71,7 +80,7 @@ describe("problems in plain words", () => {
     const open = `${HEAD}(A B C| D E F|\n`;
     const openFile = indexFile(open);
     expect(checkSlurs(open, openFile.tunes[0] as never, openFile)[0]?.message).toBe(
-      "This slur ( has no closing ): add one after its last note.",
+      "This slur ( has no closing\u00a0): add one after its last note.",
     );
   });
 });

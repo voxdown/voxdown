@@ -262,3 +262,34 @@ narrow scores are drawn at 0.86 with tighter title and system spacing (set on th
 formatting, so no source offsets move), lyrics and chord symbols set larger to compensate, voice
 names once, and two bars per line wherever they fit; the phone transport labels its icons and
 Voices moves into the Sound sheet; the start screen's transport is a slim empty state.
+
+## Polish round 5, the last (after round 4: Claude 8.4, Codex 8.1)
+
+Help: the cheat sheet's code-column rule no longer reaches the key tables; keys wrap between
+chords and stack under their action below 520 px. Shortcuts name punctuation keys ("Alt Comma",
+"Mod Backslash"), so "Remove a dot" reads Alt+, (⌥, on a Mac) everywhere. The Tab hint shows
+after the indent and stays through typing.
+
+Editor truth: a blank line ends a tune where abcjs ends it, so the index, checks, rail and summary
+agree with what is drawn; the music below is a problem with a gutter mark, opening a sheet with a
+one-click "Remove the empty line"; music before the first X: is noted the same way. abcjs's
+warnings are read into plain words where the text shows the cause (unclosed or unknown
+decorations with a guess, unclosed chords, chord symbols and grace notes, stray characters,
+unknown bar lines), plus Composer's own check for unbalanced slurs; abcjs's words remain only as a
+second line when nothing fits. Its warning columns are 1-based. The tokenizer no longer reads an
+unclosed !decoration's letters as notes, and a bar line closes a chord left open.
+
+Timeline: labels are measured and dropped rather than touching (first and last bar always kept),
+written bar numbers appear on their first time through only, the repeat band carries a "2nd"
+tag, and a readout names the bar under the pointer. On a phone, scrubbing shows a large readout
+over the finger, snaps to bar starts and lets the ruler take the whole row; the ruler is 44 px.
+
+Weight: completion and Find (with closeBrackets) load on first use of the text; the cheat sheet
+and shortcut list load, with their CSS, when first opened. First view 752 KB → 707 KB raw,
+354 KB → 340 KB gzip; DOMContentLoaded on a warm reload is unchanged (about 30 ms). What
+remains is CodeMirror's core (306 KB, needed to draw the editor), Composer's own code (171 KB)
+and three Latin-only variable fonts (162 KB: Recursive, Literata, Literata italic for the brand).
+Splitting further means drawing the start screen without the editor, a larger change.
+
+Final pass at 1440, 1024 and 390 in Paper, Night and High contrast: see the round 5 reply for
+the list of fixes.

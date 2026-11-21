@@ -131,7 +131,8 @@ export function tokenizeMusic(line: string, offset = 0): MusicToken[] {
         continue;
       }
       if (char === "!") {
-        push("unknown", 1);
+        // A decoration that never closes ("!fermat A"): its letters are not notes.
+        push("unknown", (/^!\S*/.exec(rest) as RegExpExecArray)[0].length);
         continue;
       }
     }
@@ -142,6 +143,18 @@ export function tokenizeMusic(line: string, offset = 0): MusicToken[] {
     }
     const bar = BAR.exec(rest);
     if (bar && !(char === "[" && /^\[[A-Ga-gz^_=]/.test(rest) && !/^\[\|/.test(rest))) {
+      // A bar line ends a chord left open ("[CE |"), as abcjs reads it.
+      if (inChord) {
+        inChord = false;
+        tokens.push({
+          kind: "chord-close",
+          from: offset + i,
+          to: offset + i,
+          text: "",
+          length: "",
+          lengthFrom: offset + i,
+        });
+      }
       push("bar", bar[0].length);
       continue;
     }

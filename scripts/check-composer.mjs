@@ -1754,7 +1754,7 @@ console.log(
   await tab.locator("#problems").click();
   assert.match(
     await tab.locator(".problems-popover").textContent(),
-    /!fermat… is missing its closing !\./,
+    /!fermat… is missing its closing\s!\./,
   );
   await tab.keyboard.press("Escape");
 

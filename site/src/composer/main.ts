@@ -92,7 +92,14 @@ import {
   regionTimeline,
   soundingAt,
 } from "./timeline";
-import { type FileIndex, type TuneInfo, nextTuneNumber, tuneAt, tuneLabel } from "./tunes";
+import {
+  type FileIndex,
+  type Orphan,
+  type TuneInfo,
+  nextTuneNumber,
+  tuneAt,
+  tuneLabel,
+} from "./tunes";
 import { tuneItems } from "./walk";
 
 /* biome-ignore lint/suspicious/noExplicitAny: abcjs objects. */
@@ -633,9 +640,8 @@ function explainCaret(update: ViewUpdate) {
   }
   // Music a blank line left outside its tune says so wherever the caret is in it.
   const orphan = fileIndex().orphans.find((each) => position >= each.from && position <= each.to);
-  const orphanProblem = orphan && problems.find((problem) => problem.from === orphan.from);
-  if (orphanProblem) {
-    status.textContent = orphanProblem.message;
+  if (orphan) {
+    status.textContent = orphanMessage(orphan);
     return;
   }
   if (!explanation) {
@@ -1088,18 +1094,14 @@ function runChecks(caretLeft = false) {
     }
   }
   for (const orphan of index.orphans) {
-    const name = orphan.tune
-      ? `X:${orphan.tune.number}${orphan.tune.title ? ` “${orphan.tune.title}”` : ""}`
-      : "";
+    const name = orphanName(orphan);
     const lines = orphan.blank
       ? doc.slice(orphan.blank.from, orphan.blank.to).split("\n").length - 1
       : 0;
     list.push({
       from: orphan.from,
       to: orphan.to,
-      message: orphan.tune
-        ? `A blank line ends the tune: the music below isn't part of ${name}.`
-        : "This music comes before the first X: line, so it isn't part of any tune.",
+      message: orphanMessage(orphan),
       severity: "warning",
       kind: "orphan",
       label: orphan.tune
@@ -1157,6 +1159,18 @@ function runChecks(caretLeft = false) {
       )
     : [];
   linkFromText();
+}
+
+/** "X:1 “Air”": the tune a blank line ended. */
+function orphanName(orphan: Orphan): string {
+  return orphan.tune
+    ? `X:${orphan.tune.number}${orphan.tune.title ? ` “${orphan.tune.title}”` : ""}`
+    : "";
+}
+function orphanMessage(orphan: Orphan): string {
+  return orphan.tune
+    ? `A blank line ends the tune: the music below isn't part of ${orphanName(orphan)}.`
+    : "This music comes before the first X: line, so it isn't part of any tune.";
 }
 
 /** "1 bar to check", "2 problems", "1 bar to check · 1 problem". */
@@ -2037,8 +2051,17 @@ function fitTimelineLabels() {
   const labels = [
     ...ruler.querySelectorAll<HTMLElement>(".timeline-tick span, .timeline-pass-tag"),
   ];
-  for (const label of labels) label.hidden = false;
+  for (const label of labels) {
+    label.hidden = false;
+    label.style.translate = "";
+  }
   if (width <= 0) return;
+  // A label at the end (the final bar's) stays inside the ruler, clear of the clock beside it.
+  const right = ruler.getBoundingClientRect().right;
+  for (const label of labels) {
+    const over = label.getBoundingClientRect().right - right;
+    if (over > 0) label.style.translate = `${-Math.ceil(over)}px 0`;
+  }
   const kept: DOMRect[] = [];
   const gap = 6;
   for (const priority of ["0", "1", "2"])
@@ -2274,8 +2297,12 @@ function popover(anchor: HTMLElement, title: string): HTMLElement {
   document.body.append(panel);
   const place = () => {
     const rect = anchor.getBoundingClientRect();
-    panel.style.left = `${Math.max(8, Math.min(rect.right - panel.offsetWidth, window.innerWidth - panel.offsetWidth - 8))}px`;
-    panel.style.top = `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`;
+    // From a mark in the editor's gutter it opens to the right; elsewhere it ends at the anchor.
+    const left = anchor.closest(".abc-gutter") ? rect.right + 8 : rect.right - panel.offsetWidth;
+    panel.style.left = `${Math.max(8, Math.min(left, window.innerWidth - panel.offsetWidth - 8))}px`;
+    // Above the anchor when it fits, else below it: never over the thing it is about.
+    const above = rect.top - panel.offsetHeight - 8;
+    panel.style.top = `${above >= 8 ? above : Math.min(rect.bottom + 8, window.innerHeight - panel.offsetHeight - 8)}px`;
   };
   requestAnimationFrame(place);
   const outside = (event: PointerEvent) => {
@@ -2320,10 +2347,12 @@ function soundPopover(anchor: HTMLElement) {
     const label = document.createElement("span");
     label.textContent = def.label;
     const small = document.createElement("small");
-    small.textContent = player.ready(id)
-      ? def.about
-      : `${def.about} · ${Math.round(def.bytes / 1024)}\u00a0KB`;
-    button.append(label, small);
+    small.textContent = def.about;
+    // What choosing it downloads, on its own line, until it is kept here.
+    const size = document.createElement("small");
+    size.className = "instrument-size";
+    size.textContent = player.ready(id) ? "" : `${Math.round(def.bytes / 1024)}\u00a0KB to load`;
+    button.append(label, small, size);
     button.addEventListener("click", async () => {
       prefs.instrument = id;
       savePrefs();
@@ -2334,7 +2363,7 @@ function soundPopover(anchor: HTMLElement) {
       const position = player.position();
       if (wasPlaying) player.pause();
       await player.setInstrument(id);
-      small.textContent = def.about;
+      size.textContent = "";
       if (wasPlaying && !player.loopingRegion) void player.play({ from: position });
     });
     choices.append(button);
@@ -2384,7 +2413,7 @@ function soundPopover(anchor: HTMLElement) {
     savePrefs();
   });
   // On a phone, Voices has no room in the transport: it opens from here.
-  if (phone.matches && (timeline?.tracks.length ?? 0) > 1) {
+  if (phone.matches && !$("voices-button").hidden) {
     const voices = document.createElement("button");
     voices.type = "button";
     voices.className = "sheet-link";
@@ -3051,22 +3080,30 @@ async function openRecover() {
       openButton.className = "open";
       openButton.textContent = draft.title || draft.name;
       const small = document.createElement("small");
-      small.textContent = `${draft.name} · ${humanDate(draft.updated)} · ${draft.characters.toLocaleString()} characters${draft.id === draftId ? " · open here" : ""}`;
+      small.textContent = `${draft.name} · ${humanDate(draft.updated)} · ${draft.characters.toLocaleString()}\u00a0characters`;
       openButton.append(small);
       openButton.addEventListener("click", () => {
         recoverDialog.close();
         void recoverDraft(draft.id);
       });
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.textContent = "Delete";
-      remove.setAttribute("aria-label", `Delete draft ${draft.title || draft.name}`);
-      remove.disabled = draft.id === draftId;
-      remove.addEventListener("click", async () => {
-        await deleteDraft(draft.id);
-        row.remove();
-      });
-      row.append(openButton, remove);
+      // The draft open in this tab says so instead of offering a Delete it cannot do.
+      if (draft.id === draftId) {
+        const here = document.createElement("span");
+        here.className = "recent-here";
+        here.textContent = "Open here";
+        row.append(openButton, here);
+      } else {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "recent-delete";
+        remove.textContent = "Delete";
+        remove.setAttribute("aria-label", `Delete draft ${draft.title || draft.name}`);
+        remove.addEventListener("click", async () => {
+          await deleteDraft(draft.id);
+          row.remove();
+        });
+        row.append(openButton, remove);
+      }
       recoverDialog.body.append(row);
     }
   } catch {
@@ -3325,23 +3362,19 @@ function openProblems(anchor: HTMLElement = $("problems"), only?: Problem[]) {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = problemText(problem);
+    // From the gutter mark: the whole sentence; in the list, the short label with its line.
+    button.textContent = only ? problem.message : problemText(problem);
     button.addEventListener("click", () => {
       closePopover?.();
       goToProblem(problem);
     });
     item.append(button);
-    // From the gutter: the whole message; abcjs's own words under ours when they add something.
-    if (only || problem.detail) {
+    // abcjs's own words under ours, only when no reading of ours fits.
+    if (problem.detail) {
       const detail = document.createElement("p");
       detail.className = "problem-detail";
-      if (only && problem.label) detail.textContent = problem.message;
-      if (problem.detail) {
-        const raw = document.createElement("small");
-        raw.textContent = problem.detail;
-        detail.append(raw);
-      }
-      if (detail.childNodes.length) item.append(detail);
+      detail.textContent = problem.detail;
+      item.append(detail);
     }
     if (problem.fix) {
       const { fix } = problem;

@@ -86,6 +86,16 @@ function readWarning(raw: string, at: number, text: string): PlainProblem | null
   const lineStart = text.lastIndexOf("\n", at - 1) + 1;
   const lineEnd = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
   const decoration = /^Unknown decoration: (.+)$/.exec(raw);
+  if (decoration && /\s/.test((decoration[1] as string).trim())) {
+    // abcjs read on to the next ! on the line: the first one never closed.
+    const start = text.lastIndexOf("!", at) >= lineStart ? text.lastIndexOf("!", at) : at;
+    const word = wordAround(text, start);
+    return {
+      from: start,
+      to: word.to,
+      message: `!${shorten(text.slice(start + 1, word.to))}… is missing its closing\u00a0!.`,
+    };
+  }
   if (decoration) {
     const name = (decoration[1] as string).trim();
     const start = text.lastIndexOf("!", at) >= lineStart ? text.lastIndexOf("!", at) : at;
@@ -104,7 +114,7 @@ function readWarning(raw: string, at: number, text: string): PlainProblem | null
     return {
       from: open,
       to: Math.max(word.to, open + 1),
-      message: `The chord symbol ${shorten(text.slice(open, word.to))} is missing its closing ".`,
+      message: `The chord symbol ${shorten(text.slice(open, word.to))} is missing its closing\u00a0".`,
     };
   }
   if (/^Expected '\]' to end the chords/.test(raw)) {
@@ -114,7 +124,7 @@ function readWarning(raw: string, at: number, text: string): PlainProblem | null
       return {
         from: open,
         to: Math.max(word.to, open + 1),
-        message: `This chord ${shorten(text.slice(open, word.to))} is missing its closing ].`,
+        message: `This chord ${shorten(text.slice(open, word.to))} is missing its closing\u00a0].`,
       };
     }
   }
@@ -124,7 +134,7 @@ function readWarning(raw: string, at: number, text: string): PlainProblem | null
     return {
       from: open,
       to: Math.max(word.to, open + 1),
-      message: `The grace notes ${shorten(text.slice(open, word.to))} are missing their closing }.`,
+      message: `The grace notes ${shorten(text.slice(open, word.to))} are missing their closing\u00a0}.`,
     };
   }
   if (/^Unknown character ignored/.test(raw)) {
@@ -137,7 +147,22 @@ function readWarning(raw: string, at: number, text: string): PlainProblem | null
       return {
         from: word.from + bang,
         to: word.to,
-        message: `!${shorten(name)}… is missing its closing !.`,
+        message: `!${shorten(name)}… is missing its closing\u00a0!.`,
+      };
+    }
+    // Inside a !name! that abcjs skipped letter by letter (after an earlier ! went unclosed).
+    const pair = /!([^!\s]+)!/g;
+    for (let found = pair.exec(token); found; found = pair.exec(token)) {
+      const from = word.from + found.index;
+      const to = from + found[0].length;
+      if (at < from || at >= to) continue;
+      const name = found[1] as string;
+      if (name in DECORATIONS) break;
+      const guess = nearestDecoration(name);
+      return {
+        from,
+        to,
+        message: `!${name}! isn't a decoration abcjs knows${guess ? ` (did you mean !${guess}!?)` : ""}.`,
       };
     }
     const char = text[at] ?? "";
@@ -181,7 +206,7 @@ export function checkSlurs(text: string, tune: TuneInfo, file: FileIndex | null)
       out.push({
         from,
         to: from + 1,
-        message: "This slur ( has no closing ): add one after its last note.",
+        message: "This slur ( has no closing\u00a0): add one after its last note.",
       });
   return out.sort((a, b) => a.from - b.from);
 }

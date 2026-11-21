@@ -10,8 +10,20 @@
  * plays a note twice still has the melody. Rhythm can be ignored, or required as the same
  * relative lengths.
  */
-import { type NoteToken, alterationOf, midiOf, octaveOf, value } from "./abc";
-import { type FileIndex, type TuneInfo, indexFile, tuneLabel } from "./tunes";
+import {
+  type NoteToken,
+  alterationOf,
+  defaultUnit,
+  frac,
+  midiOf,
+  octaveOf,
+  parseKey,
+  parseUnit,
+  value,
+} from "./abc";
+import { selectedNotes } from "./selected";
+import { lengthText, pitchText } from "./stepentry";
+import { type FileIndex, type TuneInfo, indexFile, tuneAt, tuneLabel } from "./tunes";
 import { tuneItems, walkTune } from "./walk";
 
 /** A sounding note in a voice: its pitch, length (whole notes), place in the text and bar. */
@@ -309,4 +321,67 @@ export function rankMatches<T extends MelodyMatch>(matches: T[]): T[] {
 export function describeMatch(match: MelodyMatch): string {
   const voice = match.voiceName || (match.tune.voices.length > 1 ? `V:${match.voice}` : "");
   return `${tuneLabel(match.tune)}${voice ? ` · ${voice}` : ""} · bar ${match.bar}`;
+}
+
+/**
+ * The melody a selection plays, as a query for the search: the selected notes' sounding pitches
+ * and lengths in one voice (the voice of the main range's first note, else the selection's highest
+ * voice), written in the tune's key and unit with the accidentals they need. Not the selection's
+ * text: that may hold two voices, lean on an accidental earlier in the bar, or follow a key change.
+ */
+export function queryFromSelection(
+  text: string,
+  file: FileIndex,
+  ranges: { from: number; to: number }[],
+  main = 0,
+): { query: string; key: string; unit: string } | null {
+  const picked = selectedNotes(text, ranges, file).filter((each) => !each.event.rest);
+  const first = (
+    selectedNotes(text, [ranges[main] ?? { from: 0, to: 0 }], file).find(
+      (each) => !each.event.rest,
+    ) ?? picked[0]
+  )?.event;
+  if (!first) return null;
+  const tune = tuneAt(file, first.from);
+  if (!tune) return null;
+  const voices = melodyOf(text, tune, file);
+  const chosen = (voice: VoiceMelody) =>
+    voice.notes.filter((note) =>
+      note.spans.some((span) =>
+        picked.some(
+          (each) =>
+            each.event.voice === voice.voice &&
+            span.from < each.event.to &&
+            span.to > each.event.from,
+        ),
+      ),
+    );
+  const mean = (notes: MelodyNote[]) =>
+    notes.reduce((sum, note) => sum + note.pitch, 0) / Math.max(1, notes.length);
+  const mainVoice = voices.find((voice) => voice.voice === first.voice);
+  const highest = voices
+    .map((voice) => ({ voice, notes: chosen(voice) }))
+    .filter((each) => each.notes.length)
+    .sort((a, b) => mean(b.notes) - mean(a.notes))[0];
+  const notes = mainVoice && chosen(mainVoice).length ? chosen(mainVoice) : (highest?.notes ?? []);
+  if (!notes.length) return null;
+  const key = tune.key.split(/\s+/)[0] || "C";
+  const unit = tune.unit || "1/8";
+  const unitLength = parseUnit(unit) ?? defaultUnit(tune.meter);
+  // One bar for the whole query (the search reads it as one): an accidental holds to its end.
+  const reading = {
+    key: parseKey(key),
+    bar: new Map<string, number>(),
+    unit: unitLength,
+    meter: "",
+    voice: "1",
+    shift: 0,
+  };
+  const query = notes
+    .map(
+      (note) =>
+        `${pitchText(note.pitch, reading)}${lengthText(frac(Math.round(note.length * 384), 384), unitLength)}`,
+    )
+    .join(" ");
+  return { query, key, unit };
 }

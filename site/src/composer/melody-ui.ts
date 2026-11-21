@@ -13,6 +13,7 @@ import {
   type MelodyMatch,
   type MelodyOptions,
   describeMatch,
+  queryFromSelection,
   queryNotes,
   rankMatches,
   searchFile,
@@ -126,12 +127,16 @@ export async function openMelody(given: MelodyContext, fromSelection = false) {
   if (!panel) build(given);
   const input = panel?.querySelector<HTMLInputElement>("#melody-query") as HTMLInputElement;
   const selection = view.state.selection.ranges.filter((range) => !range.empty);
-  if (fromSelection && selection.length)
-    input.value = selection
-      .map((range) => view.state.sliceDoc(range.from, range.to))
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
+  if (fromSelection && selection.length) {
+    // The notes the selection plays, not its text (./melody's queryFromSelection).
+    const found = queryFromSelection(
+      view.state.doc.toString(),
+      given.file(),
+      selection.map((range) => ({ from: range.from, to: range.to })),
+      Math.max(0, selection.indexOf(view.state.selection.main)),
+    );
+    if (found) input.value = found.query;
+  }
   input.focus();
   input.select();
   await search();

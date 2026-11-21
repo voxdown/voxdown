@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_OPTIONS,
   describeMatch,
+  queryFromSelection,
   queryNotes,
   rankMatches,
   searchFile,
@@ -154,6 +155,35 @@ describe("melody search, complete and ranked", () => {
     expect(find("C D E F", text).map((each) => each.where)).toEqual([
       "Two · Lead · bar 1",
       "Two · V:2 · bar 1",
+    ]);
+  });
+});
+
+describe("Find this melody, from a selection", () => {
+  const from = (text: string, part: string, nth = 0) => {
+    let at = text.indexOf(part);
+    for (let n = 0; n < nth; n++) at = text.indexOf(part, at + 1);
+    return queryFromSelection(text, indexFile(text), [{ from: at, to: at + part.length }])?.query;
+  };
+  it("takes one voice of a staff with two (the main range's)", () => {
+    const text = tune("Two", "M:4/4\nL:1/8\nK:C\nV:1\nV:2", "[V:1] cdef ga g2 | [V:2] C4 E4 |");
+    // A selection over both voices' text: the first voice's notes, not its letters mixed in.
+    const at = text.indexOf("cdef");
+    const end = text.indexOf("E4") + 2;
+    const query = queryFromSelection(text, indexFile(text), [{ from: at, to: end }])?.query;
+    expect(query).toBe("c d e f g a g2");
+  });
+  it("hears an accidental written earlier in the bar", () => {
+    const text = tune("Sharp", "M:4/4\nL:1/8\nK:C", "^F2 GA F4 |");
+    expect(from(text, "GA F4")).toBe("G A ^F4");
+  });
+  it("hears a key change in the middle of the tune", () => {
+    const text = tune("Key", "M:4/4\nL:1/8\nK:C", "C D E F | [K:D] F A d2 |");
+    expect(from(text, "F A d2")).toBe("^F A d2");
+    // And finds it, wherever the same notes are played.
+    const query = queryNotes(from(text, "F A d2") ?? "", "C");
+    expect(searchFile(query, text, indexFile(text)).map((match) => match.excerpt)).toEqual([
+      "F A d2",
     ]);
   });
 });

@@ -17,16 +17,12 @@ import {
   transposeChordSymbol,
   writePitch,
 } from "./abc";
+import { selectedNotes } from "./selected";
 import { type FileIndex, indexFile } from "./tunes";
 import { type MusicEvent, tuneItems, walkTune } from "./walk";
 
 export type Range = { from: number; to: number };
 export type Change = { from: number; to: number; insert: string };
-
-const within = (ranges: Range[], from: number, to: number) =>
-  ranges.some((range) => from >= range.from && to <= range.to && to > from);
-const touches = (ranges: Range[], from: number, to: number) =>
-  ranges.some((range) => from < range.to && to > range.from);
 
 /** An empty range (a caret) stands for the note, chord or rest it is in or just after. */
 export function resolveRanges(text: string, ranges: Range[], file = indexFile(text)): Range[] {
@@ -73,6 +69,14 @@ export function transpose(
   const changes: Change[] = [];
   const octaveOnly = semitones % 12 === 0;
   const ranges = resolveRanges(text, selection, file);
+  // The one rule: the tones selected, and the grace notes and chord symbol written before a note
+  // selected whole.
+  const picked = selectedNotes(text, selection, file);
+  const tones = new Set(picked.flatMap((each) => each.tones.map((tone) => tone.from)));
+  const attached = picked
+    .filter((each) => each.whole)
+    .map((each) => ({ from: each.span.from, to: each.event.from }));
+  const isAttached = (at: number) => attached.some((range) => at >= range.from && at < range.to);
   for (const tune of tunesTouched(file, ranges)) {
     const output = new Map<string, Map<string, number>>();
     const dirty = new Map<string, boolean>();
@@ -87,7 +91,7 @@ export function transpose(
         dirty.set(state.voice, false);
         return;
       }
-      if (token.kind === "chord-symbol" && within(ranges, token.from, token.to) && !octaveOnly) {
+      if (token.kind === "chord-symbol" && isAttached(token.from) && !octaveOnly) {
         const symbol = token.text.slice(1, -1);
         const moved = transposeChordSymbol(symbol, semitones, state.key);
         if (moved !== symbol)
@@ -95,7 +99,7 @@ export function transpose(
         return;
       }
       if (token.kind !== "note") return;
-      const selected = within(ranges, token.from, token.to);
+      const selected = tones.has(token.from) || (token.inGrace && isAttached(token.from));
       const { alter } = alterationOf(token, state.key, state.bar);
       const octave = octaveOf(token.letter, token.octave);
       const place = (letter: string, octaveNumber: number) =>
@@ -147,6 +151,8 @@ export function transpose(
 /** The length tokens a selection owns: notes and rests, or a chord's outer length. */
 function lengthTargets(text: string, ranges: Range[], file: FileIndex) {
   const targets: { from: number; to: number; length: string }[] = [];
+  // The one rule: the events selected (a chord's length is the chord's, even for one tone).
+  const starts = new Set(selectedNotes(text, ranges, file).map((each) => each.event.from));
   for (const tune of tunesTouched(file, ranges)) {
     let chord: { from: number; notes: NoteToken[] } | null = null;
     let grace = false;
@@ -159,7 +165,7 @@ function lengthTargets(text: string, ranges: Range[], file: FileIndex) {
       else if (token.kind === "chord-close" && chord) {
         const open = chord as { from: number; notes: NoteToken[] };
         chord = null;
-        if (!touches(ranges, open.from, token.to)) return;
+        if (!starts.has(open.from)) return;
         if (token.length || !open.notes.some((note) => note.length))
           targets.push({
             from: token.lengthFrom ?? token.to,
@@ -173,7 +179,7 @@ function lengthTargets(text: string, ranges: Range[], file: FileIndex) {
         (token.kind === "note" || (token.kind === "rest" && /[zx]/.test(token.letter))) &&
         !chord
       ) {
-        if (touches(ranges, token.from, token.to))
+        if (starts.has(token.from))
           targets.push({ from: token.lengthFrom, to: token.to, length: token.length });
       }
     });
@@ -210,21 +216,8 @@ export function removeDots(text: string, ranges: Range[], file = indexFile(text)
 
 /** The notes, chords and rests a selection covers (or the one at the caret). */
 export function eventsIn(text: string, ranges: Range[], file = indexFile(text)): MusicEvent[] {
-  const events: MusicEvent[] = [];
-  for (const tune of file.tunes) {
-    if (!ranges.some((range) => range.from <= tune.to && range.to >= tune.bodyFrom)) continue;
-    for (const item of tuneItems(text, tune, file))
-      if (
-        item.type === "event" &&
-        ranges.some((range) =>
-          range.from === range.to
-            ? range.from >= item.from && range.from <= item.to
-            : item.from < range.to && item.to > range.from,
-        )
-      )
-        events.push(item);
-  }
-  return events;
+  // The one rule (./selected): a note is selected when a range touches it or what is attached.
+  return selectedNotes(text, ranges, file).map((picked) => picked.event);
 }
 
 /** Ties each selected note to the next (or removes the ties when all have one). */

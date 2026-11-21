@@ -745,7 +745,11 @@ export function regionOfRanges(
   index: ScoreIndex,
   ranges: { from: number; to: number }[],
 ): Region | null {
-  const notes = notesInRanges(index, ranges);
+  return regionOfNotes(index, notesInRanges(index, ranges));
+}
+
+/** The region a set of score notes spans, voice by voice. */
+export function regionOfNotes(index: ScoreIndex, notes: ScoreNote[]): Region | null {
   if (!notes.length) return null;
   const from = minOf(notes.map((note) => note.time));
   const to = maxOf(notes.map((note) => note.time + note.duration));

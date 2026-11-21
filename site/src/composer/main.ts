@@ -82,6 +82,7 @@ import {
   notesInRanges,
   prepareTune,
   reachAt,
+  regionOfNotes,
   regionOfRanges,
   regionRanges,
   renderTune,
@@ -91,6 +92,7 @@ import {
   tuneSource,
 } from "./score";
 import { isMidiFile, isScoreFile } from "./score-files";
+import { describePicked, selectedNotes } from "./selected";
 import { type SourceFile, abcName, encodeText, newSource, readBytes, readText } from "./source";
 import {
   claimDraft,
@@ -831,6 +833,28 @@ function caret(): number {
 function ranges(): Range[] {
   return view.state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
 }
+/**
+ * The score's notes a set of text ranges selects, by the one rule (./selected): what is lit, what
+ * the status counts, and what Play and Loop play are all this.
+ */
+function pickedNotes(list: Range[]): ScoreNote[] {
+  if (!scoreIndex) return [];
+  const events = selectedNotes(text(), list, fileIndex()).map((each) => each.event);
+  if (!events.length) return [];
+  // Events are in text order and never overlap: a binary search finds the one a note overlaps.
+  return scoreIndex.notes.filter((note) => {
+    let low = 0;
+    let high = events.length - 1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      const event = events[middle] as (typeof events)[number];
+      if (event.to <= note.start) low = middle + 1;
+      else if (event.from >= note.end) high = middle - 1;
+      else return true;
+    }
+    return false;
+  });
+}
 function dirty(): boolean {
   return savedText === null
     ? text().length > 0 && text() !== source.normalized
@@ -1059,10 +1083,10 @@ function explainCaret(update: ViewUpdate) {
   }
   statusNote = null;
   if (!view.state.selection.main.empty) {
-    // Counted from the text itself, so it is right even before the score is redrawn.
-    const count = eventsIn(text(), ranges(), fileIndex()).filter(
-      (event) => !event.rest && event.to > event.from,
-    ).length;
+    // Counted by the one rule, from the text itself, so it is right even before the score is
+    // redrawn, and it agrees with what is lit.
+    const said = describePicked(selectedNotes(text(), ranges(), fileIndex()));
+    const count = said.count;
     const where = selectionWhere();
     if (count === 0) {
       // Header or lyric text: no music to play, so no play hint.
@@ -1073,7 +1097,7 @@ function explainCaret(update: ViewUpdate) {
       status.textContent = `${characters} ${characters === 1 ? "character" : "characters"} selected`;
       return;
     }
-    status.textContent = `${count} ${count === 1 ? "note" : "notes"} selected${where} · ${touch.matches ? "Tap More › Play selection to hear it" : `${shortcutLabel("Mod Alt Enter")} plays it`}`;
+    status.textContent = `${said.text} selected${where} · ${touch.matches ? "Tap More › Play selection to hear it" : `${shortcutLabel("Mod Alt Enter")} plays it`}`;
     return;
   }
   // Music a blank line left outside its tune says so wherever the caret is in it.
@@ -1413,7 +1437,7 @@ function linkFromText() {
   const nonEmpty = ranges().filter((range) => range.to > range.from);
   let caretNotes: ScoreNote[] = [];
   if (nonEmpty.length) {
-    const selected = notesInRanges(index, nonEmpty);
+    const selected = pickedNotes(nonEmpty);
     for (const note of selected)
       for (const element of note.elements) element.classList.add("is-selected");
     litSelection = [
@@ -1970,10 +1994,7 @@ scoreScroll.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   scoreScroll.focus({ preventScroll: true });
   const current =
-    regionOfRanges(
-      scoreIndex,
-      ranges().filter((range) => range.to > range.from),
-    ) ??
+    regionOfNotes(scoreIndex, pickedNotes(ranges().filter((range) => range.to > range.from))) ??
     regionOfRanges(
       scoreIndex,
       notesAt(scoreIndex, caret()).map((note) => ({ from: note.start, to: note.end })),
@@ -2139,9 +2160,7 @@ function selectionWhere(): string {
   // Runs of selected notes in each voice, joined across voices where they overlap in time:
   // a count that depends on the notes chosen, not on how the text ranges happen to fall. Only
   // what is drawn counts: a voice of invisible rests (x) is no voice to the reader.
-  const chosen = new Set(
-    notesInRanges(scoreIndex, selected).filter((note) => note.elements.length > 0),
-  );
+  const chosen = new Set(pickedNotes(selected).filter((note) => note.elements.length > 0));
   const stretches: { from: number; to: number }[] = [];
   const voices = new Set<number>();
   for (const voiceNotes of scoreIndex.byVoice) {
@@ -2175,8 +2194,8 @@ function announceScore() {
   let message: string;
   const selected = ranges().filter((range) => range.to > range.from);
   if (selected.length && scoreIndex) {
-    const notes = notesInRanges(scoreIndex, selected).filter((note) => !note.rest);
-    const bars = [...new Set(notesInRanges(scoreIndex, selected).map((note) => note.measure + 1))];
+    const notes = pickedNotes(selected).filter((note) => !note.rest);
+    const bars = [...new Set(pickedNotes(selected).map((note) => note.measure + 1))];
     const span =
       bars.length > 1 ? `bars ${Math.min(...bars)} to ${Math.max(...bars)}` : `bar ${bars[0]}`;
     message = `${notes.length} ${notes.length === 1 ? "note" : "notes"} selected${selectionWhere()}, ${span}.`;
@@ -2371,7 +2390,7 @@ function moveByNote(direction: 1 | -1, extend: boolean): boolean {
   if (!index) return false;
   const eps = 1e-6;
   const selected = ranges().filter((range) => range.to > range.from);
-  const region = selected.length ? regionOfRanges(index, selected) : null;
+  const region = selected.length ? regionOfNotes(index, pickedNotes(selected)) : null;
   const caretNote =
     notesAt(index, caret())[0] ??
     index.notes.find((note) => note.start >= caret()) ??
@@ -2656,7 +2675,7 @@ function barRegion(voice: number, written: number): Region | null {
 function selectionRegion(): Region | null {
   if (!scoreIndex) return null;
   const selected = ranges().filter((range) => range.to > range.from);
-  if (selected.length) return regionOfRanges(scoreIndex, selected);
+  if (selected.length) return regionOfNotes(scoreIndex, pickedNotes(selected));
   // No selection: the bar at the caret, in every voice.
   const place = caretWritten();
   return place ? barRegion(place.note.voice, place.written) : null;
@@ -2715,7 +2734,9 @@ function toggleLoop() {
   if (!loopOn || player.status !== "playing" || !scoreIndex) return;
   const written = playingWritten() ?? 0;
   const selected = ranges().filter((range) => range.to > range.from);
-  const region = selected.length ? regionOfRanges(scoreIndex, selected) : barRegion(0, written);
+  const region = selected.length
+    ? regionOfNotes(scoreIndex, pickedNotes(selected))
+    : barRegion(0, written);
   const line = region ? regionTimelineFor(region) : null;
   if (!region || !line || !line.notes.length) return;
   loopRegion = region;

@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import { frac } from "../src/composer/abc";
+import { type Change, scaleLengths, transpose } from "../src/composer/commands";
+import { describePicked, selectedNotes } from "../src/composer/selected";
+
+const HEAD = "X:1\nT:Rule\nM:4/4\nL:1/8\nK:C\n";
+const apply = (text: string, changes: Change[]) =>
+  [...changes]
+    .sort((a, b) => b.from - a.from)
+    .reduce(
+      (out, change) => out.slice(0, change.from) + change.insert + out.slice(change.to),
+      text,
+    );
+/** The notes selected when `part` (the `nth` occurrence in the music) is selected. */
+function pick(music: string, part: string, nth = 0) {
+  const text = `${HEAD}${music}\n`;
+  let from = text.indexOf(part, HEAD.length);
+  for (let n = 0; n < nth; n++) from = text.indexOf(part, from + 1);
+  const range = { from, to: from + part.length };
+  const picked = selectedNotes(text, [range]);
+  return {
+    text,
+    range,
+    picked,
+    notes: picked.map((each) => text.slice(each.event.from, each.event.to)),
+    tones: picked.map((each) => each.tones.map((tone) => tone.text).join("")),
+  };
+}
+
+describe("the one rule: which notes a text selection selects", () => {
+  it("takes a note when any part of it is selected: a letter, its accidental, octave or length", () => {
+    expect(pick("F/G/ A2 |", "F").notes).toEqual(["F/"]);
+    expect(pick("F/G/ A2 |", "/", 0).notes).toEqual(["F/"]);
+    expect(pick("(3G,DF A2 |", "G").notes).toEqual(["G,"]);
+    expect(pick("=G6 A2 |", "G").notes).toEqual(["=G6"]);
+    expect(pick("[C,,C,]8 |", "8").notes).toEqual(["[C,,C,]8"]);
+  });
+  it("takes a note when what is attached to it is selected", () => {
+    expect(pick("!trill!F G |", "trill").notes).toEqual(["F"]);
+    expect(pick('"Am"F G |', "Am").notes).toEqual(["F"]);
+    expect(pick("{g}F G |", "g").notes).toEqual(["F"]);
+    expect(pick("d>e f2 e |", ">").notes).toEqual(["d"]);
+    expect(pick("F- F G |", "-").notes).toEqual(["F"]);
+    // The reviewer's case: lit 4, said 3. Now all four, everywhere.
+    expect(pick("d>e f2 e |", ">e f2 e").notes).toEqual(["d", "e", "f2", "e"]);
+  });
+  it("takes only the tones selected inside a chord's brackets", () => {
+    const one = pick("[C,,C,]8 |", "C,,");
+    expect(one.notes).toEqual(["[C,,C,]8"]);
+    expect(one.picked[0]?.whole).toBe(false);
+    expect(one.tones).toEqual(["C,,"]);
+    expect(describePicked(one.picked).text).toBe("1 chord tone");
+    const all = pick("[C,,C,]8 |", "C,,C,");
+    expect(all.picked[0]?.whole).toBe(true);
+    expect(describePicked(all.picked).text).toBe("1 note");
+  });
+  it("reads a caret as the note it is in, or the one just before", () => {
+    const text = `${HEAD}C D |\n`;
+    const at = (position: number) =>
+      selectedNotes(text, [{ from: position, to: position }]).map((each) =>
+        text.slice(each.event.from, each.event.to),
+      );
+    expect(at(HEAD.length)).toEqual(["C"]);
+    expect(at(HEAD.length + 1)).toEqual(["C"]);
+    expect(at(HEAD.length + 2)).toEqual(["D"]);
+  });
+  it("is what transpose and lengths act on", () => {
+    // A double-clicked F (no length selected) moves up; G stays.
+    const f = pick("F/G/ A2 |", "F");
+    expect(apply(f.text, transpose(f.text, [f.range], 2))).toBe(`${HEAD}G/G/ A2 |\n`);
+    // One chord tone: only it moves; the chord's length stays one length for all.
+    const tone = pick("[C,,C,]8 |", "C,,");
+    expect(apply(tone.text, transpose(tone.text, [tone.range], 12))).toBe(`${HEAD}[C,C,]8 |\n`);
+    // The trill's text selected: the note is transposed, the decoration kept.
+    const trill = pick("!trill!F G |", "trill");
+    expect(apply(trill.text, transpose(trill.text, [trill.range], 1))).toBe(
+      `${HEAD}!trill!^F G |\n`,
+    );
+    // A chord symbol moves with its note; the grace notes before it too.
+    const symbol = pick('"Am"{g}F G |', "F");
+    expect(apply(symbol.text, transpose(symbol.text, [symbol.range], 2))).toBe(
+      `${HEAD}"Bm"{a}G G |\n`,
+    );
+    const length = pick("=G6 A2 |", "G");
+    expect(apply(length.text, scaleLengths(length.text, [length.range], frac(1, 2)))).toBe(
+      `${HEAD}=G3 A2 |\n`,
+    );
+  });
+  it("counts notes and chord tones in words", () => {
+    const both = pick("C [EG]2 |", "C [E");
+    expect(describePicked(both.picked).text).toBe("2 notes");
+    const mixed = selectedNotes(`${HEAD}C [EG]2 |\n`, [
+      { from: HEAD.length, to: HEAD.length + 1 },
+      { from: HEAD.length + 3, to: HEAD.length + 4 },
+    ]);
+    expect(describePicked(mixed).text).toBe("1 note and 1 chord tone");
+  });
+});

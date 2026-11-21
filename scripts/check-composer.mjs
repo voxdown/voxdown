@@ -5036,6 +5036,85 @@ console.log(
   );
 }
 
+/* 30. The one rule: whatever text is selected, the notes lit, the notes counted and the notes a
+   command changes are the same notes. */
+{
+  const hard =
+    'X:1\nT:Hard\nM:4/4\nL:1/8\n%%score (1 2)\nK:G\nV:1\n!trill!"G"d2 {a}g>f "Em"e2 [Bd]2 | (3cde !fermata!f-f [CE]G "^ad lib."A2 | =F^Fe\'c, B,4 |]\nw: one two three four five six se-ven eight nine ten e-le-ven twelve\n% a comment\nV:2\nG,4 D,2 [G,B,]2 | C2 z2 D2 E2 | F2 G2 A,4 |]\n';
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  watch(ctx);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  await p.evaluate((t) => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t } });
+  }, hard);
+  await p.waitForFunction((t) => window.composer.scoreIndex()?.source === t, hard);
+  await p.waitForTimeout(400);
+  // The music's items, in order: a chord is one item; grace notes, chord symbols, annotations and
+  // decorations are left out (they go with their note); rests are not notes.
+  const items = (text) =>
+    text
+      .split("\n")
+      .filter((line) => line && !/^(?:[A-Za-z]:|%)/.test(line))
+      .join(" ")
+      .replace(/"[^"]*"|![^!]*!|\{[^}]*\}/g, " ")
+      .match(/\[[^\]]*\][\d/]*|(?:\^\^?|__?|=)?[A-Ga-g][,']*[\d/]*/g);
+  const body = hard.indexOf("V:1\n") + 4;
+  let seed = 11;
+  const random = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  let checked = 0;
+  for (let run = 0; run < 60; run++) {
+    const a = body + Math.floor(random() * (hard.length - body));
+    const length = 1 + Math.floor(random() * 24);
+    const from = Math.min(a, hard.length - 1);
+    const to = Math.min(hard.length - 1, from + length);
+    if (to <= from) continue;
+    await p.evaluate(
+      ([anchor, head]) => {
+        document.getElementById("explain").textContent = "";
+        window.composer.view.dispatch({ selection: { anchor, head } });
+      },
+      [from, to],
+    );
+    // The status line follows the selection a moment later.
+    await p.waitForFunction(() => /selected/.test(document.getElementById("explain").textContent));
+    const { lit, said } = await p.evaluate(() => ({
+      lit: window.composer
+        .scoreIndex()
+        .notes.filter(
+          (note) =>
+            !note.rest && note.elements.some((each) => each.classList.contains("is-selected")),
+        ).length,
+      said: document.getElementById("explain").textContent,
+    }));
+    const counted = [...said.matchAll(/(\d+) (?:note|chord tone)/g)].reduce(
+      (sum, match) => sum + Number(match[1]),
+      0,
+    );
+    const what = `"${hard.slice(from, to).replace(/\n/g, "⏎")}"`;
+    assert.equal(lit, counted, `${what}: the status counts what is lit (${said})`);
+    if (!counted) continue;
+    await p.locator(".cm-content").focus();
+    await p.keyboard.press("Alt+Shift+ArrowUp");
+    const after = await docText(p);
+    const before = items(hard);
+    const moved = items(after).filter((item, at) => item !== before[at]).length;
+    assert.equal(moved, counted, `${what}: an octave up moves what is lit and counted`);
+    await p.keyboard.press("Control+z");
+    await p.waitForFunction((t) => window.composer.view.state.doc.toString() === t, hard);
+    checked += 1;
+  }
+  await ctx.close();
+  console.log(
+    `Composer: ${checked} random text selections over a hard tune light, count and move the same notes: passed`,
+  );
+}
+
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");
 console.log("Composer: no console errors and no requests leaving the site: passed");

@@ -20,7 +20,7 @@ import {
   transpose,
 } from "./commands";
 import { humanDate } from "./dates";
-import { editorState, fileIndexField, setMarks } from "./editor";
+import { editorState, fileIndexField, onFieldError, setMarks } from "./editor";
 import { EXAMPLES, NEW_TUNE } from "./examples";
 import { describeKey, describeMeter, explainAt } from "./explain";
 import { SHORTCUTS, cheatsheet, createDialog, shortcutTable } from "./help";
@@ -310,7 +310,11 @@ const view = new EditorView({
   state: makeState(""),
 });
 function makeState(text: string): EditorState {
-  return editorState(text, { onUpdate, keys, extra: [copyVoices] });
+  return editorState(text, {
+    onUpdate: safeUpdate,
+    keys,
+    extra: [copyVoices, EditorView.exceptionSink.of((error) => recoverEditor(error))],
+  });
 }
 
 function text(): string {
@@ -434,6 +438,46 @@ let explainTimer: ReturnType<typeof setTimeout> | undefined;
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let lastTyped = 0;
 let lastHeard = "";
+
+/**
+ * The safety net: the text on screen and the kept draft must never disagree silently. Our own
+ * update work never throws into the editor; if the editor itself fails, the screen is redrawn from
+ * the editor's document (what is saved), the draft is kept at once, and an error says so.
+ */
+function safeUpdate(update: ViewUpdate) {
+  try {
+    onUpdate(update);
+  } catch (error) {
+    console.warn("Composer: an update step failed.", error);
+  }
+}
+let recovering = false;
+function recoverEditor(error: unknown) {
+  if (recovering) return;
+  recovering = true;
+  console.warn("Composer: the editor failed; showing and keeping its document.", error);
+  setTimeout(() => {
+    try {
+      // Same state object: the document and undo history stay; the screen is redrawn from them.
+      view.setState(view.state);
+    } catch {
+      /* Nothing more can be done here; the draft below is still kept. */
+    }
+    void persist();
+    noticeError(
+      "Something went wrong in the editor. The text shown is exactly what is kept now; check your last few keystrokes.",
+    );
+    recovering = false;
+  }, 0);
+}
+onFieldError((error) => {
+  console.warn("Composer: marks in the text were reset.", error);
+});
+window.addEventListener("error", (event) => {
+  // An error from inside the editor's input handling can leave typed text unsaved: resync.
+  if (/codemirror|changeset|out of range/i.test(`${event.message} ${event.error?.stack ?? ""}`))
+    recoverEditor(event.error);
+});
 
 function onUpdate(update: ViewUpdate) {
   if (update.docChanged) {

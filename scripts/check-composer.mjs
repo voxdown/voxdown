@@ -942,6 +942,116 @@ console.log(
   "Composer: start screen rests the tools; prepared offline, it reloads, opens an example and plays: passed",
 );
 
+/* 10b2. Round 4, item 1: what the editor shows is what it keeps, whatever is typed. */
+const keptDraft = () =>
+  page.evaluate(
+    () =>
+      new Promise((done) => {
+        const id = sessionStorage.getItem("voxdown-composer-draft");
+        const request = indexedDB.open("voxdown-composer");
+        request.onsuccess = () => {
+          const get = request.result.transaction("drafts").objectStore("drafts").get(id);
+          get.onsuccess = () => done(get.result?.text ?? null);
+        };
+      }),
+  );
+const shown = () =>
+  page.evaluate(() =>
+    [...document.querySelectorAll(".cm-content .cm-line")]
+      .map((line) => line.textContent)
+      .join("\n"),
+  );
+const agrees = async (label) => {
+  await settle(900);
+  const doc = await docText();
+  assert.equal(await shown(), doc, `${label}: the screen shows the document`);
+  assert.equal(await keptDraft(), doc, `${label}: the draft keeps the document`);
+};
+const freshTune = async () => {
+  await page.locator("#file-menu").click();
+  await page.getByRole("menuitem", { name: "New tune file" }).click();
+  await page.waitForFunction(() => window.composer.view.state.doc.toString().startsWith("X:1"));
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+End");
+};
+const errorsBefore = errors.length;
+await freshTune();
+await page.keyboard.type("CDEF GABc|");
+await page.keyboard.press("Enter");
+await page.keyboard.type("V");
+await settle(3200);
+await page.keyboard.type(":2");
+await page.keyboard.press("Enter");
+await page.keyboard.type("G,4 C4|");
+await agrees("V: typed after a pause");
+assert(
+  (await docText()).endsWith("CDEF GABc|\nV:2\nG,4 C4|"),
+  "every keystroke reached the document",
+);
+await freshTune();
+await page.keyboard.type("CDEF (");
+await settle(3200);
+await page.keyboard.type("GAB)c|");
+await agrees("an open slur left to the checks");
+await freshTune();
+await page.keyboard.insertText("[CEG");
+await settle(3200);
+await page.keyboard.type("]2 c2|");
+await agrees("a pasted open chord");
+// Fuzz: 300 random edits with random pauses; the document, the screen and the draft never part.
+{
+  let seed = 7;
+  const random = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  const pick = (list) => list[Math.floor(random() * list.length)];
+  const snippets = [
+    "C",
+    "D2",
+    "e/",
+    "^f",
+    "_B,",
+    "z2",
+    "|",
+    "|:",
+    ":|",
+    "[CEG]",
+    "(",
+    ")",
+    '"Am"',
+    "!p!",
+    "-",
+    "(3abc",
+    "{g}",
+    "\n",
+    "V:2\n",
+    "w: la la\n",
+    "[K:G]",
+    " ",
+    "x",
+    "y",
+  ];
+  await freshTune();
+  for (let step = 1; step <= 300; step++) {
+    const action = random();
+    if (action < 0.55) await page.keyboard.type(pick(snippets));
+    else if (action < 0.7) await page.keyboard.press("Backspace");
+    else if (action < 0.82)
+      await page.keyboard.insertText(pick(["[CEG", "CDEF GABc|", '"G"d2 B', "!trill!A", "(ABc"]));
+    else if (action < 0.9) await page.keyboard.press("Control+z");
+    else if (action < 0.95) await page.keyboard.press("Control+End");
+    else await page.keyboard.press(pick(["ArrowLeft", "ArrowUp", "Home"]));
+    if (random() < 0.06) await settle(400 + random() * 2800);
+    if (step % 50 === 0) await agrees(`fuzz step ${step}`);
+  }
+  await agrees("fuzz end");
+}
+assert.deepEqual(errors.slice(errorsBefore), [], "no page errors while editing");
+console.log(
+  "Composer: the screen, the document and the draft agree after the three reported triggers and 300 random edits: passed",
+);
+
 /* 10c. Round 3: checks come back after typing; pickups; phrase-aware lines; notices; written bars;
    transport state; lyrics never touch. */
 const setText = async (value, title, withNotes = true) => {

@@ -13,6 +13,7 @@ import {
   RangeSetBuilder,
   StateEffect,
   StateField,
+  type Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -36,9 +37,35 @@ import { type FileIndex, indexFile } from "./tunes";
 /* The file's tunes, kept current for highlighting and completion. */
 export const fileIndexField = StateField.define<FileIndex>({
   create: (state) => indexFile(state.doc.toString()),
-  update: (value, transaction) =>
-    transaction.docChanged ? indexFile(transaction.newDoc.toString()) : value,
+  update: (value, transaction) => {
+    if (!transaction.docChanged) return value;
+    try {
+      return indexFile(transaction.newDoc.toString());
+    } catch (error) {
+      reportFieldError(error);
+      return { header: null, tunes: [] };
+    }
+  },
 });
+
+/** A field must never throw: a failed update would leave the screen and the document apart. */
+let fieldErrorHandler: (error: unknown) => void = () => {};
+export function onFieldError(handler: (error: unknown) => void) {
+  fieldErrorHandler = handler;
+}
+function reportFieldError(error: unknown) {
+  try {
+    fieldErrorHandler(error);
+  } catch {
+    /* The report itself must not throw either. */
+  }
+}
+
+/** Keeps a stored range inside a document of `length`. */
+export function clampRange<T extends { from: number; to: number }>(range: T, length: number): T {
+  const from = Math.max(0, Math.min(range.from, length));
+  return { ...range, from, to: Math.max(from, Math.min(range.to, length)) };
+}
 
 const mark = (className: string) => Decoration.mark({ class: className });
 const MARKS = {
@@ -177,6 +204,14 @@ const abcHighlight = ViewPlugin.fromClass(
       if (update.docChanged || update.viewportChanged) this.decorations = this.build(update.view);
     }
     build(view: EditorView): DecorationSet {
+      try {
+        return this.highlight(view);
+      } catch (error) {
+        reportFieldError(error);
+        return Decoration.none;
+      }
+    }
+    highlight(view: EditorView): DecorationSet {
       const builder = new RangeSetBuilder<Decoration>();
       const index = view.state.field(fileIndexField);
       for (const { from, to } of view.visibleRanges) {
@@ -246,47 +281,18 @@ export const marksField = StateField.define<MarkState>({
     list: [],
   }),
   update(value, transaction) {
-    let next = value;
-    if (transaction.docChanged)
-      next = {
-        caret: next.caret.map(transaction.changes),
-        playing: next.playing.map(transaction.changes),
-        issues: next.issues.map(transaction.changes),
-        list: next.list
-          .map((issue) => ({
-            ...issue,
-            from: transaction.changes.mapPos(issue.from),
-            to: transaction.changes.mapPos(issue.to),
-          }))
-          .filter((issue) => issue.to >= issue.from),
-      };
-    for (const effect of transaction.effects) {
-      if (!effect.is(setMarks)) continue;
-      const length = transaction.newDoc.length;
-      const marks = effect.value;
-      next = {
-        caret: marks.caret ? rangesToSet(marks.caret, caretMark, length) : next.caret,
-        playing: marks.playing ? rangesToSet(marks.playing, playingMark, length) : next.playing,
-        issues: marks.issues
-          ? Decoration.set(
-              marks.issues
-                .map((issue) => ({
-                  ...issue,
-                  from: Math.min(issue.from, length),
-                  to: Math.min(issue.to, length),
-                }))
-                .filter((issue) => issue.to > issue.from)
-                .sort((a, b) => a.from - b.from)
-                .map((issue) =>
-                  (issue.kind === "bar" ? barIssueMark : warningMark).range(issue.from, issue.to),
-                ),
-              true,
-            )
-          : next.issues,
-        list: marks.issues ?? next.list,
+    try {
+      return updateMarks(value, transaction);
+    } catch (error) {
+      // Lose the marks, never the edit.
+      reportFieldError(error);
+      return {
+        caret: Decoration.none,
+        playing: Decoration.none,
+        issues: Decoration.none,
+        list: [],
       };
     }
-    return next;
   },
   provide: (field) => [
     EditorView.decorations.from(field, (value) => value.issues),
@@ -294,6 +300,51 @@ export const marksField = StateField.define<MarkState>({
     EditorView.decorations.from(field, (value) => value.playing),
   ],
 });
+
+function updateMarks(value: MarkState, transaction: Transaction): MarkState {
+  let next = value;
+  if (transaction.docChanged) {
+    const before = transaction.startState.doc.length;
+    next = {
+      caret: next.caret.map(transaction.changes),
+      playing: next.playing.map(transaction.changes),
+      issues: next.issues.map(transaction.changes),
+      // Stored positions are kept inside the old document before mapping, so mapping never throws.
+      list: next.list
+        .map((issue) => clampRange(issue, before))
+        .map((issue) => ({
+          ...issue,
+          from: transaction.changes.mapPos(issue.from),
+          to: transaction.changes.mapPos(issue.to),
+        }))
+        .filter((issue) => issue.to >= issue.from),
+    };
+  }
+  for (const effect of transaction.effects) {
+    if (!effect.is(setMarks)) continue;
+    const length = transaction.newDoc.length;
+    const marks = effect.value;
+    next = {
+      caret: marks.caret ? rangesToSet(marks.caret, caretMark, length) : next.caret,
+      playing: marks.playing ? rangesToSet(marks.playing, playingMark, length) : next.playing,
+      issues: marks.issues
+        ? Decoration.set(
+            marks.issues
+              .map((issue) => clampRange(issue, length))
+              .filter((issue) => issue.to > issue.from)
+              .sort((a, b) => a.from - b.from)
+              .map((issue) =>
+                (issue.kind === "bar" ? barIssueMark : warningMark).range(issue.from, issue.to),
+              ),
+            true,
+          )
+        : next.issues,
+      // The list is kept clamped, like the decorations made from it.
+      list: marks.issues ? marks.issues.map((issue) => clampRange(issue, length)) : next.list,
+    };
+  }
+  return next;
+}
 
 class IssueMarker extends GutterMarker {
   constructor(

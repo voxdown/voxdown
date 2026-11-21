@@ -84,10 +84,10 @@
       <div id="start" class="start" hidden>
         <div class="start-inner">
           <h2>Write music<br>as plain text.</h2>
-          <p>ABC is a small notation for melodies: letters for notes, bar lines for bars. Type your tune; the score draws itself as you go, and each note sounds as you type it (you can turn that off in the Play menu). Coming from MuseScore, Dorico or Finale? Open its MusicXML export here. Everything stays in this browser until you save it.</p>
+          <p>ABC is a small notation for melodies: letters for notes, bar lines for bars. Type your tune; the score draws itself as you go, and each note sounds as you type it (you can turn that off in the Play menu). Coming from MuseScore, Dorico or Finale? Open its MusicXML export here, or a MIDI file. Everything stays in this browser until you save it.</p>
           <div class="start-actions">
             <button id="start-new" class="primary" type="button">Start a new tune</button>
-            <button id="start-open" type="button">Open ABC or MusicXML…</button>
+            <button id="start-open" type="button">Open ABC, MusicXML or MIDI…</button>
           </div>
           <p class="start-label">Or begin from an example:</p>
           <div id="examples" class="examples"></div>
@@ -159,6 +159,7 @@
       <p id="sound-status" class="sound-status" role="status" aria-live="polite"></p>
     </div>
     <footer>
+      <button id="explain-toggle" class="explain-toggle" type="button" aria-expanded="true" aria-controls="explain" title="Hide or show the explanations">Hide</button>
       <span id="explain" class="explain" role="status" aria-live="off">Ready</span>
       <button id="problems" class="problems" type="button" hidden>No problems</button>
       <span id="recovery" class="recovery" role="status">Opening local recovery…</span>

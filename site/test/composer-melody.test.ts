@@ -3,6 +3,7 @@ import {
   DEFAULT_OPTIONS,
   describeMatch,
   queryNotes,
+  rankMatches,
   searchFile,
   tuneMelody,
 } from "../src/composer/melody";
@@ -70,8 +71,8 @@ describe("melody search", () => {
       [48, 50, 52, 53],
     ]);
     expect(find("cdef", text).map((each) => each.where)).toEqual([
-      "Voices · bar 1",
-      "Voices · bar 1",
+      "Voices · V:1 · bar 1",
+      "Voices · V:2 · bar 1",
     ]);
   });
   it("searches 200 tunes in well under 200 ms, and faster again from the cache", () => {
@@ -97,5 +98,62 @@ describe("melody search", () => {
     );
     expect(cold).toBeLessThan(600);
     expect(warm).toBeLessThan(200);
+  });
+});
+
+describe("melody search, complete and ranked", () => {
+  it("finds matches that overlap", () => {
+    const scale = tune("Scale", "M:4/4\nL:1/4\nK:C", "C D E F | G A B c |");
+    expect(find("C D E", scale, { ...DEFAULT_OPTIONS, mode: "contour" })).toHaveLength(6);
+    const swing = tune("Back and forth", "M:4/4\nL:1/4\nK:C", "C D C D | C D C D |");
+    // C D C D starts on the 1st, 3rd and 5th notes (folding is about repeats, not these).
+    expect(find("C D C D", swing).map((each) => each.text)).toEqual([
+      "C D C D",
+      "C D | C D",
+      "C D C D",
+    ]);
+  });
+  it("ranks exact matches first, and marks those that needed repeats folded", () => {
+    const text = [
+      tune("Lamb", "M:4/4\nL:1/8\nK:G", "GFED EGGG | FFFF G2 GG |"),
+      tune("Plain", "M:4/4\nL:1/8\nK:G", "D2 E2 G2 F2 | G8 |"),
+      tune("Kesh", "M:6/8\nL:1/8\nK:G", "G3 GAB | A3 ABd |"),
+    ].join("\n");
+    const file = indexFile(text);
+    const kesh = rankMatches(searchFile(queryNotes("G3 GAB A3 ABd", "G"), text, file));
+    expect(kesh.map((match) => [match.tune.title, match.folded])).toEqual([["Kesh", false]]);
+    // The Lamb plays E G F G only with its repeated notes folded: it comes after the plain one.
+    const ranked = rankMatches(searchFile(queryNotes("E G F G", "G"), text, file));
+    expect(ranked.map((match) => [match.tune.title, match.folded])).toEqual([
+      ["Plain", false],
+      ["Lamb", true],
+    ]);
+  });
+  it("puts the same rhythm before another rhythm, and exact steps before a contour", () => {
+    const text = [
+      tune("Other rhythm", "M:4/4\nL:1/8\nK:C", "C2 D E F4 |"),
+      tune("Contour only", "M:4/4\nL:1/8\nK:C", "C D F G4 z |"),
+      tune("Same", "M:4/4\nL:1/8\nK:C", "C D E F4 z |"),
+    ].join("\n");
+    const file = indexFile(text);
+    const ranked = rankMatches(
+      searchFile(queryNotes("CDEF4", "C"), text, file, { ...DEFAULT_OPTIONS, mode: "contour" }),
+    );
+    expect(ranked.map((match) => match.tune.title)).toEqual([
+      "Same",
+      "Other rhythm",
+      "Contour only",
+    ]);
+  });
+  it("calls a voice with no name by its V:", () => {
+    const text = tune(
+      "Two",
+      'M:4/4\nL:1/4\nK:C\nV:1 name="Lead"\nV:2',
+      "[V:1] C D E F |\n[V:2] C D E F |",
+    );
+    expect(find("C D E F", text).map((each) => each.where)).toEqual([
+      "Two · Lead · bar 1",
+      "Two · V:2 · bar 1",
+    ]);
   });
 });

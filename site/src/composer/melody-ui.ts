@@ -6,16 +6,18 @@
  */
 import "./melody.css";
 import { EditorSelection } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
+import { dockPanel, undockPanel } from "./dock";
 import {
   DEFAULT_OPTIONS,
   type MelodyMatch,
   type MelodyOptions,
   describeMatch,
   queryNotes,
+  rankMatches,
   searchFile,
 } from "./melody";
-import { type Draft, getDraft, listDrafts } from "./storage";
+import { type Draft, draftIds, getDraft } from "./storage";
 import { type FileIndex, type TuneInfo, indexFile, tuneAt } from "./tunes";
 
 export type MelodyContext = {
@@ -25,6 +27,8 @@ export type MelodyContext = {
   draftId: () => string;
   /** Opens another draft, then selects ranges in it. */
   openDraft: (id: string, ranges: { from: number; to: number }[]) => void;
+  /** Brings the lit match into view in the score. */
+  reveal?: () => void;
   /** Spells MIDI pitches as ABC in a key (from the keyboard module), when the keyboard is on. */
   keyboard: () => Promise<{
     listen: (take: (pitches: number[]) => void) => () => void;
@@ -41,6 +45,10 @@ let results: Found[] = [];
 let current = -1;
 let context: MelodyContext | null = null;
 let stopListening: (() => void) | null = null;
+/** Results drawn so far; more are drawn on request. */
+const PAGE = 500;
+let shown = 0;
+const phone = () => window.matchMedia("(max-width: 760px)").matches;
 
 function element(
   tag: string,
@@ -70,11 +78,16 @@ function choose(at: number) {
   if (!context || !results.length) return;
   current = ((at % results.length) + results.length) % results.length;
   const match = results[current] as Found;
+  while (current >= shown) showMore();
+  // On a phone the panel folds to one line, so the match is in view.
+  panel?.classList.toggle("collapsed", phone());
   for (const [index, row] of [...(panel?.querySelectorAll(".melody-result") ?? [])].entries())
     row.setAttribute("aria-current", String(index === current));
   panel?.querySelector(".melody-result[aria-current='true']")?.scrollIntoView({ block: "nearest" });
   const count = panel?.querySelector(".melody-count");
   if (count) count.textContent = `${current + 1} of ${results.length}`;
+  const where = panel?.querySelector(".melody-bar-count");
+  if (where) where.textContent = `${current + 1} of ${results.length}`;
   if (match.draft) {
     context.openDraft(match.draft.id, match.ranges);
     return;
@@ -85,9 +98,9 @@ function choose(at: number) {
       match.ranges.map((range) => EditorSelection.range(range.from, range.to)),
       0,
     ),
-    effects: [],
-    scrollIntoView: true,
+    effects: EditorView.scrollIntoView(match.from, { y: "center" }),
   });
+  context.reveal?.();
 }
 
 /** F3 and Shift F3: the next or previous match; false when there are none to step through. */
@@ -100,7 +113,7 @@ export function stepMelody(direction: 1 | -1): boolean {
 export function closeMelody() {
   stopListening?.();
   stopListening = null;
-  panel?.remove();
+  if (panel) undockPanel(panel);
   panel = null;
   results = [];
   current = -1;
@@ -169,9 +182,29 @@ function build(given: MelodyContext) {
   };
   const check = (control: HTMLInputElement, text: string) =>
     element("label", { className: "melody-check" }, control, ` ${text}`);
+  // On a phone, once a result is chosen: one line ("2 of 7 ‹ › Close"); the count opens it again.
+  const barCount = element("button", {
+    type: "button",
+    className: "melody-bar-count",
+    title: "Show the search",
+  });
+  barCount.addEventListener("click", () => panel?.classList.remove("collapsed"));
+  const previous = element("button", { type: "button", textContent: "‹", title: "Previous match" });
+  previous.setAttribute("aria-label", "Previous match");
+  previous.addEventListener("click", () => stepMelody(-1));
+  const next = element("button", { type: "button", textContent: "›", title: "Next match" });
+  next.setAttribute("aria-label", "Next match");
+  next.addEventListener("click", () => stepMelody(1));
+  const barClose = element("button", { type: "button", textContent: "Close" });
+  barClose.addEventListener("click", () => {
+    closeMelody();
+    given.view.focus();
+  });
+  const bar = element("div", { className: "melody-bar" }, barCount, previous, next, barClose);
   panel = element(
     "section",
     { id: "melody-panel", className: "melody-panel" },
+    bar,
     element(
       "div",
       { className: "melody-head" },
@@ -194,7 +227,10 @@ function build(given: MelodyContext) {
   );
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-label", "Find melody");
-  document.body.append(panel);
+  dockPanel(panel, () => {
+    closeMelody();
+    given.view.focus();
+  });
   const later = () => {
     clearTimeout(timer);
     timer = setTimeout(() => void search(), 120);
@@ -209,11 +245,7 @@ function build(given: MelodyContext) {
     }
   });
   panel.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeMelody();
-      given.view.focus();
-    } else if (event.key === "F3") {
+    if (event.key === "F3") {
       event.preventDefault();
       stepMelody(event.shiftKey ? -1 : 1);
     }
@@ -245,6 +277,51 @@ function build(given: MelodyContext) {
   });
 }
 
+/** What the typed notes are read as, and what counts as a match, as the options stand. */
+function hint(key: string, options: MelodyOptions): string {
+  const read = `Read in K:${key}, the current tune's key.`;
+  if (options.mode === "contour")
+    return `${read} Any key, octave and length matches; only the ups and downs count${options.rhythm ? ", with the same relative lengths" : ""}.`;
+  return options.rhythm
+    ? `${read} Any key and octave matches, with the same relative lengths.`
+    : `${read} Any key, octave and length matches.`;
+}
+
+/** Draws the next page of results, with "Show more" while some are left. */
+function showMore() {
+  const list = panel?.querySelector(".melody-results");
+  if (!list) return;
+  list.querySelector(".melody-more")?.remove();
+  const end = Math.min(results.length, shown + PAGE);
+  for (let index = shown; index < end; index++) {
+    const match = results[index] as Found;
+    const row = element(
+      "button",
+      { type: "button", className: "melody-result" },
+      element("span", {
+        className: "melody-where",
+        textContent: `${match.draft ? `${match.draft.name}: ` : ""}${describeMatch(match)}`,
+      }),
+      element("code", { textContent: match.excerpt }),
+      ...(match.folded
+        ? [element("span", { className: "melody-folded", textContent: "repeats folded" })]
+        : []),
+    );
+    row.addEventListener("click", () => choose(index));
+    list.append(element("li", {}, row));
+  }
+  shown = end;
+  if (shown < results.length) {
+    const more = element("button", {
+      type: "button",
+      className: "melody-more-button",
+      textContent: `Showing ${shown.toLocaleString("en")} of ${results.length.toLocaleString("en")}. Show ${Math.min(PAGE, results.length - shown)} more`,
+    });
+    more.addEventListener("click", showMore);
+    list.append(element("li", { className: "melody-more" }, more));
+  }
+}
+
 let generation = 0;
 async function search() {
   if (!panel || !context) return;
@@ -260,8 +337,7 @@ async function search() {
   };
   const scope = (panel.querySelector("#melody-scope") as HTMLSelectElement).value as Scope;
   const reading = readingOf(view, file);
-  (panel.querySelector("#melody-reading") as HTMLElement).textContent =
-    `Read in K:${reading.key}, the current tune's key. Any key, octave and length matches.`;
+  (panel.querySelector("#melody-reading") as HTMLElement).textContent = hint(reading.key, options);
   const notes = queryNotes(query, reading.key, reading.unit);
   const count = panel.querySelector(".melody-count") as HTMLElement;
   const list = panel.querySelector(".melody-results") as HTMLElement;
@@ -281,35 +357,27 @@ async function search() {
         : []
       : searchFile(notes, text, file, options);
   if (scope === "drafts") {
-    const others = (await listDrafts(200)).filter((draft) => draft.id !== context?.draftId());
-    for (const summary of others) {
-      const draft: Draft | undefined = await getDraft(summary.id).catch(() => undefined);
-      if (!draft) continue;
+    // Every draft, read one at a time.
+    const ids = (await draftIds()).filter((id) => id !== context?.draftId());
+    for (const [index, id] of ids.entries()) {
+      if (run !== generation) return;
+      if (index % 20 === 0) count.textContent = `Searching drafts… ${index} of ${ids.length}`;
+      const draft: Draft | undefined = await getDraft(id).catch(() => undefined);
+      if (!draft || typeof draft.text !== "string") continue;
       const draftFile = indexFile(draft.text);
       for (const match of searchFile(notes, draft.text, draftFile, options))
         found.push({ ...match, draft: { id: draft.id, name: draft.name } });
     }
   }
   if (run !== generation) return;
-  results = found;
+  results = rankMatches(found);
   current = -1;
+  shown = 0;
   const took = Math.round(performance.now() - started);
-  list.replaceChildren(
-    ...found.slice(0, 500).map((match, index) => {
-      const row = element(
-        "button",
-        { type: "button", className: "melody-result" },
-        element("span", {
-          className: "melody-where",
-          textContent: `${match.draft ? `${match.draft.name}: ` : ""}${describeMatch(match)}`,
-        }),
-        element("code", { textContent: match.excerpt }),
-      );
-      row.addEventListener("click", () => choose(index));
-      return element("li", {}, row);
-    }),
-  );
+  list.replaceChildren();
+  showMore();
+  panel.classList.remove("collapsed");
   count.textContent = results.length
-    ? `${results.length} ${results.length === 1 ? "match" : "matches"} (${took} ms). F3 for the next, Shift F3 the previous.`
+    ? `${results.length.toLocaleString("en")} ${results.length === 1 ? "match" : "matches"} (${took} ms), closest first. F3 for the next, Shift F3 the previous.`
     : "No match.";
 }

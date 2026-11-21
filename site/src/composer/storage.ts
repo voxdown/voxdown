@@ -84,6 +84,12 @@ export const getDraft = (id: string) =>
   run<Draft | undefined>("drafts", "readonly", (store) => store.get(id));
 export const deleteDraft = (id: string) =>
   run("drafts", "readwrite", (store) => store.delete(id)).then(() => undefined);
+/** The id of every draft (only the keys), so all of them can be read one at a time. */
+export const draftIds = () =>
+  run<IDBValidKey[]>("drafts", "readonly", (store) => store.getAllKeys()).then((keys) =>
+    keys.filter((key): key is string => typeof key === "string"),
+  );
+
 export async function listDrafts(limit = 20): Promise<DraftSummary[]> {
   const all = await run<Draft[]>("drafts", "readonly", (store) => store.getAll());
   return all

@@ -163,6 +163,8 @@ type Prefs = {
   editorZoom: number;
   /** Playback follows D.C., D.S., Fine and Coda (off: the music as written, for practice). */
   followJumps: boolean;
+  /** On a phone, the status line's explanations folded away for room to edit. */
+  explainHidden: boolean;
 };
 const PREFS_KEY = "vxd-composer-prefs";
 const prefs: Prefs = (() => {
@@ -185,6 +187,7 @@ const prefs: Prefs = (() => {
     scoreZoom: 1,
     editorZoom: 1,
     followJumps: true,
+    explainHidden: false,
   };
   try {
     const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
@@ -473,6 +476,10 @@ function findMelody(): boolean {
             }),
           ),
         keyboard: midiKeyboard,
+        reveal: () => {
+          const lit = scoreElement.querySelector(".is-selected");
+          if (lit) keepInView(lit, true);
+        },
       },
       fromSelection,
     );
@@ -910,6 +917,14 @@ function showStart(show: boolean) {
   if (!show) body.classList.add("editing");
   for (const element of [document.querySelector(".documentbar"), $("transport")])
     element?.toggleAttribute("inert", show);
+  // Under the start screen the text, the score and the tunes panel are out of reach: Tab can't
+  // land in an editor no one can see, and screen readers skip them.
+  for (const id of ["writing", "rail", "splitter", "score-panel"]) {
+    const element = document.getElementById(id);
+    element?.toggleAttribute("inert", show);
+    if (show) element?.setAttribute("aria-hidden", "true");
+    else element?.removeAttribute("aria-hidden");
+  }
   for (const rover of rovers) rover.refresh();
   updateSavedState();
   if (show) void fillRecentStart();
@@ -1427,8 +1442,15 @@ function keepInView(element: Element, smooth: boolean) {
   const box = element.getBoundingClientRect();
   const frame = scoreScroll.getBoundingClientRect();
   const margin = 24;
-  if (box.top >= frame.top + margin && box.bottom <= frame.bottom - margin) return;
-  const target = scoreScroll.scrollTop + (box.top - frame.top) - frame.height * 0.3;
+  // A panel docked over the score (on a phone) shortens what can be seen of it.
+  const dock = document.getElementById("dock");
+  const dockTop =
+    dock && !dock.hidden && getComputedStyle(dock).position === "fixed"
+      ? dock.getBoundingClientRect().top
+      : frame.bottom;
+  const bottom = Math.min(frame.bottom, dockTop);
+  if (box.top >= frame.top + margin && box.bottom <= bottom - margin) return;
+  const target = scoreScroll.scrollTop + (box.top - frame.top) - (bottom - frame.top) * 0.3;
   following.programmatic = performance.now();
   scoreScroll.scrollTo({
     top: Math.max(0, target),
@@ -3292,6 +3314,20 @@ $("problems").addEventListener("click", () => openProblems());
 $("announce").addEventListener("click", sayNote);
 // On a phone the status line is two lines; a tap opens it fully.
 $("explain").addEventListener("click", () => $("explain").classList.toggle("open"));
+/* On a phone the status line can fold away (remembered), giving the text its room back. */
+function showExplain(hidden: boolean) {
+  body.classList.toggle("explain-hidden", hidden);
+  const toggle = $("explain-toggle");
+  toggle.setAttribute("aria-expanded", String(!hidden));
+  toggle.textContent = hidden ? "Show notes" : "Hide";
+  toggle.title = hidden ? "Show the explanations under the transport" : "Hide the explanations";
+}
+showExplain(prefs.explainHidden);
+$("explain-toggle").addEventListener("click", () => {
+  prefs.explainHidden = !prefs.explainHidden;
+  savePrefs();
+  showExplain(prefs.explainHidden);
+});
 
 /** " Bar 3, voice First." for the note at a position, when the score knows it. */
 function placeOf(position: number): string {

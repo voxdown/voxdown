@@ -1,21 +1,7 @@
-/* Find melody: a panel over the text's top right, the text still in reach. */
+/* Find melody: a panel in the dock (./dock.css), beside the text, never over the match. */
 .melody-panel {
-  position: fixed;
-  z-index: 25;
-  top: 96px;
-  right: 16px;
-  width: min(400px, calc(100vw - 32px));
-  max-height: calc(100dvh - 120px);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px 14px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px #18202c24, 0 2px 4px #18202c0a;
-  font-size: 13.5px;
+  flex: 1 1 auto;
+  max-height: 100%;
 }
 .melody-head {
   display: flex;
@@ -122,11 +108,51 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-@media (max-width: 760px) {
-  .melody-panel {
-    top: 60px;
-    right: 8px;
-    left: 8px;
-    width: auto;
-  }
+.melody-folded {
+  justify-self: start;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.melody-more-button {
+  width: 100%;
+  min-height: 32px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+}
+
+/* On a phone, after a result is chosen, one line: "2 of 7 ‹ › Close". */
+.melody-bar {
+  display: none;
+}
+.melody-panel.collapsed > :not(.melody-bar) {
+  display: none;
+}
+.melody-panel.collapsed {
+  padding: 4px 6px;
+}
+.melody-panel.collapsed .melody-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.melody-bar button {
+  min-width: 40px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+}
+.melody-bar .melody-bar-count {
+  flex: 1;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
 }

@@ -143,7 +143,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
       ["Notes selected", "Edit › Find this melody: where else is it played?"],
       ["F3  Shift F3", "the next and previous match"],
     ],
-    note: "Grace notes, ornaments, ties, broken rhythm and bar lines don't get in the way. Choose contour for a tune half remembered, Same rhythm to match lengths too, and search this tune, the file, or every draft in this browser. A MIDI keyboard can play the melody in.",
+    note: "Grace notes, ornaments, ties, broken rhythm and bar lines don't get in the way. Choose contour for a tune half remembered, Same rhythm to match lengths too, and search this tune, the file, or every draft in this browser. Matches may overlap; the closest come first, and those that needed repeated notes folded say so. A MIDI keyboard can play the melody in.",
   },
   {
     title: "A MIDI keyboard",
@@ -152,7 +152,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
       ["1 – 6  .", "in the panel: 32nd to whole, and dotted"],
       ["Pedal", "a rest (or a key you choose)"],
     ],
-    note: "Step entry spells notes for the key and the bar, writes chords as [...], puts a bar line in when the bar fills, and follows the voice's clef. Each note is one undo. Web MIDI is in Chrome, Edge and Opera; there is no recording in time yet.",
+    note: "Step entry spells notes for the key and the bar, writes chords as [...], puts a bar line in when the bar fills (tying a note that runs over it), and follows the voice's clef. A steady caret shows where the next note goes, and a Step entry pill in the status line; closing the panel goes back to Hear it. Each note is one undo. Web MIDI is in Chrome, Edge and Opera; there is no recording in time yet.",
   },
   {
     title: "Tune book",
@@ -183,7 +183,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
   },
   {
     title: "Coming from MuseScore or Dorico?",
-    note: "Export MusicXML there (File › Export › MusicXML, .musicxml or .mxl) and open it here: it becomes ABC text in a new draft. Notes, rests, chords, ties, slurs, tuplets, grace notes, beams, keys, meters, clefs, voices and staves, repeats and endings, dynamics, hairpins, articulations, ornaments, chord symbols, words, lyrics, title, composer and tempo carry over. Transposing instruments come in at concert pitch; tenor, guitar, piccolo and double bass keep their written octave. Page layout, fingerings, pedal marks, guitar notation and other specialist marks do not, and the import report lists each. File › Export MusicXML… sends a tune back.",
+    note: "Export MusicXML there (File › Export › MusicXML, .musicxml or .mxl) and open it here: it becomes ABC text in a new draft. Notes, rests, chords, ties, slurs, tuplets, grace notes, beams, keys, meters, clefs, voices and staves, repeats and endings, dynamics, hairpins, articulations, ornaments, chord symbols, words, lyrics, title, composer and tempo carry over. Transposing instruments come in at concert pitch; tenor, guitar, piccolo and double bass keep their written octave. Page layout, fingerings, pedal marks, guitar notation and other specialist marks do not, and the import report lists each. File › Export MusicXML… sends a tune back. A MIDI file from any program opens too (see Opening a MIDI file).",
   },
   {
     title: "Opening a MIDI file",

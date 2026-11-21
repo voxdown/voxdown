@@ -8,8 +8,10 @@
  */
 import "./midi.css";
 import { isolateHistory } from "@codemirror/commands";
-import type { EditorView } from "@codemirror/view";
+import { StateEffect, StateField } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { type Fraction, frac, mul, parseKey } from "./abc";
+import { dockPanel, undockPanel } from "./dock";
 import { STEP_LENGTHS, type StepReading, pitchText, stepInsert } from "./stepentry";
 import { indexFile } from "./tunes";
 
@@ -59,6 +61,64 @@ let pedalDown = false;
 const held = new Set<number>();
 const chord = new Set<number>();
 const listeners = new Set<(pitches: number[]) => void>();
+
+/* While step entry is on, a steady caret marks where the next note goes (the panel has the focus,
+   so the editor's own caret is hidden), and a pill in the status bar says step entry is on. */
+const setStepCaret = StateEffect.define<boolean>();
+const stepCaretOn = StateField.define<boolean>({
+  create: () => false,
+  update(on, transaction) {
+    for (const effect of transaction.effects) if (effect.is(setStepCaret)) return effect.value;
+    return on;
+  },
+});
+class StepCaret extends WidgetType {
+  toDOM() {
+    const mark = document.createElement("span");
+    mark.className = "cm-step-caret";
+    mark.setAttribute("aria-hidden", "true");
+    return mark;
+  }
+  override eq() {
+    return true;
+  }
+}
+const stepCaret = [
+  stepCaretOn,
+  EditorView.decorations.compute([stepCaretOn, "selection"], (state) =>
+    state.field(stepCaretOn)
+      ? Decoration.set([
+          Decoration.widget({ widget: new StepCaret(), side: 1 }).range(state.selection.main.head),
+        ])
+      : Decoration.none,
+  ),
+];
+let caretInstalled = false;
+/** Shows or hides the step caret and the status bar's pill, as step entry is on or off. */
+function showStepping() {
+  const on = Boolean(panel && mode === "step");
+  if (context) {
+    const { view } = context;
+    if (!caretInstalled && on) {
+      view.dispatch({ effects: StateEffect.appendConfig.of(stepCaret) });
+      caretInstalled = true;
+    }
+    if (caretInstalled && view.state.field(stepCaretOn, false) !== on)
+      view.dispatch({ effects: setStepCaret.of(on) });
+  }
+  let pill = document.getElementById("step-pill");
+  if (on && !pill) {
+    pill = element("button", {
+      id: "step-pill",
+      type: "button",
+      className: "step-pill",
+      textContent: "Step entry",
+      title: "Notes you play are written at the caret. Open the MIDI keyboard panel",
+    });
+    pill.addEventListener("click", () => panel?.focus());
+    document.getElementById("explain")?.before(pill);
+  } else if (!on) pill?.remove();
+}
 
 /** Whether this browser has Web MIDI. */
 export const supported = () =>
@@ -197,6 +257,22 @@ function refresh() {
     use(list.find((each) => each.name === wanted) ?? (list[0] as MIDIInput));
     if (select && input) select.value = (input as MIDIInput).id;
   }
+  showState(
+    list.length
+      ? null
+      : "No MIDI keyboard is connected. Plug one in: it shows here when it does, or Retry.",
+  );
+}
+
+/** The panel's controls, or (denied, or no keyboard) only a message and Retry. */
+function showState(message: string | null) {
+  const body = $(".midi-body");
+  const empty = $(".midi-empty");
+  if (!body || !empty) return;
+  body.hidden = message !== null;
+  empty.hidden = message === null;
+  const text = $(".midi-empty-text");
+  if (text && message) text.textContent = message;
 }
 
 async function connect() {
@@ -204,8 +280,8 @@ async function connect() {
   try {
     access = await navigator.requestMIDIAccess({ sysex: false });
   } catch {
-    say(
-      "Composer wasn't allowed to use MIDI devices. Allow it in the browser's site settings, then open this again.",
+    showState(
+      "Composer wasn't allowed to use MIDI devices. Allow it in the browser's site settings, then Retry.",
     );
     return false;
   }
@@ -280,6 +356,7 @@ function build() {
       radio.addEventListener("change", () => {
         mode = value;
         save({ mode });
+        showStepping();
         say(
           mode === "step"
             ? "Step entry: play notes or chords; they are written at the caret."
@@ -329,10 +406,17 @@ function build() {
       save({ rest: "pedal" });
       showRest();
     });
-    panel = element(
-      "section",
-      { id: "midi-panel", className: "midi-panel" },
-      head,
+    const retry = element("button", { type: "button", textContent: "Retry" });
+    retry.addEventListener("click", () => void retryKeyboard());
+    const empty = element(
+      "div",
+      { className: "midi-empty", hidden: true },
+      element("p", { className: "midi-empty-text" }),
+      retry,
+    );
+    const body = element(
+      "div",
+      { className: "midi-body" },
       element("label", { className: "midi-field" }, "Keyboard", device),
       element(
         "div",
@@ -358,8 +442,15 @@ function build() {
       element("p", {
         className: "midi-note",
         textContent:
-          "Step entry spells notes for the key, writes chords as [...] and a bar line when the bar fills. Each note is one undo.",
+          "Step entry spells notes for the key, writes chords as [...] and a bar line when the bar fills, tying a note over it. Each note is one undo. Closing the panel goes back to Hear it.",
       }),
+    );
+    panel = element(
+      "section",
+      { id: "midi-panel", className: "midi-panel" },
+      head,
+      empty,
+      body,
       status,
     );
     panel.addEventListener("keydown", (event) => {
@@ -381,22 +472,36 @@ function build() {
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-label", "MIDI keyboard");
   panel.tabIndex = -1;
-  panel.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeKeyboard();
-    }
-  });
   close.addEventListener("click", closeKeyboard);
-  document.body.append(panel);
+  dockPanel(panel, closeKeyboard);
   showLengths();
   showRest();
 }
 
+/** Closes the panel. Step entry ends with it: the keyboard goes back to Hear it. */
 export function closeKeyboard() {
-  panel?.remove();
+  if (mode === "step") {
+    mode = "audition";
+    save({ mode });
+    context?.status("Step entry is off: the keyboard plays aloud again.");
+  }
+  if (panel) undockPanel(panel);
   panel = null;
+  showStepping();
   context?.view.focus();
+}
+
+/** Asks for MIDI again (after a refusal) or looks for keyboards again. */
+async function retryKeyboard() {
+  if (!access) {
+    if (await connect()) reportListening();
+  } else {
+    refresh();
+    reportListening();
+  }
+}
+function reportListening() {
+  if (input) say(`Listening to ${input.name || "the keyboard"}.`);
 }
 
 /** Opens the panel (and the keyboard, the first time). */
@@ -407,12 +512,9 @@ export async function openKeyboard(given: KeyboardContext) {
   // Melody search may have connected already: the panel lists the keyboards and says which.
   if (supported() && (await connect())) {
     refresh();
-    say(
-      input
-        ? `Listening to ${input.name || "the keyboard"}.`
-        : "Plug in a MIDI keyboard: it shows here when it connects.",
-    );
+    reportListening();
   }
+  showStepping();
 }
 
 let melodyReading: StepReading | null = null;

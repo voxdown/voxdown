@@ -159,6 +159,11 @@ export type MelodyMatch = {
   ranges: { from: number; to: number }[];
   /** The matched notes as they stand in the text. */
   excerpt: string;
+  /** How closely it matches, for ranking: the same steps in semitones, the same relative
+   * lengths, and whether repeated notes had to be folded (on either side) to match. */
+  exact: boolean;
+  sameRhythm: boolean;
+  folded: boolean;
 };
 
 /** Where a melody is played in a set of voices. */
@@ -175,6 +180,9 @@ export function findIn(
     .slice(1)
     .map((each, at) => step((wanted[at] as typeof each).note.pitch, each.note.pitch, options.mode));
   const ratios = wanted.map((each) => each.length / (wanted[0] as typeof each).length);
+  const exactSteps = wanted
+    .slice(1)
+    .map((each, at) => each.note.pitch - (wanted[at] as typeof each).note.pitch);
   const matches: MelodyMatch[] = [];
   for (const voice of voices) {
     const seq = folded(voice.notes, options.foldRepeats);
@@ -195,6 +203,16 @@ export function findIn(
             1e-6;
       }
       if (!same) continue;
+      const window = seq.slice(at, at + wanted.length);
+      const exact = window.every(
+        (each, k) =>
+          k === 0 ||
+          each.note.pitch - (window[k - 1] as typeof each).note.pitch === exactSteps[k - 1],
+      );
+      const base = (window[0] as (typeof window)[number]).length;
+      const sameRhythm = window.every(
+        (each, k) => Math.abs(each.length / base - (ratios[k] as number)) < 1e-6,
+      );
       const first = (seq[at] as (typeof seq)[number]).note;
       const lastIndex = (seq[at + wanted.length - 1] as (typeof seq)[number]).last;
       const firstIndex = voice.notes.indexOf(first);
@@ -214,9 +232,12 @@ export function findIn(
         to: (notes[notes.length - 1] as MelodyNote).to,
         ranges,
         excerpt: ranges.map((range) => text.slice(range.from, range.to)).join(" … "),
+        exact,
+        sameRhythm,
+        // Folded: the notes it spans, or the query's, aren't one to one.
+        folded: notes.length !== query.length,
       });
-      // The next match starts after this one.
-      at += wanted.length - 2;
+      // Matches may overlap: the next one can start on the following note.
     }
   }
   return matches;
@@ -273,7 +294,19 @@ export function searchFile(
   return tunes.flatMap((tune) => findIn(query, tune, melodyOf(text, tune, file), text, options));
 }
 
-/** "Tune title, voice, bar 5". */
+/** Closest first: exact intervals, then the same rhythm, then those with no repeats folded;
+ * otherwise in the order they come. */
+export function rankMatches<T extends MelodyMatch>(matches: T[]): T[] {
+  const score = (match: MelodyMatch) =>
+    (match.exact ? 0 : 4) + (match.sameRhythm ? 0 : 2) + (match.folded ? 1 : 0);
+  return matches
+    .map((match, index) => ({ match, index }))
+    .sort((a, b) => score(a.match) - score(b.match) || a.index - b.index)
+    .map((each) => each.match);
+}
+
+/** "Tune title, voice, bar 5"; a voice with no name is called by its V: ("V:2"). */
 export function describeMatch(match: MelodyMatch): string {
-  return `${tuneLabel(match.tune)}${match.voiceName ? ` · ${match.voiceName}` : ""} · bar ${match.bar}`;
+  const voice = match.voiceName || (match.tune.voices.length > 1 ? `V:${match.voice}` : "");
+  return `${tuneLabel(match.tune)}${voice ? ` · ${voice}` : ""} · bar ${match.bar}`;
 }

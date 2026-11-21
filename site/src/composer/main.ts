@@ -2254,36 +2254,64 @@ function music(command: string): boolean {
 }
 
 function decorationMenu(anchor: HTMLElement) {
-  const choices: [string, string][] = [
-    [".", "Staccato"],
-    ["accent", "Accent"],
-    ["tenuto", "Tenuto"],
-    ["fermata", "Fermata"],
-    ["trill", "Trill"],
-    ["~", "Roll"],
-    ["mordent", "Mordent"],
-    ["ppp", "ppp — very very soft"],
-    ["pp", "pp — very soft"],
-    ["p", "p — soft"],
-    ["mp", "mp — moderately soft"],
-    ["mf", "mf — moderately loud"],
-    ["f", "f — loud"],
-    ["ff", "ff — very loud"],
-    ["fff", "fff — very very loud"],
-    ["sfz", "sfz — a sudden accent"],
-    ["crescendo(", "Crescendo starts"],
-    ["crescendo)", "Crescendo ends"],
-    ["breath", "Breath mark"],
+  const groups: [string, [string, string][]][] = [
+    [
+      "Articulations and ornaments",
+      [
+        [".", "Staccato"],
+        ["accent", "Accent"],
+        ["tenuto", "Tenuto"],
+        ["fermata", "Fermata"],
+        ["trill", "Trill"],
+        ["~", "Roll"],
+        ["mordent", "Mordent"],
+        ["breath", "Breath mark"],
+      ],
+    ],
+    [
+      "Dynamics",
+      [
+        ["ppp", "ppp — very very soft"],
+        ["pp", "pp — very soft"],
+        ["p", "p — soft"],
+        ["mp", "mp — moderately soft"],
+        ["mf", "mf — moderately loud"],
+        ["f", "f — loud"],
+        ["ff", "ff — very loud"],
+        ["fff", "fff — very very loud"],
+        ["sfz", "sfz — a sudden accent"],
+        ["crescendo(", "Crescendo starts"],
+        ["crescendo)", "Crescendo ends"],
+      ],
+    ],
+    [
+      "Repeats and jumps",
+      [
+        ["segno", "Segno 𝄋 — where D.S. goes back to"],
+        ["coda", "Coda 𝄌 — where the coda starts"],
+        ["dacoda", "To Coda — leave for 𝄌 from here"],
+        ["fine", "Fine — the end, after D.C. or D.S."],
+        ["D.C.", "D.C. — back to the start"],
+        ["D.C.alfine", "D.C. al Fine"],
+        ["D.C.alcoda", "D.C. al Coda"],
+        ["D.S.", "D.S. — back to 𝄋"],
+        ["D.S.alfine", "D.S. al Fine"],
+        ["D.S.alcoda", "D.S. al Coda"],
+      ],
+    ],
   ];
   popupMenu(anchor, [
-    ...choices.map(([name, label]) => ({
-      label,
-      shortcut: decorationMark(name),
-      run: () => {
-        apply(decorate(text(), ranges(), name, fileIndex()), "Decoration");
-        view.focus();
-      },
-    })),
+    ...groups.flatMap(([heading, choices]) => [
+      { heading },
+      ...choices.map(([name, label]) => ({
+        label,
+        shortcut: decorationMark(name),
+        run: () => {
+          apply(decorate(text(), ranges(), name, fileIndex()), "Decoration");
+          view.focus();
+        },
+      })),
+    ]),
     "-" as const,
     { label: "Dynamic for the 2nd time…", shortcut: '"^2nd time p"', run: insertPassDynamic },
   ]);

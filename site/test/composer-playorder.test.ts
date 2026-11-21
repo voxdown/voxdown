@@ -1,5 +1,7 @@
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
+import { decorationOptions } from "../src/composer/editor";
+import { DECORATIONS } from "../src/composer/explain";
 import { writeMidi } from "../src/composer/midi";
 import { bar, followOrder, playOrder, structureOf } from "../src/composer/playorder";
 import { type ScoreNote, indexScore } from "../src/composer/score";
@@ -149,5 +151,25 @@ describe("the play order", () => {
     expect(notes.map((note) => NAMES[note.pitch]).join("")).toBe("CDEFDEG");
     expect(notes.map((note) => note.tick)).toEqual([0, 480, 960, 1440, 1920, 2400, 2880]);
     expect(notes.every((note) => note.length === 456)).toBe(true);
+  });
+  it("offers the jumps where segno, coda and fine are, and says what each does", () => {
+    const labels = decorationOptions().map((option) => option.label);
+    const at = labels.indexOf("segno");
+    expect(labels.slice(at, at + 10)).toEqual([
+      "segno",
+      "coda",
+      "fine",
+      "dacoda",
+      "D.C.",
+      "D.C.alfine",
+      "D.C.alcoda",
+      "D.S.",
+      "D.S.alfine",
+      "D.S.alcoda",
+    ]);
+    expect(DECORATIONS["D.S.alcoda"]).toBe(
+      "D.S. al Coda: go back to 𝄋, play to To Coda, then jump to 𝄌",
+    );
+    expect(DECORATIONS.dacoda).toMatch(/^To Coda:/);
   });
 });

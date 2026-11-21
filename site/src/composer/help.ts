@@ -68,12 +68,17 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
     ],
   },
   {
-    title: "Bars and repeats",
+    title: "Repeats and jumps",
     rows: [
       ["|  ||  |]", "bar, double bar, end"],
       ["|:  :|  ::", "repeat start, end, both"],
       ["|1  :|2", "first and second endings"],
+      ["!segno!  !coda!  !fine!", "𝄋, 𝄌, and where the piece ends after a jump"],
+      ["!D.C.!  !D.S.!", "back to the start, back to 𝄋"],
+      ["!D.C.alfine!  !D.S.alfine!", "back, then play to Fine"],
+      ["!D.S.alcoda!  !dacoda!", "back to 𝄋, play to To Coda, then jump to 𝄌"],
     ],
+    note: "Playback follows repeats, endings and jumps: on the way back, repeats are played once and the last ending taken. The clock says “D.S.” or “Coda” as it goes. Play › Follow D.C./D.S. jumps turns jumps off, to practise a section as written. The jumps are in the decoration menu (Alt D).",
   },
   {
     title: "Together and joined",
@@ -128,6 +133,33 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
       ["Score: Shift ← →", "select by note; Space plays, Enter goes to the text"],
     ],
     note: "A region selects its text in each voice. Play, loop, transpose, change lengths, copy or delete it.",
+  },
+  {
+    title: "Tune book",
+    rows: [
+      ["Renumber X:", "1 to n in file order; nothing else changes"],
+      ["Sort tunes…", "by title, X: or key; text between tunes moves with the tune after it"],
+      [
+        "Line up bars",
+        "spaces before bar lines, so lines read like a table; the music is unchanged",
+      ],
+      ["Incipits…", "a new draft: each tune's header and first bars, for an index"],
+      ["Duplicate, New tune after", "a copy with the next X:, or a new tune right after"],
+    ],
+    note: "In the Tunes menu, and on each tune in the tunes panel (right-click or Shift F10). Each command is one undo step.",
+  },
+  {
+    title: "Exports",
+    rows: [
+      ["SVG of this tune", "the drawing, plain black on white or in the current look"],
+      [
+        "HTML tune book",
+        "one page with contents, every tune drawn and its ABC; prints a tune a page",
+      ],
+      ["MIDI, Audio (WAV)", "this tune, or every tune in one .zip; repeats and jumps as played"],
+      ["MusicXML", "for MuseScore, Dorico, Finale and Sibelius"],
+    ],
+    note: "File › Export. Names come from the tunes' titles.",
   },
   {
     title: "Coming from MuseScore or Dorico?",

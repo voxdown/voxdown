@@ -131,7 +131,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
   },
   {
     title: "Coming from MuseScore or Dorico?",
-    note: "Export MusicXML there (File › Export › MusicXML, .musicxml or .mxl) and open it here: it becomes ABC text in a new draft. Notes, rests, chords, ties, slurs, tuplets, grace notes, beams, keys, meters, clefs, voices and staves, repeats and endings, dynamics, hairpins, articulations, ornaments, chord symbols, words, lyrics, title, composer and tempo carry over. Page layout, fingerings, pedal marks, guitar notation and other specialist marks do not, and the import report lists each. File › Export MusicXML… sends a tune back.",
+    note: "Export MusicXML there (File › Export › MusicXML, .musicxml or .mxl) and open it here: it becomes ABC text in a new draft. Notes, rests, chords, ties, slurs, tuplets, grace notes, beams, keys, meters, clefs, voices and staves, repeats and endings, dynamics, hairpins, articulations, ornaments, chord symbols, words, lyrics, title, composer and tempo carry over. Transposing instruments come in at concert pitch; tenor, guitar, piccolo and double bass keep their written octave. Page layout, fingerings, pedal marks, guitar notation and other specialist marks do not, and the import report lists each. File › Export MusicXML… sends a tune back.",
   },
 ];
 

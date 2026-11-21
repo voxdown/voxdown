@@ -27,10 +27,14 @@ import {
 } from "../src/composer/score";
 import { encodeText, readBytes, readText, writeText } from "../src/composer/source";
 import {
+  PIECE_GAP,
   beatsBetween,
   buildTimeline,
   firstPlayOf,
+  piecesOf,
   regionTimeline,
+  regionWritten,
+  selectionTimeline,
   soundingAt,
 } from "../src/composer/timeline";
 import { indexFile } from "../src/composer/tunes";
@@ -355,6 +359,44 @@ describe("the score's index", () => {
     const { index } = prepare(text);
     for (const note of index.notes) expect(text.slice(note.start, note.end)).toMatch(/[A-Ga-gz]/);
     expect(index.notes.some((note) => text.slice(note.start, note.end).includes("|"))).toBe(false);
+  });
+});
+
+describe("playing a selection", () => {
+  const text =
+    "X:1\nM:4/4\nL:1/4\n%%score (1 2)\nK:C\nV:1\nc d e f|g a b c'|c' b a g|f e d c|]\nV:2\nC D E F|G A B c|c B A G|F E D C|]\n";
+  const { index, timeline } = prepare(text);
+  const notesAt = (voice: number, times: number[]) =>
+    index.notes.filter(
+      (note) => note.voice === voice && times.some((time) => Math.abs(note.time - time) < 1e-6),
+    );
+  const play = (notes: ScoreNote[]) =>
+    selectionTimeline(
+      timeline,
+      piecesOf(notes),
+      new Set(notes.map((note) => note.start)),
+      [...new Set(notes.map((note) => note.voice))],
+      false,
+    );
+  it("plays exactly two notes three bars apart, back to back", () => {
+    const line = play([...notesAt(0, [0.25]), ...notesAt(0, [3])]);
+    expect(line.notes.map((note) => [note.time, note.pitch])).toEqual([
+      [0, 74],
+      [0.25 + PIECE_GAP, 77],
+    ]);
+    expect(regionWritten(line, 0.1)).toBeCloseTo(0.35);
+    expect(regionWritten(line, 0.25 + PIECE_GAP + 0.1)).toBeCloseTo(3.1);
+  });
+  it("plays V:1's bar 1 then V:2's bar 3: eight notes, not twenty-four", () => {
+    const line = play([...notesAt(0, [0, 0.25, 0.5, 0.75]), ...notesAt(1, [2, 2.25, 2.5, 2.75])]);
+    expect(line.notes.length).toBe(8);
+    expect(line.notes.map((note) => note.pitch)).toEqual([72, 74, 76, 77, 72, 71, 69, 67]);
+    expect(line.length).toBeCloseTo(2 + PIECE_GAP);
+  });
+  it("plays a selection in one place as it was", () => {
+    const line = play(notesAt(0, [1, 1.25, 1.5]));
+    expect(line.notes.map((note) => note.time)).toEqual([0, 0.25, 0.5]);
+    expect(line.pieces).toEqual([{ at: 0, from: 1, to: 1.75 }]);
   });
 });
 

@@ -634,6 +634,10 @@ export type Region = {
    * different written times.
    */
   bounds?: Record<number, { from: number; reach: number }> | undefined;
+  /** A selection's own notes (their text starts) and the stretches of time they cover: what
+   * Play and Loop play, piece after piece. */
+  starts?: Set<number> | undefined;
+  pieces?: { from: number; to: number }[] | undefined;
 };
 
 const EPS = 1e-6;

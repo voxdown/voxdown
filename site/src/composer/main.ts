@@ -112,7 +112,10 @@ import {
   barAt,
   buildTimeline,
   firstPlayOf,
+  piecesOf,
   regionTimeline,
+  regionWritten,
+  selectionTimeline,
   soundingAt,
 } from "./timeline";
 import {
@@ -1428,7 +1431,20 @@ function setFollowJumps(on: boolean) {
 function regionTimelineFor(region: Region): Timeline | null {
   if (!timeline || !scoreIndex) return null;
   const all = region.voices.length >= scoreIndex.voices.length;
+  // A selection plays exactly its notes, piece after piece.
+  if (region.starts && region.pieces)
+    return selectionTimeline(timeline, region.pieces, region.starts, region.voices, all);
   return regionTimeline(timeline, region, all);
+}
+/** The region a text selection makes, with its own notes and the pieces of time they cover. */
+function selectedRegion(list: Range[]): Region | null {
+  if (!scoreIndex) return null;
+  const notes = pickedNotes(list);
+  const region = regionOfNotes(scoreIndex, notes);
+  if (!region) return null;
+  region.starts = new Set(notes.map((note) => note.start));
+  region.pieces = piecesOf(notes);
+  return region;
 }
 
 /* Linking: text → score. */
@@ -1760,8 +1776,17 @@ type Drag = {
   y: number;
   /** Ctrl/⌘ held: the selection before the press, which the drag adds to. */
   base?: Range[];
-  /** A finger: it scrolls unless held still first (a long press), then it selects. */
-  touch?: { armed: boolean; timer: ReturnType<typeof setTimeout>; tap: EditorSelection };
+  /**
+   * A finger: it scrolls unless held still first (a long press), then it selects. Until a tap or
+   * the long press, the selection is left as it was (`before`).
+   */
+  touch?: {
+    armed: boolean;
+    scrolled: boolean;
+    timer: ReturnType<typeof setTimeout>;
+    before: EditorSelection;
+    press: () => void;
+  };
   /** Where the pointer was last, for scrolling while dragging (by the edge or the wheel). */
   lastX: number;
   lastY: number;
@@ -2063,28 +2088,38 @@ scoreScroll.addEventListener("pointerdown", (event) => {
   };
   scoreScroll.setPointerCapture(event.pointerId);
   const voices = event.altKey ? allVoices() : [hit.note.voice];
-  selectRegion(dragRegion(scoreIndex, hit, hit, voices));
+  const index = scoreIndex;
+  // The press: the note is selected and heard.
+  const press = () => {
+    selectRegion(dragRegion(index, hit, hit, voices));
+    if (prefs.hear && !hit.note.rest && timeline) {
+      const pitches = timeline.notes
+        .filter((note) => note.start === hit.note.start)
+        .map((note) => note.pitch);
+      player.audition([...new Set(pitches)]);
+    }
+  };
   if (event.pointerType === "touch") {
-    // A finger scrolls the score; held still for a moment, it selects instead (a long press):
-    // the note's band shows, and the drag that follows selects.
+    // A finger scrolls the score, leaving the selection as it was. A tap selects the note; held
+    // still for a moment (a long press) it selects too, the band shows, and the drag that follows
+    // selects instead of scrolling.
     const pressed = drag;
     pressed.touch = {
       armed: false,
-      tap: view.state.selection,
+      scrolled: false,
+      before: view.state.selection,
+      press,
       timer: setTimeout(() => {
-        if (drag !== pressed || !pressed.touch) return;
+        if (drag !== pressed || !pressed.touch || pressed.touch.scrolled) return;
         pressed.touch.armed = true;
         scoreScroll.style.touchAction = "none";
         scoreScroll.classList.add("pressing");
+        press();
       }, LONG_PRESS),
     };
+    return;
   }
-  if (prefs.hear && !hit.note.rest && timeline) {
-    const pitches = timeline.notes
-      .filter((note) => note.start === hit.note.start)
-      .map((note) => note.pitch);
-    player.audition([...new Set(pitches)]);
-  }
+  press();
 });
 /** Moves a drag's end to a page point: the selection follows what the pointer has reached. */
 function dragTo(clientX: number, clientY: number) {
@@ -2133,8 +2168,10 @@ scoreScroll.addEventListener("pointermove", (event) => {
   if (!drag || event.pointerId !== drag.pointer || !scoreIndex) return;
   if (drag.touch && !drag.touch.armed) {
     // A finger moving before the long press: it is scrolling, not selecting.
-    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8)
+    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8) {
       clearTimeout(drag.touch.timer);
+      drag.touch.scrolled = true;
+    }
     return;
   }
   dragTo(event.clientX, event.clientY);
@@ -2160,9 +2197,12 @@ const endDrag = (event: PointerEvent) => {
     clearTimeout(drag.touch.timer);
     scoreScroll.style.touchAction = "";
     scoreScroll.classList.remove("pressing");
-    // The browser took a finger's move for a scroll: the tap's selection stands, not a partial drag.
-    if (event.type === "pointercancel" && !drag.touch.armed)
-      view.dispatch({ selection: drag.touch.tap, userEvent: "select.score" });
+    if (!drag.touch.armed) {
+      // A tap selects its note (and plays it); a scroll leaves the selection as it was.
+      if (event.type === "pointerup" && !drag.touch.scrolled) drag.touch.press();
+      else if (!view.state.selection.eq(drag.touch.before))
+        view.dispatch({ selection: drag.touch.before, userEvent: "select.score" });
+    }
   }
   cancelAnimationFrame(edgeFrame);
   edgeFrame = 0;
@@ -2700,7 +2740,7 @@ function barRegion(voice: number, written: number): Region | null {
 function selectionRegion(): Region | null {
   if (!scoreIndex) return null;
   const selected = ranges().filter((range) => range.to > range.from);
-  if (selected.length) return regionOfNotes(scoreIndex, pickedNotes(selected));
+  if (selected.length) return selectedRegion(selected);
   // No selection: the bar at the caret, in every voice.
   const place = caretWritten();
   return place ? barRegion(place.note.voice, place.written) : null;
@@ -2711,7 +2751,7 @@ function playingWritten(): number | null {
   const line = player.timeline;
   if (!line || player.status !== "playing") return null;
   const position = player.position();
-  if (player.loopingRegion) return line.offset + Math.max(0, position);
+  if (player.loopingRegion) return regionWritten(line, Math.max(0, position));
   let last: (typeof line.notes)[number] | undefined;
   for (const note of line.notes) {
     if (note.time > position) break;
@@ -2744,8 +2784,8 @@ function setLoop(on: boolean) {
     loopRegion = null;
     if (player.loopingRegion && player.status === "playing") {
       // Carry on through the tune from where the loop was.
-      const at = player.timeline?.offset ?? 0;
-      void player.play({ from: timeline ? firstPlayOf(timeline, at + player.position()) : 0 });
+      const at = player.timeline ? regionWritten(player.timeline, player.position()) : 0;
+      void player.play({ from: timeline ? firstPlayOf(timeline, at) : 0 });
     }
   }
   drawTimeline();
@@ -2759,9 +2799,7 @@ function toggleLoop() {
   if (!loopOn || player.status !== "playing" || !scoreIndex) return;
   const written = playingWritten() ?? 0;
   const selected = ranges().filter((range) => range.to > range.from);
-  const region = selected.length
-    ? regionOfNotes(scoreIndex, pickedNotes(selected))
-    : barRegion(0, written);
+  const region = selected.length ? selectedRegion(selected) : barRegion(0, written);
   const line = region ? regionTimelineFor(region) : null;
   if (!region || !line || !line.notes.length) return;
   loopRegion = region;
@@ -3112,12 +3150,23 @@ function drawTimeline() {
     ticks.append(tag);
   }
   fitTimelineLabels();
+  for (const extra of document.querySelectorAll(".timeline-loop-piece")) extra.remove();
   if (loopOn && loopRegion) {
-    const from = firstPlayOf(line, loopRegion.from);
-    const to = Math.max(from, firstPlayOf(line, loopRegion.to - 1e-6) + 0.001);
-    loopBand.hidden = false;
-    loopBand.style.left = `${(from / length) * 100}%`;
-    loopBand.style.width = `${Math.max(0.6, ((to - from) / length) * 100)}%`;
+    // A selection in pieces: a band for each, the gaps between them left clear.
+    const pieces = loopRegion.pieces ?? [{ from: loopRegion.from, to: loopRegion.to }];
+    pieces.forEach((piece, at) => {
+      const band = at === 0 ? loopBand : (loopBand.cloneNode() as HTMLElement);
+      if (at > 0) {
+        band.removeAttribute("id");
+        band.classList.add("timeline-loop-piece");
+        loopBand.after(band);
+      }
+      const from = firstPlayOf(line, piece.from);
+      const to = Math.max(from, firstPlayOf(line, piece.to - 1e-6) + 0.001);
+      band.hidden = false;
+      band.style.left = `${(from / length) * 100}%`;
+      band.style.width = `${Math.max(0.6, ((to - from) / length) * 100)}%`;
+    });
   } else loopBand.hidden = true;
   slider.setAttribute("aria-valuemin", "1");
   slider.setAttribute("aria-valuemax", String(line.bars.length));
@@ -3231,7 +3280,7 @@ function updateHead(position: number) {
   }
   let at = position;
   if (player.loopingRegion && player.timeline)
-    at = firstPlayOf(line, player.timeline.offset) + position;
+    at = firstPlayOf(line, regionWritten(player.timeline, position));
   at = Math.max(0, Math.min(at, line.length));
   head.style.left = `${(at / line.length) * 100}%`;
   const bar = barAt(line, at);

@@ -118,6 +118,12 @@ describe("explaining the caret", () => {
     expect(explain(text, "g")?.text).toBe("G, an octave above middle C, an eighth note.");
     expect(explain(text, "F ")?.midi).toEqual([66]);
   });
+  it("helps with a field that has no value yet", () => {
+    const text = "X:1\nM:\nK:C\nC|\n";
+    expect(explainAt(text, indexFile(text), text.indexOf("M:") + 2)?.text).toMatch(
+      /write it after M:/,
+    );
+  });
   it("explains fields, bars, decorations and tuplets", () => {
     const text = tune("|: !trill!A (3Bcd :|");
     expect(explain(text, "K:G")?.text).toContain("G major, 1 sharp");

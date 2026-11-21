@@ -2045,6 +2045,21 @@ body.starting #transport {
     min-width: 40px !important;
     min-height: 40px !important;
   }
+  /* One row of controls on a phone: the tempo loses its frame, Play is a little smaller. */
+  .transport {
+    padding-inline: 6px;
+  }
+  .tempo {
+    padding: 0;
+    border: 0;
+    margin-right: 0;
+  }
+  .transport .play {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    margin-right: 2px;
+  }
   .workspace-menus button {
     min-width: 40px;
   }

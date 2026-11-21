@@ -295,6 +295,14 @@ export function explainAt(text: string, file: FileIndex, position: number): Expl
     const field = fieldOf(line);
     if (!field) return { token: "", text: "Free text between tunes." };
     const fieldValue = field.value.trim();
+    const empty: Record<string, string> = {
+      K: "Key: write it after K:, for example D or Am. The music starts on the next line.",
+      M: "Meter: write it after M:, for example 4/4, 3/4 or 6/8.",
+      L: "Unit note length: write it after L:, for example 1/8.",
+      Q: "Tempo: write it after Q:, for example 1/4=120.",
+    };
+    if (!fieldValue && empty[field.key])
+      return { token: `${field.key}:`, text: empty[field.key] as string };
     switch (field.key) {
       case "K": {
         const key = parseKey(fieldValue);

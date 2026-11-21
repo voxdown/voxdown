@@ -36,7 +36,7 @@ import {
 import { EXAMPLES, NEW_TUNE } from "./examples";
 import { describeKey, describeMeter, explainAt } from "./explain";
 import { barIsFull, nearestOctave } from "./helpers";
-import { INSTRUMENTS, INSTRUMENT_ORDER, type InstrumentId, isInstrument } from "./instruments";
+import { INSTRUMENTS, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
 import { checkLyrics } from "./lyriccheck";
 import {
@@ -3197,104 +3197,28 @@ function popover(anchor: HTMLElement, title: string): HTMLElement {
   return panel;
 }
 
+/** The Sound popover (./sound-panel, loaded when first opened). */
 function soundPopover(anchor: HTMLElement) {
-  const panel = popover(anchor, "Sound");
-  const choices = document.createElement("div");
-  choices.className = "instrument-choices";
-  choices.setAttribute("role", "radiogroup");
-  choices.setAttribute("aria-label", "Instrument");
-  for (const id of INSTRUMENT_ORDER) {
-    const def = INSTRUMENTS[id];
-    const button = document.createElement("button");
-    button.type = "button";
-    button.setAttribute("role", "radio");
-    button.setAttribute("aria-checked", String(player.instrument === id));
-    const label = document.createElement("span");
-    label.textContent = def.label;
-    const small = document.createElement("small");
-    small.textContent = def.about;
-    // What choosing it downloads, on its own line, until it is kept here.
-    const size = document.createElement("small");
-    size.className = "instrument-size";
-    size.textContent = player.ready(id) ? "" : `${Math.round(def.bytes / 1024)}\u00a0KB to load`;
-    button.append(label, small, size);
-    button.addEventListener("click", async () => {
-      prefs.instrument = id;
-      savePrefs();
-      for (const each of choices.querySelectorAll("button"))
-        each.setAttribute("aria-checked", String(each === button));
-      $("instrument-label").textContent = def.label;
-      const wasPlaying = player.status === "playing";
-      const position = player.position();
-      if (wasPlaying) player.pause();
-      await player.setInstrument(id);
-      size.textContent = "";
-      if (wasPlaying && !player.loopingRegion) void player.play({ from: position });
-    });
-    choices.append(button);
-  }
-  panel.append(choices);
-  const slider = (label: string, value: number, onInput: (value: number) => void) => {
-    const row = document.createElement("label");
-    const name = document.createElement("span");
-    name.textContent = label;
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = "0";
-    input.max = "100";
-    input.value = String(Math.round(value * 100));
-    input.addEventListener("input", () => onInput(Number(input.value) / 100));
-    row.append(name, input);
-    panel.append(row);
-  };
-  slider("Volume", prefs.volume, (value) => {
-    prefs.volume = value;
-    player.setVolume(value);
-    savePrefs();
-  });
-  slider("Room", prefs.reverb, (value) => {
-    prefs.reverb = value;
-    player.setReverb(value);
-    savePrefs();
-  });
-  const check = (label: string, value: boolean, onChange: (value: boolean) => void) => {
-    const row = document.createElement("label");
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = value;
-    input.addEventListener("change", () => onChange(input.checked));
-    const name = document.createElement("span");
-    name.textContent = label;
-    row.append(input, name);
-    panel.append(row);
-  };
-  check("Hear notes as you write", prefs.hear, (value) => {
-    prefs.hear = value;
-    savePrefs();
-  });
-  check("Humanise timing and touch", prefs.humanise, (value) => {
-    prefs.humanise = value;
-    player.humanise = value;
-    savePrefs();
-  });
-  // On a phone, Voices has no room in the transport: it opens from here.
-  if (compactTransport.matches && !$("voices-button").hidden) {
-    const voices = document.createElement("button");
-    voices.type = "button";
-    voices.className = "sheet-link";
-    voices.textContent = `Voices: mute and solo… ${
-      $("voices-button")
-        .getAttribute("aria-label")
-        ?.replace(/^Voices:?\s*/, "") ?? ""
-    }`.trim();
-    voices.addEventListener("click", () => voicesPopover(anchor));
-    panel.append(voices);
-  }
-  const hint = document.createElement("p");
-  hint.className = "hint";
-  hint.textContent =
-    "Instruments load the first time you choose them, then stay in this browser for offline use. Dynamics, accents, staccato and slurs in the score shape the playing.";
-  panel.append(hint);
+  void import("./sound-panel").then((module) =>
+    module.fillSound(popover(anchor, "Sound"), {
+      player,
+      prefs,
+      savePrefs,
+      setLabel: (label) => {
+        $("instrument-label").textContent = label;
+      },
+      voices:
+        compactTransport.matches && !$("voices-button").hidden
+          ? {
+              label:
+                $("voices-button")
+                  .getAttribute("aria-label")
+                  ?.replace(/^Voices:?\s*/, "") ?? "",
+              open: () => voicesPopover(anchor),
+            }
+          : null,
+    }),
+  );
 }
 
 /* Toolbar and transport wiring. */
@@ -3684,11 +3608,11 @@ async function openFile() {
       // A MusicXML score or a MIDI file becomes a new ABC draft; it is never linked, so Save
       // writes ABC elsewhere.
       if (isMidiFile(picked.name, picked.bytes)) {
-        void importMidi(picked.bytes, picked.name);
+        importMidi(picked.bytes, picked.name);
         return;
       }
       if (isScoreFile(picked.name, picked.bytes)) {
-        void importScore(picked.bytes, picked.name);
+        importScore(picked.bytes, picked.name);
         return;
       }
       openBytes(picked.bytes, picked.name);
@@ -3705,11 +3629,11 @@ async function openFile() {
 }
 function openBytes(bytes: Uint8Array, name: string) {
   if (isMidiFile(name, bytes)) {
-    void importMidi(bytes, name);
+    importMidi(bytes, name);
     return;
   }
   if (isScoreFile(name, bytes)) {
-    void importScore(bytes, name);
+    importScore(bytes, name);
     return;
   }
   try {
@@ -3752,89 +3676,29 @@ document.addEventListener("drop", async (event) => {
   openBytes(new Uint8Array(await file.arrayBuffer()), file.name);
 });
 
-/*
- * MusicXML import: the converter loads on first use, reads the file into ABC, and the result
- * opens as a new draft (the file it came from is never written to), with a report of what was
- * brought in and what was left out.
- */
-let importing = false;
-async function importScore(bytes: Uint8Array, name: string) {
-  if (importing) return;
-  importing = true;
-  const status = $("explain");
-  status.textContent = `Reading ${name}…`;
-  try {
-    const musicxml = await import("./musicxml");
-    let shown = -1;
-    const result = await musicxml.readScore(bytes, (done, total) => {
-      const percent = total ? Math.round((done / total) * 100) : 0;
-      if (percent !== shown) {
-        shown = percent;
-        status.textContent = `Importing ${name}: ${percent}%`;
-      }
-    });
-    // The report first, painted, then the new draft behind it: a large score's drawing takes a
-    // moment, and the report should not wait for it.
-    status.textContent = musicxml.describeReport(result.report);
-    musicxml.showImportReport(result.report, name, musicxml.describeReport(result.report));
-    await new Promise((painted) => requestAnimationFrame(() => setTimeout(painted, 0)));
-    local.disconnect();
-    load(newSource(result.text), abcName(result.report.title));
-    void persist();
-  } catch (error) {
-    status.textContent = "Ready";
-    noticeError(
-      error instanceof Error && error.message
-        ? `${name} could not be imported. ${error.message}`
-        : `${name} could not be imported.`,
-    );
-  } finally {
-    importing = false;
-  }
-}
-/*
- * MIDI import (./midifile): read, quantised and written as notation on first use; the result opens
- * as a new draft with a report, which can import again at another grid. While the draft is as the
- * import left it, importing again replaces it rather than making another.
- */
-let lastMidi: { text: string; draft: string } | null = null;
-async function importMidi(
-  bytes: Uint8Array,
-  name: string,
-  options?: import("./midifile").MidiOptions,
-): Promise<void> {
-  if (importing) return;
-  importing = true;
-  const status = $("explain");
-  status.textContent = `Reading ${name}…`;
-  try {
-    const midi = await import("./midifile");
-    const started = performance.now();
-    const result = await midi.readMidiFile(bytes, name, options);
-    const took = Math.round(performance.now() - started);
-    const summary = midi.describeMidi(result);
-    status.textContent = summary;
-    lastImportMs = took;
-    const replace = Boolean(lastMidi && lastMidi.draft === draftId && lastMidi.text === text());
-    midi.showMidiReport(result, name, summary, (again) => importMidi(bytes, name, again));
-    await new Promise((painted) => requestAnimationFrame(() => setTimeout(painted, 0)));
-    if (!replace) local.disconnect();
-    load(newSource(result.text), abcName(result.report.title), { keepDraft: replace });
-    lastMidi = { text: text(), draft: draftId };
-    void persist();
-  } catch (error) {
-    status.textContent = "Ready";
-    noticeError(
-      error instanceof Error && error.message
-        ? `${name} could not be imported. ${error.message}`
-        : `${name} could not be imported.`,
-    );
-  } finally {
-    importing = false;
-  }
-}
-/** How long the last MIDI import took, for checks. */
+/* MusicXML and MIDI files (./importers, loaded on first use) open as new ABC drafts. */
 let lastImportMs = 0;
+const importContext = (): import("./importers").ImportContext => ({
+  status: (message) => {
+    $("explain").textContent = message;
+  },
+  open: (abc, title, replace) => {
+    if (!replace) local.disconnect();
+    load(newSource(abc), abcName(title), { keepDraft: replace });
+    void persist();
+  },
+  noticeError,
+  current: () => ({ text: text(), draft: draftId }),
+  took: (ms) => {
+    lastImportMs = ms;
+  },
+});
+function importScore(bytes: Uint8Array, name: string) {
+  void import("./importers").then((module) => module.importScore(importContext(), bytes, name));
+}
+function importMidi(bytes: Uint8Array, name: string) {
+  void import("./importers").then((module) => module.importMidi(importContext(), bytes, name));
+}
 
 async function save(saveAs = false) {
   const name = abcName(nameInput.value);

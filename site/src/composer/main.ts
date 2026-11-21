@@ -2725,57 +2725,29 @@ function drawTimeline() {
   const pickup = line.pickup > 1e-6;
   const step =
     line.bars.length > 64 ? 8 : line.bars.length > 24 ? 4 : line.bars.length > 12 ? 2 : 1;
-  let previous: { bar: number; pass: number } | null = null;
-  const last = line.bars.length - 1;
-  line.bars.forEach((time, index) => {
-    const tick = document.createElement("div");
-    const played = index + 1;
-    const written = writtenBarAt(line, time + 1e-6);
-    // Where playback goes back for another time through (its band carries the "2nd" tag).
-    const passStart = Boolean(
-      written &&
-        written.pass > 1 &&
-        previous &&
-        (previous.pass !== written.pass || previous.bar > written.bar),
-    );
-    previous = written;
-    tick.className = `timeline-tick${played % step === 0 || index === 0 || index === last || passStart ? " major" : ""}`;
-    tick.style.left = `${(time / length) * 100}%`;
-    tick.dataset.bar = String(index);
-    // The first and the last bar are always named; others by the step, measured to fit below.
-    const bar = written?.bar ?? (pickup ? index : played);
-    // Written bar numbers on their first time through, so a repeat never names a bar twice.
-    // Where playback goes back, the band's "2nd" tag says so; no bar number there ("8 1").
-    const labelled =
-      index === 0 || index === last || (bar > 0 && bar % step === 0 && (written?.pass ?? 1) === 1);
-    if (labelled) {
-      const label = document.createElement("span");
-      label.textContent = index === 0 && bar === 0 ? "Pickup" : String(bar);
-      label.dataset.priority = index === 0 || index === last ? "0" : "2";
-      tick.append(label);
-    }
-    ticks.append(tick);
-  });
-  // The repeat band covers only what is played again, not what follows it, and says which time.
+  // The bands: what is played again for a repeat ("2nd"), after a D.C. or D.S., and the coda.
+  type Band = {
+    from: number;
+    to: number;
+    tag: string;
+    short: string;
+    title: string;
+    jump: boolean;
+  };
+  const bands: Band[] = [];
   const reading = readingOf(line);
   const returns = line.returns ?? [];
   const inReturn = (time: number) =>
     returns.some((each) => time >= each.from - 1e-9 && time < each.to - 1e-9);
-  // What is played after a D.C. or D.S. jump, and the coda: a band each, tagged.
-  for (const each of returns) {
-    const band = document.createElement("div");
-    band.className = "timeline-pass repeat";
-    band.style.left = `${(each.from / length) * 100}%`;
-    band.style.width = `${((each.to - each.from) / length) * 100}%`;
-    band.title = each.label === "Coda" ? "The coda" : `Played again after the ${each.label}`;
-    passes.append(band);
-    const tag = document.createElement("span");
-    tag.className = "timeline-pass-tag";
-    tag.textContent = each.label;
-    tag.dataset.priority = "1";
-    tag.style.left = `${((each.from + each.to) / 2 / length) * 100}%`;
-    ticks.append(tag);
-  }
+  for (const each of returns)
+    bands.push({
+      from: each.from,
+      to: each.to,
+      tag: each.label,
+      short: each.label === "Coda" ? "𝄌" : each.label,
+      title: each.label === "Coda" ? "The coda" : `Played again after the ${each.label}`,
+      jump: true,
+    });
   if (reading)
     for (let at = 0; at < reading.times.length; at++) {
       const pass = reading.passes[at] ?? 1;
@@ -2787,22 +2759,71 @@ function drawTimeline() {
         !inReturn(reading.times[end + 1] as number)
       )
         end += 1;
-      const from = reading.times[at] as number;
-      const to = reading.times[end + 1] ?? length;
-      const band = document.createElement("div");
-      band.className = "timeline-pass repeat";
-      band.style.left = `${(from / length) * 100}%`;
-      band.style.width = `${((to - from) / length) * 100}%`;
-      band.title = `Bars ${reading.bars[at]}–${reading.bars[end]}, ${ordinal(pass)} time`;
-      passes.append(band);
-      const tag = document.createElement("span");
-      tag.className = "timeline-pass-tag";
-      tag.textContent = ordinal(pass);
-      tag.dataset.priority = "1";
-      tag.style.left = `${((from + to) / 2 / length) * 100}%`;
-      ticks.append(tag);
+      bands.push({
+        from: reading.times[at] as number,
+        to: reading.times[end + 1] ?? length,
+        tag: ordinal(pass),
+        short: ordinal(pass),
+        title: `Bars ${reading.bars[at]}–${reading.bars[end]}, ${ordinal(pass)} time`,
+        jump: false,
+      });
       at = end;
     }
+  const bandStart = (time: number) => bands.some((band) => Math.abs(band.from - time) < 1e-6);
+  let previous: { bar: number; pass: number } | null = null;
+  const last = line.bars.length - 1;
+  line.bars.forEach((time, index) => {
+    const tick = document.createElement("div");
+    const played = index + 1;
+    const written = writtenBarAt(line, time + 1e-6);
+    // Where playback goes back for another time through, or jumps.
+    const starts =
+      bandStart(time) ||
+      Boolean(
+        written &&
+          written.pass > 1 &&
+          previous &&
+          (previous.pass !== written.pass || previous.bar > written.bar),
+      );
+    previous = written;
+    tick.className = `timeline-tick${played % step === 0 || index === 0 || index === last || starts ? " major" : ""}`;
+    tick.style.left = `${(time / length) * 100}%`;
+    tick.dataset.bar = String(index);
+    // The first and the last bar are always named, and the first bar of every band; others by
+    // the step on their first time through, measured to fit below.
+    const bar = written?.bar ?? (pickup ? index : played);
+    const labelled =
+      index === 0 ||
+      index === last ||
+      starts ||
+      (bar > 0 && bar % step === 0 && (written?.pass ?? 1) === 1);
+    if (labelled) {
+      const label = document.createElement("span");
+      label.textContent = index === 0 && bar === 0 ? "Pickup" : String(bar);
+      label.dataset.priority = index === 0 || index === last ? "0" : starts ? "1" : "2";
+      if (starts) label.dataset.bandStart = "true";
+      tick.append(label);
+    }
+    ticks.append(tick);
+  });
+  // Each band a little inside its stretch, so two bands side by side show a gap.
+  for (const each of bands) {
+    const band = document.createElement("div");
+    band.className = "timeline-pass repeat";
+    band.style.left = `calc(${(each.from / length) * 100}% + 1px)`;
+    band.style.width = `max(2px, calc(${((each.to - each.from) / length) * 100}% - 2px))`;
+    band.title = each.title;
+    passes.append(band);
+    const tag = document.createElement("span");
+    tag.className = `timeline-pass-tag${each.jump ? " jump" : ""}`;
+    tag.textContent = each.tag;
+    tag.dataset.full = each.tag;
+    tag.dataset.short = each.short;
+    tag.dataset.priority = "1";
+    tag.dataset.width = String(((each.to - each.from) / length) * 100);
+    tag.style.left = `${((each.from + each.to) / 2 / length) * 100}%`;
+    ticks.append(tag);
+  }
   fitTimelineLabels();
   if (loopOn && loopRegion) {
     const from = firstPlayOf(line, loopRegion.from);
@@ -2851,9 +2872,23 @@ function fitTimelineLabels() {
   }
   const kept: DOMRect[] = [];
   const gap = 6;
+  // D.C., D.S. and Coda chips always show: in short (𝄌) where their band is too narrow for the
+  // word or another chip is in the way.
+  for (const chip of labels.filter((label) => label.classList.contains("jump"))) {
+    chip.textContent = chip.dataset.full ?? chip.textContent;
+    const band = (Number(chip.dataset.width) / 100) * width;
+    let box = chip.getBoundingClientRect();
+    const clash = () =>
+      kept.some((other) => box.left < other.right + 2 && other.left < box.right + 2);
+    if (box.width > band - 4 || clash()) {
+      chip.textContent = chip.dataset.short ?? chip.textContent;
+      box = chip.getBoundingClientRect();
+    }
+    kept.push(box);
+  }
   for (const priority of ["0", "1", "2"])
     for (const label of labels) {
-      if (label.dataset.priority !== priority) continue;
+      if (label.classList.contains("jump") || label.dataset.priority !== priority) continue;
       const box = label.getBoundingClientRect();
       const clash = kept.some(
         (other) => box.left < other.right + gap && other.left < box.right + gap,

@@ -777,3 +777,51 @@ These are under File › Export. Each choice is made in a small dialog.
   - WAV renders tune by tune with the current instrument (four tunes in 3.7 s).
 - **Names** come from titles, made safe, and are numbered when two titles are the same: "Drowsy
   Maggie.svg", "Session tunes MIDI.zip".
+
+### Sprint C fixes (after Claude 8.7, Codex 8.3)
+
+- **The first bar's length** comes from the meter at the first note, the bar check's reading
+  (`tuneMeter`), for the player and the exports. abcjs's rendered tune once gave the wrong one
+  when a subtitle came first, so a 3/4 tune "had a pickup" and Élan lost a bar from the ruler.
+- **Line up bars:**
+  - a bar line with only inline fields, decorations, chord symbols or annotations before it
+    (`[V:1] |:`, `!segno!|:`) leads its line and isn't a column;
+  - lines go in groups of like bar counts (within one bar), each lined up on its own.
+- **The ruler with jumps:**
+  - every band's first bar is numbered;
+  - the D.C./D.S./Coda chips always show, in short (𝄌) when their band is narrow;
+  - bands sit 1 px inside their stretch, so neighbouring bands show a gap.
+- **Jump marks are easy to find:**
+  - completion lists To Coda and the four "al" forms beside segno, coda and fine;
+  - each has a plain meaning ("D.S. al Coda: go back to 𝄋, play to To Coda, then jump to 𝄌");
+  - the decoration menu has a "Repeats and jumps" group;
+  - the cheat sheet has Repeats and jumps, Tune book and Exports.
+- **Tune-book commands say what they did** in a notice ("Renumbered 4 tunes (X:1–4)", "Lined up
+  6 lines in 2 tunes", "Duplicated Élan as X:13", "Sorted 4 tunes by title", "Made incipits of
+  4 tunes").
+- **Dialogs:** Sort, Incipits and the export dialogs are forms, so Enter confirms, and their
+  radios show a focus ring.
+- **One caret rule:** between two notes the status line, the highlight and Say note all name the
+  note to the left.
+- **One problem per cause:** after an unclosed chord-symbol quote or decoration, the letters
+  abcjs skips on that line fold into its problem.
+- **HTML book:**
+  - each Play button is labelled "Play <title>";
+  - Play and "ABC text" share a baseline;
+  - the text is set in Literata where the reader has it.
+- **Sort** puts exactly one blank line where two tunes would now touch; gaps that were already
+  there are kept.
+- **Menus:**
+  - a **Tunes** menu holds the tune-book commands;
+  - Edit is down to 13 items, with the pitch, length, dot, tie and slur commands under Edit ›
+    Notes;
+  - on a phone the bar shows File, Edit, Tunes and ⋯ (Insert, View, Play, Help). The menu
+    titles, editing buttons and Text/Score switch are 44 × 44, and the file name shows in full.
+- **Small things:**
+  - "8va↓" is "8vb";
+  - the Appearance Auto card reads on one line;
+  - on desktop the clock and status line are 13 px and the rail's code 12 px, in the muted
+    colour at 5.4:1;
+  - a new tune with no notes shows "Type notes after K: and the score draws here".
+- **The first view** is 719 KB. To keep it there, the decoration menu's labels, the About text
+  and the offline panel now load when first opened.

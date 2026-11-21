@@ -32,14 +32,14 @@ export const DECORATION_GROUPS: [string, [string, string][]][] = [
   [
     "Repeats and jumps",
     [
-      ["segno", "Segno 𝄋 — where D.S. goes back to"],
-      ["coda", "Coda 𝄌 — where the coda starts"],
-      ["dacoda", "To Coda — leave for 𝄌 from here"],
+      ["segno", "Segno — where D.S. goes back to"],
+      ["coda", "Coda — where the coda starts"],
+      ["dacoda", "To Coda — leave for the coda here"],
       ["fine", "Fine — the end, after D.C. or D.S."],
       ["D.C.", "D.C. — back to the start"],
       ["D.C.alfine", "D.C. al Fine"],
       ["D.C.alcoda", "D.C. al Coda"],
-      ["D.S.", "D.S. — back to 𝄋"],
+      ["D.S.", "D.S. — back to the segno"],
       ["D.S.alfine", "D.S. al Fine"],
       ["D.S.alcoda", "D.S. al Coda"],
     ],

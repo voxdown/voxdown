@@ -4625,6 +4625,8 @@ console.log(
   await p.goto(url);
   await openExample("Ode to Joy", p);
   let total = 0;
+  let backward = 0;
+  let mirrored = 0;
   for (const [name, tune] of Object.entries(tunes)) {
     await p.evaluate((t) => {
       window.__before = window.composer.scoreIndex();
@@ -4730,11 +4732,13 @@ console.log(
           );
         }
         // Nothing past the pointer's reach, nothing before the drag's start; nothing skipped.
-        const forward =
-          target.line > anchorBox.line || (target.line === anchorBox.line && target.x >= from.x);
+        // (On or back, as the score decides: left of its own head, the drag goes back.)
         const lineHeads = geometry.notes.filter((box) => box.line === target.line);
         const firstX = Math.min(...lineHeads.map((box) => box.head));
         const reachX = Math.max(target.x, firstX);
+        const forward =
+          target.line > anchorBox.line ||
+          (target.line === anchorBox.line && reachX >= anchorBox.head);
         const upTo = (box) =>
           box.line < target.line || (box.line === target.line && box.head <= reachX + 1);
         const fromOn = (box) =>
@@ -4773,12 +4777,75 @@ console.log(
                 chosen.some((note) => note.start === box.start),
                 `${say}: takes every note dragged over (missed the note at ${box.start})`,
               );
+        if (!forward) {
+          backward += 1;
+          // Dragging back mirrors dragging on: from the first head the pointer is on or left of
+          // (a head is 10 px wide) to the drag's start, every voice dragged over.
+          const lowX = target.x - 10;
+          const fromPointer = (box) =>
+            box.line > target.line || (box.line === target.line && box.head >= lowX - 1);
+          const toAnchor = (box) =>
+            box.line < anchorBox.line ||
+            (box.line === anchorBox.line && box.head <= Math.max(from.x, anchorBox.head) + 1);
+          for (const note of chosen) {
+            const box = geometry.notes.find(
+              (each) => each.start === note.start && each.voice === note.voice,
+            );
+            if (!box) continue;
+            assert(
+              fromPointer(box),
+              `${say}: dragging back takes nothing the pointer hasn't reached (note at ${note.start})`,
+            );
+            assert(toAnchor(box), `${say}: dragging back takes nothing past its start`);
+          }
+          for (const box of geometry.notes)
+            if (
+              voices.has(box.voice) &&
+              (box.line > target.line || (box.line === target.line && box.head >= lowX + 8)) &&
+              (box.line < anchorBox.line ||
+                (box.line === anchorBox.line && box.head <= anchorBox.head - 8))
+            )
+              assert(
+                chosen.some((note) => note.start === box.start),
+                `${say}: dragging back takes every note dragged over (missed the note at ${box.start})`,
+              );
+        }
+      }
+      // Symmetry: back from this head to an earlier one selects what on from that one to this does.
+      const earlier = heads.filter(
+        (box) =>
+          box !== anchorBox &&
+          (box.line < anchorBox.line ||
+            (box.line === anchorBox.line && box.head < anchorBox.head - 12)),
+      );
+      for (const other of earlier.filter(() => random() < 2 / Math.max(1, earlier.length))) {
+        const drag = async (a, b) => {
+          await p.evaluate(() => window.composer.view.dispatch({ selection: { anchor: 0 } }));
+          await p.mouse.move(a.x, a.y);
+          await p.mouse.down();
+          await p.mouse.move(b.x, b.y, { steps: 3 });
+          await p.mouse.up();
+          return p.evaluate(() =>
+            window.composer.view.state.selection.ranges
+              .filter((range) => range.to > range.from)
+              .map((range) => `${range.from}-${range.to}`)
+              .sort(),
+          );
+        };
+        const here = { x: anchorBox.head + 4, y: anchorBox.y };
+        const there = { x: other.head + 4, y: other.y };
+        assert.deepEqual(
+          await drag(here, there),
+          await drag(there, here),
+          `${name}: a drag back from ${anchorBox.start} to ${other.start} selects what a drag on from ${other.start} to ${anchorBox.start} does`,
+        );
+        mirrored += 1;
       }
     }
   }
   await ctx.close();
   console.log(
-    `Composer: ${total} drags across 6 tunes (voices on one staff, inline and interleaved voices, lyrics, comments, parts, a grand staff with a spacer voice, a multi-bar rest) select only music, voice by voice, as far as the pointer reached: passed`,
+    `Composer: ${total} drags (${backward} of them back, and ${mirrored} pairs dragged both ways alike) across 6 tunes (voices on one staff, inline and interleaved voices, lyrics, comments, parts, a grand staff with a spacer voice, a multi-bar rest) select only music, voice by voice, as far as the pointer reached: passed`,
   );
 }
 
@@ -5255,6 +5322,421 @@ console.log(
   await ctx.close();
   console.log(
     "Composer: selection hardening round 2: voiced paste, double-clicked notes and chord tones, exactly the selected notes played, melodies from notes, Insert by the notes: passed",
+  );
+}
+
+/* 32. Selection hardening, round 3: each finding, as the reviewers found it. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  await ctx.addInitScript(() => {
+    const input = { id: "fake-1", name: "Fake Keys 49", type: "input", state: "connected" };
+    const access = {
+      inputs: new Map([[input.id, input]]),
+      outputs: new Map(),
+      sysexEnabled: false,
+    };
+    navigator.requestMIDIAccess = async () => access;
+    const send = (bytes) => input.onmidimessage?.({ data: new Uint8Array(bytes) });
+    window.__midi = {
+      play: (notes) => {
+        for (const n of notes) send([0x90, n, 90]);
+        for (const n of notes) send([0x80, n, 0]);
+      },
+    };
+  });
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      if (view.state.doc.toString() !== x)
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    // One tune drawn (of two, maybe): its text is in the file's.
+    await p.waitForFunction((x) => x.includes(window.composer.scoreIndex()?.source ?? "\u0000"), t);
+    await p.waitForTimeout(400);
+    return p.evaluate(() => window.composer.geometry());
+  };
+  const pull = async (a, b) => {
+    await p.mouse.move(a.x, a.y);
+    await p.mouse.down();
+    await p.mouse.move(b.x, b.y, { steps: 6 });
+    await p.mouse.up();
+  };
+  /** Selects text ranges ([from, to] pairs), the last one main unless said. */
+  const choose = (list, main = list.length - 1) =>
+    p.evaluate(
+      ([list, main]) => {
+        const view = window.composer.view;
+        const S = view.state.selection.constructor;
+        view.dispatch({
+          selection: S.create(
+            list.map(([a, b]) => S.range(a, b)),
+            main,
+          ),
+        });
+        view.focus();
+      },
+      [list, main],
+    );
+  const texts = () =>
+    p.evaluate(() => {
+      const view = window.composer.view;
+      return view.state.selection.ranges
+        .filter((range) => !range.empty)
+        .map((range) => view.state.sliceDoc(range.from, range.to));
+    });
+  const changed = (was) =>
+    p.waitForFunction((w) => window.composer.view.state.doc.toString() !== w, was).catch(() => {});
+  const statusSays = (pattern) =>
+    p.waitForFunction(
+      (source) => new RegExp(source).test(document.getElementById("explain").textContent),
+      pattern.source,
+    );
+  const noticeSays = (pattern) =>
+    p.waitForFunction(
+      (source) => new RegExp(source).test(document.getElementById("notice").textContent),
+      pattern.source,
+    );
+  const of = (text, part, nth = 0) => {
+    let at = text.indexOf(part);
+    for (let n = 0; n < nth; n++) at = text.indexOf(part, at + 1);
+    return [at, at + part.length];
+  };
+  const two =
+    "X:1\nT:Bars\nM:4/4\nL:1/4\n%%score 1 2\nK:C\nV:1\nc d e f|g a b c'|c' b a g|f e d c|]\nV:2\nC D E F|G A B c|c B A G|F E D C|]\n";
+  let geo = await put(two);
+  const box = (voice, time) =>
+    geo.notes.find((each) => each.voice === voice && Math.abs(each.time - time) < 1e-6);
+  // 1. A selection stops before the bar line; typing, Delete and Cut keep the bars.
+  const f = box(0, 0.75);
+  await p.mouse.click(f.head + 3, f.y);
+  assert.deepEqual(await texts(), ["f"], "a click on f takes f, not its bar line");
+  await p.keyboard.press("Backspace");
+  assert.match(
+    await docText(p),
+    /\nc d e \|g a b c'\|/,
+    "Backspace in the score keeps bar 1's bar line",
+  );
+  await p.keyboard.press("Control+z");
+  await pull(
+    { x: box(0, 0.25).head + 3, y: box(0, 0.25).y },
+    { x: box(1, 0.75).head + 3, y: box(1, 0.75).y },
+  );
+  assert.deepEqual(
+    await texts(),
+    ["d e f", "D E F"],
+    "a drag across two voices stops before the bar line",
+  );
+  await p.keyboard.press("Control+x");
+  assert.match(
+    await docText(p),
+    /\nc \|g a b c'\|[^\n]*\nV:2\nC \|G A B c\|/,
+    "Cut of part of a bar keeps its bar lines",
+  );
+  await p.keyboard.press("Control+z");
+  await pull(
+    { x: box(0, 0).head + 3, y: box(0, 0).y },
+    { x: box(1, 0.75).head + 3, y: box(1, 0.75).y },
+  );
+  await p.keyboard.press("Enter");
+  await p.keyboard.type("z4");
+  assert.match(
+    await docText(p),
+    /\nz4\|g a b c'\|[^\n]*\nV:2\nz4\|G A B c\|/,
+    "typing z4 over bar 1 keeps its bar lines",
+  );
+  geo = await put(two);
+  await choose([of(two, "g a b c'")]);
+  await p.keyboard.press("Control+x");
+  assert.match(
+    await docText(p),
+    /\nc d e f\|c' b a g\|f e d c\|\]\n/,
+    "Cut of a whole bar takes it out with one bar line",
+  );
+  assert.equal(
+    await p.evaluate(() => navigator.clipboard.readText()),
+    "g a b c'|",
+    "a whole bar copies with its bar line",
+  );
+  let doc = await docText(p);
+  await p.evaluate(
+    (at) => window.composer.view.dispatch({ selection: { anchor: at } }),
+    doc.indexOf("f e d c"),
+  );
+  await p.keyboard.press("Control+v");
+  await changed(doc);
+  assert.match(
+    await docText(p),
+    /\nc d e f\|c' b a g\|g a b c'\|f e d c\|\]\n/,
+    "pasted back at a bar's start: a whole bar, no double bar line",
+  );
+  // 2. A copy of four parts in interleaved blocks: a voice's parts joined; a header caret refused.
+  const blocks =
+    "X:1\nT:Blocks\nM:4/4\nL:1/4\n%%score 1 2\nK:C\nV:1\nc d e f|g a b c'|\nV:2\nC D E F|G A B c|\nV:1\nc' b a g|e f g a|]\nV:2\nc B A G|E F G A|]\n";
+  geo = await put(blocks);
+  await choose([
+    of(blocks, "g a b c'"),
+    of(blocks, "G A B c"),
+    of(blocks, "e f g a"),
+    of(blocks, "E F G A"),
+  ]);
+  await p.keyboard.press("Control+c");
+  await p.evaluate(
+    (at) => window.composer.view.dispatch({ selection: { anchor: at } }),
+    blocks.indexOf("c d e f"),
+  );
+  await p.keyboard.press("Control+v");
+  await changed(blocks);
+  assert.match(
+    await docText(p),
+    /\nV:1\ng a b c'\| e f g a\|c d e f\|g a b c'\|\n/,
+    "at a V:1 caret: both of V:1's parts, in order",
+  );
+  geo = await put(blocks);
+  await p.evaluate(
+    (at) => window.composer.view.dispatch({ selection: { anchor: at } }),
+    blocks.indexOf("M:4/4"),
+  );
+  await p.locator(".cm-content").focus();
+  await p.keyboard.press("Control+v");
+  await statusSays(/click in a voice's music/);
+  assert.equal(await docText(p), blocks, "at a header caret: refused, the header as it was");
+  // 3. Dragging back takes only what the pointer reached.
+  geo = await put("X:1\nT:Back\nM:4/4\nL:1/4\nK:C\nC D E F|G A B c|]\n");
+  const c = geo.notes.find((each) => Math.abs(each.time - 1.75) < 1e-6);
+  const a = geo.notes.find((each) => Math.abs(each.time - 1.25) < 1e-6);
+  await pull({ x: c.head + 3, y: c.y }, { x: a.head - 4, y: a.y });
+  assert.deepEqual(
+    await texts(),
+    ["A B c"],
+    "4 px left of A's head, dragged back from c: A B c, not G",
+  );
+  // 4. Plain music over places in two voices goes into the main place only.
+  geo = await put(two);
+  await p.evaluate(() => navigator.clipboard.writeText("e e e e"));
+  await choose([of(two, "c' b a g"), of(two, "c B A G")]);
+  await p.keyboard.press("Control+v");
+  await changed(two);
+  assert.match(
+    await docText(p),
+    /\|c' b a g\|[^\n]*\nV:2\nC D E F\|G A B c\|e e e e\|/,
+    "only V:2, the main place, takes it",
+  );
+  await noticeSays(/main selection only \(V:2\)/);
+  // 5. Duplicate copies the notes: a chord tone's whole chord.
+  const chord = "X:1\nT:Chord\nM:4/4\nL:1/8\nK:C\n[CEG]2 A2 B4|\n";
+  geo = await put(chord);
+  await choose([[chord.indexOf("E"), chord.indexOf("E") + 1]]);
+  await p.keyboard.press("Control+Shift+D");
+  assert.match(
+    await docText(p),
+    /\n\[CEG\]2 \[CEG\]2 A2 B4\|/,
+    "a chord tone duplicates its chord",
+  );
+  // 6. A loop goes on through an edit before it.
+  const loop = "X:1\nT:Loop\nM:4/4\nL:1/4\nK:C\nC D E F|G A B c|]\n";
+  geo = await put(loop);
+  await choose([of(loop, "G A B c")]);
+  await p.keyboard.press("Control+Alt+Enter");
+  await p.waitForFunction(() => window.composer.player.status === "playing");
+  await p.keyboard.press("Control+Shift+L");
+  await p.waitForFunction(() => window.composer.player.loopingRegion);
+  for (const [where, at] of [
+    ["before", loop.indexOf("C D")],
+    ["inside", loop.indexOf("A B")],
+    ["after", loop.indexOf("|]")],
+  ]) {
+    const before = await docText(p);
+    await p.evaluate(
+      (pos) => window.composer.view.dispatch({ changes: { from: pos, insert: "!p!" } }),
+      at + (before.length - loop.length),
+    );
+    await p.waitForFunction((was) => window.composer.scoreIndex()?.source !== was, before);
+    await p.waitForTimeout(300);
+    assert.deepEqual(
+      await p.evaluate(() => [
+        window.composer.player.status,
+        window.composer.player.timeline.notes.map((note) => note.pitch),
+      ]),
+      ["playing", [67, 69, 71, 72]],
+      `an edit ${where} the loop: it goes on playing G A B c`,
+    );
+  }
+  await p.keyboard.press("Control+Shift+L");
+  await p.keyboard.press("Control+Period");
+  // 7. A triplet over a voice across V: blocks is one triplet.
+  geo = await put(blocks);
+  await choose([of(blocks, "f"), [blocks.indexOf("g a b c'"), blocks.indexOf("g a b c'") + 1]]);
+  doc = await docText(p);
+  await menu("insert", "Triplet", p);
+  await changed(doc);
+  const tripled = await docText(p);
+  assert.equal(tripled.split("(3").length - 1, 1, "one triplet over V:1's f and g across blocks");
+  assert.match(tripled, /\nc d e \(3f\|/, "before the passage's first note");
+  // 8. ", [ and { over selected music act on its notes.
+  const eighths = "X:1\nT:Keys\nM:4/4\nL:1/8\nK:C\nc2 d2 e2 f2|g a b c' d'4|]\n";
+  geo = await put(eighths);
+  await choose([of(eighths, "d2 e2")]);
+  await p.keyboard.type('"');
+  assert.match(
+    await docText(p),
+    /\nc2 ""d2 e2 f2\|/,
+    '" writes a chord symbol before the first note',
+  );
+  await p.keyboard.type("G");
+  assert.match(await docText(p), /\nc2 "G"d2 e2 f2\|/, "the caret is inside it");
+  geo = await put(eighths);
+  await choose([of(eighths, "c2 d2 e2")]);
+  await p.keyboard.type("[");
+  assert.match(
+    await docText(p),
+    /\n\[cde\]2 f2\|/,
+    "[ makes one chord with the first note's length",
+  );
+  geo = await put(eighths);
+  await choose([of(eighths, "f2|g")]);
+  await p.keyboard.type("[");
+  await statusSays(/one bar of one voice/);
+  assert.equal(await docText(p), eighths, "[ across a bar line is refused, the text as it was");
+  await choose([of(eighths, "g a b")]);
+  await p.keyboard.type("{");
+  assert.match(
+    await docText(p),
+    /\|\{g a b\} c' d'4\|/,
+    "{ makes grace notes of notes without lengths",
+  );
+  geo = await put(eighths);
+  await choose([of(eighths, "c2 d2")]);
+  await p.keyboard.type("(");
+  assert.match(await docText(p), /\n\(c2 d2\) e2/, "( slurs them");
+  geo = await put(eighths);
+  await choose([of(eighths, "c2 d2")]);
+  await p.keyboard.type("!");
+  assert.doesNotMatch(await docText(p), /!c2 d2!/, "! is typed, never wrapped around the notes");
+  // 9. A bar from L:1/8 K:D pasted into L:1/4 K:C sounds the same.
+  const tunes2 =
+    "X:1\nT:From\nM:4/4\nL:1/8\nK:D\nf2 g2 a2 c'2|]\n\nX:2\nT:To\nM:4/4\nL:1/4\nK:C\nC D E F|]\n";
+  geo = await put(tunes2);
+  await choose([of(tunes2, "f2 g2 a2 c'2")]);
+  await p.keyboard.press("Control+c");
+  await p.evaluate(
+    (at) => window.composer.view.dispatch({ selection: { anchor: at } }),
+    tunes2.indexOf("C D E F"),
+  );
+  await p.keyboard.press("Control+v");
+  await changed(tunes2);
+  assert.match(
+    await docText(p),
+    /\nK:C\n\^f g a \^c'\|C D E F\|\]\n/,
+    "lengths for L:1/4, F♯ and C♯ spelled for C",
+  );
+  await noticeSays(/Pasted from L:1\/8, K:D: lengths and accidentals rewritten\./);
+  // 10. The status after a cut, and its undo, says the voices.
+  geo = await put(two);
+  await pull(
+    { x: box(0, 1).head + 3, y: box(0, 1).y },
+    { x: box(1, 1.75).head + 3, y: box(1, 1.75).y },
+  );
+  await statusSays(/in 2 voices/);
+  await p.keyboard.press("Control+x");
+  await p.keyboard.press("Control+z");
+  await statusSays(/^4 notes selected in 2 voices|^8 notes selected in 2 voices/);
+  // 11. A selection across two tunes says so.
+  geo = await put(tunes2);
+  await choose([[tunes2.indexOf("g2"), tunes2.indexOf("E F")]]);
+  await statusSays(/in 2 tunes/);
+  // 12. A resize mid-drag: the anchor is found again in the new drawing.
+  geo = await put(two);
+  const start = box(0, 0.25);
+  await p.mouse.move(start.head + 3, start.y);
+  await p.mouse.down();
+  await p.mouse.move(box(0, 1.25).head + 3, box(0, 1.25).y, { steps: 4 });
+  await p.setViewportSize({ width: 900, height: 900 });
+  await p.waitForTimeout(600);
+  geo = await p.evaluate(() => window.composer.geometry());
+  await p.mouse.move(box(0, 1.5).head + 3, box(0, 1.5).y, { steps: 4 });
+  await p.mouse.up();
+  await p.setViewportSize({ width: 1440, height: 900 });
+  assert.deepEqual(await texts(), ["d e f|g a b"], "after the reflow, the drag still starts at d");
+  // 13. Shift Alt arrows from a caret, and back to it.
+  geo = await put("X:1\nT:Steps\nM:4/4\nL:1/4\nK:C\nc d e f|]\n");
+  await p.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf("d e") } });
+    view.focus();
+  });
+  const steps = [];
+  for (const key of ["Right", "Right", "Left", "Left", "Left"]) {
+    await p.keyboard.press(`Shift+Alt+Arrow${key}`);
+    steps.push((await texts()).join(","));
+  }
+  assert.deepEqual(steps, ["d", "d e", "d", "", "c"], "→ d, → d e, ← d, ← the caret again, ← c");
+  // 14. MIDI step entry over a selection replaces its notes, and says so.
+  geo = await put(two);
+  await menu("play", "MIDI keyboard…", p);
+  await p.waitForFunction(() =>
+    /Listening to Fake Keys 49/.test(document.querySelector(".midi-status")?.textContent ?? ""),
+  );
+  await p.getByLabel("Write it at the caret (step entry)").check();
+  await choose([of(two, "c B A G"), of(two, "c' b a g")]);
+  await p.evaluate(() => window.__midi.play([72]));
+  await p.waitForFunction(() =>
+    /in place of the selected notes; the other place selected was left/.test(
+      document.querySelector(".midi-status")?.textContent ?? "",
+    ),
+  );
+  doc = await docText(p);
+  assert.match(
+    doc,
+    /\nc d e f\|g a b c'\| ?c\/\|f e d c\|\]\n/,
+    "V:1's bar 3 is the step, its bar lines kept",
+  );
+  assert.match(doc, /\|c B A G\|/, "V:2's place is left as it was");
+  await p
+    .locator(".midi-close, #midi-panel button[aria-label^='Close']")
+    .first()
+    .click()
+    .catch(() => {});
+  // 15. A drag over a 220-bar score: pointer moves arriving several to a frame (as a fast mouse
+  // sends them) make one selection update a frame, not one each (the old way: ~55 ms a batch).
+  const big = `X:1\nT:Big\nM:4/4\nL:1/8\nK:G\n${Array.from({ length: 220 }, (_, at) => ["GABc dBAG", "FGAB cAGF", "EFGA BGFE", "DEFG AFED"][at % 4]).join("|")}|]\n`;
+  geo = await put(big);
+  const heads = geo.notes
+    .filter((each) => each.y > 150 && each.y < 800)
+    .sort((x, y) => x.line - y.line || x.head - y.head);
+  await p.mouse.move(heads[0].head + 3, heads[0].y);
+  await p.mouse.down();
+  await p.waitForTimeout(300);
+  const points = heads.slice(0, 160).map((each) => [each.head + 3, each.y]);
+  const batches = await p.evaluate(async (list) => {
+    const scroll = document.getElementById("score-scroll");
+    const took = [];
+    for (let at = 0; at + 8 <= list.length; at += 8) {
+      const t = performance.now();
+      for (const [x, y] of list.slice(at, at + 8))
+        scroll.dispatchEvent(
+          new PointerEvent("pointermove", { pointerId: 1, clientX: x, clientY: y, bubbles: true }),
+        );
+      took.push(performance.now() - t);
+      await new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)));
+    }
+    return took;
+  }, points);
+  const reached = (await texts()).join("");
+  const last = points.at(-1);
+  await p.mouse.move(last[0], last[1]);
+  await p.mouse.up();
+  const longest = Math.max(...batches);
+  assert(longest < 20, `8 pointer moves in one task take ${Math.round(longest)} ms (under 20)`);
+  assert(reached.length > 120, "the selection followed the moves, frame by frame");
+  await ctx.close();
+  console.log(
+    `Composer: selection hardening round 3: bar lines kept by typing, Delete, Cut, Copy and Paste; voiced copies from interleaved blocks; drags back; plain paste over voices; Duplicate by notes; loops through edits; one triplet over blocks; " [ { over notes; paste between keys and units; status after cut, across tunes; a resize mid-drag; Shift Alt back to the caret; step entry over a selection; a 220-bar drag (8 moves in ${Math.round(longest)} ms): passed`,
   );
 }
 

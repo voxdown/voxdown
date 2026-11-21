@@ -209,10 +209,12 @@ export function planPaste(
     const places = selected.length ? selected : [ranges[main] ?? (ranges[0] as Range)];
     const plan = pasteVoiced(text, places, parts, file);
     if ("refused" in plan) return plan;
-    const changes = plan.changes.map((change) => ({
-      ...change,
-      insert: change.insert ? fit(change.insert, change.from) : "",
-    }));
+    // Each part fitted to its place's unit and key, and to the bar lines around it.
+    const changes = plan.changes.flatMap((change) => {
+      const insert = change.insert ? fit(change.insert, change.from) : "";
+      const place = { from: change.from, to: change.to };
+      return (insert && pasteKeepingBars(text, [place], insert, file)) || [{ ...place, insert }];
+    });
     return { changes, message: [plan.message, ...said].join(" ") };
   }
   let targets = selected.length ? selected : ranges;

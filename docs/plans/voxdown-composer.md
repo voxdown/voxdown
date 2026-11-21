@@ -1150,3 +1150,50 @@ The pieces:
 - Voiced paste (`paste.ts`) and Insert › Triplet, Repeat and Chord symbol (`inserts.ts`) load on first use.
 - The caret explainer (`explain.ts`) loads when the editor is first used. The names the editor needs from the start (decorations, meters, keys) moved to `names.ts`.
 - check-composer step 1 counts only what the browser requests. Other programs probing local ports sometimes fetched `/` from its server and added 79 KB.
+
+### Round 3 fixes (after Codex 8.5 provisional, Claude 7.0)
+
+**Bar lines** (`barwise.ts`, loaded once the editor is in use). Decided by the owner:
+- A selection never ends on a bar line: a click, a drag, Shift+Alt arrows and Ctrl+A in the score all stop before the `|`, and the lit notes agree.
+- Typing over selected music, Backspace and Delete replace the notes only. Bar lines (`|`, `|:`, `:|`, `|]`, `[1`) and line breaks stay.
+  - An emptied bar keeps its bar lines apart: `| :|`, never `|:|`, which would read as a start-repeat.
+- Cut, and Delete or Backspace in the score, take whole bars out with one bar line: the plain `|` after them, else the plain one before, so no empty bar is left. Part of a bar loses only its notes. A music line left empty goes with its line break, because a blank line would end the tune.
+- Copy of whole bars adds their closing `|`. Paste fits a copy to the bars around it: a copy ending in `|` pasted just before a bar line doesn't double it.
+- Commands that relied on the trailing bar line:
+  - Duplicate of whole bars inserts `|` and the bars after them.
+  - Repeat looks past spaces for the bar line after the notes, as it already did.
+  - Find melody, Play and Loop go by notes, so they are unchanged.
+
+**Paste** (`paste.ts`, one `planPaste`):
+1. **A copy of voices:**
+   - A voice's parts from several `V:` blocks are joined, in order.
+   - A voice selected in several places takes its parts piece by piece when the counts agree, else all of it in its first place.
+   - A copy with one `V:` line goes into that voice's places, leaving the other places as they are.
+   - Refused, with the reason, at a caret outside music (header, comment, between tunes), or with several voices into a tune without `V:`.
+   - The voice at a place is read within its own tune.
+   - Every paste says what went where.
+2. **Plain music over places in several voices** goes into the main place only, said so.
+3. **Between tunes** (`clip-convert.ts`). Composer's copy remembers its unit and key, in memory and as `application/x-voxdown-source` beside the plain ABC. Pasted under another `L:` or `K:`, lengths are rewritten for the unit and notes spelled for the key, bar accidentals followed, so it sounds the same: "Pasted from L:1/8, K:D: lengths and accidentals rewritten." Text from outside Composer is pasted as it is.
+
+**The other findings:**
+- **Leftward drags** mirror rightward ones: each voice starts at the first head the pointer is on or left of (a head is 10 px wide). Step 28 now drags back as often as on, and checks pairs of heads dragged both ways give the same selection.
+- **Duplicate** copies the selected notes: whole chords, their attachments, and a tuplet sign that opens them. The raw-text audit found no other command slicing range text (Copy is text by design).
+- **Loop through edits.** A selection's loop keeps its text ranges, mapped through every edit, and finds its notes again when the score is rebuilt.
+- **Insert › Triplet, Repeat, Chord symbol** group by `passagesOf`.
+- **`"`, `[`, `{` over music:**
+  - `"` writes an empty chord symbol before the first note, the caret inside.
+  - `[` makes one chord from notes in one bar of one voice, with the first note's length.
+  - `{` makes grace notes from notes without lengths in one bar.
+  - Anything else is refused with the reason. `(` is a slur, and `!` is typed.
+- **Status** is read again when the new score index arrives. Across tunes it says "in 2 tunes": commands change each tune by its own key and meter; the score shows one.
+- **Resize mid-drag:** the anchor's note is found again in the new drawing.
+- **Shift+Alt arrows** move a boundary between notes, as in text: back at the anchor, the selection is a caret again.
+- **MIDI step entry over a selection** replaces the main range's notes (bar lines kept), says what was left, and says when a bar is overfull.
+- **Big scores:**
+  - Pointer moves are coalesced to one selection update a frame. On the round-2 build, eight moves arriving in one task took about 55 ms; now they take about 0 ms.
+  - Placed notes are kept per drawing, and each tune's events per text.
+  - A press on a 220-bar score still costs about 60 ms, mostly the browser's style and layout work after focus. That is one event, not a cost per move.
+
+**First view.** 714 KB, under its 720 KB check. To make room:
+- `problems.ts` loads with the editing modules, and the checks run again when it arrives.
+- The decoration names (`decorations.ts`) load with the first `!` typed, and with the explainer.

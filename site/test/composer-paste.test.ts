@@ -164,3 +164,13 @@ describe("paste between tunes keeps the music sounding the same (round 3)", () =
     expect(planPaste(from, [{ from: at, to: at }], 0, "f2 g2", null)).toBeNull();
   });
 });
+
+describe("a copy of voices' whole bars pasted over whole bars (round 3)", () => {
+  it("doesn't double the bar lines", () => {
+    const places = [range(tune, "c' b a g"), range(tune, "c B A G")];
+    const plan = planPaste(tune, places, 0, copy, null);
+    expect(plan && "changes" in plan && apply(tune, plan.changes)).toBe(
+      "X:1\nT:Paste\nM:4/4\nL:1/4\n%%score (1 2)\nK:C\nV:1\nc d e f|g a b c'|c d e f|f e d c|]\nV:2\nC D E F|G A B c|C D E F|F E D C|]\n",
+    );
+  });
+});

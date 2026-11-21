@@ -356,7 +356,7 @@ function loadEditing() {
 }
 /** Where the last copy made here came from (its unit and key), for a paste elsewhere. */
 let lastCopy: { text: string; source: import("./paste").ClipSource | null } | null = null;
-const CLIP_SOURCE = "web application/x-voxdown-source";
+const CLIP_SOURCE = "application/x-voxdown-source";
 /** Carets after each inserted piece: where a paste or typing leaves the selection. */
 function caretsAfter(state: EditorState, changes: Change[]): EditorSelection {
   const set = state.changes(changes);

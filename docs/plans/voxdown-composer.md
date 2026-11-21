@@ -825,3 +825,192 @@ These are under File › Export. Each choice is made in a small dialog.
   - a new tune with no notes shows "Type notes after K: and the score draws here".
 - **The first view** is 719 KB. To keep it there, the decoration menu's labels, the About text
   and the offline panel now load when first opened.
+
+## Sprint D: finding and playing in
+
+Everything new loads on first use:
+- melody search: 9 KB, plus 2 KB of CSS;
+- the MIDI keyboard: 9 KB, plus 2 KB of CSS;
+- the MIDI file reader: 24 KB, which loads the MusicXML importer behind it;
+- the import glue (`importers.ts`) and the Sound popover (`sound-panel.ts`), moved out of the main bundle to make room.
+
+The first view is 719 KB, under its 720 KB check.
+
+### 1. Melody search (Edit › Find melody…, Ctrl/⌘ Shift M)
+
+`melody.ts` is pure and unit-tested. `melody-ui.ts` is the panel.
+
+**Reading the music.** Each voice of each tune is read once into sounding notes:
+- one note per note or chord: the chord's top note;
+- a tied note is one note;
+- grace notes, rests, decorations, chord symbols, slurs and bar lines are left out;
+- broken rhythm and tuplets count in the lengths.
+
+**The cache.** Reads are cached by the tune's text and the file header, so a search re-reads only tunes that changed.
+
+**Matching.**
+- Matching compares the steps between notes, not the notes:
+  - in semitones (exact intervals, the default);
+  - or as up, down and same (contour).
+- So any key, octave or L: matches.
+- "Ignore repeated notes" (on by default) folds a note played again into one.
+- "Same rhythm" requires the same length ratios.
+
+**The query.** It is typed ABC, read in the current tune's key and unit. It can also come from the selection ("Find this melody"), or from the MIDI keyboard. Notes played into it are spelled for the key, with one bar's accidentals for the whole query.
+
+**Scope.** This tune, this file (the default), or every draft in this browser (read only; choosing a result opens that draft).
+
+**Results.**
+- Each result shows the tune, voice, bar and the ABC excerpt.
+- Choosing one selects the matched notes as ranges, merged per line, across bar lines. The score lights them.
+- Enter, F3 and Shift F3 step through the results.
+- The count and the time taken are shown.
+
+**Timing.** 200 tunes searched in 34 ms cold and 5 ms cached (unit test, Node).
+
+### 2. A MIDI keyboard (Play › MIDI keyboard…)
+
+`stepentry.ts` is pure and unit-tested. `midi-input.ts` is the panel.
+
+**Support.** Web MIDI is in Chrome, Edge and Opera. Elsewhere the panel says "MIDI keyboards need Chrome or Edge (or Opera)". Access is asked with `sysex: false`, never SysEx.
+
+**The panel.**
+- Picks the input device and remembers it by name.
+- Shows the notes held and a velocity meter.
+- Says on its status line when a keyboard is plugged in or out; the device list follows.
+
+**Modes.**
+- Nothing.
+- Hear it: the player's own instrument, with the key's velocity.
+- Write it at the caret: step entry.
+
+**Step entry.**
+- A note or chord is written when the last key of it is let go. Keys held together are a chord, written `[...]`, low to high.
+- The length is picked in the panel, or with keys 1–6 (32nd to whole) and `.` (dotted) while the panel has focus. It is written in the tune's L:.
+- **Spelling:**
+  - the key's own note first;
+  - then sharps in sharp keys and flats in flat keys;
+  - in C: E♭ and B♭, but F♯, C♯ and G♯.
+  - An accidental is written only when the key and the bar's earlier accidentals don't already give it, so a natural after a sharp is written.
+- **Octaves:** a voice with an octave clef (treble-8 and the others) is written an octave from where it sounds, so it plays as played. Without one, `transpose=` counts.
+- **Rests:** the sustain pedal (or a key chosen with "Use a key…") writes `z` at the current length.
+- **Bar lines:**
+  - When the notes fill the bar, " |" follows. This uses the typing helper's own check (`barIsFull`), always on here.
+  - It needs the caret at the end of its line. Writing in the middle of a line never adds bar lines.
+- **Spacing:** notes shorter than a beat join the note before them inside a beat, so they beam by beat. Otherwise a space comes first.
+- **Undo:** each step is one undo (`isolateHistory`), the bar line with its note.
+
+**Real-time recording is left out.** Playing along with the metronome needs latency compensation and a quantiser that handles held notes across bar lines. A rough version would write worse ABC than step entry, so it waits.
+
+### 3. MIDI files (File › Open, or drop a .mid or .midi)
+
+The pieces:
+- `midifile/smf.ts` reads the file;
+- `midifile/convert.ts` turns it into notation;
+- the MusicXML importer writes the ABC, so both imports share one writer (units, line breaks, lyrics, ties, tuplets, voices and `%%score`).
+
+**Reading.**
+- Formats 0 and 1; a format 2 file's tracks are read one after another.
+- RIFF-wrapped .rmi files are read too.
+- Running status (including across meta events, as many files rely on).
+- Note-on with velocity 0 counts as note-off.
+- Meta events kept: tempo, time and key signatures, track names and lyrics.
+- SysEx is skipped and counted.
+- Controllers, pedal, pitch bends, aftertouch, program changes and markers are counted for the report.
+- **Refused, with a plain message:**
+  - files over 16 MB;
+  - files with more than 2 million events;
+  - SMPTE timing;
+  - damaged files: cut short, data with no status, bad data bytes.
+
+**Time.** Time is counted in slots of 1/96 of a whole note, so 32nds (3 slots), eighth-note triplets (8) and sixteenth-note triplets (4) are all whole numbers.
+
+**The grid.**
+- **Straight grid:** eighths, sixteenths or 32nds, the coarsest that holds the notes' starts. At most 1 note in 100 may start more than a quarter step (and half a slot) off it; in a short piece, none.
+- Notes on thirds of a beat are left out of that choice.
+- **Triplet beats:** a quarter beat is written in triplets when two or more notes start inside it, and they sit on thirds at least twice as closely as on the straight grid.
+- Compound and /8 meters stay straight unless triplets are asked for.
+- So swing, with one note inside each beat, stays straight eighths; a hard 2:1 written as triplets has to be asked for.
+- **Snapping:** starts and ends snap to the grid of the beat they fall in. A note that would vanish gets one step.
+- **Re-import grids:** the report can import again with:
+  - Eighths;
+  - Sixteenths;
+  - 32nds;
+  - Eighth-note triplets throughout;
+  - Sixteenths with triplets where they fit;
+  - or Chosen from the music.
+
+**Parts and voices.**
+- Each track with notes is a part. In format 0, and in a track that mixes channels, each channel is a part.
+- **Part names:**
+  - a track's own name, when the track is one part (in format 0 the track's name is the title);
+  - else the General MIDI program's name;
+  - else "Channel n".
+- Notes that start and end together are a chord.
+- **Splitting into voices:**
+  - A chord goes to the first voice of its part that is free when it starts.
+  - Before opening a new voice, a note still sounding into the new one by at most a sixteenth (and at most half its length) is trimmed to meet it, as legato playing does.
+  - At most four voices per part. Past that, the voice held longest lets go.
+- Voices after the first show only their notes; their gaps are invisible rests.
+- **Clefs:** a part averaging below middle C gets the bass clef.
+
+**Drums (channel 10).** Left out by default, and the report says so with the count; Composer has no drum sounds. On request they go on a percussion staff in the usual places: kick in the bottom space, snare in the third, toms between, hi-hat and cymbals above.
+
+**Key.**
+- From the key signature meta.
+- Else estimated with the Krumhansl–Kessler profiles over how long each pitch class sounds, plus a small lean toward the key whose tonic is the last bass note. The report says it was estimated.
+- **Spelling:**
+  - the key's notes first, then naturals;
+  - then sharps in sharp keys and flats in flat keys; in C, E♭ and B♭, with F♯, C♯ and G♯;
+  - a minor key's leading note is raised (C♯ in D minor).
+- Key changes take effect at the next bar start.
+
+**Meter.** From the time signature meta, else 4/4, said so. Meter changes take effect at the next bar start.
+
+**Tempo.**
+- The first tempo is Q:. Later changes are inline [Q:], the first in a bar.
+- With no tempo in the file, MIDI's default 120 is written and said.
+
+**Notation.**
+- Notes are split at bar lines.
+- A note that starts off the beat and runs over the next beat is split at that beat; the pieces are tied.
+- Lengths that aren't a note value are cut into the largest ones that fit.
+- Notes shorter than a beat are beamed by beat (a dotted quarter in compound time).
+- Each triplet beat is one tuplet.
+
+**Lyrics.**
+- Lyric meta events go under the first voice of the part whose notes start where the syllables are.
+- A trailing "-" joins a syllable to the next. So does a missing trailing space in karaoke-style files, where words end in a space.
+- Syllables with no note starting under them are counted as left out.
+
+**The report says:**
+- the file's format, and how many tracks or channels became how many parts and voices;
+- the grid chosen;
+- what was estimated (key, meter, tempo);
+- where the lyrics went, and what became of the drums;
+- that loudness isn't written;
+- **left out:** pedal, controllers, pitch bends, aftertouch, program changes (the first names a part), SysEx, markers, notes cut short by a fifth voice, and notes never released.
+
+**Re-importing.** "Import again" applies the chosen grid and drums. While the draft is unchanged since the import, it is replaced rather than a new one made.
+
+**Composer's MIDI export** now writes 6/8, 9/8 and 12/8 time signatures. Before, a dotted beat gave none.
+
+**Timing.** A 570 KB file (16 tracks, 400 bars, 68,400 notes, 19 voices) is read, converted and written as ABC in 1.4 s in the browser, not counting loading the module or drawing the score.
+
+### Checks
+
+**Unit tests:**
+- the matcher, in `composer-melody.test.ts`;
+- step-entry spelling, lengths and octave clefs, in `composer-stepentry.test.ts`;
+- the SMF reader, quantiser, key and speller, in `composer-midifile.test.ts`. That file also covers:
+  - every example re-imported from Composer's own MIDI export, with the same notes and lengths;
+  - handmade files: format 0 with several channels and running status; format 1 with a conductor track and tempo changes; triplets; swing-ish timing; drums; lyrics; overlapping lines; ties across beats and bars; an estimated key;
+  - damaged and hostile files.
+
+**`check-composer` (step 24):**
+- a melody found a tone up across a 3-tune file and selected; F3 to the next;
+- the keyboard playing into the search;
+- step entry with a fake MIDIAccess (D major and the bar's accidentals, a chord, lengths, the pedal's rest, a bar line, F major on a treble-8 voice, undo per note, unplug and plug);
+- the unsupported message with `requestMIDIAccess` removed;
+- a .mid opened with its report, then imported again at sixteenths with the drums;
+- the first view without melody or MIDI code.

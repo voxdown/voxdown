@@ -142,6 +142,11 @@ assert(
   ![...served.keys()].some((path) => /musicxml/i.test(path)),
   "the MusicXML converter is not in the first view",
 );
+// Sprint D: melody search, the MIDI keyboard and MIDI import load when first used.
+assert(
+  ![...served.keys()].some((path) => /melody|midi-input|midifile/i.test(path)),
+  "melody search and MIDI are not in the first view",
+);
 assert(firstView < 720 * 1024, `the first view stays light (${(firstView / 1024).toFixed(0)} KB)`);
 console.log(
   `Composer: start screen, ${(firstView / 1024).toFixed(0)} KB served uncompressed, no abcjs or samples: passed`,
@@ -3071,7 +3076,7 @@ console.log(
   const exportVia = async (item, kind, setup) => {
     await page.locator('[data-menu="file"]').click();
     await page.getByRole("menuitem", { name: "Export", exact: true }).click();
-    await page.getByRole("menuitem", { name: item }).click();
+    await page.getByRole("menuitem", { name: item, exact: true }).click();
     const dialog = page.locator(`#export-${kind}[open]`);
     await dialog.waitFor();
     if (setup) await setup(dialog);
@@ -3607,6 +3612,321 @@ await phone.close();
 console.log(
   "Composer: phone layout switches Text and Score; 40 px targets, More menu, closable tunes panel: passed",
 );
+
+/* 24. Sprint D: finding a melody, a MIDI keyboard (faked), and MIDI files. */
+{
+  // A Web MIDI keyboard for the page: window.__midi plays notes, the pedal, and plugs it in and out.
+  const fakeMidi = () => {
+    const input = {
+      id: "fake-1",
+      name: "Fake Keys 49",
+      type: "input",
+      state: "connected",
+      onmidimessage: null,
+    };
+    const access = {
+      inputs: new Map([[input.id, input]]),
+      outputs: new Map(),
+      sysexEnabled: false,
+      onstatechange: null,
+    };
+    navigator.requestMIDIAccess = async (options) => {
+      window.__midiAsked = options;
+      return access;
+    };
+    const send = (bytes) => input.onmidimessage?.({ data: new Uint8Array(bytes) });
+    window.__midi = {
+      play: (notes) => {
+        for (const note of notes) send([0x90, note, 90]);
+        for (const note of notes) send([0x80, note, 0]);
+      },
+      pedal: () => {
+        send([0xb0, 64, 127]);
+        send([0xb0, 64, 0]);
+      },
+      unplug: () => {
+        access.inputs.delete(input.id);
+        input.state = "disconnected";
+        access.onstatechange?.({ port: input });
+      },
+      plug: () => {
+        access.inputs.set(input.id, input);
+        input.state = "connected";
+        access.onstatechange?.({ port: input });
+      },
+    };
+  };
+  const sd = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  watch(sd);
+  await sd.addInitScript(fakeMidi);
+  const p = await sd.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const setDoc = async (text, at) => {
+    await p.evaluate(
+      ([t, a]) => {
+        const view = window.composer.view;
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: t },
+          selection: { anchor: a },
+        });
+      },
+      [text, at],
+    );
+    await drawn(p);
+  };
+
+  // Melody search: the Kesh's opening, found again a tone up in a third tune.
+  const book =
+    "X:1\nT:The Kesh\nM:6/8\nL:1/8\nK:G\n|:G3 GAB|A3 ABd|edd gdd|edB dBA:|\n\n" +
+    "X:2\nT:Drowsy Maggie\nM:4/4\nL:1/8\nK:Edor\n|:E2BE dEBE|E2BE AFDF|E2BE dEBE|BABc dAFD:|\n\n" +
+    "X:3\nT:Up a tone\nM:6/8\nL:1/8\nK:A\n|:A3 ABc|B3 Bce|fee aee|fec ecB:|\n";
+  await setDoc(book, 40);
+  await p.locator(".cm-content").focus();
+  await p.keyboard.press("Control+Shift+M");
+  await p.locator("#melody-panel").waitFor();
+  await p.locator("#melody-query").fill("GGGAB AAABd");
+  await p.waitForFunction(() =>
+    /2 matches/.test(document.querySelector(".melody-count")?.textContent ?? ""),
+  );
+  const rows = await p.locator(".melody-result .melody-where").allInnerTexts();
+  assert.deepEqual(
+    rows,
+    ["The Kesh · bar 1", "Up a tone · bar 1"],
+    "the melody is found as written and a tone up",
+  );
+  await p.locator(".melody-result").nth(1).click();
+  assert.deepEqual(await selection(p), ["A3 ABc|B3 Bc"], "choosing a match selects its notes");
+  await p.waitForFunction(() => document.querySelectorAll("#score .is-selected").length >= 8);
+  await p.keyboard.press("F3");
+  assert.deepEqual(await selection(p), ["G3 GAB|A3 ABd"], "F3 steps to the next match");
+  console.log("Composer: a melody found a tone up across a 3-tune file, and selected: passed");
+
+  // The keyboard plays a melody into the search.
+  await p.locator("#melody-query").fill("");
+  await p.getByRole("button", { name: "From the keyboard" }).click();
+  await p.evaluate(() => {
+    for (const note of [67, 67, 67, 69, 71]) window.__midi.play([note]);
+  });
+  await p.waitForFunction(() => document.getElementById("melody-query").value === "G G G A B");
+  await p.waitForFunction(() =>
+    /match/.test(document.querySelector(".melody-count")?.textContent ?? ""),
+  );
+  await p.getByRole("button", { name: "From the keyboard" }).click();
+  await p.locator(".melody-close").click();
+
+  // Step entry: spelled for the key and bar, chords, lengths, rests, bar lines, octave clefs.
+  const steps =
+    "X:1\nT:Steps\nM:4/4\nL:1/8\nK:D\n\n\nX:2\nT:Low\nM:3/4\nL:1/4\nK:F clef=treble-8\n\n";
+  await setDoc(steps, "X:1\nT:Steps\nM:4/4\nL:1/8\nK:D\n".length);
+  await menu("play", "MIDI keyboard…", p);
+  await p.locator("#midi-panel").waitFor();
+  await p.waitForFunction(() =>
+    /Listening to Fake Keys 49/.test(document.querySelector(".midi-status")?.textContent ?? ""),
+  );
+  assert.deepEqual(
+    await p.evaluate(() => window.__midiAsked),
+    { sysex: false },
+    "MIDI is asked for without SysEx",
+  );
+  await p.getByLabel("Write it at the caret (step entry)").check();
+  await p.locator("#midi-panel").focus();
+  const play = async (notes) => {
+    await p.evaluate((list) => window.__midi.play(list), notes);
+    await settle(30);
+  };
+  await p.keyboard.press("3");
+  for (const note of [62, 66, 69, 65]) await play([note]);
+  await p.keyboard.press("4");
+  await play([62, 66, 69]);
+  await play([70]);
+  await p.evaluate(() => window.__midi.pedal());
+  await p.keyboard.press("2");
+  await play([74]);
+  await p.keyboard.press("3");
+  await p.keyboard.press(".");
+  await play([76]);
+  const lineOf = async (from) =>
+    (await docText(p)).split("\n").find((line) => line.startsWith(from)) ?? "";
+  assert.equal(
+    await lineOf("DF"),
+    "DF A=F [D^FA]2 ^A2 | z2 d/ e3/",
+    "notes spelled for D major and the bar, a chord, lengths, a bar line, the pedal's rest",
+  );
+  // A flat key, on a voice an octave down (treble-8): written an octave up, so it sounds as played.
+  const low = (await docText(p)).indexOf("K:F clef=treble-8\n") + "K:F clef=treble-8\n".length;
+  await p.evaluate((at) => window.composer.view.dispatch({ selection: { anchor: at } }), low);
+  await p.keyboard.press("4");
+  for (const note of [70, 71, 63]) await play([note]);
+  assert.equal(await lineOf("b "), "b =b _e |", "B♭ from the key, B natural, E♭; a full bar");
+  await p.locator(".cm-content").focus();
+  await p.keyboard.press("Control+z");
+  assert.equal(await lineOf("b "), "b =b", "undo takes back one note (and its bar line)");
+  await p.keyboard.press("Control+z");
+  assert.equal(await lineOf("b"), "b", "and the next undo one more");
+  // Plugged out and in again.
+  await p.evaluate(() => window.__midi.unplug());
+  await p.waitForFunction(() =>
+    /disconnected/.test(document.querySelector(".midi-status")?.textContent ?? ""),
+  );
+  assert.equal(await p.locator("#midi-device option").count(), 0, "no keyboard to choose");
+  await p.evaluate(() => window.__midi.plug());
+  await p.waitForFunction(() =>
+    /Fake Keys 49 connected/.test(document.querySelector(".midi-status")?.textContent ?? ""),
+  );
+  console.log(
+    "Composer: step entry from a MIDI keyboard spells, chords, rests, bars, octave clefs and undoes per note: passed",
+  );
+  await p.locator(".midi-close").click();
+
+  // MIDI files: a song with lyrics, a bass, chords and drums.
+  const vlq = (v) => {
+    const out = [v & 0x7f];
+    for (let r = v >> 7; r; r >>= 7) out.unshift((r & 0x7f) | 0x80);
+    return out;
+  };
+  const utf = (text) => [...Buffer.from(text, "utf8")];
+  const metaEvent = (type, data) => [0xff, type, ...vlq(data.length), ...data];
+  const u32 = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const trackBytes = (events) => {
+    const sorted = events
+      .map((event, index) => ({ event, index }))
+      .sort(
+        (a, b) =>
+          a.event[0] - b.event[0] ||
+          Number(a.event[1][0] >> 4 === 9) - Number(b.event[1][0] >> 4 === 9) ||
+          a.index - b.index,
+      );
+    const body = [];
+    let tick = 0;
+    for (const { event } of sorted) {
+      body.push(...vlq(event[0] - tick), ...event[1]);
+      tick = event[0];
+    }
+    body.push(0, 0xff, 0x2f, 0);
+    return [...utf("MTrk"), ...u32(body.length), ...body];
+  };
+  const noteEvents = (channel, list) =>
+    list.flatMap(([start, length, pitch]) => [
+      [start * 480, [0x90 | channel, pitch, 80]],
+      [(start + length) * 480, [0x80 | channel, pitch, 0]],
+    ]);
+  const melody = [
+    [0, 1, 64],
+    [1, 1, 64],
+    [2, 1, 65],
+    [3, 1, 67],
+    [4, 1, 67],
+    [5, 1, 65],
+    [6, 1, 64],
+    [7, 1, 62],
+    [8, 1, 60],
+    [9, 1, 60],
+    [10, 1, 62],
+    [11, 1, 64],
+    [12, 1.5, 64],
+    [13.5, 0.5, 62],
+    [14, 2, 62],
+  ];
+  const words = "Here |we |go |a-|long |the |riv-|er |road |and |on |to |the |sea |now ".split("|");
+  const bass = [];
+  const drums = [];
+  for (let bar = 0; bar < 4; bar++) {
+    const root = [48, 43, 45, 43][bar];
+    bass.push([bar * 4, 2, root], [bar * 4 + 2, 2, root + 7]);
+    for (let beat = 0; beat < 4; beat++) drums.push([bar * 4 + beat, 0.5, beat % 2 ? 38 : 36]);
+  }
+  const song = Buffer.from([
+    ...utf("MThd"),
+    ...u32(6),
+    0,
+    1,
+    0,
+    4,
+    480 >> 8,
+    480 & 255,
+    ...trackBytes([
+      [0, metaEvent(3, utf("River Road"))],
+      [0, metaEvent(0x58, [4, 2, 24, 8])],
+      [0, metaEvent(0x59, [0, 0])],
+      [0, metaEvent(0x51, [0x09, 0x89, 0x68])],
+    ]),
+    ...trackBytes([
+      [0, metaEvent(3, utf("Melody"))],
+      ...melody.map(([start], index) => [start * 480, metaEvent(5, utf(words[index]))]),
+      ...noteEvents(0, melody),
+    ]),
+    ...trackBytes([[0, metaEvent(3, utf("Bass"))], [0, [0xc1, 32]], ...noteEvents(1, bass)]),
+    ...trackBytes([[0, metaEvent(3, utf("Kit"))], ...noteEvents(9, drums)]),
+  ]);
+  await p
+    .locator("#file")
+    .setInputFiles({ name: "River Road.mid", mimeType: "audio/midi", buffer: song });
+  await p.locator("#midi-report").waitFor({ state: "visible" });
+  const report = await p.locator("#midi-report .dialog-body").innerText();
+  for (const said of [
+    "from MIDI: 2 parts, 2 voices, 4 bars",
+    "A format 1 MIDI file: 3 tracks with notes became 2 parts.",
+    "15 lyric syllables from the file are under Melody.",
+    "Drums (channel 10, 16 notes) were left out",
+    "1 program changes",
+  ])
+    assert(report.includes(said), `the import report says: ${said}`);
+  await p.getByRole("button", { name: "OK" }).click();
+  await p.waitForFunction(() => document.getElementById("name").value === "River Road.abc");
+  await drawn(p);
+  const imported = await docText(p);
+  assert.match(imported, /^K:C$/m, "the key from the file");
+  assert.match(imported, /^V:1 name="Melody" clef=treble$/m, "the melody's track name");
+  assert.match(imported, /^V:2 name="Bass" clef=bass$/m, "the bass on a bass clef");
+  assert.match(imported, /^w: ?Here we go a- \| long the riv-er/m, "lyrics under the notes");
+  assert.match(imported, /E2 E2 F2 G2 \| G2 F2 E2 D2 \|/, "the melody's notes");
+  // Import again with the drums, at another grid: the same draft, now with a percussion staff.
+  await p
+    .locator("#file")
+    .setInputFiles({ name: "River Road.mid", mimeType: "audio/midi", buffer: song });
+  await p.locator("#midi-report").waitFor({ state: "visible" });
+  await p.locator("#midi-grid").selectOption("16");
+  await p.locator("#midi-drums").selectOption("staff");
+  await p.getByRole("button", { name: "Import again" }).click();
+  await p.waitForFunction(() =>
+    /3 parts/.test(document.querySelector("#midi-report .dialog-body p")?.textContent ?? ""),
+  );
+  assert.match(
+    await p.locator("#midi-report .dialog-body").innerText(),
+    /sixteenths \(as chosen\)/,
+    "the report names the grid chosen",
+  );
+  await p.getByRole("button", { name: "OK" }).click();
+  await drawn(p);
+  assert.match(await docText(p), /^V:3 name="Kit" clef=perc$/m, "drums on a percussion staff");
+  console.log(
+    "Composer: a .mid opens as ABC with a report, and imports again at another grid: passed",
+  );
+  await sd.close();
+
+  // Without Web MIDI, the panel says so plainly.
+  const plain = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  watch(plain);
+  await plain.addInitScript(() => {
+    Object.defineProperty(navigator, "requestMIDIAccess", { value: undefined, configurable: true });
+  });
+  const q = await plain.newPage();
+  await q.goto(url);
+  await openExample("Ode to Joy", q);
+  await menu("play", "MIDI keyboard…", q);
+  await q.locator("#midi-panel").waitFor();
+  assert.match(
+    await q.locator("#midi-panel").innerText(),
+    /MIDI keyboards need Chrome or Edge/,
+    "a browser without Web MIDI is told so",
+  );
+  assert.equal(await q.locator("#midi-device").count(), 0, "and offered no devices");
+  await plain.close();
+  console.log(
+    "Composer: without Web MIDI, the keyboard panel says it needs Chrome or Edge: passed",
+  );
+}
 
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");

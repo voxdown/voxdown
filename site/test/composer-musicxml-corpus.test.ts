@@ -6,8 +6,10 @@ import { checkBars } from "../src/composer/barcheck";
 import { readScore } from "../src/composer/musicxml";
 import { exportMusicXml } from "../src/composer/musicxml/export";
 import { importMusicXml } from "../src/composer/musicxml/import";
+import { mxlDocuments } from "../src/composer/musicxml/zip";
 import { indexFile } from "../src/composer/tunes";
 import { musicOf } from "./musicxml-music";
+import { playedOf, sameNotes, soundingOf } from "./musicxml-sound";
 
 const DIR = fileURLToPath(new URL("./fixtures/musicxml/lilypond-suite", import.meta.url));
 const FILES = readdirSync(DIR)
@@ -26,9 +28,23 @@ const NOT_CLEAN: Record<string, string> = {
 };
 /** Files whose round trip changes, and why. */
 const NOT_ROUND: Record<string, string> = {
-  "11h-TimeSignatures-SenzaMisura.xml": "free meter: an empty bar's length is not known",
   "21i-Chord-DifferentVoices.xml": "a chord shared between voices comes back in one voice",
   "71e-TabStaves.xml": "tablature: its spacing rests are re-measured",
+};
+
+/**
+ * The played-pitch check leaves out files whose playing order is not their written order
+ * (repeats, endings, jumps), whose ornaments abcjs plays as several notes, and unpitched notes.
+ */
+const PLAYED_ORDER =
+  /<repeat|<ending|senza-misura|<unpitched|<tremolo|trill-mark|mordent|<turn|D\.C\.|D\.S\./;
+/** Files whose played notes differ from the MusicXML's, and why. */
+const NOT_PLAYED: Record<string, string> = {
+  "03a-Rhythm-Durations.xml": "notes beyond abcjs's longest and shortest",
+  "03d-Rhythm-DottedDurations-Factors.xml": "multi-dotted notes abcjs cannot draw",
+  "21i-Chord-DifferentVoices.xml": "a chord shared between voices is played once",
+  "23b-Tuplets-Styles.xml": "a 17-note tuplet is written without its sign",
+  "23d-Tuplets-Nested.xml": "nested tuplets are written without their signs",
 };
 
 describe("the unofficial MusicXML test suite", () => {
@@ -50,6 +66,29 @@ describe("the unofficial MusicXML test suite", () => {
       if (warnings.length || issues.length) unclean.push(name);
     }
     expect(unclean).toEqual(Object.keys(NOT_CLEAN));
+  });
+  it("plays every file's notes at the pitch and time its MusicXML sounds", async () => {
+    const differ: string[] = [];
+    let checked = 0;
+    for (const name of FILES) {
+      const bytes = new Uint8Array(readFileSync(`${DIR}/${name}`));
+      const xml = name.endsWith(".mxl")
+        ? ((await mxlDocuments(bytes))[0]?.text ?? "")
+        : new TextDecoder().decode(bytes);
+      if (PLAYED_ORDER.test(xml)) continue;
+      checked++;
+      const { text } = await readScore(bytes);
+      const sounding = soundingOf(xml);
+      const played = playedOf(text);
+      // After a tempo change abcjs counts time in its own units: compare the order of pitches.
+      const same = /\[Q:/.test(text.split("\nK:")[1] ?? "")
+        ? JSON.stringify(played.map((note) => note.midi).sort()) ===
+          JSON.stringify(sounding.map((note) => note.midi).sort())
+        : sameNotes(played, sounding);
+      if (!same) differ.push(name);
+    }
+    expect(checked).toBeGreaterThan(120);
+    expect(differ).toEqual(Object.keys(NOT_PLAYED));
   });
   it("sends every other file round through MusicXML unchanged", async () => {
     const changed: string[] = [];

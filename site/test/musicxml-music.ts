@@ -30,18 +30,25 @@ export type Music = {
 };
 
 export function musicOf(tune: Any): Music {
-  const voices = new Map<string, { elements: Any[]; key: Any }>();
+  const voices = new Map<string, { elements: Any[]; key: Any; clef: Any }>();
   for (const line of tune.lines ?? []) {
     for (const [staffIndex, staff] of (line.staff ?? []).entries())
       for (const [voiceIndex, voice] of (staff.voices ?? []).entries()) {
         const id = `${staffIndex}.${voiceIndex}`;
-        const entry = voices.get(id) ?? { elements: [], key: staff.key };
+        const entry = voices.get(id) ?? { elements: [], key: staff.key, clef: staff.clef };
         entry.elements.push(...voice);
         voices.set(id, entry);
       }
   }
   const result: Music["voices"] = [];
-  for (const { elements, key } of voices.values()) {
+  for (const { elements, key, clef } of voices.values()) {
+    // Pitches as heard: an octave clef, or else transpose= on the voice, moves them.
+    const transpose = Number(clef?.transpose ?? 0);
+    const shiftOf = (each: Any) => {
+      const octave = /([-+])8$/.exec(String(each?.type ?? ""));
+      return octave ? (octave[1] === "-" ? -12 : 12) : transpose;
+    };
+    let shift = shiftOf(clef);
     let keyAlters: Record<string, number> = {};
     const setKey = (k: Any) => {
       keyAlters = {};
@@ -59,6 +66,7 @@ export function musicOf(tune: Any): Music {
     let pendingNotes = false;
     for (const element of elements) {
       if (element.el_type === "key") setKey(element);
+      if (element.el_type === "clef") shift = shiftOf(element);
       if (element.el_type === "bar") {
         bar = new Map();
         if (pendingNotes) bars += 1;
@@ -95,7 +103,7 @@ export function musicOf(tune: Any): Music {
                 bar.set(place, alter);
               } else alter = bar.get(place) ?? keyAlters["CDEFGAB"[step] as string] ?? 0;
               return String(
-                60 + 12 * Math.floor(place / 7) + (STEP_SEMITONE[step] as number) + alter,
+                60 + 12 * Math.floor(place / 7) + (STEP_SEMITONE[step] as number) + alter + shift,
               );
             })
             .sort();

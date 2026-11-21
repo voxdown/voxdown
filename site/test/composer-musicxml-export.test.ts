@@ -114,6 +114,9 @@ const ORDER: Record<string, string[]> = {
     "staff",
   ],
   root: ["root-step", "root-alter"],
+  degree: ["degree-value", "degree-alter", "degree-type"],
+  transpose: ["diatonic", "chromatic", "octave-change", "double"],
+  forward: ["duration", "footnote", "level", "voice", "staff"],
   bass: ["bass-separator", "bass-step", "bass-alter"],
   metronome: ["beat-unit", "beat-unit-dot", "beat-unit-tied", "per-minute"],
   lyric: [
@@ -181,10 +184,21 @@ describe("MusicXML export", () => {
     expect(harmonyXml("F#m7b5/C")).toContain(
       "<root-alter>1</root-alter></root><kind>half-diminished</kind><bass><bass-step>C</bass-step></bass>",
     );
-    expect(harmonyXml("Gadd9")).toContain('<kind text="add9">other</kind>');
+    expect(harmonyXml("Gadd9")).toContain(
+      "<kind>major</kind><degree><degree-value>9</degree-value><degree-alter>0</degree-alter><degree-type>add</degree-type></degree>",
+    );
+    expect(harmonyXml("C7b9")).toContain(
+      "<kind>dominant</kind><degree><degree-value>9</degree-value><degree-alter>-1</degree-alter><degree-type>add</degree-type></degree>",
+    );
+    expect(harmonyXml("Gsus%")).toContain('<kind text="sus%">other</kind>');
   });
   it("writes valid MusicXML 4.0 partwise, its elements in the schema's order", () => {
-    const texts = [...EXAMPLES.map((example) => example.text), ...MORE.map(([, text]) => text)];
+    const texts = [
+      ...EXAMPLES.map((example) => example.text),
+      ...MORE.map(([, text]) => text),
+      // Octave clefs, an octave-transposing voice, chord degrees and jumps with their sounds.
+      'X:1\nT:Octaves\nM:2/4\nL:1/4\n%%score {1 2} 3\nV:1 name="Guitar" clef=treble-8\nV:2 clef=bass-8\nV:3 name="Piccolo" transpose=12\nK:C\nV:1\n!segno!"C7b9"c x | !D.S.alfine!c2 |]\nV:2\nC, x | C,2 |]\nV:3\n"G7sus4"c d | !fine!e2 |]\n',
+    ];
     for (const text of texts) {
       const { xml } = roundTrip(text);
       const root = parseXml(xml);
@@ -203,9 +217,45 @@ describe("MusicXML export", () => {
     expect(xml).toContain("<per-minute>104</per-minute>");
     expect(xml).toContain('<score-part id="P1"><part-name>First</part-name></score-part>');
     const { xml: voices } = roundTrip((MORE[0] as [string, string])[1]);
-    expect(voices).toContain(
-      '<part-group number="1" type="start"><group-symbol>brace</group-symbol></part-group>',
-    );
     expect(voices).toContain("<backup>");
+  });
+  it("writes a grand staff as one part of two staves, as MuseScore reads a piano", () => {
+    // %%score {(1 2) 3}: a piano, named once, with two voices in the right hand.
+    const { xml } = roundTrip((MORE[0] as [string, string])[1]);
+    const root = parseXml(xml);
+    const list = root.children.find((each) => each.name === "part-list") as XmlElement;
+    expect(list.children.map((each) => each.name)).toEqual(["score-part"]);
+    const parts = root.children.filter((each) => each.name === "part");
+    expect(parts).toHaveLength(1);
+    const measure = (parts[0] as XmlElement).children[0] as XmlElement;
+    const attributes = measure.children.find((each) => each.name === "attributes") as XmlElement;
+    expect(attributes.children.find((each) => each.name === "staves")?.text).toBe("2");
+    expect(
+      attributes.children.filter((each) => each.name === "clef").map((each) => each.attrs.number),
+    ).toEqual(["1", "2"]);
+    const notes = measure.children.filter((each) => each.name === "note");
+    const staffOf = (note: XmlElement) => note.children.find((each) => each.name === "staff")?.text;
+    const voiceOf = (note: XmlElement) => note.children.find((each) => each.name === "voice")?.text;
+    expect(notes.map((note) => `${voiceOf(note)}/${staffOf(note)}`)).toEqual([
+      "1/1",
+      "1/1",
+      "1/1",
+      "2/1",
+      "3/2",
+    ]);
+    expect(measure.children.filter((each) => each.name === "backup")).toHaveLength(2);
+    // Brackets and braces between different instruments stay part groups.
+    const { xml: band } = roundTrip(
+      'X:1\nT:Band\nM:4/4\nL:1/4\n%%score [1 {2 3}]\nV:1 name="Flute"\nV:2 name="Violin"\nV:3 name="Cello" clef=bass\nK:C\nV:1\nC4|]\nV:2\nC4|]\nV:3\nC,4|]\n',
+    );
+    expect(band).toContain(
+      '<part-group number="1" type="start"><group-symbol>bracket</group-symbol></part-group>\n<score-part id="P1">',
+    );
+    expect(band).toContain(
+      '<part-group number="2" type="start"><group-symbol>brace</group-symbol></part-group>\n<score-part id="P2">',
+    );
+    expect(band).toContain(
+      '<score-part id="P3"><part-name>Cello</part-name></score-part>\n<part-group number="2" type="stop"/>\n<part-group number="1" type="stop"/>',
+    );
   });
 });

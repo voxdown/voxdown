@@ -26,6 +26,18 @@ describe("round trip: ABC → MusicXML → ABC gives back the same music", () =>
       "timewise",
       "transposing-and-percussion",
       "twinkle-two-parts",
+      "octave-instruments",
+      "sibelius-256",
+      "finale-768",
+      "mid-bar-changes",
+      "bar-rests",
+      "awkward-text",
+      "review-satb",
+      "review-finale-guitar",
+      "review-dorico-winds",
+      "review-musescore-song",
+      "review-sibelius-rounded",
+      "review-injection",
     ].map(
       (name) =>
         [

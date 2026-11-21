@@ -1,0 +1,3 @@
+<?xml version="1.0"?><score-partwise version="4.0"><work><work-title>Evil
+X:2
+T:&lt;img src=x onerror=alert(1)&gt;</work-title></work><part-list><score-part id="P1"><part-name>Pi"ano] V:9</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><direction placement="above"><direction-type><words>he said "hi" | ! %%score</words></direction-type></direction><note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>whole</type><lyric><syllabic>single</syllabic><text>a|b-c_d%e</text></lyric></note></measure></part></score-partwise>

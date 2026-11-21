@@ -352,3 +352,207 @@ EasyABC (GPLv2) was used for ideas only; none of its code.
 - Phones get More › Select more.
 - The helpers read back only from the caret: about 3 ms of handler time per key at p90 on a
   200-bar tune, measured with Event Timing.
+
+## Sprint B: MusicXML import and export
+
+Our own TypeScript converter (no xml2abc, which is LGPL, and no other converter's code). It
+runs in the browser, and an import becomes a new ABC draft, so the text stays the source of
+truth.
+
+### Scope and shape
+
+- `site/src/composer/musicxml/` is a pure module with no DOM:
+  - `xml.ts`, a small XML reader. It reads entities and character references, CDATA, comments
+    and PIs. The DOCTYPE is skipped and never fetched. Errors carry their line.
+  - `zip.ts`, a zip reader and writer. The reader follows the central directory and inflates
+    deflate entries with `DecompressionStream("deflate-raw")`; the writer stores entries
+    uncompressed. `META-INF/container.xml` names the root file(s). Encrypted and zip64 archives
+    are refused in plain words.
+  - `import.ts` (MusicXML → ABC plus a report) and `export.ts` (abcjs's parse → MusicXML 4.0
+    partwise).
+- The module is a lazy chunk (46 KB, 18 KB gzipped), loaded on the first import or export. The
+  first view went from 714 KB to 716 KB, for the menu items and the file sniffing.
+- Ways in:
+  - File › Open (the filter is "ABC or MusicXML": .abc .txt .musicxml .xml .mxl);
+  - drag and drop;
+  - the start screen's Open button.
+
+  A file is MusicXML by its extension, its zip magic, or `<score-partwise` or
+  `<score-timewise` near the top. UTF-8 and UTF-16 are both read.
+- Import reads partwise and timewise, MusicXML 3.0–4.0 (a later version is read as 4.0 and the
+  report says so), and an opus is refused with a plain message. Several `<score-partwise>`
+  documents, or several root files in an .mxl, become X:1, X:2… in one file.
+- **Transposing instruments are written at sounding pitch** (concert score), so every voice in the
+  ABC plays and checks at the pitch heard. The report names the parts this applies to.
+- Huge files: the conversion yields to the page every 25 measures and shows "Importing
+  name: n%" in the status line. Only the XML read itself is one task.
+- After an import the dialog "Imported from MusicXML" gives the summary ("Imported “Title”: 2
+  parts, 8 bars. Left out: page layout."), then "Left out" (each kind with its count) and
+  "Good to know". The status line keeps the summary. A malformed file gives a notice ("name
+  could not be imported. This file is not well-formed XML: … (line n)") and the open draft
+  stays as it was.
+- Export: File › Export MusicXML › "This tune (.musicxml)…", or "Every tune, N files in one
+  .zip…" (one .musicxml per tune, stored zip). It is built from `abcjs.parseOnly`, the parse
+  the score uses. Element order follows the MusicXML 4.0 XSD sequences, and a test checks every
+  element we write against an encoded order table.
+
+### Mapping
+
+| MusicXML | ABC | Notes |
+|---|---|---|
+| work-title / movement-title / first credit-words | `T:` | movement-title as a second `T:` when both exist |
+| creator composer, lyricist, arranger | `C:`, `C:Words: …`, `Z:Arranged by …` | |
+| first metronome / sound tempo | `Q:1/4=96` | later tempos are `[Q:]` inline |
+| divisions | `L:` | the most common note value of a quarter or shorter, per tune (1/8 when unsure) |
+| pitch step/alter/octave | `^ _ = ^^ __` letters `'` `,` | accidentals only where the key and the bar don't imply them; ties carry them |
+| rest, whole-measure rest | `z`, `Z` / `Zn` | `Z` only for a lone full-measure rest; runs become `Zn` |
+| `<chord/>` | `[CEG]` | |
+| tie / tied | `-` | only where the pitch continues |
+| slur | `( )` | |
+| time-modification, tuplet | `(3` or `(p:q:r` | p ≤ 9 |
+| grace, slash | `{g}`, `{/g}` | |
+| beam | no space inside a group, a space between | |
+| key, time, clef changes | `[K:]`, `[M:]`, `[K: clef=]` | clef: treble, bass, alto, tenor, percussion, and G/F/C on other lines (treble1…, bass3…, alto1…) |
+| transpose | sounding pitch | see above |
+| part, part-name | `V:n name="…" clef=…` | |
+| several `<voice>` in a part, backup/forward | one `V:` each | |
+| two staves in a part | two voices, `%%score {1 2}` | voices sharing a staff in `( )` |
+| part-group bracket (square, line) / brace | `%%score [ … ]`, `{ … }` | a brace may sit inside a bracket; deeper or overlapping groups are reported |
+| barline: light-light, light-heavy, heavy-light | `\|\|`, `\|]`, `[\|` | |
+| repeat forward/backward | `\|:` `:\|` `::` | |
+| ending 1, 2, 1,2 | `[1` `[2` `[1,2` | |
+| segno, coda; D.C., D.S., Fine, al Fine, al Coda as words | `!segno!` `!coda!` `!D.C.!` `!D.S.!` `!fine!` `!D.C.alfine!` `!D.S.alcoda!` … | other words become annotations |
+| multiple-rest | `Zn` | |
+| dynamics pppp … ffff, sfz | `!p!` … | sf, sfp, fz, rf… are written as `!sfz!`, fp/pf as their first letter, and each is reported |
+| wedge crescendo/diminuendo | `!<(!` `!<)!` `!>(!` `!>)!` | |
+| staccato, accent, tenuto, strong-accent, staccatissimo/spiccato, breath, caesura | `.` `!>!` `!tenuto!` `!marcato!` `!wedge!` `!breath!` `!shortphrase!` | |
+| fermata (on a note) | `!fermata!` / `!invertedfermata!` | |
+| trill, mordent, inverted mordent, turn(s), shake | `!trill!` `!lowermordent!` `!uppermordent!` `!turn!` `!invertedturn!` `!pralltriller!` | |
+| tremolo single / arpeggiate | `!trem1!`… / `!arpeggio!` | |
+| up-bow, down-bow, open, snap pizzicato, thumb, stopped | `!upbow!` `!downbow!` `!open!` `!snap!` `!thumb!` `!+!` | |
+| harmony root/kind/bass | `"Am7"`, `"G/B"` | every kind (major-seventh → maj7, half-diminished → m7b5…) |
+| words, rehearsal | `"^text"` / `"_text"` | by placement |
+| lyric number, syllabic, extend, elision | one `w:` per verse, `-`, `_`, `~` | `\|` per bar keeps lines aligned |
+| print new-system / new-page | a new ABC line | otherwise 4 bars a line |
+| implicit first measure | a pickup | |
+| unpitched (percussion) | the display step/octave in a `perc` clef voice | reported |
+
+### What is dropped, and why
+
+Everything here is counted in the report: nothing is dropped without being reported.
+
+- **Page layout** (`<defaults>`, `<credit>`, system/page/staff layout, fonts, positions): ABC
+  lays itself out, and Composer wraps by phrase.
+- **Marks ABC or abcjs cannot draw:**
+  - fingerings;
+  - pedal marks;
+  - octave lines (8va);
+  - brackets, dash lines and trill lines;
+  - glissandos and slides;
+  - harmonics, bends, hammer-ons, pull-offs, taps, frets and strings (tablature);
+  - figured bass;
+  - chord diagrams;
+  - notehead shapes;
+  - two-note tremolos;
+  - cue notes;
+  - beat, measure and slash repeats;
+  - harp pedals;
+  - scordatura;
+  - accordion registrations;
+  - swing settings;
+  - images;
+  - other or unknown articulations, ornaments and dynamics.
+- **Part brackets and braces ABC cannot nest** (a bracket inside a bracket, a brace around a
+  grand staff, overlapping groups): the widest are kept.
+- **Approximations** (said in the report):
+  - composite time signatures written as their total;
+  - microtones rounded to the nearest semitone;
+  - the first note of a grace chord;
+  - lyrics on grace notes;
+  - fermatas on bar lines;
+  - ties to a note of another pitch;
+  - overlapping notes in one voice.
+- **Limits of ABC/abcjs:**
+  - tuplets of 10 or more notes, and nested tuplets: the notes are kept at their sounding
+    lengths, without the tuplet sign, so the bar check flags the bar;
+  - notes shorter than a 128th or longer than a long: kept and reported, but abcjs warns.
+- **Bars that do not add up** in the file (incomplete or overfull) are kept as written. The bar
+  check flags them as problems; the importer never fixes them silently.
+
+### Coverage: feature × import × export × round trip
+
+✓ = done and tested; ≈ = done, with the approximation noted.
+
+| Feature | Import | Export | Round trip |
+|---|---|---|---|
+| Title, composer, lyricist, tempo | ✓ | ✓ | ✓ |
+| Notes, accidentals in key and bar | ✓ | ✓ | ✓ |
+| Rests, whole-measure and multi-measure rests | ✓ | ✓ | ✓ |
+| Chords | ✓ | ✓ | ✓ |
+| Ties, slurs | ✓ | ✓ | ✓ |
+| Triplets and general tuplets (p ≤ 9) | ✓ | ✓ | ✓ |
+| Grace notes, acciaccatura | ✓ | ✓ | ✓ |
+| Beams | ✓ | ✓ | ✓ |
+| Key, time and clef changes | ✓ | ✓ | ✓ |
+| Transposing instruments | ✓ (sounding) | sounding pitch, no `<transpose>` | ✓ |
+| Several voices in a part | ✓ | ✓ (`<backup>`) | ✓ |
+| Grand staff, `%%score` groups | ✓ | ✓ (part-group brace/bracket) | ✓ |
+| Repeats, endings, double and final bars | ✓ | ✓ | ✓ |
+| D.C./D.S./Fine/segno/coda | ✓ | ✓ | ✓ |
+| Dynamics, wedges | ✓ (≈ for sf, fp…) | ✓ | ✓ |
+| Articulations, fermatas | ✓ | ✓ | ✓ |
+| Ornaments, tremolo, arpeggio, bowing | ✓ | ✓ | ✓ |
+| Chord symbols (with bass) | ✓ | ✓ | ✓ |
+| Annotations and words | ✓ | ✓ | ✓ |
+| Lyrics: verses, syllables, extend, elision | ✓ | ✓ | ✓ |
+| System breaks | ✓ | ✓ (`<print new-system>`) | (layout, not compared) |
+| Pickup | ✓ | ✓ (`implicit`) | ✓ |
+| Several movements / tune book | ✓ (X:1, X:2…) | ✓ (a .zip) | ✓ |
+| .mxl (deflate) / plain / timewise | ✓ | plain .musicxml | n/a |
+| Percussion (unpitched) | ≈ (display pitch) | as pitched notes | ✓ |
+
+The round trip compares, per voice:
+- pitches as MIDI numbers (after key and bar accidentals);
+- lengths, ties and graces;
+- marks, with synonyms such as `!<(!`/`!crescendo(!` treated as one;
+- chord symbols, slurs, bars, repeats and lyrics.
+
+It does not compare bytes.
+- **Examples (4):** Ode to Joy, Greensleeves, Twinkle and Frère Jacques all come back the same.
+- **Handwritten cases (4) and fixtures (5):** all the same. The fixtures are MuseScore-style,
+  Dorico-style, timewise, transposing with percussion, and features; each has a .mxl twin.
+- **The unofficial MusicXML test suite:**
+  - **Source and licence:** Reinhold Kainhofer's suite, 166 files, from LilyPond's
+    `input/regression/musicxml`, under the MIT licence. It is committed in
+    `site/test/fixtures/musicxml/lilypond-suite/` with its LICENSE beside it.
+  - **Import:** all 166 import without failing, and 159 draw without warnings with every bar
+    adding up. The other 7 are listed in the test with reasons:
+    - three use durations beyond abcjs;
+    - two use a 17-note tuplet or nested tuplets;
+    - two have bars that really are incomplete or overfull, and the bar check flags them.
+  - **Round trip:** 163 come back the same. The other 3 are listed:
+    - senza misura: an empty bar's length is unknown;
+    - a chord shared between voices;
+    - tablature spacing.
+
+### Timings
+
+A generated orchestral score (12 parts × 300 bars, 4.8 MB, 28,800 notes, with dynamics, slurs,
+lyrics and three transposing parts), on the development machine with the production build in
+Chromium:
+
+| Stage | Time |
+|---|---|
+| Read the XML (one task) | 112 ms |
+| Convert, yielding every 25 measures (progress 0 → 100%) | about 650 ms, no task over 50 ms |
+| Load the ABC into the editor | 255 ms |
+| The rest of the 2.4 s to the report dialog | the existing score draw of 28,800 notes |
+
+- **Under node (vitest):** 102 ms for the XML read and 330 ms for the whole import. abcjs's
+  parse takes 67 ms.
+- **The result:** 76 KB of ABC, with no abcjs warnings and no bar problems.
+- **The draw:** it has one task of about 1 s. Opening the same ABC as a plain .abc file gives
+  the same task, so it is the score renderer, not the import. A future sprint could split the
+  draw.
+- **The check:** `check-composer` imports a 12 × 300 score built in memory. It asserts a
+  progress line, and that no task runs a quarter second or more while importing.

@@ -841,6 +841,17 @@ body[data-layout="below"] #layout-toggle .beside {
 .score-place[hidden] {
   display: none;
 }
+/* The score cursor (Ctrl/⌘ with the arrows): a dashed ring that leaves the selection alone. */
+.score-cursor {
+  position: absolute;
+  border: 2px dashed var(--focus);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+.score-cursor[hidden] {
+  display: none;
+}
 .score-bands {
   position: absolute;
   inset: 0;

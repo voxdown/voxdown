@@ -2038,6 +2038,137 @@ assert.equal(
 );
 console.log("Composer: F10 goes to the menus; Edit has Cut, Copy, Paste, Select all: passed");
 
+{
+  // Sprint A 1. > and < over selected music: pairs dotted-short or short-dotted, again removes.
+  await openExample("Twinkle, Twinkle, Little Star");
+  const original = await docText();
+  const bars = '"C"C C | G G |';
+  const from = original.indexOf(bars);
+  await page.locator(".cm-content").focus();
+  await page.evaluate(
+    ([a, b]) => window.composer.view.dispatch({ selection: { anchor: a, head: b } }),
+    [from, from + bars.length - 2],
+  );
+  await page.keyboard.type(">");
+  assert((await docText()).includes('"C"C>C | G>G |'), "each pair in each bar, not across it");
+  assert.match(
+    await page.locator("#explain").textContent(),
+    /^Dotted-then-short on 2 pairs · type > again to remove$/,
+  );
+  await page.keyboard.type("<");
+  assert((await docText()).includes('"C"C<C | G<G |'), "< turns them round");
+  await page.keyboard.type("<");
+  assert.equal(await docText(), original.replace('"C"C C | G G |', '"C"C C | G G |'));
+  await page.keyboard.press("Control+z");
+  assert((await docText()).includes('"C"C<C | G<G |'), "one undo step");
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Control+z");
+  assert.equal(await docText(), original, "back to the start");
+}
+console.log(
+  "Composer: > and < make pairs dotted-short and short-dotted, bar by bar; again removes: passed",
+);
+
+{
+  // Sprint A 2. A selection in several places: Ctrl click three notes in different bars, type .
+  const original = await docText();
+  const geo = await geometry();
+  const line = Math.min(...geo.notes.map((note) => note.line));
+  const notes = geo.notes
+    .filter((note) => note.line === line && note.voice === 0)
+    .sort((a, b) => a.time - b.time);
+  const picks = [notes[0], notes[3], notes[6]];
+  await page.evaluate(() => window.composer.view.dispatch({ selection: { anchor: 0 } }));
+  const ctrlClick = async (x, y) => {
+    await page.keyboard.down("Control");
+    await page.mouse.click(x, y);
+    await page.keyboard.up("Control");
+  };
+  for (const note of picks) await ctrlClick(note.head + 3, note.y);
+  const chosen = await selectedStarts();
+  assert.deepEqual(
+    chosen,
+    picks.map((note) => note.start),
+    `three notes selected: ${chosen}`,
+  );
+  await page.waitForFunction(() =>
+    /^3 notes selected in 3 places · /.test(document.getElementById("explain").textContent),
+  );
+  assert.equal(
+    await page.locator("#score-bands .score-band.selection").count(),
+    3,
+    "one band per place",
+  );
+  await page.keyboard.type(".");
+  const marked = await docText();
+  assert.equal(marked.length, original.length + 3, "three marks and nothing else");
+  assert.equal(marked.replaceAll(".", ""), original.replaceAll(".", ""), "nothing else changed");
+  await page.waitForFunction(
+    () => document.querySelectorAll('#score [data-name="scripts.staccato"]').length === 3,
+  );
+  assert.deepEqual(
+    (await selectedStarts()).length,
+    3,
+    "the selection stays on the same three notes",
+  );
+  // Ctrl click again takes one out.
+  const again = (await geometry()).notes.find(
+    (note) => note.voice === 0 && Math.abs(note.time - picks[1].time) < 1e-6,
+  );
+  await ctrlClick(again.head + 3, again.y);
+  assert.equal((await selectedStarts()).length, 2, "Ctrl click again removes it");
+  // The keyboard: Ctrl arrows move the cursor, Ctrl Space toggles; the selection is untouched.
+  await page.locator("#score-scroll").focus();
+  const before = await selection();
+  await page.keyboard.press("Control+ArrowRight");
+  await page.keyboard.press("Control+ArrowRight");
+  assert.deepEqual(await selection(), before, "Ctrl arrows leave the selection");
+  assert(await page.locator("#score-cursor").isVisible(), "the cursor shows");
+  await page.keyboard.press("Control+Space");
+  assert.equal((await selectedStarts()).length, 3, "Ctrl Space adds the note at the cursor");
+  await page.keyboard.press("Control+Space");
+  assert.equal((await selectedStarts()).length, 2, "and takes it out again");
+  await page.keyboard.press("Control+z");
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: 0 } });
+  });
+  assert.equal(await docText(), original, "undo takes the three marks back");
+}
+{
+  // Two Ctrl drags across both voices: two places, every voice, one band each per staff.
+  await openExample("Frère Jacques");
+  await drawn();
+  await settle(300);
+  const geo = await geometry();
+  const line = Math.min(...geo.notes.map((note) => note.line));
+  const top = geo.notes
+    .filter((note) => note.line === line && note.voice === 0)
+    .sort((a, b) => a.time - b.time);
+  const bottom = staffMiddle(geo, line, 1);
+  await page.evaluate(() => window.composer.view.dispatch({ selection: { anchor: 0 } }));
+  for (const [first, last] of [
+    [top[0], top[3]],
+    [top[8], top[11]],
+  ]) {
+    await page.mouse.move(first.head + 3, first.y);
+    await page.keyboard.down("Control");
+    await page.mouse.down();
+    await page.mouse.move(last.head + 3, bottom, { steps: 6 });
+    await page.mouse.up();
+    await page.keyboard.up("Control");
+  }
+  const parts = await selection();
+  assert.equal(parts.length, 4, `two places in two voices: ${JSON.stringify(parts)}`);
+  await page.waitForFunction(() =>
+    /selected in 2 places/.test(document.getElementById("explain").textContent),
+  );
+  assert.equal(await page.locator("#score-bands .score-band.selection").count(), 4);
+}
+console.log(
+  "Composer: Ctrl click and Ctrl drag select in several places; . marks only them; Ctrl arrows and Ctrl Space: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

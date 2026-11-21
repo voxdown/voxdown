@@ -36,7 +36,14 @@ import { describeKey, describeMeter, explainAt } from "./explain";
 import { INSTRUMENTS, INSTRUMENT_ORDER, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
 import { checkLyrics } from "./lyriccheck";
-import { type MenuItem, mountMenus, popupMenu, shortcutAria, shortcutLabel } from "./menus";
+import {
+  type MenuItem,
+  isApple,
+  mountMenus,
+  popupMenu,
+  shortcutAria,
+  shortcutLabel,
+} from "./menus";
 import { offlineStatus, prepareOffline } from "./offline";
 import { applyPassDynamics, passMarks } from "./passes";
 import { Player, encodeWav, normalise } from "./player";
@@ -425,29 +432,60 @@ const copyVoices = EditorView.domEventHandlers({
  * that is not music (headers, lyrics, comments, free text, or a mix) is typed as usual, and so is
  * text being composed with an input method.
  */
-const MARK_NAMES = { staccato: "Staccato", roll: "Roll", slur: "Slur" } as const;
+const MARK_NAMES = {
+  staccato: "Staccato",
+  roll: "Roll",
+  slur: "Slur",
+  "dotted-short": "Dotted-then-short",
+  "short-dotted": "Short-then-dotted",
+} as const;
 /** A status message kept while the selection it describes stays as it is. */
 let statusNote: { message: string; selection: EditorSelection } | null = null;
+function sayAboutSelection(message: string) {
+  statusNote = { message, selection: view.state.selection };
+  $("explain").textContent = message;
+}
 const typedMarks = Prec.highest(
   EditorView.inputHandler.of((target, _from, _to, typed) => {
     if (target.composing || target.compositionStarted) return false;
-    const state = target.state;
-    const ranges = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
-    const result = markSelection(state.doc.toString(), ranges, typed, state.field(fileIndexField));
-    if (!result || !result.changes.length) return false;
-    const changes = state.changes(result.changes);
-    const selection = state.selection.map(changes);
-    target.dispatch({ changes, selection, userEvent: "input.mark", scrollIntoView: true });
-    const notes = `${result.count} ${result.count === 1 ? "note" : "notes"}`;
-    const name = MARK_NAMES[result.mark];
-    const message = result.removed
-      ? `${name} removed from ${notes}`
-      : `${name} ${result.mark === "slur" ? "over" : "on"} ${notes} · type ${typed} again to remove`;
-    statusNote = { message, selection: target.state.selection };
-    $("explain").textContent = message;
-    return true;
+    return typeMark(target, typed);
   }),
 );
+/** A mark typed over selected music, from the text or the score; false when it is just typing. */
+function typeMark(target: EditorView, typed: string): boolean {
+  const state = target.state;
+  const ranges = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
+  const result = markSelection(state.doc.toString(), ranges, typed, state.field(fileIndexField));
+  if (!result) return false;
+  const broken = result.mark === "dotted-short" || result.mark === "short-dotted";
+  if (!result.changes.length) {
+    if (!broken) return false;
+    // One note alone has no partner: say so rather than typing over the music.
+    sayAboutSelection(
+      "Broken rhythm needs two notes side by side in a bar: select a pair or more.",
+    );
+    return true;
+  }
+  const changes = state.changes(result.changes);
+  // Marks put at a range's edge join it, so the selection stays on the same notes, marks and all.
+  const selection = EditorSelection.create(
+    state.selection.ranges.map((range) =>
+      EditorSelection.range(changes.mapPos(range.from, -1), changes.mapPos(range.to, 1)),
+    ),
+    state.selection.mainIndex,
+  );
+  target.dispatch({ changes, selection, userEvent: "input.mark", scrollIntoView: true });
+  const count = broken
+    ? `${result.count} ${result.count === 1 ? "pair" : "pairs"}`
+    : `${result.count} ${result.count === 1 ? "note" : "notes"}`;
+  const name = MARK_NAMES[result.mark];
+  sayAboutSelection(
+    result.removed
+      ? `${name} removed from ${count}`
+      : `${name} ${result.mark === "slur" ? "over" : "on"} ${count} · type ${typed} again to remove`,
+  );
+  return true;
+}
 
 const view = new EditorView({
   parent: $("editor"),
@@ -701,7 +739,7 @@ function explainCaret(update: ViewUpdate) {
     const count = eventsIn(text(), ranges(), fileIndex()).filter(
       (event) => !event.rest && event.to > event.from,
     ).length;
-    const voices = view.state.selection.ranges.length;
+    const where = selectionWhere();
     if (count === 0) {
       // Header or lyric text: no music to play, so no play hint.
       const characters = view.state.selection.ranges.reduce(
@@ -711,7 +749,7 @@ function explainCaret(update: ViewUpdate) {
       status.textContent = `${characters} ${characters === 1 ? "character" : "characters"} selected`;
       return;
     }
-    status.textContent = `${count} ${count === 1 ? "note" : "notes"} selected${voices > 1 ? ` in ${voices} voices` : ""} · ${touch.matches ? "Tap More › Play selection to hear it" : `${shortcutLabel("Mod Alt Enter")} plays it`}`;
+    status.textContent = `${count} ${count === 1 ? "note" : "notes"} selected${where} · ${touch.matches ? "Tap More › Play selection to hear it" : `${shortcutLabel("Mod Alt Enter")} plays it`}`;
     return;
   }
   // Music a blank line left outside its tune says so wherever the caret is in it.
@@ -852,6 +890,8 @@ async function render(force = false) {
     scoreIndex = result;
     geometry = null;
     attached = null;
+    scoreCursor = null;
+    $("score-cursor").hidden = true;
     // The lit notes and the place marker belong to the drawing just replaced: paint them again.
     litPlaying = [];
     playingKey = "~redrawn";
@@ -933,7 +973,7 @@ function updateSummary() {
   );
   scoreScroll.setAttribute(
     "aria-label",
-    `Score of ${parts.join(", ")}. ← and → move by note, ↑ and ↓ change voice, Home and End go along the line, Shift extends, Space plays, Enter goes to the text.`,
+    `Score of ${parts.join(", ")}. ← and → move by note, ↑ and ↓ change voice, Home and End go along the line, Shift extends, Space plays, Enter goes to the text. ${isApple ? "⌘" : "Ctrl"} with the arrows moves a cursor without changing the selection, and ${shortcutLabel("Mod Space")} puts the note at the cursor in or out of it.`,
   );
 }
 
@@ -1085,38 +1125,78 @@ function drawBands(selected: ScoreNote[], issueNotes: ScoreNote[] = currentIssue
   const offsetTop = scoreElement.offsetTop;
   const offsetLeft = scoreElement.offsetLeft;
   const add = (notes: ScoreNote[], className: string) => {
-    const groups = new Map<string, { left: number; right: number; line: number; staff: number }>();
-    for (const box of geo.notes) {
-      if (!notes.includes(box.note)) continue;
-      const key = `${box.note.line}:${box.note.staff}`;
-      const group = groups.get(key) ?? {
-        left: box.head,
-        right: box.right,
-        line: box.note.line,
-        staff: box.note.staff,
-      };
-      group.left = Math.min(group.left, box.head);
-      group.right = Math.max(group.right, box.right);
-      groups.set(key, group);
+    if (!scoreIndex) return;
+    const chosen = new Set(notes);
+    const boxOf = new Map(geo.notes.map((box) => [box.note, box]));
+    // Runs of selected notes, voice by voice and system by system: a note left out ends a run,
+    // so a selection in several places shows as several bands.
+    type Run = {
+      line: number;
+      staff: number;
+      left: number;
+      right: number;
+      open: boolean;
+      close: boolean;
+    };
+    const runs: Run[] = [];
+    for (const voiceNotes of scoreIndex.byVoice) {
+      let run: Run | null = null;
+      voiceNotes.forEach((note, at) => {
+        const box = boxOf.get(note);
+        if (!chosen.has(note) || !box) {
+          run = null;
+          return;
+        }
+        const previous = voiceNotes[at - 1];
+        const next = voiceNotes[at + 1];
+        if (!run || run.line !== note.line) {
+          run = {
+            line: note.line,
+            staff: note.staff,
+            left: box.head,
+            right: box.right,
+            // A run carried on from the system above has no edge at its start.
+            open: !(previous && chosen.has(previous) && previous.line !== note.line),
+            close: true,
+          };
+          runs.push(run);
+        }
+        run.left = Math.min(run.left, box.head);
+        run.right = Math.max(run.right, box.right);
+        run.close = !(next && chosen.has(next) && next.line !== note.line);
+      });
     }
-    const ordered = [...groups.values()].sort((a, b) => a.line - b.line || a.staff - b.staff);
-    // One span of time per system: every staff's band starts and ends at the same x.
-    const spans = new Map<number, { left: number; right: number }>();
-    for (const group of ordered) {
-      const span = spans.get(group.line) ?? { left: group.left, right: group.right };
-      span.left = Math.min(span.left, group.left);
-      span.right = Math.max(span.right, group.right);
-      spans.set(group.line, span);
+    // Runs that overlap in time on one system share one span across its staves.
+    const spans = new Map<number, { left: number; right: number }[]>();
+    for (const run of [...runs].sort((a, b) => a.left - b.left)) {
+      const list = spans.get(run.line) ?? [];
+      const last = list[list.length - 1];
+      if (last && run.left <= last.right + 4) last.right = Math.max(last.right, run.right);
+      else list.push({ left: run.left, right: run.right });
+      spans.set(run.line, list);
     }
-    const firstLine = ordered[0]?.line;
-    const lastLine = ordered[ordered.length - 1]?.line;
-    for (const group of ordered) {
-      const staff = geo.staves.find((box) => box.line === group.line && box.staff === group.staff);
+    const drawn = new Set<string>();
+    for (const run of runs) {
+      const span = (spans.get(run.line) ?? []).find(
+        (each) => run.left >= each.left - 0.5 && run.right <= each.right + 0.5,
+      ) ?? { left: run.left, right: run.right };
+      const key = `${run.line}:${run.staff}:${span.left}`;
+      const edges = runs.filter(
+        (other) =>
+          other.line === run.line &&
+          other.staff === run.staff &&
+          other.left >= span.left - 0.5 &&
+          other.right <= span.right + 0.5,
+      );
+      if (drawn.has(key)) continue;
+      drawn.add(key);
+      const staff = geo.staves.find((box) => box.line === run.line && box.staff === run.staff);
       const top = staff ? staff.top - 10 : 0;
       const bottom = staff ? staff.bottom + 10 : 0;
       const band = document.createElement("div");
-      band.className = `score-band ${className}${group.line === firstLine ? " edge-start" : ""}${group.line === lastLine ? " edge-end" : ""}`;
-      const span = spans.get(group.line) ?? group;
+      const open = edges.some((each) => each.open);
+      const close = edges.some((each) => each.close);
+      band.className = `score-band ${className}${open ? " edge-start" : ""}${close ? " edge-end" : ""}`;
       band.style.left = `${offsetLeft + span.left - 6}px`;
       band.style.width = `${span.right - span.left + 12}px`;
       band.style.top = `${offsetTop + top}px`;
@@ -1280,8 +1360,61 @@ type Drag = {
   pointer: number;
   x: number;
   y: number;
+  /** Ctrl/⌘ held: the selection before the press, which the drag adds to. */
+  base?: Range[];
 };
 let drag: Drag | null = null;
+
+/* A selection in several places: Ctrl/⌘ click toggles a note, Ctrl/⌘ drag adds a region. */
+const addsToSelection = (event: MouseEvent | KeyboardEvent) =>
+  isApple ? event.metaKey : event.ctrlKey;
+/** Ranges sorted and joined where they overlap or touch (only spaces between them). */
+function mergeRanges(list: Range[]): Range[] {
+  const doc = text();
+  const out: Range[] = [];
+  for (const range of [...list]
+    .filter((each) => each.to > each.from)
+    .sort((a, b) => a.from - b.from)) {
+    const last = out[out.length - 1];
+    if (last && (range.from <= last.to || /^[ \t]*$/.test(doc.slice(last.to, range.from))))
+      last.to = Math.max(last.to, range.to);
+    else out.push({ ...range });
+  }
+  return out;
+}
+function selectRanges(list: Range[], fallback: number) {
+  const merged = mergeRanges(list);
+  view.dispatch({
+    selection: merged.length
+      ? EditorSelection.create(merged.map((range) => EditorSelection.range(range.from, range.to)))
+      : { anchor: fallback },
+    scrollIntoView: true,
+    userEvent: "select.score",
+  });
+}
+/** A note in or out of the selection: out of a range splits it around the note. */
+function toggleNote(note: ScoreNote) {
+  const current = ranges().filter((range) => range.to > range.from);
+  const holder = current.find((range) => note.start >= range.from && note.end <= range.to);
+  if (!holder) {
+    selectRanges([...current, { from: note.start, to: note.end }], note.start);
+    return;
+  }
+  const doc = text();
+  const keep = (from: number, to: number) => {
+    while (to > from && /\s/.test(doc[to - 1] as string)) to -= 1;
+    while (from < to && /\s/.test(doc[from] as string)) from += 1;
+    return to > from && eventsIn(doc, [{ from, to }], fileIndex()).length ? [{ from, to }] : [];
+  };
+  selectRanges(
+    [
+      ...current.filter((range) => range !== holder),
+      ...keep(holder.from, note.start),
+      ...keep(note.end, holder.to),
+    ],
+    note.start,
+  );
+}
 
 /** Bar lines' x on each system, in the score's coordinates (measured with the geometry). */
 let barCache: { for: unknown; bars: Map<number, number[]> } | null = null;
@@ -1409,6 +1542,20 @@ scoreScroll.addEventListener("pointerdown", (event) => {
       scoreIndex,
       notesAt(scoreIndex, caret()).map((note) => ({ from: note.start, to: note.end })),
     );
+  if (addsToSelection(event) && !event.shiftKey) {
+    // Ctrl/⌘: a click toggles the note, a drag adds a region; decided when the pointer moves.
+    drag = {
+      anchor: hit,
+      allVoices: event.altKey,
+      moved: false,
+      pointer: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      base: ranges().filter((range) => range.to > range.from),
+    };
+    scoreScroll.setPointerCapture(event.pointerId);
+    return;
+  }
   if (event.shiftKey && current) {
     // Shift click extends to the place clicked: back to its note's start, or on to what it reached.
     const voices = event.altKey ? allVoices() : [...new Set([...current.voices, hit.note.voice])];
@@ -1452,7 +1599,10 @@ scoreScroll.addEventListener("pointermove", (event) => {
       : drag.anchor.note.voice === hit.note.voice
         ? [drag.anchor.note.voice]
         : voicesOnStaff(hit.staff);
-  selectRegion(dragRegion(scoreIndex, drag.anchor, hit, voices));
+  const region = dragRegion(scoreIndex, drag.anchor, hit, voices);
+  if (drag.base)
+    selectRanges([...drag.base, ...regionRanges(scoreIndex, region, text())], hit.note.start);
+  else selectRegion(region);
   // Scroll while dragging near the edges.
   const frame = scoreScroll.getBoundingClientRect();
   if (event.clientY > frame.bottom - 30) scoreScroll.scrollTop += 12;
@@ -1461,10 +1611,39 @@ scoreScroll.addEventListener("pointermove", (event) => {
 const endDrag = (event: PointerEvent) => {
   if (!drag || event.pointerId !== drag.pointer) return;
   scoreScroll.classList.remove("dragging");
+  // Ctrl/⌘ click without a drag: the note goes in or out of the selection.
+  if (drag.base && !drag.moved && event.type === "pointerup") toggleNote(drag.anchor.note);
   drag = null;
 };
 scoreScroll.addEventListener("pointerup", endDrag);
 scoreScroll.addEventListener("pointercancel", endDrag);
+
+/**
+ * " in 3 places" when the selected ranges cover separate stretches of time, " in 2 voices" when
+ * one stretch spans several voices, else nothing.
+ */
+function selectionWhere(): string {
+  const selected = ranges().filter((range) => range.to > range.from);
+  if (selected.length < 2) return "";
+  const spans: { from: number; to: number }[] = [];
+  for (const range of selected) {
+    const notes = scoreIndex ? notesInRanges(scoreIndex, [range]) : [];
+    if (!notes.length) continue;
+    spans.push({
+      from: Math.min(...notes.map((note) => note.time)),
+      to: Math.max(...notes.map((note) => note.time + note.duration)),
+    });
+  }
+  if (!spans.length) return ` in ${selected.length} places`;
+  spans.sort((a, b) => a.from - b.from);
+  let places = 0;
+  let end = Number.NEGATIVE_INFINITY;
+  for (const span of spans) {
+    if (span.from >= end - 1e-6) places += 1;
+    end = Math.max(end, span.to);
+  }
+  return places > 1 ? ` in ${places} places` : ` in ${selected.length} voices`;
+}
 
 /** Says what the score's keyboard moved to: the note, its bar and voice, or the selection. */
 function announceScore() {
@@ -1476,7 +1655,7 @@ function announceScore() {
     const bars = [...new Set(notesInRanges(scoreIndex, selected).map((note) => note.measure + 1))];
     const span =
       bars.length > 1 ? `bars ${Math.min(...bars)} to ${Math.max(...bars)}` : `bar ${bars[0]}`;
-    message = `${notes.length} ${notes.length === 1 ? "note" : "notes"} selected, ${span}${selected.length > 1 ? `, ${selected.length} voices` : ""}.`;
+    message = `${notes.length} ${notes.length === 1 ? "note" : "notes"} selected${selectionWhere()}, ${span}.`;
   } else {
     const explanation = explainAt(text(), fileIndex(), caret());
     message = explanation ? `${explanation.text}${placeOf(caret())}` : "No note here.";
@@ -1519,8 +1698,90 @@ function moveToLineEnd(end: boolean): boolean {
   return true;
 }
 
+/*
+ * The score cursor: with Ctrl/⌘ held, the arrows move it without changing the selection, and
+ * Ctrl/⌘ Space puts the note under it in or out of the selection. Without Ctrl/⌘ it is the caret.
+ */
+let scoreCursor: ScoreNote | null = null;
+function cursorNote(): ScoreNote | null {
+  if (!scoreIndex) return null;
+  if (scoreCursor && scoreIndex.notes.includes(scoreCursor)) return scoreCursor;
+  return (
+    notesAt(scoreIndex, caret())[0] ??
+    scoreIndex.notes.find((note) => note.start >= caret()) ??
+    null
+  );
+}
+function showCursor(note: ScoreNote | null) {
+  scoreCursor = note;
+  const marker = $("score-cursor");
+  const box = note ? staffGeometry()?.notes.find((each) => each.note === note) : null;
+  if (!box) {
+    marker.hidden = true;
+    return;
+  }
+  marker.hidden = false;
+  marker.style.left = `${scoreElement.offsetLeft + box.head - 5}px`;
+  marker.style.top = `${scoreElement.offsetTop + box.top - 5}px`;
+  marker.style.width = `${box.right - box.head + 10}px`;
+  marker.style.height = `${box.bottom - box.top + 10}px`;
+  if (note) {
+    const explanation = explainAt(text(), fileIndex(), note.start);
+    const inside = ranges().some(
+      (range) => note.start >= range.from && note.end <= range.to && range.to > range.from,
+    );
+    $("score-live").textContent =
+      `Cursor: ${explanation?.text ?? "note"}${placeOf(note.start)}${inside ? ", selected" : ""}.`;
+  }
+}
+function moveCursor(key: string): boolean {
+  const index = scoreIndex;
+  const note = cursorNote();
+  if (!index || !note) return false;
+  let target: ScoreNote | undefined;
+  if (key === "ArrowRight" || key === "ArrowLeft") {
+    const voiceNotes = index.byVoice[note.voice] ?? [];
+    target = voiceNotes[voiceNotes.indexOf(note) + (key === "ArrowRight" ? 1 : -1)];
+  } else {
+    const voice = note.voice + (key === "ArrowDown" ? 1 : -1);
+    if (voice >= 0 && voice < index.voices.length) target = noteAtTime(index, voice, note.time);
+  }
+  showCursor(target ?? note);
+  return true;
+}
+
 scoreScroll.addEventListener("keydown", (event) => {
   if (!scoreIndex) return;
+  // . ~ ( < > mark the selected notes from the score too.
+  if (
+    [".", "~", "(", "<", ">"].includes(event.key) &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    typeMark(view, event.key)
+  ) {
+    event.preventDefault();
+    return;
+  }
+  if (addsToSelection(event) && !event.altKey) {
+    if (["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      moveCursor(event.key);
+      return;
+    }
+    if (event.key === " ") {
+      event.preventDefault();
+      const note = cursorNote();
+      if (note) {
+        toggleNote(note);
+        showCursor(note);
+        announceScore();
+      }
+      return;
+    }
+  }
+  if (["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key))
+    showCursor(null);
   if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
     event.preventDefault();
     moveByNote(event.key === "ArrowRight" ? 1 : -1, event.shiftKey);

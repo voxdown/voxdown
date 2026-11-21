@@ -82,4 +82,27 @@ describe("typing a mark onto selected notes", () => {
         .slice(6),
     ).toEqual([".C .D E F |", "V:2", ".C, .D, E, F, |", ""]);
   });
+
+  it("makes each pair of notes dotted-short with >, short-dotted with <", () => {
+    const dotted = type("C D E F G |", "C D E F G", ">");
+    expect(dotted.line).toBe("C>D E>F G |");
+    expect(dotted.result?.mark).toBe("dotted-short");
+    expect(dotted.result?.count).toBe(2);
+    expect(type("C D E F |", "C D E F", "<").line).toBe("C<D E<F |");
+  });
+  it("never pairs across a bar line or a rest; chords count as one note", () => {
+    expect(type("C D E | F G z A B |", "C D E | F G z A B", ">").line).toBe("C>D E | F>G z A>B |");
+    expect(type("[CE] D !p!E F |", "[CE] D !p!E F", ">").line).toBe("[CE]>D !p!E>F |");
+  });
+  it("removes the sign when every pair has it, and turns the other one round", () => {
+    const off = type("C>D E>F |", "C>D E>F", ">");
+    expect(off.line).toBe("C D E F |");
+    expect(off.result?.removed).toBe(true);
+    expect(type("C<D E F |", "C<D E F", ">").line).toBe("C>D E>F |");
+  });
+  it("leaves one note alone", () => {
+    const single = type("C D E F |", "D", ">");
+    expect(single.result?.changes).toEqual([]);
+    expect(single.result?.count).toBe(0);
+  });
 });

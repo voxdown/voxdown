@@ -423,7 +423,8 @@ function merge(changes: Change[]): Change[] {
 /** What typing a mark onto selected music did: the edit, how many notes, added or removed. */
 export type MarkResult = {
   changes: Change[];
-  mark: "staccato" | "roll" | "slur";
+  mark: "staccato" | "roll" | "slur" | "dotted-short" | "short-dotted";
+  /** Notes marked, or for broken rhythm, pairs. */
   count: number;
   removed: boolean;
 };
@@ -483,8 +484,10 @@ export function markSelection(
   typed: string,
   file = indexFile(text),
 ): MarkResult | null {
-  if (typed !== "." && typed !== "~" && typed !== "(") return null;
+  if (typed !== "." && typed !== "~" && typed !== "(" && typed !== ">" && typed !== "<")
+    return null;
   if (!isMusicSelection(text, ranges, file)) return null;
+  if (typed === ">" || typed === "<") return brokenRhythm(text, ranges, typed, file);
   const notes = eventsIn(text, ranges, file).filter((event) => !event.rest);
   if (typed === "(") {
     const changes = toggleSlur(text, ranges, file);
@@ -502,6 +505,81 @@ export function markSelection(
     changes: merge(changes),
     mark: typed === "." ? "staccato" : "roll",
     count: notes.length,
+    removed,
+  };
+}
+
+/**
+ * The pairs of neighbouring notes in each range, for broken rhythm: notes (a chord counts as
+ * one) taken two by two; a bar line, a rest or another voice starts afresh, and an odd note at
+ * the end is left alone.
+ */
+export function notePairs(
+  text: string,
+  ranges: Range[],
+  file = indexFile(text),
+): [MusicEvent, MusicEvent][] {
+  const pairs: [MusicEvent, MusicEvent][] = [];
+  for (const range of ranges) {
+    for (const tune of file.tunes) {
+      if (range.from >= tune.to || range.to <= tune.bodyFrom) continue;
+      const items = tuneItems(text, tune, file)
+        .filter((item) => item.from < range.to && item.to > range.from)
+        .sort((a, b) => a.from - b.from);
+      let run: MusicEvent[] = [];
+      const close = () => {
+        for (let at = 0; at + 1 < run.length; at += 2)
+          pairs.push([run[at] as MusicEvent, run[at + 1] as MusicEvent]);
+        run = [];
+      };
+      for (const item of items) {
+        if (item.type === "bar" || item.rest || (run[0] && run[0].voice !== item.voice)) close();
+        if (item.type === "event" && !item.rest) run.push(item);
+      }
+      close();
+    }
+  }
+  return pairs;
+}
+
+/** Where a pair's broken-rhythm sign goes: after the first note and any tie or slur end on it. */
+function brokenGap(text: string, first: MusicEvent, second: MusicEvent) {
+  let from = first.to;
+  while (from < second.from && /[-)]/.test(text[from] as string)) from += 1;
+  const gap = text.slice(from, second.from);
+  const sign = /^\s*(>+|<+)\s*/.exec(gap);
+  return {
+    from,
+    sign: sign?.[1] ?? "",
+    to: from + (sign ? sign[0].length : (/^\s*/.exec(gap)?.[0].length ?? 0)),
+  };
+}
+
+/** ">" or "<" over selected music: dotted-short (or short-dotted) pairs, or off when all have it. */
+function brokenRhythm(
+  text: string,
+  ranges: Range[],
+  typed: ">" | "<",
+  file: FileIndex,
+): MarkResult {
+  const pairs = notePairs(text, ranges, file).map(([first, second]) => ({
+    first,
+    second,
+    gap: brokenGap(text, first, second),
+  }));
+  const removed = pairs.length > 0 && pairs.every((pair) => pair.gap.sign === typed);
+  const changes = pairs
+    .filter((pair) => removed || pair.gap.sign !== typed)
+    .map((pair) => ({
+      from: pair.gap.from,
+      to: pair.gap.to,
+      // Back to a plain space when taken off; the sign joins the two notes when put on.
+      insert: removed ? " " : typed,
+    }));
+  return {
+    changes: merge(changes),
+    mark: typed === ">" ? "dotted-short" : "short-dotted",
+    count: pairs.length,
     removed,
   };
 }

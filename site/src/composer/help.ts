@@ -1,5 +1,5 @@
 import "./help.css";
-import { shortcutLabel } from "./menus";
+import { isApple, shortcutLabel } from "./menus";
 
 export const SHORTCUTS: [string, string][] = [
   ["Play or pause", "Mod Enter"],
@@ -90,6 +90,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
       ['"^2nd time p"A', "a dynamic for the 2nd time through; playback follows it"],
       [".A  !>!A  !tenuto!A", "staccato, accent, tenuto"],
       [". ~ (", "select notes and type . ~ ( to mark them all; again to remove"],
+      ["> <", "select notes and type > or < : each pair dotted-short or short-dotted"],
       ["~A  !trill!A  !fermata!A", "roll, trill, pause"],
     ],
     note: "Type ! for the full list.",
@@ -103,6 +104,12 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
   {
     title: "Selecting music in the score",
     rows: [
+      [`${isApple ? "⌘" : "Ctrl"} click`, "add a note to the selection, or take it out"],
+      [`${isApple ? "⌘" : "Ctrl"} drag`, "add another region: one selection in several places"],
+      [
+        `${isApple ? "⌘" : "Ctrl"} arrows, ${isApple ? "⌘" : "Ctrl+"}Space`,
+        "move a cursor in the score, and put its note in or out",
+      ],
       ["Click a note", "selects its text"],
       ["Drag", "a time region: one staff selects its voice"],
       ["Drag across staves", "the same span in every voice"],

@@ -1,0 +1,146 @@
+/* Play › MIDI keyboard…: a panel over the score's bottom right, the text and caret in view. */
+.midi-panel {
+  position: fixed;
+  z-index: 25;
+  right: 16px;
+  bottom: 100px;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #18202c24, 0 2px 4px #18202c0a;
+  font-size: 13.5px;
+}
+.midi-panel:focus {
+  outline: none;
+}
+.midi-panel:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.midi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.midi-head h2 {
+  margin: 0;
+  font: 600 16px / 1.2 var(--story, Georgia, serif);
+}
+.midi-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  min-height: 32px;
+}
+.midi-unsupported {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+.midi-field {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.midi-panel select {
+  min-height: 32px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.midi-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.midi-meter {
+  min-width: 7em;
+  font: 600 15px / 1.3 "Composer Mono", ui-monospace, monospace;
+}
+.midi-level-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hover);
+  overflow: hidden;
+}
+.midi-level {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.08s;
+}
+.midi-modes {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.midi-modes legend,
+.midi-label {
+  margin: 0 0 2px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.midi-modes label {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.midi-lengths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.midi-panel button:not(.midi-close) {
+  min-height: 30px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+}
+.midi-panel button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+}
+.midi-rest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.midi-note {
+  margin: 0;
+}
+.midi-note,
+.midi-status {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.midi-status {
+  margin: 0;
+  min-height: 1.3em;
+}
+@media (max-width: 760px) {
+  .midi-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+}

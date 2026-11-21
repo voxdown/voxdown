@@ -146,6 +146,15 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
     note: "Grace notes, ornaments, ties, broken rhythm and bar lines don't get in the way. Choose contour for a tune half remembered, Same rhythm to match lengths too, and search this tune, the file, or every draft in this browser. A MIDI keyboard can play the melody in.",
   },
   {
+    title: "A MIDI keyboard",
+    rows: [
+      ["Play › MIDI keyboard…", "pick the keyboard; hear it, or write at the caret"],
+      ["1 – 6  .", "in the panel: 32nd to whole, and dotted"],
+      ["Pedal", "a rest (or a key you choose)"],
+    ],
+    note: "Step entry spells notes for the key and the bar, writes chords as [...], puts a bar line in when the bar fills, and follows the voice's clef. Each note is one undo. Web MIDI is in Chrome, Edge and Opera; there is no recording in time yet.",
+  },
+  {
     title: "Tune book",
     rows: [
       ["Renumber X:", "1 to n in file order; nothing else changes"],

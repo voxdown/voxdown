@@ -478,8 +478,20 @@ function findMelody(): boolean {
   });
   return true;
 }
-/** The MIDI keyboard, when it is on, for melody search to listen to. */
-const midiKeyboard = async () => null;
+/* Play › MIDI keyboard… (./midi-input): audition and step entry on Web MIDI. */
+const keyboardContext = () => ({
+  view,
+  audition: (pitches: number[], velocity: number) => player.audition(pitches, velocity, 0.8),
+  status: (message: string) => {
+    $("explain").textContent = message;
+  },
+});
+function openMidiKeyboard() {
+  void import("./midi-input").then((module) => module.openKeyboard(keyboardContext()));
+}
+/** The MIDI keyboard, when there is one, for melody search to listen to. */
+const midiKeyboard = () =>
+  import("./midi-input").then((module) => module.keyboardForMelody(keyboardContext()));
 
 /** Find and replace, loading it first if this is the first time. */
 function openFind(): boolean {
@@ -4573,6 +4585,8 @@ const menuDefinitions: Record<string, () => MenuItem[]> = {
       checked: () => prefs.hear,
     },
     { label: "Sound…", run: () => soundPopover($("sound-button")) },
+    "-",
+    { label: "MIDI keyboard…", run: openMidiKeyboard },
   ],
   help: () => [
     { label: "ABC cheat sheet", run: () => sheet.open(), shortcut: "F1" },

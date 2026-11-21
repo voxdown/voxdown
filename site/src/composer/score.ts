@@ -15,17 +15,21 @@ export let loadedPlayOrder: typeof import("./playorder") | null = null;
 /** The key and clef repair for abcjs's reflow (./reflow), loaded with abcjs. */
 let loadedReflow: typeof import("./reflow") | null = null;
 /** Playing a selection (./selection-play), loaded with abcjs. */
-export const loadedSelectionPlay: typeof import("./selection-play") | null = null;
+export let loadedSelectionPlay: typeof import("./selection-play") | null = null;
 /** abcjs is ~500 KB; it loads after the first paint, once there is a tune to draw. */
 export function loadAbcjs(): Promise<Abcjs> {
-  abcjsModule ??= Promise.all([import("abcjs"), import("./playorder"), import("./reflow")]).then(
-    ([module, order, reflow]) => {
-      loadedPlayOrder = order;
-      loadedReflow = reflow;
-      loadedAbcjs = ((module as Any).default ?? module) as Abcjs;
-      return loadedAbcjs;
-    },
-  );
+  abcjsModule ??= Promise.all([
+    import("abcjs"),
+    import("./playorder"),
+    import("./reflow"),
+    import("./selection-play"),
+  ]).then(([module, order, reflow, selectionPlay]) => {
+    loadedPlayOrder = order;
+    loadedReflow = reflow;
+    loadedSelectionPlay = selectionPlay;
+    loadedAbcjs = ((module as Any).default ?? module) as Abcjs;
+    return loadedAbcjs;
+  });
   return abcjsModule;
 }
 

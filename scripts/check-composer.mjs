@@ -5182,6 +5182,10 @@ console.log(
   await across(2);
   await p.keyboard.press("Enter");
   await p.keyboard.press("Control+v");
+  // The voiced paste loads with the first voiced copy; wait for the text to change.
+  await p
+    .waitForFunction((was) => window.composer.view.state.doc.toString() !== was, paste)
+    .catch(() => {});
   assert.equal(
     await docText(p),
     "X:1\nT:Paste\nM:4/4\nL:1/4\n%%score (1 2)\nK:C\nV:1\nc d e f|g a b c'|c d e f|f e d c|]\nV:2\nC D E F|G A B c|C D E F|F E D C|]\n",
@@ -5233,6 +5237,10 @@ console.log(
     if (backwards) await select(from + 5, from);
     else await select(from, from + 5);
     await menu("insert", "Triplet", p);
+    // Triplet, Repeat and Chord symbol load on first use.
+    await p
+      .waitForFunction((was) => window.composer.view.state.doc.toString() !== was, plain)
+      .catch(() => {});
     assert.match(
       await docText(p),
       /\nC \(3d e f g4 \|/,

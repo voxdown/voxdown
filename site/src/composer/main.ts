@@ -325,34 +325,47 @@ function clipboard(kind: "cut" | "copy") {
  * A copy of several voices pasted: each place takes its own voice's part (./paste), in one undo
  * step, or it is refused with the reason in the status line. False when it isn't such a copy.
  */
+/** The voiced paste, loaded with the first copy of several voices (or the first such paste). */
+let paster: typeof import("./paste") | null = null;
+const loadPaster = () =>
+  import("./paste").then((module) => {
+    paster = module;
+    return module;
+  });
 function pasteVoices(target: EditorView, pasted: string): boolean {
   // Told at once (the browser's own paste must be stopped now); worked out when ./paste loads.
   if (!/^V:\s*\S/.test(pasted) || !/\nV:\s*\S/.test(pasted)) return false;
-  void import("./paste").then(({ pasteVoiced, voicedParts }) => {
-    const state = target.state;
-    const parts = voicedParts(pasted);
-    if (!parts) {
-      target.dispatch(state.replaceSelection(pasted), {
-        scrollIntoView: true,
-        userEvent: "input.paste",
-      });
-      return;
-    }
-    const selected = state.selection.ranges.filter((range) => !range.empty);
-    const places = (selected.length ? selected : [state.selection.main]).map((range) => ({
-      from: range.from,
-      to: range.to,
-    }));
-    const plan = pasteVoiced(state.doc.toString(), places, parts);
-    if ("refused" in plan) {
-      sayAboutSelection(plan.refused);
-      notice(plan.refused);
-      return;
-    }
-    target.dispatch({ changes: plan.changes, scrollIntoView: true, userEvent: "input.paste" });
-    notice(plan.message, "success");
-  });
+  if (paster) pasteVoicesWith(paster, target, pasted);
+  else void loadPaster().then((module) => pasteVoicesWith(module, target, pasted));
   return true;
+}
+function pasteVoicesWith(
+  { pasteVoiced, voicedParts }: typeof import("./paste"),
+  target: EditorView,
+  pasted: string,
+) {
+  const state = target.state;
+  const parts = voicedParts(pasted);
+  if (!parts) {
+    target.dispatch(state.replaceSelection(pasted), {
+      scrollIntoView: true,
+      userEvent: "input.paste",
+    });
+    return;
+  }
+  const selected = state.selection.ranges.filter((range) => !range.empty);
+  const places = (selected.length ? selected : [state.selection.main]).map((range) => ({
+    from: range.from,
+    to: range.to,
+  }));
+  const plan = pasteVoiced(state.doc.toString(), places, parts);
+  if ("refused" in plan) {
+    sayAboutSelection(plan.refused);
+    notice(plan.refused);
+    return;
+  }
+  target.dispatch({ changes: plan.changes, scrollIntoView: true, userEvent: "input.paste" });
+  notice(plan.message, "success");
 }
 async function pasteText() {
   view.focus();
@@ -662,6 +675,7 @@ const copyVoices = EditorView.domEventHandlers({
     event.clipboardData.setData("text/plain", text.text);
     event.preventDefault();
     notice(`Copied ${text.voices} voices, each with its V: line.`, "success");
+    if (!paster) void loadPaster();
     return true;
   },
   cut(event, view) {
@@ -674,6 +688,7 @@ const copyVoices = EditorView.domEventHandlers({
       userEvent: "delete.cut",
     });
     notice(`Cut ${text.voices} voices, each copied with its V: line.`, "success");
+    if (!paster) void loadPaster();
     return true;
   },
 });

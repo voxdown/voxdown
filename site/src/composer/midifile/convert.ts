@@ -142,19 +142,35 @@ const fifthsOf = (pc: number) => {
   return fifths > 5 ? fifths - 12 : fifths;
 };
 /** The key whose profile best matches how long each pitch class sounds. */
-export function estimateKey(weights: number[], finalBass = -1): { fifths: number; minor: boolean } {
-  let best = { fifths: 0, minor: false, score: Number.NEGATIVE_INFINITY };
+/** How close (in correlation) the last bar's bass key must be to the best to be chosen. */
+const HOME_MARGIN = 0.05;
+/**
+ * The key whose Krumhansl–Kessler profile best matches how long each pitch class sounds. When the
+ * key whose tonic is the lowest note of the last bar (most music ends at home) scores within a
+ * small margin of the best, it is chosen instead; otherwise the profiles decide alone.
+ */
+export function estimateKey(weights: number[], lastBass = -1): { fifths: number; minor: boolean } {
+  const scores: { fifths: number; minor: boolean; tonic: number; score: number }[] = [];
   for (let tonic = 0; tonic < 12; tonic++) {
     const rotated = weights.map((_, i) => weights[(i + tonic) % 12] as number);
-    // A nudge toward the key whose tonic is the last bass note: most music ends at home.
-    const home = tonic === finalBass ? 0.1 : 0;
-    const major = correlation(rotated, MAJOR_PROFILE) + home;
-    const minor = correlation(rotated, MINOR_PROFILE) + home;
-    if (major > best.score) best = { fifths: fifthsOf(tonic), minor: false, score: major };
-    if (minor > best.score)
-      best = { fifths: fifthsOf((tonic + 3) % 12), minor: true, score: minor };
+    scores.push({
+      fifths: fifthsOf(tonic),
+      minor: false,
+      tonic,
+      score: correlation(rotated, MAJOR_PROFILE),
+    });
+    scores.push({
+      fifths: fifthsOf((tonic + 3) % 12),
+      minor: true,
+      tonic,
+      score: correlation(rotated, MINOR_PROFILE),
+    });
   }
-  return { fifths: best.fifths, minor: best.minor };
+  scores.sort((a, b) => b.score - a.score);
+  const best = scores[0] as (typeof scores)[number];
+  const home = scores.find((each) => each.tonic === lastBass);
+  const chosen = home && best.score - home.score <= HOME_MARGIN ? home : best;
+  return { fifths: chosen.fifths, minor: chosen.minor };
 }
 
 /* Spelling. */
@@ -273,9 +289,97 @@ type Part = {
   drums: boolean;
   notes: Note[];
   voices: Chord[][];
+  /** Each voice's staff: 1, or 2 for a piano's left hand. */
+  staffOf: number[];
+  /** Two staves when both hands were in one track. */
+  staves: number;
   track: number;
   channel: number;
 };
+
+/**
+ * Both hands of a piano in one track, told apart: notes are taken onset by onset, and each goes
+ * to the hand it continues best — nearest to where that hand is heading (its last note moved on by
+ * its last step), less likely while that hand is still holding notes, never stretching a hand
+ * past a tenth, with a slight pull toward middle C; ties go to one note per hand, uncrossed. Notes starting together may go to both hands,
+ * but a hand's notes are only ever chorded with its own. Null when the part's range doesn't span
+ * both clefs (its low 15% below G3 and its high 15% above E4).
+ */
+export function splitHands(notes: Note[]): { right: Note[]; left: Note[] } | null {
+  if (notes.length < 8) return null;
+  const sorted = notes.map((note) => note.pitch).sort((a, b) => a - b);
+  const low = sorted[Math.floor(sorted.length * 0.15)] as number;
+  const high = sorted[Math.floor(sorted.length * 0.85)] as number;
+  if (!(low < 55 && high > 64 && high - low >= 14)) return null;
+  const hands = {
+    right: { notes: [] as Note[], last: high, step: 0, until: -1 },
+    left: { notes: [] as Note[], last: low, step: 0, until: -1 },
+  };
+  const groups = new Map<number, Note[]>();
+  for (const note of notes) {
+    const group = groups.get(note.start) ?? [];
+    group.push(note);
+    groups.set(note.start, group);
+  }
+  const span = (list: Note[]) =>
+    list.length ? maxOf(list.map((n) => n.pitch)) - minOf(list.map((n) => n.pitch)) : 0;
+  for (const [start, group] of [...groups].sort((a, b) => a[0] - b[0])) {
+    group.sort((a, b) => a.pitch - b.pitch);
+    const aim = (hand: typeof hands.right) => hand.last + Math.max(-4, Math.min(4, hand.step));
+    const cost = (right: Note[], left: Note[]) => {
+      let total = 0;
+      for (const note of right)
+        total += Math.abs(note.pitch - aim(hands.right)) + Math.max(0, 57 - note.pitch) * 0.25;
+      for (const note of left)
+        total += Math.abs(note.pitch - aim(hands.left)) + Math.max(0, note.pitch - 64) * 0.25;
+      if (right.length && start < hands.right.until) total += 6;
+      if (left.length && start < hands.left.until) total += 6;
+      total += Math.max(0, span(right) - 16) * 50 + Math.max(0, span(left) - 16) * 50;
+      // Ties break toward a note for each hand, and toward hands that don't cross at one onset.
+      total += Math.max(0, right.length - 1) + Math.max(0, left.length - 1);
+      if (
+        right.length &&
+        left.length &&
+        minOf(right.map((n) => n.pitch)) < maxOf(left.map((n) => n.pitch))
+      )
+        total += 0.5;
+      return total;
+    };
+    let best: { right: Note[]; left: Note[]; cost: number } | null = null;
+    if (group.length <= 10) {
+      for (let mask = 0; mask < 1 << group.length; mask++) {
+        const right = group.filter((_, i) => mask & (1 << i));
+        const left = group.filter((_, i) => !(mask & (1 << i)));
+        const total = cost(right, left);
+        if (!best || total < best.cost) best = { right, left, cost: total };
+      }
+    } else
+      for (let cut = 0; cut <= group.length; cut++) {
+        const left = group.slice(0, cut);
+        const right = group.slice(cut);
+        const total = cost(right, left);
+        if (!best || total < best.cost) best = { right, left, cost: total };
+      }
+    const chosen = best as { right: Note[]; left: Note[] };
+    for (const [name, list] of [
+      ["right", chosen.right],
+      ["left", chosen.left],
+    ] as const) {
+      if (!list.length) continue;
+      const hand = hands[name];
+      const centre = list.reduce((sum, note) => sum + note.pitch, 0) / list.length;
+      hand.step = centre - hand.last;
+      hand.last = centre;
+      hand.until = maxOf(
+        list.map((note) => note.end),
+        hand.until,
+      );
+      hand.notes.push(...list);
+    }
+  }
+  if (!hands.right.notes.length || !hands.left.notes.length) return null;
+  return { right: hands.right.notes, left: hands.left.notes };
+}
 
 /** One piece of a chord or rest as written: start and length in slots. */
 type Piece = { start: number; length: number; tuplet: boolean };
@@ -454,6 +558,7 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
   const plan = chooseGrid(starts, options.grid, compound);
 
   const counts = { cut: 0, trimmed: 0, short: 0 };
+  const pianos: string[] = [];
   const names = new Map<string, number>();
   const parts: Part[] = raw.map((each) => {
     const track = smf.tracks[each.track] as Smf["tracks"][number];
@@ -491,6 +596,8 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
       };
     });
     return {
+      staffOf: [],
+      staves: 1,
       name,
       drums: each.channel === 9,
       notes: quantised,
@@ -499,7 +606,20 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
       channel: each.channel,
     };
   });
-  for (const part of parts) part.voices = voicesOf(part.notes, counts);
+  for (const part of parts) {
+    const hands = part.drums ? null : splitHands(part.notes);
+    if (hands) {
+      const right = voicesOf(hands.right, counts);
+      const left = voicesOf(hands.left, counts);
+      part.voices = [...right, ...left];
+      part.staffOf = [...right.map(() => 1), ...left.map(() => 2)];
+      part.staves = 2;
+      pianos.push(part.name);
+    } else {
+      part.voices = voicesOf(part.notes, counts);
+      part.staffOf = part.voices.map(() => 1);
+    }
+  }
   let end = 0;
   for (const part of parts)
     for (const voice of part.voices) for (const chord of voice) end = Math.max(end, chord.end);
@@ -514,14 +634,15 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
       if (!part.drums)
         for (const note of part.notes)
           weights[note.pitch % 12] = (weights[note.pitch % 12] as number) + (note.end - note.start);
+    // The lowest note of the last bar (in the first meter, or 4/4).
     const pitched = parts.filter((part) => !part.drums).flatMap((part) => part.notes);
-    const lastStart = maxOf(pitched.map((note) => note.start));
-    const finalBass = minOf(
-      pitched.filter((note) => note.start === lastStart).map((note) => note.pitch),
-    );
-    key = estimateKey(weights, finalBass % 12);
+    const barLength = firstMeter ? (firstMeter.num * WHOLE) / firstMeter.den : WHOLE;
+    const lastBar =
+      Math.floor((maxOf(pitched.map((note) => note.end)) - 1) / barLength) * barLength;
+    const lastBass = minOf(pitched.filter((note) => note.end > lastBar).map((note) => note.pitch));
+    key = estimateKey(weights, lastBass % 12);
     notes.push(
-      `The file has no key signature: the key was estimated as ${keyLabel(key.fifths, key.minor)} from how long each note sounds (Krumhansl–Kessler profiles, leaning toward the last bass note).`,
+      `The file has no key signature: the key was estimated as ${keyLabel(key.fifths, key.minor)} from how long each note sounds (Krumhansl–Kessler profiles; when two keys score alike, the one whose tonic is the last bar's lowest note).`,
     );
   }
   if (!firstMeter) notes.push("The file has no time signature: written in 4/4.");
@@ -625,7 +746,11 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
       : `A format ${smf.format} MIDI file: ${plural(tracksWithNotes, "track")} with notes became ${plural(parts.length, "part")}.`,
     `Notes were placed on a grid of ${plan.label}.`,
   );
-  if (voiceCount > parts.length)
+  if (pianos.length)
+    notes.push(
+      `${pianos.join(", ")} ${pianos.length === 1 ? "has" : "have"} both hands in one track: written on two staves, each note given to the hand whose line it continues.`,
+    );
+  if (voiceCount > parts.reduce((sum, part) => sum + part.staves, 0))
     notes.push(
       `Notes that overlap in a part were sorted into voices (${voiceCount} in all): notes that start and end together are a chord, and a chord goes to the first voice free when it starts.`,
     );
@@ -683,11 +808,14 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
     out.push(`<part id="P${index + 1}">`);
     const pitches = part.notes.map((note) => note.pitch);
     const average = pitches.reduce((sum, p) => sum + p, 0) / Math.max(1, pitches.length);
-    const clef = part.drums
-      ? "<clef><sign>percussion</sign></clef>"
-      : average < 60
-        ? "<clef><sign>F</sign><line>4</line></clef>"
-        : "<clef><sign>G</sign><line>2</line></clef>";
+    const clef =
+      part.staves === 2
+        ? '<staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef>'
+        : part.drums
+          ? "<clef><sign>percussion</sign></clef>"
+          : average < 60
+            ? "<clef><sign>F</sign><line>4</line></clef>"
+            : "<clef><sign>G</sign><line>2</line></clef>";
     const partLyrics = lyrics.get(part.name);
     const cursors = part.voices.map(() => 0);
     let previous: Bar | null = null;
@@ -741,10 +869,13 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
         }
         if (at < barEnd)
           spans.push({ start: at, end: barEnd, chord: null, tieIn: false, tieOut: false });
-        const hidden = v > 0;
+        // A staff's first voice shows its rests; the voices sharing it show only their notes.
+        const staff = part.staffOf[v] ?? 1;
+        const hidden = part.staffOf.indexOf(staff) !== v;
+        const onStaff = part.staves === 2 ? `<staff>${staff}</staff>` : "";
         if (spans.length === 1 && !spans[0]?.chord) {
           out.push(
-            `<note${hidden ? ' print-object="no"' : ""}><rest measure="yes"/><duration>${bar.length}</duration><voice>${v + 1}</voice></note>`,
+            `<note${hidden ? ' print-object="no"' : ""}><rest measure="yes"/><duration>${bar.length}</duration><voice>${v + 1}</voice>${onStaff}</note>`,
           );
           return;
         }
@@ -829,6 +960,7 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
               parts.push(
                 "<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>",
               );
+            if (onStaff) parts.push(onStaff);
             if (w.beam && n === 0) parts.push(`<beam number="1">${w.beam}</beam>`);
             const notations: string[] = [];
             if (tieStop) notations.push('<tied type="stop"/>');

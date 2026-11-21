@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
 import { EXAMPLES } from "../src/composer/examples";
@@ -428,6 +429,87 @@ describe("MIDI import: damaged and hostile files", () => {
   it("says plainly when a file has no notes", async () => {
     const empty = smf(0, [track([[0, tempo(120)]])]);
     await expect(readMidiFile(empty, "empty.mid")).rejects.toThrow(/no notes/);
+  });
+});
+
+describe("MIDI import: a piano's two hands in one track", () => {
+  const voiceLines = (text: string) => {
+    const lines = new Map<string, string>();
+    let voice = "";
+    for (const line of text.split("\n")) {
+      const named = /^V:(\S+)$/.exec(line);
+      if (named) voice = named[1] as string;
+      else if (voice && !/^[A-Za-z]:/.test(line))
+        lines.set(voice, `${lines.get(voice) ?? ""}${line}`);
+    }
+    return lines;
+  };
+  it("writes an alberti bass under a melody on two staves (a C major piece, not G)", async () => {
+    const file = new Uint8Array(
+      readFileSync(new URL("./fixtures/midi/piano-one-track.mid", import.meta.url)),
+    );
+    const result = await readMidiFile(file, "piano.mid");
+    expect(result.text).toContain("%%score {1 2}");
+    expect(result.text).toMatch(/^V:1 name="Piano" clef=treble$/m);
+    expect(result.text).toMatch(/^V:2 clef=bass$/m);
+    expect(result.text).toContain("K:C\n");
+    const lines = voiceLines(result.text);
+    expect(lines.get("1")).toMatch(/^e2 g2 \[egc'\]4 \|/);
+    expect(lines.get("2")).toMatch(/^C,G, E,G, C,G, E,G, \|/);
+    expect(result.report.notes.join(" ")).toContain(
+      "Piano has both hands in one track: written on two staves",
+    );
+  });
+  it("keeps block chords in their own hands", async () => {
+    const list: [number, number, number][] = [];
+    const chords = [
+      [72, 76, 79, 48, 55],
+      [74, 77, 81, 50, 57],
+      [71, 74, 79, 43, 55],
+      [72, 76, 79, 48, 55],
+    ];
+    chords.forEach((chord, bar) => {
+      for (const pitch of chord) list.push([bar * 2, 2, pitch]);
+    });
+    const file = smf(0, [
+      track([[0, meter(4, 4)], [0, key(0)], [0, [0xc0, 0]], ...notes(0, list)]),
+    ]);
+    const lines = voiceLines((await readMidiFile(file, "chords.mid")).text);
+    expect(lines.get("1")).toBe("[ceg]4 [dfa]4 | [Bdg]4 [ceg]4 |]");
+    expect(lines.get("2")).toBe("[C,G,]4 [D,A,]4 | [G,,G,]4 [C,G,]4 |]");
+  });
+  it("follows each hand's line when the hands cross", async () => {
+    const right = [79, 76, 72, 69, 65, 62, 59, 55];
+    const left = [43, 47, 50, 53, 57, 60, 64, 67];
+    const file = smf(0, [
+      track([
+        [0, meter(4, 4)],
+        [0, key(0)],
+        ...notes(0, [
+          ...right.map((pitch, at): [number, number, number] => [at, 1, pitch]),
+          ...left.map((pitch, at): [number, number, number] => [at, 1, pitch]),
+        ]),
+      ]),
+    ]);
+    const lines = voiceLines((await readMidiFile(file, "cross.mid")).text);
+    // The right hand comes down below the left as it goes up: each keeps its own line.
+    expect(lines.get("1")).toBe("g e c A | F D B, G, |]");
+    expect(lines.get("2")).toBe("G,, B,, D, F, | A, C E G |]");
+  });
+  it("estimates G major for a G major tune", async () => {
+    const tune = [67, 71, 74, 71, 72, 69, 66, 69, 67, 74, 71, 67];
+    const file = smf(0, [
+      track([
+        [0, meter(4, 4)],
+        ...notes(0, [
+          ...tune.map((pitch, at): [number, number, number] => [at, 1, pitch]),
+          [0, 4, 43],
+          [4, 4, 50],
+          [8, 4, 43],
+        ]),
+      ]),
+    ]);
+    expect((await readMidiFile(file, "g.mid")).text).toContain("K:G\n");
   });
 });
 

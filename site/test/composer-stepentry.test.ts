@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { frac } from "../src/composer/abc";
-import { beatOf, readingAt, stepText } from "../src/composer/stepentry";
+import { beatOf, noteValues, readingAt, stepInsert, stepText } from "../src/composer/stepentry";
 import { indexFile } from "../src/composer/tunes";
 
 /** What step entry writes for each step at the end of a tune, one after another. */
@@ -51,5 +51,85 @@ describe("step entry", () => {
     expect(beatOf("4/4")).toBe(0.25);
     expect(beatOf("6/8")).toBe(0.375);
     expect(beatOf("C|")).toBe(0.5);
+  });
+});
+
+/** Step entry played into a tune, one step after another, as the panel writes them. */
+function play(header: string, played: [number[] | "rest", [number, number]][], music = ""): string {
+  let text = `X:1\nT:Steps\n${header}\n${music}`;
+  for (const [pitches, [num, den]] of played) {
+    const step = stepInsert(text, indexFile(text), text.length, pitches, frac(num, den));
+    if (!step) throw new Error("not in music");
+    text += step.insert;
+  }
+  return text.slice(`X:1\nT:Steps\n${header}\n`.length);
+}
+
+describe("step entry across bar lines", () => {
+  it("puts a bar line in when a bar fills, beaming short notes within a beat", () => {
+    expect(
+      play("M:4/4\nL:1/8\nK:D", [
+        [[62], [1, 8]],
+        [[66], [1, 8]],
+        [[69], [1, 8]],
+        [[65], [1, 8]],
+        [
+          [62, 66, 69],
+          [1, 4],
+        ],
+        [[70], [1, 4]],
+        ["rest", [1, 4]],
+      ]),
+    ).toBe("DF A=F [D^FA]2 ^A2 | z2");
+  });
+  it("splits a note that overflows the bar, ties it, and goes on counting", () => {
+    expect(
+      play("M:3/4\nL:1/4\nK:C", [
+        [[60], [1, 2]],
+        [[62], [1, 2]],
+        [[64], [1, 4]],
+        [[65], [1, 4]],
+        [[67], [1, 4]],
+      ]),
+    ).toBe("C2 D- | D E F | G");
+  });
+  it("restates an accidental after the bar line (not within it), and ties a chord", () => {
+    expect(
+      play("M:3/4\nL:1/4\nK:C", [
+        [[66], [1, 2]],
+        [[66], [1, 2]],
+        [
+          [60, 64],
+          [1, 1],
+        ],
+      ]),
+    ).toBe("^F2 F- | ^F [CE]2- | [CE]2");
+  });
+  it("splits a long note over several bars, and a rest without a tie", () => {
+    expect(play("M:2/4\nL:1/8\nK:G", [[[67], [3, 2]]])).toBe("G4- | G4- | G4 |");
+    expect(
+      play("M:3/4\nL:1/4\nK:C", [
+        ["rest", [1, 2]],
+        ["rest", [1, 2]],
+      ]),
+    ).toBe("z2 z | z");
+  });
+  it("closes a bar that is already full before writing", () => {
+    expect(play("M:2/4\nL:1/8\nK:C", [[[72], [1, 8]]], "CDEF")).toBe("CDEF | c");
+  });
+  it("writes no bar lines in the middle of a line, or in free meter", () => {
+    const text = "X:1\nT:Steps\nM:2/4\nL:1/8\nK:C\nCD EF\n";
+    const at = text.indexOf("CD") + 2;
+    expect(stepInsert(text, indexFile(text), at, [64], frac(1, 2))?.insert).toBe(" E4");
+    expect(
+      play("M:none\nL:1/8\nK:C", [
+        [[60], [1, 1]],
+        [[62], [1, 1]],
+      ]),
+    ).toBe("C8 D8");
+  });
+  it("cuts a length into note values", () => {
+    expect(noteValues(frac(5, 8)).map((f) => `${f.num}/${f.den}`)).toEqual(["1/2", "1/8"]);
+    expect(noteValues(frac(3, 4)).map((f) => `${f.num}/${f.den}`)).toEqual(["3/4"]);
   });
 });

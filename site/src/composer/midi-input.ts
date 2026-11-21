@@ -9,19 +9,9 @@
 import "./midi.css";
 import { isolateHistory } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
-import { type Fraction, frac, mul, parseKey, value } from "./abc";
-import { barAt as barInText } from "./barcheck";
-import { barIsFull } from "./helpers";
-import {
-  STEP_LENGTHS,
-  type StepReading,
-  beatOf,
-  pitchText,
-  readingAt,
-  stepText,
-} from "./stepentry";
-import { indexFile, tuneAt } from "./tunes";
-import { tuneItems } from "./walk";
+import { type Fraction, frac, mul, parseKey } from "./abc";
+import { STEP_LENGTHS, type StepReading, pitchText, stepInsert } from "./stepentry";
+import { indexFile } from "./tunes";
 
 export type KeyboardContext = {
   view: EditorView;
@@ -101,36 +91,22 @@ function enter(pitches: number[] | "rest") {
   if (!context) return;
   const { view } = context;
   const text = view.state.doc.toString();
-  const file = indexFile(text);
   const at = view.state.selection.main.head;
-  const reading = readingAt(text, file, at);
-  if (!reading) {
+  const step = stepInsert(text, indexFile(text), at, pitches, length());
+  if (!step) {
     say("Put the caret in a tune's music (after K:) to write there.");
     return;
   }
-  const written = stepText(pitches, length(), reading);
-  // Notes shorter than a beat join (beamed) within a beat; elsewhere a space comes first.
-  const before = at === 0 ? "\n" : (text[at - 1] as string);
-  let gap = /\s/.test(before) ? "" : " ";
-  if (gap && /[A-Ga-gz,'\d/\]]/.test(before) && value(length()) < beatOf(reading.meter)) {
-    const tune = tuneAt(file, at);
-    const bar = tune ? barInText(tuneItems(text, tune, file), at) : null;
-    const filled = bar ? value(bar.filled) : 0;
-    const beat = beatOf(reading.meter);
-    const onBeat = Math.abs(filled / beat - Math.round(filled / beat)) < 1e-6;
-    if (!onBeat) gap = "";
-  }
-  let insert = `${gap}${written}`;
-  const after = `${text.slice(0, at)}${insert}${text.slice(at)}`;
-  if (barIsFull(after, at + insert.length, indexFile(after))) insert += " |";
   view.dispatch({
-    changes: { from: at, insert },
-    selection: { anchor: at + insert.length },
+    changes: { from: at, insert: step.insert },
+    selection: { anchor: at + step.insert.length },
     annotations: isolateHistory.of("full"),
     userEvent: "input.midi",
     scrollIntoView: true,
   });
-  say(`Wrote ${written}${insert.endsWith("|") ? " and a bar line" : ""}.`);
+  say(
+    `Wrote ${step.written}${step.bars ? ` and ${step.bars === 1 ? "a bar line" : `${step.bars} bar lines`}` : ""}.`,
+  );
 }
 
 function meter() {

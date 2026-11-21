@@ -9,18 +9,22 @@ import {
   type Key,
   accidentalText,
   accidentalValue,
+  add,
   defaultUnit,
   formatLength,
   frac,
+  meterLength,
   mul,
   parseKey,
   parseUnit,
   spell,
   staffPlace,
+  value,
   writePitch,
 } from "./abc";
+import { barAt } from "./barcheck";
 import { type FileIndex, tuneAt } from "./tunes";
-import { walkTune } from "./walk";
+import { tuneItems, walkTune } from "./walk";
 
 export type StepReading = {
   key: Key;
@@ -158,3 +162,98 @@ export const STEP_LENGTHS: { key: string; name: string; length: Fraction }[] = [
   { key: "5", name: "Half", length: frac(1, 2) },
   { key: "6", name: "Whole", length: frac(1) },
 ];
+
+const sub = (a: Fraction, b: Fraction) => add(a, frac(-b.num, b.den));
+/** Note values a step can be written as (in whole notes): plain or dotted, a whole down to a 64th. */
+const VALUES = [
+  1.5, 1, 0.75, 0.5, 0.375, 0.25, 0.1875, 0.125, 0.09375, 0.0625, 0.046875, 0.03125, 0.015625,
+];
+/** A length as note values, largest first: 5/8 is a half tied to an eighth. */
+export function noteValues(length: Fraction): Fraction[] {
+  const pieces: Fraction[] = [];
+  let left = length;
+  while (value(left) > 1e-9) {
+    const fits = VALUES.find((each) => each <= value(left) + 1e-9);
+    if (!fits) {
+      pieces.push(left);
+      break;
+    }
+    const piece = frac(Math.round(fits * 256), 256);
+    pieces.push(piece);
+    left = sub(left, piece);
+  }
+  return pieces;
+}
+
+/**
+ * What step entry writes at a place: the note, chord or rest, with a space before it unless it
+ * joins a note shorter than a beat inside the same beat (so they beam). When the caret ends its
+ * line, the bar is counted as the bar check counts it: a step that fills the bar is followed by a
+ * bar line, and one that overflows it is split at the bar line and tied (a rest is split without a
+ * tie), the count starting again in the new bar, where accidentals are written afresh. Null when
+ * the place isn't in a tune's music.
+ */
+export function stepInsert(
+  text: string,
+  file: FileIndex,
+  at: number,
+  pitches: number[] | "rest",
+  length: Fraction,
+): { insert: string; written: string; bars: number } | null {
+  const reading = readingAt(text, file, at);
+  const tune = tuneAt(file, at);
+  if (!reading || !tune) return null;
+  const lineEnd = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+  const atLineEnd = !text.slice(at, lineEnd).trim();
+  // Right after a bar line the new bar is empty (the bar check still counts the closed one).
+  const afterBarLine = /[|:]\]?\s*$/.test(text.slice(tune.bodyFrom, at));
+  const bar = afterBarLine ? null : barAt(tuneItems(text, tune, file), at);
+  const filled = bar?.filled ?? frac(0);
+  const expected = atLineEnd ? meterLength(reading.meter) : null;
+  const beat = beatOf(reading.meter);
+  // A space first, unless this joins a short note in the middle of a beat.
+  const before = at === 0 ? "\n" : (text[at - 1] as string);
+  let gap = /\s/.test(before) ? "" : " ";
+  if (gap && /[A-Ga-gz,'\d/\]]/.test(before) && value(length) < beat) {
+    const onBeat = Math.abs(value(filled) / beat - Math.round(value(filled) / beat)) < 1e-6;
+    if (!onBeat) gap = "";
+  }
+  if (!expected) {
+    const written = stepText(pitches, length, reading);
+    return { insert: `${gap}${written}`, written, bars: 0 };
+  }
+  let room = sub(expected, filled);
+  let out = gap;
+  let bars = 0;
+  const newBar = () => {
+    out += out && !/\s$/.test(out) ? " |" : "|";
+    room = expected;
+    reading.bar = new Map();
+    bars += 1;
+  };
+  // A bar already full (or over) gets its bar line first.
+  if (value(room) <= 1e-9 && value(filled) > 0) {
+    newBar();
+    out += " ";
+  }
+  const rest = pitches === "rest" || !pitches.length;
+  const parts: string[] = [];
+  let left = length;
+  while (value(left) > 1e-9) {
+    const take = value(left) <= value(room) + 1e-9 ? left : room;
+    const pieces = noteValues(take);
+    pieces.forEach((piece, index) => {
+      const last = index === pieces.length - 1 && value(sub(left, take)) <= 1e-9;
+      const written = stepText(pitches, piece, reading);
+      parts.push(written);
+      out += `${index > 0 ? " " : ""}${written}${!rest && !last ? "-" : ""}`;
+    });
+    left = sub(left, take);
+    room = sub(room, take);
+    if (value(room) <= 1e-9) {
+      newBar();
+      if (value(left) > 1e-9) out += " ";
+    }
+  }
+  return { insert: out, written: parts.join(" "), bars };
+}

@@ -57,7 +57,13 @@ const text = (type: number, value: string) => {
 
 export function writeMidi(
   timeline: Timeline,
-  options: { title?: string; tempoFactor?: number; instrument?: InstrumentId } = {},
+  options: {
+    title?: string;
+    tempoFactor?: number;
+    instrument?: InstrumentId;
+    /** The tune's key signature, written as a key-signature meta event. */
+    key?: { fifths: number; minor: boolean } | null;
+  } = {},
 ): Uint8Array {
   const factor = options.tempoFactor ?? 1;
   const beat = timeline.beat > 0 ? timeline.beat : 0.25;
@@ -79,6 +85,21 @@ export function writeMidi(
   const conductor = track([
     { tick: 0, order: 0, bytes: text(0x03, options.title ?? "Composer") },
     ...(meter.length ? [{ tick: 0, order: 1, bytes: meter.slice(1) }] : []),
+    ...(options.key
+      ? [
+          {
+            tick: 0,
+            order: 1,
+            bytes: [
+              0xff,
+              0x59,
+              2,
+              Math.max(-7, Math.min(7, options.key.fifths)) & 255,
+              options.key.minor ? 1 : 0,
+            ],
+          },
+        ]
+      : []),
     {
       tick: 0,
       order: 2,

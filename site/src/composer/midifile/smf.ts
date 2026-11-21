@@ -6,6 +6,8 @@
  * the number of events is capped, so a hostile file can't hold the page.
  */
 
+import { maxOf } from "../extent";
+
 export class MidiFileError extends Error {
   constructor(message: string) {
     super(message);
@@ -38,6 +40,8 @@ export type Smf = {
   tempos: { tick: number; perQuarter: number }[];
   meters: { tick: number; num: number; den: number }[];
   keys: { tick: number; fifths: number; minor: boolean }[];
+  /** Where a file cut short stops: the tick its last track reached, and tracks never begun. */
+  truncated?: { tick: number; tracks: number };
   /** What was read and left out, counted. */
   counts: {
     controllers: number;
@@ -130,11 +134,11 @@ export function parseSmf(input: Uint8Array): Smf {
     const id = ascii(bytes, at);
     const length = view.getUint32(at + 4);
     const start = at + 8;
-    const end = start + length;
-    at = end;
+    at = start + length;
     if (id !== "MTrk") continue; // Unknown chunks are skipped, as the standard says.
-    if (end > bytes.length)
-      throw new MidiFileError("This MIDI file is cut short: a track runs past its end.");
+    // A file cut short: its last track is read as far as it goes.
+    const clipped = at > bytes.length;
+    const end = Math.min(at, bytes.length);
     const track: SmfTrack = { name: "", notes: [], programs: [], lyrics: [] };
     const open = new Map<number, { tick: number; velocity: number }[]>();
     let position = start;
@@ -170,91 +174,102 @@ export function parseSmf(input: Uint8Array): Smf {
       }
       track.notes.push({ tick: first.tick, end: when, pitch, velocity: first.velocity, channel });
     };
-    while (position < end) {
-      if (++events > EVENT_LIMIT)
-        throw new MidiFileError(
-          `This MIDI file has more than ${EVENT_LIMIT.toLocaleString("en")} events, too many to open here.`,
-        );
-      tick += variable();
-      let byte = bytes[position] as number;
-      if (byte & 0x80) {
-        position += 1;
-      } else {
-        // Running status: the data bytes of another message like the last.
-        if (!status)
-          throw new MidiFileError("This MIDI file is damaged: data with no status before it.");
-        byte = status;
-      }
-      if (byte === 0xff) {
-        const type = bytes[position++] as number;
-        const size = variable();
-        if (position + size > end)
-          throw new MidiFileError("This MIDI file is damaged: an event runs past its track.");
-        const body = bytes.subarray(position, position + size);
-        position += size;
-        if (type === 0x2f) break;
-        if (type === 0x03 && !track.name) track.name = textOf(body).trim();
-        else if (type === 0x05) track.lyrics.push({ tick, text: textOf(body) });
-        else if (type === 0x51 && size >= 3)
-          smf.tempos.push({
-            tick,
-            perQuarter:
-              ((body[0] as number) << 16) | ((body[1] as number) << 8) | (body[2] as number),
-          });
-        else if (type === 0x58 && size >= 2)
-          smf.meters.push({ tick, num: body[0] as number, den: 2 ** (body[1] as number) });
-        else if (type === 0x59 && size >= 2)
-          smf.keys.push({ tick, fifths: ((body[0] as number) << 24) >> 24, minor: body[1] === 1 });
-        else if (type === 0x06 || type === 0x07) smf.counts.markers += 1;
-        continue;
-      }
-      if (byte === 0xf0 || byte === 0xf7) {
-        const size = variable();
-        position += size;
-        if (position > end)
+    try {
+      while (position < end) {
+        if (++events > EVENT_LIMIT)
           throw new MidiFileError(
-            "This MIDI file is damaged: a SysEx message runs past its track.",
+            `This MIDI file has more than ${EVENT_LIMIT.toLocaleString("en")} events, too many to open here.`,
           );
-        smf.counts.sysex += 1;
-        continue;
+        tick += variable();
+        let byte = bytes[position] as number;
+        if (byte & 0x80) {
+          position += 1;
+        } else {
+          // Running status: the data bytes of another message like the last.
+          if (!status)
+            throw new MidiFileError("This MIDI file is damaged: data with no status before it.");
+          byte = status;
+        }
+        if (byte === 0xff) {
+          const type = bytes[position++] as number;
+          const size = variable();
+          if (position + size > end)
+            throw new MidiFileError("This MIDI file is damaged: an event runs past its track.");
+          const body = bytes.subarray(position, position + size);
+          position += size;
+          if (type === 0x2f) break;
+          if (type === 0x03 && !track.name) track.name = textOf(body).trim();
+          else if (type === 0x05) track.lyrics.push({ tick, text: textOf(body) });
+          else if (type === 0x51 && size >= 3)
+            smf.tempos.push({
+              tick,
+              perQuarter:
+                ((body[0] as number) << 16) | ((body[1] as number) << 8) | (body[2] as number),
+            });
+          else if (type === 0x58 && size >= 2)
+            smf.meters.push({ tick, num: body[0] as number, den: 2 ** (body[1] as number) });
+          else if (type === 0x59 && size >= 2)
+            smf.keys.push({
+              tick,
+              fifths: ((body[0] as number) << 24) >> 24,
+              minor: body[1] === 1,
+            });
+          else if (type === 0x06 || type === 0x07) smf.counts.markers += 1;
+          continue;
+        }
+        if (byte === 0xf0 || byte === 0xf7) {
+          const size = variable();
+          position += size;
+          if (position > end)
+            throw new MidiFileError(
+              "This MIDI file is damaged: a SysEx message runs past its track.",
+            );
+          smf.counts.sysex += 1;
+          continue;
+        }
+        if (byte >= 0xf0)
+          throw new MidiFileError(
+            "This MIDI file is damaged: it has a system message files can't hold.",
+          );
+        status = byte;
+        const kind = byte & 0xf0;
+        const channel = byte & 0x0f;
+        if (kind === 0x90 || kind === 0x80) {
+          const pitch = data();
+          const velocity = data();
+          if (kind === 0x90 && velocity > 0) {
+            const key = channel * 128 + pitch;
+            const list = open.get(key) ?? [];
+            list.push({ tick, velocity });
+            open.set(key, list);
+          } else close(channel, pitch, tick);
+        } else if (kind === 0xa0) {
+          data();
+          data();
+          smf.counts.aftertouch += 1;
+        } else if (kind === 0xb0) {
+          const controller = data();
+          data();
+          if (controller === 64) smf.counts.pedals += 1;
+          else if (controller < 120) smf.counts.controllers += 1;
+        } else if (kind === 0xc0) {
+          track.programs.push({ tick, channel, program: data() });
+          smf.counts.programs += 1;
+        } else if (kind === 0xd0) {
+          data();
+          smf.counts.aftertouch += 1;
+        } else {
+          data();
+          data();
+          smf.counts.pitchBends += 1;
+        }
       }
-      if (byte >= 0xf0)
-        throw new MidiFileError(
-          "This MIDI file is damaged: it has a system message files can't hold.",
-        );
-      status = byte;
-      const kind = byte & 0xf0;
-      const channel = byte & 0x0f;
-      if (kind === 0x90 || kind === 0x80) {
-        const pitch = data();
-        const velocity = data();
-        if (kind === 0x90 && velocity > 0) {
-          const key = channel * 128 + pitch;
-          const list = open.get(key) ?? [];
-          list.push({ tick, velocity });
-          open.set(key, list);
-        } else close(channel, pitch, tick);
-      } else if (kind === 0xa0) {
-        data();
-        data();
-        smf.counts.aftertouch += 1;
-      } else if (kind === 0xb0) {
-        const controller = data();
-        data();
-        if (controller === 64) smf.counts.pedals += 1;
-        else if (controller < 120) smf.counts.controllers += 1;
-      } else if (kind === 0xc0) {
-        track.programs.push({ tick, channel, program: data() });
-        smf.counts.programs += 1;
-      } else if (kind === 0xd0) {
-        data();
-        smf.counts.aftertouch += 1;
-      } else {
-        data();
-        data();
-        smf.counts.pitchBends += 1;
-      }
+    } catch (error) {
+      // An event cut off by the end of the file: keep what came before it.
+      if (!clipped || !(error instanceof MidiFileError) || /too many/.test(error.message))
+        throw error;
     }
+    if (clipped) smf.truncated = { tick, tracks: trackCount - smf.tracks.length - 1 };
     // Notes still held when the track ends stop there.
     for (const [key, list] of open)
       for (const each of list) {
@@ -273,6 +288,15 @@ export function parseSmf(input: Uint8Array): Smf {
     smf.tracks.push(track);
   }
   if (!smf.tracks.length) throw new MidiFileError("This MIDI file has no tracks.");
+  // Tracks the header promised but the file doesn't hold.
+  if (smf.tracks.length < trackCount && !smf.truncated)
+    smf.truncated = {
+      tick: maxOf(
+        smf.tracks.flatMap((track) => track.notes.map((note) => note.end)),
+        0,
+      ),
+      tracks: trackCount - smf.tracks.length,
+    };
   for (const list of [smf.tempos, smf.meters, smf.keys]) list.sort((a, b) => a.tick - b.tick);
   return smf;
 }

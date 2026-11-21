@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
 import { EXAMPLES } from "../src/composer/examples";
-import { tuneTimeline } from "../src/composer/exports";
+import { midiKey, tuneTimeline } from "../src/composer/exports";
 import { writeMidi } from "../src/composer/midi";
 import { readMidiFile } from "../src/composer/midifile";
 import {
@@ -104,9 +104,15 @@ describe("MIDI import: round trip", () => {
     it(`${example.title} comes back with the same notes and lengths`, async () => {
       const timeline = tuneTimeline(abcjs as never, example.text, true);
       if (!timeline) throw new Error("no timeline");
-      const bytes = writeMidi(timeline, { title: example.title });
+      const key = /^K:(.*)$/m.exec(example.text)?.[1] ?? "C";
+      const bytes = writeMidi(timeline, { title: example.title, key: midiKey(key) });
       const result = await readMidiFile(bytes, example.file.replace(/abc$/, "mid"));
       expect(notesOf(result.text)).toEqual(notesOf(example.text));
+      // The key, meter and tempo come back as written: from the file, not estimated.
+      expect(result.text).toContain(`K:${key}\n`);
+      expect(result.text).toContain(`${/^M:.*$/m.exec(example.text)?.[0]}\n`);
+      expect(result.text).toContain(`${/^Q:.*$/m.exec(example.text)?.[0]}\n`);
+      expect(result.report.notes.join(" ")).not.toMatch(/estimated|no time signature|no tempo/);
     });
 });
 
@@ -388,8 +394,46 @@ describe("MIDI import: damaged and hostile files", () => {
     expect(() => parseSmf(new TextEncoder().encode("X:1\nK:C\nCDE\n"))).toThrow(MidiFileError);
     expect(() => parseSmf(new TextEncoder().encode("X:1\nK:C\nCDE\n"))).toThrow(/not a MIDI file/);
   });
-  it("refuses a file cut short", () => {
-    expect(() => parseSmf(ok.subarray(0, ok.length - 6))).toThrow(/cut short/);
+  it("reads a file cut short as far as it goes, and says where it stops", async () => {
+    const whole = smf(0, [
+      track([
+        [0, meter(4, 4)],
+        [0, key(0)],
+        ...notes(0, [
+          [0, 4, 60],
+          [4, 4, 62],
+          [8, 4, 64],
+          [12, 4, 65],
+        ]),
+      ]),
+    ]);
+    // Cut inside the fourth note's start: the three before it come through whole.
+    const cut = whole.subarray(0, whole.length - 12);
+    expect(parseSmf(cut).truncated).toBeDefined();
+    const result = await readMidiFile(cut, "cut.mid");
+    expect(musicOf(result.text)).toMatch(/^C8 \| D8 \| E8 \|\]/m);
+    expect(result.report.notes[0]).toBe(
+      "The file was cut short: it stops in bar 3, so whatever came after that is missing.",
+    );
+    // Cut before a note's release: it ends where the file does.
+    const held = smf(0, [
+      track([
+        [0, meter(4, 4)],
+        [0, key(0)],
+        ...notes(0, [
+          [0, 2, 60],
+          [2, 6, 62],
+        ]),
+      ]),
+    ]);
+    const cutHeld = held.subarray(0, held.length - 9);
+    const heldResult = await readMidiFile(cutHeld, "held.mid");
+    expect(heldResult.report.notes[0]).toMatch(/1 note still sounding there ends with it\.$/);
+    // A header promising tracks that aren't there.
+    const missing = smf(1, [track([[0, meter(4, 4)]]), track(notes(0, [[0, 4, 60]]))]);
+    missing[11] = 3;
+    const short = await readMidiFile(missing, "short.mid");
+    expect(short.report.notes[0]).toMatch(/1 track the file promised isn't there at all/);
   });
   it("refuses data with no status, and bad data bytes", () => {
     const broken = smf(0, [[...utf("MTrk"), ...u32(4), 0, 0x40, 0x40, 0]]);

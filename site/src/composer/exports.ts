@@ -1,3 +1,4 @@
+import { parseKey } from "./abc";
 /**
  * Exports beyond ABC and MusicXML: a tune as SVG, the whole file as one self-contained HTML tune
  * book, and MIDI or WAV for this tune or every tune (a .zip). Loaded the first time one is used.
@@ -325,6 +326,14 @@ export function tuneTimeline(abcjs: Abcjs, source: string, followJumps: boolean)
   return applyPassDynamics(timeline, marks.rules, marks.written);
 }
 
+/** A tune's K: as a MIDI key signature: its sharps or flats, and minor for minor and Aeolian. */
+export function midiKey(key: string): { fifths: number; minor: boolean } | null {
+  if (!key.trim() || /^none\b/i.test(key.trim())) return null;
+  const parsed = parseKey(key);
+  if (!parsed.tonic) return null;
+  return { fifths: parsed.fifths, minor: ["min", "m", "aeo"].includes(parsed.mode) };
+}
+
 /** A timeline's notes for the HTML book's player: [start s, length s, MIDI pitch, velocity]. */
 export function playerNotes(timeline: Timeline, tempoFactor = 1): number[][] {
   const beat = timeline.beat > 0 ? timeline.beat : 0.25;
@@ -534,6 +543,7 @@ async function runExport(
             title: tuneLabel(tune),
             tempoFactor: context.tempoFactor,
             instrument: context.instrument,
+            key: midiKey(tune.key),
           }),
         });
       else {

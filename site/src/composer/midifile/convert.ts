@@ -784,7 +784,16 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
   add(c.programs, "program changes (the first one names a part with no track name)");
   add(c.sysex, "SysEx messages");
   add(c.markers, "markers and cue points");
-  add(c.unclosed, "notes never released (ended with their track)");
+  if (smf.truncated) {
+    // Said first: it matters most.
+    const slot = toSlots(smf.truncated.tick);
+    const bar = bars.findIndex((each) => slot < each.start + each.length - 1e-6);
+    const where = bar < 0 ? bars.length : bar + 1;
+    const lost = smf.truncated.tracks;
+    notes.unshift(
+      `The file was cut short: it stops in bar ${where}, so whatever came after that is missing${lost > 0 ? `, and ${plural(lost, "track")} the file promised ${lost === 1 ? "isn't" : "aren't"} there at all` : ""}.${c.unclosed ? ` ${plural(c.unclosed, "note")} still sounding there ${c.unclosed === 1 ? "ends" : "end"} with it.` : ""}`,
+    );
+  } else add(c.unclosed, "notes never released (ended with their track)");
   notes.push("Loudness (note velocities) is not written.");
 
   // MusicXML.
@@ -832,7 +841,19 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
         attributes.push(`<time><beats>${bar.num}</beats><beat-type>${bar.den}</beat-type></time>`);
       if (!previous) attributes.push(clef);
       if (attributes.length) out.push(`<attributes>${attributes.join("")}</attributes>`);
-      if (bar.tempo !== undefined && index === 0) out.push(`<sound tempo="${bar.tempo}"/>`);
+      if (bar.tempo !== undefined && index === 0) {
+        // The tempo in the meter's beat: Q:3/8=80 in 6/8, Q:1/2=60 in 2/2.
+        const compound = bar.num % 3 === 0 && bar.num > 3;
+        const unit = compound ? bar.den / 2 : bar.den;
+        const beatWhole = (compound ? 1.5 : 1) / unit;
+        const type = { 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th" }[unit];
+        const perMinute = Math.round((bar.tempo * 0.25) / beatWhole);
+        if (type && perMinute > 0)
+          out.push(
+            `<direction><direction-type><metronome><beat-unit>${type}</beat-unit>${compound ? "<beat-unit-dot/>" : ""}<per-minute>${perMinute}</per-minute></metronome></direction-type><sound tempo="${bar.tempo}"/></direction>`,
+          );
+        else out.push(`<sound tempo="${bar.tempo}"/>`);
+      }
       const spell = spellerFor(bar.fifths, bar.minor);
       const beat =
         bar.den >= 8 && bar.num % 3 === 0 && bar.num > 3 ? (3 * WHOLE) / bar.den : WHOLE / bar.den;

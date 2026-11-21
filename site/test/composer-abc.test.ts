@@ -88,7 +88,8 @@ describe("ABC tokens", () => {
     expect(formatLength(frac(3, 2))).toBe("3/2");
     expect(formatLength(frac(2))).toBe("2");
     expect(meterLength("6/8")).toEqual(frac(3, 4));
-    expect(meterLength("C|")).toEqual(frac(1, 2));
+    // Cut time is 2/2.
+    expect(meterLength("C|")).toEqual(frac(1));
     expect(meterLength("2+3/8")).toEqual(frac(5, 8));
     expect(meterLength("none")).toBeNull();
   });

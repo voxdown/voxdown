@@ -38,6 +38,10 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
   {
     title: "Notes and octaves",
     rows: [
+      [
+        "Typing helpers",
+        "Edit › Typing helpers: a bar line on Space when a bar is full; each letter in the octave nearest the last note (type ' or , to move it)",
+      ],
       ["C, D, … B,", "the octave below middle C"],
       ["C D E F G A B", "from middle C up"],
       ["c d e … b", "an octave higher"],
@@ -107,6 +111,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
     rows: [
       [`${isApple ? "⌘" : "Ctrl"} click`, "add a note to the selection, or take it out"],
       [`${isApple ? "⌘" : "Ctrl"} drag`, "add another region: one selection in several places"],
+      ["Phone: More › Select more", "then taps add notes or take them out, and drags add passages"],
       [
         `${isApple ? "⌘" : "Ctrl"} arrows, ${isApple ? "⌘" : "Ctrl+"}Space`,
         "move a cursor in the score, and put its note in or out",

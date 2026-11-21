@@ -427,34 +427,60 @@ export type MarkResult = {
   /** Notes marked, or for broken rhythm, pairs. */
   count: number;
   removed: boolean;
+  /** Why nothing changed, when the selection is music but the mark cannot apply. */
+  reason?: string;
+  /** For broken rhythm put on: each sign's place (before the edit) and the gap it replaced. */
+  gaps?: { from: number; gap: string }[];
 };
+/** The gap a broken-rhythm sign replaced, by the sign's place, when it is remembered. */
+export type GapAt = (position: number) => string | undefined;
 
 /**
  * Whether every range is music: non-empty, inside a tune's body, on music lines only, and with
  * at least one note or chord. Headers, lyrics, comments, directives and free text are not.
  */
 export function isMusicSelection(text: string, ranges: Range[], file = indexFile(text)): boolean {
-  if (!ranges.length) return false;
+  return musicSelection(text, ranges, file) === "music";
+}
+
+/**
+ * What a selection is, for typed marks: "music" when every range lies on music lines of a tune's
+ * body and at least one range has a note or chord (ranges of rests alone are skipped); "rests"
+ * when it is music but has only rests; null when any of it is not music (headers, lyrics,
+ * comments, directives, free text), which is typed as usual.
+ */
+export function musicSelection(
+  text: string,
+  ranges: Range[],
+  file = indexFile(text),
+): "music" | "rests" | null {
+  if (!ranges.length) return null;
+  let notes = false;
   for (const range of ranges) {
-    if (range.from >= range.to) return false;
+    if (range.from >= range.to) return null;
     const tune = file.tunes.find((each) => range.from >= each.bodyFrom && range.to <= each.to);
-    if (!tune) return false;
+    if (!tune) return null;
     let at = text.lastIndexOf("\n", range.from - 1) + 1;
     while (at < range.to) {
       const end = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
-      if (lineKind(text.slice(at, end), true) !== "music") return false;
+      if (lineKind(text.slice(at, end), true) !== "music") return null;
       at = end + 1;
     }
-    if (!eventsIn(text, [range], file).some((event) => !event.rest)) return false;
+    const events = eventsIn(text, [range], file);
+    if (!events.length) return null;
+    if (events.some((event) => !event.rest)) notes = true;
   }
-  return true;
+  return notes ? "music" : "rests";
 }
 
-/** The bare marks ("." or "~") written before an event, among its decorations and grace notes. */
-function marksBefore(text: string, eventFrom: number, mark: string): number[] {
+/** The same mark written in full: !staccato! for ".", !roll! for "~". */
+const FULL_MARK: Record<string, string> = { ".": "!staccato!", "~": "!roll!" };
+
+/** The marks ("." or "~", or written in full) before an event, among its other decorations. */
+function marksBefore(text: string, eventFrom: number, mark: string): Range[] {
   const lineFrom = text.lastIndexOf("\n", eventFrom - 1) + 1;
   const tokens = tokenizeMusic(text.slice(lineFrom, eventFrom), lineFrom);
-  const found: number[] = [];
+  const found: Range[] = [];
   for (let at = tokens.length - 1; at >= 0; at--) {
     const token = tokens[at] as MusicToken;
     const prefix =
@@ -466,7 +492,8 @@ function marksBefore(text: string, eventFrom: number, mark: string): number[] {
       (token.kind === "note" && token.inGrace) ||
       (token.kind === "slur" && token.text === "(");
     if (!prefix) break;
-    if (token.kind === "decoration" && token.text === mark) found.push(token.from);
+    if (token.kind === "decoration" && (token.text === mark || token.text === FULL_MARK[mark]))
+      found.push({ from: token.from, to: token.to });
   }
   return found;
 }
@@ -483,21 +510,53 @@ export function markSelection(
   ranges: Range[],
   typed: string,
   file = indexFile(text),
+  gapAt: GapAt = () => undefined,
 ): MarkResult | null {
   if (typed !== "." && typed !== "~" && typed !== "(" && typed !== ">" && typed !== "<")
     return null;
-  if (!isMusicSelection(text, ranges, file)) return null;
-  if (typed === ">" || typed === "<") return brokenRhythm(text, ranges, typed, file);
+  const kind = musicSelection(text, ranges, file);
+  if (!kind) return null;
+  const mark =
+    typed === "."
+      ? "staccato"
+      : typed === "~"
+        ? "roll"
+        : typed === "("
+          ? "slur"
+          : typed === ">"
+            ? "dotted-short"
+            : "short-dotted";
+  // Music, but only rests: nothing to mark, and nothing is typed over it either.
+  if (kind === "rests")
+    return {
+      changes: [],
+      mark,
+      count: 0,
+      removed: false,
+      reason:
+        mark === "staccato"
+          ? "Rests can't be staccato: select notes to mark them."
+          : mark === "roll"
+            ? "Rests can't have a roll: select notes to mark them."
+            : mark === "slur"
+              ? "A slur joins notes, and this selection has only rests."
+              : "Broken rhythm needs notes, and this selection has only rests.",
+    };
+  if (typed === ">" || typed === "<") return brokenRhythm(text, ranges, typed, file, gapAt);
   const notes = eventsIn(text, ranges, file).filter((event) => !event.rest);
   if (typed === "(") {
-    const changes = toggleSlur(text, ranges, file);
+    // Ranges of rests alone are left out of the slur.
+    const withNotes = ranges.filter((range) =>
+      eventsIn(text, [range], file).some((event) => !event.rest),
+    );
+    const changes = toggleSlur(text, withNotes, file);
     const removed = changes.some((change) => change.insert === "");
     return { changes, mark: "slur", count: notes.length, removed };
   }
   const existing = notes.map((event) => marksBefore(text, event.from, typed));
   const removed = existing.every((found) => found.length > 0);
   const changes = removed
-    ? existing.flat().map((from) => ({ from, to: from + 1, insert: "" }))
+    ? existing.flat().map((range) => ({ ...range, insert: "" }))
     : notes
         .filter((_, at) => (existing[at] ?? []).length === 0)
         .map((event) => ({ from: event.from, to: event.from, insert: typed }));
@@ -561,6 +620,7 @@ function brokenRhythm(
   ranges: Range[],
   typed: ">" | "<",
   file: FileIndex,
+  gapAt: GapAt,
 ): MarkResult {
   const pairs = notePairs(text, ranges, file).map(([first, second]) => ({
     first,
@@ -568,18 +628,25 @@ function brokenRhythm(
     gap: brokenGap(text, first, second),
   }));
   const removed = pairs.length > 0 && pairs.every((pair) => pair.gap.sign === typed);
-  const changes = pairs
-    .filter((pair) => removed || pair.gap.sign !== typed)
-    .map((pair) => ({
-      from: pair.gap.from,
-      to: pair.gap.to,
-      // Back to a plain space when taken off; the sign joins the two notes when put on.
-      insert: removed ? " " : typed,
-    }));
+  const changing = pairs.filter((pair) => removed || pair.gap.sign !== typed);
+  const changes = changing.map((pair) => ({
+    from: pair.gap.from,
+    to: pair.gap.to,
+    // Taken off, the gap that was there comes back exactly (none when it is not known, so
+    // beamed notes stay beamed); put on, the sign joins the two notes.
+    insert: removed ? (gapAt(pair.gap.from) ?? "") : typed,
+  }));
+  // The gap a new sign replaces is remembered; a sign turned round keeps the one it had.
+  const gaps = removed
+    ? []
+    : changing
+        .filter((pair) => !pair.gap.sign)
+        .map((pair) => ({ from: pair.gap.from, gap: text.slice(pair.gap.from, pair.gap.to) }));
   return {
     changes: merge(changes),
     mark: typed === ">" ? "dotted-short" : "short-dotted",
     count: pairs.length,
     removed,
+    gaps,
   };
 }

@@ -51,27 +51,46 @@ describe("automatic octave", () => {
     const { text, caret, file } = at(body);
     return nearestOctave(text, caret, typed, file);
   };
-  it("takes the octave nearest the note before, in either case", () => {
+  /** Types a phrase letter by letter with the helper, as the editor would. */
+  const phrase = (start: string, letters: string) => {
+    let body = start;
+    for (const letter of letters) body += `${octave(body, letter) ?? letter} `;
+    return body.trim();
+  };
+  it("takes the octave nearest the note before, whatever the case typed", () => {
     expect(octave("B ", "c")).toBe("c");
+    expect(octave("B ", "C")).toBe("c");
     expect(octave("c ", "b")).toBe("B");
-    expect(octave("e ", "a")).toBe("a");
+    expect(octave("c ", "B")).toBe("B");
     expect(octave("a ", "d")).toBe("d'");
     expect(octave("a ", "e")).toBe("e");
-    expect(octave("C ", "a")).toBe("A,");
     expect(octave("C ", "f")).toBe("F");
     expect(octave("g' ", "c")).toBe("c''");
   });
-  it("with Shift, takes the other side", () => {
-    expect(octave("C ", "F")).toBe("F,");
-    expect(octave("C ", "A")).toBe("A");
+  it("keeps a phrase in one octave band, and repeated notes in theirs", () => {
+    expect(phrase("d ", "fedcBAG")).toBe("d f e d c B A G");
+    expect(phrase("d ", "fedcbag")).toBe("d f e d c B A G");
+    expect(phrase("G ", "GGGG")).toBe("G G G G G");
+    expect(phrase("c' ", "cc")).toBe("c' c' c'");
   });
-  it("leaves the first note of a tune alone, and skips rests", () => {
+  it("lets ' and , typed after a note move it, and follows from there", () => {
+    expect(octave("c' ", "d")).toBe("d'");
+    expect(octave("C, ", "D")).toBe("D,");
+  });
+  it("stays within the clef's range, taking the other side at its edges", () => {
+    // Treble: G, to c'''. Below G, the nearest A would leave it, so the A above.
+    expect(octave("C, ", "a")).toBe("A,");
+    expect(octave("c''' ", "e")).toBe("e''");
+    // Bass: C,, to e'.
+    expect(octave("V:1 clef=bass\nC,, ", "a")).toBe("A,,");
+    expect(octave("V:1 clef=bass\nE, ", "c")).toBe("C,");
+  });
+  it("leaves the first note alone, skips rests and grace notes, and follows the voice", () => {
     expect(octave("", "c")).toBeNull();
     expect(octave("c z ", "b")).toBe("B");
-  });
-  it("follows the voice, near the clef's range too", () => {
-    expect(octave("V:1\nc d |\nV:2\nC,, D,, |\nV:1\nc ", "e")).toBe("e");
-    expect(octave("V:1\nc d |\nV:2\nC,, D,, ", "e")).toBe("E,,");
+    expect(octave("c {g'}", "d")).toBe("d");
+    expect(octave("V:1\nc d |\nV:2 clef=bass\nC,, D,, |\nV:1\nc ", "e")).toBe("e");
+    expect(octave("V:1\nc d |\nV:2 clef=bass\nC,, D,, ", "e")).toBe("E,,");
   });
   it("only in music", () => {
     expect(octave('C "', "c")).toBeNull();

@@ -312,7 +312,8 @@ export function meterLength(meter: string): Fraction | null {
   const text = meter.trim().replace(/\s*%.*$/, "");
   if (!text || /^none$/i.test(text)) return null;
   if (text === "C") return frac(1);
-  if (text === "C|") return frac(1, 2);
+  // Cut time is 2/2: a whole note a bar.
+  if (text === "C|") return frac(1);
   const match = /^\(?([0-9+\s]+)\)?\s*\/\s*([0-9]+)/.exec(text);
   if (!match) return null;
   const top = (match[1] as string)

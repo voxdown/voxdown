@@ -2212,9 +2212,15 @@ console.log(
   await page.locator("#notice", { hasText: "the octave nearest the note before" }).waitFor();
   await page.keyboard.press("Control+z");
   assert((await docText()).endsWith("| a"), "undo returns what was typed");
-  // From that a (A5), g is the G just below; Shift takes the G above instead.
-  await page.keyboard.type(" g G");
-  assert((await docText()).endsWith("| a g g'"), `nearest and other side: ${await lastLine()}`);
+  // From that a (A5), g is the G just below, whatever its case; ' moves a note up, and the
+  // next letter follows from there.
+  await page.keyboard.type(" g G c' d");
+  // (c after g is the c' above; the typed ' pushes it to c''; d follows it there.)
+  assert(
+    // (After four quarters the bar helper, also on, writes its bar line.)
+    (await docText()).endsWith("| a g g c'' | d''"),
+    `case ignored, ' kept: ${await lastLine()}`,
+  );
   // Off again, for what follows.
   for (const name of ["Bar line on Space when the bar is full", "Automatic octave"]) {
     await page.locator('[data-menu="edit"]').click();
@@ -2338,6 +2344,218 @@ console.log(
 }
 console.log(
   "Composer: zoom per pane by keys; hits and bands exact at 50%, 100% and 200%; page zoom left alone: passed",
+);
+
+{
+  // Sprint A fixes 1 and 6. Every global shortcut works with the score focused, and undo and
+  // redo too, keeping the score's selection on the same notes.
+  await openExample("Greensleeves");
+  await drawn();
+  const score = page.locator("#score-scroll");
+  const status = () => page.evaluate(() => window.composer.player.status);
+  const focusedScore = () => page.evaluate(() => document.activeElement?.id === "score-scroll");
+  await score.focus();
+  await page.keyboard.press("Control+Enter");
+  await page.waitForFunction(() => window.composer.player.status === "playing");
+  assert(await focusedScore(), "Ctrl Enter plays and the score keeps focus");
+  await page.keyboard.press("Control+Enter");
+  await page.waitForFunction(() => window.composer.player.status === "paused");
+  await page.keyboard.press("Control+Period");
+  await page.waitForFunction(() => window.composer.player.status === "stopped");
+  await page.keyboard.press("Control+Shift+Enter");
+  await page.waitForFunction(() => window.composer.player.status === "playing");
+  await page.keyboard.press("Control+Period");
+  const doc = await docText();
+  const bar = doc.indexOf("e>fe");
+  await page.evaluate(
+    ([from, to]) => window.composer.view.dispatch({ selection: { anchor: from, head: to } }),
+    [bar, bar + 4],
+  );
+  await score.focus();
+  await page.keyboard.press("Control+Alt+Enter");
+  await page.waitForFunction(() => window.composer.state().region);
+  await page.keyboard.press("Control+Period");
+  await page.waitForFunction(() => window.composer.player.status === "stopped");
+  await page.keyboard.press("Control+Shift+L");
+  assert.equal(
+    await page.locator("#loop").getAttribute("aria-pressed"),
+    "true",
+    "Ctrl Shift L loops",
+  );
+  await page.keyboard.press("Control+Shift+L");
+  await page.keyboard.press("Control+Period");
+  assert(await focusedScore(), "the score keeps focus through playback keys");
+  assert.equal(await status(), "stopped");
+  // Transpose, lengths, undo and redo from the score.
+  const chosen = await selectedStarts();
+  await page.keyboard.press("Alt+ArrowUp");
+  assert.notEqual(await docText(), doc, "Alt ↑ transposes from the score");
+  await page.keyboard.press("Control+z");
+  assert.equal(await docText(), doc, "Ctrl Z undoes from the score");
+  assert.deepEqual(await selectedStarts(), chosen, "the selection stays on the same notes");
+  await page.keyboard.press("Control+Shift+z");
+  assert.notEqual(await docText(), doc, "Ctrl Shift Z redoes from the score");
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Alt+BracketRight");
+  assert.notEqual(await docText(), doc, "Alt ] doubles from the score");
+  await page.keyboard.press("Control+z");
+  assert.equal(await docText(), doc);
+  assert(await focusedScore(), "the score keeps focus through editing keys");
+  // F8 goes to the problem; Ctrl F opens Find; Ctrl S reaches the page's save.
+  await page.evaluate((at) => {
+    window.composer.view.dispatch({ changes: { from: at, insert: "c " } });
+  }, doc.indexOf('| "G"d2 B G>AB | "Am"c2 A'));
+  await page.waitForFunction(() => !document.getElementById("problems").hidden);
+  await page.evaluate(() => window.composer.view.dispatch({ selection: { anchor: 0 } }));
+  await score.focus();
+  await page.keyboard.press("F8");
+  await page.waitForFunction(() => window.composer.view.state.selection.main.from > 0);
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: 0 } });
+  });
+  await page.keyboard.press("Control+z");
+  await page.waitForFunction(
+    (original) => window.composer.view.state.doc.toString() === original,
+    doc,
+  );
+  await score.focus();
+  await page.keyboard.press("Control+f");
+  await page.locator(".cm-search").waitFor();
+  await page.keyboard.press("Escape");
+  const reached = await page.evaluate(() => {
+    let seen = false;
+    const spy = (event) => {
+      if (event.key === "s" && event.ctrlKey) {
+        seen = true;
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      }
+    };
+    document.addEventListener("keydown", spy, true);
+    const scroll = document.getElementById("score-scroll");
+    scroll.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }),
+    );
+    document.removeEventListener("keydown", spy, true);
+    return seen;
+  });
+  assert(reached, "Ctrl S from the score reaches the page's keys");
+  // A bare Enter still goes to the text.
+  await score.focus();
+  await page.keyboard.press("Enter");
+  assert(await page.evaluate(() => window.composer.view.hasFocus), "Enter goes to the text");
+}
+console.log(
+  "Composer: from the score, play, from caret, play selection, loop, stop, transpose, lengths, F8, Find, save, undo and redo all work: passed",
+);
+
+{
+  // Sprint A fixes 2. Rests in a selection are skipped, never typed over.
+  await openExample("Frère Jacques");
+  await drawn();
+  const original = await docText();
+  const notes = original.indexOf("!mp!G A B G | G A B");
+  const rests = original.indexOf("z4 | z4 |");
+  const region = [
+    [notes, notes + "!mp!G A B G | G A B".length],
+    [rests, rests + "z4 | z4 |".length],
+  ];
+  const choose = (list) =>
+    page.evaluate((spans) => {
+      const view = window.composer.view;
+      const Selection = view.state.selection.constructor;
+      view.dispatch({
+        selection: Selection.create(spans.map(([anchor, head]) => Selection.range(anchor, head))),
+      });
+    }, list);
+  const explain = () => page.locator("#explain").textContent();
+  // From the score.
+  await choose(region);
+  await page.locator("#score-scroll").focus();
+  await page.keyboard.type(".");
+  let marked = await docText();
+  assert.equal(marked.length, original.length + 7, "seven notes marked from the score");
+  assert(marked.includes("z4 | z4 |"), "the rests are untouched");
+  await page.keyboard.press("Control+z");
+  assert.equal(await docText(), original);
+  // From the text.
+  await page.locator(".cm-content").focus();
+  await choose(region);
+  await page.keyboard.type(".");
+  marked = await docText();
+  assert.equal(
+    marked.length,
+    original.length + 7,
+    "seven notes marked from the text, nothing replaced",
+  );
+  assert(marked.includes("z4 | z4 |"));
+  await page.keyboard.press("Control+z");
+  assert.equal(await docText(), original);
+  // A note and a rest, then >: nothing to pair, said, not typed.
+  await choose([
+    [notes + 4, notes + 5],
+    [rests, rests + 2],
+  ]);
+  await page.keyboard.type(">");
+  assert.equal(await docText(), original, "> with one note changes nothing");
+  assert.match(await explain(), /Broken rhythm needs two notes/);
+  // Rests alone, then .: said why, not typed.
+  await choose([[rests, rests + "z4 | z4 |".length]]);
+  await page.keyboard.type(".");
+  assert.equal(await docText(), original, ". on rests changes nothing");
+  assert.match(await explain(), /Rests can't be staccato/);
+}
+console.log(
+  "Composer: rests in a selection are skipped; music is never typed over by a mark: passed",
+);
+
+{
+  // Sprint A fixes 5 and 7. No ( is paired in music; endings, chords, chord symbols and inline
+  // fields type as written; broken rhythm comes off with the gap it replaced.
+  await page.locator('[data-menu="file"]').click();
+  await page.getByRole("menuitem", { name: "New tune file" }).click();
+  await page.waitForFunction(() => document.getElementById("name").value === "Untitled.abc");
+  await page.locator(".cm-content").focus();
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+  });
+  await page.keyboard.type('(3cde f2 |\n[CEG]2 [K:G] "Am"A2 |[1 A4 :|');
+  await page.keyboard.press("Escape");
+  const lines = (await docText()).trimEnd().split("\n").slice(-2);
+  assert.deepEqual(
+    lines,
+    ["(3cde f2 |", '[CEG]2 [K:G] "Am"A2 |[1 A4 :|'],
+    `typed as written: ${JSON.stringify(lines)}`,
+  );
+  // Broken rhythm on beamed notes, two spaces and a tab: off again restores each gap.
+  const original = await docText();
+  // Pairs AB (no gap), c  d (two spaces) and e	f (a tab).
+  const line = "AB c  d e\tf |";
+  await page.evaluate((text) => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from: view.state.doc.length, insert: `\n${text}\n` } });
+  }, line);
+  const from = (await docText()).lastIndexOf(line);
+  await page.evaluate(
+    ([a, b]) => window.composer.view.dispatch({ selection: { anchor: a, head: b } }),
+    [from, from + line.length - 2],
+  );
+  await page.keyboard.type(">");
+  assert(
+    (await docText()).includes("A>B c>d e>f |"),
+    `dotted-short on each pair: ${JSON.stringify((await docText()).split("\n").slice(-3))} ${await page.locator("#explain").textContent()}`,
+  );
+  await page.keyboard.type(">");
+  assert(
+    (await docText()).includes(line),
+    `the gaps come back: ${(await docText()).split("\n").at(-2)}`,
+  );
+  assert.equal((await docText()).length, original.length + line.length + 2);
+}
+console.log(
+  "Composer: ( is not paired in music; endings and fields type as written; broken rhythm restores its gaps: passed",
 );
 
 const phone = await browser.newContext({
@@ -2532,6 +2750,32 @@ assert.equal(
     "voices from Sound",
   );
   await small.keyboard.press("Escape");
+}
+{
+  // Sprint A fixes 10. On a phone, More › Select more makes taps add notes.
+  await small.locator("#more-tools").click();
+  await small
+    .getByRole("menuitemcheckbox", { name: "Select more" })
+    .or(small.getByRole("menuitem", { name: "Select more" }))
+    .first()
+    .click();
+  const tapped = await small.evaluate(() => window.composer.geometry());
+  const firstLine = Math.min(...tapped.notes.map((note) => note.line));
+  const two = tapped.notes
+    .filter((note) => note.line === firstLine && note.voice === 0)
+    .sort((a, b) => a.time - b.time);
+  await small.evaluate(() => window.composer.view.dispatch({ selection: { anchor: 0 } }));
+  for (const note of [two[0], two[2]]) await small.mouse.click(note.head + 2, note.y);
+  const picked = await small.evaluate(
+    () => window.composer.view.state.selection.ranges.filter((range) => !range.empty).length,
+  );
+  assert.equal(picked, 2, "two taps, two notes selected");
+  await small.locator("#more-tools").click();
+  await small
+    .getByRole("menuitemcheckbox", { name: "Select more" })
+    .or(small.getByRole("menuitem", { name: "Select more" }))
+    .first()
+    .click();
 }
 console.log(
   "Composer: Frère Jacques on a phone pairs its bars; the score header wraps whole: passed",

@@ -241,6 +241,30 @@ export type Marks = {
 };
 export const setMarks = StateEffect.define<Marks>();
 
+/*
+ * The gaps broken-rhythm signs replaced, kept at each sign's place as the text changes, so
+ * taking a sign off restores exactly what was there: none, spaces or a tab.
+ */
+export const rememberGaps = StateEffect.define<{ pos: number; gap: string }[]>();
+export const brokenGapsField = StateField.define<{ pos: number; gap: string }[]>({
+  create: () => [],
+  update(value, transaction) {
+    let next = value;
+    if (transaction.docChanged) {
+      const length = transaction.startState.doc.length;
+      next = next
+        .filter((entry) => entry.pos <= length)
+        .map((entry) => ({ ...entry, pos: transaction.changes.mapPos(entry.pos, 1) }));
+    }
+    for (const effect of transaction.effects)
+      if (effect.is(rememberGaps)) {
+        const places = new Set(effect.value.map((entry) => entry.pos));
+        next = [...next.filter((entry) => !places.has(entry.pos)), ...effect.value];
+      }
+    return next;
+  },
+});
+
 const caretMark = Decoration.mark({ class: "abc-caret-note" });
 const playingMark = Decoration.mark({ class: "abc-playing" });
 const barIssueMark = Decoration.mark({ class: "abc-bar-issue" });
@@ -608,6 +632,22 @@ export type EditorHooks = {
 };
 
 /** The editing state for a text; one per open file, so undo history never crosses files. */
+/** A digit typed into a just-paired "[]" is an ending ("[1"), not a chord: drop the "]". */
+const endingInBrackets = Prec.high(
+  EditorView.inputHandler.of((view, from, to, typed) => {
+    if (!/^[1-9]$/.test(typed) || from !== to) return false;
+    const doc = view.state.doc;
+    if (doc.sliceString(from - 1, from) !== "[" || doc.sliceString(from, from + 1) !== "]")
+      return false;
+    view.dispatch({
+      changes: { from, to: from + 1, insert: typed },
+      selection: { anchor: from + 1 },
+      userEvent: "input.type",
+    });
+    return true;
+  }),
+);
+
 /*
  * Completion, closing brackets and find/replace are not needed to draw the first view: they load
  * just after it (or on the first focus or Find), and join every editor state from then on.
@@ -629,7 +669,11 @@ export function loadEditorExtras(view: EditorView): Promise<EditorExtras> {
     import("@codemirror/search"),
   ]).then(([complete, find]) => {
     extraExtensions = [
+      // [ { and " are paired; ( is not (it starts tuplets and slurs, whose ends come later) and
+      // neither is ', the octave mark.
+      EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["[", "{", '"'] } }]),
       complete.closeBrackets(),
+      endingInBrackets,
       complete.autocompletion({ override: [abcCompletions], icons: false, activateOnTyping: true }),
       find.search({ top: true }),
       // Completion's keys act only while it is open, so they may come first.
@@ -651,6 +695,7 @@ export function editorState(text: string, hooks: EditorHooks): EditorState {
   const extensions: Extension[] = [
     fileIndexField,
     marksField,
+    brokenGapsField,
     lineNumbers(),
     issueGutter,
     highlightActiveLineGutter(),

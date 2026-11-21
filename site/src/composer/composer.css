@@ -940,10 +940,12 @@ body[data-layout="below"] #layout-toggle .beside {
   border-right: 0 !important;
   color: var(--muted) !important;
 }
+/* The gutter grows with the text's zoom, its numbers on the text's baseline. */
 .cm-lineNumbers .cm-gutterElement {
-  font-size: 12px;
+  font-size: calc(12px * var(--editor-zoom, 1));
+  line-height: calc(15px * var(--editor-zoom, 1) * 1.65);
   padding: 0 6px 0 14px !important;
-  min-width: 34px !important;
+  min-width: calc(34px * var(--editor-zoom, 1)) !important;
 }
 .cm-activeLine {
   background: color-mix(in srgb, var(--hover) 55%, transparent) !important;
@@ -1065,13 +1067,14 @@ body[data-layout="below"] #layout-toggle .beside {
   text-underline-offset: 3px;
 }
 .abc-gutter {
-  width: 14px;
+  width: calc(14px * var(--editor-zoom, 1));
 }
 .abc-gutter-mark {
   display: block;
-  width: 7px;
-  height: 7px;
-  margin: 7px auto 0;
+  width: calc(7px * var(--editor-zoom, 1));
+  height: calc(7px * var(--editor-zoom, 1));
+  /* Centred on the first line of its text. */
+  margin: calc((15px * 1.65 - 7px) / 2 * var(--editor-zoom, 1)) auto 0;
   border-radius: 50%;
   background: var(--warn);
   cursor: pointer;

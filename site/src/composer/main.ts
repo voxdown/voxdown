@@ -1,7 +1,7 @@
 import "./composer.css";
 import { isolateHistory, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
 import { EditorSelection, type EditorState, Prec, type TransactionSpec } from "@codemirror/state";
-import { EditorView, type KeyBinding, type ViewUpdate } from "@codemirror/view";
+import { EditorView, type KeyBinding, type ViewUpdate, runScopeHandlers } from "@codemirror/view";
 import { frac, lineKind, parseKey } from "./abc";
 import { barAt as barInText, checkBars, describeBar } from "./barcheck";
 import {
@@ -23,12 +23,14 @@ import {
 import { humanDate } from "./dates";
 import { createDialog, lazyDialog } from "./dialog";
 import {
+  brokenGapsField,
   editorExtras,
   editorState,
   fileIndexField,
   loadEditorExtras,
   onFieldError,
   onIssueGutter,
+  rememberGaps,
   setMarks,
 } from "./editor";
 import { EXAMPLES, NEW_TUNE } from "./examples";
@@ -354,7 +356,8 @@ function applyEditorZoom() {
   $("editor").style.setProperty("--editor-zoom", String(prefs.editorZoom));
   view.requestMeasure();
 }
-let zoomBadgeTimer: ReturnType<typeof setTimeout> | undefined;
+/** Each pane's badge fades on its own clock, so switching panes never leaves one stuck. */
+const zoomBadgeTimers = new Map<Pane, ReturnType<typeof setTimeout>>();
 function setZoom(pane: Pane, value: number) {
   const steps = ZOOMS[pane];
   const level = Math.max(steps[0], Math.min(steps[steps.length - 1] as number, value));
@@ -388,8 +391,11 @@ function showZoom(pane: Pane) {
   badge.textContent = `${pane === "score" ? "Score" : "Text"} ${Math.round(level * 100)}%`;
   badge.hidden = false;
   badge.classList.add("shown");
-  clearTimeout(zoomBadgeTimer);
-  zoomBadgeTimer = setTimeout(() => badge.classList.remove("shown"), 1100);
+  clearTimeout(zoomBadgeTimers.get(pane));
+  zoomBadgeTimers.set(
+    pane,
+    setTimeout(() => badge.classList.remove("shown"), 1100),
+  );
 }
 // Ctrl/⌘ wheel and a pinch on the score zoom it.
 {
@@ -658,7 +664,7 @@ const typingHelpers = Prec.highest(
       lastOctave = { at: from, typed, written };
       helperOnce(
         "vxd-composer-helper-octave",
-        `${typed} became ${written}, the octave nearest the note before (Shift takes the other side). Undo keeps what you typed; Edit › Typing helpers turns this off.`,
+        `${typed} became ${written}, the octave nearest the note before, whatever the case you type. Type ' or , after a note to move it an octave. Undo keeps what you typed; Edit › Typing helpers turns this off.`,
       );
       return true;
     }
@@ -678,14 +684,23 @@ function setHelper(key: "barOnSpace" | "autoOctave", on: boolean) {
 function typeMark(target: EditorView, typed: string): boolean {
   const state = target.state;
   const ranges = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
-  const result = markSelection(state.doc.toString(), ranges, typed, state.field(fileIndexField));
+  const gaps = state.field(brokenGapsField);
+  const result = markSelection(
+    state.doc.toString(),
+    ranges,
+    typed,
+    state.field(fileIndexField),
+    (position) => gaps.find((entry) => entry.pos === position)?.gap,
+  );
   if (!result) return false;
   const broken = result.mark === "dotted-short" || result.mark === "short-dotted";
   if (!result.changes.length) {
-    if (!broken) return false;
-    // One note alone has no partner: say so rather than typing over the music.
+    // Music is never typed over with a mark: say why nothing changed instead.
     sayAboutSelection(
-      "Broken rhythm needs two notes side by side in a bar: select a pair or more.",
+      result.reason ??
+        (broken
+          ? "Broken rhythm needs two notes side by side in a bar: select a pair or more."
+          : `Nothing to mark here: select notes for the ${MARK_NAMES[result.mark].toLowerCase()}.`),
     );
     return true;
   }
@@ -697,7 +712,15 @@ function typeMark(target: EditorView, typed: string): boolean {
     ),
     state.selection.mainIndex,
   );
-  target.dispatch({ changes, selection, userEvent: "input.mark", scrollIntoView: true });
+  target.dispatch({
+    changes,
+    selection,
+    userEvent: "input.mark",
+    scrollIntoView: true,
+    effects: rememberGaps.of(
+      (result.gaps ?? []).map((entry) => ({ pos: changes.mapPos(entry.from, -1), gap: entry.gap })),
+    ),
+  });
   const count = broken
     ? `${result.count} ${result.count === 1 ? "pair" : "pairs"}`
     : `${result.count} ${result.count === 1 ? "note" : "notes"}`;
@@ -1595,8 +1618,20 @@ type Drag = {
 let drag: Drag | null = null;
 
 /* A selection in several places: Ctrl/⌘ click toggles a note, Ctrl/⌘ drag adds a region. */
+/** Phones have no Ctrl or ⌘: "Select more" (in More) makes every tap and drag add instead. */
+let selectMore = false;
 const addsToSelection = (event: MouseEvent | KeyboardEvent) =>
-  isApple ? event.metaKey : event.ctrlKey;
+  (isApple ? event.metaKey : event.ctrlKey) || (selectMore && event instanceof MouseEvent);
+function setSelectMore(on: boolean) {
+  selectMore = on;
+  scoreScroll.classList.toggle("select-more", on);
+  notice(
+    on
+      ? "Select more: tap notes to add them or take them out, or drag to add a passage. Turn it off in More."
+      : "Select more is off: a tap selects one note again.",
+    "info",
+  );
+}
 /** Ranges sorted and joined where they overlap or touch (only spaces between them). */
 function mergeRanges(list: Range[]): Range[] {
   const doc = text();
@@ -1856,24 +1891,35 @@ scoreScroll.addEventListener("pointercancel", endDrag);
 function selectionWhere(): string {
   const selected = ranges().filter((range) => range.to > range.from);
   if (selected.length < 2) return "";
-  const spans: { from: number; to: number }[] = [];
-  for (const range of selected) {
-    const notes = scoreIndex ? notesInRanges(scoreIndex, [range]) : [];
-    if (!notes.length) continue;
-    spans.push({
-      from: Math.min(...notes.map((note) => note.time)),
-      to: Math.max(...notes.map((note) => note.time + note.duration)),
-    });
+  if (!scoreIndex) return ` in ${selected.length} places`;
+  // Runs of selected notes in each voice, joined across voices where they overlap in time:
+  // a count that depends on the notes chosen, not on how the text ranges happen to fall.
+  const chosen = new Set(notesInRanges(scoreIndex, selected));
+  const stretches: { from: number; to: number }[] = [];
+  const voices = new Set<number>();
+  for (const voiceNotes of scoreIndex.byVoice) {
+    let run: { from: number; to: number } | null = null;
+    for (const note of voiceNotes) {
+      if (!chosen.has(note)) {
+        run = null;
+        continue;
+      }
+      voices.add(note.voice);
+      if (!run) {
+        run = { from: note.time, to: note.time + note.duration };
+        stretches.push(run);
+      } else run.to = Math.max(run.to, note.time + note.duration);
+    }
   }
-  if (!spans.length) return ` in ${selected.length} places`;
-  spans.sort((a, b) => a.from - b.from);
+  stretches.sort((a, b) => a.from - b.from);
   let places = 0;
   let end = Number.NEGATIVE_INFINITY;
-  for (const span of spans) {
-    if (span.from >= end - 1e-6) places += 1;
-    end = Math.max(end, span.to);
+  for (const stretch of stretches) {
+    if (stretch.from >= end - 1e-6) places += 1;
+    end = Math.max(end, stretch.to);
   }
-  return places > 1 ? ` in ${places} places` : ` in ${selected.length} voices`;
+  if (places > 1) return ` in ${places} places`;
+  return voices.size > 1 ? ` in ${voices.size} voices` : "";
 }
 
 /** Says what the score's keyboard moved to: the note, its bar and voice, or the selection. */
@@ -2011,6 +2057,27 @@ scoreScroll.addEventListener("keydown", (event) => {
       return;
     }
   }
+  // Keys with Ctrl/⌘ or Alt (and F8) mean in the score what they mean in the text: play, loop,
+  // stop, transpose, lengths, ties, undo and redo, Find… The text's own keymap runs them; keys
+  // that would delete text are not passed on.
+  const modified = event.altKey || event.ctrlKey || event.metaKey || /^F\d+$/.test(event.key);
+  if (modified && !["Backspace", "Delete"].includes(event.key)) {
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      ["c", "x"].includes(event.key.toLowerCase())
+    ) {
+      event.preventDefault();
+      clipboard(event.key.toLowerCase() === "x" ? "cut" : "copy");
+      return;
+    }
+    if (runScopeHandlers(view, event, "editor")) {
+      event.preventDefault();
+      event.stopPropagation();
+      announceScore();
+      return;
+    }
+  }
   if (["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key))
     showCursor(null);
   if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
@@ -2029,7 +2096,8 @@ scoreScroll.addEventListener("keydown", (event) => {
   } else if (event.key === " ") {
     event.preventDefault();
     togglePlay();
-  } else if (event.key === "Enter") {
+  } else if (event.key === "Enter" && !modified && !event.shiftKey) {
+    // A bare Enter goes to the text; with modifiers it was handled above.
     event.preventDefault();
     view.focus();
   } else if (event.key === "Escape") {
@@ -4568,6 +4636,7 @@ for (const element of document.querySelectorAll<HTMLElement>("[title]")) {
 $("more-tools").addEventListener("click", (event) =>
   popupMenu(event.currentTarget as HTMLElement, [
     { label: "Play the selection", run: () => void playSelection(false) },
+    { label: "Select more", run: () => setSelectMore(!selectMore), checked: () => selectMore },
     "-",
     { label: "Halve lengths", run: () => music("halve") },
     { label: "Double lengths", run: () => music("double") },

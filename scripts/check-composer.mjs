@@ -4117,6 +4117,313 @@ console.log(
   );
 }
 
+/* 26. Sprint D fixes, 6–13: the start screen, step entry's caret, docked panels, melody search. */
+{
+  const overlaps = (a, b) =>
+    a &&
+    b &&
+    a.x < b.x + b.width &&
+    b.x < a.x + a.width &&
+    a.y < b.y + b.height &&
+    b.y < a.y + a.height;
+  const fresh = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  watch(fresh);
+  await fresh.addInitScript(() => {
+    const input = {
+      id: "k",
+      name: "Fake Keys 49",
+      type: "input",
+      state: "connected",
+      onmidimessage: null,
+    };
+    const access = { inputs: new Map([["k", input]]), outputs: new Map(), onstatechange: null };
+    navigator.requestMIDIAccess = async () => access;
+    const send = (bytes) => input.onmidimessage?.({ data: new Uint8Array(bytes) });
+    window.__midi = {
+      play: (notes) => {
+        for (const note of notes) send([0x90, note, 90]);
+        for (const note of notes) send([0x80, note, 0]);
+      },
+      unplug: () => {
+        access.inputs.delete("k");
+        input.state = "disconnected";
+        access.onstatechange?.({ port: input });
+      },
+      plug: () => {
+        access.inputs.set("k", input);
+        input.state = "connected";
+        access.onstatechange?.({ port: input });
+      },
+    };
+  });
+  const p = await fresh.newPage();
+  await p.goto(url);
+  // 6. The start screen: Tab never reaches the editor behind it, and typing changes nothing.
+  await p.getByRole("heading", { name: /Write music/ }).waitFor();
+  assert.equal(
+    await p.locator("#writing").getAttribute("inert"),
+    "",
+    "the text is inert under the start screen",
+  );
+  assert.equal(
+    await p.locator("#writing").getAttribute("aria-hidden"),
+    "true",
+    "and hidden from screen readers",
+  );
+  const startText = await docText(p);
+  for (let index = 0; index < 40; index++) {
+    await p.keyboard.press("Tab");
+    assert(
+      !(await p.evaluate(() =>
+        Boolean(document.activeElement?.closest("#writing, #score-panel, #rail")),
+      )),
+      "Tab never lands in the hidden editor, score or tunes panel",
+    );
+  }
+  await p.keyboard.type("abc");
+  assert.equal(await docText(p), startText, "typing on the start screen edits nothing");
+  await openExample("Ode to Joy", p);
+  assert.equal(
+    await p.locator("#writing").getAttribute("inert"),
+    null,
+    "the text is back in reach",
+  );
+  assert.equal(await p.locator("#writing").getAttribute("aria-hidden"), null);
+  console.log("Composer: the start screen keeps Tab and typing out of the hidden editor: passed");
+
+  // 7 and 10. Step entry: a steady caret and a pill; closing goes back to Hear it.
+  const steps = "X:1\nT:Steps\nM:3/4\nL:1/4\nK:D\n";
+  await p.evaluate((t) => {
+    const view = window.composer.view;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: `${t}\n` },
+      selection: { anchor: t.length },
+    });
+  }, steps);
+  await drawn(p);
+  await menu("play", "MIDI keyboard…", p);
+  await p.locator("#midi-panel").waitFor();
+  assert.equal(await p.locator("#step-pill").count(), 0, "no pill before step entry");
+  await p.getByLabel("Write it at the caret (step entry)").check();
+  await p.locator("#midi-panel").focus();
+  await p.keyboard.press("5");
+  for (const note of [62, 66]) {
+    await p.evaluate((n) => window.__midi.play([n]), note);
+    await settle(40);
+  }
+  assert.equal(
+    (await docText(p)).split("\n")[5],
+    "D2 F- | F",
+    "a half note over the bar line is tied, and the count goes on",
+  );
+  const caret = await p.locator(".cm-step-caret").boundingBox();
+  assert(caret && caret.height > 10, "a caret marks where the next note goes");
+  const lastNote = await p.evaluate(() => {
+    const view = window.composer.view;
+    const rect = view.coordsAtPos(view.state.selection.main.head);
+    return rect ? { x: rect.left, y: rect.top } : null;
+  });
+  assert(
+    Math.abs(caret.x - lastNote.x) < 4 && Math.abs(caret.y - lastNote.y) < 6,
+    "at the caret's place",
+  );
+  assert(await p.locator("#step-pill").isVisible(), "a Step entry pill in the status line");
+  // The score shows the caret's note once it has redrawn.
+  await p.waitForFunction(() => document.querySelectorAll("#score .is-caret").length > 0);
+  // Docked: the panel covers neither the text nor the score.
+  const panelBox = await p.locator("#midi-panel").boundingBox();
+  assert(
+    !overlaps(panelBox, await p.locator("#writing").boundingBox()),
+    "the keyboard panel leaves the text clear",
+  );
+  assert(!overlaps(panelBox, await p.locator("#score-panel").boundingBox()), "and the score");
+  // No keyboard: only the message and Retry.
+  await p.evaluate(() => window.__midi.unplug());
+  await p.locator(".midi-empty").waitFor();
+  assert(await p.getByRole("button", { name: "Retry" }).isVisible(), "Retry is offered");
+  assert(!(await p.locator(".midi-body").isVisible()), "and nothing else");
+  await p.evaluate(() => window.__midi.plug());
+  await p.locator(".midi-body").waitFor();
+  await p.locator(".midi-close").click();
+  assert.equal(await p.locator("#step-pill").count(), 0, "closing the panel ends step entry");
+  assert.equal(await p.locator(".cm-step-caret").count(), 0, "and its caret");
+  await menu("play", "MIDI keyboard…", p);
+  assert(await p.getByLabel("Hear it").isChecked(), "it opens again in Hear it");
+  await p.locator(".midi-close").click();
+  console.log(
+    "Composer: step entry shows its caret and a pill, ties over bar lines, and ends when closed: passed",
+  );
+
+  // 8 and 9. Find melody, docked: never over the text or the lit match; ranked and complete.
+  const book =
+    "X:1\nT:The Kesh\nM:6/8\nL:1/8\nK:G\n|:G3 GAB|A3 ABd|edd gdd|edB dBA:|\n\n" +
+    "X:2\nT:Scale\nM:4/4\nL:1/4\nK:C\nV:1\nC D E F | G A B c |\nV:2\nC D E F | G A B c |\n\n" +
+    "X:3\nT:Up a tone\nM:6/8\nL:1/8\nK:A\n|:A3 ABc|B3 Bce|fee aee|fec ecB:|\n";
+  await p.evaluate((t) => {
+    const view = window.composer.view;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: t },
+      selection: { anchor: 40 },
+    });
+  }, book);
+  await drawn(p);
+  await p.locator(".cm-content").focus();
+  await p.keyboard.press("Control+Shift+M");
+  await p.locator("#melody-query").fill("G3 GAB A3 ABd");
+  await p.waitForFunction(() =>
+    /2 matches/.test(document.querySelector(".melody-count")?.textContent ?? ""),
+  );
+  await p.locator(".melody-result").nth(1).click();
+  await p.waitForFunction(() => document.querySelectorAll("#score .is-selected").length >= 8);
+  const melodyBox = await p.locator("#melody-panel").boundingBox();
+  const lit = await p.evaluate(() =>
+    [...document.querySelectorAll("#score .is-selected")].map((element) => {
+      const box = element.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    }),
+  );
+  assert(
+    lit.every((box) => !overlaps(melodyBox, box)),
+    "the panel never covers the lit match in the score",
+  );
+  const frame = await p.locator("#score-panel").boundingBox();
+  assert(
+    lit.every((box) => box.y >= frame.y && box.y + box.height <= frame.y + frame.height),
+    "the match is in view",
+  );
+  const marked = await p.evaluate(() =>
+    [...document.querySelectorAll(".cm-selectionBackground")].map((element) => {
+      const box = element.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    }),
+  );
+  assert(
+    marked.length && marked.every((box) => !overlaps(melodyBox, box)),
+    "nor the match in the text",
+  );
+  // Overlapping matches, unnamed voices, and the hint as the options change.
+  await p.locator("#melody-mode").selectOption("contour");
+  await p.locator("#melody-query").fill("C D E");
+  await p.waitForFunction(() =>
+    /18 matches/.test(document.querySelector(".melody-count")?.textContent ?? ""),
+  );
+  const where = await p.locator(".melody-result .melody-where").allInnerTexts();
+  // Each voice of the scale goes up twice running six times over: every one is found.
+  assert.equal(
+    where.filter((each) => each.startsWith("Scale · V:1")).length,
+    6,
+    "overlapping matches",
+  );
+  assert.equal(where.filter((each) => each.startsWith("Scale · V:2")).length, 6, "in each voice");
+  assert(where.includes("Scale · V:2 · bar 1"), "a voice with no name is called V:2");
+  assert.match(await p.locator("#melody-reading").innerText(), /only the ups and downs count\.$/);
+  await p.locator("#melody-mode").selectOption("intervals");
+  await p.locator("#melody-rhythm").check();
+  await p.waitForFunction(() =>
+    /same relative lengths/.test(document.getElementById("melody-reading")?.textContent ?? ""),
+  );
+  await p.locator("#melody-rhythm").uncheck();
+  // Matches that needed repeated notes folded say so (the Kesh has two G's, the query three);
+  // the query is read in the key of the tune the caret is in: the Kesh's G major.
+  await p.evaluate(() => window.composer.view.dispatch({ selection: { anchor: 40 } }));
+  await p.locator("#melody-query").fill("GGGAB AAABd");
+  await p.waitForFunction(() => {
+    const rows = [...document.querySelectorAll(".melody-where")].map((row) => row.textContent);
+    return rows.length === 2 && rows[0].startsWith("The Kesh");
+  });
+  assert.equal(
+    await p.locator(".melody-folded").count(),
+    2,
+    "matches that needed repeats folded say so",
+  );
+  // Tab stays in the panel; Escape closes it and gives focus back to the text.
+  await p.locator("#melody-query").focus();
+  for (let index = 0; index < 30; index++) {
+    await p.keyboard.press("Tab");
+    assert(
+      await p.evaluate(() =>
+        document.getElementById("melody-panel").contains(document.activeElement),
+      ),
+      "Tab stays in the panel",
+    );
+  }
+  await p.keyboard.press("Escape");
+  assert.equal(await p.locator("#melody-panel").count(), 0, "Escape closes it");
+  assert(
+    await p.evaluate(() => Boolean(document.activeElement?.closest(".cm-editor"))),
+    "focus is back in the text",
+  );
+  await fresh.close();
+
+  // On a phone: a chosen result folds the panel to one line, and the match is in view above it.
+  const pocket = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  watch(pocket);
+  const q = await pocket.newPage();
+  await q.goto(url);
+  await q.getByRole("button", { name: "Ode to Joy" }).click();
+  await drawn(q);
+  await q.evaluate((t) => {
+    const view = window.composer.view;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: t },
+      selection: { anchor: 40 },
+    });
+  }, book);
+  await drawn(q);
+  await q.locator("#show-score").click();
+  await q.locator('[data-menu="edit"]').click();
+  await q.getByRole("menuitem", { name: "Find melody…" }).click();
+  await q.locator("#melody-query").fill("G3 GAB A3 ABd");
+  await q.waitForFunction(() => document.querySelectorAll(".melody-result").length === 2);
+  await q.locator(".melody-result").nth(1).click();
+  await q.locator(".melody-bar").waitFor();
+  assert.equal(
+    await q.locator(".melody-bar-count").innerText(),
+    "2 of 2",
+    "one line: where we are",
+  );
+  const bar = await q.locator("#melody-panel").boundingBox();
+  assert(bar.height <= 60, `the panel folds to one line (${bar.height} px)`);
+  await q.waitForFunction(() => document.querySelectorAll("#score .is-selected").length >= 8);
+  const shown = await q.evaluate(() =>
+    [...document.querySelectorAll("#score .is-selected")].map(
+      (element) => element.getBoundingClientRect().bottom,
+    ),
+  );
+  assert(shown.length && shown.every((bottom) => bottom < bar.y), "the match shows above it");
+  await q.getByRole("button", { name: "Next match" }).click();
+  assert.equal(await q.locator(".melody-bar-count").innerText(), "1 of 2", "› steps to the next");
+  await q.locator(".melody-bar").getByRole("button", { name: "Close" }).click();
+  // 13. The status line folds away on a phone (about 40 px back), stays folded, and comes back.
+  await q.evaluate(() => window.composer.view.dispatch({ selection: { anchor: 33 } }));
+  await settle(300);
+  const lineHeight = (await q.locator("#app > footer").boundingBox()).height;
+  const transportTop = async () => (await q.locator("#transport").boundingBox()).y;
+  const transportBefore = await transportTop();
+  await q.locator("#explain-toggle").click();
+  assert(!(await q.locator("#app > footer").isVisible()), "folded, the status line is gone");
+  const gained = (await transportTop()) - before;
+  assert(
+    gained >= Math.min(open, 36) - 1,
+    `folding gives ${gained} px back (the line was ${open} px)`,
+  );
+  await q.reload();
+  await drawn(q);
+  assert(!(await q.locator("#app > footer").isVisible()), "folded after a reload");
+  await q.locator("#more-menus").click();
+  await q.locator(".workspace-dropdown").getByRole("menuitem", { name: "View" }).click();
+  await q.getByRole("menuitemcheckbox", { name: "Status line" }).click();
+  assert(await q.locator("#app > footer").isVisible(), "View › Status line brings it back");
+  await pocket.close();
+  console.log(
+    "Composer: Find melody docked clear of the match, overlapping, ranked, trapped focus; a one-line bar and a folding status line on a phone: passed",
+  );
+}
+
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");
 console.log("Composer: no console errors and no requests leaving the site: passed");

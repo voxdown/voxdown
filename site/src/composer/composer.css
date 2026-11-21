@@ -2741,8 +2741,11 @@ dialog.composer-dialog[open]::backdrop {
   outline-offset: 2px;
 }
 
-/* The status line's fold on a phone: a small Hide button; folded, only "Show notes" is left. */
+/* The status line can be folded away (View › Status line, or Hide on a phone), remembered. */
 .explain-toggle {
+  display: none;
+}
+body.explain-hidden #app > footer {
   display: none;
 }
 @media (max-width: 760px) {
@@ -2757,16 +2760,5 @@ dialog.composer-dialog[open]::backdrop {
     background: transparent;
     color: var(--muted);
     font-size: 12px;
-  }
-  body.explain-hidden #app > footer {
-    min-height: 0;
-    padding-block: 2px;
-    justify-content: flex-end;
-  }
-  body.explain-hidden #app > footer > :not(.explain-toggle):not(.problems) {
-    display: none;
-  }
-  body.explain-hidden .explain-toggle {
-    min-height: 22px;
   }
 }

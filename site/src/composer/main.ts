@@ -3316,17 +3316,17 @@ $("explain").addEventListener("click", () => $("explain").classList.toggle("open
 /* On a phone the status line can fold away (remembered), giving the text its room back. */
 function showExplain(hidden: boolean) {
   body.classList.toggle("explain-hidden", hidden);
-  const toggle = $("explain-toggle");
-  toggle.setAttribute("aria-expanded", String(!hidden));
-  toggle.textContent = hidden ? "Show notes" : "Hide";
-  toggle.title = hidden ? "Show the explanations under the transport" : "Hide the explanations";
+  $("explain-toggle").setAttribute("aria-expanded", String(!hidden));
 }
-showExplain(prefs.explainHidden);
-$("explain-toggle").addEventListener("click", () => {
+function toggleExplain() {
   prefs.explainHidden = !prefs.explainHidden;
   savePrefs();
   showExplain(prefs.explainHidden);
-});
+  if (prefs.explainHidden)
+    notice("The status line is folded away. View › Status line brings it back.");
+}
+showExplain(prefs.explainHidden);
+$("explain-toggle").addEventListener("click", toggleExplain);
 
 /** " Bar 3, voice First." for the note at a position, when the score knows it. */
 function placeOf(position: number): string {
@@ -4368,6 +4368,7 @@ const menuDefinitions: Record<string, () => MenuItem[]> = {
       checked: () => body.classList.contains("focus-mode"),
       shortcut: "Mod Shift F",
     },
+    { label: "Status line", run: toggleExplain, checked: () => !prefs.explainHidden },
     {
       label: "Score in Focus",
       run: () => {

@@ -646,3 +646,134 @@ Chromium:
   about 1.6 s.
 - **The reviewer's 8-part score** (13.3 MB, 1,000 bars): converted in 1.7 s, report painted at
   1.7 s (it was 7.5 s), drawn and timed behind it by 7.5 s.
+
+## Sprint C: tune books, exports, and the play order
+
+Every command that changes the text is one undo step of its own (`isolateHistory`), never
+automatic, and touches only the text it is asked to change. Saving stays byte-faithful. The new
+code loads on first use:
+- the play order (5 KB) loads with abcjs;
+- the tune-book commands (9 KB), the exports (15 KB) and the MIDI writer load when used.
+
+The first view is 719 KB, under its 720 KB check. To make room, the MusicXML import report and
+MusicXML export moved into the MusicXML module.
+
+### 1. The play order: D.C., D.S., Fine and Coda
+
+abcjs plays repeats and endings but ignores jumps, so Composer works out the order itself
+(`playorder.ts`, pure, with unit tests).
+
+- **What it reads.** The first voice's bars give the bars, repeats and endings; the jump marks
+  come from every voice. Marks may be decorations or words:
+  - decorations: `!segno!`, `!coda!`, `!fine!`, `!dacoda!`, `!D.C.!`, `!D.S.!`, `!D.C.alfine!`,
+    `!D.C.alcoda!`, `!D.S.alfine!`, `!D.S.alcoda!`;
+  - words: "D.C.", "Da Capo", "D.S.", "Dal Segno", with "al Fine" or "al Coda", "Fine", "To Coda",
+    "Coda".
+- **Repeats are played as abcjs plays them.** A unit test checks this against abcjs's own
+  expansion on ten repeat forms:
+  - `:|` goes back to the last `|:` or `::`, else to just after the last `:|`, else to the start;
+  - a section with endings is played as many times as its highest ending number, taking the
+    ending with each pass's number;
+  - a second ending runs on, as abcjs draws it, until a double, thick or repeat bar.
+- **The jump.** D.C. goes back to the start and D.S. to `!segno!`. Either happens at the end of
+  the bar that carries it, once that bar's own repeat is played out.
+- **On the return,** repeats are not played again, and each run of endings takes its last ending.
+- **Where the return ends:**
+  - al Fine stops at the end of the bar with Fine;
+  - a plain D.C. or D.S. does the same when the tune has a Fine, and otherwise plays to the end;
+  - al Coda leaves at the end of the bar with "To Coda" (`!dacoda!`, or the first `!coda!` when
+    there is no "To Coda") and goes on from the next `!coda!`.
+- **A mark written on a bar line** (`!segno!|:`) belongs to the bar after it if it is a segno or
+  coda, and to the bar before it otherwise.
+- **The timeline is laid out in this order.** Each written note appears where its stretch is
+  played, and bars and passes are worked out again. The scheduler, the clock, the ruler,
+  follow-along, WAV and MIDI all use it:
+  - the clock says "Bar 5 · D.S." (or D.C.), and "Coda" in the coda;
+  - the ruler draws a band for each.
+
+  MIDI is now written from this timeline by Composer's own writer (`midi.ts`), not abcjs's: type
+  1, a track per voice, per-pass dynamics in the velocities.
+- **Play › Follow D.C./D.S. jumps** is on by default. Off, the music is played as written, for
+  practising sections.
+- **Tested forms:** D.C. al Fine (decoration and words), D.S. al Fine, D.S. al Coda (with "To
+  Coda", or with two coda signs), D.C. al Coda with `!dacoda!`, plain D.C. with and without a
+  Fine, Dal Segno as words, repeats and endings inside the return, a D.C. on a repeat's last bar,
+  and jumps not followed. check-composer plays a D.S. al Coda and checks three things: the notes
+  lit in order, the clock's "D.S." and "Coda", and the setting.
+
+### 2. Tune-book commands
+
+These are under Edit › Tune book, and in a menu on each tune in the rail (right-click, Shift F10
+or the menu key). Pure functions in `book.ts`, unit-tested.
+
+- **Renumber X: 1…n:** only each X: line's number changes. Spaces and comments after it are kept.
+- **Sort tunes…** by title, X: or key.
+  - By title ignores a leading The, A or An, accents and case; by key goes from C to B, major
+    before minor.
+  - The file's header (everything before the first X:) stays first.
+  - Comments or other text between two tunes move with the tune after them. The blank lines
+    between tunes stay where they were.
+  - The dialog says all this.
+- **Line up bars** pads music lines with spaces so their bar lines stand in columns.
+  - It works on every tune, the selection, or the rail's tune.
+  - A run of music lines is aligned together. Voice and lyrics lines inside the run don't break
+    it, so the voices of a system line up too.
+  - A run of bar lines (`:| [2`) counts as one, aligned on its first. A leading bar (`|:`) is not
+    counted.
+  - Lines whose bar count is far from the run's usual count stay as they are.
+  - Spaces go in only just before a bar line, so the notes and beams cannot change. Tests check
+    that abcjs's whole parse, positions aside, is identical before and after (for the examples, a
+    two-voice tune and endings), and that running it twice changes nothing.
+- **Incipits…** makes a new draft for a tune index and leaves the file untouched.
+  - For each tune: X:, T:, M:, L: and K: (with the first voice's clef), then its first 1–4 bars
+    in its first voice, chosen in the dialog.
+  - A pickup comes with its bars. Lyrics and other voices are left out.
+  - Short tunes now share a printed page instead of taking one each, so incipits print well.
+- **Duplicate tune** puts a copy after the tune, with the next free X:. **New tune after this one**
+  inserts the template there.
+- **The editor is now monospaced, as its CSS always intended.** It asked for Recursive's MONO
+  axis, but the Recursive it loads has only the weight axis, so the text was proportional and no
+  alignment could look like a table.
+  - The new font is a 45 KB static instance of Recursive Mono: Latin, weight 300–800, made with
+    fontTools from the fontsource file the site already has. It sits in `composer/fonts/` with
+    the OFL and a README.
+  - It loads once something is open, never behind the start screen. Line numbers keep the
+    interface font.
+  - check-composer measures the lined-up bar lines on screen.
+
+### 3. Exports
+
+These are under File › Export. Each choice is made in a small dialog.
+
+- **SVG of this tune…** is the tune as drawn (as print draws it, 740 px wide), plain black on
+  white by default or in the current look's colours. The file is standalone:
+  - our classes, data attributes and styles are removed, and so are abcjs's own `<style>` and
+    XHTML `<title>`;
+  - the colours are written in, over a background rectangle;
+  - the view box takes in everything drawn, with a 14 px margin;
+  - there is one `<title>`;
+  - font families fall back to serif or sans-serif (the music itself is paths);
+  - pass dynamics are bold italic by attribute.
+
+  It is valid XML, and our strict XML reader parses it in the tests.
+- **HTML tune book…** is one self-contained page.
+  - **Contents:** the title, the number of tunes, and a contents list with each tune's composer,
+    key and meter.
+  - **Each tune:** inline SVG, and its ABC in a block that is closed, open or left out, as chosen.
+  - **Printing:** a print stylesheet starts each tune on a new page (a tune longer than a page
+    flows on) and hides the buttons and closed blocks.
+  - **No scripts are needed to read it.**
+  - **Optional Play button per tune:** a triangle-wave synth in 1.3 KB of inline script, with
+    each tune's notes in the order played as JSON beside it. It works offline.
+  - **Size:** a book of four reels and jigs is 278 KB.
+  - **Checked in a browser:** it opens offline with every tune drawn and no network requests, and
+    printed to PDF it is 5 pages (contents, then a page per tune).
+- **MIDI… and Audio (WAV)…** export this tune, or every tune as files in one .zip (the in-house
+  zip writer).
+  - Each tune's timeline is built as the player builds it: abcjs's description, the play order,
+    per-pass dynamics.
+  - A .zip of separate files was chosen over one type-1 file with a track per tune: each tune can
+    be opened, played and shared on its own.
+  - WAV renders tune by tune with the current instrument (four tunes in 3.7 s).
+- **Names** come from titles, made safe, and are numbered when two titles are the same: "Drowsy
+  Maggie.svg", "Session tunes MIDI.zip".

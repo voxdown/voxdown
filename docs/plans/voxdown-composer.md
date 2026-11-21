@@ -371,7 +371,7 @@ truth.
   - `import.ts` (MusicXML → ABC plus a report) and `export.ts` (abcjs's parse → MusicXML 4.0
     partwise).
 - The module is a lazy chunk (46 KB, 18 KB gzipped), loaded on the first import or export. The
-  first view went from 714 KB to 716 KB, for the menu items and the file sniffing.
+  first view went from 714 KB to 717 KB (served uncompressed; the check allows 720 KB), for the menu items and the file sniffing.
 - Ways in:
   - File › Open (the filter is "ABC or MusicXML": .abc .txt .musicxml .xml .mxl);
   - drag and drop;

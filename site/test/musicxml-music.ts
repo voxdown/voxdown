@@ -102,9 +102,13 @@ export function musicOf(tune: Any): Music {
       const graces = (element.gracenotes ?? []).map((grace: Any) => `g${grace.pitch}`).join("");
       const marks = (element.decoration ?? []).map((name: string) => SAME[name] ?? name).sort();
       const chords = (element.chord ?? [])
-        .map(
-          (chord: Any) =>
-            `${chord.position === "default" || !chord.position ? "" : chord.position[0]}"${chord.name}"`,
+        .flatMap((chord: Any) =>
+          String(chord.name)
+            .split("\n")
+            .map(
+              (name: string) =>
+                `${chord.position === "default" || !chord.position ? "" : chord.position[0]}"${name}"`,
+            ),
         )
         .sort();
       const ties = (element.pitches ?? []).some((pitch: Any) => pitch.startTie) ? "-" : "";

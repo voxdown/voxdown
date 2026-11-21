@@ -347,7 +347,14 @@ function voiceMeasure(
           xml: `<direction placement="${placementOf(name)}"><direction-type>${type}</direction-type><voice>${voiceNumber}</voice></direction>`,
         });
     }
-    for (const chord of element.chord ?? []) {
+    // abcjs joins several chord symbols (or annotations) on one note with line breaks.
+    const chords = (element.chord ?? []).flatMap((chord: Any) =>
+      String(chord.name ?? "")
+        .split("\n")
+        .filter(Boolean)
+        .map((name) => ({ ...chord, name })),
+    );
+    for (const chord of chords) {
       const name = String(chord.name ?? "");
       if (chord.position === "default" || !chord.position) {
         const harmony = harmonyXml(name);

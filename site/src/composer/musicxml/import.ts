@@ -235,10 +235,11 @@ function clefName(clef: XmlElement): string {
   const line = numberOf(clef, "line");
   const octave = numberOf(clef, "clef-octave-change") ?? 0;
   const suffix = octave === -1 ? "-8" : octave === 1 ? "+8" : "";
-  if (sign === "G") return `treble${suffix}`;
-  if (sign === "F") return line === 3 ? "baritone" : `bass${suffix}`;
-  if (sign === "C")
-    return line === 4 ? "tenor" : line === 1 ? "soprano" : line === 2 ? "mezzosoprano" : "alto";
+  // abcjs's names: treble, bass, alto, tenor, and the clef with its line (bass3 is a
+  // baritone clef, alto1 a soprano clef, alto2 a mezzo-soprano clef).
+  if (sign === "G") return line && line !== 2 ? `treble${line}` : `treble${suffix}`;
+  if (sign === "F") return line && line !== 4 ? `bass${line}` : `bass${suffix}`;
+  if (sign === "C") return line === 4 ? "tenor" : line && line !== 3 ? `alto${line}` : "alto";
   if (sign === "percussion") return "perc";
   if (sign === "TAB") return "treble";
   return "treble";
@@ -247,11 +248,23 @@ function clefName(clef: XmlElement): string {
 function timeName(time: XmlElement): string | null {
   if (child(time, "senza-misura")) return "none";
   const symbol = time.attrs.symbol;
-  const beats = textOf(time, "beats");
-  const type = textOf(time, "beat-type");
-  if (symbol === "common" && beats === "4" && type === "4") return "C";
-  if (symbol === "cut" && beats === "2" && type === "2") return "C|";
-  return beats && type ? `${beats}/${type}` : null;
+  const beats = children(time, "beats").map((each) => each.text);
+  const types = children(time, "beat-type").map((each) => each.text);
+  if (beats.length > 1 && beats.length === types.length) {
+    // Several signatures at once (3/8 + 2/4): ABC has one meter, so their total.
+    let total = frac(0);
+    for (const [index, count] of beats.entries()) {
+      const parts = count.split("+").reduce((sum, part) => sum + (Number(part) || 0), 0);
+      total = add(total, frac(parts, Number(types[index]) || 4));
+    }
+    const den = Math.max(...types.map((type) => Number(type) || 4));
+    return `${Math.round(value(total) * den)}/${den}`;
+  }
+  const [beat] = beats;
+  const [type] = types;
+  if (symbol === "common" && beat === "4" && type === "4") return "C";
+  if (symbol === "cut" && beat === "2" && type === "2") return "C|";
+  return beat && type ? `${beat}/${type}` : null;
 }
 
 const KINDS: Record<string, string> = {
@@ -445,7 +458,11 @@ async function readPart(
             measure.key = value;
           }
           const time = child(node, "time");
-          if (time) measure.time = timeName(time);
+          if (time) {
+            measure.time = timeName(time);
+            if (children(time, "beats").length > 1)
+              dropped.add("composite time signatures written as their total");
+          }
           for (const clef of children(node, "clef")) {
             const number = Number(clef.attrs.number ?? 1);
             const value = clefName(clef);
@@ -609,8 +626,8 @@ async function readPart(
             const typed = UNIT_LENGTH[typeName ?? "eighth"] ?? frac(1, 8);
             const list = pendingGrace.get(voiceId) ?? [];
             if (pitch) {
-              if (isChord && list.length)
-                (list[list.length - 1] as Event["grace"][number]).pitches.push(pitch);
+              // ABC has no chords in grace notes: the first note of the chord is kept.
+              if (isChord && list.length) dropped.add("chords in grace notes (first note kept)");
               else
                 list.push({
                   pitches: [pitch],
@@ -641,6 +658,10 @@ async function readPart(
           }
           const start = cursor;
           const written = mul(duration, frac(actual, normal));
+          if (!rest && (value(written) < 1 / 128 - 1e-9 || value(written) > 4 + 1e-9))
+            dropped.add(
+              "notes shorter than a 128th or longer than a long (abcjs cannot draw them)",
+            );
           const event: Event = {
             time: start,
             duration,
@@ -666,6 +687,8 @@ async function readPart(
             const startsHere = tuplets.some((tuplet) => tuplet.attrs.type === "start");
             const stopsHere = tuplets.some((tuplet) => tuplet.attrs.type === "stop");
             const open = openTuplet.get(voiceId);
+            if (open && (open.p !== actual || open.q !== normal) && !startsHere)
+              dropped.add("nested tuplets (ABC cannot write them)");
             event.tuplet = { p: actual, q: normal, start: startsHere || !open, stop: stopsHere };
             openTuplet.set(voiceId, stopsHere ? null : { p: actual, q: normal });
           } else openTuplet.set(voiceId, null);
@@ -901,7 +924,10 @@ async function convertScore(
   const partList = child(score, "part-list");
   const names = new Map<string, string>();
   for (const scorePart of children(partList, "score-part"))
-    names.set(scorePart.attrs.id ?? "", textOf(scorePart, "part-name") ?? "");
+    names.set(
+      scorePart.attrs.id ?? "",
+      (textOf(scorePart, "part-name") ?? "").replace(/\s+/g, " "),
+    );
   const partElements = children(score, "part");
   if (!partElements.length)
     throw new MusicXmlError("This MusicXML file has no parts with music in them.");
@@ -1040,6 +1066,14 @@ async function convertScore(
   // Body: per system, every voice's bars, then its lyrics.
   const keyState = new Map<string, Record<string, number>>();
   const wedgeOpen = new Map<string, string>();
+  /** The bar length in force at a measure (for an empty one): the latest time signature. */
+  const meterAt = (part: Part, index: number): Fraction => {
+    for (let at = index; at >= 0; at--) {
+      const time = part.measures[at]?.time;
+      if (time) return meterLength(time) ?? frac(1);
+    }
+    return meterLength(meter) ?? frac(1);
+  };
   /** Marks after a voice's last note in a bar wait for its next note. */
   const carried = new Map<string, string[]>();
   let barsWritten = 0;
@@ -1075,7 +1109,18 @@ async function convertScore(
         const span = multiAt.get(index);
         const bar = span
           ? `Z${span}`
-          : writeMeasure(voice, part, index, measure, unit, alters, wedgeOpen, carried, dropped);
+          : writeMeasure(
+              voice,
+              part,
+              index,
+              measure,
+              unit,
+              alters,
+              wedgeOpen,
+              carried,
+              dropped,
+              meterAt(part, index),
+            );
         music.push(`${barBefore}${barBefore ? " " : ""}${prefix}${bar}`);
         if (voice === voices[0] && !measure.implicit) barsWritten += span ?? 1;
         // Lyrics, verse by verse, aligned with | per bar.
@@ -1138,6 +1183,7 @@ function writeMeasure(
   wedgeOpen: Map<string, string>,
   carried: Map<string, string[]>,
   dropped: Dropped,
+  meterFill: Fraction,
 ): string {
   const events = [...(voice.measures.get(index) ?? [])].sort(
     (a, b) => value(a.time) - value(b.time),
@@ -1202,7 +1248,9 @@ function writeMeasure(
     takeAttachments(event.time);
     let text = pending.join("") + event.before.join("");
     pending = [];
-    if (event.tuplet?.start) {
+    if (event.tuplet?.start && event.tuplet.p > 9)
+      dropped.add("tuplets of 10 or more notes (ABC cannot write them)");
+    if (event.tuplet?.start && event.tuplet.p <= 9) {
       // The notes this tuplet covers: up to its stop, or as many as it says.
       let count = 0;
       for (let next = at; next < events.length; next++) {
@@ -1278,7 +1326,7 @@ function writeMeasure(
     tokens[lastNoteToken] = `${space}${pending.join("")}${token.trimStart()}`;
   } else if (pending.length) carried.set(voice.id, pending);
   const out = tokens.join("").trim();
-  return out || `x${length(measure.length.num ? measure.length : frac(1))}`;
+  return out || `x${length(measure.length.num ? measure.length : meterFill)}`;
 }
 
 /**

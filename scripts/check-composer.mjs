@@ -4406,11 +4406,12 @@ console.log(
   const transportBefore = await transportTop();
   await q.locator("#explain-toggle").click();
   assert(!(await q.locator("#app > footer").isVisible()), "folded, the status line is gone");
-  const gained = (await transportTop()) - before;
+  const gained = (await transportTop()) - transportBefore;
   assert(
-    gained >= Math.min(open, 36) - 1,
-    `folding gives ${gained} px back (the line was ${open} px)`,
+    gained >= Math.min(lineHeight, 36) - 1,
+    `folding gives ${gained} px back (the line was ${lineHeight} px)`,
   );
+  console.log(`Composer: folding the status line on a phone gives ${gained} px back`);
   await q.reload();
   await drawn(q);
   assert(!(await q.locator("#app > footer").isVisible()), "folded after a reload");

@@ -1,6 +1,12 @@
 import "./composer.css";
 import { isolateHistory, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
-import { EditorSelection, type EditorState, Prec, type TransactionSpec } from "@codemirror/state";
+import {
+  EditorSelection,
+  type EditorState,
+  Prec,
+  type Transaction,
+  type TransactionSpec,
+} from "@codemirror/state";
 import { EditorView, type KeyBinding, type ViewUpdate, runScopeHandlers } from "@codemirror/view";
 import { frac, lineKind, parseKey } from "./abc";
 import { barAt as barInText, checkBars, describeBar, tuneMeter } from "./barcheck";
@@ -647,6 +653,34 @@ function sayAboutSelection(message: string) {
   statusNote = { message, selection: view.state.selection };
   $("explain").textContent = message;
 }
+/*
+ * Redo puts back the selection a mark or music command left: the history's own guess loses a mark
+ * written at the range's start (".C .D" came back as "C .D" selected). Each such change is kept
+ * with its selection, and the same change redone gets the same selection (on the same text).
+ */
+const leftSelections: { changes: string; selection: EditorSelection }[] = [];
+function rememberSelection(transaction: Transaction) {
+  leftSelections.push({
+    changes: JSON.stringify(transaction.changes.toJSON()),
+    selection: transaction.selection ?? transaction.startState.selection,
+  });
+  if (leftSelections.length > 100) leftSelections.shift();
+}
+// The history redoes with filters off, so the selection is put back right after it.
+const redoSelection = EditorView.updateListener.of((update) => {
+  const redone = update.transactions.find(
+    (transaction) => transaction.isUserEvent("redo") && !transaction.changes.empty,
+  );
+  if (!redone) return;
+  const key = JSON.stringify(redone.changes.toJSON());
+  const found = [...leftSelections].reverse().find((each) => each.changes === key);
+  if (!found || found.selection.main.to > update.state.doc.length) return;
+  const target = update.view;
+  queueMicrotask(() => {
+    if (target.state.doc.eq(update.state.doc))
+      target.dispatch({ selection: found.selection, userEvent: "select.redo" });
+  });
+});
 const typedMarks = [
   Prec.highest(
     EditorView.inputHandler.of((target, _from, _to, typed) => {
@@ -786,7 +820,7 @@ function typeMark(target: EditorView, typed: string): boolean {
     ),
     state.selection.mainIndex,
   );
-  target.dispatch({
+  const marked = state.update({
     changes,
     selection,
     userEvent: "input.mark",
@@ -795,6 +829,8 @@ function typeMark(target: EditorView, typed: string): boolean {
       (result.gaps ?? []).map((entry) => ({ pos: changes.mapPos(entry.from, -1), gap: entry.gap })),
     ),
   });
+  rememberSelection(marked);
+  target.dispatch(marked);
   const count = broken
     ? `${result.count} ${result.count === 1 ? "pair" : "pairs"}`
     : `${result.count} ${result.count === 1 ? "note" : "notes"}`;
@@ -824,6 +860,7 @@ function makeState(text: string): EditorState {
     keys,
     extra: [
       copyVoices,
+      redoSelection,
       typedMarks,
       typingHelpers,
       EditorView.exceptionSink.of((error) => recoverEditor(error)),
@@ -1723,8 +1760,15 @@ type Drag = {
   y: number;
   /** Ctrl/⌘ held: the selection before the press, which the drag adds to. */
   base?: Range[];
+  /** A finger: it scrolls unless held still first (a long press), then it selects. */
+  touch?: { armed: boolean; timer: ReturnType<typeof setTimeout>; tap: EditorSelection };
+  /** Where the pointer was last, for scrolling while dragging (by the edge or the wheel). */
+  lastX: number;
+  lastY: number;
 };
 let drag: Drag | null = null;
+/** How long a finger must stay still before a drag selects instead of scrolling. */
+const LONG_PRESS = 400;
 
 /* A selection in several places: Ctrl/⌘ click toggles a note, Ctrl/⌘ drag adds a region. */
 /** Phones have no Ctrl or ⌘: "Select more" (in More) makes every tap and drag add instead. */
@@ -1992,6 +2036,8 @@ scoreScroll.addEventListener("pointerdown", (event) => {
       pointer: event.pointerId,
       x: event.clientX,
       y: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
       base: ranges().filter((range) => range.to > range.from),
     };
     scoreScroll.setPointerCapture(event.pointerId);
@@ -2015,10 +2061,27 @@ scoreScroll.addEventListener("pointerdown", (event) => {
     pointer: event.pointerId,
     x: event.clientX,
     y: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
   };
   scoreScroll.setPointerCapture(event.pointerId);
   const voices = event.altKey ? allVoices() : [hit.note.voice];
   selectRegion(dragRegion(scoreIndex, hit, hit, voices));
+  if (event.pointerType === "touch") {
+    // A finger scrolls the score; held still for a moment, it selects instead (a long press):
+    // the note's band shows, and the drag that follows selects.
+    const pressed = drag;
+    pressed.touch = {
+      armed: false,
+      tap: view.state.selection,
+      timer: setTimeout(() => {
+        if (drag !== pressed || !pressed.touch) return;
+        pressed.touch.armed = true;
+        scoreScroll.style.touchAction = "none";
+        scoreScroll.classList.add("pressing");
+      }, LONG_PRESS),
+    };
+  }
   if (prefs.hear && !hit.note.rest && timeline) {
     const pitches = timeline.notes
       .filter((note) => note.start === hit.note.start)
@@ -2026,12 +2089,15 @@ scoreScroll.addEventListener("pointerdown", (event) => {
     player.audition([...new Set(pitches)]);
   }
 });
-scoreScroll.addEventListener("pointermove", (event) => {
-  if (!drag || event.pointerId !== drag.pointer || !scoreIndex) return;
-  if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 4) return;
+/** Moves a drag's end to a page point: the selection follows what the pointer has reached. */
+function dragTo(clientX: number, clientY: number) {
+  if (!drag || !scoreIndex) return;
+  drag.lastX = clientX;
+  drag.lastY = clientY;
+  if (!drag.moved && Math.hypot(clientX - drag.x, clientY - drag.y) < 4) return;
   drag.moved = true;
   scoreScroll.classList.add("dragging");
-  const hit = hitPoint(event.clientX, event.clientY, drag.anchor.note.voice);
+  const hit = hitPoint(clientX, clientY, drag.anchor.note.voice);
   if (!hit) return;
   const sameStaff = hit.staff === drag.anchor.staff;
   // A drag along a staff takes every voice drawn on it, as far as the pointer reached: what was
@@ -2043,13 +2109,66 @@ scoreScroll.addEventListener("pointermove", (event) => {
   if (drag.base)
     selectRanges([...drag.base, ...regionRanges(scoreIndex, region, text())], hit.note.start);
   else selectRegion(region);
-  // Scroll while dragging near the edges.
+}
+
+/*
+ * Scrolling while dragging: near the score's top or bottom edge it scrolls every frame, faster the
+ * nearer the edge, and the selection follows; a wheel scroll during a drag moves its end too.
+ */
+const EDGE = 40;
+let edgeFrame = 0;
+function edgeScroll() {
+  edgeFrame = 0;
+  if (!drag || (drag.touch && !drag.touch.armed)) return;
   const frame = scoreScroll.getBoundingClientRect();
-  if (event.clientY > frame.bottom - 30) scoreScroll.scrollTop += 12;
-  else if (event.clientY < frame.top + 30) scoreScroll.scrollTop -= 12;
+  const below = drag.lastY - (frame.bottom - EDGE);
+  const above = frame.top + EDGE - drag.lastY;
+  const depth = Math.min(EDGE, Math.max(below, above));
+  if (depth > 0) {
+    const speed = Math.ceil(2 + (depth / EDGE) ** 2 * 22);
+    const before = scoreScroll.scrollTop;
+    scoreScroll.scrollTop += below > 0 ? speed : -speed;
+    if (scoreScroll.scrollTop !== before) dragTo(drag.lastX, drag.lastY);
+  }
+  edgeFrame = requestAnimationFrame(edgeScroll);
+}
+scoreScroll.addEventListener("pointermove", (event) => {
+  if (!drag || event.pointerId !== drag.pointer || !scoreIndex) return;
+  if (drag.touch && !drag.touch.armed) {
+    // A finger moving before the long press: it is scrolling, not selecting.
+    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8)
+      clearTimeout(drag.touch.timer);
+    return;
+  }
+  dragTo(event.clientX, event.clientY);
+  if (!edgeFrame) edgeFrame = requestAnimationFrame(edgeScroll);
 });
+scoreScroll.addEventListener("scroll", () => {
+  if (drag?.moved) dragTo(drag.lastX, drag.lastY);
+});
+// Held still long enough, a finger's move selects: the page must not pan under it.
+scoreScroll.addEventListener(
+  "touchmove",
+  (event) => {
+    if (drag?.touch?.armed && event.cancelable) event.preventDefault();
+  },
+  { passive: false },
+);
 const endDrag = (event: PointerEvent) => {
   if (!drag || event.pointerId !== drag.pointer) return;
+  // Where it was let go counts (after a wheel scroll, too).
+  if (event.type === "pointerup" && drag.moved && (!drag.touch || drag.touch.armed))
+    dragTo(event.clientX, event.clientY);
+  if (drag.touch) {
+    clearTimeout(drag.touch.timer);
+    scoreScroll.style.touchAction = "";
+    scoreScroll.classList.remove("pressing");
+    // The browser took a finger's move for a scroll: the tap's selection stands, not a partial drag.
+    if (event.type === "pointercancel" && !drag.touch.armed)
+      view.dispatch({ selection: drag.touch.tap, userEvent: "select.score" });
+  }
+  cancelAnimationFrame(edgeFrame);
+  edgeFrame = 0;
   scoreScroll.classList.remove("dragging");
   // Ctrl/⌘ click without a drag: the note goes in or out of the selection.
   if (drag.base && !drag.moved && event.type === "pointerup") toggleNote(drag.anchor.note);
@@ -2332,22 +2451,39 @@ function moveByNote(direction: 1 | -1, extend: boolean): boolean {
     }
     return true;
   }
-  if (!region) {
-    selectRegion(spanRegion(index, caretNote.time, caretNote.time, [caretNote.voice]));
+  // As in text: an anchor that stays and an end that moves, so going back shrinks the selection
+  // before it grows the other way. A selection made some other way starts with its anchor at its
+  // first note and its moving end at its last.
+  const kept = noteSpan?.selection.eq(view.state.selection) ? noteSpan : null;
+  const span = kept ?? {
+    anchor: region ? region.from : caretNote.time,
+    head: region ? (region.reach ?? region.from) : caretNote.time,
+    voices: region ? region.voices : [caretNote.voice],
+    selection: view.state.selection,
+  };
+  if (!kept && !region) {
+    selectRegion(spanRegion(index, span.anchor, span.head, span.voices));
+    noteSpan = { ...span, selection: view.state.selection };
     return true;
   }
-  let { from } = region;
-  let reach = region.reach ?? region.from;
-  if (direction > 0) {
-    const next = notes.find((note) => note.time > reach + eps);
-    if (next) reach = next.time;
-  } else {
-    const previous = [...notes].reverse().find((note) => note.time < from - eps);
-    if (previous) from = previous.time;
-  }
-  selectRegion(spanRegion(index, from, reach, region.voices));
+  const step =
+    direction > 0
+      ? notes.find((note) => note.time > span.head + eps)
+      : [...notes].reverse().find((note) => note.time < span.head - eps);
+  const head = step ? step.time : span.head;
+  selectRegion(
+    spanRegion(index, Math.min(span.anchor, head), Math.max(span.anchor, head), span.voices),
+  );
+  noteSpan = { ...span, head, selection: view.state.selection };
   return true;
 }
+/** Shift Alt ←/→'s selection: where it was anchored and where its moving end is, in time. */
+let noteSpan: {
+  anchor: number;
+  head: number;
+  voices: number[];
+  selection: EditorSelection;
+} | null = null;
 
 /* Musical commands. */
 function apply(changes: Change[], label: string): boolean {
@@ -2369,7 +2505,9 @@ function apply(changes: Change[], label: string): boolean {
     ),
     before.mainIndex,
   );
-  view.dispatch(view.state.update({ ...spec, selection: mapped }));
+  const done = view.state.update({ ...spec, selection: mapped });
+  rememberSelection(done);
+  view.dispatch(done);
   return true;
 }
 

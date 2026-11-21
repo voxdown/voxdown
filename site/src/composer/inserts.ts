@@ -1,21 +1,21 @@
-import type { Change, Range } from "./commands";
+import { type Change, type Range, passagesOf } from "./commands";
 import { selectedNotes } from "./selected";
 import { type FileIndex, indexFile } from "./tunes";
 
 /*
  * Insert › Triplet, Repeat and Chord symbol over a selection go by its notes, never by which end
- * the selection was dragged to.
+ * the selection was dragged to; a voice selected across V: blocks is one passage (as for
+ * Duplicate and slurs), so a triplet or repeat is written once over it.
  */
 
-/** The selected notes of each range (the one rule), in text order. */
+/** The selected notes of each passage (the one rule), in text order. */
 function notesOfRanges(text: string, ranges: Range[], file: FileIndex) {
-  return ranges
-    .filter((range) => range.to > range.from)
-    .map((range) => selectedNotes(text, [range], file).filter((each) => !each.event.rest))
+  return passagesOf(text, ranges, file)
+    .map((passage) => selectedNotes(text, passage.ranges, file).filter((each) => !each.event.rest))
     .filter((notes) => notes.length);
 }
 
-/** `(3` before each range's first selected note (before its decorations): three selected notes
+/** `(3` before each passage's first selected note (before its decorations): three selected notes
  * become the triplet. Null when nothing selected is a note. */
 export function insertTriplet(
   text: string,
@@ -41,7 +41,7 @@ export function insertChordSymbol(
 }
 
 /**
- * Each range's notes inside a repeat: `|:` before the first and `:|` after the last, reusing a
+ * Each passage's notes inside a repeat: `|:` before the first and `:|` after the last, reusing a
  * plain bar line already there (`|` becomes `|:` or `:|`; a `||` or `|]` takes a `:` before it).
  */
 export function insertRepeat(

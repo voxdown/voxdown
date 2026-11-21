@@ -7,7 +7,13 @@ import {
   type Transaction,
   type TransactionSpec,
 } from "@codemirror/state";
-import { EditorView, type KeyBinding, type ViewUpdate, runScopeHandlers } from "@codemirror/view";
+import {
+  EditorView,
+  type KeyBinding,
+  type ViewUpdate,
+  keymap,
+  runScopeHandlers,
+} from "@codemirror/view";
 import { frac, lineKind, parseKey } from "./abc";
 import { barAt as barInText, checkBars, describeBar, tuneMeter } from "./barcheck";
 import {
@@ -321,57 +327,83 @@ function clipboard(kind: "cut" | "copy") {
   if (!document.execCommand(kind))
     notice(`Use ${shortcutLabel(kind === "cut" ? "Mod X" : "Mod C")} to ${kind} in this browser.`);
 }
-/**
- * A copy of several voices pasted: each place takes its own voice's part (./paste), in one undo
- * step, or it is refused with the reason in the status line. False when it isn't such a copy.
+/*
+ * Editing selected music: ./barwise (bar lines kept by typing and deleting, whole bars cut and
+ * copied with theirs) and ./paste (voiced copies, plain music over several voices, music from
+ * another unit or key), loaded once the editor is in use; until then the editor's own ways do.
  */
-/** The voiced paste, loaded with the first copy of several voices (or the first such paste). */
+let barwise: typeof import("./barwise") | null = null;
 let paster: typeof import("./paste") | null = null;
-const loadPaster = () =>
-  import("./paste").then((module) => {
-    paster = module;
-    return module;
-  });
-function pasteVoices(target: EditorView, pasted: string): boolean {
-  // Told at once (the browser's own paste must be stopped now); worked out when ./paste loads.
-  if (!/^V:\s*\S/.test(pasted) || !/\nV:\s*\S/.test(pasted)) return false;
-  if (paster) pasteVoicesWith(paster, target, pasted);
-  else void loadPaster().then((module) => pasteVoicesWith(module, target, pasted));
-  return true;
+let editingLoading: Promise<unknown> | null = null;
+function loadEditing() {
+  editingLoading ??= Promise.all([import("./barwise"), import("./paste")]).then(
+    ([bars, paste]) => {
+      barwise = bars;
+      paster = paste;
+    },
+    () => {
+      editingLoading = null;
+    },
+  );
+  return editingLoading;
 }
-function pasteVoicesWith(
-  { pasteVoiced, voicedParts }: typeof import("./paste"),
-  target: EditorView,
-  pasted: string,
-) {
-  const state = target.state;
-  const parts = voicedParts(pasted);
-  if (!parts) {
-    target.dispatch(state.replaceSelection(pasted), {
-      scrollIntoView: true,
-      userEvent: "input.paste",
-    });
-    return;
+/** Where the last copy made here came from (its unit and key), for a paste elsewhere. */
+let lastCopy: { text: string; source: import("./paste").ClipSource | null } | null = null;
+const CLIP_SOURCE = "web application/x-voxdown-source";
+/** Carets after each inserted piece: where a paste or typing leaves the selection. */
+function caretsAfter(state: EditorState, changes: Change[]): EditorSelection {
+  const set = state.changes(changes);
+  const ends = changes
+    .filter((change) => change.insert)
+    .map((change) => EditorSelection.cursor(set.mapPos(change.from, -1) + change.insert.length));
+  return ends.length
+    ? EditorSelection.create(ends)
+    : EditorSelection.single(set.mapPos(state.selection.main.from));
+}
+/** A paste, decided by ./paste; false when the editor's own paste does the same. */
+function pastePlanned(target: EditorView, pasted: string, sourceData = ""): boolean {
+  if (!paster) {
+    // A copy of voices before ./paste loads: told at once, done when it has.
+    if (!/^V:\s*\S/.test(pasted)) return false;
+    void loadEditing().then(() => paster && pastePlanned(target, pasted, sourceData));
+    return true;
   }
-  const selected = state.selection.ranges.filter((range) => !range.empty);
-  const places = (selected.length ? selected : [state.selection.main]).map((range) => ({
-    from: range.from,
-    to: range.to,
-  }));
-  const plan = pasteVoiced(state.doc.toString(), places, parts);
+  let source = lastCopy?.text === pasted ? lastCopy.source : null;
+  try {
+    if (sourceData) source = JSON.parse(sourceData);
+  } catch {
+    /* Not ours: pasted as it is. */
+  }
+  const state = target.state;
+  const list = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
+  const plan = paster.planPaste(
+    state.doc.toString(),
+    list,
+    state.selection.mainIndex,
+    pasted,
+    source,
+    target.state.field(fileIndexField),
+  );
+  if (!plan) return false;
   if ("refused" in plan) {
     sayAboutSelection(plan.refused);
     notice(plan.refused);
-    return;
+    return true;
   }
-  target.dispatch({ changes: plan.changes, scrollIntoView: true, userEvent: "input.paste" });
-  notice(plan.message, "success");
+  target.dispatch({
+    changes: plan.changes,
+    selection: caretsAfter(state, plan.changes),
+    scrollIntoView: true,
+    userEvent: "input.paste",
+  });
+  if (plan.message) notice(plan.message, "success");
+  return true;
 }
 async function pasteText() {
   view.focus();
   try {
     const pasted = await navigator.clipboard.readText();
-    if (pasteVoices(view, pasted)) return;
+    if (pastePlanned(view, pasted)) return;
     view.dispatch(view.state.replaceSelection(pasted), {
       scrollIntoView: true,
       userEvent: "input.paste",
@@ -665,33 +697,45 @@ const keys: KeyBinding[] = [
 const copyVoices = EditorView.domEventHandlers({
   paste(event, view) {
     const pasted = event.clipboardData?.getData("text/plain");
-    if (!pasted || !pasteVoices(view, pasted)) return false;
+    if (!pasted || !pastePlanned(view, pasted, event.clipboardData?.getData(CLIP_SOURCE)))
+      return false;
     event.preventDefault();
     return true;
   },
-  copy(event, view) {
-    const text = voicedCopy(view.state);
-    if (!text || !event.clipboardData) return false;
-    event.clipboardData.setData("text/plain", text.text);
-    event.preventDefault();
-    notice(`Copied ${text.voices} voices, each with its V: line.`, "success");
-    if (!paster) void loadPaster();
-    return true;
-  },
-  cut(event, view) {
-    const text = voicedCopy(view.state);
-    if (!text || !event.clipboardData) return false;
-    event.clipboardData.setData("text/plain", text.text);
-    event.preventDefault();
-    view.dispatch({
-      changes: view.state.selection.ranges.map((range) => ({ from: range.from, to: range.to })),
-      userEvent: "delete.cut",
-    });
-    notice(`Cut ${text.voices} voices, each copied with its V: line.`, "success");
-    if (!paster) void loadPaster();
-    return true;
-  },
+  copy: (event, view) => copyOut(event, view, false),
+  cut: (event, view) => copyOut(event, view, true),
 });
+/** Copy and Cut: see copyText; Cut of whole bars takes them out with a bar line (./barwise). */
+function copyOut(event: ClipboardEvent, target: EditorView, cut: boolean): boolean {
+  const copy = copyText(target.state);
+  if (!copy || !event.clipboardData) return false;
+  event.clipboardData.setData("text/plain", copy.text);
+  try {
+    if (copy.source) event.clipboardData.setData(CLIP_SOURCE, JSON.stringify(copy.source));
+  } catch {
+    /* A browser without custom clipboard types: the copy is remembered here only. */
+  }
+  lastCopy = copy;
+  event.preventDefault();
+  if (cut) {
+    const list = target.state.selection.ranges
+      .filter((range) => !range.empty)
+      .map((range) => ({ from: range.from, to: range.to }));
+    const changes =
+      barwise?.cutKeepingBars(
+        target.state.doc.toString(),
+        list,
+        target.state.field(fileIndexField),
+      ) ?? list.map((range) => ({ ...range, insert: "" }));
+    target.dispatch({ changes, userEvent: "delete.cut", scrollIntoView: true });
+  }
+  if (copy.voices > 1)
+    notice(
+      `${cut ? "Cut" : "Copied"} ${copy.voices} voices, each ${cut ? "copied " : ""}with its V: line.`,
+      "success",
+    );
+  return true;
+}
 
 /*
  * Typing ".", "~" or "(" over selected music marks the notes instead of replacing them, the way an
@@ -740,12 +784,45 @@ const redoSelection = EditorView.updateListener.of((update) => {
       target.dispatch({ selection: found.selection, userEvent: "select.redo" });
   });
 });
+/** Typing over selected music, or Backspace/Delete: the notes go, the bar lines stay. */
+function replaceMusic(target: EditorView, typed: string): boolean {
+  if (!barwise || target.state.selection.ranges.every((range) => range.empty)) return false;
+  const state = target.state;
+  const list = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
+  const changes = barwise.replaceKeepingBars(
+    state.doc.toString(),
+    list,
+    typed,
+    state.field(fileIndexField),
+  );
+  if (!changes) return false;
+  // The caret goes after what was typed, at each range's first piece.
+  const firsts = list
+    .filter((range) => range.to > range.from)
+    .map((range) => changes.find((change) => change.from >= range.from) as Change);
+  const set = state.changes(changes);
+  target.dispatch({
+    changes,
+    selection: EditorSelection.create(
+      firsts.map((change) => EditorSelection.cursor(set.mapPos(change.from, -1) + typed.length)),
+    ),
+    scrollIntoView: true,
+    userEvent: typed ? "input.type" : "delete.selection",
+  });
+  return true;
+}
 const typedMarks = [
   Prec.highest(
     EditorView.inputHandler.of((target, _from, _to, typed) => {
       if (target.composing || target.compositionStarted) return false;
-      return typeMark(target, typed);
+      return typeMark(target, typed) || replaceMusic(target, typed);
     }),
+  ),
+  Prec.highest(
+    keymap.of([
+      { key: "Backspace", run: (target) => replaceMusic(target, "") },
+      { key: "Delete", run: (target) => replaceMusic(target, "") },
+    ]),
   ),
   // A mark key held down acts once over selected music, rather than adding and removing in turn.
   Prec.highest(
@@ -921,18 +998,30 @@ function dirty(): boolean {
 }
 
 /** Copies several voices' spans each under its V: line, so they paste as voices. */
-function voicedCopy(state: EditorState): { text: string; voices: number } | null {
+/**
+ * What Copy puts on the clipboard: the selected text, whole bars with their closing bar line
+ * (./barwise), several voices each under its V: line; and where it came from (unit and key), so
+ * a paste under another unit or key sounds the same. Null with nothing selected.
+ */
+function copyText(
+  state: EditorState,
+): { text: string; voices: number; source: import("./paste").ClipSource | null } | null {
   const selection = state.selection.ranges.filter((range) => !range.empty);
-  if (selection.length < 2) return null;
+  if (!selection.length) return null;
   const doc = state.doc.toString();
+  const file = state.field(fileIndexField);
   const parts = selection.map((range) => ({
     voice: voiceAt(doc, range.from),
-    text: doc.slice(range.from, range.to),
+    text: barwise?.copyWithBars(doc, range, file) ?? doc.slice(range.from, range.to),
   }));
-  if (new Set(parts.map((part) => part.voice)).size < 2) return null;
+  const source = paster?.sourceAt(doc, file, (selection[0] as { from: number }).from) ?? null;
+  const voices = new Set(parts.map((part) => part.voice)).size;
+  if (selection.length < 2 || voices < 2)
+    return { text: parts.map((part) => part.text).join(state.lineBreak), voices: 1, source };
   return {
     text: `${parts.map((part) => `V:${part.voice}\n${part.text}`).join("\n")}\n`,
     voices: parts.length,
+    source,
   };
 }
 
@@ -1130,6 +1219,7 @@ let explainer: typeof import("./explain") | null = null;
 let explainerLoading: Promise<unknown> | null = null;
 function explainAt(position: number): Explanation | null {
   if (explainer) return explainer.explainAt(text(), fileIndex(), position);
+  void loadEditing();
   explainerLoading ??= import("./explain").then(
     (module) => {
       explainer = module;
@@ -2460,6 +2550,17 @@ scoreScroll.addEventListener("keydown", (event) => {
     return;
   }
   const modified = event.altKey || event.ctrlKey || event.metaKey || /^F\d+$/.test(event.key);
+  // Delete in the score takes whole bars out with a bar line, like Cut (./barwise).
+  if (!modified && ["Backspace", "Delete"].includes(event.key) && hasSelection()) {
+    event.preventDefault();
+    const list = ranges().filter((range) => range.to > range.from);
+    const changes =
+      barwise?.cutKeepingBars(text(), list, fileIndex()) ??
+      list.map((range) => ({ ...range, insert: "" }));
+    view.dispatch({ changes, userEvent: "delete.selection", scrollIntoView: true });
+    announceScore();
+    return;
+  }
   if (modified && !["Backspace", "Delete"].includes(event.key)) {
     if (
       (event.ctrlKey || event.metaKey) &&

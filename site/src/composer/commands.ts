@@ -431,25 +431,79 @@ export function barAround(text: string, position: number): Range {
   return { from, to };
 }
 
-/** Puts a copy of the selection (or the bar at the caret) right after it. */
+/**
+ * The notes a range selects, as written: from its first selected note's attachments to its last
+ * note's tie (a whole chord when some of its tones are selected), with a tuplet sign that opens
+ * the first note. Null when it selects no note.
+ */
+function notesText(text: string, range: Range, file: FileIndex): Range | null {
+  const picked = selectedNotes(text, [range], file);
+  const first = picked[0];
+  const last = picked[picked.length - 1];
+  if (!first || !last) return null;
+  let from = first.span.from;
+  const lineFrom = text.lastIndexOf("\n", from - 1) + 1;
+  const before = tokenizeMusic(text.slice(lineFrom, from), lineFrom).filter(
+    (token) => token.kind !== "space",
+  );
+  if (before.at(-1)?.kind === "tuplet") from = (before.at(-1) as MusicToken).from;
+  return { from, to: last.span.to };
+}
+
+/** Where a body of whole bars ends: the bar line after it, when nothing but spaces is between. */
+function wholeBarsEnd(text: string, body: Range): MusicToken | null {
+  const lineFrom = text.lastIndexOf("\n", body.from - 1) + 1;
+  const lineTo = text.indexOf("\n", body.to) < 0 ? text.length : text.indexOf("\n", body.to);
+  const tokens = tokenizeMusic(text.slice(lineFrom, lineTo), lineFrom);
+  const event = (token: MusicToken) =>
+    (token.kind === "note" && !token.inGrace) || token.kind === "rest";
+  const lead = tokens.filter((token) => token.to <= body.from);
+  const opened = lead.map((token) => token.kind).lastIndexOf("bar");
+  if (lead.slice(opened + 1).some(event)) return null;
+  const next = tokens.find((token) => token.from >= body.to && token.kind !== "space");
+  return next?.kind === "bar" ? next : null;
+}
+
+/**
+ * Puts a copy of the selected notes (or the bar at the caret) right after them. Whole bars are
+ * copied as bars, after their bar line, so no bar is overfull.
+ */
 export function duplicate(text: string, ranges: Range[], file = indexFile(text)): Change[] {
   const changes: Change[] = [];
   // A voice selected across V: blocks is one passage: duplicated once, after its end, in that
   // voice's last block (not each block's piece after itself).
   const passages = passagesOf(text, ranges, file).filter((passage) => passage.ranges.length > 1);
   const joined = new Set(passages.flatMap((passage) => passage.ranges));
+  const place = (body: Range, written: string) => {
+    const bar = wholeBarsEnd(text, body);
+    if (bar) {
+      const gap = text.slice(body.to, bar.from);
+      changes.push({ from: body.to, to: body.to, insert: `${gap}|${gap}${written}` });
+    } else changes.push({ from: body.to, to: body.to, insert: ` ${written}` });
+  };
   for (const passage of passages) {
-    const end = passage.ranges[passage.ranges.length - 1] as Range;
-    const body = passage.ranges.map((range) => text.slice(range.from, range.to).trim()).join(" ");
-    const glue = /\s$/.test(text.slice(end.from, end.to)) ? "" : " ";
-    changes.push({ from: end.to, to: end.to, insert: `${glue}${body}` });
+    const bodies = passage.ranges
+      .map((range) => notesText(text, range, file))
+      .filter((body): body is Range => Boolean(body));
+    const end = bodies[bodies.length - 1];
+    const written = bodies.map(
+      (body, at) =>
+        text.slice(body.from, body.to) +
+        (at < bodies.length - 1 && wholeBarsEnd(text, body) ? "|" : ""),
+    );
+    if (end) place(end, written.join(" "));
   }
   for (const range of ranges) {
     if (joined.has(range)) continue;
-    const target = range.from === range.to ? barAround(text, range.from) : range;
-    const body = text.slice(target.from, target.to);
-    const glue = /\s$/.test(body) ? "" : " ";
-    changes.push({ from: target.to, to: target.to, insert: `${glue}${body}` });
+    if (range.from === range.to) {
+      const target = barAround(text, range.from);
+      const body = text.slice(target.from, target.to);
+      const glue = /\s$/.test(body) ? "" : " ";
+      changes.push({ from: target.to, to: target.to, insert: `${glue}${body}` });
+      continue;
+    }
+    const body = notesText(text, range, file);
+    if (body) place(body, text.slice(body.from, body.to));
   }
   return changes;
 }

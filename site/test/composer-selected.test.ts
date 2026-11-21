@@ -143,7 +143,7 @@ describe("a voice written in V: blocks is one passage", () => {
   ];
   it("duplicates the passage once, after its end, in the voice's last block", () => {
     expect(apply(blocks, duplicate(blocks, both))).toBe(
-      "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nc d e f|\nV:2\nC D E F|\nV:1\ng a b c'| c d e f| g a b c'|\nV:2\nG A B c|\n",
+      "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nc d e f|\nV:2\nC D E F|\nV:1\ng a b c'|c d e f| g a b c'|\nV:2\nG A B c|\n",
     );
   });
   it("puts one slur over it, from its first note to its last", () => {
@@ -158,5 +158,58 @@ describe("a voice written in V: blocks is one passage", () => {
     ];
     expect(apply(blocks, toggleSlur(blocks, apart))).toContain("(c d) e f|");
     expect(apply(blocks, toggleSlur(blocks, apart))).toContain("g a (b c')|");
+  });
+});
+
+describe("Duplicate copies the selected notes, not the raw text (round 3)", () => {
+  const head = "X:1\nM:4/4\nL:1/8\nK:C\n";
+  it("a chord tone selected duplicates its whole chord", () => {
+    const text = `${head}[CEG]2 A2 B4|\n`;
+    const at = text.indexOf("E");
+    expect(apply(text, duplicate(text, [{ from: at, to: at + 1 }]))).toBe(
+      `${head}[CEG]2 [CEG]2 A2 B4|\n`,
+    );
+  });
+  it("a note selected through its decoration duplicates with it, and its broken rhythm", () => {
+    const text = `${head}B>!trill!c2 d4|\n`;
+    const at = text.indexOf(">");
+    expect(apply(text, duplicate(text, [{ from: at, to: at + 4 }]))).toBe(
+      `${head}B>!trill!c2 B>!trill!c2 d4|\n`,
+    );
+  });
+  it("a triplet's first notes take its sign", () => {
+    const text = `${head}(3abc d4|\n`;
+    const from = text.indexOf("abc");
+    expect(apply(text, duplicate(text, [{ from, to: from + 3 }]))).toBe(`${head}(3abc (3abc d4|\n`);
+  });
+  it("whole bars are duplicated as bars, after the bar line", () => {
+    const text = `${head}c2 d2 e2 f2|g2 a2 b2 c'2|]\n`;
+    const from = text.indexOf("g2");
+    expect(apply(text, duplicate(text, [{ from, to: from + 11 }]))).toBe(
+      `${head}c2 d2 e2 f2|g2 a2 b2 c'2|g2 a2 b2 c'2|]\n`,
+    );
+  });
+});
+
+describe("Insert over a voice selected across V: blocks is one passage (round 3)", () => {
+  const blocks =
+    "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nc d e f|\nV:2\nC D E F|\nV:1\ng a b c'|\nV:2\nG A B c|\n";
+  const across = [
+    { from: blocks.indexOf("e f"), to: blocks.indexOf("e f") + 3 },
+    { from: blocks.indexOf("g a"), to: blocks.indexOf("g a") + 1 },
+  ];
+  it("one triplet, before the passage's first note", () => {
+    const out = apply(blocks, insertTriplet(blocks, across) ?? []);
+    expect(out).toContain("c d (3e f|");
+    expect(out).toContain("\ng a b c'|");
+  });
+  it("one repeat, around the whole passage", () => {
+    const whole = [
+      { from: blocks.indexOf("c d e f"), to: blocks.indexOf("c d e f") + 7 },
+      { from: blocks.indexOf("g a b c'"), to: blocks.indexOf("g a b c'") + 8 },
+    ];
+    const out = apply(blocks, insertRepeat(blocks, whole) ?? []);
+    expect(out).toContain("V:1\n|: c d e f|\n");
+    expect(out).toContain("V:1\ng a b c':|\n");
   });
 });

@@ -131,24 +131,17 @@ describe("the playback timeline", () => {
 });
 
 describe("score regions", () => {
-  it("turns a region into one text range per voice, bar lines included", () => {
+  it("turns a region into one text range per voice, stopping before the bar line", () => {
     const { index } = prepare(twoVoices);
     const ranges = regionRanges(index, { from: 0, to: 0.5, voices: [0, 1] }, twoVoices);
-    expect(ranges.map((range) => twoVoices.slice(range.from, range.to))).toEqual([
-      "C D |",
-      "C, D, |",
-    ]);
+    expect(ranges.map((range) => twoVoices.slice(range.from, range.to))).toEqual(["C D", "C, D,"]);
   });
   it("splits a voice whose music continues in a later V: block, never taking other voices' text", () => {
     const text =
       "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nC D E F |\nV:2\nC,4 |\nV:1\nG A B c |\nV:2\nG,4 |\n";
     const { index } = prepare(text);
     const ranges = regionRanges(index, { from: 0.5, to: 1.5, voices: [0, 1] }, text);
-    expect(ranges.map((range) => text.slice(range.from, range.to))).toEqual([
-      "E F |",
-      "G A",
-      "G,4 |",
-    ]);
+    expect(ranges.map((range) => text.slice(range.from, range.to))).toEqual(["E F", "G A", "G,4"]);
   });
   it("splits a voice's range at every line that isn't its music, and at comments", () => {
     const whole = (text: string) => {
@@ -161,17 +154,17 @@ describe("score regions", () => {
       whole(
         "X:1\nM:4/4\nL:1/4\nK:C\nC D E F |\nw: one two three four\n% important comment\nG A B c |\nw: five six se-ven eight\n",
       ),
-    ).toEqual(["C D E F |", "G A B c |"]);
+    ).toEqual(["C D E F", "G A B c"]);
     // Parts, a key change, a title, meter and unit fields, a directive (Claude's cases).
     expect(
       whole(
         "X:1\nT:Reel with parts\nM:4/4\nL:1/8\nK:D\nP:A\n|:dfaf gfed|cdeg fedc:|\nP:B\n|:d2fd ad fd|e2ge be ge:|\nK:G\nT:Second strain\nM:3/4\nL:1/4\n%%vskip 10\nG A B |\n",
       ),
-    ).toEqual(["dfaf gfed|cdeg fedc:|", "d2fd ad fd|e2ge be ge:|", "G A B |"]);
+    ).toEqual(["dfaf gfed|cdeg fedc", "d2fd ad fd|e2ge be ge", "G A B"]);
     // A comment at the end of a line of music. (A blank line ends the tune, so none falls inside.)
-    expect(whole("X:1\nL:1/4\nK:C\nC D | % the end\nE F |\n")).toEqual(["C D |", "E F |"]);
+    expect(whole("X:1\nL:1/4\nK:C\nC D | % the end\nE F |\n")).toEqual(["C D", "E F"]);
     // Music lines one after another stay one range; a % inside an annotation is not a comment.
-    expect(whole('X:1\nL:1/4\nK:C\nC "^50%"D |\nE F |\n')).toEqual(['C "^50%"D |\nE F |']);
+    expect(whole('X:1\nL:1/4\nK:C\nC "^50%"D |\nE F |\n')).toEqual(['C "^50%"D |\nE F']);
   });
   it("snaps a text selection to whole notes and back", () => {
     const { index } = prepare(twoVoices);
@@ -257,12 +250,12 @@ describe("reading the pointer in the score", () => {
     for (const offset of [2, 6, 9]) {
       expect(slices(at(0, 510 + offset), at(0, xOf(1.25) + 5), [0])).toEqual(["F G"]);
       expect(slices(at(0, xOf(1.25) + 5), at(0, 510 + offset), [0])).toEqual(["F G"]);
-      expect(slices(at(0, 510 + offset), at(1, xOf(1.25) + 5))).toEqual(["F G", "G,4 |"]);
+      expect(slices(at(0, 510 + offset), at(1, xOf(1.25) + 5))).toEqual(["F G", "G,4"]);
     }
     // Ending 2–10 px either side of the bar line keeps bar 1 whole and takes nothing of bar 2.
     // (Bar 2's first head is 10 px past the bar line in this layout, so 8 is the last gap.)
     for (const offset of [-10, -2, 2, 8]) {
-      expect(slices(at(0, xOf(0)), at(0, 510 + offset))).toEqual(["C D E2 |", "C, D, E, F, |"]);
+      expect(slices(at(0, xOf(0)), at(0, 510 + offset))).toEqual(["C D E2", "C, D, E, F,"]);
     }
   });
   it("reads a rest alone in its bar and drawn mid-bar (a whole-bar rest) from the bar's start", () => {
@@ -290,20 +283,17 @@ describe("reading the pointer in the score", () => {
   });
   it("does not let a long note pull the other voice ahead of the pointer", () => {
     const anchor = point(1, xOf(0));
-    expect(slices(anchor, point(0, xOf(0.5) + 10))).toEqual(["C D E2 |", "C, D, E,"]);
-    expect(slices(anchor, point(0, xOf(0.75) + 2))).toEqual(["C D E2 |", "C, D, E, F, |"]);
+    expect(slices(anchor, point(0, xOf(0.5) + 10))).toEqual(["C D E2", "C, D, E,"]);
+    expect(slices(anchor, point(0, xOf(0.75) + 2))).toEqual(["C D E2", "C, D, E, F,"]);
   });
   it("takes nothing from the next bar in the gap before or after the bar line", () => {
     const anchor = point(0, xOf(0));
-    expect(slices(anchor, point(0, 505), [0])).toEqual(["C D E2 |"]);
-    expect(slices(anchor, point(1, 515))).toEqual(["C D E2 |", "C, D, E, F, |"]);
-    expect(slices(anchor, point(1, 521))).toEqual(["C D E2 | F", "C, D, E, F, | G,4 |"]);
+    expect(slices(anchor, point(0, 505), [0])).toEqual(["C D E2"]);
+    expect(slices(anchor, point(1, 515))).toEqual(["C D E2", "C, D, E, F,"]);
+    expect(slices(anchor, point(1, 521))).toEqual(["C D E2 | F", "C, D, E, F, | G,4"]);
   });
   it("drags backwards from where the pointer went down", () => {
-    expect(slices(point(0, xOf(0.75) + 5), point(0, xOf(0.25) + 5))).toEqual([
-      "D E2 |",
-      "D, E, F, |",
-    ]);
+    expect(slices(point(0, xOf(0.75) + 5), point(0, xOf(0.25) + 5))).toEqual(["D E2", "D, E, F,"]);
   });
   it("extends by reach, as Shift click and Alt Shift → do", () => {
     const region = spanRegion(index, 0, 0.25, [0, 1]);
@@ -352,13 +342,13 @@ describe("a drag reads what is drawn, voice by voice", () => {
     const along = drawnRegion(index, placed, at(1, 1), at(1, 1.75), [0, 1]);
     expect(
       regionRanges(index, along, text).map((range) => text.slice(range.from, range.to)),
-    ).toEqual(["c d e f|", "G A B c|"]);
+    ).toEqual(["c d e f", "G A B c"]);
   });
   it("drags back from the anchor to the pointer's note", () => {
     const back = drawnRegion(index, placed, at(1, 1.75), at(1, 1), [1]);
     expect(
       regionRanges(index, back, text).map((range) => text.slice(range.from, range.to)),
-    ).toEqual(["G A B c|"]);
+    ).toEqual(["G A B c"]);
   });
 });
 
@@ -624,5 +614,38 @@ describe("the caret's note", () => {
     ).toBe("e/");
     const first = text.indexOf("c2");
     expect(caretNotesAt(index, first)[0]?.start).toBe(first);
+  });
+});
+
+describe("dragging back mirrors dragging on (round 3)", () => {
+  const text = "X:1\nM:4/4\nL:1/4\nK:C\nC D E F|G A B c|]\n";
+  const { index } = prepare(text);
+  const placed: Placed[] = index.notes.map((note) => ({
+    note,
+    line: 0,
+    staff: 0,
+    x: 100 + note.time * 160 + (note.time >= 1 ? 20 : 0),
+  }));
+  const head = (time: number) =>
+    placed.find((each) => Math.abs(each.note.time - time) < 1e-6) as Placed;
+  const point = (x: number, time: number): ScorePoint => ({
+    note: head(time).note,
+    line: 0,
+    staff: 0,
+    x,
+    reach: time,
+  });
+  const slices = (anchor: ScorePoint, to: ScorePoint) =>
+    regionRanges(index, drawnRegion(index, placed, anchor, to, [0]), text).map((range) =>
+      text.slice(range.from, range.to),
+    );
+  it("4 px left of A's head takes A B c, not G", () => {
+    const anchor = point(head(1.75).x + 2, 1.75);
+    // noteUnder gives G (the last head left of the pointer); the region must still start at A.
+    expect(slices(anchor, point(head(1.25).x - 4, 1))).toEqual(["A B c"]);
+  });
+  it("on a head takes it, both ways", () => {
+    expect(slices(point(head(1.75).x + 2, 1.75), point(head(1.25).x + 3, 1.25))).toEqual(["A B c"]);
+    expect(slices(point(head(1.25).x + 2, 1.25), point(head(1.75).x + 3, 1.75))).toEqual(["A B c"]);
   });
 });

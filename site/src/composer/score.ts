@@ -733,17 +733,9 @@ export function regionRanges(
     for (const notes of runs) {
       const from = minOf(notes.map((note) => note.start));
       let to = maxOf(notes.map((note) => note.end));
-      const lastEnd = maxOf(notes.map((note) => note.time + note.duration));
+      // A selection stops before the bar line: typing over it or deleting it keeps the bars
+      // (./barwise); Cut and Copy of whole bars take their bar line themselves.
       while (to > from && /[ \t]/.test(text[to - 1] as string)) to -= 1;
-      // When this run's last note ends its bar, the bar line comes too, so bars stay whole.
-      const bar = index.bars.find(
-        (each) =>
-          each.voice === voice &&
-          Math.abs(each.time - lastEnd) < EPS &&
-          each.start >= to &&
-          /^[ \t]*$/.test(text.slice(to, each.start)),
-      );
-      if (bar) to = bar.end;
       ranges.push({ from, to });
     }
   }
@@ -865,7 +857,8 @@ export type ScorePoint = { note: ScoreNote; line: number; staff: number; x: numb
  * The region a drag covers, read from what is drawn: in each voice, the notes whose heads lie
  * between where the drag started (the anchor note's head) and where the pointer is (heads at or
  * left of it), in reading order: system, then x. Left of a system's first head, the pointer is on
- * that head. Dragging back, the pointer's note starts it and the anchor ends it. Voices drawn out
+ * that head. Dragging back, the first heads at or right of the pointer start it and the anchor
+ * ends it, as a drag on ends at the heads at or left of the pointer. Voices drawn out
  * of line with each other (a multi-bar rest is drawn one bar wide) each take what was dragged over.
  */
 export function drawnRegion(
@@ -891,7 +884,9 @@ export function drawnRegion(
         { line: pointer.line, x: pointerX },
       ]
     : [
-        { line: pointer.line, x: headOf(pointer.note, pointer.x) - slack },
+        // Dragging back mirrors dragging on: each voice starts at its first head the pointer is
+        // on or left of (a head is ~10 px wide), never at a note the pointer hasn't reached.
+        { line: pointer.line, x: pointer.x - HEAD_WIDTH },
         { line: anchor.line, x: Math.max(anchor.x, anchorHead) },
       ];
   const after = (each: Placed, point: { line: number; x: number }) =>
@@ -932,6 +927,9 @@ export function drawnRegion(
   );
   return region;
 }
+
+/** A note head's width as drawn: the pointer anywhere on it is on that note. */
+const HEAD_WIDTH = 10;
 
 /** The region between where a drag started and where the pointer is now. */
 export function dragRegion(

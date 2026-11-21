@@ -1014,3 +1014,49 @@ The pieces:
 - the unsupported message with `requestMIDIAccess` removed;
 - a .mid opened with its report, then imported again at sixteenths with the drums;
 - the first view without melody or MIDI code.
+
+### Sprint D fixes (after Claude 8.4, Codex 7.8)
+
+1. **Key changes drawn right across the score's reflow.** abcjs 6.7.3's `lineBreaks` reflow repeats the key and clef at every join of the source's own lines. A key change was drawn twice (two sharps, then a stray ♯ mid-line), and a line after a clef change could start in the old clef. Playback was always right.
+   - `reflow.ts` (`keepSignatures`, loaded with abcjs) runs on every parsed tune. On a reflowed tune, each line starts with the key and clef in force. Everywhere, a key or clef element that changes nothing is dropped.
+   - Meter, L: and Q: elements were checked and are drawn once, where written.
+   - The MusicXML and MIDI importers write [K:] only when the signature changes.
+   - Tests:
+     - unit tests over abcjs's own reflow: C→G, Em→G, D→F, a change at a drawn line's start, two voices, `[K:G clef=bass]`, [M:]/[L:]/[Q:], and an unreflowed tune left alone;
+     - check-composer step 25: drawn key signatures, clefs and time signatures by line and bar, at 1440 beside, below and 390.
+2. **Large files.** Every spread of a data-sized list into a call is now a loop (`extent.ts`): in the MusicXML and MIDI code, and in the score and play order they feed. A 200,000-note file imports. Error messages Composer writes are shown as they are; any other error is logged to the console and a plain sentence stands in (`plain.ts`).
+3. **Both hands of a piano in one track** go on a grand staff (`splitHands`).
+   - **When:** the part's range spans both clefs (its low 15% below G3, its high 15% above E4).
+   - **How:** notes are taken onset by onset. Each goes to the hand whose line it continues: nearest to where the hand is heading (its last note moved on by its last step).
+   - **Costs and tie-breaks:**
+     - a hand still holding notes is less likely to take a new one;
+     - no hand stretches past a tenth;
+     - a slight pull toward middle C;
+     - ties go to one note per hand, uncrossed.
+   - Each hand gets its own voices, so a chord never mixes hands.
+   - Tests: an alberti bass under a melody, block chords, and lines that cross.
+4. **The key estimate** leans toward the key whose tonic is the last bar's lowest note only when that key's Krumhansl–Kessler score is within 0.05 of the best. A C major piece ending on an alberti G stays in C. Tests: that piece, A minor, G major.
+5. **Step entry across bar lines.** A step that overflows the bar is split at the bar line and tied (a rest without a tie). The bar line goes in, and the count starts again in the new bar, where accidentals are written afresh. A long note crosses as many bars as it needs, and a bar already full is closed first. This is the pure `stepInsert`, with tests.
+6. **The start screen** makes the text, score, splitter and tunes panel `inert` and `aria-hidden` while it shows.
+7. **Step entry's caret:** a steady caret mark (a CodeMirror widget) where the next note goes, while step entry is on. The score lights the caret's note as before.
+8. **Docked panels.**
+   - Find melody and the MIDI keyboard dock in the rail's column, which widens to 340 px while one is open (`dock.ts`). They never cover the text, the score or the lit match, and the score scrolls the match into view.
+   - On a phone they sit above the transport. A chosen melody result folds the panel to one line (2 of 7 ‹ › Close).
+   - Both use the dialogs' 1 px border; focus on the panel shows in the border, not a ring.
+9. **Melody search.**
+   - Matches may overlap.
+   - "Every draft" reads every draft, one at a time.
+   - Results are drawn 500 at a time with "Showing 500 of N. Show 500 more".
+   - Ranking: exact intervals first, then the same rhythm, then those with no repeats folded. Matches that needed repeats folded say so.
+   - Unnamed voices are named by their V:.
+   - The hint says what contour and Same rhythm match.
+   - Tab stays in the panel; Escape closes it and returns focus.
+10. **Step entry's state.** A "Step entry" pill shows in the status line. Closing the panel goes back to Hear it. A refusal, or no keyboard, shows only its message and Retry.
+11. **MIDI copy and metadata.**
+    - The start screen and the "Coming from MuseScore" help mention MIDI.
+    - Composer's MIDI export writes the key signature (it already wrote the meter and track names), so its files come back in their own key.
+    - The importer writes Q: in the meter's beat (Q:3/8=80 in 6/8).
+12. **A file cut short** is read as far as it goes. The report says the bar where it stops, any tracks the header promised that aren't there, and the notes still sounding at the cut.
+13. **The status line folds away** (Hide on a phone, View › Status line), remembered. Folded, it is gone, about 40 px back on a phone.
+
+**First view.** 719 KB, under its 720 KB check. To stay there, the reflow repair loads with abcjs, and the Appearance and Recover drafts dialogs fill when first opened.

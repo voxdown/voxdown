@@ -2140,8 +2140,13 @@ body.focus-mode .app-header {
   .print-score .print-tune {
     break-after: page;
   }
-  .print-score .print-tune:last-child {
+  .print-score .print-tune:last-child,
+  .print-score .print-tune.short {
     break-after: auto;
+  }
+  .print-score .print-tune.short {
+    break-inside: avoid;
+    margin-bottom: 6mm;
   }
   .print-score svg {
     display: block;

@@ -3033,6 +3033,113 @@ console.log(
   "Composer: tune book: sort and renumber, one undo each; bars lined up, the music the same: passed",
 );
 
+{
+  // Sprint C 3. Exports: an SVG of this tune, the HTML tune book (opened offline, every tune shown)
+  // and every tune's MIDI in one .zip.
+  await setText(
+    'X:1\nT:The Swallowtail\nM:6/8\nL:1/8\nK:Em\nGEE BEE|dBA BAG|\n\nX:2\nT:Banish Misfortune\nM:6/8\nL:1/8\nK:Dmix\nfed cAG|A2d cAG|\n\nX:3\nT:Jumps\nM:1/4\nL:1/4\nK:C\nC|!segno!D|"^To Coda"E|!D.S.alcoda!F|!coda!G|]\n',
+    "The Swallowtail",
+  );
+  const exportVia = async (item, kind, setup) => {
+    await page.locator('[data-menu="file"]').click();
+    await page.getByRole("menuitem", { name: "Export", exact: true }).click();
+    await page.getByRole("menuitem", { name: item }).click();
+    const dialog = page.locator(`#export-${kind}[open]`);
+    await dialog.waitFor();
+    if (setup) await setup(dialog);
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      dialog.getByRole("button", { name: "Export" }).click(),
+    ]);
+    const path = resolve(
+      process.env.TMPDIR ?? "/tmp",
+      `composer-${Date.now()}-${download.suggestedFilename()}`,
+    );
+    await download.saveAs(path);
+    return { name: download.suggestedFilename(), path };
+  };
+  const svg = await exportVia("SVG of this tune…", "svg");
+  assert.equal(svg.name, "The Swallowtail.svg");
+  const svgText = readFileSync(svg.path, "utf8");
+  assert.match(svgText, /^<\?xml version="1\.0" encoding="UTF-8" standalone="no"\?>\n<svg /);
+  assert.match(svgText, / viewBox="0 0 [\d.]+ [\d.]+"/);
+  assert(!/\sclass=|currentColor|is-caret|is-selected/.test(svgText), "no classes or highlights");
+  const svgDrawn = await page.evaluate(async (markup) => {
+    const parsed = new DOMParser().parseFromString(markup, "image/svg+xml");
+    if (parsed.querySelector("parsererror")) return { valid: false, width: 0 };
+    const image = new Image();
+    image.src = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
+    await image.decode();
+    return { valid: true, width: image.naturalWidth };
+  }, svgText);
+  assert.deepEqual(svgDrawn.valid, true, "valid SVG");
+  assert(svgDrawn.width > 300, `the SVG draws on its own: ${svgDrawn.width} px wide`);
+  unlinkSync(svg.path);
+  const html = await exportVia("HTML tune book…", "html", (dialog) =>
+    dialog.getByRole("checkbox").check(),
+  );
+  assert.match(html.name, /\.html$/);
+  const offline = await browser.newContext({
+    offline: true,
+    viewport: { width: 1440, height: 900 },
+  });
+  const reader = await offline.newPage();
+  const requests = [];
+  reader.on("request", (request) => {
+    if (!request.url().startsWith("file:") && !request.url().startsWith("data:"))
+      requests.push(request.url());
+  });
+  await reader.goto(`file://${html.path}`);
+  const shown = await reader.evaluate(() => ({
+    contents: [...document.querySelectorAll("nav a")].map((link) => link.textContent),
+    tunes: [...document.querySelectorAll("section.tune")].map((section) => ({
+      title: section.querySelector("h2").textContent,
+      drawn: section.querySelector("svg")?.getBoundingClientRect().height ?? 0,
+      abc: Boolean(section.querySelector("details pre")),
+      play: Boolean(section.querySelector("button.play")),
+    })),
+  }));
+  assert.deepEqual(shown.contents, ["The Swallowtail", "Banish Misfortune", "Jumps"]);
+  assert.equal(shown.tunes.length, 3);
+  for (const tune of shown.tunes) {
+    assert(tune.drawn > 60, `${tune.title} is drawn (${tune.drawn} px)`);
+    assert(tune.abc && tune.play, `${tune.title} has its ABC and a Play button`);
+  }
+  assert.deepEqual(requests, [], "the book needs nothing from the network");
+  await offline.close();
+  unlinkSync(html.path);
+  const midi = await exportVia("MIDI…", "midi", (dialog) =>
+    dialog.getByLabel(/Every tune/).check(),
+  );
+  assert.equal(
+    midi.name,
+    "Untitled MIDI.zip".replace(
+      "Untitled",
+      (await page.locator("#name").inputValue()).replace(/\.abc$/, ""),
+    ),
+  );
+  const zip = readFileSync(midi.path);
+  const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const entries = [];
+  for (let at = zip.readUInt32LE(end + 16), n = 0; n < zip.readUInt16LE(end + 10); n++) {
+    const nameLength = zip.readUInt16LE(at + 28);
+    const local = zip.readUInt32LE(at + 42);
+    const name = zip.subarray(at + 46, at + 46 + nameLength).toString();
+    const data = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+    entries.push({ name, head: zip.subarray(data, data + 4).toString() });
+    at += 46 + nameLength + zip.readUInt16LE(at + 30) + zip.readUInt16LE(at + 32);
+  }
+  assert.deepEqual(entries, [
+    { name: "The Swallowtail.mid", head: "MThd" },
+    { name: "Banish Misfortune.mid", head: "MThd" },
+    { name: "Jumps.mid", head: "MThd" },
+  ]);
+  unlinkSync(midi.path);
+}
+console.log(
+  "Composer: SVG and HTML book exported (the book opens offline with every tune), every tune's MIDI in one .zip: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

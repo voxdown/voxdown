@@ -49,7 +49,7 @@ import {
 } from "./menus";
 import { offlineStatus, prepareOffline } from "./offline";
 import { applyPassDynamics, passMarks } from "./passes";
-import { Player, encodeWav, normalise } from "./player";
+import { Player } from "./player";
 import { checkSlurs, plainWarnings } from "./problems";
 import { roving } from "./roving";
 import {
@@ -3696,7 +3696,7 @@ async function importScore(bytes: Uint8Array, name: string) {
     // The report first, painted, then the new draft behind it: a large score's drawing takes a
     // moment, and the report should not wait for it.
     status.textContent = musicxml.describeReport(result.report);
-    showImportReport(result.report, name, musicxml.describeReport(result.report));
+    musicxml.showImportReport(result.report, name, musicxml.describeReport(result.report));
     await new Promise((painted) => requestAnimationFrame(() => setTimeout(painted, 0)));
     local.disconnect();
     load(newSource(result.text), abcName(result.report.title));
@@ -3712,54 +3712,6 @@ async function importScore(bytes: Uint8Array, name: string) {
     importing = false;
   }
 }
-const importDialog = createDialog("import-report", "Imported from MusicXML");
-function showImportReport(
-  report: import("./musicxml").ImportReport,
-  name: string,
-  summary: string,
-) {
-  const body = importDialog.body;
-  body.replaceChildren();
-  const lead = document.createElement("p");
-  lead.textContent = summary;
-  const source = document.createElement("p");
-  source.className = "hint";
-  source.textContent = `From ${name}. It is now ABC text in a new draft: the score is drawn from it, and ${name} is left as it was.`;
-  body.append(lead, source);
-  const section = (title: string, items: string[]) => {
-    if (!items.length) return;
-    const heading = document.createElement("h3");
-    heading.textContent = title;
-    const list = document.createElement("ul");
-    list.className = "import-list";
-    for (const item of items) {
-      const entry = document.createElement("li");
-      entry.textContent = item;
-      list.append(entry);
-    }
-    body.append(heading, list);
-  };
-  section(
-    "Left out",
-    report.dropped.map((item) =>
-      item.label === "page layout"
-        ? "Page layout (margins, spacing, fonts, credits)"
-        : `${item.count} ${item.label}`,
-    ),
-  );
-  section("Good to know", report.notes);
-  const done = document.createElement("button");
-  done.type = "button";
-  done.className = "primary";
-  done.textContent = "OK";
-  done.addEventListener("click", () => importDialog.close());
-  const row = document.createElement("div");
-  row.className = "dialog-actions";
-  row.append(done);
-  body.append(row);
-  importDialog.open();
-}
-
 async function save(saveAs = false) {
   const name = abcName(nameInput.value);
   let encoded: { bytes: Uint8Array<ArrayBuffer>; upgraded: boolean };
@@ -3853,80 +3805,49 @@ nameInput.addEventListener("change", () => {
  * MusicXML out, from abcjs's parse of each tune (the parse the score is drawn from): the tune at
  * the caret as a .musicxml, or every tune as .musicxml files in one .zip.
  */
-async function exportMusicXmlFiles(all: boolean) {
-  const index = fileIndex();
-  const current = tuneAt(index, caret());
-  const tunes = all ? index.tunes : current ? [current] : [];
-  if (!tunes.length) return notice("Write a tune first: there is nothing to export yet.");
-  try {
-    const [abcjs, musicxml] = await Promise.all([loadAbcjs(), import("./musicxml")]);
-    const encoder = new TextEncoder();
-    const date = new Date().toISOString().slice(0, 10);
-    const used = new Set<string>();
-    const files = tunes.map((tune) => {
-      const { source } = tuneSource({ text: text(), file: index, tune });
-      const parsed = (abcjs as Any).parseOnly(source)[0];
-      let base = abcName(tuneLabel(tune)).replace(/\.abc$/, "");
-      // Two tunes with one title get numbered names in the .zip.
-      for (let count = 2; used.has(base); count++)
-        base = `${abcName(tuneLabel(tune)).replace(/\.abc$/, "")} ${count}`;
-      used.add(base);
-      return {
-        name: `${base}.musicxml`,
-        data: encoder.encode(musicxml.exportMusicXml(parsed, { date })),
-      };
-    });
-    if (files.length === 1) {
-      const [file] = files as [(typeof files)[number]];
-      download(file.data as BlobPart, file.name, "application/vnd.recordare.musicxml+xml");
-      notice(`Exported ${file.name}: open it in MuseScore, Dorico, Finale or Sibelius.`, "success");
-    } else {
-      const zipName = `${abcName(nameInput.value).replace(/\.abc$/, "")} (MusicXML).zip`;
-      download(musicxml.writeZip(files) as BlobPart, zipName, "application/zip");
-      notice(`Exported ${files.length} tunes as MusicXML in ${zipName}.`, "success");
-    }
-  } catch (error) {
-    noticeError(
-      `The MusicXML could not be written${error instanceof Error && error.message ? `: ${error.message}` : "."}`,
-    );
-  }
-}
+/** MusicXML out (./musicxml): this tune, or every tune in a .zip. */
+const exportMusicXmlFiles = (all: boolean) =>
+  import("./musicxml").then((musicxml) =>
+    musicxml.exportMusicXmlFiles({
+      all,
+      text: text(),
+      file: fileIndex(),
+      tune: tuneAt(fileIndex(), caret()),
+      name: nameInput.value,
+      notice,
+      noticeError,
+    }),
+  );
 
-async function exportMidi() {
-  if (!scoreIndex || !timeline) return notice("Draw a tune first: there is nothing to export yet.");
-  // From the timeline the player plays: repeats, endings and D.C./D.S. jumps as heard.
-  const { writeMidi } = await import("./midi");
-  const bytes = writeMidi(timeline, {
-    title: tuneLabel(scoreIndex.tune),
-    tempoFactor: player.tempoFactor,
-    instrument: player.instrument,
-  });
-  download(
-    bytes as BlobPart,
-    `${abcName(tuneLabel(scoreIndex.tune)).replace(/\.abc$/, "")}.mid`,
-    "audio/midi",
-  );
-}
-async function exportWav() {
-  if (!timeline || !scoreIndex) return notice("Draw a tune first: there is nothing to export yet.");
-  notice(
-    `Rendering ${tuneLabel(scoreIndex.tune)} with the ${INSTRUMENTS[player.instrument].label.toLowerCase()}…`,
-    "success",
-  );
-  try {
-    const buffer = await player.render(timeline);
-    // Playback leaves headroom for the room and the limiter; a file is brought up to −1 dBFS.
-    normalise(buffer);
-    download(
-      encodeWav(buffer),
-      `${abcName(tuneLabel(scoreIndex.tune)).replace(/\.abc$/, "")}.wav`,
-      "audio/wav",
-    );
-    notice("Audio exported as WAV.", "success");
-  } catch {
-    noticeError("The audio could not be rendered. Try again once the instrument has loaded.");
+/** SVG, the HTML tune book, MIDI and WAV (./exports), with the score's colours for the look. */
+const exportRun = (kind: import("./exports").ExportKind) => () => {
+  let element: Element | null = $("score");
+  const ink = getComputedStyle(element).color;
+  let paper = "#ffffff";
+  for (; element; element = element.parentElement) {
+    const fill = getComputedStyle(element).backgroundColor;
+    if (fill && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(fill)) {
+      paper = fill;
+      break;
+    }
   }
-}
+  void import("./exports").then((module) =>
+    module.openExport(kind, {
+      text: text(),
+      file: fileIndex(),
+      tune: scoreIndex?.tune ?? tuneAt(fileIndex(), caret()),
+      name: nameInput.value,
+      timeline,
+      followJumps: prefs.followJumps,
+      tempoFactor: player.tempoFactor,
+      instrument: player.instrument,
+      look: { ink, paper },
+      render: (line) => player.render(line),
+      notice,
+      noticeError,
+    }),
+  );
+};
 /** Every tune, drawn for paper with the screen's fonts. Synchronous, so the browser's own Print
  * (which gives no time to wait) can use it too. */
 function fillPrint(abcjs: typeof import("abcjs")): boolean {
@@ -3948,6 +3869,9 @@ function fillPrint(abcjs: typeof import("abcjs")): boolean {
       wrap: { minSpacing: 1.8, maxSpacing: 2.6, preferredMeasuresPerLine: 4 },
     } as Any);
     drawPassDynamics(holder);
+    // Short tunes (an incipit, a two-line air) share a page; longer ones start a page each.
+    if (Number(holder.querySelector("svg")?.getAttribute("height")) < 330)
+      holder.classList.add("short");
   }
   return index.tunes.length > 0;
 }
@@ -4439,11 +4363,18 @@ const menus = mountMenus(
           },
         ],
       },
-      { label: "Export MIDI", run: () => void exportMidi(), enabled: () => Boolean(scoreIndex) },
       {
-        label: "Export audio (WAV)",
-        run: () => void exportWav(),
-        enabled: () => Boolean(timeline),
+        label: "Export",
+        id: "export",
+        submenu: () => {
+          const some = () => fileIndex().tunes.length > 0;
+          return [
+            { label: "SVG of this tune…", run: exportRun("svg"), enabled: some },
+            { label: "HTML tune book…", run: exportRun("html"), enabled: some },
+            { label: "MIDI…", run: exportRun("midi"), enabled: some },
+            { label: "Audio (WAV)…", run: exportRun("wav"), enabled: some },
+          ];
+        },
       },
       { label: "Print or save as PDF…", run: () => void printScore(), shortcut: "Mod P" },
     ],

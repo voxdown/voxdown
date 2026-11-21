@@ -9,6 +9,7 @@ export { describeReport, type ImportReport, type ImportResult } from "./import";
 export { MusicXmlError } from "./text";
 export { ZipError, writeZip } from "./zip";
 export { exportMusicXml } from "./export";
+export { exportMusicXmlFiles, showImportReport } from "./app";
 
 /** Reads a .musicxml, .xml or .mxl file into ABC text and a report. */
 export async function readScore(

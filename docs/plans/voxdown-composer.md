@@ -1059,4 +1059,16 @@ The pieces:
 12. **A file cut short** is read as far as it goes. The report says the bar where it stops, any tracks the header promised that aren't there, and the notes still sounding at the cut.
 13. **The status line folds away** (Hide on a phone, View › Status line), remembered. Folded, it is gone, about 40 px back on a phone.
 
-**First view.** 719 KB, under its 720 KB check. To stay there, the reflow repair loads with abcjs, and the Appearance and Recover drafts dialogs fill when first opened.
+14. **A note never gets two staccatos (or two rolls).**
+    - **The path that stacked them:** the decoration menu's `decorate` checked only the characters right before a note. Staccato on `"Am".C`, `.!p!C`, `!staccato!C`, or a mark set apart by a space or a line break, added a second.
+    - **Marks read as abcjs reads them:** `prefixMarks` goes across chord symbols, annotations, other decorations, grace groups, a slur's start, spaces and the end of the line before. `.` and `!staccato!` count as one mark, `~` and `!roll!` as another.
+    - **The guard:** every change that adds a mark passes `guardMarks`. A mark the note already has is never added, and a whole-file check (`doubledMarks`, one pass) makes sure no note has the same mark twice afterwards.
+    - A held mark key acts once, in the text and the score.
+    - **Ruled out:** the score's key handler and the editor's input can't both act, since the score calls `preventDefault` and the editor hasn't the focus. IME composition skips the mark handler, so the browser types the character as usual.
+    - **Tests:** every split form, both spellings, space and line break, a selection that starts between a mark and its note, a mixed selection typed once and then again (text, score and decoration menu, in check-composer step 27), and the guard itself.
+15. **Shift+click in the score takes the note clicked.** A note counted as reached only from its head's left edge, so a click on the middle of a note's box (where Playwright clicks) stopped one note short. A pointer over a note's own drawing (head, stem, chord symbol, words), clipped to its bar so nothing reaching over a bar line counts, is now on that note. check-composer step 27 covers the head, the stem and the middle, both ways.
+
+**First view.** 718 KB, under its 720 KB check. To stay there:
+- the reflow repair loads with abcjs;
+- the Appearance and Recover drafts dialogs fill when first opened;
+- the problems list and those dialogs' styles load with them.

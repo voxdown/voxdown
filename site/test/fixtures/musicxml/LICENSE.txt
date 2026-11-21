@@ -6,3 +6,5 @@ The review-*.musicxml files were written by Composer's reviewer in the shapes Mu
 Finale and Sibelius export, for these tests. They too hold only public-domain music (traditional
 tunes, Beethoven's "Ode to Joy" theme, John Newton's 1779 words) or made-up test notes, and are
 released into the public domain (CC0 1.0).
+review-bad-charref, review-billion-laughs and review-truncated are deliberately broken files from
+the same review, for the reader's error messages.

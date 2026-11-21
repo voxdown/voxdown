@@ -1,8 +1,17 @@
 /**
  * A small zip reader and writer for .mxl files and tune-book exports. Reading follows the
  * central directory and inflates "deflate" entries with the browser's DecompressionStream; writing
- * stores entries uncompressed. Encrypted and zip64 archives are refused with a plain message.
+ * stores entries uncompressed. Encrypted and zip64 archives are refused with a plain message, and
+ * so are archives that would unpack to more than a score could need (a zip bomb): by the sizes the
+ * directory gives before anything is unpacked, and by what actually comes out while unpacking.
  */
+import { decodeText } from "./text";
+
+/** The most one file inside an .mxl may unpack to, all of them together, and how many there are. */
+export const ENTRY_LIMIT = 64 * 1024 * 1024;
+export const TOTAL_LIMIT = 128 * 1024 * 1024;
+export const ENTRY_COUNT_LIMIT = 1000;
+const TOO_LARGE = "This .mxl unpacks to more than 64 MB, too large to open here.";
 
 export class ZipError extends Error {
   constructor(message: string) {
@@ -36,13 +45,38 @@ export function crc32(bytes: Uint8Array): number {
 export const isZip = (bytes: Uint8Array) =>
   bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 3 && bytes[3] === 4;
 
-async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
+/** Inflates a deflate entry, stopping as soon as it passes the limit, whatever its header says. */
+async function inflate(bytes: Uint8Array, limit = ENTRY_LIMIT): Promise<Uint8Array> {
   if (typeof DecompressionStream === "undefined")
     throw new ZipError("This browser cannot unpack compressed .mxl files.");
-  const stream = new Blob([bytes as BlobPart])
+  const reader = new Blob([bytes as BlobPart])
     .stream()
-    .pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+    .pipeThrough(new DecompressionStream("deflate-raw"))
+    .getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > limit) {
+        await reader.cancel();
+        throw new ZipError(TOO_LARGE);
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof ZipError) throw error;
+    throw new ZipError("A file inside this .mxl is damaged and cannot be unpacked.");
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.length;
+  }
+  return out;
 }
 
 /** The entries of a zip archive, read from its central directory. */
@@ -63,6 +97,11 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
     throw new ZipError(
       "This archive uses zip64, which Composer does not read. Save it as plain MusicXML (.musicxml) instead.",
     );
+  if (count > ENTRY_COUNT_LIMIT)
+    throw new ZipError(
+      `This .mxl holds ${count.toLocaleString("en")} files, too many for a score (Composer reads up to ${ENTRY_COUNT_LIMIT.toLocaleString("en")}).`,
+    );
+  let total = 0;
   const decoder = new TextDecoder();
   const entries: ZipEntry[] = [];
   let at = offset;
@@ -88,6 +127,12 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
       );
     if (method !== 0 && method !== 8)
       throw new ZipError(`"${name}" is packed in a way Composer does not read (method ${method}).`);
+    // Refused by the sizes the directory gives, before anything is unpacked.
+    total += plain;
+    if (plain > ENTRY_LIMIT) throw new ZipError(TOO_LARGE);
+    if (total > TOTAL_LIMIT)
+      throw new ZipError("This .mxl unpacks to more than 128 MB in all, too large to open here.");
+    if (local + 30 > bytes.length) throw new ZipError("The archive's directory is damaged.");
     entries.push({
       name,
       method,
@@ -98,7 +143,10 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
         const localName = view.getUint16(local + 26, true);
         const localExtra = view.getUint16(local + 28, true);
         const start = local + 30 + localName + localExtra;
+        if (start + compressed > bytes.length)
+          throw new ZipError(`"${name}" is damaged in the archive.`);
         const raw = bytes.subarray(start, start + compressed);
+        if (method === 0 && raw.length > ENTRY_LIMIT) throw new ZipError(TOO_LARGE);
         return method === 0 ? raw : inflate(raw);
       },
     });
@@ -161,35 +209,42 @@ export function writeZip(files: { name: string; data: Uint8Array }[]): Uint8Arra
   return out;
 }
 
+/** A name that points outside the archive's own folder: never used (we only look names up). */
+const outside = (name: string) => /^[/\\]|^[A-Za-z]:|(^|[/\\])\.\.([/\\]|$)/.test(name);
+
 /**
  * The MusicXML documents inside an .mxl: the root files named in META-INF/container.xml (several
  * for a book of movements), or the first .musicxml/.xml outside META-INF when it is missing.
+ * Names with ../ or an absolute path are ignored.
  */
 export async function mxlDocuments(bytes: Uint8Array): Promise<{ name: string; text: string }[]> {
   const entries = readZip(bytes);
-  const decoder = new TextDecoder();
   const byName = new Map(entries.map((entry) => [entry.name, entry]));
   const container = byName.get("META-INF/container.xml");
   let roots: string[] = [];
   if (container) {
-    const text = decoder.decode(await container.data());
+    const text = decodeText(await container.data(), "META-INF/container.xml");
     roots = [...text.matchAll(/<rootfile\b[^>]*\bfull-path\s*=\s*["']([^"']+)["'][^>]*>/g)]
       .filter(
         (match) => !/media-type\s*=\s*["'](?!application\/vnd\.recordare\.musicxml)/.test(match[0]),
       )
-      .map((match) => match[1] as string);
+      .map((match) => match[1] as string)
+      .filter((name) => !outside(name));
   }
   if (!roots.length)
     roots = entries
       .map((entry) => entry.name)
-      .filter((name) => !name.startsWith("META-INF/") && /\.(musicxml|xml)$/i.test(name))
+      .filter(
+        (name) =>
+          !name.startsWith("META-INF/") && !outside(name) && /\.(musicxml|xml)$/i.test(name),
+      )
       .slice(0, 1);
   if (!roots.length) throw new ZipError("No MusicXML score was found inside this .mxl file.");
   const documents: { name: string; text: string }[] = [];
   for (const root of roots) {
     const entry = byName.get(root);
     if (!entry) throw new ZipError(`The .mxl names "${root}", but it is not in the archive.`);
-    documents.push({ name: root, text: decoder.decode(await entry.data()) });
+    documents.push({ name: root, text: decodeText(await entry.data(), root) });
   }
   return documents;
 }

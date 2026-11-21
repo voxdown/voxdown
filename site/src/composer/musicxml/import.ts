@@ -18,6 +18,7 @@ import {
   value,
   writePitch,
 } from "../abc";
+import { MusicXmlError } from "./text";
 import { type XmlElement, child, children, numberOf, parseXml, textOf } from "./xml";
 
 export type ImportReport = {
@@ -32,12 +33,7 @@ export type ImportReport = {
 };
 export type ImportResult = { text: string; report: ImportReport };
 
-export class MusicXmlError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "MusicXmlError";
-  }
-}
+export { MusicXmlError };
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const fracOf = (num: number, den: number): Fraction => (den ? frac(Math.round(num), den) : frac(0));

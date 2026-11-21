@@ -63,10 +63,42 @@ describe("the XML reader", () => {
   it("says what is wrong and where", () => {
     expect(() => parseXml("<a>\n<b>\n</a>")).toThrow(XmlError);
     expect(() => parseXml("<a>\n<b>\n</a>")).toThrow(
-      /<\/a> found where <\/b> was expected \(line 3\)/,
+      /<\/a> found where <\/b> was expected \(line 3, column 1\)/,
     );
     expect(() => parseXml("<a>")).toThrow(/<a> is not closed/);
     expect(() => parseXml("just text")).toThrow(XmlError);
+  });
+  it("gives every error a line and column: bad character references, entities, limits", () => {
+    const error = (source: string, limits?: { length: number; elements: number }) => {
+      try {
+        parseXml(source, limits);
+      } catch (caught) {
+        return caught;
+      }
+      return null;
+    };
+    // The reviewer's file: &#x110000; is past Unicode. A RangeError before; now an XmlError.
+    const bad = error(fixture("review-bad-charref.musicxml")) as XmlError;
+    expect(bad).toBeInstanceOf(XmlError);
+    expect(bad.message).toBe("&#x110000; is not a character XML allows (line 1, column 74)");
+    expect(bad.line).toBe(1);
+    expect(bad.column).toBe(74);
+    for (const reference of ["&#0;", "&#xD800;", "&#xFFFE;", "&#1114112;"])
+      expect(error(`<a>\n  x${reference}</a>`), reference).toBeInstanceOf(XmlError);
+    expect((error('<a b="1 &#x0; 2"/>') as XmlError).message).toBe(
+      "&#x0; is not a character XML allows (line 1, column 9)",
+    );
+    // A DTD's entities are never expanded (the reviewer's billion laughs).
+    expect((error(fixture("review-billion-laughs.musicxml")) as XmlError).message).toMatch(
+      /^&lol9; is an entity Composer does not expand .* \(line \d+, column \d+\)$/,
+    );
+    // Too long, or too many elements.
+    expect((error("<a></a>", { length: 4, elements: 10 }) as XmlError).message).toBe(
+      "The document is larger than 0 MB, too large to open here (line 1, column 1)",
+    );
+    expect((error("<a><b/><b/><b/></a>", { length: 100, elements: 3 }) as XmlError).message).toBe(
+      "The document has more than 3 elements, too many to open here (line 1, column 12)",
+    );
   });
 });
 

@@ -16,55 +16,92 @@ export class XmlError extends Error {
   constructor(
     message: string,
     readonly line: number,
+    readonly column = 1,
   ) {
-    super(`${message} (line ${line})`);
+    super(`${message} (line ${line}, column ${column})`);
     this.name = "XmlError";
   }
 }
 
+/** The most a document may hold: 64 MB of text and five million elements. */
+export const XML_LIMITS = { length: 64 * 1024 * 1024, elements: 5_000_000 };
+
 const NAMED: Record<string, string> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" };
 
-function decode(text: string, lineAt: () => number): string {
-  if (!text.includes("&")) return text;
-  return text.replace(
-    /&(#x[0-9a-fA-F]+|#[0-9]+|[A-Za-z][A-Za-z0-9]*);?/g,
-    (match, body: string) => {
-      if (body.startsWith("#x")) return String.fromCodePoint(Number.parseInt(body.slice(2), 16));
-      if (body.startsWith("#")) return String.fromCodePoint(Number.parseInt(body.slice(1), 10));
-      const named = NAMED[body];
-      if (named !== undefined) return named;
-      // Entities a DTD would define are not fetched; keep the text as written.
-      if (!match.endsWith(";")) return match;
-      throw new XmlError(`Unknown entity &${body};`, lineAt());
-    },
-  );
-}
+/** Whether a code point may appear in XML 1.0. */
+const allowed = (code: number) =>
+  code === 0x9 ||
+  code === 0xa ||
+  code === 0xd ||
+  (code >= 0x20 && code <= 0xd7ff) ||
+  (code >= 0xe000 && code <= 0xfffd) ||
+  (code >= 0x10000 && code <= 0x10ffff);
 
 /** Parses an XML document and returns its root element. */
-export function parseXml(source: string): XmlElement {
+export function parseXml(
+  source: string,
+  limits: { length: number; elements: number } = XML_LIMITS,
+): XmlElement {
+  if (source.length > limits.length)
+    throw new XmlError(
+      `The document is larger than ${Math.round(limits.length / 1024 / 1024)} MB, too large to open here`,
+      1,
+    );
   const text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
   let at = 0;
-  const lineAt = () => {
+  /** Line and column of a place in the text. */
+  const place = (offset: number) => {
     let line = 1;
-    for (let index = 0; index < at && index < text.length; index++)
-      if (text.charCodeAt(index) === 10) line++;
-    return line;
+    let lineStart = 0;
+    for (let index = 0; index < offset && index < text.length; index++)
+      if (text.charCodeAt(index) === 10) {
+        line++;
+        lineStart = index + 1;
+      }
+    return { line, column: offset - lineStart + 1 };
   };
-  const fail = (message: string): never => {
-    throw new XmlError(message, lineAt());
+  const failAt = (message: string, offset: number): never => {
+    const { line, column } = place(offset);
+    throw new XmlError(message, line, column);
   };
+  const fail = (message: string): never => failAt(message, at);
+  /** Text with its entities and character references replaced; offset is where it starts. */
+  const decode = (chunk: string, offset: number): string => {
+    if (!chunk.includes("&")) return chunk;
+    return chunk.replace(
+      /&(#x[0-9a-fA-F]+|#[0-9]+|[A-Za-z][A-Za-z0-9]*);?/g,
+      (match, body: string, index: number) => {
+        if (body.startsWith("#")) {
+          const code = body.startsWith("#x")
+            ? Number.parseInt(body.slice(2), 16)
+            : Number.parseInt(body.slice(1), 10);
+          if (!allowed(code)) failAt(`${match} is not a character XML allows`, offset + index);
+          return String.fromCodePoint(code);
+        }
+        const named = NAMED[body];
+        if (named !== undefined) return named;
+        // Entities a DTD would define are not fetched or expanded; keep the text as written.
+        if (!match.endsWith(";")) return match;
+        return failAt(
+          `&${body}; is an entity Composer does not expand (only &lt; &gt; &amp; &quot; &apos;)`,
+          offset + index,
+        );
+      },
+    );
+  };
+  let elements = 0;
   const root: XmlElement = { name: "#document", attrs: {}, children: [], text: "" };
   const stack: { element: XmlElement; texts: string[] }[] = [{ element: root, texts: [] }];
   while (at < text.length) {
     const open = text.indexOf("<", at);
     const top = stack[stack.length - 1] as { element: XmlElement; texts: string[] };
     if (open < 0) {
-      if (text.slice(at).trim() && stack.length > 1) top.texts.push(decode(text.slice(at), lineAt));
+      if (text.slice(at).trim() && stack.length > 1) top.texts.push(decode(text.slice(at), at));
       break;
     }
     if (open > at) {
       const chunk = text.slice(at, open);
-      if (stack.length > 1) top.texts.push(decode(chunk, lineAt));
+      if (stack.length > 1) top.texts.push(decode(chunk, at));
       else if (chunk.trim()) fail("Text outside the root element");
     }
     at = open;
@@ -107,6 +144,10 @@ export function parseXml(source: string): XmlElement {
       const match = /^<([A-Za-z_][\w.:-]*)/.exec(text.slice(at, at + 200));
       if (!match) fail("A tag is not well formed");
       const name = (match as RegExpExecArray)[1] as string;
+      if (++elements > limits.elements)
+        fail(
+          `The document has more than ${limits.elements.toLocaleString("en")} elements, too many to open here`,
+        );
       let index = at + (match as RegExpExecArray)[0].length;
       const attrs: Record<string, string> = {};
       for (;;) {
@@ -116,9 +157,10 @@ export function parseXml(source: string): XmlElement {
         const attr = /^([A-Za-z_][\w.:-]*)\s*=\s*("([^"]*)"|'([^']*)')/.exec(
           text.slice(index, index + 2000),
         );
-        if (!attr) fail(`An attribute of <${name}> is not well formed`);
+        if (!attr) failAt(`An attribute of <${name}> is not well formed`, index);
         const found = attr as RegExpExecArray;
-        attrs[found[1] as string] = decode(found[3] ?? found[4] ?? "", lineAt);
+        const valueAt = index + found[0].indexOf(found[2] as string) + 1;
+        attrs[found[1] as string] = decode(found[3] ?? found[4] ?? "", valueAt);
         index += found[0].length;
       }
       const element: XmlElement = { name, attrs, children: [], text: "" };

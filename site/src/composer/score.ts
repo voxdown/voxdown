@@ -403,6 +403,12 @@ export async function renderTune(
       pickup,
       filled,
     });
+    // abcjs wants a list of breaks for each section of music it reflows (a %%vskip, a %%text or a
+    // new part's title starts one) and throws without it: the score then never redraws.
+    const reflowed = (parsed?.deline?.({ lineBreaks: false }) ?? []).filter(
+      (line: Any) => line.staff,
+    ).length;
+    while (lineBreaks.length < reflowed) lineBreaks.push([]);
     measured = {
       sections: sections.map((section: Any) => ({
         left: section.left,

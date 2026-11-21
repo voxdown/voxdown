@@ -646,12 +646,26 @@ function sayAboutSelection(message: string) {
   statusNote = { message, selection: view.state.selection };
   $("explain").textContent = message;
 }
-const typedMarks = Prec.highest(
-  EditorView.inputHandler.of((target, _from, _to, typed) => {
-    if (target.composing || target.compositionStarted) return false;
-    return typeMark(target, typed);
-  }),
-);
+const typedMarks = [
+  Prec.highest(
+    EditorView.inputHandler.of((target, _from, _to, typed) => {
+      if (target.composing || target.compositionStarted) return false;
+      return typeMark(target, typed);
+    }),
+  ),
+  // A mark key held down acts once over selected music, rather than adding and removing in turn.
+  Prec.highest(
+    EditorView.domEventHandlers({
+      keydown(event, target) {
+        if (!event.repeat || ![".", "~", "(", "<", ">"].includes(event.key)) return false;
+        const ranges = target.state.selection.ranges;
+        if (ranges.every((range) => range.empty)) return false;
+        event.preventDefault();
+        return true;
+      },
+    }),
+  ),
+];
 /*
  * Typing helpers (Edit › Typing helpers, off by default). Each writes what was typed first, then
  * its change as a separate undo step, so undo goes back to exactly what was typed.
@@ -1853,14 +1867,42 @@ function hitPoint(clientX: number, clientY: number, preferVoice?: number): Score
       }
     }
   }
-  const note = noteUnder(
+  let note = noteUnder(
     onStaff.filter((each) => each.note.voice === voice),
     staff.line,
     x,
     barLines().get(staff.line) ?? [],
   );
+  let reach = reachAt(placed, staff.line, x);
+  // A pointer over a note's own drawing (its head, stem, chord symbol or words) is on that note,
+  // even a hair left of its head: a click on a note always takes it. Overlapping, the nearest head.
+  // Its box stops at its bar's lines: words or a chord symbol reaching over one don't count.
+  const bars = barLines().get(staff.line) ?? [];
+  let over: (typeof geo.notes)[number] | null = null;
+  for (const box of geo.notes) {
+    if (box.note.line !== staff.line || box.note.staff !== staff.staff || box.note.voice !== voice)
+      continue;
+    let left = box.left;
+    let right = box.right;
+    for (const bar of bars) {
+      if (bar <= box.head) left = Math.max(left, bar);
+      else right = Math.min(right, bar);
+    }
+    if (
+      x >= left &&
+      x <= right &&
+      y >= box.top &&
+      y <= box.bottom &&
+      (!over || Math.abs(box.head - x) < Math.abs(over.head - x))
+    )
+      over = box;
+  }
+  if (over) {
+    note = over.note;
+    reach = Math.max(reach, over.note.time);
+  }
   if (!note) return null;
-  return { note, line: staff.line, staff: staff.staff, x, reach: reachAt(placed, staff.line, x) };
+  return { note, line: staff.line, staff: staff.staff, x, reach };
 }
 
 function voicesOnStaff(staff: number): number[] {
@@ -2127,6 +2169,7 @@ scoreScroll.addEventListener("keydown", (event) => {
   if (
     [".", "~", "(", "<", ">"].includes(event.key) &&
     !event.ctrlKey &&
+    !event.repeat &&
     !event.metaKey &&
     !event.altKey &&
     typeMark(view, event.key)

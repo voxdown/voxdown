@@ -356,13 +356,15 @@ export function decorate(
   file = indexFile(text),
 ): Change[] {
   const mark = decorationMark(decoration);
-  return eventsIn(text, ranges, file)
+  // A note that has the mark already, in either spelling, is left as it is.
+  const changes = eventsIn(text, ranges, file)
     .filter(
       (event) =>
-        text.slice(Math.max(0, event.from - mark.length), event.from) !== mark &&
-        !text.startsWith(mark, event.from),
+        !text.startsWith(mark, event.from) &&
+        !prefixMarks(text, event.from).some((each) => each.mark === markOf(mark)),
     )
     .map((event) => ({ from: event.from, to: event.from, insert: mark }));
+  return guardMarks(text, changes, file);
 }
 
 /** Text of the bar around a position: from after the previous bar line to after the next. */
@@ -475,27 +477,130 @@ export function musicSelection(
 
 /** The same mark written in full: !staccato! for ".", !roll! for "~". */
 const FULL_MARK: Record<string, string> = { ".": "!staccato!", "~": "!roll!" };
+/** A decoration as the mark it makes: "." and !staccato! are one, "~" and !roll! another. */
+const markOf = (decoration: string) =>
+  decoration === "!staccato!" ? "." : decoration === "!roll!" ? "~" : decoration;
+
+/**
+ * The decorations a note carries, as written before it: across other decorations, chord symbols,
+ * annotations, grace groups, a slur's start, spaces, and onto the end of the line before (abcjs
+ * gives a decoration to the next note however far it is), stopping at anything else.
+ */
+export function prefixMarks(text: string, eventFrom: number): (Range & { mark: string })[] {
+  const found: (Range & { mark: string })[] = [];
+  let end = eventFrom;
+  for (;;) {
+    const lineFrom = text.lastIndexOf("\n", end - 1) + 1;
+    const tokens = tokenizeMusic(text.slice(lineFrom, end), lineFrom);
+    let open = true;
+    for (let at = tokens.length - 1; at >= 0; at--) {
+      const token = tokens[at] as MusicToken;
+      const prefix =
+        token.kind === "decoration" ||
+        token.kind === "annotation" ||
+        token.kind === "chord-symbol" ||
+        token.kind === "grace-open" ||
+        token.kind === "grace-close" ||
+        token.kind === "space" ||
+        (token.kind === "note" && token.inGrace) ||
+        (token.kind === "slur" && token.text === "(");
+      if (!prefix) {
+        open = false;
+        break;
+      }
+      if (token.kind === "decoration")
+        found.push({ from: token.from, to: token.to, mark: markOf(token.text) });
+    }
+    // Only spaces and marks back to the line's start: the line before may hold more of them.
+    if (!open || lineFrom === 0) break;
+    const previousFrom = text.lastIndexOf("\n", lineFrom - 2) + 1;
+    if (lineKind(text.slice(previousFrom, lineFrom - 1), true) !== "music") break;
+    end = lineFrom - 1;
+  }
+  return found;
+}
 
 /** The marks ("." or "~", or written in full) before an event, among its other decorations. */
 function marksBefore(text: string, eventFrom: number, mark: string): Range[] {
-  const lineFrom = text.lastIndexOf("\n", eventFrom - 1) + 1;
-  const tokens = tokenizeMusic(text.slice(lineFrom, eventFrom), lineFrom);
-  const found: Range[] = [];
-  for (let at = tokens.length - 1; at >= 0; at--) {
-    const token = tokens[at] as MusicToken;
-    const prefix =
-      token.kind === "decoration" ||
-      token.kind === "annotation" ||
-      token.kind === "chord-symbol" ||
-      token.kind === "grace-open" ||
-      token.kind === "grace-close" ||
-      (token.kind === "note" && token.inGrace) ||
-      (token.kind === "slur" && token.text === "(");
-    if (!prefix) break;
-    if (token.kind === "decoration" && (token.text === mark || token.text === FULL_MARK[mark]))
-      found.push({ from: token.from, to: token.to });
+  return prefixMarks(text, eventFrom).filter((each) => each.mark === markOf(mark));
+}
+
+/**
+ * Notes anywhere in the file with the same mark twice ("." and !staccato! count as one): one pass
+ * over each tune's music lines, the marks pending until the note they belong to.
+ */
+export function doubledMarks(
+  text: string,
+  file = indexFile(text),
+): { from: number; mark: string }[] {
+  const doubled: { from: number; mark: string }[] = [];
+  for (const tune of file.tunes) {
+    let pending: string[] = [];
+    let at = tune.bodyFrom;
+    while (at < tune.to) {
+      const end = Math.min(
+        tune.to,
+        text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at),
+      );
+      const line = text.slice(at, end);
+      if (lineKind(line, true) !== "music") pending = [];
+      else
+        for (const token of tokenizeMusic(line, at)) {
+          if (token.kind === "decoration") pending.push(markOf(token.text));
+          else if ((token.kind === "note" && !token.inGrace) || token.kind === "chord-open") {
+            for (const mark of [".", "~"])
+              if (pending.filter((each) => each === mark).length > 1)
+                doubled.push({ from: token.from, mark });
+            pending = [];
+          } else if (
+            !(
+              token.kind === "annotation" ||
+              token.kind === "chord-symbol" ||
+              token.kind === "grace-open" ||
+              token.kind === "grace-close" ||
+              token.kind === "space" ||
+              token.kind === "note" ||
+              (token.kind === "slur" && token.text === "(")
+            )
+          )
+            pending = [];
+        }
+      at = end + 1;
+    }
   }
-  return found;
+  return doubled;
+}
+
+/**
+ * The guard on every change that adds marks: an insertion of a mark the note already has is
+ * dropped, and after the change no note anywhere may have a staccato or roll twice that didn't
+ * before (whatever path the change came by).
+ */
+export function guardMarks(text: string, changes: Change[], file = indexFile(text)): Change[] {
+  const kept = changes.filter((change) => {
+    const mark = markOf(change.insert);
+    if (change.from !== change.to || (mark !== "." && mark !== "~")) return true;
+    const event = eventsIn(text, [{ from: change.from, to: change.from }], file).find(
+      (each) => each.from >= change.from,
+    );
+    const at = event ? event.from : change.from;
+    return !prefixMarks(text, at).some((each) => each.mark === mark);
+  });
+  const apply = (list: Change[]) => {
+    let out = text;
+    for (const change of [...list].sort((a, b) => b.from - a.from))
+      out = out.slice(0, change.from) + change.insert + out.slice(change.to);
+    return out;
+  };
+  const key = (list: { from: number; mark: string }[]) => list.length;
+  const before = key(doubledMarks(text, file));
+  const after = apply(kept);
+  if (key(doubledMarks(after)) <= before) return kept;
+  // Still doubled somewhere: keep only the changes that add no mark.
+  return kept.filter((change) => {
+    const mark = markOf(change.insert);
+    return mark !== "." && mark !== "~";
+  });
 }
 
 /**
@@ -561,7 +666,7 @@ export function markSelection(
         .filter((_, at) => (existing[at] ?? []).length === 0)
         .map((event) => ({ from: event.from, to: event.from, insert: typed }));
   return {
-    changes: merge(changes),
+    changes: guardMarks(text, merge(changes), file),
     mark: typed === "." ? "staccato" : "roll",
     count: notes.length,
     removed,

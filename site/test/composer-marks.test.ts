@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type Change, markSelection } from "../src/composer/commands";
+import {
+  type Change,
+  decorate,
+  doubledMarks,
+  guardMarks,
+  markSelection,
+} from "../src/composer/commands";
 
 const HEAD = "X:1\nT:Marks\nM:4/4\nL:1/4\nK:C\n";
 const apply = (text: string, changes: Change[]) =>
@@ -188,5 +194,80 @@ describe("typing a mark onto selected notes", () => {
     expect(type("!staccato!C .D E |", "!staccato!C .D", ".").line).toBe("C D E |");
     expect(type("!staccato!C D E |", "!staccato!C D", ".").line).toBe("!staccato!C .D E |");
     expect(type("!roll!C ~D E |", "!roll!C ~D", "~").line).toBe("C D E |");
+  });
+});
+
+describe("a note never gets a mark twice", () => {
+  /** Types the mark over the whole music line, once and then again, through markSelection. */
+  const twice = (music: string, mark = ".") => {
+    let text = `${HEAD}${music}\n`;
+    const lines: string[] = [];
+    for (let time = 0; time < 2; time++) {
+      const from = HEAD.length;
+      const to = text.indexOf("\n", from);
+      const result = markSelection(text, [{ from, to }], mark);
+      text = apply(text, result?.changes ?? []);
+      expect(doubledMarks(text)).toEqual([]);
+      lines.push(text.slice(HEAD.length, text.indexOf("\n", HEAD.length)));
+    }
+    return lines;
+  };
+  it("sees a mark split from its note by a chord symbol, an annotation, a decoration or graces", () => {
+    expect(twice('"Am".C D |')).toEqual(['"Am".C .D |', '"Am"C D |']);
+    expect(twice('."Am"C D |')).toEqual(['."Am"C .D |', '"Am"C D |']);
+    expect(twice('"^loud".C D |')).toEqual(['"^loud".C .D |', '"^loud"C D |']);
+    expect(twice(".!p!C D |")).toEqual([".!p!C .D |", "!p!C D |"]);
+    expect(twice(".{g}C D |")).toEqual([".{g}C .D |", "{g}C D |"]);
+    expect(twice("(.C D) |")).toEqual(["(.C .D) |", "(C D) |"]);
+  });
+  it("counts !staccato! and . as one, and !roll! and ~ as one", () => {
+    expect(twice("!staccato!C D |")).toEqual(["!staccato!C .D |", "C D |"]);
+    expect(twice("!roll!C D |", "~")).toEqual(["!roll!C ~D |", "C D |"]);
+  });
+  it("sees a mark across a space or a line break", () => {
+    expect(twice(". C D |")).toEqual([". C .D |", " C D |"]);
+    const text = `${HEAD}C .\nD E |\n`;
+    const from = HEAD.length;
+    const result = markSelection(text, [{ from, to: text.length - 1 }], ".");
+    expect(apply(text, result?.changes ?? [])).toBe(`${HEAD}.C .\nD .E |\n`);
+  });
+  it("adds to a mixed selection only where missing, then removes from all", () => {
+    expect(twice(".C D .E F |")).toEqual([".C .D .E .F |", "C D E F |"]);
+    expect(twice("~C D ~E F |", "~")).toEqual(["~C ~D ~E ~F |", "C D E F |"]);
+  });
+  it("leaves a selection that starts between the mark and its note marked once", () => {
+    const text = `${HEAD}.C D |\n`;
+    const from = HEAD.length + 1;
+    const result = markSelection(text, [{ from, to: from + 3 }], ".");
+    const out = apply(text, result?.changes ?? []);
+    expect(out).toBe(`${HEAD}.C .D |\n`);
+    expect(doubledMarks(out)).toEqual([]);
+  });
+  it("gives the decoration menu the same rule", () => {
+    for (const music of ['"Am".C D |', "!staccato!C D |", ". C D |", ".!p!C D |"]) {
+      const text = `${HEAD}${music}\n`;
+      const from = HEAD.length;
+      const out = apply(text, decorate(text, [{ from, to: text.length - 1 }], "staccato"));
+      expect(doubledMarks(out)).toEqual([]);
+      expect(out.match(/\.|!staccato!/g)).toHaveLength(2);
+    }
+    const rolls = `${HEAD}!roll!C D |\n`;
+    expect(apply(rolls, decorate(rolls, [{ from: HEAD.length, to: rolls.length - 1 }], "~"))).toBe(
+      `${HEAD}!roll!C ~D |\n`,
+    );
+  });
+  it("guards any change set: a mark the note already has is never added", () => {
+    const text = `${HEAD}"Am".C D |\n`;
+    const note = text.indexOf("C", HEAD.length);
+    const d = text.indexOf("D", HEAD.length);
+    const kept = guardMarks(text, [
+      { from: note, to: note, insert: "." },
+      { from: d, to: d, insert: "!staccato!" },
+    ]);
+    expect(kept).toEqual([{ from: d, to: d, insert: "!staccato!" }]);
+    expect(doubledMarks(`${HEAD}..C !staccato!.D |\n`).map((each) => each.mark)).toEqual([
+      ".",
+      ".",
+    ]);
   });
 });

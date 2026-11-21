@@ -4424,6 +4424,114 @@ console.log(
   );
 }
 
+/* 27. Sprint D fixes, 14 and 15: a note never gets two staccatos; Shift+click takes the note. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  watch(ctx);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Twinkle, Twinkle, Little Star", p);
+  await p.waitForTimeout(400);
+  // 15. Shift+click takes the note clicked: on its head, its stem, or the middle of its box.
+  const notes = p.locator("#score .abcjs-note");
+  const at = (index, where) =>
+    notes.nth(index).evaluate((element, spot) => {
+      const box = element.getBoundingClientRect();
+      const head = element.querySelector("path").getBoundingClientRect();
+      if (spot === "head") return { x: head.x + head.width / 2, y: head.y + head.height / 2 };
+      if (spot === "stem") return { x: head.x + head.width - 1, y: head.y - 18 };
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    }, where);
+  const shiftClick = async (point) => {
+    await p.keyboard.down("Shift");
+    await p.mouse.click(point.x, point.y);
+    await p.keyboard.up("Shift");
+  };
+  for (const where of ["head", "stem", "middle"]) {
+    const first = await at(0, "head");
+    await p.mouse.click(first.x, first.y);
+    await shiftClick(await at(3, where));
+    assert.deepEqual(
+      await selection(p),
+      ['"C"C C | G G |'],
+      `Shift+click on the 4th note's ${where} takes it`,
+    );
+    await p.waitForFunction(() =>
+      document.getElementById("explain").textContent.startsWith("4 notes selected"),
+    );
+    // And back the other way.
+    const fourth = await at(3, "head");
+    await p.mouse.click(fourth.x, fourth.y);
+    await shiftClick(await at(0, where));
+    assert.deepEqual(await selection(p), ['"C"C C | G G |'], `and back to the 1st note's ${where}`);
+  }
+  console.log(
+    "Composer: Shift+click in the score takes the note clicked, head, stem or middle: passed",
+  );
+
+  // 14. Typing . over a mixed selection: added where missing, then removed from all; never twice.
+  const music = '.C "Am".D E !staccato!F | . G A B c |';
+  const marked = '.C "Am".D .E !staccato!F | . G .A .B .c |';
+  const bare = 'C "Am"D E F |  G A B c |';
+  const head = "X:1\nT:Marks\nM:4/4\nL:1/4\nK:C\n";
+  const line = async () => (await docText(p)).split("\n")[5];
+  const selectLine = () =>
+    p.evaluate((from) => {
+      const view = window.composer.view;
+      view.dispatch({ selection: { anchor: from, head: view.state.doc.line(6).to } });
+    }, head.length);
+  await p.evaluate((t) => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t } });
+  }, `${head}${music}\n`);
+  await drawn(p);
+  await selectLine();
+  await p.locator(".cm-content").focus();
+  await p.keyboard.press(".");
+  assert.equal(await line(), marked, "the text: staccato added only where missing");
+  await p.keyboard.press(".");
+  assert.equal(await line(), bare, "and removed from all the second time");
+  // A held key acts once.
+  await p.evaluate((t) => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t } });
+  }, `${head}${music}\n`);
+  await selectLine();
+  await p.keyboard.down(".");
+  await p.keyboard.down(".");
+  await p.keyboard.down(".");
+  await p.keyboard.up(".");
+  assert.equal(await line(), marked, "a held . marks once");
+  // The score: the same, from notes selected there.
+  await p.evaluate((t) => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t } });
+  }, `${head}${music}\n`);
+  await drawn(p);
+  await p.waitForTimeout(400);
+  const firstNote = await at(0, "head");
+  const lastNote = await at(7, "head");
+  await p.mouse.click(firstNote.x, firstNote.y);
+  await shiftClick(lastNote);
+  await p.keyboard.press(".");
+  assert.equal(await line(), marked, "the score: staccato added only where missing");
+  await p.keyboard.press(".");
+  assert.equal(await line(), bare, "and removed from all the second time");
+  // The decoration menu keeps to the same rule.
+  await p.evaluate((t) => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t } });
+  }, `${head}${music}\n`);
+  await selectLine();
+  await p.locator('[data-command="decoration"]').click();
+  await p.getByRole("menuitem", { name: /^Staccato/ }).click();
+  assert.equal(await line(), marked, "Staccato from the menu adds only where missing");
+  await ctx.close();
+  console.log(
+    "Composer: . over a mixed selection, in the text, the score and the menu, adds once then removes; never two staccatos: passed",
+  );
+}
+
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");
 console.log("Composer: no console errors and no requests leaving the site: passed");

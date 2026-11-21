@@ -326,12 +326,29 @@ EasyABC (GPLv2) was used for ideas only; none of its code.
 - Typing helpers (Edit › Typing helpers; off by default, remembered):
   - Bar line on Space: uses the bar check's arithmetic, only at the end of a music line right
     after a note.
-  - Automatic octave: picks the octave nearest the previous note in the voice by staff steps.
-    A capital (Shift) takes the other side. That is our reading of "Shift flips the case", since
-    case no longer chooses the octave.
+  - Automatic octave: picks the octave nearest the previous note in the voice by staff steps,
+    whatever the case typed (ties go towards middle C), within the clef's range (treble G, to
+    c''', bass C,, to e'). A ' or , typed after the note moves it the ABC way. (The first
+    reading, a capital for the other side, drifted upwards; the owner chose this rule.)
   
   Each writes what was typed, then its change as its own undo step, and each says once what it
   did.
 - Zoom per pane: score 50–200% (abcjs lays out at width ÷ zoom and draws larger, so it
   re-wraps) and text 80–160%. Ctrl/⌘ + − 0 act on the pane with focus or under the pointer,
   and are left to the browser elsewhere. Ctrl/⌘ wheel and a pinch zoom the score.
+
+### Sprint A fixes (after Codex 8.3, Claude 8.2)
+
+- With the score focused, keys with Ctrl/⌘ or Alt (and F8) run the text's own keymap, so play,
+  from caret, play selection, loop, stop, transpose, lengths, undo, redo and Find all work from
+  the score. Only a bare Enter goes to the text.
+- Ranges of rests alone are skipped by marks. A mark never types over music: when it cannot
+  apply, the status line says why.
+- `M:C|` is 2/2.
+- `(` and `'` are no longer auto-paired. A digit typed into a fresh `[]` is an ending.
+- Broken rhythm, taken off, restores the exact gap it replaced. The gaps are kept in a state
+  field that follows edits.
+- Places are counted from runs of selected notes per voice.
+- Phones get More › Select more.
+- The helpers read back only from the caret: about 3 ms of handler time per key at p90 on a
+  200-bar tune, measured with Event Timing.

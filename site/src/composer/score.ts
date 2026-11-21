@@ -824,8 +824,9 @@ export function noteUnder(
 }
 
 /**
- * Where the pointer reads each note: its head, except a note alone in its bar (a whole-bar rest,
- * drawn mid-bar) is read from just after the bar line, so it spans its bar.
+ * Where the pointer reads each note: its head, except a rest alone in its bar and drawn well
+ * inside it (a whole-bar rest, which abcjs centres) is read from just after the bar line, so it
+ * spans its bar. A lone note is read at its head, like every other voice's notes at that time.
  */
 export function spanLoneNotes(placed: Placed[], barsByLine: Map<number, number[]>): Placed[] {
   const groups = new Map<string, Placed[]>();
@@ -844,7 +845,10 @@ export function spanLoneNotes(placed: Placed[], barsByLine: Map<number, number[]
     const start = segment(each);
     const alone =
       (groups.get(`${each.line}:${each.staff}:${each.note.voice}:${start}`) ?? []).length === 1;
-    return alone && Number.isFinite(start) ? { ...each, x: Math.min(each.x, start + 12) } : each;
+    const centred = each.note.rest && each.x - start > 20;
+    return alone && centred && Number.isFinite(start)
+      ? { ...each, x: Math.min(each.x, start + 12) }
+      : each;
   });
 }
 

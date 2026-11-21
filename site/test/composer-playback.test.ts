@@ -267,9 +267,11 @@ describe("reading the pointer in the score", () => {
       expect(slices(at(0, xOf(0)), at(0, 510 + offset))).toEqual(["C D E2 |", "C, D, E, F, |"]);
     }
   });
-  it("reads a note alone in its bar (a whole-bar rest drawn mid-bar) from the bar's start", () => {
+  it("reads a rest alone in its bar and drawn mid-bar (a whole-bar rest) from the bar's start", () => {
     const moved = placed.map((each) =>
-      each.note.voice === 1 && each.note.time === 1 ? { ...each, x: 700 } : each,
+      each.note.voice === 1 && each.note.time === 1
+        ? { ...each, x: 700, note: { ...each.note, rest: true } }
+        : each,
     );
     const spanned = spanLoneNotes(moved, new Map([[0, [510, 900]]]));
     const rest = spanned.find((each) => each.note.voice === 1 && each.note.time === 1);
@@ -278,6 +280,15 @@ describe("reading the pointer in the score", () => {
     expect(spanned.filter((each) => each.note.time < 1).map((each) => each.x)).toEqual(
       moved.filter((each) => each.note.time < 1).map((each) => each.x),
     );
+  });
+  it("reads a note alone in its bar at its head, as the other voices' notes then", () => {
+    // The reviewer's case: a whole note C6 alone in its bar was taken 12 px after the bar line,
+    // before the pointer reached its head, while the other voice's note at that time was not.
+    const spanned = spanLoneNotes(placed, new Map([[0, [510, 900]]]));
+    const lone = spanned.find((each) => each.note.voice === 1 && each.note.time === 1);
+    const other = spanned.find((each) => each.note.voice === 0 && each.note.time === 1);
+    expect(lone?.x).toBe(xOf(1));
+    expect(lone?.x).toBe(other?.x);
   });
   it("does not let a long note pull the other voice ahead of the pointer", () => {
     const anchor = point(1, xOf(0));

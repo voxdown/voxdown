@@ -32,6 +32,7 @@ import { offlineStatus, prepareOffline } from "./offline";
 import { Player, encodeWav, normalise } from "./player";
 import { roving } from "./roving";
 import {
+  type Breaks,
   type Placed,
   type Region,
   type ScoreIndex,
@@ -462,6 +463,7 @@ let renderedKey = "";
 let rendering = false;
 let geometry: ReturnType<typeof measure> | null = null;
 let renderCost = 0;
+let breaks: Breaks | null = null;
 
 function scheduleRender(delay?: number) {
   clearTimeout(renderTimer);
@@ -510,15 +512,25 @@ async function render(force = false) {
   const started = performance.now();
   try {
     await document.fonts?.ready;
+    // Read the reader's place while the layout is still clean (reading later forces a reflow).
+    const anchor = topSystem();
+    const sameTune = scoreIndex?.tune.from === tune.from;
     const result = await renderTune(
       stage,
       { text: doc, file: index, tune, width },
       workspace.dataset.layout === "below",
+      sameTune ? breaks : null,
     );
     if (generation !== renderGeneration && !force) return;
+    breaks = result.breaks;
     renderCost = performance.now() - started;
-    // Keep the reader's place: the system at the top stays at the top.
-    const anchor = topSystem();
+    // The new score goes in on the next task, so drawing and placing are two short tasks.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (generation !== renderGeneration && !force) {
+      stage.replaceChildren();
+      return;
+    }
+    performance.mark("composer:swap");
     const fragment = document.createDocumentFragment();
     fragment.append(...stage.childNodes);
     scoreElement.style.minHeight = `${scoreElement.offsetHeight}px`;
@@ -526,6 +538,7 @@ async function render(force = false) {
     scoreElement.style.minHeight = "";
     stage.replaceChildren();
     restoreSystem(anchor);
+    performance.measure("composer:swap", "composer:swap");
     renderedKey = key;
     scoreIndex = result;
     geometry = null;
@@ -570,8 +583,15 @@ function topSystem(): { line: number; offset: number } | null {
 }
 function restoreSystem(anchor: { line: number; offset: number } | null) {
   if (!anchor) return;
-  const y = systemTops().get(anchor.line);
-  if (y === undefined) return;
+  // Only the anchored system is measured.
+  const marks = scoreElement.querySelectorAll<SVGGraphicsElement>(
+    `.abcjs-staff.abcjs-l${anchor.line}`,
+  );
+  if (!marks.length) return;
+  const scoreTop = scoreElement.getBoundingClientRect().top;
+  const origin = scoreTop - scoreScroll.getBoundingClientRect().top + scoreScroll.scrollTop;
+  const y =
+    Math.min(...[...marks].map((mark) => mark.getBoundingClientRect().top)) - scoreTop + origin;
   scoreScroll.scrollTop = Math.max(0, y - anchor.offset);
 }
 

@@ -64,17 +64,45 @@ function measuresPerLine(width: number): number {
 }
 
 /** Renders one tune into `stage` (hidden), then indexes what was drawn. */
+/** Line breaks abcjs chose (last measure of each line, per section), for redrawing in one pass. */
+export type Breaks = { key: string; lineBreaks: number[][] };
+
+/** What decides line breaks: the width and the number of bars, not the notes inside them. */
+export function breaksKey(source: string, width: number): string {
+  return `${Math.floor(width)}:${(source.match(/\|/g) ?? []).length}`;
+}
+
+/** abcjs's own choice, read back from its explanation of the wrapping it did. */
+export function chosenBreaks(explanation: Any): number[][] | null {
+  if (!Array.isArray(explanation)) return null;
+  const sections: number[][] = [];
+  for (const section of explanation) {
+    const chosen = (section?.attempts ?? [])
+      .filter((attempt: Any) => !attempt.failed && Array.isArray(attempt.lineBreaks))
+      .at(-1);
+    if (!chosen) return null;
+    sections.push(chosen.lineBreaks);
+  }
+  return sections;
+}
+
 export async function renderTune(
   stage: HTMLElement,
   input: RenderInput,
   wide: boolean,
-): Promise<ScoreIndex> {
+  cached: Breaks | null = null,
+): Promise<ScoreIndex & { breaks: Breaks | null }> {
   const abcjs = await loadAbcjs();
   const { source, toDocument } = tuneSource(input);
   const staffwidth = Math.max(240, Math.floor(input.width) - 30);
   stage.style.width = `${Math.floor(input.width)}px`;
   const font = '"Literata Variable", Georgia, serif';
+  performance.mark("composer:engrave");
+  // While the bars and the width stay the same, the last line breaks still fit: one pass, not two.
+  const key = breaksKey(source, staffwidth);
+  const reuse = cached && cached.key === key ? cached.lineBreaks : null;
   const tunes = abcjs.renderAbc(stage, source, {
+    ...(reuse ? { lineBreaks: reuse } : {}),
     add_classes: true,
     staffwidth,
     paddingtop: 6,
@@ -82,11 +110,13 @@ export async function renderTune(
     paddingleft: 6,
     paddingright: 12,
     selectTypes: false,
-    wrap: {
-      minSpacing: 1.6,
-      maxSpacing: wide ? 2.4 : 2.7,
-      preferredMeasuresPerLine: measuresPerLine(staffwidth),
-    },
+    wrap: reuse
+      ? undefined
+      : {
+          minSpacing: 1.6,
+          maxSpacing: wide ? 2.4 : 2.7,
+          preferredMeasuresPerLine: measuresPerLine(staffwidth),
+        },
     format: {
       titlefont: `${font} 19`,
       subtitlefont: `${font} 14`,
@@ -100,7 +130,12 @@ export async function renderTune(
     },
   } as Any) as Any[];
   const visual = tunes[0];
-  return indexScore(visual, input.tune, toDocument, source);
+  performance.measure(reuse ? "composer:engrave-once" : "composer:engrave", "composer:engrave");
+  performance.mark("composer:index");
+  const index = indexScore(visual, input.tune, toDocument, source);
+  performance.measure("composer:index", "composer:index");
+  const found = reuse ?? chosenBreaks(visual?.explanation);
+  return { ...index, breaks: found ? { key, lineBreaks: found } : null };
 }
 
 export function indexScore(

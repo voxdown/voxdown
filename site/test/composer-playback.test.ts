@@ -8,6 +8,8 @@ import {
   type Placed,
   type ScoreNote,
   type ScorePoint,
+  breaksKey,
+  chosenBreaks,
   dragRegion,
   indexScore,
   noteUnder,
@@ -229,6 +231,28 @@ describe("files and dates", () => {
       10 ** (-1 / 20),
       5,
     );
+  });
+});
+
+describe("redrawing in one pass", () => {
+  it("reads abcjs's chosen line breaks and keys them on width and bar count", () => {
+    expect(
+      chosenBreaks([
+        {
+          attempts: [
+            { type: "Fixed", failed: true, lineBreaks: [1] },
+            { type: "Free", lineBreaks: [3, 7] },
+            { type: "Optimize", failed: false, lineBreaks: [3, 8] },
+          ],
+        },
+      ]),
+    ).toEqual([[3, 8]]);
+    expect(
+      chosenBreaks([{ attempts: [{ type: "Fixed", failed: false, lineBreaks: [3] }] }]),
+    ).toEqual([[3]]);
+    expect(chosenBreaks("narrower than the margin")).toBeNull();
+    expect(breaksKey("A B | c d | e f |", 600.4)).toBe("600:3");
+    expect(breaksKey("A B c | c d | e f |", 600)).toBe(breaksKey("A B | c d | e f |", 600));
   });
 });
 

@@ -66,6 +66,7 @@ import {
   drawPassDynamics,
   loadAbcjs,
   loadedAbcjs,
+  loadedPlayOrder,
   measure,
   noteAtTime,
   noteUnder,
@@ -158,6 +159,8 @@ type Prefs = {
   /** Zoom per pane: the score 0.5–2, the text 0.8–1.6. */
   scoreZoom: number;
   editorZoom: number;
+  /** Playback follows D.C., D.S., Fine and Coda (off: the music as written, for practice). */
+  followJumps: boolean;
 };
 const PREFS_KEY = "vxd-composer-prefs";
 const prefs: Prefs = (() => {
@@ -179,6 +182,7 @@ const prefs: Prefs = (() => {
     autoOctave: false,
     scoreZoom: 1,
     editorZoom: 1,
+    followJumps: true,
   };
   try {
     const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
@@ -1272,6 +1276,13 @@ function buildPlayback(index: ScoreIndex) {
   }
   // Times in the description are whole notes at the starting tempo.
   timeline = buildTimeline(audio, meta, index.toDocument, lookup);
+  // abcjs plays repeats and endings; D.C., D.S., Fine and Coda are followed here.
+  const order = loadedPlayOrder;
+  if (order && prefs.followJumps) {
+    const structure = order.structureOf(visual);
+    if (order.hasJumps(structure))
+      timeline = order.followOrder(timeline, structure, order.playOrder(structure));
+  }
   // Dynamics written for a pass ("^2nd time p") are applied on that pass.
   const marks = passMarks(text(), index.tune, fileIndex());
   timeline = applyPassDynamics(timeline, marks.rules, marks.written);
@@ -1285,6 +1296,16 @@ function buildPlayback(index: ScoreIndex) {
   updateVoices();
   drawTimeline();
   updateSummary();
+}
+
+function setFollowJumps(on: boolean) {
+  prefs.followJumps = on;
+  savePrefs();
+  if (player.status === "playing") stop();
+  if (scoreIndex) buildPlayback(scoreIndex);
+  $("explain").textContent = on
+    ? "Playback follows D.C., D.S., Fine and Coda."
+    : "Playback plays the music as written, without D.C. and D.S. jumps: for practising sections.";
 }
 
 function regionTimelineFor(region: Region): Timeline | null {
@@ -2705,12 +2726,35 @@ function drawTimeline() {
   });
   // The repeat band covers only what is played again, not what follows it, and says which time.
   const reading = readingOf(line);
+  const returns = line.returns ?? [];
+  const inReturn = (time: number) =>
+    returns.some((each) => time >= each.from - 1e-9 && time < each.to - 1e-9);
+  // What is played after a D.C. or D.S. jump, and the coda: a band each, tagged.
+  for (const each of returns) {
+    const band = document.createElement("div");
+    band.className = "timeline-pass repeat";
+    band.style.left = `${(each.from / length) * 100}%`;
+    band.style.width = `${((each.to - each.from) / length) * 100}%`;
+    band.title = each.label === "Coda" ? "The coda" : `Played again after the ${each.label}`;
+    passes.append(band);
+    const tag = document.createElement("span");
+    tag.className = "timeline-pass-tag";
+    tag.textContent = each.label;
+    tag.dataset.priority = "1";
+    tag.style.left = `${((each.from + each.to) / 2 / length) * 100}%`;
+    ticks.append(tag);
+  }
   if (reading)
     for (let at = 0; at < reading.times.length; at++) {
       const pass = reading.passes[at] ?? 1;
-      if (pass < 2) continue;
+      if (pass < 2 || inReturn(reading.times[at] as number)) continue;
       let end = at;
-      while (end + 1 < reading.times.length && (reading.passes[end + 1] ?? 1) === pass) end += 1;
+      while (
+        end + 1 < reading.times.length &&
+        (reading.passes[end + 1] ?? 1) === pass &&
+        !inReturn(reading.times[end + 1] as number)
+      )
+        end += 1;
       const from = reading.times[at] as number;
       const to = reading.times[end + 1] ?? length;
       const band = document.createElement("div");
@@ -2839,7 +2883,15 @@ function updateHead(position: number) {
   const bar = barAt(line, at);
   const written = writtenBarAt(line, at);
   const number = written?.bar ?? (line.pickup > 1e-6 ? bar : bar + 1);
-  const time = written?.repeated ? ` · ${ordinal(written.pass)} time` : "";
+  // After a D.C. or D.S. jump the clock says so ("Bar 5 · D.S."), and in the coda "Coda".
+  const returned = player.loopingRegion
+    ? undefined
+    : line.returns?.find((each) => at >= each.from - 1e-9 && at < each.to - 1e-9);
+  const time = returned
+    ? ` · ${returned.label}`
+    : written?.repeated
+      ? ` · ${ordinal(written.pass)} time`
+      : "";
   const seconds = (at / ((line.bpm * player.tempoFactor * line.beat) / 60)) | 0;
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   const name = number === 0 ? "Pickup" : `Bar ${number}`;
@@ -2849,7 +2901,7 @@ function updateHead(position: number) {
   slider.setAttribute("aria-valuenow", String(bar + 1));
   slider.setAttribute(
     "aria-valuetext",
-    `${name}${written?.repeated ? `, ${ordinal(written.pass)} time` : ""}, played bar ${bar + 1} of ${line.bars.length}, ${clock}`,
+    `${name}${returned ? `, ${returned.label === "Coda" ? "in the coda" : `after the ${returned.label}`}` : written?.repeated ? `, ${ordinal(written.pass)} time` : ""}, played bar ${bar + 1} of ${line.bars.length}, ${clock}`,
   );
 }
 
@@ -3798,15 +3850,14 @@ async function exportMusicXmlFiles(all: boolean) {
 }
 
 async function exportMidi() {
-  if (!scoreIndex) return notice("Draw a tune first: there is nothing to export yet.");
-  const abcjs = await loadAbcjs();
-  const { source: abc } = tuneSource({ text: text(), file: fileIndex(), tune: scoreIndex.tune });
-  const files = (abcjs.synth as Any).getMidiFile(abc, {
-    midiOutputType: "binary",
-    bpm: Math.round(timeline ? timeline.bpm * player.tempoFactor : 120),
-  }) as Uint8Array[];
-  const bytes = files[0];
-  if (!bytes) return noticeError("This tune could not be turned into MIDI.");
+  if (!scoreIndex || !timeline) return notice("Draw a tune first: there is nothing to export yet.");
+  // From the timeline the player plays: repeats, endings and D.C./D.S. jumps as heard.
+  const { writeMidi } = await import("./midi");
+  const bytes = writeMidi(timeline, {
+    title: tuneLabel(scoreIndex.tune),
+    tempoFactor: player.tempoFactor,
+    instrument: player.instrument,
+  });
   download(
     bytes as BlobPart,
     `${abcName(tuneLabel(scoreIndex.tune)).replace(/\.abc$/, "")}.mid`,
@@ -4534,6 +4585,11 @@ const menus = mountMenus(
         label: "Count in one bar",
         run: () => setCountIn(!prefs.countIn),
         checked: () => prefs.countIn,
+      },
+      {
+        label: "Follow D.C./D.S. jumps",
+        run: () => setFollowJumps(!prefs.followJumps),
+        checked: () => prefs.followJumps,
       },
       {
         label: "Hear notes as you write",

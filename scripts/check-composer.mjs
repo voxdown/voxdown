@@ -2902,6 +2902,59 @@ console.log("Composer: a whole-bar rest imports as a rest of the bar and plays i
 }
 console.log(`Composer: zip bombs are refused plainly (${bombTimes.join(", ")}): passed`);
 
+{
+  // Sprint C 1. Playback follows D.S. al Coda: the order scheduled, the notes lit as they play,
+  // and the clock saying "D.S." and "Coda"; Play › Follow D.C./D.S. jumps turns it off.
+  await setText(
+    'X:1\nT:Jumps\nM:1/4\nL:1/4\nQ:1/4=300\nK:C\nC|!segno!D|"^To Coda"E|!D.S.alcoda!F|!coda!G|]\n',
+    "Jumps",
+  );
+  const letters = () =>
+    page.evaluate(() =>
+      window.composer
+        .timelineNotes()
+        .filter((note) => note.track === 0)
+        .map((note) => ({ 60: "C", 62: "D", 64: "E", 65: "F", 67: "G" })[note.pitch])
+        .join(""),
+    );
+  assert.equal(
+    await letters(),
+    "CDEFDEG",
+    "the order scheduled: back to the segno, on to the coda",
+  );
+  await setCaret(0);
+  await page.locator("#play").click();
+  const lit = [];
+  const clocks = new Set();
+  const started = Date.now();
+  while (Date.now() - started < 4000) {
+    const now = await page.evaluate(() => ({
+      status: window.composer.state().status,
+      note: [...document.querySelectorAll(".cm-content .abc-playing")]
+        .map((element) => element.textContent)
+        .join(""),
+      clock: document.getElementById("clock").textContent,
+    }));
+    const letter = /[A-G](?=[^A-G]*$)/.exec(now.note)?.[0];
+    if (letter && lit[lit.length - 1] !== letter) lit.push(letter);
+    clocks.add(now.clock.replace(/ · \d+:\d+$/, ""));
+    if (now.status === "stopped" && lit.length) break;
+    await settle(30);
+  }
+  assert.equal(lit.join(""), "CDEFDEG", `the notes lit as they play: ${lit.join("")}`);
+  assert(clocks.has("Bar 2 · D.S."), `the clock after the jump: ${[...clocks].join(", ")}`);
+  assert(clocks.has("Bar 5 · Coda"), `the clock in the coda: ${[...clocks].join(", ")}`);
+  await page.locator('[data-menu="play"]').click();
+  await page.getByRole("menuitemcheckbox", { name: "Follow D.C./D.S. jumps" }).click();
+  assert.equal(await letters(), "CDEFG", "as written, for practice");
+  await page.locator('[data-menu="play"]').click();
+  await page.getByRole("menuitemcheckbox", { name: "Follow D.C./D.S. jumps" }).click();
+  assert.equal(await letters(), "CDEFDEG");
+}
+console.log(
+  "Composer: a D.S. al Coda plays in order, lit and named on the clock; the setting turns it off: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

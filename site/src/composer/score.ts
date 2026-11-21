@@ -8,9 +8,12 @@ type Abcjs = typeof import("abcjs");
 let abcjsModule: Promise<Abcjs> | null = null;
 /** abcjs once loaded, for work that cannot wait (the browser's own Print). */
 export let loadedAbcjs: Abcjs | null = null;
+/** The play order (D.C., D.S., Fine, Coda), loaded with abcjs: playback needs both. */
+export let loadedPlayOrder: typeof import("./playorder") | null = null;
 /** abcjs is ~500 KB; it loads after the first paint, once there is a tune to draw. */
 export function loadAbcjs(): Promise<Abcjs> {
-  abcjsModule ??= import("abcjs").then((module) => {
+  abcjsModule ??= Promise.all([import("abcjs"), import("./playorder")]).then(([module, order]) => {
+    loadedPlayOrder = order;
     loadedAbcjs = ((module as Any).default ?? module) as Abcjs;
     return loadedAbcjs;
   });

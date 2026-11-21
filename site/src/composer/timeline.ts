@@ -37,6 +37,8 @@ export type Timeline = {
   /** Performance times where bars start. */
   bars: number[];
   passes: Pass[];
+  /** Stretches played after a D.C. or D.S. jump, in performance time. */
+  returns?: { from: number; to: number; label: "D.C." | "D.S." | "Coda" }[];
   /** Written time of the region start, when this is a region's timeline. */
   offset: number;
 };
@@ -196,6 +198,7 @@ export function regionTimeline(
     length,
     bars,
     passes: [{ from: 0, to: length, repeat: false }],
+    returns: [],
     offset: region.from,
   };
 }

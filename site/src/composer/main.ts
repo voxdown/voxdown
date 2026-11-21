@@ -3,9 +3,8 @@ import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { openSearchPanel } from "@codemirror/search";
 import { EditorSelection, type EditorState, type TransactionSpec } from "@codemirror/state";
 import { EditorView, type KeyBinding, type ViewUpdate } from "@codemirror/view";
-import { frac } from "./abc";
-import { parseKey } from "./abc";
-import { checkBars } from "./barcheck";
+import { frac, lineKind, parseKey } from "./abc";
+import { barAt as barInText, checkBars, describeBar } from "./barcheck";
 import {
   type Change,
   type Range,
@@ -38,6 +37,7 @@ import {
   type ScoreIndex,
   type ScoreNote,
   type ScorePoint,
+  authorBarsPerLine,
   dragRegion,
   loadAbcjs,
   measure,
@@ -58,6 +58,7 @@ import {
   deleteDraft,
   forgetFile,
   getDraft,
+  hashBytes,
   keepDraft,
   listDrafts,
   newDraftId,
@@ -75,6 +76,7 @@ import {
   soundingAt,
 } from "./timeline";
 import { type FileIndex, type TuneInfo, nextTuneNumber, tuneAt, tuneLabel } from "./tunes";
+import { tuneItems } from "./walk";
 
 /* biome-ignore lint/suspicious/noExplicitAny: abcjs objects. */
 type Any = any;
@@ -90,11 +92,15 @@ const transportElement = $("transport");
 const nameInput = $<HTMLInputElement>("name");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const phone = window.matchMedia("(max-width: 760px)");
+/** Touch screens get touch words, not keyboard shortcuts. */
+const touch = window.matchMedia("(pointer: coarse)");
 
 /* Preferences. */
 type Prefs = {
   layout: "auto" | "beside" | "below";
   rail: boolean;
+  /** Set once the writer opens or closes the rail; until then it follows the width. */
+  railChosen?: boolean;
   hear: boolean;
   instrument: InstrumentId;
   volume: number;
@@ -141,16 +147,28 @@ function savePrefs() {
   }
 }
 
-/* Notices. */
+/* Notices: they sit above the transport, clear of the text and the score's title. Information
+   fades after a few seconds or with the next edit; errors that need action stay until dismissed. */
 const noticeElement = $("notice");
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;
-function notice(message: string, tone: "info" | "success" = "info") {
+let noticeTone: "info" | "success" | "error" = "info";
+function notice(message: string, tone: "info" | "success" | "error" = "info") {
   clearTimeout(noticeTimer);
-  noticeElement.replaceChildren();
   if (!message) {
-    noticeElement.hidden = true;
+    if (noticeElement.hidden) return;
+    noticeElement.classList.add("leaving");
+    noticeTimer = setTimeout(
+      () => {
+        noticeElement.hidden = true;
+        noticeElement.classList.remove("leaving");
+        noticeElement.replaceChildren();
+      },
+      reducedMotion.matches ? 0 : 160,
+    );
     return;
   }
+  noticeElement.classList.remove("leaving");
+  noticeElement.replaceChildren();
   const text = document.createElement("span");
   text.textContent = message;
   const close = document.createElement("button");
@@ -159,10 +177,19 @@ function notice(message: string, tone: "info" | "success" = "info") {
   close.textContent = "Dismiss";
   close.addEventListener("click", () => notice(""));
   noticeElement.append(text, close);
+  noticeTone = tone;
   noticeElement.dataset.tone = tone;
-  noticeElement.setAttribute("role", "status");
+  noticeElement.setAttribute("role", tone === "error" ? "alert" : "status");
+  // Above the transport and footer, wherever they are.
+  const app = $("app");
+  noticeElement.style.bottom = `${app.clientHeight - transportElement.offsetTop + 10}px`;
   noticeElement.hidden = false;
-  if (tone === "success") noticeTimer = setTimeout(() => notice(""), 4500);
+  if (tone !== "error") noticeTimer = setTimeout(() => notice(""), 6000);
+}
+const noticeError = (message: string) => notice(message, "error");
+/** The next edit clears information (errors stay). */
+function noticeOnEdit() {
+  if (!noticeElement.hidden && noticeTone !== "error") notice("");
 }
 
 /* The document. */
@@ -243,6 +270,8 @@ const keys: KeyBinding[] = [
   { key: "Alt-Shift-ArrowRight", run: () => moveByNote(1, true) },
   { key: "Alt-Shift-ArrowLeft", run: () => moveByNote(-1, true) },
   { key: "Mod-Shift-d", run: () => music("duplicate"), preventDefault: true },
+  { key: "F8", run: () => stepProblem(1), preventDefault: true },
+  { key: "Shift-F8", run: () => stepProblem(-1), preventDefault: true },
   {
     key: "Escape",
     run: () => {
@@ -333,6 +362,10 @@ function load(
   // The tune being replaced keeps its own draft, written now rather than after a delay.
   if (started && !options.keepDraft) flushDraft();
   player.stop();
+  if (!options.keepDraft) {
+    link = null;
+    pendingLink = null;
+  }
   source = next;
   const content = options.text ?? next.normalized;
   savedText = content === next.normalized ? content : null;
@@ -374,6 +407,26 @@ function showStart(show: boolean) {
   if (show) void fillRecentStart();
 }
 
+/* The file this draft belongs to, kept across reloads: Save asks permission again and checks it
+   was not changed elsewhere before writing. */
+let link: { fileId: string; name: string; hash: string } | null = null;
+let pendingLink: { handle: FileSystemFileHandle; name: string; hash: string } | null = null;
+async function keepLink(bytes: Uint8Array) {
+  const handle = local.current as unknown as FileSystemFileHandle | null;
+  if (!handle) return;
+  try {
+    link = {
+      fileId: await rememberFile(handle.name, handle),
+      name: handle.name,
+      hash: await hashBytes(bytes),
+    };
+    pendingLink = null;
+    schedulePersist();
+  } catch {
+    /* Without storage the link lasts this visit. */
+  }
+}
+
 /* Updates from the editor. */
 let renderTimer: ReturnType<typeof setTimeout> | undefined;
 let checkTimer: ReturnType<typeof setTimeout> | undefined;
@@ -385,10 +438,11 @@ let lastHeard = "";
 function onUpdate(update: ViewUpdate) {
   if (update.docChanged) {
     lastTyped = performance.now();
+    noticeOnEdit();
     if (started) schedulePersist();
     scheduleRender();
     clearTimeout(checkTimer);
-    checkTimer = setTimeout(runChecks, 750);
+    checkTimer = setTimeout(() => runChecks(), 750);
     updateRail();
     updateSavedState();
   }
@@ -399,6 +453,13 @@ function onUpdate(update: ViewUpdate) {
     $("position").textContent = `Line ${line.number}, column ${caret() - line.from + 1}`;
     clearTimeout(explainTimer);
     explainTimer = setTimeout(() => explainCaret(update), 40);
+    if (!update.docChanged && skippedBar) {
+      const head = update.state.selection.main.head;
+      if (head < skippedBar.from || head > skippedBar.to + 1) {
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(() => runChecks(true), 0);
+      }
+    }
     if (!update.docChanged) {
       // Moving into another tune draws that tune.
       const tune = tuneAt(fileIndex(), caret());
@@ -421,11 +482,11 @@ function explainCaret(update: ViewUpdate) {
       ? notesInRanges(scoreIndex, ranges()).filter((note) => !note.rest).length
       : 0;
     const voices = view.state.selection.ranges.length;
-    status.textContent = `${count} ${count === 1 ? "note" : "notes"} selected${voices > 1 ? ` in ${voices} voices` : ""} · Ctrl/⌘ Alt Enter plays it`;
+    status.textContent = `${count} ${count === 1 ? "note" : "notes"} selected${voices > 1 ? ` in ${voices} voices` : ""} · ${touch.matches ? "More › Play the selection plays it" : "Ctrl/⌘ Alt Enter plays it"}`;
     return;
   }
   if (!explanation) {
-    status.textContent = "Ready";
+    status.textContent = barStatus(position) ?? "Ready";
     return;
   }
   if (explanation.token) {
@@ -454,6 +515,17 @@ function explainCaret(update: ViewUpdate) {
       player.audition(explanation.midi);
     }
   } else if (!explanation.midi) lastHeard = "";
+}
+
+/** "Bar 4 · 6 of 6 eighths" for a caret in music that is on no note (a line end, after a bar line). */
+function barStatus(position: number): string | null {
+  const index = fileIndex();
+  const tune = tuneAt(index, position);
+  if (!tune || position < tune.bodyFrom) return null;
+  const line = view.state.doc.lineAt(position);
+  if (lineKind(line.text, true) !== "music") return null;
+  const info = barInText(tuneItems(text(), tune, index), position);
+  return info ? describeBar(info) : null;
 }
 
 /* Rendering the score. */
@@ -521,6 +593,7 @@ async function render(force = false) {
       { text: doc, file: index, tune, width },
       workspace.dataset.layout === "below",
       sameTune ? breaks : null,
+      () => authorBarsPerLine(doc, tuneItems(doc, tune, index)),
     );
     if (generation !== renderGeneration && !force) return;
     breaks = result.breaks;
@@ -603,7 +676,9 @@ function updateSummary() {
   const parts = [tuneLabel(tune)];
   if (tune.key) parts.push(describeKey(parseKey(tune.key)).split(",")[0] as string);
   if (tune.meter) parts.push(tune.meter);
-  parts.push(`${index.measures} ${index.measures === 1 ? "bar" : "bars"}`);
+  const pickup = timeline ? timeline.pickup > 1e-6 : false;
+  const bars = index.measures - (pickup ? 1 : 0);
+  parts.push(`${bars} ${bars === 1 ? "bar" : "bars"}${pickup ? " and a pickup" : ""}`);
   if (index.voices.length > 1) parts.push(`${index.voices.length} voices`);
   $("score-summary").textContent = parts.join(" · ");
   scoreScroll.setAttribute(
@@ -637,7 +712,14 @@ function buildPlayback(index: ScoreIndex) {
     bpm: audio.tempo || visual.getBpm?.() || 120,
     beat: visual.getBeatLength?.() || 0.25,
     bar: visual.getBarLength?.() || 1,
-    pickup: visual.getPickupLength?.() || 0,
+    // A first bar shorter than the meter is a pickup; an overfull one is just a long bar
+    // (abcjs reports what is left over a whole bar, so the first bar is measured here).
+    pickup: ((bar: number) => {
+      const first = (index.byVoice[0] ?? [])
+        .filter((note) => note.measure === 0)
+        .reduce((sum, note) => sum + note.duration, 0);
+      return first > 1e-6 && first < bar - 1e-6 ? first : 0;
+    })(visual.getBarLength?.() || 1),
     voices: index.voices.map((voice) => voice.name),
   };
   // A tempo set by hand belongs to the tune it was set for.
@@ -656,6 +738,7 @@ function buildPlayback(index: ScoreIndex) {
   applyTempo();
   updateVoices();
   drawTimeline();
+  updateSummary();
 }
 
 function regionTimelineFor(region: Region): Timeline | null {
@@ -736,16 +819,24 @@ function drawBands(selected: ScoreNote[], issueNotes: ScoreNote[] = currentIssue
       if (!notes.includes(box.note)) continue;
       const key = `${box.note.line}:${box.note.staff}`;
       const group = groups.get(key) ?? {
-        left: box.left,
+        left: box.head,
         right: box.right,
         line: box.note.line,
         staff: box.note.staff,
       };
-      group.left = Math.min(group.left, box.left);
+      group.left = Math.min(group.left, box.head);
       group.right = Math.max(group.right, box.right);
       groups.set(key, group);
     }
     const ordered = [...groups.values()].sort((a, b) => a.line - b.line || a.staff - b.staff);
+    // One span of time per system: every staff's band starts and ends at the same x.
+    const spans = new Map<number, { left: number; right: number }>();
+    for (const group of ordered) {
+      const span = spans.get(group.line) ?? { left: group.left, right: group.right };
+      span.left = Math.min(span.left, group.left);
+      span.right = Math.max(span.right, group.right);
+      spans.set(group.line, span);
+    }
     const firstLine = ordered[0]?.line;
     const lastLine = ordered[ordered.length - 1]?.line;
     for (const group of ordered) {
@@ -754,8 +845,9 @@ function drawBands(selected: ScoreNote[], issueNotes: ScoreNote[] = currentIssue
       const bottom = staff ? staff.bottom + 10 : 0;
       const band = document.createElement("div");
       band.className = `score-band ${className}${group.line === firstLine ? " edge-start" : ""}${group.line === lastLine ? " edge-end" : ""}`;
-      band.style.left = `${offsetLeft + group.left - 5}px`;
-      band.style.width = `${group.right - group.left + 10}px`;
+      const span = spans.get(group.line) ?? group;
+      band.style.left = `${offsetLeft + span.left - 6}px`;
+      band.style.width = `${span.right - span.left + 12}px`;
       band.style.top = `${offsetTop + top}px`;
       band.style.height = `${Math.max(20, bottom - top)}px`;
       bandsLayer.append(band);
@@ -772,25 +864,37 @@ type Problem = {
   message: string;
   severity: "warning" | "error";
   kind: "bar" | "parse";
+  /** "bar 3 — has 7 eighths, 6 expected", for the list. */
+  label?: string;
 };
 let problems: Problem[] = [];
 let currentIssueNotes: ScoreNote[] = [];
-function runChecks() {
+const TYPING_WINDOW = 2500;
+/** The bar left out because it was being typed, so it can be checked as soon as that ends. */
+let skippedBar: { from: number; to: number } | null = null;
+let recheckTimer: ReturnType<typeof setTimeout> | undefined;
+
+function runChecks(caretLeft = false) {
   const index = fileIndex();
   const doc = text();
   const list: Problem[] = [];
   const position = caret();
-  const recentlyTyped = performance.now() - lastTyped < 2500;
+  const recentlyTyped = !caretLeft && performance.now() - lastTyped < TYPING_WINDOW;
+  skippedBar = null;
   for (const tune of index.tunes) {
     for (const issue of checkBars(doc, tune, index)) {
-      // Not while the bar is still being typed.
-      if (recentlyTyped && position >= issue.from && position <= issue.to + 1) continue;
+      // Not while the bar is still being typed; it is checked once typing pauses or the caret leaves.
+      if (recentlyTyped && position >= issue.from && position <= issue.to + 1) {
+        skippedBar = { from: issue.from, to: issue.to };
+        continue;
+      }
       list.push({
         from: issue.from,
         to: issue.to,
         message: issue.message,
         severity: "warning",
         kind: "bar",
+        label: `${issue.bar === 0 ? "pickup" : `bar ${issue.bar}`} — ${issue.detail}`,
       });
     }
   }
@@ -803,6 +907,12 @@ function runChecks() {
         kind: "parse",
       });
   problems = list;
+  clearTimeout(recheckTimer);
+  if (skippedBar)
+    recheckTimer = setTimeout(
+      () => runChecks(),
+      Math.max(50, lastTyped + TYPING_WINDOW - performance.now() + 50),
+    );
   view.dispatch({ effects: setMarks.of({ issues: list }) });
   const button = $<HTMLButtonElement>("problems");
   button.hidden = list.length === 0;
@@ -1512,6 +1622,57 @@ player.onLoading = (message) => {
 };
 
 /* The position bar. */
+/** For each moment of playback: the written bar heard, and which time through it is. */
+type Reading = { times: number[]; bars: number[]; passes: number[]; totals: Map<number, number> };
+const readings = new WeakMap<Timeline, Reading>();
+function readingOf(line: Timeline): Reading | null {
+  if (!scoreIndex) return null;
+  const known = readings.get(line);
+  if (known) return known;
+  const byStart = new Map(scoreIndex.notes.map((note) => [note.start, note]));
+  const pickup = line.pickup > 1e-6;
+  const reading: Reading = { times: [], bars: [], passes: [], totals: new Map() };
+  let previous: { bar: number; written: number } | null = null;
+  for (const note of line.notes) {
+    if (note.start === undefined) continue;
+    const scored = byStart.get(note.start);
+    if (!scored) continue;
+    const bar = pickup ? scored.measure : scored.measure + 1;
+    const entering = !previous || previous.bar !== bar || note.written < previous.written - 1e-6;
+    if (entering) reading.totals.set(bar, (reading.totals.get(bar) ?? 0) + 1);
+    if (reading.times.length && reading.times[reading.times.length - 1] === note.time) continue;
+    reading.times.push(note.time);
+    reading.bars.push(bar);
+    reading.passes.push(reading.totals.get(bar) ?? 1);
+    previous = { bar, written: note.written };
+  }
+  readings.set(line, reading);
+  return reading;
+}
+function writtenBarAt(
+  line: Timeline,
+  position: number,
+): { bar: number; pass: number; repeated: boolean } | null {
+  const reading = readingOf(line);
+  if (!reading || !reading.times.length) return null;
+  let low = 0;
+  let high = reading.times.length - 1;
+  while (low < high) {
+    const middle = (low + high + 1) >> 1;
+    if ((reading.times[middle] as number) <= position + 1e-9) low = middle;
+    else high = middle - 1;
+  }
+  const bar = reading.bars[low] as number;
+  return { bar, pass: reading.passes[low] as number, repeated: (reading.totals.get(bar) ?? 1) > 1 };
+}
+const ordinal = (n: number) =>
+  `${n}${n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"}`;
+/** The written bars, not counting a pickup. */
+function writtenBars(): number {
+  if (!scoreIndex) return 0;
+  return scoreIndex.measures - (timeline && timeline.pickup > 1e-6 ? 1 : 0);
+}
+
 function drawTimeline() {
   const line = timeline;
   const ticks = $("timeline-ticks");
@@ -1536,8 +1697,9 @@ function drawTimeline() {
     tick.className = `timeline-tick${number % step === 0 || index === 0 ? " major" : ""}`;
     tick.style.left = `${(time / length) * 100}%`;
     if ((number % (step * 2) === 0 || index === 0) && number > 0) {
+      // Labelled with the written bar, so a repeat reads as the same bars again.
       const label = document.createElement("span");
-      label.textContent = String(number);
+      label.textContent = String(writtenBarAt(line, time + 1e-6)?.bar ?? number);
       tick.append(label);
     }
     ticks.append(tick);
@@ -1611,15 +1773,18 @@ function updateHead(position: number) {
   at = Math.max(0, Math.min(at, line.length));
   head.style.left = `${(at / line.length) * 100}%`;
   const bar = barAt(line, at);
-  const number = line.pickup > 1e-6 ? bar : bar + 1;
+  const written = writtenBarAt(line, at);
+  const number = written?.bar ?? (line.pickup > 1e-6 ? bar : bar + 1);
+  const time = written?.repeated ? ` · ${ordinal(written.pass)} time` : "";
   const seconds = (at / ((line.bpm * player.tempoFactor * line.beat) / 60)) | 0;
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-  $("clock").textContent = `${player.loopingRegion ? "Loop · " : ""}Bar ${number} · ${clock}`;
+  const name = number === 0 ? "Pickup" : `Bar ${number}`;
+  $("clock").textContent = `${player.loopingRegion ? "Loop · " : ""}${name}${time} · ${clock}`;
   const slider = $("timeline");
   slider.setAttribute("aria-valuenow", String(bar));
   slider.setAttribute(
     "aria-valuetext",
-    `Bar ${number} of ${line.pickup > 1e-6 ? line.bars.length - 1 : line.bars.length}, ${clock}`,
+    `${name}${written?.repeated ? `, ${ordinal(written.pass)} time` : ""}, of ${writtenBars()} bars, ${clock}`,
   );
 }
 
@@ -1670,6 +1835,13 @@ function updateVoices() {
   const tracks = timeline?.tracks ?? [];
   $("voices-button").hidden = tracks.length < 2;
   applyMutes();
+  // The button says when some voices are silenced: a dot, and words for assistive technology.
+  const button = $("voices-button");
+  const label = soloed.size ? `${soloed.size} solo` : muted.size ? `${muted.size} muted` : "";
+  button.dataset.state = soloed.size ? "solo" : muted.size ? "muted" : "";
+  button.setAttribute("aria-label", label ? `Voices: ${label}` : "Voices");
+  const text = button.querySelector(".transport-label");
+  if (text) text.textContent = label ? `Voices · ${label}` : "Voices";
 }
 function voicesPopover(anchor: HTMLElement) {
   const tracks = timeline?.tracks ?? [];
@@ -1688,7 +1860,7 @@ function voicesPopover(anchor: HTMLElement) {
       if (muted.has(index)) muted.delete(index);
       else muted.add(index);
       mute.setAttribute("aria-pressed", String(muted.has(index)));
-      applyMutes();
+      updateVoices();
     });
     const solo = document.createElement("button");
     solo.type = "button";
@@ -1699,7 +1871,7 @@ function voicesPopover(anchor: HTMLElement) {
       if (soloed.has(index)) soloed.delete(index);
       else soloed.add(index);
       solo.setAttribute("aria-pressed", String(soloed.has(index)));
-      applyMutes();
+      updateVoices();
     });
     row.append(name, mute, solo);
     panel.append(row);
@@ -1910,6 +2082,8 @@ $("sound-button").addEventListener("click", (event) =>
 );
 $("problems").addEventListener("click", openProblems);
 $("announce").addEventListener("click", sayNote);
+// On a phone the status line is two lines; a tap opens it fully.
+$("explain").addEventListener("click", () => $("explain").classList.toggle("open"));
 
 /** " Bar 3, voice First." for the note at a position, when the score knows it. */
 function placeOf(position: number): string {
@@ -1938,7 +2112,8 @@ function sayNote() {
 
 /* Layout: score beside or below, rail, focus, phone switch, splitter. */
 function resolvedLayout(): "beside" | "below" {
-  if (prefs.layout === "auto") return window.innerWidth >= 1200 ? "beside" : "below";
+  // From tablet width up the score sits beside the text; the rail makes room below 1200 px.
+  if (prefs.layout === "auto") return window.innerWidth >= 960 ? "beside" : "below";
   return prefs.layout;
 }
 function applyLayout() {
@@ -1946,7 +2121,11 @@ function applyLayout() {
   workspace.dataset.layout = layout;
   body.dataset.layout = layout;
   // On a phone the rail is an overlay, closed until asked for.
-  const railOpen = phone.matches ? phoneRail : prefs.rail;
+  const railOpen = phone.matches
+    ? phoneRail
+    : prefs.railChosen
+      ? prefs.rail
+      : window.innerWidth >= 1200;
   workspace.dataset.rail = railOpen ? "open" : "closed";
   $("rail-toggle").setAttribute("aria-pressed", String(railOpen));
   $("layout-toggle").setAttribute(
@@ -1975,7 +2154,8 @@ let phoneRail = false;
 function toggleRail() {
   if (phone.matches) phoneRail = !phoneRail;
   else {
-    prefs.rail = !prefs.rail;
+    prefs.rail = workspace.dataset.rail !== "open";
+    prefs.railChosen = true;
     savePrefs();
   }
   applyLayout();
@@ -2050,7 +2230,7 @@ new ResizeObserver(() => {
   resizeTimer = setTimeout(() => void render(), 140);
 }).observe(scoreScroll);
 window.addEventListener("resize", () => {
-  if (prefs.layout === "auto") applyLayout();
+  applyLayout();
 });
 scoreScroll.addEventListener(
   "scroll",
@@ -2153,13 +2333,15 @@ function updateSavedState() {
   const element = $("saved-state");
   element.textContent = !started
     ? ""
-    : dirty()
-      ? local.linked
-        ? "Edited"
-        : "Not saved to a file"
-      : local.linked
-        ? "Saved"
-        : "";
+    : pendingLink && !local.linked
+      ? `Saved to ${pendingLink.name} earlier · Save to reconnect`
+      : dirty()
+        ? local.linked
+          ? "Edited"
+          : "Not saved to a file"
+        : local.linked
+          ? "Saved"
+          : "";
   document.title = `${dirty() ? "• " : ""}${nameInput.value} — VoxDown Composer`;
 }
 
@@ -2170,14 +2352,12 @@ async function openFile() {
       if (!picked) return;
       openBytes(picked.bytes, picked.name);
       local.connect(picked.handle, picked.bytes);
-      void rememberFile(picked.name, picked.handle as unknown as FileSystemFileHandle).catch(
-        () => {},
-      );
+      void keepLink(picked.bytes);
       updateSavedState();
       return;
     }
   } catch {
-    notice("That file could not be opened. Try again, or drop it onto the page.");
+    noticeError("That file could not be opened. Try again, or drop it onto the page.");
     return;
   }
   $<HTMLInputElement>("file").click();
@@ -2193,7 +2373,7 @@ function openBytes(bytes: Uint8Array, name: string) {
       "success",
     );
   } catch (error) {
-    notice(error instanceof Error ? error.message : "That file could not be opened.");
+    noticeError(error instanceof Error ? error.message : "That file could not be opened.");
   }
 }
 $<HTMLInputElement>("file").addEventListener("change", async () => {
@@ -2223,12 +2403,40 @@ async function save(saveAs = false) {
   try {
     encoded = encodeText(source, text());
   } catch (error) {
-    notice(error instanceof Error ? error.message : "This text cannot be saved.");
+    noticeError(error instanceof Error ? error.message : "This text cannot be saved.");
     return;
+  }
+  if (local.canSave && !saveAs && !local.linked && pendingLink) {
+    // After a reload: ask to write to the same file again, if nothing else changed it.
+    const { handle, hash } = pendingLink;
+    try {
+      const permitted = handle as FileSystemFileHandle & {
+        requestPermission?: (options: { mode: string }) => Promise<string>;
+      };
+      if (
+        permitted.requestPermission &&
+        (await permitted.requestPermission({ mode: "readwrite" })) !== "granted"
+      )
+        throw new Error("denied");
+      const current = new Uint8Array(await (await handle.getFile()).arrayBuffer());
+      if ((await hashBytes(current)) !== hash) {
+        noticeError(
+          `${handle.name} was changed elsewhere since Composer saved it. Use Save as to keep both, or Download.`,
+        );
+        return;
+      }
+      local.connect(handle as never, current);
+    } catch {
+      noticeError(
+        `Composer could not reach ${pendingLink.name} again. Use Save as to choose where to save.`,
+      );
+      return;
+    }
   }
   if (local.canSave) {
     const result = await local.save(encoded.bytes, name, saveAs);
     if (result.status === "saved") {
+      void keepLink(encoded.bytes);
       savedText = text();
       nameInput.value = result.name;
       updateSavedState();
@@ -2242,11 +2450,12 @@ async function save(saveAs = false) {
     if (result.status === "conflict") {
       notice(
         `${result.name} was changed by another program since you opened it. Use Save as to keep both, or Download.`,
+        "error",
       );
       return;
     }
     if (result.status === "error") {
-      notice(result.message);
+      noticeError(result.message);
       return;
     }
   }
@@ -2260,7 +2469,7 @@ function downloadAbc() {
   try {
     download(encodeText(source, text()).bytes, name, "text/vnd.abc;charset=utf-8");
   } catch (error) {
-    notice(error instanceof Error ? error.message : "This text cannot be saved.");
+    noticeError(error instanceof Error ? error.message : "This text cannot be saved.");
   }
 }
 $("save-primary").addEventListener("click", () => void save());
@@ -2279,7 +2488,7 @@ async function exportMidi() {
     bpm: Math.round(timeline ? timeline.bpm * player.tempoFactor : 120),
   }) as Uint8Array[];
   const bytes = files[0];
-  if (!bytes) return notice("This tune could not be turned into MIDI.");
+  if (!bytes) return noticeError("This tune could not be turned into MIDI.");
   download(
     bytes as BlobPart,
     `${abcName(tuneLabel(scoreIndex.tune)).replace(/\.abc$/, "")}.mid`,
@@ -2303,7 +2512,7 @@ async function exportWav() {
     );
     notice("Audio exported as WAV.", "success");
   } catch {
-    notice("The audio could not be rendered. Try again once the instrument has loaded.");
+    noticeError("The audio could not be rendered. Try again once the instrument has loaded.");
   }
 }
 async function printScore() {
@@ -2338,6 +2547,7 @@ function flushDraft() {
     text: text(),
     updated: Date.now(),
     source: meta,
+    link: link ?? undefined,
   }).catch(() => {});
 }
 function schedulePersist() {
@@ -2354,6 +2564,7 @@ async function persist() {
       text: text(),
       updated: Date.now(),
       source: meta,
+      link: link ?? undefined,
     });
     setSessionDraftId(draftId);
     $("recovery").textContent = "Draft kept in this browser";
@@ -2482,7 +2693,7 @@ async function recentMenu(anchor: HTMLElement) {
             void rememberFile(file.name, handle);
           } catch {
             await forgetFile(file.id);
-            notice(`${file.name} could not be reopened. It may have moved; use Open.`);
+            noticeError(`${file.name} could not be reopened. It may have moved; use Open.`);
           }
         },
       }))
@@ -2647,42 +2858,62 @@ const offlineDialog = createDialog("offline-dialog", "Work offline");
   });
 }
 
-const problemsDialog = createDialog("problems-dialog", "Bars to check");
+/** Problems as a list above the footer button; the editor stays usable beside it. */
+function problemText(problem: Problem): string {
+  const line = view.state.doc.lineAt(Math.min(problem.from, view.state.doc.length)).number;
+  return problem.label ? `Line ${line}, ${problem.label}` : `Line ${line} — ${problem.message}`;
+}
+function goToProblem(problem: Problem, focusEditor = true) {
+  view.dispatch({
+    selection: { anchor: problem.from, head: Math.min(problem.to, view.state.doc.length) },
+    scrollIntoView: true,
+  });
+  $("explain").textContent = problemText(problem);
+  if (focusEditor) view.focus();
+}
 function openProblems() {
-  problemsDialog.body.replaceChildren();
   const bars = problems.filter((problem) => problem.kind === "bar").length;
-  problemsDialog.heading.textContent =
+  const title =
     bars === problems.length
       ? "Bars to check"
       : bars
         ? "Bars and problems to check"
         : "Problems to check";
-  const intro = document.createElement("p");
-  intro.textContent =
-    "Bars whose length differs from the meter, and anything abcjs could not read. Choose one to go there.";
+  const panel = popover($("problems"), title);
+  panel.classList.add("problems-popover");
   const list = document.createElement("ul");
   list.className = "problem-list";
   for (const problem of problems) {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
-    const where = document.createElement("span");
-    where.className = "where";
-    where.textContent = `Line ${view.state.doc.lineAt(Math.min(problem.from, view.state.doc.length)).number}`;
-    button.append(where, problem.message);
+    button.textContent = problemText(problem);
     button.addEventListener("click", () => {
-      problemsDialog.close();
-      view.dispatch({
-        selection: { anchor: problem.from, head: Math.min(problem.to, view.state.doc.length) },
-        scrollIntoView: true,
-      });
-      view.focus();
+      closePopover?.();
+      goToProblem(problem);
     });
     item.append(button);
     list.append(item);
   }
-  problemsDialog.body.append(intro, list);
-  problemsDialog.open();
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = "F8 goes to the next, Shift F8 to the previous.";
+  panel.append(list, hint);
+}
+/** F8 / Shift F8: the next or previous problem after the caret, wrapping around. */
+function stepProblem(direction: 1 | -1): boolean {
+  if (!problems.length) {
+    notice("Nothing to check: every bar fits its meter.", "success");
+    return true;
+  }
+  const sorted = [...problems].sort((a, b) => a.from - b.from);
+  const at = view.state.selection.main.from;
+  const next =
+    direction > 0
+      ? (sorted.find((problem) => problem.from > at) ?? sorted[0])
+      : ([...sorted].reverse().find((problem) => problem.from < at) ?? sorted[sorted.length - 1]);
+  if (next) goToProblem(next);
+  return true;
 }
 
 /* Menus. */
@@ -2732,6 +2963,12 @@ const menus = mountMenus(
       },
       "-",
       { label: "Find and replace…", run: () => openSearchPanel(view), shortcut: "Mod F" },
+      { label: "Next bar or problem to check", run: () => stepProblem(1), shortcut: "F8" },
+      {
+        label: "Previous bar or problem to check",
+        run: () => stepProblem(-1),
+        shortcut: "Shift F8",
+      },
       "-",
       { label: "Up a semitone", run: () => music("transpose-up"), shortcut: "Alt ↑" },
       { label: "Down a semitone", run: () => music("transpose-down"), shortcut: "Alt ↓" },
@@ -2935,9 +3172,19 @@ document.addEventListener("keydown", (event) => {
   const inEditor = view.hasFocus;
   const inField =
     event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement;
+  if (
+    event.key === "Escape" &&
+    !noticeElement.hidden &&
+    !menus.isOpen() &&
+    !document.querySelector("dialog[open]")
+  )
+    notice("");
   if (event.key === "F1") {
     event.preventDefault();
     sheet.open();
+  } else if (event.key === "F8" && !inEditor) {
+    event.preventDefault();
+    stepProblem(event.shiftKey ? -1 : 1);
   } else if (mod && !event.altKey && event.key.toLowerCase() === "s") {
     event.preventDefault();
     void save(event.shiftKey);
@@ -2996,7 +3243,7 @@ function updateAll(immediate = false) {
   updateRail();
   scheduleRender(immediate ? 0 : undefined);
   clearTimeout(checkTimer);
-  checkTimer = setTimeout(runChecks, immediate ? 300 : 750);
+  checkTimer = setTimeout(() => runChecks(), immediate ? 300 : 750);
 }
 
 function fillExamples() {
@@ -3067,9 +3314,14 @@ for (const element of document.querySelectorAll<HTMLElement>("[title]")) {
 // On a phone, the commands that do not fit the toolbar are one tap away.
 $("more-tools").addEventListener("click", (event) =>
   popupMenu(event.currentTarget as HTMLElement, [
+    { label: "Play the selection", run: () => void playSelection(false) },
+    "-",
+    { label: "Halve lengths", run: () => music("halve") },
+    { label: "Double lengths", run: () => music("double") },
+    { label: "Add a dot", run: () => music("dot") },
+    { label: "Remove a dot", run: () => music("undot") },
     { label: "Up an octave", run: () => music("octave-up") },
     { label: "Down an octave", run: () => music("octave-down") },
-    { label: "Remove a dot", run: () => music("undot") },
     "-",
     { label: "Bar line", run: () => music("bar") },
     { label: "Tie or untie", run: () => music("tie") },
@@ -3098,6 +3350,17 @@ async function start() {
       if (draft) {
         draftId = id;
         load(draftSource(draft), draft.name, { keepDraft: true, text: draft.text });
+        if (draft.link) {
+          link = draft.link;
+          const saved = draft.link;
+          void recentFiles()
+            .then((files) => {
+              const file = files.find((each) => each.id === saved.fileId);
+              if (file) pendingLink = { handle: file.handle, name: saved.name, hash: saved.hash };
+              updateSavedState();
+            })
+            .catch(() => {});
+        }
         $("recovery").textContent = "Recovered this tab's draft";
         return;
       }
@@ -3131,6 +3394,7 @@ void start();
       : null,
   }),
   scoreIndex: () => scoreIndex,
+  breaks: () => breaks,
   /** Note heads and bar lines in page coordinates, for checks that drag across bars. */
   geometry: () => {
     const geo = staffGeometry();

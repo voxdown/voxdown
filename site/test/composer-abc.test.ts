@@ -9,7 +9,7 @@ import {
   tokenizeMusic,
   transposeChordSymbol,
 } from "../src/composer/abc";
-import { checkBars } from "../src/composer/barcheck";
+import { barAt, checkBars, describeBar } from "../src/composer/barcheck";
 import {
   type Change,
   decorate,
@@ -23,6 +23,7 @@ import {
 } from "../src/composer/commands";
 import { explainAt } from "../src/composer/explain";
 import { indexFile } from "../src/composer/tunes";
+import { tuneItems } from "../src/composer/walk";
 
 const apply = (text: string, changes: Change[]) => {
   let out = text;
@@ -118,6 +119,14 @@ describe("explaining the caret", () => {
     expect(explain(text, "g")?.text).toBe("G, an octave above middle C, an eighth note.");
     expect(explain(text, "F ")?.midi).toEqual([66]);
   });
+  it("reads a note before its dynamic and chord symbol", () => {
+    const text = tune('!mp!"Am"G2 A |', "M:4/4\nL:1/4\nK:C");
+    const expected = "G, just above middle C, a half note, mp (moderately soft), chord Am.";
+    expect(explain(text, "!mp!")?.text).toBe(expected);
+    expect(explain(text, '"Am"', 1)?.text).toBe(expected);
+    expect(explain(text, "G2")?.text).toBe(expected);
+    expect(explain(text, "A |")?.text).toBe("A, just above middle C, a quarter note.");
+  });
   it("helps with a field that has no value yet", () => {
     const text = "X:1\nM:\nK:C\nC|\n";
     expect(explainAt(text, indexFile(text), text.indexOf("M:") + 2)?.text).toMatch(
@@ -129,9 +138,29 @@ describe("explaining the caret", () => {
     expect(explain(text, "K:G")?.text).toContain("G major, 1 sharp");
     expect(explain(text, "M:4/4")?.text).toContain("4 quarter notes a bar");
     expect(explain(text, "|:")?.text).toBe("Start of a repeat.");
-    expect(explain(text, "!trill!", 1)?.text).toBe("Decoration: trill.");
+    expect(explain(text, "!trill!", 1)?.text).toBe(
+      "A, just above middle C, an eighth note, trill.",
+    );
     expect(explain(text, "(3")?.text).toBe("triplet: three notes in the time of two.");
     expect(explain(text, ":|")?.text).toContain("End of a repeat");
+  });
+});
+
+describe("the bar at the caret", () => {
+  it("numbers bars from a pickup and says how full the bar is", () => {
+    const text = tune("D | G2 AB c2 BA | G4 z2 |", "M:4/4\nL:1/8\nK:G");
+    const file = indexFile(text);
+    const items = tuneItems(text, file.tunes[0] as never, file);
+    const at = (part: string, offset = 0) => barAt(items, text.indexOf(part) + offset);
+    expect(describeBar(at("D |") as never)).toBe("Pickup · 1 of 8 eighths");
+    expect(describeBar(at("G2 AB") as never)).toBe("Bar 1 · 8 of 8 eighths");
+    expect(describeBar(at("z2 |", 3) as never)).toBe("Bar 2 · 6 of 8 eighths");
+  });
+  it("calls an overfull first bar bar 1, not a pickup", () => {
+    const text = tune("d2e2f2^F2 GABc|", "M:4/4\nL:1/8\nK:G");
+    const issues = bars(text);
+    expect(issues[0]?.bar).toBe(1);
+    expect(issues[0]?.detail).toBe("has 12 eighths, 8 expected");
   });
 });
 
@@ -152,7 +181,7 @@ describe("bar check", () => {
   it("flags long and short bars in the middle of a tune", () => {
     const issues = bars(tune("G2 AB c2 BA | G4 z4 c | G4 | D8 |"));
     expect(issues.map((issue) => issue.kind)).toEqual(["long", "short"]);
-    expect(issues[0]?.message).toBe("This bar has 9 eighths; M:4/4 holds 8 eighths.");
+    expect(issues[0]?.message).toBe("Bar 2 has 9 eighths, 8 expected (M:4/4).");
   });
   it("counts tuplets, broken rhythm, chords and grace notes", () => {
     expect(bars(tune("(3GAB c2 A>B {g}c2 | [GBd]4 [GB]2 z2 |", "M:4/4\nL:1/8\nK:G"))).toEqual([]);

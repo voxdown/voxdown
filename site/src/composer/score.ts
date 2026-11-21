@@ -59,13 +59,16 @@ export function tuneSource(input: Pick<RenderInput, "text" | "file" | "tune">) {
   return { source: prefix + body, toDocument, prefixLength: prefix.length };
 }
 
-function measuresPerLine(width: number): number {
-  return Math.max(1, Math.min(8, Math.round(width / 210)));
-}
-
 /** Renders one tune into `stage` (hidden), then indexes what was drawn. */
 /** Line breaks abcjs chose (last measure of each line, per section), for redrawing in one pass. */
-export type Breaks = { key: string; lineBreaks: number[][] };
+export type Breaks = {
+  key: string;
+  lineBreaks: number[][];
+  /** What the breaks were chosen from, for checks. */
+  measured?:
+    | { sections: { left: number; measureWidths: number[] }[]; staffwidth: number }
+    | undefined;
+};
 
 /** What decides line breaks: the width and the number of bars, not the notes inside them. */
 export function breaksKey(source: string, width: number): string {
@@ -86,41 +89,188 @@ export function chosenBreaks(explanation: Any): number[][] | null {
   return sections;
 }
 
+/** Lyric syllables carry a no-break space each side, so words never touch, and a narrow one
+ * before a hyphen, so it stands between syllables. abcjs then reserves the room itself. */
+export function padLyrics(tune: Any): void {
+  for (const line of tune?.lines ?? [])
+    for (const staff of line.staff ?? [])
+      for (const voice of staff.voices ?? [])
+        for (const element of voice)
+          for (const lyric of element.lyric ?? []) {
+            if (!lyric.syllable || lyric.padded) continue;
+            lyric.padded = true;
+            lyric.syllable = `\u00a0${lyric.syllable}${lyric.divider === "-" ? "\u202f" : ""}`;
+            lyric.divider = lyric.divider === " " ? "\u00a0" : `${lyric.divider}\u00a0`;
+          }
+}
+
+/**
+ * Line breaks that follow phrases: the number of bars the author wrote per line when that is
+ * consistent and fits, else 4 bars, else 2 (or 8 when 4 leave lines sparse), else 1; a pickup
+ * rides with the first line, and a short last line joins the one above when it fits.
+ */
+export function chooseBreaks(
+  sections: { left: number; measureWidths: number[] }[],
+  staffwidth: number,
+  spacing: { min: number; max: number },
+  options: { authorBars?: number | null; pickup?: boolean; filled?: boolean[][] } = {},
+): number[][] {
+  return sections.map((section, sectionIndex) => {
+    const filled = options.filled?.[sectionIndex];
+    const widths = section.measureWidths;
+    const usable = staffwidth - section.left;
+    const most = usable / spacing.min;
+    const least = usable / spacing.max;
+    // abcjs counts an empty "measure" before a leading |: — it rides with the bar after it.
+    const real = widths
+      .map((width, index) => ({ width, index }))
+      .filter(({ width, index }) => (filled ? filled[index] !== false : width > 0.5));
+    if (real.length < 2) return [];
+    const pickup = Boolean(options.pickup) && sectionIndex === 0;
+    const lines = (perLine: number): { width: number; index: number }[][] => {
+      const out: { width: number; index: number }[][] = [];
+      let at = 0;
+      while (at < real.length) {
+        const take = perLine + (pickup && at === 0 ? 1 : 0);
+        out.push(real.slice(at, at + take));
+        at += take;
+      }
+      return out;
+    };
+    const total = (line: { width: number }[]) => line.reduce((sum, bar) => sum + bar.width, 0);
+    const fits = (perLine: number) => lines(perLine).every((line) => total(line) <= most + 0.5);
+    const sparse = (perLine: number) =>
+      lines(perLine)
+        .slice(0, -1)
+        .some((line) => total(line) < least);
+    // The author's own bars per line first; else 4 (8 when 4 leave lines sparse), 2, 1.
+    const candidates: number[] = [];
+    if (options.authorBars && options.authorBars > 0) candidates.push(options.authorBars);
+    if (fits(4) && sparse(4) && fits(8)) candidates.push(8);
+    candidates.push(4, 2, 1);
+    const chosen = candidates.find(fits) ?? 1;
+    const result = lines(chosen);
+    // A short last line (under half the width) joins the line above when they fit together.
+    if (result.length > 1) {
+      const last = result[result.length - 1] as { width: number; index: number }[];
+      const previous = result[result.length - 2] as { width: number; index: number }[];
+      const remainder = last.length < chosen;
+      if (remainder && total(last) < most * 0.5 && total(previous) + total(last) <= most + 0.5)
+        result.splice(result.length - 2, 2, [...previous, ...last]);
+    }
+    return result.slice(0, -1).map((line) => (line[line.length - 1] as { index: number }).index);
+  });
+}
+
+/**
+ * Which of abcjs's measures hold music, per section (a leading |: makes an empty one), and
+ * whether the first is a pickup: shorter than the bar.
+ */
+export function measuresOf(parsed: Any): { filled: boolean[][]; pickup: boolean } {
+  const filled: boolean[][] = [];
+  let section: boolean[] | null = null;
+  let first: number | null = null;
+  const bar = parsed?.getBarLength?.() ?? 1;
+  for (const line of parsed?.lines ?? []) {
+    if (!line.staff) {
+      section = null;
+      continue;
+    }
+    if (!section) {
+      section = [];
+      filled.push(section);
+    }
+    let notes = 0;
+    let length = 0;
+    for (const element of line.staff[0]?.voices?.[0] ?? []) {
+      if (element.el_type === "note") {
+        notes += 1;
+        length += element.duration ?? 0;
+      } else if (element.el_type === "bar") {
+        section.push(notes > 0);
+        if (notes > 0 && first === null) first = length;
+        notes = 0;
+        length = 0;
+      }
+    }
+    if (notes > 0) {
+      section.push(true);
+      if (first === null) first = length;
+    }
+  }
+  return { filled, pickup: first !== null && first > 1e-6 && first < bar - 1e-6 };
+}
+
+/** Bars per source line in the first voice, when the author wrote a consistent number. */
+export function authorBarsPerLine(
+  text: string,
+  items: { type: string; voice: string; from: number; to: number }[],
+): number | null {
+  const voice = items.find((item) => item.type === "event")?.voice;
+  if (voice === undefined) return null;
+  const counts = new Map<number, number>();
+  let events = 0;
+  let first = true;
+  for (const item of items) {
+    if (item.voice !== voice) continue;
+    if (item.type === "event") {
+      events += 1;
+      continue;
+    }
+    if (!events) continue;
+    events = 0;
+    const line = text.slice(0, item.from).split("\n").length;
+    // The pickup does not count as one of the line's bars.
+    if (first) {
+      first = false;
+      continue;
+    }
+    counts.set(line, (counts.get(line) ?? 0) + 1);
+  }
+  const values = [...counts.values()];
+  if (values.length < 2) return values[0] && values[0] >= 2 ? values[0] : null;
+  const body = values.slice(1, -1);
+  const typical = values[1] as number;
+  if (
+    body.every((count) => count === typical) &&
+    (values[0] as number) >= typical - 1 &&
+    (values[values.length - 1] as number) <= typical
+  )
+    return typical;
+  return null;
+}
+
+const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 export async function renderTune(
   stage: HTMLElement,
   input: RenderInput,
   wide: boolean,
   cached: Breaks | null = null,
+  authorBars: () => number | null = () => null,
 ): Promise<ScoreIndex & { breaks: Breaks | null }> {
   const abcjs = await loadAbcjs();
   const { source, toDocument } = tuneSource(input);
   const staffwidth = Math.max(240, Math.floor(input.width) - 30);
   stage.style.width = `${Math.floor(input.width)}px`;
   const font = '"Literata Variable", Georgia, serif';
-  performance.mark("composer:engrave");
-  // While the bars and the width stay the same, the last line breaks still fit: one pass, not two.
-  const key = breaksKey(source, staffwidth);
-  const reuse = cached && cached.key === key ? cached.lineBreaks : null;
-  const tunes = abcjs.renderAbc(stage, source, {
-    ...(reuse ? { lineBreaks: reuse } : {}),
+  // Narrow screens accept closer spacing, so a phone still shows two bars a line.
+  const compact = staffwidth < 500;
+  const spacing = { min: compact ? 1.1 : 1.35, max: wide ? 2.4 : 2.7 };
+  const params: Any = {
     add_classes: true,
     staffwidth,
-    paddingtop: 6,
+    paddingtop: compact ? 2 : 6,
     paddingbottom: 10,
     paddingleft: 6,
     paddingright: 12,
     selectTypes: false,
-    wrap: reuse
-      ? undefined
-      : {
-          minSpacing: 1.6,
-          maxSpacing: wide ? 2.4 : 2.7,
-          preferredMeasuresPerLine: measuresPerLine(staffwidth),
-        },
     format: {
-      titlefont: `${font} 19`,
-      subtitlefont: `${font} 14`,
-      composerfont: `${font} italic 12`,
+      // A phone keeps the title block tight, so the first staff is not pushed off the screen.
+      ...(compact ? { titlespace: 2, subtitlespace: 1, composerspace: 2, musicspace: 4 } : {}),
+      titlefont: `${font} ${compact ? 16 : 19}`,
+      subtitlefont: `${font} ${compact ? 12 : 14}`,
+      composerfont: `${font} italic ${compact ? 11 : 12}`,
       gchordfont: '"Recursive Variable", sans-serif 12',
       annotationfont: '"Recursive Variable", sans-serif 11',
       vocalfont: `${font} 13`,
@@ -128,14 +278,44 @@ export async function renderTune(
       tempofont: '"Recursive Variable", sans-serif 11',
       wordsfont: `${font} 13`,
     },
-  } as Any) as Any[];
+    afterParsing: padLyrics,
+  };
+  // While the bars and the width stay the same, the last line breaks still fit: one pass.
+  const key = `${breaksKey(source, staffwidth)}:${wide ? "w" : "n"}`;
+  let lineBreaks = cached && cached.key === key ? cached.lineBreaks : null;
+  let measured = cached && cached.key === key ? cached.measured : undefined;
+  if (!lineBreaks) {
+    // Otherwise measure the bars and choose phrase-aware breaks, then draw in the next task.
+    performance.mark("composer:measure");
+    const parsed = (abcjs as Any).parseOnly(source, params)[0];
+    padLyrics(parsed);
+    const controller = new (abcjs as Any).test.EngraverController(stage, params);
+    const sections = parsed ? controller.getMeasureWidths(parsed) : [];
+    const { filled, pickup } = measuresOf(parsed);
+    lineBreaks = chooseBreaks(sections, staffwidth, spacing, {
+      authorBars: authorBars(),
+      pickup,
+      filled,
+    });
+    measured = {
+      sections: sections.map((section: Any) => ({
+        left: section.left,
+        measureWidths: section.measureWidths,
+      })),
+      staffwidth,
+    };
+    stage.replaceChildren();
+    performance.measure("composer:measure", "composer:measure");
+    await nextTask();
+  }
+  performance.mark("composer:engrave");
+  const tunes = abcjs.renderAbc(stage, source, { ...params, lineBreaks } as Any) as Any[];
   const visual = tunes[0];
-  performance.measure(reuse ? "composer:engrave-once" : "composer:engrave", "composer:engrave");
+  performance.measure("composer:engrave", "composer:engrave");
   performance.mark("composer:index");
   const index = indexScore(visual, input.tune, toDocument, source);
   performance.measure("composer:index", "composer:index");
-  const found = reuse ?? chosenBreaks(visual?.explanation);
-  return { ...index, breaks: found ? { key, lineBreaks: found } : null };
+  return { ...index, breaks: { key, lineBreaks, measured } };
 }
 
 export function indexScore(

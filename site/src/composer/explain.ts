@@ -355,6 +355,9 @@ export function explainAt(text: string, file: FileIndex, position: number): Expl
   let chordNotes: string[] = [];
   let chordMidi: number[] = [];
   let chordFrom = -1;
+  // Decorations, chord symbols and annotations belong to the note after them: read the note first.
+  let prefix: MusicToken[] = [];
+  let pending: Explanation | null = null;
   walkTune(text, tune, file, (token: MusicToken, state) => {
     if (found || token.from > lineTo) return;
     if (token.kind === "chord-open") {
@@ -367,24 +370,45 @@ export function explainAt(text: string, file: FileIndex, position: number): Expl
       chordNotes.push(described.text.split(",")[0] as string);
       chordMidi.push(described.midi);
     }
+    const attached =
+      token.kind === "decoration" || token.kind === "chord-symbol" || token.kind === "annotation";
+    const owner =
+      (token.kind === "note" && !token.inChord && !token.inGrace) || token.kind === "rest";
+    if (owner && prefix.length) {
+      const start = (prefix[0] as MusicToken).from;
+      if (pending || (position >= start && position <= token.to)) {
+        found = explainToken(token, state, null, text, played, prefix.map(attachedPhrase));
+        return;
+      }
+    }
+    if (!attached && token.kind !== "space") {
+      if (pending) {
+        found = pending;
+        return;
+      }
+      prefix = [];
+    }
     const inside = position >= token.from && position < token.to;
     const atEnd = position === token.to && token.kind !== "space";
+    if (attached) prefix.push(token);
     if (
       !inside &&
       !(atEnd && (token.kind === "note" || token.kind === "rest" || token.kind === "chord-close"))
     )
       return;
     if (token.kind === "space" && position !== token.from) return;
-    found = explainToken(
+    const explanation = explainToken(
       token,
       state,
       chordFrom >= 0 ? { names: chordNotes, midi: chordMidi } : null,
       text,
       played,
     );
+    if (attached) pending = explanation;
+    else found = explanation;
     if (token.kind === "chord-close") chordFrom = -1;
   });
-  return found;
+  return found ?? pending;
 }
 
 function explainToken(
@@ -393,7 +417,9 @@ function explainToken(
   chord: { names: string[]; midi: number[] } | null,
   text = "",
   played = new Map<number, Fraction>(),
+  attached: string[] = [],
 ): Explanation | null {
+  const extra = attached.length ? `, ${attached.join(", ")}` : "";
   switch (token.kind) {
     case "note": {
       const written = mul(parseLength(token.length), state.unit);
@@ -410,7 +436,7 @@ function explainToken(
       const described = describeNote(token, state, why);
       return {
         token: token.text,
-        text: `${token.inGrace ? "Grace note " : ""}${described.text}.`,
+        text: `${token.inGrace ? "Grace note " : ""}${described.text}${extra}.`,
         midi: [described.midi],
       };
     }
@@ -419,13 +445,13 @@ function explainToken(
         const bars = Number(token.length) || 1;
         return {
           token: token.text,
-          text: `A rest of ${bars} whole ${bars === 1 ? "bar" : "bars"}.`,
+          text: `A rest of ${bars} whole ${bars === 1 ? "bar" : "bars"}${extra}.`,
         };
       }
       const duration = mul(parseLength(token.length), state.unit);
       return {
         token: token.text,
-        text: `${token.letter === "x" ? "An invisible rest" : "A rest"}, ${lengthName(duration).replace(" note", "")}.`,
+        text: `${token.letter === "x" ? "An invisible rest" : "A rest"}, ${lengthName(duration).replace(" note", "")}${extra}.`,
       };
     }
     case "chord-open":
@@ -515,4 +541,16 @@ function explainToken(
 
 export function meterOf(tune: TuneInfo): Fraction | null {
   return meterLength(tune.meter);
+}
+
+/** "mp (moderately soft)", "trill", "chord Am": what a mark before a note adds to it. */
+function attachedPhrase(token: MusicToken): string {
+  if (token.kind === "chord-symbol") return `chord ${token.text.slice(1, -1)}`;
+  if (token.kind === "annotation") return `“${token.text.slice(2, -1)}”`;
+  if (token.text.length === 1)
+    return (SHORTHAND[token.text] ?? "decoration").split(":")[0] as string;
+  const name = token.text.slice(1, -1);
+  const meaning = DECORATIONS[name] ?? name;
+  const dynamic = /^dynamic (\S+), (.+)$/.exec(meaning);
+  return dynamic ? `${dynamic[1]} (${dynamic[2]})` : meaning;
 }

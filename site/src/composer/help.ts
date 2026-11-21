@@ -56,6 +56,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Say the note at the caret", "Alt N"],
   ["Duplicate the bar or selection", "Mod Shift D"],
   ["Find / replace", "Mod F"],
+  ["Next / previous bar to check", "F8 / Shift F8"],
   ["Complete a field, key or decoration", "Ctrl Space"],
   ["Score beside or below", "Mod \\"],
   ["Focus", "Mod Shift F"],
@@ -187,7 +188,13 @@ export function cheatsheet(): HTMLElement {
   const keys = document.createElement("section");
   const heading = document.createElement("h3");
   heading.textContent = "Keys";
-  keys.append(heading, shortcutTable(SHORTCUTS.slice(0, 12)));
+  keys.append(
+    heading,
+    shortcutTable([
+      ...SHORTCUTS.slice(0, 12),
+      ...SHORTCUTS.filter(([action]) => action.startsWith("Next / previous bar")),
+    ]),
+  );
   root.append(keys);
   const more = document.createElement("p");
   more.style.fontSize = "12px";

@@ -67,6 +67,10 @@ export class LocalFiles {
   get linked(): string | null {
     return this.handle?.name ?? null;
   }
+  /** The connected file, to keep for reconnecting after a reload. */
+  get current(): FileHandleLike | null {
+    return this.handle;
+  }
 
   disconnect() {
     this.handle = null;

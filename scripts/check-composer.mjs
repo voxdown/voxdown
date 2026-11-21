@@ -442,8 +442,22 @@ console.log(
   "Composer: a two-voice drag takes notes only as the pointer reaches them, and no next bar before its bar line: passed",
 );
 
-// One voice with a long last note (Greensleeves), the gap after it, Shift click, and a first press.
-await openExample("Greensleeves");
+// One voice with a long last note, the gap after it, Shift click, and a first press.
+await page.evaluate(() => {
+  const view = window.composer.view;
+  view.dispatch({
+    changes: {
+      from: 0,
+      to: view.state.doc.length,
+      insert: "X:1\nT:Long notes\nM:4/4\nL:1/8\nK:G\nG2 AB c4 | d2 B2 G4 | A2 B2 c2 d2 | g8 |]\n",
+    },
+  });
+});
+await page.waitForFunction(() =>
+  document.getElementById("score-summary").textContent.startsWith("Long notes"),
+);
+await drawn();
+await settle(300);
 {
   const geo = await geometry();
   const notes = geo.notes.filter((note) => note.voice === 0).sort((a, b) => a.time - b.time);
@@ -623,12 +637,27 @@ assert.match(
   await page.locator("#problems").textContent(),
 );
 assert(await page.locator(".abc-bar-issue").count(), "the long bar is marked in the text");
+// 4. The list names the bar, opens above its button without blocking the editor, and F8 steps.
 await page.locator("#problems").click();
-assert.match(
-  await page.locator("#problems-dialog").textContent(),
-  /This bar has 7 eighths; M:6\/8 holds 6 eighths/,
-);
+const popover = page.locator(".problems-popover");
+assert.match(await popover.textContent(), /Line \d+, bar 2 — has 7 eighths, 6 expected/);
+assert.equal(await page.locator("dialog[open]").count(), 0, "not a modal dialog");
+const above = await page.evaluate(() => {
+  const list = document.querySelector(".problems-popover").getBoundingClientRect();
+  const button = document.getElementById("problems").getBoundingClientRect();
+  return list.bottom <= button.top + 1;
+});
+assert(above, "the list sits above its button");
 await page.keyboard.press("Escape");
+await page.locator(".cm-content").focus();
+await setCaret(0);
+await page.keyboard.press("F8");
+const stepped = await page.evaluate(() => {
+  const view = window.composer.view;
+  return view.state.doc.sliceString(view.state.selection.main.from, view.state.selection.main.to);
+});
+assert.match(stepped, /c "G"d2 B G>AB/, "F8 selects the long bar");
+assert.match(await page.locator("#explain").textContent(), /bar 2 — has 7 eighths/);
 await page.evaluate(() => {
   const view = window.composer.view;
   const end = view.state.doc.length;
@@ -913,6 +942,277 @@ console.log(
   "Composer: start screen rests the tools; prepared offline, it reloads, opens an example and plays: passed",
 );
 
+/* 10c. Round 3: checks come back after typing; pickups; phrase-aware lines; notices; written bars;
+   transport state; lyrics never touch. */
+const setText = async (value, title, withNotes = true) => {
+  await page.evaluate((text) => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+  }, value);
+  await page.waitForFunction(
+    (name) => document.getElementById("score-summary").textContent.startsWith(name),
+    title,
+  );
+  if (withNotes) await drawn();
+  await settle(300);
+};
+const barsPerSystem = () =>
+  page.evaluate(() => {
+    const index = window.composer.scoreIndex();
+    const lines = new Map();
+    for (const note of index.byVoice[0]) {
+      if (!lines.has(note.line)) lines.set(note.line, new Set());
+      lines.get(note.line).add(note.measure);
+    }
+    return [...lines.values()].map((set) => set.size);
+  });
+// 1. A long bar typed and left: noted within about three seconds, with no further edit.
+await setText("X:1\nT:Typed\nM:4/4\nL:1/8\nK:C\n", "Typed", false);
+await page.evaluate(() => {
+  const view = window.composer.view;
+  view.dispatch({ selection: { anchor: view.state.doc.length } });
+  view.focus();
+});
+await page.keyboard.type("CDEF GABc d2|");
+assert(await page.locator("#problems").isHidden(), "not while the bar is being typed");
+await page.waitForFunction(() => !document.getElementById("problems").hidden, null, {
+  timeout: 3500,
+});
+assert.match(await page.locator("#problems").textContent(), /^1 bar to check$/);
+// 2. An overfull first bar is bar 1, not a pickup.
+await setText("X:1\nT:Overfull\nM:4/4\nL:1/8\nQ:1/4=120\nK:C\nd2e2f2^F2 GABc|c8|]\n", "Overfull");
+assert.match(await page.locator("#clock").textContent(), /^Bar 1 · 0:00$/);
+await page.waitForFunction(() => !document.getElementById("problems").hidden);
+await page.locator("#problems").click();
+assert.match(
+  await page.locator(".problems-popover").textContent(),
+  /bar 1 — has 12 eighths, 8 expected/,
+);
+await page.keyboard.press("Escape");
+// 7. Lines follow phrases: a typed 4-bar tune is one line; Twinkle's lines are equal.
+await setText(
+  "X:1\nT:Four bars\nM:4/4\nL:1/8\nK:G\nG2 AB c2 BA | G2 B2 d4 | e2 dc B2 AG | A8 |]\n",
+  "Four bars",
+);
+assert.deepEqual(await barsPerSystem(), [4], "four bars on one line");
+await openExample("Twinkle, Twinkle, Little Star");
+{
+  const systems = await barsPerSystem();
+  assert(
+    systems.every((count) => count === systems[0]),
+    `Twinkle's lines are equal: ${systems}`,
+  );
+  assert(systems[0] >= 4, `Twinkle has at least 4 bars a line at 1440: ${systems}`);
+}
+await openExample("Greensleeves");
+{
+  const systems = await barsPerSystem();
+  assert.equal(systems[0], 5, `the pickup rides with the first 4 bars: ${systems}`);
+  assert(
+    systems.slice(1).every((count) => count === 4),
+    `then 4 bars a line: ${systems}`,
+  );
+  assert(
+    systems.every((count) => count > 1),
+    "no stranded bar",
+  );
+  // 10. Written bars, with the pass: the summary and the clock agree.
+  assert.match(await page.locator("#score-summary").textContent(), /16 bars and a pickup/);
+  await page.evaluate(() => {
+    const line = window.composer.player.timeline;
+    const second = line.passes.find((pass) => pass.repeat);
+    window.composer.player.seek(second.from + 1.2);
+  });
+  await page.waitForFunction(() => /2nd time/.test(document.getElementById("clock").textContent));
+  assert.match(await page.locator("#clock").textContent(), /^Bar [1-8] · 2nd time · \d:\d\d$/);
+  assert.match(
+    await page.locator("#timeline").getAttribute("aria-valuetext"),
+    /2nd time, of 16 bars/,
+  );
+  await page.locator("#stop").click();
+}
+console.log(
+  "Composer: long bars come back after typing; overfull first bar is bar 1; lines follow phrases; written bars with passes: passed",
+);
+
+{
+  // 9. Notices sit above the transport, fade, close with Escape and with the next edit.
+  await setCaret((await docText()).indexOf("c2 d e"));
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Alt+t");
+  await page.locator("#notice").waitFor();
+  const placed = await page.evaluate(() => {
+    const note = document.getElementById("notice").getBoundingClientRect();
+    const transport = document.getElementById("transport").getBoundingClientRect();
+    const title = [...document.querySelectorAll("#score svg text")]
+      .find((text) => text.textContent === "Greensleeves")
+      .getBoundingClientRect();
+    const overlaps = (a, b) =>
+      a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    return { above: note.bottom <= transport.top, clearOfTitle: !overlaps(note, title) };
+  });
+  assert(placed.above && placed.clearOfTitle, `notice placement ${JSON.stringify(placed)}`);
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => document.getElementById("notice").hidden);
+  await page.keyboard.press("Alt+t");
+  await page.locator("#notice").waitFor();
+  await page.keyboard.type(" ");
+  await page.waitForFunction(() => document.getElementById("notice").hidden);
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Alt+t");
+  await page.locator("#notice").waitFor();
+  await page.waitForFunction(() => document.getElementById("notice").hidden, null, {
+    timeout: 7500,
+  });
+}
+console.log(
+  "Composer: notices sit above the transport, clear of the title; Escape, an edit or six seconds close them: passed",
+);
+
+await openExample("Ode to Joy");
+{
+  // 12. Voices shows a mute; the stopped marker is hollow, not the playing colour; count-in keeps widths.
+  await page.locator("#voices-button").click();
+  await page
+    .getByRole("button", { name: /^Mute / })
+    .first()
+    .click();
+  assert.equal(await page.locator("#voices-button").getAttribute("aria-label"), "Voices: 1 muted");
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: /^Mute / })
+    .first()
+    .click()
+    .catch(() => {});
+  await page.locator("#voices-button").click();
+  await page
+    .getByRole("button", { name: /^Mute / })
+    .first()
+    .click();
+  await page.keyboard.press("Escape");
+  const head = await page.evaluate(() => {
+    const element = document.getElementById("timeline-head");
+    const style = getComputedStyle(element);
+    const probe = document.createElement("div");
+    probe.style.color = "var(--play)";
+    document.body.append(probe);
+    const play = getComputedStyle(probe).color;
+    probe.remove();
+    return { background: style.backgroundColor, play };
+  });
+  assert.notEqual(head.background, head.play, "a stopped marker is not the playing colour");
+  const width = await page
+    .locator("#timeline")
+    .evaluate((element) => element.getBoundingClientRect().width);
+  await page.locator("#count-in").click();
+  await setCaret(0);
+  await page.locator("#play").click();
+  await page.waitForFunction(() =>
+    document.getElementById("clock").textContent.startsWith("Count-in"),
+  );
+  const during = await page
+    .locator("#timeline")
+    .evaluate((element) => element.getBoundingClientRect().width);
+  assert(
+    Math.abs(during - width) < 1,
+    `the timeline keeps its width while counting in (${width} → ${during})`,
+  );
+  await page.locator("#stop").click();
+  await page.locator("#count-in").click();
+}
+console.log(
+  "Composer: Voices shows a mute; the stopped marker is hollow; count-in keeps the timeline's width: passed",
+);
+
+/* 23. Lyric words never touch, at any width the score can have. */
+const lyricTune =
+  "X:1\nT:Ten seconds\nM:4/4\nL:1/4\nK:C\nC D E F | G2 A G | F E D E | C D E2 |]\nw: I just love to play this song, for it's just ten sec-onds long.\n";
+const lyricGaps = (p) =>
+  p.evaluate(() => {
+    const gapNeeded = 0.4 * 13;
+    const words = [];
+    for (const text of document.querySelectorAll("#score text.abcjs-lyric")) {
+      const content = text.textContent;
+      const first = content.search(/[^\s\u00a0\u202f]/);
+      const last =
+        content.length -
+        1 -
+        [...content]
+          .reverse()
+          .join("")
+          .search(/[^\s\u00a0\u202f]/);
+      if (first < 0) continue;
+      const start = text.getStartPositionOfChar(first);
+      const end = text.getEndPositionOfChar(last);
+      const matrix = text.getScreenCTM();
+      words.push({
+        y: Math.round(start.y * matrix.d + matrix.f),
+        left: start.x * matrix.a + matrix.e,
+        right: end.x * matrix.a + matrix.e,
+        word: content.trim(),
+      });
+    }
+    const lines = new Map();
+    for (const word of words) {
+      if (!lines.has(word.y)) lines.set(word.y, []);
+      lines.get(word.y).push(word);
+    }
+    let smallest = Number.POSITIVE_INFINITY;
+    let pair = "";
+    for (const line of lines.values()) {
+      line.sort((a, b) => a.left - b.left);
+      for (let i = 1; i < line.length; i++) {
+        const gap = line[i].left - line[i - 1].right;
+        if (gap < smallest) {
+          smallest = gap;
+          pair = `${line[i - 1].word} | ${line[i].word}`;
+        }
+      }
+    }
+    return { smallest, pair, needed: gapNeeded, count: words.length };
+  });
+{
+  await setText(lyricTune, "Ten seconds");
+  const wide = await lyricGaps(page);
+  assert(wide.count >= 14 && wide.smallest >= wide.needed, `1440 beside: ${JSON.stringify(wide)}`);
+  // The narrowest score the splitter allows.
+  await page.locator("#splitter").focus();
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
+  await settle(900);
+  const narrow = await lyricGaps(page);
+  assert(narrow.smallest >= narrow.needed, `narrowest score: ${JSON.stringify(narrow)}`);
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowLeft");
+  for (const [width, height] of [
+    [1024, 768],
+    [390, 844],
+  ]) {
+    const sized = await browser.newContext({
+      viewport: { width, height },
+      isMobile: width < 500,
+      hasTouch: width < 500,
+    });
+    watch(sized);
+    const other = await sized.newPage();
+    await other.goto(url);
+    await other.getByRole("button", { name: "Start a new tune" }).click();
+    await other.evaluate((text) => {
+      const view = window.composer.view;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+    }, lyricTune);
+    if (width < 500) await other.locator("#show-score").click();
+    await other.waitForFunction(() =>
+      document.getElementById("score-summary").textContent.startsWith("Ten seconds"),
+    );
+    await other.waitForTimeout(900);
+    const measured = await lyricGaps(other);
+    assert(measured.smallest >= measured.needed, `${width}: ${JSON.stringify(measured)}`);
+    await sized.close();
+  }
+}
+console.log(
+  "Composer: lyric words keep a clear gap at 1440, 1024, 390 and the narrowest score: passed",
+);
+
 /* 11. Phone: Text | Score switch with the transport at hand. */
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
@@ -933,6 +1233,11 @@ const overflow = await small.evaluate(
   () => document.documentElement.scrollWidth - window.innerWidth,
 );
 assert(overflow <= 0, "no sideways scroll on a phone");
+// 19. The phone toolbar fits its row: nothing to scroll sideways.
+const toolbarFits = await small
+  .locator(".documentbar .toolbar")
+  .evaluate((element) => element.scrollWidth <= element.clientWidth + 1);
+assert(toolbarFits, "the phone toolbar fits without scrolling");
 // 18. Touch targets, the More menu and the tunes panel.
 await small.locator("#show-text").click();
 const small40 = await small.evaluate(() =>

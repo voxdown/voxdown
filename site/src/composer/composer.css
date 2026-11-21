@@ -493,10 +493,10 @@ body[data-layout="below"] #layout-toggle .beside {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 30px;
-  min-width: 30px;
-  padding: 4px 6px;
+  gap: 2px;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 4px 7px;
   font-size: 12px;
   border: 1px solid transparent;
   background: transparent;
@@ -534,12 +534,11 @@ body[data-layout="below"] #layout-toggle .beside {
 .notice {
   position: absolute;
   z-index: 20;
-  top: 46px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 18px;
+  bottom: 90px;
   width: max-content;
-  max-width: min(720px, calc(100% - 24px));
-  padding: 7px 8px 7px 14px;
+  max-width: min(460px, calc(100% - 36px));
+  padding: 8px 8px 8px 14px;
   font-size: 13px;
   line-height: 1.45;
   color: var(--ink);
@@ -550,6 +549,26 @@ body[data-layout="below"] #layout-toggle .beside {
   display: flex;
   align-items: center;
   gap: 12px;
+  animation: notice-in 0.15s ease-out;
+}
+.notice.leaving {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease-in, transform 0.15s ease-in;
+}
+.notice[data-tone="info"] {
+  background: var(--surface);
+  border-color: var(--border);
+}
+.notice[data-tone="error"] {
+  border-color: var(--warn);
+  box-shadow: 0 8px 24px #18202c30, inset 3px 0 0 var(--warn);
+}
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 .notice[data-tone="success"] {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
@@ -839,8 +858,10 @@ body[data-layout="below"] #layout-toggle .beside {
   padding: 14px 0 40vh !important;
   caret-color: var(--ink);
 }
+/* A wrapped line hangs: its continuation is indented, so it never looks like a new line. */
 .cm-line {
-  padding: 0 22px 0 12px !important;
+  padding: 0 22px 0 calc(12px + 2.5ch) !important;
+  text-indent: -2.5ch;
 }
 .cm-gutters {
   background: var(--surface) !important;
@@ -1053,9 +1074,10 @@ body[data-layout="below"] #layout-toggle .beside {
   margin: 0 0 10px;
   font-size: 13px !important;
 }
+/* Two by two (one column on a phone): never three and a stranded one. */
 .examples {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 22px;
 }
@@ -2074,6 +2096,190 @@ body.starting #transport {
     min-height: 40px;
   }
   .notice {
-    top: 96px;
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    width: auto;
   }
+}
+
+/* The Voices button shows that voices are silenced. */
+#voices-button[data-state="muted"],
+#voices-button[data-state="solo"] {
+  color: var(--accent);
+}
+#voices-button[data-state="muted"]::after,
+#voices-button[data-state="solo"]::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  margin-left: 2px;
+}
+/* Stopped or paused, the place marker is a hollow outline in the accent, not the playing colour. */
+.transport:not([data-state="playing"]) .timeline-head {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  width: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+}
+/* The clock keeps its width, so counting in or a long bar name never squeezes the timeline. */
+.clock {
+  min-width: 13.5em;
+}
+/* Tick labels: readable, full strength. */
+.timeline {
+  height: 32px;
+}
+.timeline-tick.major {
+  opacity: 1;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.timeline-tick span {
+  font-size: 12px;
+  color: var(--muted);
+}
+@media (max-width: 1100px) {
+  .clock {
+    min-width: 11.5em;
+  }
+}
+@media (max-width: 760px) {
+  .clock {
+    min-width: 9.5em;
+    font-size: 12px;
+  }
+  .timeline {
+    height: 40px;
+  }
+}
+
+/* Accidentals in the toolbar, drawn like the other icons. */
+.toolbar svg.accidental {
+  width: 9px;
+  height: 15px;
+  margin-left: -1px;
+  stroke-width: 1.5;
+}
+.tool-group {
+  gap: 2px;
+}
+/* Light motion for menus, popovers and dialogs (none with reduced motion). */
+.workspace-dropdown,
+.composer-popover {
+  animation: pop-in 0.13s ease-out;
+  transform-origin: top left;
+}
+dialog.composer-dialog[open] {
+  animation: dialog-in 0.15s ease-out;
+}
+dialog.composer-dialog[open]::backdrop {
+  animation: fade-in 0.15s ease-out;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-3px);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+/* The status line wraps on a phone, and opens fully when tapped. */
+@media (max-width: 760px) {
+  .examples {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .toolbar .transpose-group ~ .tool-group:not(.more-group):not(.view-switch) {
+    display: none !important;
+  }
+  .toolbar svg.accidental {
+    display: none;
+  }
+  #app > footer {
+    align-items: flex-start;
+  }
+  .explain {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+  .explain.open {
+    display: block;
+    -webkit-line-clamp: unset;
+  }
+}
+
+/* Phone header: the file name and its saved state on a slim second row. */
+@media (max-width: 760px) {
+  .app-header {
+    height: auto;
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .app-header .filebar {
+    display: flex !important;
+    order: 10;
+    flex-basis: 100%;
+    min-height: 26px;
+    padding: 0 6px 2px;
+  }
+  .app-header .filename {
+    display: block !important;
+    flex: 0 1 auto;
+    max-width: 60%;
+  }
+  .app-header .filename input {
+    min-height: 26px;
+    font-size: 13px;
+    padding: 2px 4px;
+  }
+  .app-header .saved-state {
+    display: inline !important;
+    font-size: 12px;
+  }
+}
+
+/* The splitter: a visible grip that answers to the pointer and the keyboard. */
+.splitter {
+  position: relative;
+  transition: background-color 0.12s;
+}
+.splitter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: repeating-linear-gradient(to bottom, var(--muted) 0 3px, transparent 3px 6px);
+  opacity: 0.7;
+}
+.workspace[data-layout="below"] .splitter::after {
+  width: 36px;
+  height: 3px;
+  background: repeating-linear-gradient(to right, var(--muted) 0 3px, transparent 3px 6px);
+}
+.splitter:hover,
+.splitter:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, var(--desk));
+}
+.splitter:hover::after,
+.splitter:focus-visible::after {
+  opacity: 1;
 }

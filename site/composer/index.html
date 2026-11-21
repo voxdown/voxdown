@@ -43,9 +43,9 @@
           <button id="undo" type="button" disabled aria-label="Undo" title="Undo (Ctrl/⌘ Z)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 2.5 7 6 10.5M2.5 7h7a3.5 3.5 0 0 1 0 7H8"/></svg></button>
           <button id="redo" type="button" disabled aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 13.5 7 10 10.5M13.5 7h-7a3.5 3.5 0 0 0 0 7H8"/></svg></button>
         </div>
-        <div class="tool-group" role="group" aria-label="Transpose">
-          <button type="button" data-command="transpose-down" aria-label="Down a semitone" title="Down a semitone (Alt ↓)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4.5 9.5 8 13l3.5-3.5"/></svg><span class="tool-label">♭</span></button>
-          <button type="button" data-command="transpose-up" aria-label="Up a semitone" title="Up a semitone (Alt ↑)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M4.5 6.5 8 3l3.5 3.5"/></svg><span class="tool-label">♯</span></button>
+        <div class="tool-group transpose-group" role="group" aria-label="Transpose">
+          <button type="button" data-command="transpose-down" aria-label="Down a semitone" title="Down a semitone (Alt ↓)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3v10M2.5 9.5 6 13l3.5-3.5"/></svg><svg class="accidental" viewBox="0 0 10 16" aria-hidden="true"><path d="M3 2v11.5c2.6-1.2 4.5-2.6 4.5-4.4 0-1.5-1.6-2-4.5-.6"/></svg></button>
+          <button type="button" data-command="transpose-up" aria-label="Up a semitone" title="Up a semitone (Alt ↑)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 13V3M2.5 6.5 6 3l3.5 3.5"/></svg><svg class="accidental" viewBox="0 0 10 16" aria-hidden="true"><path d="M3.5 2.5v11M6.5 2v11M1.5 6.8l7-1.6M1.5 10.8l7-1.6"/></svg></button>
           <button type="button" data-command="octave-down" class="wide-only" aria-label="Down an octave" title="Down an octave (Alt Shift ↓)"><span class="tool-text">8va↓</span></button>
           <button type="button" data-command="octave-up" class="wide-only" aria-label="Up an octave" title="Up an octave (Alt Shift ↑)"><span class="tool-text">8va↑</span></button>
         </div>

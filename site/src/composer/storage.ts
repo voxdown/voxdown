@@ -8,6 +8,8 @@ export type Draft = {
   updated: number;
   /** How the file was written, so a recovered draft saves the same way. */
   source: Omit<SourceFile, "normalized">;
+  /** The file it was opened from or saved to (a kept handle), and a hash of those bytes. */
+  link?: { fileId: string; name: string; hash: string } | undefined;
 };
 export type DraftSummary = {
   id: string;
@@ -97,7 +99,7 @@ export async function listDrafts(limit = 20): Promise<DraftSummary[]> {
     }));
 }
 
-export async function rememberFile(name: string, handle: FileSystemFileHandle): Promise<void> {
+export async function rememberFile(name: string, handle: FileSystemFileHandle): Promise<string> {
   const all = await run<RecentFile[]>("files", "readonly", (store) => store.getAll());
   for (const file of all) {
     try {
@@ -113,6 +115,13 @@ export async function rememberFile(name: string, handle: FileSystemFileHandle): 
     (a, b) => b.opened - a.opened,
   );
   for (const old of kept.slice(8)) await run("files", "readwrite", (store) => store.delete(old.id));
+  return id;
+}
+
+/** SHA-256 of bytes, to tell later whether a file changed since it was saved. */
+export async function hashBytes(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 export async function recentFiles(): Promise<RecentFile[]> {
   return (await run<RecentFile[]>("files", "readonly", (store) => store.getAll())).sort(

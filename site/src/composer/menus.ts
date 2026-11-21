@@ -126,8 +126,17 @@ export function mountMenus(
           document.body.append(sub);
           const rect = entry.getBoundingClientRect();
           const right = rect.right + 2;
-          sub.style.left = `${right + sub.offsetWidth > window.innerWidth - 8 ? Math.max(8, rect.left - sub.offsetWidth - 2) : right}px`;
-          sub.style.top = `${Math.max(8, Math.min(rect.top - 5, window.innerHeight - sub.offsetHeight - 8))}px`;
+          const roomRight = right + sub.offsetWidth <= window.innerWidth - 8;
+          const roomLeft = rect.left - sub.offsetWidth - 2 >= 8;
+          if (roomRight || roomLeft) {
+            sub.style.left = `${roomRight ? right : rect.left - sub.offsetWidth - 2}px`;
+            sub.style.top = `${Math.max(8, Math.min(rect.top - 5, window.innerHeight - sub.offsetHeight - 8))}px`;
+          } else {
+            // A narrow screen: the submenu opens under its item, leaving the item in view.
+            sub.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - sub.offsetWidth - 8))}px`;
+            sub.style.top = `${Math.min(rect.bottom + 2, window.innerHeight - sub.offsetHeight - 8)}px`;
+            sub.style.maxWidth = "calc(100vw - 16px)";
+          }
           entry.setAttribute("aria-expanded", "true");
           child = { entry, panel: sub };
           sub.addEventListener("keydown", (event) => {

@@ -12,6 +12,7 @@ import {
   spellerFor,
 } from "../src/composer/midifile/convert";
 import { EVENT_LIMIT, MidiFileError, parseSmf } from "../src/composer/midifile/smf";
+import { PlainError, plainMessage } from "../src/composer/plain";
 
 /* A small SMF writer for fixtures. */
 type Event = [tick: number, bytes: number[]];
@@ -427,6 +428,44 @@ describe("MIDI import: damaged and hostile files", () => {
   it("says plainly when a file has no notes", async () => {
     const empty = smf(0, [track([[0, tempo(120)]])]);
     await expect(readMidiFile(empty, "empty.mid")).rejects.toThrow(/no notes/);
+  });
+});
+
+describe("MIDI import: large files", () => {
+  it("reads 200,000 notes without running out of stack", async () => {
+    const tracks: number[][] = [];
+    for (let channel = 0; channel < 8; channel++) {
+      const body: number[] = [];
+      for (let index = 0; index < 25_000; index++) {
+        const pitch = 48 + ((index * 7 + channel * 5) % 36);
+        body.push(0, 0x90 | channel, pitch, 80, 110, 0x80 | channel, pitch, 0);
+      }
+      body.push(0, 0xff, 0x2f, 0);
+      tracks.push([...utf("MTrk"), ...u32(body.length), ...body]);
+    }
+    const file = new Uint8Array([...utf("MThd"), ...u32(6), 0, 1, 0, 8, 1, 224, ...tracks.flat()]);
+    const read = parseSmf(file);
+    expect(read.tracks.reduce((sum, track) => sum + track.notes.length, 0)).toBe(200_000);
+    const result = await readMidiFile(file, "big.mid");
+    expect(result.report.parts).toBe(8);
+    expect(result.report.bars).toBeGreaterThan(1400);
+  }, 120_000);
+
+  it("shows its own plain messages, and never an engine's", () => {
+    const logged: unknown[] = [];
+    const log = console.error;
+    console.error = (...args: unknown[]) => logged.push(args[0]);
+    try {
+      expect(plainMessage(new MidiFileError("This MIDI file is cut short."), "fallback")).toBe(
+        "This MIDI file is cut short.",
+      );
+      expect(plainMessage(new PlainError("Plain."), "fallback")).toBe("Plain.");
+      const overflow = new RangeError("Maximum call stack size exceeded");
+      expect(plainMessage(overflow, "Something stopped it.")).toBe("Something stopped it.");
+      expect(logged).toEqual([overflow]);
+    } finally {
+      console.error = log;
+    }
   });
 });
 

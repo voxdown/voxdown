@@ -4,7 +4,7 @@
  */
 import { type ImportReport, importMusicXml } from "../musicxml/import";
 import { DEFAULT_MIDI_OPTIONS, type MidiOptions, midiToMusicXml } from "./convert";
-import { MidiFileError, parseSmf } from "./smf";
+import { parseSmf } from "./smf";
 
 export { DEFAULT_MIDI_OPTIONS, GRID_NAMES, type Grid, type MidiOptions } from "./convert";
 export { MidiFileError } from "./smf";
@@ -27,12 +27,7 @@ export async function readMidiFile(
   options: MidiOptions = DEFAULT_MIDI_OPTIONS,
 ): Promise<MidiImport> {
   const smf = parseSmf(bytes);
-  let converted: ReturnType<typeof midiToMusicXml>;
-  try {
-    converted = midiToMusicXml(smf, name.replace(/\.(midi?|kar|rmi)$/i, ""), options);
-  } catch (error) {
-    throw new MidiFileError(error instanceof Error ? error.message : String(error));
-  }
+  const converted = midiToMusicXml(smf, name.replace(/\.(midi?|kar|rmi)$/i, ""), options);
   const result = await importMusicXml([converted.xml]);
   return {
     text: result.text,

@@ -1,3 +1,4 @@
+import { maxOf, minOf } from "./extent";
 import { DYNAMIC_WORD, passDynamics } from "./passes";
 import type { FileIndex, TuneInfo } from "./tunes";
 
@@ -689,7 +690,10 @@ export function spanRegion(
 ): Region {
   const region: Region = { from, to: from, voices, reach };
   const notes = regionNotes(index, region);
-  region.to = Math.max(from, ...notes.map((note) => note.time + note.duration));
+  region.to = maxOf(
+    notes.map((note) => note.time + note.duration),
+    from,
+  );
   return region;
 }
 
@@ -703,9 +707,9 @@ export function regionRanges(
   for (const voice of region.voices) {
     const notes = (index.byVoice[voice] ?? []).filter((note) => takes(region, note));
     if (!notes.length) continue;
-    const from = Math.min(...notes.map((note) => note.start));
-    let to = Math.max(...notes.map((note) => note.end));
-    const lastEnd = Math.max(...notes.map((note) => note.time + note.duration));
+    const from = minOf(notes.map((note) => note.start));
+    let to = maxOf(notes.map((note) => note.end));
+    const lastEnd = maxOf(notes.map((note) => note.time + note.duration));
     while (to > from && /[ \t]/.test(text[to - 1] as string)) to -= 1;
     // When this voice's last note ends its bar, the bar line comes too, so bars stay whole.
     const bar = index.bars.find(
@@ -728,9 +732,9 @@ export function regionOfRanges(
 ): Region | null {
   const notes = notesInRanges(index, ranges);
   if (!notes.length) return null;
-  const from = Math.min(...notes.map((note) => note.time));
-  const to = Math.max(...notes.map((note) => note.time + note.duration));
-  const reach = Math.max(...notes.map((note) => note.time));
+  const from = minOf(notes.map((note) => note.time));
+  const to = maxOf(notes.map((note) => note.time + note.duration));
+  const reach = maxOf(notes.map((note) => note.time));
   const voices = [...new Set(notes.map((note) => note.voice))].sort((a, b) => a - b);
   return { from, to, voices, reach };
 }

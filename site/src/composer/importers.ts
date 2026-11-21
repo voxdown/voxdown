@@ -6,6 +6,7 @@
  * another. Loaded the first time a score or MIDI file is opened.
  */
 import type { MidiOptions } from "./midifile";
+import { plainMessage } from "./plain";
 
 export type ImportContext = {
   status: (text: string) => void;
@@ -31,9 +32,7 @@ async function guarded(context: ImportContext, name: string, run: () => Promise<
   } catch (error) {
     context.status("Ready");
     context.noticeError(
-      error instanceof Error && error.message
-        ? `${name} could not be imported. ${error.message}`
-        : `${name} could not be imported.`,
+      `${name} could not be imported. ${plainMessage(error, "Something in it stopped the converter; the details are in the browser's console.")}`,
     );
   } finally {
     importing = false;

@@ -48,6 +48,7 @@ import {
   shortcutLabel,
 } from "./menus";
 import { applyPassDynamics, passMarks } from "./passes";
+import { plainMessage } from "./plain";
 import { Player } from "./player";
 import { checkSlurs, plainWarnings } from "./problems";
 import { roving } from "./roving";
@@ -3646,7 +3647,7 @@ function openBytes(bytes: Uint8Array, name: string) {
       "success",
     );
   } catch (error) {
-    noticeError(error instanceof Error ? error.message : "That file could not be opened.");
+    noticeError(plainMessage(error, "That file could not be opened."));
   }
 }
 $<HTMLInputElement>("file").addEventListener("change", async () => {
@@ -3706,7 +3707,7 @@ async function save(saveAs = false) {
   try {
     encoded = encodeText(source, text());
   } catch (error) {
-    noticeError(error instanceof Error ? error.message : "This text cannot be saved.");
+    noticeError(plainMessage(error, "This text cannot be saved."));
     return;
   }
   if (local.canSave && !saveAs && !local.linked && pendingLink) {
@@ -3775,7 +3776,7 @@ function downloadAbc() {
     download(encodeText(source, text()).bytes, name, "text/vnd.abc;charset=utf-8");
     nameFollowsTitle = false;
   } catch (error) {
-    noticeError(error instanceof Error ? error.message : "This text cannot be saved.");
+    noticeError(plainMessage(error, "This text cannot be saved."));
   }
 }
 $("save-primary").addEventListener("click", () => void save());

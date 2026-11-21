@@ -4,6 +4,7 @@
  */
 import { createDialog } from "../dialog";
 import { download } from "../local-file";
+import { plainMessage } from "../plain";
 import { loadAbcjs, tuneSource } from "../score";
 import { abcName } from "../source";
 import { type FileIndex, type TuneInfo, tuneLabel } from "../tunes";
@@ -103,7 +104,7 @@ export async function exportMusicXmlFiles(context: {
     }
   } catch (error) {
     noticeError(
-      `The MusicXML could not be written${error instanceof Error && error.message ? `: ${error.message}` : "."}`,
+      `The MusicXML could not be written. ${plainMessage(error, "The details are in the browser's console.")}`,
     );
   }
 }

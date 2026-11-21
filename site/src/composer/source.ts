@@ -3,6 +3,7 @@
  * unchanged file writes the original bytes, and a changed one keeps its BOM, line ends and
  * encoding. ABC 2.1 files are UTF-8 by default; older Latin-1 files reopen and save as Latin-1.
  */
+import { PlainError } from "./plain";
 export type SourceFile = {
   original: string;
   normalized: string;
@@ -15,11 +16,11 @@ export const MAX_SOURCE = 2_000_000;
 
 export function readText(original: string, encoding: SourceFile["encoding"] = "utf-8"): SourceFile {
   if (original.length > MAX_SOURCE)
-    throw new Error(
+    throw new PlainError(
       "This file is larger than Composer can edit (2 million characters). Split it into smaller files.",
     );
   if (original.includes("\0"))
-    throw new Error("This looks like a binary file. Open a UTF-8 .abc or .txt file.");
+    throw new PlainError("This looks like a binary file. Open a UTF-8 .abc or .txt file.");
   const bom = original.startsWith("\uFEFF");
   const body = bom ? original.slice(1) : original;
   const endings = body.match(/\r\n|\r|\n/g) ?? [];
@@ -80,7 +81,7 @@ export function encodeText(
   }
   const bytes = new TextEncoder().encode(output);
   if (new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes) !== output)
-    throw new Error(
+    throw new PlainError(
       "This text contains an incomplete Unicode character. Correct it before saving.",
     );
   return { bytes, upgraded: file.encoding === "windows-1252" };

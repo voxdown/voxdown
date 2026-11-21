@@ -1,3 +1,4 @@
+import { maxOf, minOf } from "../extent";
 /**
  * A MIDI file as notation: notes quantised to a grid, sorted into voices, spelled for a key and
  * cut into bars and beats, written out as MusicXML for Composer's MusicXML importer to turn into
@@ -24,7 +25,7 @@
  *   tuplet.
  */
 import { escapeXml } from "../musicxml/xml";
-import type { Smf } from "./smf";
+import { MidiFileError, type Smf } from "./smf";
 
 export type Grid = "auto" | "8" | "16" | "32" | "triplets" | "mixed";
 export type MidiOptions = { grid: Grid; drums: "omit" | "staff" };
@@ -350,9 +351,7 @@ function voicesOf(notes: Note[], counts: { cut: number; trimmed: number }): Chor
       if (!chord.pitches.includes(note.pitch)) chord.pitches.push(note.pitch);
       chords.set(note.end, chord);
     }
-    const ordered = [...chords.values()].sort(
-      (a, b) => Math.max(...b.pitches) - Math.max(...a.pitches),
-    );
+    const ordered = [...chords.values()].sort((a, b) => maxOf(b.pitches) - maxOf(a.pitches));
     for (const chord of ordered) {
       chord.pitches.sort((a, b) => a - b);
       const lastOf = (voice: Chord[]) => voice[voice.length - 1] as Chord;
@@ -422,7 +421,7 @@ const hasNotes = (smf: Smf) => smf.tracks.some((track) => track.notes.length);
 
 /** Converts a read MIDI file into MusicXML and what the report should say. */
 export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions): Converted {
-  if (!hasNotes(smf)) throw new Error("This MIDI file has no notes in it.");
+  if (!hasNotes(smf)) throw new MidiFileError("This MIDI file has no notes in it.");
   const notes: string[] = [];
   const dropped: { label: string; count: number }[] = [];
   const toSlots = (tick: number) => (tick * QUARTER) / smf.division;
@@ -447,7 +446,7 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
     }
   });
   if (!raw.length)
-    throw new Error(
+    throw new MidiFileError(
       "This MIDI file has only drums in it. Import it again with drums kept as a percussion staff.",
     );
 
@@ -501,7 +500,9 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
     };
   });
   for (const part of parts) part.voices = voicesOf(part.notes, counts);
-  const end = Math.max(...parts.flatMap((part) => part.voices.flat().map((chord) => chord.end)));
+  let end = 0;
+  for (const part of parts)
+    for (const voice of part.voices) for (const chord of voice) end = Math.max(end, chord.end);
 
   // Key: the file's, else estimated.
   let key = smf.keys[0]
@@ -514,9 +515,9 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
         for (const note of part.notes)
           weights[note.pitch % 12] = (weights[note.pitch % 12] as number) + (note.end - note.start);
     const pitched = parts.filter((part) => !part.drums).flatMap((part) => part.notes);
-    const lastStart = Math.max(...pitched.map((note) => note.start));
-    const finalBass = Math.min(
-      ...pitched.filter((note) => note.start === lastStart).map((note) => note.pitch),
+    const lastStart = maxOf(pitched.map((note) => note.start));
+    const finalBass = minOf(
+      pitched.filter((note) => note.start === lastStart).map((note) => note.pitch),
     );
     key = estimateKey(weights, finalBass % 12);
     notes.push(
@@ -551,7 +552,7 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
       minor: current.minor,
     });
     at += length;
-    if (bars.length > 100_000) throw new Error("This MIDI file is too long to write out.");
+    if (bars.length > 100_000) throw new MidiFileError("This MIDI file is too long to write out.");
   }
   // Tempo: the first change in each bar.
   for (const change of tempoAt) {

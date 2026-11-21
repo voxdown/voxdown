@@ -18,6 +18,7 @@ import {
   value,
   writePitch,
 } from "../abc";
+import { maxOf } from "../extent";
 import { MusicXmlError } from "./text";
 import { type XmlElement, child, children, numberOf, parseXml, textOf } from "./xml";
 
@@ -325,7 +326,7 @@ function timeName(time: XmlElement): string | null {
       const parts = count.split("+").reduce((sum, part) => sum + (Number(part) || 0), 0);
       total = add(total, frac(parts, Number(types[index]) || 4));
     }
-    const den = Math.max(...types.map((type) => Number(type) || 4));
+    const den = maxOf(types.map((type) => Number(type) || 4));
     return `${Math.round(value(total) * den)}/${den}`;
   }
   const [beat] = beats;
@@ -1246,7 +1247,7 @@ async function convertScore(
   }
   progress(totalMeasures, totalMeasures);
   const unit = chooseUnit(parts);
-  const measureCount = Math.max(...parts.map((part) => part.measures.length));
+  const measureCount = maxOf(parts.map((part) => part.measures.length));
   const first = parts[0] as Part;
   const firstMeasure = first.measures[0];
   const meter = inForce(first, "meter", 0, frac(0)) ?? "none";
@@ -1844,7 +1845,10 @@ export async function importMusicXml(
     report: {
       title: tunes[0]?.title ?? "Untitled",
       tunes: tunes.length,
-      parts: Math.max(0, ...tunes.map((tune) => tune.parts)),
+      parts: maxOf(
+        tunes.map((tune) => tune.parts),
+        0,
+      ),
       bars: tunes.reduce((sum, tune) => sum + tune.bars, 0),
       dropped: dropped.list(),
       notes: facts.list(),

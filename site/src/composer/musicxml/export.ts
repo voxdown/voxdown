@@ -4,6 +4,7 @@
  * braces in %%score become part groups. Element order follows the MusicXML 4.0 schema.
  */
 import { type Fraction, add, frac, mul, parseKey, value } from "../abc";
+import { maxOf } from "../extent";
 import { escapeXml } from "./xml";
 
 // biome-ignore lint/suspicious/noExplicitAny: abcjs's parsed tune has no published types.
@@ -803,9 +804,9 @@ export function exportMusicXml(
     const voices: { staff: number; measures: Measure[]; context: Context }[] = [];
     for (const [position, staffIndex] of part.entries()) {
       const staff = staves[staffIndex];
-      const voiceCount = Math.max(
+      const voiceCount = maxOf(
+        lines.map((line) => line.staff?.[staffIndex]?.voices?.length ?? 0),
         1,
-        ...lines.map((line) => line.staff?.[staffIndex]?.voices?.length ?? 0),
       );
       for (let voice = 0; voice < voiceCount; voice++)
         voices.push({
@@ -827,7 +828,7 @@ export function exportMusicXml(
     const firstStaff = staves[part[0] as number];
     // A voice's transpose= (abcjs ignores it under an octave clef).
     const transpose = clefOctave(firstStaff?.clef) ? 0 : Number(firstStaff?.clef?.transpose ?? 0);
-    const measureCount = Math.max(...voices.map((voice) => voice.measures.length));
+    const measureCount = maxOf(voices.map((voice) => voice.measures.length));
     let ending: string | null = null;
     let number = 0;
     for (let index = 0; index < measureCount; index++) {

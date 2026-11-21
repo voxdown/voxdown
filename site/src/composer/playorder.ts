@@ -1,3 +1,4 @@
+import { maxOf } from "./extent";
 /**
  * The order a tune is played in. abcjs plays repeats and endings but not D.C., D.S., Fine or
  * Coda, so Composer works the order out itself:
@@ -188,7 +189,10 @@ export function structureOf(visual: Any): Structure {
   // Runs of endings, and the last ending of each.
   let run: Bar[] = [];
   const closeRun = () => {
-    const last = Math.max(0, ...run.flatMap((each) => each.ending ?? []));
+    const last = maxOf(
+      run.flatMap((each) => each.ending ?? []),
+      0,
+    );
     for (const each of run) each.lastEnding = last;
     run = [];
   };
@@ -363,7 +367,10 @@ export function followOrder(
   return {
     ...timeline,
     notes,
-    length: Math.max(cursor, ...notes.map((note) => note.time + note.duration), 0),
+    length: maxOf(
+      notes.map((note) => note.time + note.duration),
+      Math.max(cursor, 0),
+    ),
     bars: [...new Set(bars.map((time) => Math.round(time * 1e6) / 1e6))].sort((a, b) => a - b),
     passes,
     returns,

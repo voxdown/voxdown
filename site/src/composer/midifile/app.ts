@@ -4,6 +4,7 @@
  */
 import "./midifile.css";
 import { createDialog } from "../dialog";
+import { plainMessage } from "../plain";
 import { GRID_NAMES, type Grid, type MidiOptions } from "./convert";
 import type { MidiImport } from "./index";
 
@@ -109,7 +110,10 @@ export function showMidiReport(
       grid: grid.control.value as Grid,
       drums: (drums?.control.value ?? result.options.drums) as MidiOptions["drums"],
     }).catch((error: unknown) => {
-      status.textContent = error instanceof Error ? error.message : "That didn't work.";
+      status.textContent = plainMessage(
+        error,
+        "That didn't work; the details are in the browser's console.",
+      );
       redo.disabled = false;
     });
   });

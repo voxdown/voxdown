@@ -1,6 +1,9 @@
-import { fieldOf } from "./abc";
+import { fieldOf, lineKind, tokenizeMusic } from "./abc";
 
-/** One tune in a file: from its X: line to just before the next X: line (or the end). */
+/**
+ * One tune in a file: from its X: line to its first blank line after the header (where abcjs, as
+ * ABC 2.1 says, ends it), or else to the next X: line or the end.
+ */
 export type TuneInfo = {
   index: number;
   from: number;
@@ -21,16 +24,44 @@ export type TuneInfo = {
 };
 export type VoiceInfo = { id: string; name: string; from: number };
 
+/** Music outside every tune: after a blank line ended the tune above, or before the first X:. */
+export type Orphan = {
+  from: number;
+  to: number;
+  /** The tune a blank line ended, or null before the first X:. */
+  tune: TuneInfo | null;
+  /** The blank lines between that tune and this music, when nothing else is between. */
+  blank: { from: number; to: number } | null;
+};
+
 export type FileIndex = {
   /** Fields before the first X:, which apply to every tune (ABC 2.1 §2.2.2). */
   header: { from: number; to: number } | null;
   tunes: TuneInfo[];
+  orphans: Orphan[];
 };
+
+/** A line that reads as music (notes, no stray words), or lyrics, or a voice line. */
+function looksLikeMusic(line: string): boolean {
+  const kind = lineKind(line, true);
+  if (kind === "lyrics") return true;
+  if (kind === "field") return /^[VP]:/.test(line);
+  if (kind !== "music") return false;
+  const tokens = tokenizeMusic(line);
+  return (
+    tokens.some((token) => token.kind === "note") &&
+    !tokens.some((token) => token.kind === "unknown")
+  );
+}
 
 /** Scans the file's line starts only; cheap enough to run on every edit. */
 export function indexFile(text: string): FileIndex {
   const tunes: TuneInfo[] = [];
+  const orphans: Orphan[] = [];
   let current: TuneInfo | null = null;
+  /** Set once a blank line has ended the current tune. */
+  let ended = false;
+  let blank: { from: number; to: number } | null = null;
   let position = 0;
   let firstTune = -1;
   const lines = text.split("\n");
@@ -38,8 +69,43 @@ export function indexFile(text: string): FileIndex {
     const from = position;
     position += line.length + 1;
     const field = fieldOf(line);
+    if (field?.key !== "X" && (ended || !current)) {
+      // Outside every tune: note music that abcjs will not draw.
+      if (!line.trim()) {
+        if (ended && blank && blank.to === from) blank.to = Math.min(position, text.length);
+        continue;
+      }
+      if (!looksLikeMusic(line)) {
+        blank = null;
+        continue;
+      }
+      const last = orphans[orphans.length - 1];
+      if (
+        last &&
+        text.slice(last.to, from).trim() === "" &&
+        !text.slice(last.to, from).includes("\n\n")
+      )
+        last.to = from + line.length;
+      else
+        orphans.push({
+          from,
+          to: from + line.length,
+          tune: ended ? current : null,
+          blank: ended && blank && blank.to === from ? { ...blank } : null,
+        });
+      blank = null;
+      continue;
+    }
+    if (current && !ended && current.bodyFrom >= 0 && !line.trim() && field?.key !== "X") {
+      current.to = from;
+      ended = true;
+      blank = { from, to: Math.min(position, text.length) };
+      continue;
+    }
     if (field?.key === "X") {
-      if (current) current.to = from;
+      if (current && !ended) current.to = from;
+      ended = false;
+      blank = null;
       if (firstTune < 0) firstTune = from;
       current = {
         index: tunes.length,
@@ -111,7 +177,7 @@ export function indexFile(text: string): FileIndex {
     firstTune > 0 && /^[A-Za-z]:|^%%/m.test(text.slice(0, firstTune))
       ? { from: 0, to: firstTune }
       : null;
-  return { header, tunes };
+  return { header, tunes, orphans };
 }
 
 export function tuneAt(index: FileIndex, position: number): TuneInfo | null {

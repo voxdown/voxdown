@@ -1,15 +1,10 @@
-import {
-  type Completion,
-  type CompletionContext,
-  autocompletion,
-  closeBrackets,
-  completionKeymap,
-} from "@codemirror/autocomplete";
+import type { Completion, CompletionContext } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { search, searchKeymap } from "@codemirror/search";
 import {
+  Compartment,
   EditorState,
   type Extension,
+  Prec,
   RangeSetBuilder,
   StateEffect,
   StateField,
@@ -43,7 +38,7 @@ export const fileIndexField = StateField.define<FileIndex>({
       return indexFile(transaction.newDoc.toString());
     } catch (error) {
       reportFieldError(error);
-      return { header: null, tunes: [] };
+      return { header: null, tunes: [], orphans: [] };
     }
   },
 });
@@ -241,7 +236,7 @@ export type Marks = {
     to: number;
     message: string;
     severity: "warning" | "error";
-    kind: "bar" | "parse" | "lyrics";
+    kind: "bar" | "parse" | "lyrics" | "orphan";
   }[];
 };
 export const setMarks = StateEffect.define<Marks>();
@@ -334,7 +329,10 @@ function updateMarks(value: MarkState, transaction: Transaction): MarkState {
               .filter((issue) => issue.to > issue.from)
               .sort((a, b) => a.from - b.from)
               .map((issue) =>
-                (issue.kind === "parse" ? warningMark : barIssueMark).range(issue.from, issue.to),
+                (issue.kind === "parse" || issue.kind === "orphan"
+                  ? warningMark
+                  : barIssueMark
+                ).range(issue.from, issue.to),
               ),
             true,
           )
@@ -365,8 +363,31 @@ class IssueMarker extends GutterMarker {
   }
 }
 
+let gutterHandler: ((lineFrom: number, element: HTMLElement) => void) | null = null;
+/** Called when a problem's gutter mark is clicked, with the line and the mark. */
+export function onIssueGutter(handler: (lineFrom: number, element: HTMLElement) => void) {
+  gutterHandler = handler;
+}
+
 const issueGutter = gutter({
   class: "abc-gutter",
+  domEventHandlers: {
+    mousedown(view, line, event) {
+      const target = (event.target as HTMLElement).closest<HTMLElement>(".abc-gutter-mark");
+      if (!target || !gutterHandler) return false;
+      const { list } = view.state.field(marksField);
+      if (
+        !list.some(
+          (issue) =>
+            view.state.doc.lineAt(Math.min(issue.from, view.state.doc.length)).from === line.from,
+        )
+      )
+        return false;
+      event.preventDefault();
+      gutterHandler(line.from, target);
+      return true;
+    },
+  },
   markers(view) {
     const { list } = view.state.field(marksField);
     const builder = new RangeSetBuilder<GutterMarker>();
@@ -587,6 +608,45 @@ export type EditorHooks = {
 };
 
 /** The editing state for a text; one per open file, so undo history never crosses files. */
+/*
+ * Completion, closing brackets and find/replace are not needed to draw the first view: they load
+ * just after it (or on the first focus or Find), and join every editor state from then on.
+ */
+const extras = new Compartment();
+let extraExtensions: Extension[] = [];
+export type EditorExtras = {
+  completionStatus: (state: EditorState) => string | null;
+  searchPanelOpen: (state: EditorState) => boolean;
+  openSearchPanel: (view: EditorView) => boolean;
+};
+let extrasLoaded: EditorExtras | null = null;
+let extrasLoading: Promise<EditorExtras> | null = null;
+/** The extras, once loaded (null before). */
+export const editorExtras = () => extrasLoaded;
+export function loadEditorExtras(view: EditorView): Promise<EditorExtras> {
+  extrasLoading ??= Promise.all([
+    import("@codemirror/autocomplete"),
+    import("@codemirror/search"),
+  ]).then(([complete, find]) => {
+    extraExtensions = [
+      complete.closeBrackets(),
+      complete.autocompletion({ override: [abcCompletions], icons: false, activateOnTyping: true }),
+      find.search({ top: true }),
+      // Completion's keys act only while it is open, so they may come first.
+      Prec.high(keymap.of(complete.completionKeymap)),
+      keymap.of(find.searchKeymap),
+    ];
+    view.dispatch({ effects: extras.reconfigure(extraExtensions) });
+    extrasLoaded = {
+      completionStatus: complete.completionStatus,
+      searchPanelOpen: find.searchPanelOpen,
+      openSearchPanel: find.openSearchPanel,
+    };
+    return extrasLoaded;
+  });
+  return extrasLoading;
+}
+
 export function editorState(text: string, hooks: EditorHooks): EditorState {
   const extensions: Extension[] = [
     fileIndexField,
@@ -598,9 +658,6 @@ export function editorState(text: string, hooks: EditorHooks): EditorState {
     drawSelection(),
     EditorState.allowMultipleSelections.of(true),
     highlightActiveLine(),
-    closeBrackets(),
-    autocompletion({ override: [abcCompletions], icons: false, activateOnTyping: true }),
-    search({ top: true }),
     abcHighlight,
     EditorView.lineWrapping,
     EditorView.contentAttributes.of({
@@ -610,14 +667,9 @@ export function editorState(text: string, hooks: EditorHooks): EditorState {
       autocapitalize: "off",
       autocorrect: "off",
     }),
-    keymap.of([
-      ...hooks.keys,
-      ...completionKeymap,
-      ...searchKeymap,
-      ...historyKeymap,
-      indentWithTab,
-      ...defaultKeymap,
-    ]),
+    keymap.of([...hooks.keys, ...historyKeymap, indentWithTab, ...defaultKeymap]),
+    // After the editor's own keys, so Composer's shortcuts (Mod-Shift-L loops) win over Find's.
+    extras.of(extraExtensions),
     EditorView.updateListener.of(hooks.onUpdate),
     theme,
     ...(hooks.extra ?? []),

@@ -1136,8 +1136,8 @@ body[data-layout="below"] #layout-toggle .beside {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 34px;
-  min-width: 34px;
+  min-height: 36px;
+  min-width: 36px;
   padding: 4px 8px;
   border-color: transparent;
   background: transparent;
@@ -1553,6 +1553,36 @@ dialog.composer-dialog::backdrop {
   background: transparent;
   line-height: 1.45;
 }
+.problem-list .problem-detail {
+  margin: -4px 4px 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.problem-list .problem-detail small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.problem-list .problem-fix {
+  display: inline-flex;
+  width: auto;
+  min-height: 32px;
+  margin: 0 4px 10px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 600;
+}
+.problem-list .problem-fix:hover {
+  background: var(--hover);
+}
+.abc-gutter-mark {
+  cursor: pointer;
+}
 .problem-list .where {
   color: var(--muted);
   font-size: 12px;
@@ -1575,69 +1605,6 @@ dialog.composer-dialog::backdrop {
 .recent-row small {
   display: block;
   color: var(--muted);
-}
-
-/* Cheat sheet: two dense columns, like VoxDown's own. */
-.cheatsheet {
-  columns: 2 300px;
-  column-gap: 32px;
-}
-.cheatsheet section {
-  break-inside: avoid;
-  margin-bottom: 18px;
-}
-.cheatsheet h3 {
-  margin: 0 0 6px;
-  font: 650 14px / 1.3 var(--story);
-  color: var(--accent);
-}
-.cheatsheet table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12.5px;
-}
-.cheatsheet td {
-  padding: 3px 6px 3px 0;
-  vertical-align: top;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-}
-.cheatsheet td:first-child {
-  width: 40%;
-  font-variation-settings: "MONO" 1;
-  white-space: nowrap;
-}
-.cheatsheet pre {
-  margin: 4px 0 0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--hover);
-  font-variation-settings: "MONO" 1;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-.cheatsheet kbd,
-.shortcut-table kbd {
-  font-family: var(--ui);
-  font-size: 12px;
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  background: var(--surface);
-}
-.shortcut-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.shortcut-table td {
-  padding: 5px 0;
-  border-bottom: 1px solid var(--border);
-}
-.shortcut-table td:last-child {
-  text-align: right;
-  white-space: nowrap;
 }
 .look-choices {
   display: grid;
@@ -1756,8 +1723,15 @@ body.focus-mode .app-header {
   color: var(--ink);
   font: 13px / 1 var(--ui);
 }
-.focus-controls button[aria-pressed="false"] {
-  color: var(--muted);
+.focus-controls button:hover {
+  background: var(--hover);
+}
+/* Score on: the pressed fill, as Loop and Metronome have; off: a normal button. */
+.focus-controls button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
 }
 
 /* Narrower desks. */
@@ -1928,8 +1902,8 @@ body.focus-mode .app-header {
     margin-right: 2px;
   }
   .transport button {
-    min-height: 40px;
-    min-width: 40px;
+    min-height: 44px;
+    min-width: 44px;
   }
   .transport .play {
     width: 46px;
@@ -1942,7 +1916,7 @@ body.focus-mode .app-header {
   #sound-button {
     flex-direction: column;
     gap: 1px;
-    padding: 2px 3px;
+    padding: 2px 1px;
   }
   #from-caret .transport-label,
   #loop .transport-label,
@@ -2201,12 +2175,12 @@ body.starting .transport-empty {
     min-height: 44px;
   }
   .tempo-value input {
-    min-height: 40px;
+    min-height: 44px;
     width: 40px;
   }
   .tempo button {
-    min-width: 40px !important;
-    min-height: 40px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
   }
   /* One row of controls on a phone: the tempo loses its frame, Play is a little smaller. */
   .transport {
@@ -2282,6 +2256,43 @@ body.starting .transport-empty {
   font-size: 12px;
   color: var(--muted);
 }
+.timeline-tick span[hidden],
+.timeline-pass-tag[hidden] {
+  display: none;
+}
+/* "2nd" under the band of bars played again. */
+.timeline-pass-tag {
+  position: absolute;
+  top: 18px;
+  transform: translateX(-50%);
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 14px;
+  white-space: nowrap;
+}
+/* The readout above the ruler: the bar under the pointer, or the bar a scrub will start from. */
+.timeline-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.14);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+}
+.timeline-tip[hidden] {
+  display: none;
+}
 @media (max-width: 1100px) {
   .clock {
     min-width: 11.5em;
@@ -2293,7 +2304,17 @@ body.starting .transport-empty {
     font-size: 12px;
   }
   .timeline {
-    height: 40px;
+    height: 44px;
+  }
+  /* Scrubbing on a phone: the ruler takes the whole row, the readout reads large over the finger. */
+  .position.scrubbing .clock {
+    display: none;
+  }
+  .scrubbing .timeline-tip {
+    bottom: calc(100% + 18px);
+    padding: 6px 12px;
+    font-size: 16px;
+    font-weight: 600;
   }
 }
 

@@ -33,7 +33,7 @@
     <button id="appearance" type="button" aria-label="Appearance: Auto" title="Appearance">◐ Auto</button>
     <div class="panel-toggles" role="group" aria-label="Panels">
       <button id="rail-toggle" type="button" aria-label="Tunes" title="Tunes and voices" aria-pressed="true" aria-controls="rail"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="frame" x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg></button>
-      <button id="layout-toggle" type="button" aria-label="Score beside the text" title="Score beside or below (Ctrl/⌘ \)" aria-keyshortcuts="Control+\"><svg class="beside" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8.5 2.5v11"/><path d="M10.5 6h2M10.5 8h2M10.5 10h2"/></svg><svg class="below" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 8.5h13"/><path d="M4 10.5h8M4 12h8"/></svg></button>
+      <button id="layout-toggle" type="button" aria-label="Score beside the text" title="Score beside or below (Ctrl/⌘ Backslash)" ><svg class="beside" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8.5 2.5v11"/><path d="M10.5 6h2M10.5 8h2M10.5 10h2"/></svg><svg class="below" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 8.5h13"/><path d="M4 10.5h8M4 12h8"/></svg></button>
     </div>
   </header>
   <main id="app" aria-label="Composer workspace">
@@ -50,10 +50,10 @@
           <button type="button" data-command="octave-up" class="wide-only" aria-label="Up an octave" title="Up an octave (Alt Shift ↑)"><span class="tool-text">8va↑</span></button>
         </div>
         <div class="tool-group" role="group" aria-label="Lengths">
-          <button type="button" data-command="halve" aria-label="Halve lengths" title="Halve lengths (Alt [)"><span class="tool-text">½×</span></button>
-          <button type="button" data-command="double" aria-label="Double lengths" title="Double lengths (Alt ])"><span class="tool-text">2×</span></button>
-          <button type="button" data-command="dot" aria-label="Add a dot" title="Add a dot (Alt .)"><svg class="note-icon" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="6" cy="11.5" rx="2.6" ry="1.9" transform="rotate(-20 6 11.5)"/><path d="M8.4 11V2.5"/><circle class="fill" cx="12" cy="11.5" r="1.1"/></svg></button>
-          <button type="button" data-command="undot" class="wide-only" aria-label="Remove a dot" title="Remove a dot (Alt ,)"><svg class="note-icon" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="6" cy="11.5" rx="2.6" ry="1.9" transform="rotate(-20 6 11.5)"/><path d="M8.4 11V2.5"/><path d="m10.5 9.5 3 3m0-3-3 3"/></svg></button>
+          <button type="button" data-command="halve" aria-label="Halve lengths" title="Halve lengths (Alt BracketLeft)"><span class="tool-text">½×</span></button>
+          <button type="button" data-command="double" aria-label="Double lengths" title="Double lengths (Alt BracketRight)"><span class="tool-text">2×</span></button>
+          <button type="button" data-command="dot" aria-label="Add a dot" title="Add a dot (Alt Period)"><svg class="note-icon" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="6" cy="11.5" rx="2.6" ry="1.9" transform="rotate(-20 6 11.5)"/><path d="M8.4 11V2.5"/><circle class="fill" cx="12" cy="11.5" r="1.1"/></svg></button>
+          <button type="button" data-command="undot" class="wide-only" aria-label="Remove a dot" title="Remove a dot (Alt Comma)"><svg class="note-icon" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="6" cy="11.5" rx="2.6" ry="1.9" transform="rotate(-20 6 11.5)"/><path d="M8.4 11V2.5"/><path d="m10.5 9.5 3 3m0-3-3 3"/></svg></button>
         </div>
         <div class="tool-group marks" role="group" aria-label="Marks">
           <button type="button" data-command="bar" aria-label="Insert a bar line" title="Insert a bar line"><span class="tool-text">|</span></button>
@@ -122,7 +122,7 @@
     <div id="transport" class="transport" role="toolbar" aria-label="Playback">
       <div class="transport-main">
         <button id="play" class="play" type="button" aria-label="Play" title="Play or pause (Ctrl/⌘ Enter)"><svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.8 8z"/></svg><svg class="icon-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9M11 3.5v9"/></svg></button>
-        <button id="stop" type="button" aria-label="Stop" title="Stop (Ctrl/⌘ .)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1"/></svg></button>
+        <button id="stop" type="button" aria-label="Stop" title="Stop (Ctrl/⌘ Period)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1"/></svg></button>
         <button id="from-caret" type="button" aria-label="Play from the caret" title="Play from the caret (Ctrl/⌘ Shift Enter)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3v10"/><path d="M6.5 4v8L12.5 8z"/></svg><span class="transport-label">From caret</span></button>
         <button id="loop" type="button" aria-pressed="false" aria-label="Loop the selection" title="Loop the selection, or the bar at the caret (Ctrl/⌘ Shift L)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7V6a2 2 0 0 1 2-2h7.5M10.5 2l2 2-2 2M13 9v1a2 2 0 0 1-2 2H3.5M5.5 14l-2-2 2-2"/></svg><span class="transport-label">Loop</span></button>
       </div>
@@ -132,14 +132,15 @@
           <div id="timeline-loop" class="timeline-loop" hidden></div>
           <div id="timeline-ticks" class="timeline-ticks"></div>
           <div id="timeline-head" class="timeline-head"></div>
+          <div id="timeline-tip" class="timeline-tip" aria-hidden="true" hidden></div>
         </div>
         <span id="clock" class="clock" aria-live="off">Bar 1 · 0:00</span>
       </div>
       <div class="transport-side">
         <div class="tempo" role="group" aria-label="Tempo">
-          <button id="tempo-down" type="button" aria-label="Slower" title="Slower (Ctrl/⌘ Alt −)">−</button>
+          <button id="tempo-down" type="button" aria-label="Slower" title="Slower (Ctrl/⌘ Alt Minus)">−</button>
           <label class="tempo-value"><span id="tempo-unit" aria-hidden="true">♩ =</span><input id="tempo" type="number" min="20" max="400" value="120" inputmode="numeric" aria-label="Tempo, beats per minute"></label>
-          <button id="tempo-up" type="button" aria-label="Faster" title="Faster (Ctrl/⌘ Alt =)">+</button>
+          <button id="tempo-up" type="button" aria-label="Faster" title="Faster (Ctrl/⌘ Alt Equal)">+</button>
           <button id="tap" class="wide-only" type="button" title="Tap the beat to set the tempo">Tap</button>
         </div>
         <button id="metronome" type="button" aria-pressed="false" aria-label="Metronome" title="Metronome (Ctrl/⌘ Alt M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 14h5l-1.8-11H7.3z"/><path d="m8 10 3.5-5.5"/></svg></button>

@@ -818,6 +818,7 @@ console.log("Composer: Loop is a mode; count-in shows its beats, not a bar and t
   );
   await page.keyboard.press("Control+Alt+M");
   await page.keyboard.press("F1");
+  await page.locator("#cheatsheet[open]").waitFor();
   assert(await page.locator("#cheatsheet").isVisible(), "F1: cheat sheet");
   await page.keyboard.press("Escape");
 }
@@ -1153,8 +1154,23 @@ await openExample("Greensleeves");
   // 5. The timeline starts at the pickup, marks the 2nd time, bands only what is played again,
   // and its value, maximum and text agree.
   const timelineState = await page.evaluate(() => {
-    const labels = [...document.querySelectorAll("#timeline-ticks span")].map(
-      (label) => label.textContent,
+    const shown = [
+      ...document.querySelectorAll("#timeline-ticks .timeline-tick span:not([hidden])"),
+    ];
+    const labels = shown.map((label) => label.textContent);
+    const boxes = [
+      ...document.querySelectorAll(
+        "#timeline-ticks .timeline-tick span:not([hidden]), #timeline-ticks .timeline-pass-tag:not([hidden])",
+      ),
+    ].map((label) => label.getBoundingClientRect());
+    const touching = boxes.some((a, i) =>
+      boxes.some(
+        (b, j) =>
+          i < j && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom,
+      ),
+    );
+    const tags = [...document.querySelectorAll(".timeline-pass-tag:not([hidden])")].map(
+      (tag) => tag.textContent,
     );
     const bands = [...document.querySelectorAll("#timeline-passes .timeline-pass.repeat")].map(
       (band) => Number.parseFloat(band.style.width),
@@ -1162,6 +1178,8 @@ await openExample("Greensleeves");
     const slider = document.getElementById("timeline");
     return {
       labels,
+      touching,
+      tags,
       bands,
       ticks: document.querySelectorAll("#timeline-ticks .timeline-tick").length,
       max: Number(slider.getAttribute("aria-valuemax")),
@@ -1169,10 +1187,25 @@ await openExample("Greensleeves");
     };
   });
   assert.equal(timelineState.labels[0], "Pickup", `first label: ${timelineState.labels}`);
-  assert(
-    timelineState.labels.some((label) => /· 2nd$/.test(label)),
-    `a 2nd-time label: ${timelineState.labels}`,
+  // 8. Labels never touch, the last bar is always named, the repeat band says "2nd".
+  assert(!timelineState.touching, `no two labels touch: ${timelineState.labels}`);
+  assert.equal(
+    timelineState.labels.at(-1),
+    "16",
+    `the final bar is named: ${timelineState.labels}`,
   );
+  assert.deepEqual(timelineState.tags, ["2nd"], "the band carries a 2nd tag");
+  assert(
+    timelineState.labels.filter((label) => label === "4").length <= 1,
+    "a repeat never names a bar twice",
+  );
+  // Hovering the ruler names the bar there, with its time through and its time.
+  const ruler = await page.locator("#timeline").boundingBox();
+  await page.mouse.move(ruler.x + ruler.width * 0.45, ruler.y + ruler.height / 2);
+  await page.locator("#timeline-tip").waitFor();
+  assert.match(await page.locator("#timeline-tip").textContent(), /^Bar \d+ · 2nd time · \d:\d\d$/);
+  await page.mouse.move(ruler.x + ruler.width * 0.45, ruler.y - 200);
+  await page.waitForFunction(() => document.getElementById("timeline-tip").hidden);
   assert.equal(timelineState.bands.length, 1, "one band for the repeated part");
   assert(
     timelineState.bands[0] < 45,
@@ -1588,6 +1621,176 @@ console.log(
   "Composer: two-voice scores start as close below the title block as one-voice ones: passed",
 );
 
+// 1 and 2. Every cell of the cheat sheet and the shortcut list shows whole, at three widths and
+// on both platforms; punctuation keys read as keys ("Alt+,", "⌥,"), never as separators.
+for (const mac of [false, true]) {
+  for (const [width, height] of [
+    [1440, 900],
+    [1024, 768],
+    [390, 844],
+  ]) {
+    const sized = await browser.newContext({ viewport: { width, height } });
+    watch(sized);
+    if (mac)
+      await sized.addInitScript(() => {
+        Object.defineProperty(Navigator.prototype, "platform", { get: () => "MacIntel" });
+      });
+    const help = await sized.newPage();
+    await help.goto(url);
+    await help.getByRole("button", { name: "Ode to Joy" }).click();
+    await help.waitForFunction(() => (window.composer.state().timeline?.notes ?? 0) > 0);
+    const clipped = async () =>
+      help.evaluate(() =>
+        [...document.querySelectorAll("dialog[open] td")]
+          .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
+          .map((cell) => `${cell.textContent} (${cell.scrollWidth} > ${cell.clientWidth})`),
+      );
+    for (const name of ["cheatsheet", "shortcuts"]) {
+      if (name === "cheatsheet") await help.keyboard.press("F1");
+      else {
+        await help.locator('[data-menu="help"]').click();
+        await help.getByRole("menuitem", { name: "Keyboard shortcuts" }).click();
+      }
+      await help.locator(`#${name}[open] td`).first().waitFor();
+      const bad = await clipped();
+      assert.deepEqual(bad, [], `${name} at ${width}${mac ? " (Mac)" : ""}: clipped ${bad}`);
+      const keys = await help.locator(`#${name}[open] kbd`).allTextContents();
+      if (name === "shortcuts") {
+        assert(keys.includes(mac ? "⌥," : "Alt+,"), `remove a dot reads ${mac ? "⌥," : "Alt+,"}`);
+        assert(keys.includes(mac ? "⌥." : "Alt+."), "add a dot reads as a key");
+        assert(keys.includes(mac ? "⌘\\" : "Ctrl+\\"), "score beside or below");
+        assert(!keys.some((key) => /^(Alt|⌥)$/.test(key)), `no lone modifier: ${keys}`);
+      }
+      await help.keyboard.press("Escape");
+    }
+    if (width === 1440) {
+      await help.locator('[data-menu="edit"]').click();
+      const item = help.getByRole("menuitem", { name: /Remove a dot/ });
+      assert.equal(
+        (await item.locator(".menu-shortcut").textContent()).trim(),
+        mac ? "⌥," : "Alt+,",
+      );
+      assert.equal(await item.getAttribute("aria-keyshortcuts"), "Alt+,");
+      await help.keyboard.press("Escape");
+      assert.match(
+        await help.locator('[data-command="undot"]').getAttribute("title"),
+        mac ? /\(⌥,\)$/ : /\(Alt\+,\)$/,
+      );
+    }
+    await sized.close();
+  }
+}
+console.log(
+  "Composer: cheat sheet and shortcuts never clip at 1440, 1024 and 390, Mac and Ctrl; punctuation keys read as keys: passed",
+);
+
+{
+  // 3. The Tab hint stays on screen after the first Tab, and is said once.
+  const fresh = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  watch(fresh);
+  const tab = await fresh.newPage();
+  await tab.goto(url);
+  await tab.getByRole("button", { name: "Start a new tune" }).click();
+  await tab.locator(".cm-content").focus();
+  await tab.keyboard.press("Tab");
+  await tab.locator("#notice", { hasText: "Tab indents" }).waitFor();
+  await tab.keyboard.type("C");
+  await tab.waitForTimeout(4000);
+  assert(
+    await tab.locator("#notice", { hasText: "Tab indents" }).isVisible(),
+    "the Tab hint is still there after 4 s, through typing",
+  );
+  assert.equal(await tab.evaluate(() => localStorage.getItem("vxd-composer-tab-hint")), "1");
+
+  // 4. A blank line in the body: a problem with a gutter mark, one click puts it right.
+  await tab.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: "X:1\nT:Air\nM:4/4\nL:1/4\nK:C\n\nCDEF|GABc|\n",
+      },
+      selection: { anchor: 0 },
+    });
+  });
+  await tab.locator("#problems").waitFor();
+  assert.match(await tab.locator("#problems").textContent(), /1 problem/);
+  assert.match(
+    await tab.locator("#score-summary").textContent(),
+    /0 bars · music below a blank line left out/,
+  );
+  await tab.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf("CDEF") + 1 } });
+  });
+  await tab.waitForFunction(() =>
+    /A blank line ends the tune: the music below isn't part of X:1 “Air”\./.test(
+      document.getElementById("explain").textContent,
+    ),
+  );
+  const mark = tab.locator('.abc-gutter-mark.warning[title*="blank line"]');
+  await mark.click();
+  const fix = tab.getByRole("button", { name: "Remove the empty line" });
+  await fix.waitFor();
+  assert.match(await tab.locator(".problems-popover").textContent(), /isn't part of X:1 “Air”/);
+  await fix.click();
+  await tab.waitForFunction(() =>
+    / · 2 bars$/.test(document.getElementById("score-summary").textContent),
+  );
+  assert.equal(
+    await tab.evaluate(() => window.composer.view.state.doc.toString()),
+    "X:1\nT:Air\nM:4/4\nL:1/4\nK:C\nCDEF|GABc|\n",
+  );
+  await tab.waitForFunction(() => document.getElementById("problems").hidden);
+
+  // 5. Problems in plain words.
+  await tab.evaluate(() => {
+    const view = window.composer.view;
+    const at = view.state.doc.toString().indexOf("GABc");
+    view.dispatch({ changes: { from: at, insert: "!fermat " } });
+  });
+  await tab.waitForFunction(() => /problem/.test(document.getElementById("problems").textContent));
+  await tab.locator("#problems").click();
+  assert.match(
+    await tab.locator(".problems-popover").textContent(),
+    /!fermat… is missing its closing !\./,
+  );
+  await tab.keyboard.press("Escape");
+
+  // 6. A selection with no notes counts characters and offers no playing.
+  await tab.evaluate(() => {
+    const view = window.composer.view;
+    const from = view.state.doc.toString().indexOf("T:Air");
+    view.dispatch({ selection: { anchor: from, head: from + 5 } });
+  });
+  await tab.waitForFunction(
+    () => document.getElementById("explain").textContent === "5 characters selected",
+  );
+  await fresh.close();
+
+  // 7. An example opens with the caret at its first line of music, not on %%MIDI.
+  await openExample("Ode to Joy");
+  const caretLine = await page.evaluate(() => {
+    const view = window.composer.view;
+    return view.state.doc.lineAt(view.state.selection.main.head).text;
+  });
+  assert(!/^%%|^[A-Za-z]:/.test(caretLine), `the caret starts on music: ${caretLine}`);
+
+  // 12. Desktop transport buttons are at least 36 px.
+  const small36 = await page.evaluate(() =>
+    [...document.querySelectorAll("#transport button")]
+      .filter((button) => button.getClientRects().length && !button.closest(".tempo"))
+      .map((button) => ({ id: button.id, box: button.getBoundingClientRect() }))
+      .filter(({ box }) => box.width < 36 || box.height < 36)
+      .map(({ id, box }) => `${id} ${box.width}×${box.height}`),
+  );
+  assert.deepEqual(small36, [], "desktop transport buttons are 36 px");
+}
+console.log(
+  "Composer: Tab hint stays; a blank line's music is a problem with a one-click fix; plain-word problems; characters selected; caret on music; 36 px transport: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,
@@ -1705,6 +1908,52 @@ assert.equal(
     };
   });
   assert(transport.oneRow, "Play and Sound share a row on a phone");
+  // 12. Every transport button is a 44 px target on a phone.
+  const small44 = await small.evaluate(() =>
+    [...document.querySelectorAll("#transport button")]
+      .filter((button) => button.getClientRects().length)
+      .map((button) => ({ id: button.id, box: button.getBoundingClientRect() }))
+      .filter(({ box }) => box.width < 44 || box.height < 44)
+      .map(({ id, box }) => `${id} ${box.width}×${box.height}`),
+  );
+  assert.deepEqual(small44, [], "phone transport buttons are 44 px");
+  // 9. Scrubbing on a phone: a large readout above the finger, snapped to bars; a 44 px ruler.
+  const ruler = await small.locator("#timeline").boundingBox();
+  assert(ruler.height >= 44, `ruler ${ruler.height}px tall`);
+  await small.evaluate(
+    ([x, y]) => {
+      const target = document.getElementById("timeline");
+      const fire = (type, cx) =>
+        target.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerId: 7,
+            pointerType: "touch",
+            clientX: cx,
+            clientY: y,
+            isPrimary: true,
+          }),
+        );
+      fire("pointerdown", x);
+      fire("pointermove", x + 40);
+    },
+    [ruler.x + 20, ruler.y + ruler.height / 2],
+  );
+  const readout = await small.evaluate(() => {
+    const tip = document.getElementById("timeline-tip");
+    return {
+      text: tip.textContent,
+      visible: !tip.hidden,
+      size: Number.parseFloat(getComputedStyle(tip).fontSize),
+    };
+  });
+  assert(readout.visible && readout.size >= 16, `scrub readout ${JSON.stringify(readout)}`);
+  assert.match(readout.text, /^(Bar \d+|Pickup)( · \d\w\w time)? · \d:\d\d$/);
+  await small.evaluate(() =>
+    document
+      .getElementById("timeline")
+      .dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 7 })),
+  );
   assert.deepEqual(transport.labels, ["From caret", "Loop", "Sound"]);
   assert(transport.size >= 11 && transport.size <= 12, `label size ${transport.size}`);
   assert(transport.name >= 40, `file name field ${transport.name}px tall`);

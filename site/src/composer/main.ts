@@ -1,7 +1,5 @@
 import "./composer.css";
-import { completionStatus } from "@codemirror/autocomplete";
 import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
-import { openSearchPanel, searchPanelOpen } from "@codemirror/search";
 import { EditorSelection, type EditorState, type TransactionSpec } from "@codemirror/state";
 import { EditorView, type KeyBinding, type ViewUpdate } from "@codemirror/view";
 import { frac, lineKind, parseKey } from "./abc";
@@ -22,17 +20,26 @@ import {
   transpose,
 } from "./commands";
 import { humanDate } from "./dates";
-import { editorState, fileIndexField, onFieldError, setMarks } from "./editor";
+import { createDialog, lazyDialog } from "./dialog";
+import {
+  editorExtras,
+  editorState,
+  fileIndexField,
+  loadEditorExtras,
+  onFieldError,
+  onIssueGutter,
+  setMarks,
+} from "./editor";
 import { EXAMPLES, NEW_TUNE } from "./examples";
 import { describeKey, describeMeter, explainAt } from "./explain";
-import { SHORTCUTS, cheatsheet, createDialog, shortcutTable } from "./help";
 import { INSTRUMENTS, INSTRUMENT_ORDER, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
 import { checkLyrics } from "./lyriccheck";
-import { type MenuItem, isApple, mountMenus, popupMenu, shortcutLabel } from "./menus";
+import { type MenuItem, mountMenus, popupMenu, shortcutAria, shortcutLabel } from "./menus";
 import { offlineStatus, prepareOffline } from "./offline";
 import { applyPassDynamics, passMarks } from "./passes";
 import { Player, encodeWav, normalise } from "./player";
+import { checkSlurs, plainWarnings } from "./problems";
 import { roving } from "./roving";
 import {
   type Attachment,
@@ -165,8 +172,15 @@ function savePrefs() {
 const noticeElement = $("notice");
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 let noticeTone: "info" | "success" | "error" = "info";
-function notice(message: string, tone: "info" | "success" | "error" = "info") {
+/** Until then, edits leave the current notice in place (a hint about the edit just made). */
+let noticeHoldsUntil = 0;
+function notice(
+  message: string,
+  tone: "info" | "success" | "error" = "info",
+  options: { holdThroughEdits?: number } = {},
+) {
   clearTimeout(noticeTimer);
+  noticeHoldsUntil = message ? performance.now() + (options.holdThroughEdits ?? 0) : 0;
   if (!message) {
     if (noticeElement.hidden) return;
     noticeElement.classList.add("leaving");
@@ -202,6 +216,7 @@ function notice(message: string, tone: "info" | "success" | "error" = "info") {
 const noticeError = (message: string) => notice(message, "error");
 /** The next edit clears information (errors stay). */
 function noticeOnEdit() {
+  if (performance.now() < noticeHoldsUntil) return;
   if (!noticeElement.hidden && noticeTone !== "error") notice("");
 }
 
@@ -219,20 +234,40 @@ player.humanise = prefs.humanise;
 player.metronome = prefs.metronome;
 player.countIn = prefs.countIn;
 
-/** Said once in this browser, the first time Tab indents: how to leave the text by keyboard. */
+/**
+ * Said once in this browser, the first time Tab indents: how to leave the text by keyboard. It
+ * shows after the indent is made, stays through typing for a few seconds, and only counts as said
+ * once it has been on screen.
+ */
+let tabHintSaid = false;
 function tabHint() {
   try {
-    if (localStorage.getItem("vxd-composer-tab-hint")) return;
-    localStorage.setItem("vxd-composer-tab-hint", "1");
+    if (tabHintSaid || localStorage.getItem("vxd-composer-tab-hint")) return;
   } catch {
-    /* Without storage it is said once per visit. */
     if (tabHintSaid) return;
   }
   tabHintSaid = true;
-  notice("Tab indents in the text. To leave it by keyboard, press Escape, then Tab.");
+  setTimeout(() => {
+    notice("Tab indents in the text. To leave it by keyboard, press Escape, then Tab.", "info", {
+      holdThroughEdits: 6000,
+    });
+    requestAnimationFrame(() => {
+      if (noticeElement.hidden) return;
+      try {
+        localStorage.setItem("vxd-composer-tab-hint", "1");
+      } catch {
+        /* Without storage it is said once per visit. */
+      }
+    });
+  }, 0);
 }
-let tabHintSaid = false;
+/** Find and replace, loading it first if this is the first time. */
+function openFind(): boolean {
+  void loadEditorExtras(view).then((extras) => extras.openSearchPanel(view));
+  return true;
+}
 const keys: KeyBinding[] = [
+  { key: "Mod-f", run: openFind, preventDefault: true },
   {
     key: "Tab",
     run: () => {
@@ -315,8 +350,8 @@ const keys: KeyBinding[] = [
       // Focus leaves first; an open completion or search keeps its own Escape.
       if (
         body.classList.contains("focus-mode") &&
-        !completionStatus(target.state) &&
-        !searchPanelOpen(target.state)
+        !editorExtras()?.completionStatus(target.state) &&
+        !editorExtras()?.searchPanelOpen(target.state)
       ) {
         setFocusMode(false);
         return true;
@@ -353,6 +388,12 @@ const view = new EditorView({
   parent: $("editor"),
   state: makeState(""),
 });
+// Completion and Find join as soon as the text is used: its first focus, or a first key press.
+{
+  const load = () => void loadEditorExtras(view);
+  view.contentDOM.addEventListener("focus", load, { once: true });
+  document.addEventListener("keydown", load, { once: true });
+}
 function makeState(text: string): EditorState {
   return editorState(text, {
     onUpdate: safeUpdate,
@@ -437,9 +478,16 @@ function load(
   updateSavedState();
 }
 
+/** The start of the first line of music, past %%MIDI, V: and P: lines. */
 function firstMusicPosition(): number {
   const tune = fileIndex().tunes[0];
   if (!tune) return view.state.doc.length;
+  const doc = text();
+  let at = tune.bodyFrom;
+  for (const line of doc.slice(tune.bodyFrom, tune.to).split("\n")) {
+    if (lineKind(line, true) === "music") return at;
+    at += line.length + 1;
+  }
   return Math.min(tune.bodyFrom, view.state.doc.length);
 }
 
@@ -571,7 +619,23 @@ function explainCaret(update: ViewUpdate) {
       (event) => !event.rest && event.to > event.from,
     ).length;
     const voices = view.state.selection.ranges.length;
+    if (count === 0) {
+      // Header or lyric text: no music to play, so no play hint.
+      const characters = view.state.selection.ranges.reduce(
+        (sum, range) => sum + range.to - range.from,
+        0,
+      );
+      status.textContent = `${characters} ${characters === 1 ? "character" : "characters"} selected`;
+      return;
+    }
     status.textContent = `${count} ${count === 1 ? "note" : "notes"} selected${voices > 1 ? ` in ${voices} voices` : ""} · ${touch.matches ? "Tap More › Play selection to hear it" : `${shortcutLabel("Mod Alt Enter")} plays it`}`;
+    return;
+  }
+  // Music a blank line left outside its tune says so wherever the caret is in it.
+  const orphan = fileIndex().orphans.find((each) => position >= each.from && position <= each.to);
+  const orphanProblem = orphan && problems.find((problem) => problem.from === orphan.from);
+  if (orphanProblem) {
+    status.textContent = orphanProblem.message;
     return;
   }
   if (!explanation) {
@@ -769,6 +833,9 @@ function updateSummary() {
   const pickup = timeline ? timeline.pickup > 1e-6 : false;
   const bars = index.measures - (pickup ? 1 : 0);
   parts.push(`${bars} ${bars === 1 ? "bar" : "bars"}${pickup ? " and a pickup" : ""}`);
+  // Music below a blank line is not drawn: say so where the bars are counted.
+  const left = fileIndex().orphans.filter((orphan) => orphan.tune?.from === tune.from).length;
+  if (left) parts.push("music below a blank line left out");
   if (index.voices.length > 1) parts.push(`${index.voices.length} voices`);
   // Each part stays whole when a phone wraps the line ("2 voices", never "2 voi…").
   $("score-summary").replaceChildren(
@@ -981,7 +1048,11 @@ type Problem = {
   to: number;
   message: string;
   severity: "warning" | "error";
-  kind: "bar" | "parse" | "lyrics";
+  kind: "bar" | "parse" | "lyrics" | "orphan";
+  /** One click that puts it right, offered in the problems list. */
+  fix?: { label: string; from: number; to: number; insert: string };
+  /** abcjs's own words, shown under ours when they add something. */
+  detail?: string;
   /** "bar 3 — has 7 eighths, 6 expected", for the list. */
   label?: string;
 };
@@ -1016,6 +1087,36 @@ function runChecks(caretLeft = false) {
       });
     }
   }
+  for (const orphan of index.orphans) {
+    const name = orphan.tune
+      ? `X:${orphan.tune.number}${orphan.tune.title ? ` “${orphan.tune.title}”` : ""}`
+      : "";
+    const lines = orphan.blank
+      ? doc.slice(orphan.blank.from, orphan.blank.to).split("\n").length - 1
+      : 0;
+    list.push({
+      from: orphan.from,
+      to: orphan.to,
+      message: orphan.tune
+        ? `A blank line ends the tune: the music below isn't part of ${name}.`
+        : "This music comes before the first X: line, so it isn't part of any tune.",
+      severity: "warning",
+      kind: "orphan",
+      label: orphan.tune
+        ? `music after a blank line, left out of ${name}`
+        : "music before the first X: line",
+      ...(orphan.blank
+        ? {
+            fix: {
+              label: lines > 1 ? "Remove the empty lines" : "Remove the empty line",
+              from: orphan.blank.from,
+              to: orphan.blank.to,
+              insert: "",
+            },
+          }
+        : {}),
+    });
+  }
   for (const tune of index.tunes)
     for (const issue of checkLyrics(doc, tune))
       list.push({
@@ -1027,13 +1128,17 @@ function runChecks(caretLeft = false) {
         label: `lyrics — ${issue.extra} ${issue.extra === 1 ? "syllable has" : "syllables have"} no notes`,
       });
   if (scoreIndex)
-    for (const warning of scoreIndex.warnings)
+    for (const warning of plainWarnings(scoreIndex.warnings, doc))
       list.push({
         ...warning,
         to: Math.max(warning.to, warning.from + 1),
         severity: "error",
         kind: "parse",
       });
+  for (const tune of index.tunes)
+    for (const slur of checkSlurs(doc, tune, index))
+      list.push({ ...slur, severity: "warning", kind: "parse" });
+  list.sort((a, b) => a.from - b.from);
   problems = list;
   clearTimeout(recheckTimer);
   if (skippedBar)
@@ -1841,11 +1946,12 @@ function drawTimeline() {
   const step =
     line.bars.length > 64 ? 8 : line.bars.length > 24 ? 4 : line.bars.length > 12 ? 2 : 1;
   let previous: { bar: number; pass: number } | null = null;
+  const last = line.bars.length - 1;
   line.bars.forEach((time, index) => {
     const tick = document.createElement("div");
     const played = index + 1;
     const written = writtenBarAt(line, time + 1e-6);
-    // Where playback goes back for another time through, the tick says which time.
+    // Where playback goes back for another time through (its band carries the "2nd" tag).
     const passStart = Boolean(
       written &&
         written.pass > 1 &&
@@ -1853,39 +1959,50 @@ function drawTimeline() {
         (previous.pass !== written.pass || previous.bar > written.bar),
     );
     previous = written;
-    tick.className = `timeline-tick${played % step === 0 || index === 0 || passStart ? " major" : ""}`;
+    tick.className = `timeline-tick${played % step === 0 || index === 0 || index === last || passStart ? " major" : ""}`;
     tick.style.left = `${(time / length) * 100}%`;
-    const labelled = index === 0 || passStart || (played % (step * 2) === 0 && !written?.repeated);
+    tick.dataset.bar = String(index);
+    // The first and the last bar are always named; others by the step, measured to fit below.
+    const bar = written?.bar ?? (pickup ? index : played);
+    // Written bar numbers on their first time through, so a repeat never names a bar twice.
+    const labelled =
+      index === 0 ||
+      index === last ||
+      passStart ||
+      (bar > 0 && bar % step === 0 && (written?.pass ?? 1) === 1);
     if (labelled) {
       const label = document.createElement("span");
-      const bar = written?.bar ?? (pickup ? index : played);
-      label.textContent =
-        index === 0 && bar === 0
-          ? "Pickup"
-          : passStart && written
-            ? `${bar} · ${ordinal(written.pass)}`
-            : String(bar);
+      label.textContent = index === 0 && bar === 0 ? "Pickup" : String(bar);
+      label.dataset.priority = index === 0 || index === last ? "0" : "2";
       tick.append(label);
     }
     ticks.append(tick);
   });
-  // The repeat band covers only what is played again, not what follows it.
+  // The repeat band covers only what is played again, not what follows it, and says which time.
   const reading = readingOf(line);
   if (reading)
     for (let at = 0; at < reading.times.length; at++) {
-      if ((reading.passes[at] ?? 1) < 2) continue;
+      const pass = reading.passes[at] ?? 1;
+      if (pass < 2) continue;
       let end = at;
-      while (end + 1 < reading.times.length && (reading.passes[end + 1] ?? 1) >= 2) end += 1;
+      while (end + 1 < reading.times.length && (reading.passes[end + 1] ?? 1) === pass) end += 1;
       const from = reading.times[at] as number;
       const to = reading.times[end + 1] ?? length;
       const band = document.createElement("div");
       band.className = "timeline-pass repeat";
       band.style.left = `${(from / length) * 100}%`;
       band.style.width = `${((to - from) / length) * 100}%`;
-      band.title = "Played again";
+      band.title = `Bars ${reading.bars[at]}–${reading.bars[end]}, ${ordinal(pass)} time`;
       passes.append(band);
+      const tag = document.createElement("span");
+      tag.className = "timeline-pass-tag";
+      tag.textContent = ordinal(pass);
+      tag.dataset.priority = "1";
+      tag.style.left = `${((from + to) / 2 / length) * 100}%`;
+      ticks.append(tag);
       at = end;
     }
+  fitTimelineLabels();
   if (loopOn && loopRegion) {
     const from = firstPlayOf(line, loopRegion.from);
     const to = Math.max(from, firstPlayOf(line, loopRegion.to - 1e-6) + 0.001);
@@ -1908,6 +2025,44 @@ function pulseBeat(index: number, down: boolean) {
   void button.offsetWidth;
   button.classList.add("beat");
   if (down) button.classList.add("downbeat");
+}
+
+/**
+ * Drops labels that would touch the one before: the first and last bar always stay, then the
+ * pass tags, then bar numbers in order. Run again whenever the ruler's width changes.
+ */
+function fitTimelineLabels() {
+  const ruler = $("timeline");
+  const width = ruler.getBoundingClientRect().width;
+  const labels = [
+    ...ruler.querySelectorAll<HTMLElement>(".timeline-tick span, .timeline-pass-tag"),
+  ];
+  for (const label of labels) label.hidden = false;
+  if (width <= 0) return;
+  const kept: DOMRect[] = [];
+  const gap = 6;
+  for (const priority of ["0", "1", "2"])
+    for (const label of labels) {
+      if (label.dataset.priority !== priority) continue;
+      const box = label.getBoundingClientRect();
+      const clash = kept.some(
+        (other) => box.left < other.right + gap && other.left < box.right + gap,
+      );
+      if (clash) label.hidden = true;
+      else kept.push(box);
+    }
+}
+new ResizeObserver(() => fitTimelineLabels()).observe($("timeline"));
+
+/** "Bar 5 · 2nd time · 0:40": a played bar as the clock names it, for the ruler's readout. */
+function describePlayedBar(line: Timeline, index: number): string {
+  const time = line.bars[index] ?? 0;
+  const written = writtenBarAt(line, time + 1e-6);
+  const number = written?.bar ?? (line.pickup > 1e-6 ? index : index + 1);
+  const seconds = (time / ((line.bpm * player.tempoFactor * line.beat) / 60)) | 0;
+  const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const name = number === 0 ? "Pickup" : `Bar ${number}`;
+  return `${name}${written?.repeated ? ` · ${ordinal(written.pass)} time` : ""} · ${clock}`;
 }
 
 function updateHead(position: number) {
@@ -1964,19 +2119,62 @@ function updateHead(position: number) {
   );
 }
 
-function seekToClient(clientX: number) {
+/** The played bar under a point on the ruler (snapped to bar starts). */
+function barAtClient(clientX: number): number | null {
   const line = timeline;
-  if (!line) return;
+  if (!line) return null;
   const box = $("timeline").getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (clientX - box.left) / box.width));
-  const time = ratio * line.length;
-  const bar = barAt(line, time);
+  return barAt(line, ratio * line.length);
+}
+function seekToClient(clientX: number) {
+  const line = timeline;
+  const bar = barAtClient(clientX);
+  if (!line || bar === null) return;
   if (loopOn) setLoop(false);
   player.seek(line.bars[bar] ?? 0);
   if (player.status !== "playing") updateHead(line.bars[bar] ?? 0);
 }
+/* The readout above the ruler: on hover it names the bar under the pointer; while scrubbing
+   (larger on a phone, above the finger) it names the bar the music will start from. */
+const timelineTip = $("timeline-tip");
+function showTip(clientX: number) {
+  const line = timeline;
+  const bar = barAtClient(clientX);
+  if (!line || bar === null) return;
+  const ruler = $("timeline").getBoundingClientRect();
+  const x = ((line.bars[bar] ?? 0) / line.length) * ruler.width;
+  timelineTip.textContent = describePlayedBar(line, bar);
+  timelineTip.hidden = false;
+  const half = timelineTip.offsetWidth / 2;
+  timelineTip.style.left = `${Math.max(half - 8, Math.min(ruler.width - half + 8, x))}px`;
+}
+let scrubbing = false;
 $("timeline").addEventListener("pointerdown", (event) => {
+  const ruler = event.currentTarget as HTMLElement;
+  scrubbing = true;
+  try {
+    ruler.setPointerCapture(event.pointerId);
+  } catch {
+    /* A pointer the browser no longer tracks: the drag still follows while over the ruler. */
+  }
+  ruler.closest(".position")?.classList.add("scrubbing");
   seekToClient(event.clientX);
+  showTip(event.clientX);
+});
+$("timeline").addEventListener("pointermove", (event) => {
+  if (scrubbing) seekToClient(event.clientX);
+  if (scrubbing || event.pointerType === "mouse") showTip(event.clientX);
+});
+const endScrub = () => {
+  scrubbing = false;
+  $("timeline").closest(".position")?.classList.remove("scrubbing");
+  timelineTip.hidden = true;
+};
+$("timeline").addEventListener("pointerup", endScrub);
+$("timeline").addEventListener("pointercancel", endScrub);
+$("timeline").addEventListener("pointerleave", () => {
+  if (!scrubbing) timelineTip.hidden = true;
 });
 $("timeline").addEventListener("keydown", (event) => {
   const line = timeline;
@@ -2124,7 +2322,7 @@ function soundPopover(anchor: HTMLElement) {
     const small = document.createElement("small");
     small.textContent = player.ready(id)
       ? def.about
-      : `${def.about} · ${Math.round(def.bytes / 1024)} KB`;
+      : `${def.about} · ${Math.round(def.bytes / 1024)}\u00a0KB`;
     button.append(label, small);
     button.addEventListener("click", async () => {
       prefs.instrument = id;
@@ -2271,7 +2469,7 @@ $("voices-button").addEventListener("click", (event) =>
 $("sound-button").addEventListener("click", (event) =>
   soundPopover(event.currentTarget as HTMLElement),
 );
-$("problems").addEventListener("click", openProblems);
+$("problems").addEventListener("click", () => openProblems());
 $("announce").addEventListener("click", sayNote);
 // On a phone the status line is two lines; a tap opens it fully.
 $("explain").addEventListener("click", () => $("explain").classList.toggle("open"));
@@ -2933,10 +3131,14 @@ async function recentMenu(anchor: HTMLElement) {
 }
 
 /* Help, shortcuts, appearance. */
-const sheet = createDialog("cheatsheet", "ABC cheat sheet", true);
-sheet.body.append(cheatsheet());
-const shortcuts = createDialog("shortcuts", "Keyboard shortcuts");
-shortcuts.body.append(shortcutTable(SHORTCUTS));
+// The cheat sheet and the shortcut list load the first time they open.
+const sheet = lazyDialog("cheatsheet", "ABC cheat sheet", true, async () =>
+  (await import("./help")).cheatsheet(),
+);
+const shortcuts = lazyDialog("shortcuts", "Keyboard shortcuts", false, async () => {
+  const help = await import("./help");
+  return help.shortcutTable(help.SHORTCUTS);
+});
 const about = createDialog("about", "About VoxDown Composer");
 for (const line of [
   "Composer is a browser-only editor for ABC music notation. Your music stays on this device: there is no account, no server and no tracking, and nothing is sent anywhere.",
@@ -3038,7 +3240,7 @@ const offlineDialog = createDialog("offline-dialog", "Work offline");
   prepare.textContent = "Prepare for offline use";
   const sounds = document.createElement("button");
   sounds.type = "button";
-  sounds.textContent = "Keep every instrument offline (2.6 MB)";
+  sounds.textContent = "Keep every instrument offline (2.6\u00a0MB)";
   const actions = document.createElement("div");
   actions.className = "dialog-actions";
   actions.append(sounds, prepare);
@@ -3101,22 +3303,25 @@ function goToProblem(problem: Problem, focusEditor = true) {
   $("explain").textContent = problemText(problem);
   if (focusEditor) view.focus();
 }
-function openProblems() {
-  const bars = problems.filter((problem) => problem.kind === "bar").length;
-  const lyrics = problems.filter((problem) => problem.kind === "lyrics").length;
+function openProblems(anchor: HTMLElement = $("problems"), only?: Problem[]) {
+  const shown = only ?? problems;
+  const bars = shown.filter((problem) => problem.kind === "bar").length;
+  const lyrics = shown.filter((problem) => problem.kind === "lyrics").length;
   const title =
-    bars === problems.length
+    bars === shown.length
       ? "Bars to check"
-      : lyrics === problems.length
+      : lyrics === shown.length
         ? "Lyrics to check"
         : bars
           ? "Bars and problems to check"
-          : "Problems to check";
-  const panel = popover($("problems"), title);
+          : shown.length === 1
+            ? "A problem to check"
+            : "Problems to check";
+  const panel = popover(anchor, title);
   panel.classList.add("problems-popover");
   const list = document.createElement("ul");
   list.className = "problem-list";
-  for (const problem of problems) {
+  for (const problem of shown) {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
@@ -3126,13 +3331,55 @@ function openProblems() {
       goToProblem(problem);
     });
     item.append(button);
+    // From the gutter: the whole message; abcjs's own words under ours when they add something.
+    if (only || problem.detail) {
+      const detail = document.createElement("p");
+      detail.className = "problem-detail";
+      if (only && problem.label) detail.textContent = problem.message;
+      if (problem.detail) {
+        const raw = document.createElement("small");
+        raw.textContent = problem.detail;
+        detail.append(raw);
+      }
+      if (detail.childNodes.length) item.append(detail);
+    }
+    if (problem.fix) {
+      const { fix } = problem;
+      const repair = document.createElement("button");
+      repair.type = "button";
+      repair.className = "problem-fix";
+      repair.textContent = fix.label;
+      repair.addEventListener("click", () => {
+        closePopover?.();
+        view.dispatch({
+          changes: { from: fix.from, to: fix.to, insert: fix.insert },
+          selection: { anchor: fix.from },
+          scrollIntoView: true,
+          userEvent: "input",
+        });
+        view.focus();
+        runChecks(true);
+      });
+      item.append(repair);
+    }
     list.append(item);
   }
-  const hint = document.createElement("p");
-  hint.className = "hint";
-  hint.textContent = "F8 goes to the next, Shift F8 to the previous.";
-  panel.append(list, hint);
+  panel.append(list);
+  if (!only) {
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "F8 goes to the next, Shift F8 to the previous.";
+    panel.append(hint);
+  }
 }
+// A problem's gutter mark opens that line's problems, with their fixes.
+onIssueGutter((lineFrom, element) => {
+  const doc = view.state.doc;
+  const here = problems.filter(
+    (problem) => doc.lineAt(Math.min(problem.from, doc.length)).from === lineFrom,
+  );
+  if (here.length) openProblems(element, here);
+});
 /** F8 / Shift F8: the next or previous problem after the caret, wrapping around. */
 function stepProblem(direction: 1 | -1): boolean {
   if (!problems.length) {
@@ -3195,7 +3442,7 @@ const menus = mountMenus(
         enabled: () => redoDepth(view.state) > 0,
       },
       "-",
-      { label: "Find and replace…", run: () => openSearchPanel(view), shortcut: "Mod F" },
+      { label: "Find and replace…", run: openFind, shortcut: "Mod F" },
       { label: "Next bar or problem to check", run: () => stepProblem(1), shortcut: "F8" },
       {
         label: "Previous bar or problem to check",
@@ -3208,10 +3455,10 @@ const menus = mountMenus(
       { label: "Up an octave", run: () => music("octave-up"), shortcut: "Alt Shift ↑" },
       { label: "Down an octave", run: () => music("octave-down"), shortcut: "Alt Shift ↓" },
       "-",
-      { label: "Double lengths", run: () => music("double"), shortcut: "Alt ]" },
-      { label: "Halve lengths", run: () => music("halve"), shortcut: "Alt [" },
-      { label: "Add a dot", run: () => music("dot"), shortcut: "Alt ." },
-      { label: "Remove a dot", run: () => music("undot"), shortcut: "Alt ," },
+      { label: "Double lengths", run: () => music("double"), shortcut: "Alt BracketRight" },
+      { label: "Halve lengths", run: () => music("halve"), shortcut: "Alt BracketLeft" },
+      { label: "Add a dot", run: () => music("dot"), shortcut: "Alt Period" },
+      { label: "Remove a dot", run: () => music("undot"), shortcut: "Alt Comma" },
       "-",
       { label: "Tie or untie", run: () => music("tie"), shortcut: "Alt T" },
       { label: "Slur or unslur", run: () => music("slur"), shortcut: "Alt S" },
@@ -3243,7 +3490,7 @@ const menus = mountMenus(
         label: "Score beside",
         run: () => setLayout("beside"),
         checked: () => resolvedLayout() === "beside",
-        shortcut: "Mod \\",
+        shortcut: "Mod Backslash",
       },
       {
         label: "Score below",
@@ -3292,17 +3539,17 @@ const menus = mountMenus(
         checked: () => loopOn,
         shortcut: "Mod Shift L",
       },
-      { label: "Stop", run: stop, shortcut: "Mod ." },
+      { label: "Stop", run: stop, shortcut: "Mod Period" },
       "-",
       {
         label: "Faster",
         run: () => setTempo(Number($<HTMLInputElement>("tempo").value) + 4),
-        shortcut: "Mod Alt =",
+        shortcut: "Mod Alt Equal",
       },
       {
         label: "Slower",
         run: () => setTempo(Number($<HTMLInputElement>("tempo").value) - 4),
-        shortcut: "Mod Alt -",
+        shortcut: "Mod Alt Minus",
       },
       {
         label: "Tempo from the tune",
@@ -3540,28 +3787,10 @@ $("rail-close").addEventListener("click", () => {
 for (const element of document.querySelectorAll<HTMLElement>("[title]")) {
   const match = /\(([^)]+)\)\s*$/.exec(element.title);
   if (!match) continue;
-  const named = (match[1] as string).replace(/Ctrl\/⌘/g, "Mod").replace(/−/g, "-");
+  const named = (match[1] as string).replace(/Ctrl\/⌘/g, "Mod");
   element.title = element.title.replace(/\(([^)]+)\)\s*$/, `(${shortcutLabel(named)})`);
-  if (element.hasAttribute("aria-keyshortcuts")) continue;
-  const keys = (match[1] as string)
-    .replace(/Ctrl\/⌘/g, isApple ? "Meta" : "Control")
-    .replace(/−/g, "-")
-    .split(/\s+/)
-    .map(
-      (part) =>
-        ({
-          Alt: "Alt",
-          Shift: "Shift",
-          Control: "Control",
-          Meta: "Meta",
-          "↑": "ArrowUp",
-          "↓": "ArrowDown",
-          "←": "ArrowLeft",
-          "→": "ArrowRight",
-        })[part] ?? part,
-    )
-    .join("+");
-  element.setAttribute("aria-keyshortcuts", keys);
+  if (!element.hasAttribute("aria-keyshortcuts"))
+    element.setAttribute("aria-keyshortcuts", shortcutAria(named));
 }
 // On a phone, the commands that do not fit the toolbar are one tap away.
 $("more-tools").addEventListener("click", (event) =>

@@ -1,55 +1,18 @@
+import "./help.css";
 import { shortcutLabel } from "./menus";
-
-/** A dialog in the family's style: a sticky title bar with Close, and a body. */
-export function createDialog(id: string, title: string, wide = false) {
-  const dialog = document.createElement("dialog");
-  dialog.id = id;
-  dialog.className = `composer-dialog${wide ? " wide" : ""}`;
-  dialog.setAttribute("aria-labelledby", `${id}-title`);
-  const header = document.createElement("div");
-  header.className = "dialog-header";
-  const heading = document.createElement("h2");
-  heading.id = `${id}-title`;
-  heading.textContent = title;
-  const close = document.createElement("button");
-  close.type = "button";
-  close.textContent = "Close";
-  close.addEventListener("click", () => dialog.close());
-  header.append(heading, close);
-  const body = document.createElement("div");
-  body.className = "dialog-body";
-  dialog.append(header, body);
-  dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
-  });
-  document.body.append(dialog);
-  return {
-    dialog,
-    body,
-    heading,
-    open() {
-      if (!dialog.open) dialog.showModal();
-      (
-        body.querySelector<HTMLElement>("[autofocus], button, input, select, [tabindex='0']") ??
-        close
-      ).focus();
-    },
-    close: () => dialog.close(),
-  };
-}
 
 export const SHORTCUTS: [string, string][] = [
   ["Play or pause", "Mod Enter"],
   ["Play from the caret", "Mod Shift Enter"],
   ["Play the selection once", "Mod Alt Enter"],
   ["Loop the selection or bar", "Mod Shift L"],
-  ["Stop", "Mod ."],
-  ["Faster / slower", "Mod Alt = / Mod Alt -"],
+  ["Stop", "Mod Period"],
+  ["Faster / slower", "Mod Alt Equal / Mod Alt Minus"],
   ["Metronome", "Mod Alt M"],
   ["Up / down a semitone", "Alt ↑ / Alt ↓"],
   ["Up / down an octave", "Alt Shift ↑ / Alt Shift ↓"],
-  ["Halve / double lengths", "Alt [ / Alt ]"],
-  ["Add / remove a dot", "Alt . / Alt ,"],
+  ["Halve / double lengths", "Alt BracketLeft / Alt BracketRight"],
+  ["Add / remove a dot", "Alt Period / Alt Comma"],
   ["Tie, slur, decoration", "Alt T, Alt S, Alt D"],
   ["Next / previous note", "Alt → / Alt ←"],
   ["Extend the selection by a note", "Alt Shift → / Alt Shift ←"],
@@ -58,7 +21,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Find / replace", "Mod F"],
   ["Next / previous bar to check", "F8 / Shift F8"],
   ["Complete a field, key or decoration", "Ctrl Space"],
-  ["Score beside or below", "Mod \\"],
+  ["Score beside or below", "Mod Backslash"],
   ["Focus", "Mod Shift F"],
   ["Open / Save / Save as", "Mod O / Mod S / Mod Shift S"],
   ["Indent in the text / leave it (Escape, then Tab)", "Tab / Escape, Tab"],

@@ -21,26 +21,67 @@ export const isApple =
   typeof navigator !== "undefined" &&
   /Mac|iPad|iPhone|iPod/.test(`${navigator.platform} ${navigator.userAgent}`);
 
-/** "Mod Shift Enter" → "Ctrl+Shift+Enter" or "⌘⇧↩". */
-export function shortcutLabel(value: string): string {
-  // "Alt ↑ / Alt ↓", "Alt T, Alt S": each chord on its own, the separators kept.
+/* Shortcuts are written with key names ("Alt Comma", "Mod Backslash"), so punctuation keys are
+   never mistaken for the separators between chords: " / " for alternatives, ", " for a list. */
+const KEY_TEXT: Record<string, string> = {
+  Comma: ",",
+  Period: ".",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Slash: "/",
+  Equal: "=",
+  Minus: "−",
+};
+const KEY_ARIA: Record<string, string> = {
+  ...KEY_TEXT,
+  Minus: "-",
+  "↑": "ArrowUp",
+  "↓": "ArrowDown",
+  "←": "ArrowLeft",
+  "→": "ArrowRight",
+};
+const APPLE: Record<string, string> = { Mod: "⌘", Alt: "⌥", Shift: "⇧", Ctrl: "⌃", Enter: "↩" };
+
+/** The chords of a shortcut and the separators between them. */
+function chords(value: string): (string[] | string)[] {
   return value
-    .split(/(\s*\/\s+|,\s*)/)
+    .split(/(\s+\/\s+|,\s+)/)
+    .map((part) => (/^\s+\/\s+$|^,\s+$/.test(part) ? part.trim() : part.trim().split(/\s+/)))
+    .filter((part) => part.length > 0);
+}
+
+/** "Mod Shift Enter" → "Ctrl+Shift+Enter" or "⌘⇧↩"; "Alt Comma" → "Alt+," or "⌥,". */
+export function shortcutLabel(value: string): string {
+  return chords(value)
     .map((part) => {
-      if (/^\s*\/\s+$/.test(part)) return " / ";
-      if (/^,\s*$/.test(part)) return ", ";
-      const keys = part.trim().split(/\s+/).filter(Boolean);
+      if (part === "/") return " / ";
+      if (part === ",") return ", ";
+      const keys = (part as string[]).map((key) => KEY_TEXT[key] ?? key);
       if (!isApple) return keys.map((key) => (key === "Mod" ? "Ctrl" : key)).join("+");
-      const symbol: Record<string, string> = {
-        Mod: "⌘",
-        Alt: "⌥",
-        Shift: "⇧",
-        Ctrl: "⌃",
-        Enter: "↩",
-      };
-      return keys.map((key) => symbol[key] ?? key).join("");
+      return keys.map((key) => APPLE[key] ?? key).join("");
     })
     .join("");
+}
+
+/** The same shortcut for aria-keyshortcuts: "Control+Alt+=", alternatives separated by spaces. */
+export function shortcutAria(value: string): string {
+  return chords(value)
+    .filter((part) => Array.isArray(part))
+    .map((part) =>
+      (part as string[])
+        .map((key) =>
+          key === "Mod"
+            ? isApple
+              ? "Meta"
+              : "Control"
+            : key === "Ctrl"
+              ? "Control"
+              : (KEY_ARIA[key] ?? key),
+        )
+        .join("+"),
+    )
+    .join(" ");
 }
 
 export function mountMenus(
@@ -181,10 +222,7 @@ export function mountMenus(
         shortcut.className = "menu-shortcut";
         shortcut.textContent = shortcutLabel(item.shortcut);
         entry.append(shortcut);
-        entry.setAttribute(
-          "aria-keyshortcuts",
-          item.shortcut.replace(/Mod/g, isApple ? "Meta" : "Control").replace(/\s+/g, "+"),
-        );
+        entry.setAttribute("aria-keyshortcuts", shortcutAria(item.shortcut));
       }
       entry.disabled = item.enabled ? !item.enabled() : false;
       entry.addEventListener("pointerenter", () => {

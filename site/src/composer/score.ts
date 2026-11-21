@@ -534,13 +534,15 @@ export function parseWarnings(
   const out: { from: number; to: number; message: string }[] = [];
   for (const raw of list) {
     const text = raw.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ");
-    const match = /Line:\s*(\d+):(\d+):\s*([^:]+)/.exec(text);
+    // "Line:5:9: Unknown decoration: foo:  !foo!A B|" — the message, without the quoted line.
+    const match = /Line:\s*(\d+):(\d+):\s*(.*?)(?::\s{2}.*)?$/.exec(text);
     if (!match) {
       out.push({ from: toDocument(0), to: toDocument(0), message: text });
       continue;
     }
     const line = Number(match[1]) - 1;
-    const column = Number(match[2]);
+    // abcjs counts columns from 1.
+    const column = Number(match[2]) - 1;
     const start = (lineStarts[line] ?? 0) + Math.max(0, column);
     const from = Math.min(start, source.length);
     out.push({

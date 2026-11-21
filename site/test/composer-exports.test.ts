@@ -115,7 +115,7 @@ describe("the HTML tune book", () => {
     expect(page.querySelector("#tune-1 h2")?.textContent).toBe("The <First> & Best");
     expect(page.querySelectorAll("details:not([open])")).toHaveLength(2);
     expect(page.querySelector("#tune-1 pre")?.textContent).toBe("X:1\nT:The <First> & Best");
-    expect(html).toMatch(/@media print\{[^]*\.tune\{break-before:page;break-inside:avoid/);
+    expect(html).toMatch(/@media print\{[\s\S]*\.tune\{break-before:page;break-inside:avoid/);
   });
   it("shows the ABC, or leaves it out, as chosen", () => {
     expect(

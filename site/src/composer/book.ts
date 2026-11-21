@@ -47,7 +47,7 @@ export type SortBy = "title" | "number" | "key";
 export const titleKey = (title: string) =>
   title
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/\p{M}/gu, "")
     .replace(/^\s*(the|a|an)\s+/i, "")
     .trim()
     .toLowerCase();

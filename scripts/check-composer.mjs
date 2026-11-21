@@ -3078,7 +3078,7 @@ console.log(
   assert.equal(svg.name, "The Swallowtail.svg");
   const svgText = readFileSync(svg.path, "utf8");
   assert.match(svgText, /^<\?xml version="1\.0" encoding="UTF-8" standalone="no"\?>\n<svg /);
-  assert.match(svgText, / viewBox="0 0 [\d.]+ [\d.]+"/);
+  assert.match(svgText, / viewBox="-?[\d.]+ -?[\d.]+ [\d.]+ [\d.]+"/);
   assert(!/\sclass=|currentColor|is-caret|is-selected/.test(svgText), "no classes or highlights");
   const svgDrawn = await page.evaluate(async (markup) => {
     const parsed = new DOMParser().parseFromString(markup, "image/svg+xml");

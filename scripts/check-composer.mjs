@@ -244,6 +244,11 @@ console.log(
 await setCaret(fromCaret.start);
 await settle(150);
 assert(await page.locator("#score .is-caret").count(), "the caret's note is lit in the score");
+// Playback followed the music; start from the top so no drag begins at the score's scrolling edge.
+await page.locator("#score-scroll").evaluate((element) => {
+  element.scrollTop = 0;
+});
+await settle(100);
 const target = await noteCenter(1, 3);
 await page.mouse.click(target.x, target.y);
 await settle(150);

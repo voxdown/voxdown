@@ -134,6 +134,13 @@ style and a shortcuts table.
   separate tasks afterwards.
 - Score geometry for regions comes from the drawn notes' boxes and staff lines, measured once per
   redraw in the score's own coordinates (so scrolling keeps it valid).
+- A drag reads the pointer in time, not by the nearest note: the pointer reaches a note when it gets
+  to the note's head (accidentals included, chord symbols and text above excluded), so the space
+  after a bar's last note still belongs to that bar, and the next bar starts only at its first
+  note. A region takes, in every voice, the notes whose start the pointer reached, so a long note
+  under the pointer never lets another voice run ahead (round 1 fix, after the owner's report).
+- File › Examples (a submenu, → and ← by keyboard) opens each example as a new draft; the open
+  tune's draft is written at once and stays under Recover.
 - Shared look: `site/src/workspace-theme.css` and the family's tokens; Composer keeps its own look
   preference (`vxd-composer-look`), applied before first paint by a same-origin script (CSP-safe),
   and does not import Writer or Studio code.

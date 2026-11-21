@@ -88,7 +88,6 @@ import { isMidiFile, isScoreFile } from "./score-files";
 import { type SourceFile, abcName, encodeText, newSource, readBytes, readText } from "./source";
 import {
   claimDraft,
-  deleteDraft,
   forgetFile,
   getDraft,
   hashBytes,
@@ -3975,58 +3974,10 @@ async function recoverDraft(id: string) {
 }
 
 const recoverDialog = createDialog("recover-dialog", "Recover a draft");
+/** Recover drafts (./recover, loaded when first opened): every draft kept in this browser. */
 async function openRecover() {
-  recoverDialog.body.replaceChildren();
-  const intro = document.createElement("p");
-  intro.textContent =
-    "Every tab keeps its own draft in this browser as you write. Open one to carry on; it opens as a new draft, so nothing is overwritten.";
-  recoverDialog.body.append(intro);
-  try {
-    const drafts = await listDrafts(30);
-    if (!drafts.length) {
-      const empty = document.createElement("p");
-      empty.textContent = "No drafts yet.";
-      recoverDialog.body.append(empty);
-    }
-    for (const draft of drafts) {
-      const row = document.createElement("div");
-      row.className = "recent-row";
-      const openButton = document.createElement("button");
-      openButton.type = "button";
-      openButton.className = "open";
-      openButton.textContent = draft.title || draft.name;
-      const small = document.createElement("small");
-      small.textContent = `${draft.name} · ${humanDate(draft.updated)} · ${draft.characters.toLocaleString()}\u00a0characters`;
-      openButton.append(small);
-      openButton.addEventListener("click", () => {
-        recoverDialog.close();
-        void recoverDraft(draft.id);
-      });
-      // The draft open in this tab says so instead of offering a Delete it cannot do.
-      if (draft.id === draftId) {
-        const here = document.createElement("span");
-        here.className = "recent-here";
-        here.textContent = "Open here";
-        row.append(openButton, here);
-      } else {
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "recent-delete";
-        remove.textContent = "Delete";
-        remove.setAttribute("aria-label", `Delete draft ${draft.title || draft.name}`);
-        remove.addEventListener("click", async () => {
-          await deleteDraft(draft.id);
-          row.remove();
-        });
-        row.append(openButton, remove);
-      }
-      recoverDialog.body.append(row);
-    }
-  } catch {
-    const failed = document.createElement("p");
-    failed.textContent = "Browser storage is unavailable here, so drafts cannot be listed.";
-    recoverDialog.body.append(failed);
-  }
+  const { fillRecover } = await import("./recover");
+  await fillRecover(recoverDialog, draftId, (id) => void recoverDraft(id));
   recoverDialog.open();
 }
 
@@ -4097,78 +4048,35 @@ const about = lazyDialog("about", "About VoxDown Composer", false, async () =>
 );
 $("cheatsheet-open").addEventListener("click", () => sheet.open());
 
-const LOOKS = [
-  {
-    id: "auto",
-    label: "Auto",
-    tone: "As your device",
-    swatch: "linear-gradient(135deg, #ffffff 50%, #1b1d21 50%)",
-    ink: "#25282d",
-  },
-  { id: "paper", label: "Paper", tone: "Light", swatch: "#ffffff", ink: "#25282d" },
-  { id: "sepia", label: "Sepia", tone: "Light, warm", swatch: "#f7f0e1", ink: "#33291d" },
-  { id: "night", label: "Night", tone: "Dark", swatch: "#1b1d21", ink: "#e4e5e3" },
-  { id: "slate", label: "Slate", tone: "Dark, softer", swatch: "#262c35", ink: "#d9dee5" },
-  {
-    id: "contrast",
-    label: "High contrast",
-    tone: "Light, every mark darker",
-    swatch: "#ffffff",
-    ink: "#000000",
-  },
-];
+/** The looks' names, for the header button; their choices load with the dialog (./looks). */
+const LOOK_LABELS: Record<string, string> = {
+  auto: "Auto",
+  paper: "Paper",
+  sepia: "Sepia",
+  night: "Night",
+  slate: "Slate",
+  contrast: "High contrast",
+};
 function applyLook(look: string) {
   const root = document.documentElement;
   root.dataset.look = look;
   root.dataset.theme =
     look === "auto" ? "system" : look === "night" || look === "slate" ? "dark" : "light";
-  const label = LOOKS.find((each) => each.id === look)?.label ?? "Auto";
+  const label = LOOK_LABELS[look] ?? "Auto";
   $("appearance").textContent = `◐ ${label}`;
   $("appearance").setAttribute("aria-label", `Appearance: ${label}`);
 }
-const looks = createDialog("looks", "Appearance");
-{
-  const intro = document.createElement("p");
-  intro.textContent = "The paper and ink for the text and the score.";
-  const group = document.createElement("fieldset");
-  group.className = "look-choices";
-  const legend = document.createElement("legend");
-  legend.className = "sr-only";
-  legend.textContent = "Look";
-  group.append(legend);
-  for (const look of LOOKS) {
-    const label = document.createElement("label");
-    label.className = "look-choice";
-    const input = document.createElement("input");
-    input.type = "radio";
-    input.name = "look";
-    input.value = look.id;
-    input.checked = prefs.look === look.id;
-    input.addEventListener("change", () => {
-      prefs.look = look.id;
-      try {
-        localStorage.setItem("vxd-composer-look", look.id);
-      } catch {
-        /* This visit only. */
-      }
-      applyLook(look.id);
-    });
-    const swatch = document.createElement("span");
-    swatch.className = "look-swatch";
-    swatch.style.background = look.swatch;
-    swatch.style.color = look.ink;
-    swatch.textContent = "♪";
-    swatch.setAttribute("aria-hidden", "true");
-    const name = document.createElement("span");
-    name.textContent = look.label;
-    const tone = document.createElement("small");
-    tone.textContent = look.tone;
-    name.append(tone);
-    label.append(input, swatch, name);
-    group.append(label);
-  }
-  looks.body.append(intro, group);
-}
+const looks = lazyDialog("looks", "Appearance", false, async () =>
+  (await import("./looks")).lookChoices(prefs.look, (id) => {
+    prefs.look = id;
+    try {
+      localStorage.setItem("vxd-composer-look", id);
+    } catch {
+      /* This visit only. */
+    }
+    applyLook(id);
+  }),
+);
 $("appearance").addEventListener("click", () => looks.open());
 applyLook(prefs.look);
 

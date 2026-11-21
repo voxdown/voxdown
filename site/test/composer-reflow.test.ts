@@ -1,6 +1,6 @@
 import abcjs from "abcjs";
 import { describe, expect, it } from "vitest";
-import { keepSignatures } from "../src/composer/score";
+import { keepSignatures } from "../src/composer/reflow";
 
 /* biome-ignore lint/suspicious/noExplicitAny: abcjs objects. */
 type Any = any;

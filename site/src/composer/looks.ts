@@ -2,6 +2,7 @@
  * The Appearance dialog's choices: each look's paper and ink, as a swatch. Loaded when the dialog
  * first opens.
  */
+import "./looks.css";
 export const LOOKS = [
   {
     id: "auto",

@@ -2,6 +2,7 @@
  * The Recover drafts dialog's list: every draft kept in this browser, newest first, to open as a
  * new draft or delete. Loaded when the dialog is first opened.
  */
+import "./recover.css";
 import { humanDate } from "./dates";
 import { deleteDraft, listDrafts } from "./storage";
 

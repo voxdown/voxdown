@@ -4140,49 +4140,18 @@ function goToProblem(problem: Problem, focusEditor = true) {
   $("explain").textContent = problemText(problem);
   if (focusEditor) view.focus();
 }
+/** The problems list (./problem-list, loaded when first opened), above the footer button. */
 function openProblems(anchor: HTMLElement = $("problems"), only?: Problem[]) {
   const shown = only ?? problems;
-  const bars = shown.filter((problem) => problem.kind === "bar").length;
-  const lyrics = shown.filter((problem) => problem.kind === "lyrics").length;
-  const title =
-    bars === shown.length
-      ? "Bars to check"
-      : lyrics === shown.length
-        ? "Lyrics to check"
-        : bars
-          ? "Bars and problems to check"
-          : shown.length === 1
-            ? "A problem to check"
-            : "Problems to check";
-  const panel = popover(anchor, title);
-  panel.classList.add("problems-popover");
-  const list = document.createElement("ul");
-  list.className = "problem-list";
-  for (const problem of shown) {
-    const item = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    // From the gutter mark: the whole sentence; in the list, the short label with its line.
-    button.textContent = only ? problem.message : problemText(problem);
-    button.addEventListener("click", () => {
-      closePopover?.();
-      goToProblem(problem);
-    });
-    item.append(button);
-    // abcjs's own words under ours, only when no reading of ours fits.
-    if (problem.detail) {
-      const detail = document.createElement("p");
-      detail.className = "problem-detail";
-      detail.textContent = problem.detail;
-      item.append(detail);
-    }
-    if (problem.fix) {
-      const { fix } = problem;
-      const repair = document.createElement("button");
-      repair.type = "button";
-      repair.className = "problem-fix";
-      repair.textContent = fix.label;
-      repair.addEventListener("click", () => {
+  void import("./problem-list").then((list) => {
+    const panel = popover(anchor, list.problemsTitle(shown));
+    list.fillProblems(panel, shown, Boolean(only), {
+      text: problemText,
+      go: (problem) => {
+        closePopover?.();
+        goToProblem(problem as Problem);
+      },
+      fix: (fix) => {
         closePopover?.();
         view.dispatch({
           changes: { from: fix.from, to: fix.to, insert: fix.insert },
@@ -4192,18 +4161,9 @@ function openProblems(anchor: HTMLElement = $("problems"), only?: Problem[]) {
         });
         view.focus();
         runChecks(true);
-      });
-      item.append(repair);
-    }
-    list.append(item);
-  }
-  panel.append(list);
-  if (!only) {
-    const hint = document.createElement("p");
-    hint.className = "hint";
-    hint.textContent = "F8 goes to the next, Shift F8 to the previous.";
-    panel.append(hint);
-  }
+      },
+    });
+  });
 }
 // A problem's gutter mark opens that line's problems, with their fixes.
 onIssueGutter((lineFrom, element) => {

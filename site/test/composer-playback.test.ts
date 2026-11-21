@@ -136,6 +136,17 @@ describe("score regions", () => {
       "C, D, |",
     ]);
   });
+  it("splits a voice whose music continues in a later V: block, never taking other voices' text", () => {
+    const text =
+      "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nC D E F |\nV:2\nC,4 |\nV:1\nG A B c |\nV:2\nG,4 |\n";
+    const { index } = prepare(text);
+    const ranges = regionRanges(index, { from: 0.5, to: 1.5, voices: [0, 1] }, text);
+    expect(ranges.map((range) => text.slice(range.from, range.to))).toEqual([
+      "E F |",
+      "G A",
+      "G,4 |",
+    ]);
+  });
   it("snaps a text selection to whole notes and back", () => {
     const { index } = prepare(twoVoices);
     const start = twoVoices.indexOf("D |");

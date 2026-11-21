@@ -631,30 +631,56 @@ export function spanRegion(
   return region;
 }
 
-/** The text ranges a region covers: one per voice, from its first note to its last. */
+/** A voice change in the text: a `V:` line or an inline `[V:…]`. */
+const VOICE_SWITCH = /(?:^|\n)[ \t]*V:|\[V:/;
+
+/**
+ * The text ranges a region covers: per voice, from its first note to its last, split wherever the
+ * voice's text is interrupted by another voice's (its music continuing in a later `V:` block), so a
+ * range never takes another voice's text.
+ */
 export function regionRanges(
   index: ScoreIndex,
   region: Region,
   text: string,
 ): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = [];
+  const inText = [...index.notes].sort((a, b) => a.start - b.start);
   for (const voice of region.voices) {
-    const notes = (index.byVoice[voice] ?? []).filter((note) => takes(region, note));
-    if (!notes.length) continue;
-    const from = minOf(notes.map((note) => note.start));
-    let to = maxOf(notes.map((note) => note.end));
-    const lastEnd = maxOf(notes.map((note) => note.time + note.duration));
-    while (to > from && /[ \t]/.test(text[to - 1] as string)) to -= 1;
-    // When this voice's last note ends its bar, the bar line comes too, so bars stay whole.
-    const bar = index.bars.find(
-      (each) =>
-        each.voice === voice &&
-        Math.abs(each.time - lastEnd) < EPS &&
-        each.start >= to &&
-        /^[ \t]*$/.test(text.slice(to, each.start)),
-    );
-    if (bar) to = bar.end;
-    ranges.push({ from, to });
+    const runs: ScoreNote[][] = [];
+    let run: ScoreNote[] = [];
+    let interrupted = false;
+    for (const note of inText) {
+      if (note.voice !== voice) {
+        if (run.length) interrupted = true;
+        continue;
+      }
+      if (!takes(region, note)) continue;
+      const last = run.at(-1);
+      if (last && (interrupted || VOICE_SWITCH.test(text.slice(last.end, note.start)))) {
+        runs.push(run);
+        run = [];
+      }
+      interrupted = false;
+      run.push(note);
+    }
+    if (run.length) runs.push(run);
+    for (const notes of runs) {
+      const from = minOf(notes.map((note) => note.start));
+      let to = maxOf(notes.map((note) => note.end));
+      const lastEnd = maxOf(notes.map((note) => note.time + note.duration));
+      while (to > from && /[ \t]/.test(text[to - 1] as string)) to -= 1;
+      // When this run's last note ends its bar, the bar line comes too, so bars stay whole.
+      const bar = index.bars.find(
+        (each) =>
+          each.voice === voice &&
+          Math.abs(each.time - lastEnd) < EPS &&
+          each.start >= to &&
+          /^[ \t]*$/.test(text.slice(to, each.start)),
+      );
+      if (bar) to = bar.end;
+      ranges.push({ from, to });
+    }
   }
   return ranges.sort((a, b) => a.from - b.from);
 }

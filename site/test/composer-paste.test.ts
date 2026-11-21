@@ -34,7 +34,7 @@ describe("pasting a copy of several voices", () => {
       "X:1\nT:Paste\nM:4/4\nL:1/4\n%%score (1 2)\nK:C\nV:1\nc d e f|g a b c'|c d e f|f e d c|]\nV:2\nC D E F|G A B c|C D E F|F E D C|]\n",
     );
   });
-  it("pastes the caret's voice's part, or the music without V: lines", () => {
+  it("pastes the caret's voice's part, or one part into a voice the copy hasn't", () => {
     const at = tune.indexOf("f e d c");
     const plan = pasteVoiced(tune, [{ from: at, to: at }], voicedParts(copy) ?? []);
     expect("changes" in plan && plan.changes[0]?.insert).toBe("c d e f|");
@@ -42,8 +42,8 @@ describe("pasting a copy of several voices", () => {
     const three = `${tune.replace("%%score (1 2)", "%%score (1 2 3)")}V:3\nz4|]\n`;
     const z = three.indexOf("z4");
     const plain = pasteVoiced(three, [{ from: z, to: z }], voicedParts(copy) ?? []);
-    expect("changes" in plain && plain.changes[0]?.insert).toBe("c d e f| C D E F|");
-    expect("message" in plain && plain.message).toMatch(/one after another into V:3/);
+    expect("changes" in plain && plain.changes[0]?.insert).toBe("c d e f|");
+    expect("message" in plain && plain.message).toBe("Pasted V:1's part; the copy also had V:2.");
   });
   it("a voice selected in two places, with one part, takes it in the first, said so", () => {
     const places = [range(tune, "c' b a g|"), range(tune, "f e d c|"), range(tune, "c B A G|")];
@@ -148,7 +148,7 @@ describe("paste between tunes keeps the music sounding the same (round 3)", () =
     const source = sourceAt(from, indexFile(from), from.indexOf("f2"));
     const at = from.indexOf("C D");
     const plan = planPaste(from, [{ from: at, to: at }], 0, "f2 g2 a2 c'2|", source);
-    expect(plan && "changes" in plan && plan.changes[0]?.insert).toBe("^f g a ^c'|");
+    expect(plan && "changes" in plan && plan.changes[0]?.insert).toBe("^f g a ^c'| ");
     expect(plan && "message" in plan && plan.message).toBe(
       "Pasted from L:1/8, K:D: lengths and accidentals rewritten.",
     );
@@ -157,7 +157,7 @@ describe("paste between tunes keeps the music sounding the same (round 3)", () =
     const source = sourceAt(from, indexFile(from), from.indexOf("f2"));
     const at = from.indexOf("C D");
     const plan = planPaste(from, [{ from: at, to: at }], 0, "[DF]4 F2 =F2|", source);
-    expect(plan && "changes" in plan && plan.changes[0]?.insert).toBe("[D^F]2 F =F|");
+    expect(plan && "changes" in plan && plan.changes[0]?.insert).toBe("[D^F]2 F =F| ");
   });
   it("music copied from outside Composer is pasted as it is", () => {
     const at = from.indexOf("C D");

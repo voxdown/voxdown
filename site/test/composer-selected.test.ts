@@ -1,17 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { frac } from "../src/composer/abc";
-import {
-  type Change,
-  duplicate,
-  scaleLengths,
-  toggleSlur,
-  transpose,
-} from "../src/composer/commands";
+import { duplicate } from "../src/composer/barwise";
+import { type Change, scaleLengths, toggleSlur, transpose } from "../src/composer/commands";
 import { insertChordSymbol, insertRepeat, insertTriplet } from "../src/composer/inserts";
 import { describePicked, selectedNotes } from "../src/composer/selected";
 
 const HEAD = "X:1\nT:Rule\nM:4/4\nL:1/8\nK:C\n";
-const apply = (text: string, changes: Change[]) =>
+const apply = (text: string, given: Change[] | { refused: string }) => {
+  if ("refused" in given) throw new Error(given.refused);
+  return applied(text, given);
+};
+const applied = (text: string, changes: Change[]) =>
   [...changes]
     .sort((a, b) => b.from - a.from)
     .reduce(
@@ -123,9 +122,10 @@ describe("Insert over a selection goes by its notes", () => {
     expect(apply(bars.text, insertRepeat(bars.text, bars.ranges) ?? [])).toBe(
       `${HEAD}C D |: E F G A :| B c |]\n`,
     );
+    // Round 4: a repeat goes round whole bars, at their bar lines (or the line's ends).
     const plain = over("C D E F G A |]", "D E");
     expect(apply(plain.text, insertRepeat(plain.text, plain.ranges) ?? [])).toBe(
-      `${HEAD}C |: D E :| F G A |]\n`,
+      `${HEAD}|: C D E F G A :|]\n`,
     );
     const end = over("C D | E F |]", "E F");
     expect(apply(end.text, insertRepeat(end.text, end.ranges) ?? [])).toBe(
@@ -198,10 +198,9 @@ describe("Insert over a voice selected across V: blocks is one passage (round 3)
     { from: blocks.indexOf("e f"), to: blocks.indexOf("e f") + 3 },
     { from: blocks.indexOf("g a"), to: blocks.indexOf("g a") + 1 },
   ];
-  it("one triplet, before the passage's first note", () => {
-    const out = apply(blocks, insertTriplet(blocks, across) ?? []);
-    expect(out).toContain("c d (3e f|");
-    expect(out).toContain("\ng a b c'|");
+  it("a triplet across a bar line is refused (round 4: 3 notes in one bar)", () => {
+    const result = insertTriplet(blocks, across);
+    expect(result && "refused" in result && result.refused).toMatch(/one bar/);
   });
   it("one repeat, around the whole passage", () => {
     const whole = [
@@ -211,5 +210,71 @@ describe("Insert over a voice selected across V: blocks is one passage (round 3)
     const out = apply(blocks, insertRepeat(blocks, whole) ?? []);
     expect(out).toContain("V:1\n|: c d e f|\n");
     expect(out).toContain("V:1\ng a b c':|\n");
+  });
+});
+
+describe("Duplicate keeps tuplets, slurs, ties and bar-line marks whole (round 4)", () => {
+  const head = "X:1\nM:4/4\nL:1/8\nK:C\n";
+  it("after the tuplet the last note is in, not inside it", () => {
+    const text = `${head}(3cde (3fga b2 c'2 |\n`;
+    const from = text.indexOf("e (3f");
+    expect(apply(text, duplicate(text, [{ from, to: from + 5 }]))).toBe(
+      `${head}(3cde (3fga e f b2 c'2 |\n`,
+    );
+  });
+  it("half a slur isn't copied", () => {
+    const text = `${head}a2 b2 c'2 c'2 | (d'4 e'4) |\n`;
+    const from = text.indexOf("c'2 |");
+    const out = apply(text, duplicate(text, [{ from, to: text.indexOf("d'4") + 3 }]));
+    expect(out.split("(").length).toBe(2);
+    expect(out.split(")").length).toBe(2);
+  });
+  it("a bar ending in a D.S. is a whole bar: duplicated as a bar, the D.S. after both", () => {
+    const text = `${head}A2 B2 c2 d2 | e2 f2 g2 a2 !D.S.! | b8 |]\n`;
+    const from = text.indexOf("e2");
+    expect(apply(text, duplicate(text, [{ from, to: from + 11 }]))).toBe(
+      `${head}A2 B2 c2 d2 | e2 f2 g2 a2 | e2 f2 g2 a2 !D.S.! | b8 |]\n`,
+    );
+  });
+  it("a tie on the last note stays on the copy when the note is the same", () => {
+    const text = `${head}A2 c2- c4 |\n`;
+    const from = text.indexOf("c2-");
+    expect(apply(text, duplicate(text, [{ from, to: from + 3 }]))).toBe(`${head}A2 c2- c2- c4 |\n`);
+  });
+  it("the original's tie goes when the copy starts on another note", () => {
+    const text = `${head}A2 c2- c4 |\n`;
+    const from = text.indexOf("A2");
+    expect(apply(text, duplicate(text, [{ from, to: text.indexOf("c2-") + 3 }]))).toBe(
+      `${head}A2 c2 A2 c2- c4 |\n`,
+    );
+  });
+});
+
+describe("Insert › Repeat and Triplet keep bars and tuplets whole (round 4)", () => {
+  const head = "X:1\nM:4/4\nL:1/8\nK:C\n";
+  const text = `${head}(3cde (3fga b2 c'2 | d'8 |]\n`;
+  const of = (part: string) => [{ from: text.indexOf(part), to: text.indexOf(part) + part.length }];
+  it("a repeat over e…a goes to the bar lines around, not inside a triplet", () => {
+    expect(apply(text, insertRepeat(text, of("e (3fga")) ?? [])).toBe(
+      `${head}|: (3cde (3fga b2 c'2 :| d'8 |]\n`,
+    );
+  });
+  it("a repeat merges with the bar lines there", () => {
+    const two = `${head}a8 :| b8 | c'8 |]\n`;
+    const range = [{ from: two.indexOf("b8"), to: two.indexOf("b8") + 2 }];
+    expect(apply(two, insertRepeat(two, range) ?? [])).toBe(`${head}a8 :: b8 :| c'8 |]\n`);
+  });
+  it("a triplet needs exactly 3 notes, in one bar, none in a tuplet", () => {
+    const inside = insertTriplet(text, of("fga"));
+    expect(inside && "refused" in inside && inside.refused).toMatch(/already in a tuplet/);
+    const plain = `${head}a b c d4 e2 f2 |\n`;
+    const four = insertTriplet(plain, [{ from: plain.indexOf("a"), to: plain.indexOf("d4") + 2 }]);
+    expect(four && "refused" in four && four.refused).toMatch(/exactly 3 notes.*4 are selected/);
+    const three = [{ from: plain.indexOf("a b c"), to: plain.indexOf("a b c") + 5 }];
+    expect(apply(plain, insertTriplet(plain, three) ?? [])).toBe(`${head}(3a b c d4 e2 f2 |\n`);
+    const across = `${head}a b c d e f g a | b c d e f g a b |\n`;
+    const crossing = [{ from: across.indexOf("g a |"), to: across.indexOf("| b") + 3 }];
+    const refused = insertTriplet(across, crossing);
+    expect(refused && "refused" in refused && refused.refused).toMatch(/cross a bar line/);
   });
 });

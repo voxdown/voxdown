@@ -1,6 +1,7 @@
 import "./composer.css";
 import { isolateHistory, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
 import {
+  type ChangeSet,
   EditorSelection,
   type EditorState,
   Prec,
@@ -22,7 +23,6 @@ import {
   barLine,
   decorate,
   decorationMark,
-  duplicate,
   eventsIn,
   markSelection,
   newTuneTemplate,
@@ -375,6 +375,25 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
     void loadEditing().then(() => paster && pastePlanned(target, pasted, sourceData));
     return true;
   }
+  const now = target.state;
+  if (
+    lastCut &&
+    pasted === lastCut.clip &&
+    now.selection.ranges.length === 1 &&
+    now.selection.main.empty &&
+    now.selection.main.head === lastCut.caret &&
+    now.doc.toString() === lastCut.after
+  ) {
+    // Pasted back where it was cut: exactly what was there.
+    target.dispatch({
+      changes: lastCut.undo,
+      selection: { anchor: lastCut.back },
+      userEvent: "input.paste",
+      scrollIntoView: true,
+    });
+    lastCut = null;
+    return true;
+  }
   let source = lastCopy?.text === pasted ? lastCopy.source : null;
   try {
     if (sourceData) source = JSON.parse(sourceData);
@@ -712,10 +731,65 @@ const copyVoices = EditorView.domEventHandlers({
   copy: (event, view) => copyOut(event, view, false),
   cut: (event, view) => copyOut(event, view, true),
 });
+/**
+ * The last Cut: its copy pasted back where it left the caret, nothing changed since, puts back
+ * exactly what was cut.
+ */
+let lastCut: { clip: string; after: string; caret: number; undo: ChangeSet; back: number } | null =
+  null;
+/**
+ * Cut, or Delete in the score: whole bars out with their bar lines, the structure kept
+ * (./barwise), a plain caret left at the edit. False when it is refused, said why.
+ */
+function cutMusic(target: EditorView, clip: string | null): boolean {
+  const state = target.state;
+  const list = state.selection.ranges
+    .filter((range) => !range.empty)
+    .map((range) => ({ from: range.from, to: range.to }));
+  const plan = barwise?.cutPlan(state.doc.toString(), list, state.field(fileIndexField));
+  if (plan && "refused" in plan) {
+    sayAboutSelection(plan.refused);
+    notice(plan.refused);
+    return false;
+  }
+  const changes = plan?.changes ?? list.map((range) => ({ ...range, insert: "" }));
+  const set = state.changes(changes);
+  const caret = plan?.caret ?? set.mapPos(Math.min(...changes.map((change) => change.from)), -1);
+  target.dispatch({
+    changes: set,
+    selection: { anchor: caret },
+    userEvent: clip === null ? "delete.selection" : "delete.cut",
+    scrollIntoView: true,
+  });
+  if (plan?.said.length) notice(plan.said.join(" "));
+  lastCut =
+    clip === null
+      ? null
+      : {
+          clip,
+          after: target.state.doc.toString(),
+          caret,
+          undo: set.invert(state.doc),
+          back: state.selection.main.to,
+        };
+  return true;
+}
 /** Copy and Cut: see copyText; Cut of whole bars takes them out with a bar line (./barwise). */
 function copyOut(event: ClipboardEvent, target: EditorView, cut: boolean): boolean {
   const copy = copyText(target.state);
   if (!copy || !event.clipboardData) return false;
+  if (cut && barwise) {
+    // A refused Cut leaves the clipboard as it was.
+    const state = target.state;
+    const list = state.selection.ranges.filter((range) => !range.empty);
+    const plan = barwise.cutPlan(state.doc.toString(), list, state.field(fileIndexField));
+    if (plan && "refused" in plan) {
+      event.preventDefault();
+      sayAboutSelection(plan.refused);
+      notice(plan.refused);
+      return true;
+    }
+  }
   event.clipboardData.setData("text/plain", copy.text);
   try {
     if (copy.source) event.clipboardData.setData(CLIP_SOURCE, JSON.stringify(copy.source));
@@ -724,18 +798,7 @@ function copyOut(event: ClipboardEvent, target: EditorView, cut: boolean): boole
   }
   lastCopy = copy;
   event.preventDefault();
-  if (cut) {
-    const list = target.state.selection.ranges
-      .filter((range) => !range.empty)
-      .map((range) => ({ from: range.from, to: range.to }));
-    const changes =
-      barwise?.cutKeepingBars(
-        target.state.doc.toString(),
-        list,
-        target.state.field(fileIndexField),
-      ) ?? list.map((range) => ({ ...range, insert: "" }));
-    target.dispatch({ changes, userEvent: "delete.cut", scrollIntoView: true });
-  }
+  if (cut) cutMusic(target, copy.text);
   if (copy.voices > 1)
     notice(
       `${cut ? "Cut" : "Copied"} ${copy.voices} voices, each ${cut ? "copied " : ""}with its V: line.`,
@@ -803,6 +866,10 @@ function replaceMusic(target: EditorView, typed: string): boolean {
     state.field(fileIndexField),
   );
   if (!changes) return false;
+  if ("refused" in changes) {
+    sayAboutSelection(changes.refused);
+    return true;
+  }
   // The caret goes after what was typed, at each range's first piece.
   const firsts = list
     .filter((range) => range.to > range.from)
@@ -1049,14 +1116,25 @@ function copyText(
   const file = state.field(fileIndexField);
   const parts = selection.map((range) => ({
     voice: voiceAt(doc, range.from),
-    text: barwise?.copyWithBars(doc, range, file) ?? doc.slice(range.from, range.to),
+    text: barwise?.copyText(doc, range, file) ?? doc.slice(range.from, range.to),
   }));
   const source = paster?.sourceAt(doc, file, (selection[0] as { from: number }).from) ?? null;
   const voices = new Set(parts.map((part) => part.voice)).size;
   if (selection.length < 2 || voices < 2)
     return { text: parts.map((part) => part.text).join(state.lineBreak), voices: 1, source };
   return {
-    text: `${parts.map((part) => `V:${part.voice}\n${part.text}`).join("\n")}\n`,
+    // Each voice under its V: line, with its clef, so a paste into another voice can choose.
+    text: `${parts
+      .map((part, at) => {
+        const clef = paster?.clefOf(
+          doc,
+          file,
+          (selection[at] as { from: number }).from,
+          part.voice,
+        );
+        return `V:${part.voice}${clef && clef !== "treble" ? ` clef=${clef}` : ""}\n${part.text}`;
+      })
+      .join("\n")}\n`,
     voices: parts.length,
     source,
   };
@@ -2638,10 +2716,7 @@ scoreScroll.addEventListener("keydown", (event) => {
   if (!modified && ["Backspace", "Delete"].includes(event.key) && hasSelection()) {
     event.preventDefault();
     const list = ranges().filter((range) => range.to > range.from);
-    const changes =
-      barwise?.cutKeepingBars(text(), list, fileIndex()) ??
-      list.map((range) => ({ ...range, insert: "" }));
-    view.dispatch({ changes, userEvent: "delete.selection", scrollIntoView: true });
+    if (list.length) cutMusic(view, null);
     announceScore();
     return;
   }
@@ -2771,7 +2846,7 @@ let noteSpan: {
 } | null = null;
 
 /* Musical commands. */
-function apply(changes: Change[], label: string): boolean {
+function apply(changes: Change[], label: string, outward = true): boolean {
   if (!changes.length) {
     notice(`${label}: nothing to change here. Put the caret on a note or select some music.`);
     return true;
@@ -2784,8 +2859,8 @@ function apply(changes: Change[], label: string): boolean {
       range.empty
         ? EditorSelection.cursor(transaction.changes.mapPos(range.head, 1))
         : EditorSelection.range(
-            transaction.changes.mapPos(range.from, -1),
-            transaction.changes.mapPos(range.to, 1),
+            transaction.changes.mapPos(range.from, outward ? -1 : 1),
+            transaction.changes.mapPos(range.to, outward ? 1 : -1),
           ),
     ),
     before.mainIndex,
@@ -2831,7 +2906,12 @@ function music(command: string): boolean {
       // After the selection, whichever way it was made.
       return apply([barLine(doc, view.state.selection.main.to)], "Bar line");
     case "duplicate":
-      return apply(duplicate(doc, list, index), "Duplicate");
+      // Duplicate goes by ./barwise's copy rules, loaded with the editor.
+      if (!barwise) {
+        void loadEditing().then(() => barwise && music("duplicate"));
+        return true;
+      }
+      return apply(barwise.duplicate(doc, list, index), "Duplicate");
     case "new-tune":
       newTune();
       return true;
@@ -4966,7 +5046,13 @@ function insertTripletHere() {
   void import("./inserts").then(({ insertTriplet }) => {
     const changes = insertTriplet(text(), ranges(), fileIndex());
     if (!changes) return insertAtCaret("(3", 2);
-    apply(changes, "Triplet");
+    if ("refused" in changes) {
+      sayAboutSelection(changes.refused);
+      notice(changes.refused);
+      return;
+    }
+    // The selection stays on the notes, never taking a bar line put next to it.
+    apply(changes, "Triplet", false);
     view.focus();
   });
 }
@@ -4975,7 +5061,13 @@ function insertRepeatHere() {
   void import("./inserts").then(({ insertRepeat }) => {
     const changes = insertRepeat(text(), ranges(), fileIndex());
     if (!changes) return insertAtCaret("|:  :|", 3);
-    apply(changes, "Repeat");
+    if ("refused" in changes) {
+      sayAboutSelection(changes.refused);
+      notice(changes.refused);
+      return;
+    }
+    // The selection stays on the notes, never taking a bar line put next to it.
+    apply(changes, "Repeat", false);
     view.focus();
   });
 }

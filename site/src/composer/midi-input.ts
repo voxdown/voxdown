@@ -162,9 +162,12 @@ function enter(pitches: number[] | "rest") {
   const others = view.state.selection.ranges.filter((range) => range !== main && !range.empty);
   const at = main.empty ? main.head : main.from;
   // The selected notes go first; the step is worked out on what is left.
-  const cleared = main.empty
-    ? null
-    : (replaceKeepingBars(text, [main], "") ?? [{ from: main.from, to: main.to, insert: "" }]);
+  const kept = main.empty ? null : replaceKeepingBars(text, [main], "");
+  if (kept && "refused" in kept) {
+    say(kept.refused);
+    return;
+  }
+  const cleared = main.empty ? null : (kept ?? [{ from: main.from, to: main.to, insert: "" }]);
   const left = cleared ? applied(text, cleared) : text;
   const step = stepInsert(left, indexFile(left), at, pitches, length());
   if (!step) {

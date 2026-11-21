@@ -25,7 +25,7 @@ import { type FileIndex, type TuneInfo, indexFile, voiceAt } from "./tunes";
 export type Range = { from: number; to: number };
 export { voiceAt };
 export type { ClipSource };
-export type VoicedPart = { voice: string; text: string };
+export type VoicedPart = { voice: string; text: string; clef?: string };
 
 /** The parts of a copy of voices (one `V:` line or more first), or null when it isn't one. */
 export function voicedParts(copy: string): VoicedPart[] | null {
@@ -33,8 +33,9 @@ export function voicedParts(copy: string): VoicedPart[] | null {
   if (!/^V:\s*\S/.test(lines[0] ?? "")) return null;
   const parts: VoicedPart[] = [];
   for (const line of lines) {
-    const voice = /^V:\s*(\S+)/.exec(line);
-    if (voice) parts.push({ voice: voice[1] as string, text: "" });
+    const voice = /^V:\s*(\S+)(.*)$/.exec(line);
+    const clef = /\bclef=(\S+)/.exec(voice?.[2] ?? "")?.[1];
+    if (voice) parts.push({ voice: voice[1] as string, text: "", ...(clef ? { clef } : {}) });
     else {
       const part = parts[parts.length - 1] as VoicedPart;
       part.text = part.text ? `${part.text}\n${line}` : line;
@@ -107,10 +108,12 @@ export function pasteVoiced(
           );
           said.push(`V:${part.voice} piece by piece into its ${places.length} places`);
         } else {
-          places.forEach((place, at) => changes.push({ ...place, insert: at ? "" : part.text }));
+          // One part, several places: the first takes it, the others are left as they were (a
+          // place emptied would leave its voice short of the others).
+          changes.push({ ...(places[0] as Range), insert: part.text });
           said.push(
             places.length > 1
-              ? `V:${part.voice} into the first of its ${places.length} places`
+              ? `V:${part.voice} into the first of its ${places.length} places (the other${places.length > 2 ? "s were" : " was"} left as ${places.length > 2 ? "they were" : "it was"})`
               : `V:${part.voice} into V:${part.voice}`,
           );
         }
@@ -157,15 +160,27 @@ export function pasteVoiced(
       message: `Pasted V:${here}'s part here${others.length ? `; the copy also has ${names(others)}, not pasted` : ""}.`,
     };
   }
-  if (parts.length === 1)
-    return {
-      changes: [{ ...range, insert: (parts[0] as VoicedPart).text }],
-      message: `Pasted V:${(parts[0] as VoicedPart).voice}'s music into V:${here}.`,
-    };
+  // A voice the copy doesn't have: one part, the one in this voice's clef, else the first.
+  const clef = clefOf(text, file, range.from, here);
+  const chosen = parts.find((part) => (part.clef ?? "treble") === clef) ?? (parts[0] as VoicedPart);
+  const others = parts.filter((part) => part !== chosen);
   return {
-    changes: [{ ...range, insert: parts.map((part) => part.text).join(" ") }],
-    message: `Pasted the copy's ${all} one after another into V:${here}, which isn't in the copy.`,
+    changes: [{ ...range, insert: chosen.text }],
+    message: `Pasted V:${chosen.voice}'s part${others.length ? `; the copy also had ${names(others)}` : ""}.`,
   };
+}
+
+/** A voice's clef, as its V: line in the tune says (treble when none does). */
+export function clefOf(text: string, file: FileIndex, position: number, voice: string): string {
+  const tune = tuneOf(file, position);
+  if (!tune) return "treble";
+  const body = text.slice(tune.from, tune.to);
+  for (const match of body.matchAll(/^V:\s*(\S+)(.*)$/gm))
+    if (match[1] === voice) {
+      const clef = /\bclef=(\S+)/.exec(match[2] ?? "")?.[1];
+      if (clef) return clef;
+    }
+  return /\bclef=(\S+)/.exec(/^K:(.*)$/m.exec(body)?.[1] ?? "")?.[1] ?? "treble";
 }
 
 /** The unit and key in force at a place (where a copy starts), for ./clip-convert. */
@@ -205,16 +220,26 @@ export function planPaste(
   };
   const selected = ranges.filter((range) => range.to > range.from);
   const parts = voicedParts(copy);
+  // Fitted to the bar lines around each place (./barwise), whole bars under their own meter.
+  const meter = source?.meter ? { meter: source.meter } : null;
+  const placed = (place: Range, insert: string): Change[] | { refused: string } => {
+    const fitted = pasteKeepingBars(text, [place], insert, file, meter);
+    if (!fitted) return [{ ...place, insert }];
+    if ("refused" in fitted) return fitted;
+    if (fitted.said && !said.includes(fitted.said)) said.push(fitted.said);
+    return fitted.changes;
+  };
   if (parts) {
     const places = selected.length ? selected : [ranges[main] ?? (ranges[0] as Range)];
     const plan = pasteVoiced(text, places, parts, file);
     if ("refused" in plan) return plan;
-    // Each part fitted to its place's unit and key, and to the bar lines around it.
-    const changes = plan.changes.flatMap((change) => {
+    const changes: Change[] = [];
+    for (const change of plan.changes) {
       const insert = change.insert ? fit(change.insert, change.from) : "";
-      const place = { from: change.from, to: change.to };
-      return (insert && pasteKeepingBars(text, [place], insert, file)) || [{ ...place, insert }];
-    });
+      const done = placed({ from: change.from, to: change.to }, insert);
+      if ("refused" in done) return done;
+      changes.push(...done);
+    }
     return { changes, message: [plan.message, ...said].join(" ") };
   }
   let targets = selected.length ? selected : ranges;
@@ -226,17 +251,24 @@ export function planPaste(
     said.push(
       `Pasted into the main selection only${voice ? ` (V:${voice})` : ""}: the copy has no V: line to say which voice it is.`,
     );
+  } else if (selected.length > 1) {
+    // Several places in one voice: the first takes the copy, the others stay as they were.
+    targets = [selected[0] as Range];
+    said.push(
+      `Pasted into the first of the ${selected.length} selected places; the other${selected.length > 2 ? "s were" : " was"} left as ${selected.length > 2 ? "they were" : "it was"}.`,
+    );
   }
-  const converted = targets.map((range) => fit(copy, range.from));
-  const fitted = targets.map(
-    (range, at) =>
-      pasteKeepingBars(text, [range], converted[at] as string, file) ?? [
-        { ...range, insert: converted[at] as string },
-      ],
-  );
-  const special =
-    said.length > 0 ||
-    targets.some((range, at) => pasteKeepingBars(text, [range], converted[at] as string, file));
+  const changes: Change[] = [];
+  let special = said.length > 0;
+  for (const range of targets) {
+    const insert = fit(copy, range.from);
+    const fitted = pasteKeepingBars(text, [range], insert, file, meter);
+    if (fitted && "refused" in fitted) return fitted;
+    if (fitted || insert !== copy) special = true;
+    const done = placed(range, insert);
+    if ("refused" in done) return done;
+    changes.push(...done);
+  }
   if (!special) return null;
-  return { changes: fitted.flat(), message: said.join(" ") };
+  return { changes, message: said.join(" ") };
 }

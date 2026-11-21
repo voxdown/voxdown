@@ -1,20 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   bracketOver,
-  copyWithBars,
-  cutKeepingBars,
+  copyText,
+  cutPlan,
   pasteKeepingBars,
   replaceKeepingBars,
 } from "../src/composer/barwise";
 import type { Change } from "../src/composer/commands";
 
-const apply = (text: string, changes: Change[] | null) => {
-  if (!changes) return null;
+const apply = (text: string, changes: Change[] | { refused: string } | null) => {
+  if (!changes || "refused" in changes) return null;
   let out = text;
   for (const change of [...changes].sort((a, b) => b.from - a.from))
     out = out.slice(0, change.from) + change.insert + out.slice(change.to);
   return out;
 };
+const cutKeepingBars = (text: string, ranges: { from: number; to: number }[]) => {
+  const plan = cutPlan(text, ranges);
+  return plan && "changes" in plan ? plan.changes : null;
+};
+const fitted = (plan: ReturnType<typeof pasteKeepingBars>) =>
+  plan && "changes" in plan ? plan.changes : null;
 const head = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\n";
 const tune = `${head}c d e f|g a b c'|c' b a g|f e d c|]\n`;
 const at = (text: string, part: string, from = 0) => text.indexOf(part, from);
@@ -92,27 +98,29 @@ describe("cut takes whole bars out with one bar line", () => {
 
 describe("copy of whole bars takes their bar line", () => {
   it("a whole bar copies with its closing bar line", () => {
-    expect(copyWithBars(tune, span(tune, "g a b c'"))).toBe("g a b c'|");
+    expect(copyText(tune, span(tune, "g a b c'"))).toBe("g a b c'|");
   });
   it("part of a bar copies as written", () => {
-    expect(copyWithBars(tune, span(tune, "g a"))).toBe("g a");
+    expect(copyText(tune, span(tune, "g a"))).toBe("g a");
   });
   it("a copy already ending in its bar line is left as it is", () => {
-    expect(copyWithBars(tune, span(tune, "g a b c'|"))).toBe("g a b c'|");
+    expect(copyText(tune, span(tune, "g a b c'|"))).toBe("g a b c'|");
   });
 });
 
 describe("paste fits the bars around it", () => {
   it("whole bars pasted over a whole bar don't double its bar line", () => {
-    const out = apply(tune, pasteKeepingBars(tune, [span(tune, "g a b c'")], "e e e e|"));
+    const out = apply(tune, fitted(pasteKeepingBars(tune, [span(tune, "g a b c'")], "e e e e|")));
     expect(out).toBe(`${head}c d e f|e e e e|c' b a g|f e d c|]\n`);
   });
   it("whole bars pasted at the start of a bar add a bar", () => {
     const caret = at(tune, "g a");
-    expect(pasteKeepingBars(tune, [{ from: caret, to: caret }], "e e e e|")).toBeNull();
+    expect(
+      apply(tune, fitted(pasteKeepingBars(tune, [{ from: caret, to: caret }], "e e e e|"))),
+    ).toBe(`${head}c d e f|e e e e| g a b c'|c' b a g|f e d c|]\n`);
   });
   it("notes pasted over a selection with a bar line keep it", () => {
-    const out = apply(tune, pasteKeepingBars(tune, [span(tune, "e f|g a")], "B B"));
+    const out = apply(tune, fitted(pasteKeepingBars(tune, [span(tune, "e f|g a")], "B B")));
     expect(out).toBe(`${head}c d B B| b c'|c' b a g|f e d c|]\n`);
   });
 });

@@ -13,7 +13,9 @@ import {
   formatLength,
   frac,
   mul,
+  parseKey,
   parseLength,
+  parseUnit,
   staffPlace,
   tokenizeMusic,
 } from "./abc";
@@ -38,10 +40,12 @@ export function keyLabel(key: Key): string {
  */
 export function convertClip(
   clip: string,
-  source: ClipSource,
-  target: { unit: Fraction; key: Key; bar: Map<string, number> },
+  from: ClipSource,
+  to: { unit: Fraction; key: Key; bar: Map<string, number> },
 ): { text: string; lengths: boolean; accidentals: boolean } {
-  const ratio = mul(source.unit, frac(target.unit.den, target.unit.num));
+  let source = from;
+  let target = to;
+  let ratio = mul(source.unit, frac(target.unit.den, target.unit.num));
   const rescale = ratio.num !== ratio.den;
   const respell = !sameKey(source.key, target.key);
   if (!rescale && !respell) return { text: clip, lengths: false, accidentals: false };
@@ -60,6 +64,20 @@ export function convertClip(
       at = to;
     };
     for (const token of tokens) {
+      // A field in the copy is pasted too: from there on, both sides are in it.
+      const field = token.kind === "inline-field" ? /^\[([KL]):([^\]]*)\]/.exec(token.text) : null;
+      if (field?.[1] === "K") {
+        const key = parseKey(field[2] as string);
+        source = { ...source, key };
+        target = { ...target, key };
+      } else if (field?.[1] === "L") {
+        const unit = parseUnit(field[2] as string);
+        if (unit) {
+          source = { ...source, unit };
+          target = { ...target, unit };
+          ratio = frac(1);
+        }
+      }
       if (token.kind === "bar") {
         fromBar = new Map();
         toBar = new Map();

@@ -10,11 +10,11 @@ import {
   transposeChordSymbol,
 } from "../src/composer/abc";
 import { barAt, checkBars, describeBar } from "../src/composer/barcheck";
+import { duplicate } from "../src/composer/barwise";
 import {
   type Change,
   decorate,
   decorationMark,
-  duplicate,
   removeDots,
   scaleLengths,
   toggleSlur,

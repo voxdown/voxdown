@@ -923,3 +923,11 @@ export function drawPassDynamics(root: Element): number {
   }
   return drawn;
 }
+
+/** The first bar's length when it is shorter than a full bar (a pickup), else 0. */
+export function firstBarPickup(index: ScoreIndex, bar: number): number {
+  const first = (index.byVoice[0] ?? [])
+    .filter((note) => note.measure === 0)
+    .reduce((sum, note) => sum + note.duration, 0);
+  return first > 1e-6 && first < bar - 1e-6 ? first : 0;
+}

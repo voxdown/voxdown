@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultUnit, meterLength, value } from "../src/composer/abc";
-import { checkBars } from "../src/composer/barcheck";
+import { checkBars, tuneMeter } from "../src/composer/barcheck";
 import { describeMeter } from "../src/composer/explain";
 import { indexFile } from "../src/composer/tunes";
 
@@ -50,5 +50,34 @@ describe("meters", () => {
     expect(describeMeter("9/8")).toBe("9 eighth notes a bar, 3 dotted beats");
     expect(describeMeter("12/8")).toBe("12 eighth notes a bar, 4 dotted beats");
     expect(describeMeter("none")).toBe("free time, no bar length");
+  });
+});
+
+describe("the meter at the first note, one source for a full first bar", () => {
+  const meterOf = (text: string) => {
+    const file = indexFile(text);
+    return tuneMeter(text, file.tunes[0] as never, file);
+  };
+  it("reads the meter past subtitles, %% lines and voices", () => {
+    expect(meterOf("X:1\nT:A\nT:B\nM:3/4\nL:1/4\nK:C\nC D E|F G A|\n")).toEqual({
+      meter: "3/4",
+      bar: 0.75,
+      beat: 0.25,
+    });
+    expect(meterOf("X:1\nT:A\n%%titlefont Times 20\nT:B\nM:6/8\nL:1/8\nK:C\nCDE FGA|\n")).toEqual({
+      meter: "6/8",
+      bar: 0.75,
+      beat: 0.375,
+    });
+    expect(
+      meterOf(
+        "X:1\nT:A\nT:B\n%%score 1 2\nM:9/8\nL:1/8\nV:1\nV:2 clef=bass\nK:C\nV:1\nCDE FGA Bcd|\nV:2\nC,9|\n",
+      ),
+    ).toEqual({
+      meter: "9/8",
+      bar: 1.125,
+      beat: 0.375,
+    });
+    expect(meterOf("M:C|\nX:1\nT:Cut\nK:C\nC2 D2|\n")).toEqual({ meter: "C|", bar: 1, beat: 0.5 });
   });
 });

@@ -113,7 +113,20 @@ export function sortChange(text: string, index: FileIndex, by: SortBy): Change |
 
 /* Line up bars. */
 
-/** Where a music line's bar lines stand: the first bar token of each run, after the first note. */
+/** What may come before a line's leading bar line without being music: `[V:1] !segno! "^Intro" |:`. */
+const BEFORE_MUSIC = new Set([
+  "inline-field",
+  "decoration",
+  "chord-symbol",
+  "annotation",
+  "continuation",
+]);
+
+/**
+ * Where a music line's bar lines stand: the first bar token of each run, after the first note. A
+ * bar line with only inline fields, decorations, chord symbols or annotations before it leads the
+ * line and is not a column.
+ */
 function barColumns(line: string): number[] {
   const tokens = tokenizeMusic(line);
   const columns: number[] = [];
@@ -126,9 +139,9 @@ function barColumns(line: string): number[] {
       inRun = true;
       continue;
     }
-    if (token.kind === "space") continue;
+    if (token.kind === "space" || (!music && BEFORE_MUSIC.has(token.kind))) continue;
     inRun = false;
-    if (token.kind !== "continuation") music = true;
+    music = true;
   }
   return columns;
 }
@@ -173,12 +186,25 @@ export function lineUpChanges(
       at = stop + 1;
     }
     close();
+    // Lines go in groups of like bar counts (within one bar), and each group lines up on its
+    // own: a two-voice system of four bars, then one of two; a line far from the rest stays.
+    const groups: (typeof runs)[number][] = [];
     for (const lines of runs) {
-      const counts = lines.map((each) => each.columns.length).sort((a, b) => a - b);
-      const usual = counts[Math.floor(counts.length / 2)] as number;
-      const near = lines.filter(
-        (each) => Math.abs(each.columns.length - usual) <= Math.max(1, Math.floor(usual / 4)),
-      );
+      const sorted = [...lines].sort((a, b) => a.columns.length - b.columns.length);
+      let group: (typeof lines)[number][] = [];
+      for (const each of sorted) {
+        if (
+          group.length &&
+          each.columns.length - (group[0] as (typeof lines)[number]).columns.length > 1
+        ) {
+          if (group.length > 1) groups.push(group);
+          group = [];
+        }
+        group.push(each);
+      }
+      if (group.length > 1) groups.push(group);
+    }
+    for (const near of groups) {
       if (near.length < 2) continue;
       // Column by column: each line's bar moves right to the furthest one, everything after it
       // moving with it.

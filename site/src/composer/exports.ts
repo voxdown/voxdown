@@ -2,6 +2,7 @@
  * Exports beyond ABC and MusicXML: a tune as SVG, the whole file as one self-contained HTML tune
  * book, and MIDI or WAV for this tune or every tune (a .zip). Loaded the first time one is used.
  */
+import { tuneMeter } from "./barcheck";
 import { createDialog } from "./dialog";
 import type { InstrumentId } from "./instruments";
 import { download } from "./local-file";
@@ -13,6 +14,7 @@ import { followOrder, hasJumps, playOrder, structureOf } from "./playorder";
 import {
   type ScoreNote,
   drawPassDynamics,
+  firstBarPickup,
   indexScore,
   loadAbcjs,
   prepareTune,
@@ -301,17 +303,15 @@ export function tuneTimeline(abcjs: Abcjs, source: string, followJumps: boolean)
   } catch {
     return null;
   }
-  const bar = visual.getBarLength?.() || 1;
-  const first = (index.byVoice[0] ?? [])
-    .filter((note) => note.measure === 0)
-    .reduce((sum, note) => sum + note.duration, 0);
+  const meter = tuneMeter(source, tune, file);
+  const bar = meter.bar ?? (visual.getBarLength?.() || 1);
   let timeline = buildTimeline(
     audio,
     {
       bpm: audio.tempo || visual.getBpm?.() || 120,
-      beat: visual.getBeatLength?.() || 0.25,
+      beat: meter.bar ? meter.beat : visual.getBeatLength?.() || 0.25,
       bar,
-      pickup: first > 1e-6 && first < bar - 1e-6 ? first : 0,
+      pickup: firstBarPickup(index, bar),
       voices: index.voices.map((voice) => voice.name),
     },
     (char) => char,

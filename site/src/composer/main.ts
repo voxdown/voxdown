@@ -3,7 +3,7 @@ import { isolateHistory, redo, redoDepth, selectAll, undo, undoDepth } from "@co
 import { EditorSelection, type EditorState, Prec, type TransactionSpec } from "@codemirror/state";
 import { EditorView, type KeyBinding, type ViewUpdate, runScopeHandlers } from "@codemirror/view";
 import { frac, lineKind, parseKey } from "./abc";
-import { barAt as barInText, checkBars, describeBar } from "./barcheck";
+import { barAt as barInText, checkBars, describeBar, tuneMeter } from "./barcheck";
 import {
   type Change,
   type Range,
@@ -64,6 +64,7 @@ import {
   authorBarsPerLine,
   dragRegion,
   drawPassDynamics,
+  firstBarPickup,
   loadAbcjs,
   loadedAbcjs,
   loadedPlayOrder,
@@ -1257,18 +1258,16 @@ function buildPlayback(index: ScoreIndex) {
     while (at < doc.length && /\s/.test(doc[at] as string)) at += 1;
     return byStart.get(at) ?? byStart.get(start);
   };
+  // The bar and beat from the meter at the first note, as the bar check reads it: one source
+  // for what a full first bar is (a subtitle line once made abcjs's own a pickup).
+  const meter = tuneMeter(doc, index.tune, fileIndex());
+  const barLength = meter.bar ?? (visual.getBarLength?.() || 1);
   const meta = {
     bpm: audio.tempo || visual.getBpm?.() || 120,
-    beat: visual.getBeatLength?.() || 0.25,
-    bar: visual.getBarLength?.() || 1,
-    // A first bar shorter than the meter is a pickup; an overfull one is just a long bar
-    // (abcjs reports what is left over a whole bar, so the first bar is measured here).
-    pickup: ((bar: number) => {
-      const first = (index.byVoice[0] ?? [])
-        .filter((note) => note.measure === 0)
-        .reduce((sum, note) => sum + note.duration, 0);
-      return first > 1e-6 && first < bar - 1e-6 ? first : 0;
-    })(visual.getBarLength?.() || 1),
+    beat: meter.bar ? meter.beat : visual.getBeatLength?.() || 0.25,
+    bar: barLength,
+    // A first bar shorter than the meter is a pickup; an overfull one is just a long bar.
+    pickup: firstBarPickup(index, barLength),
     voices: index.voices.map((voice) => voice.name),
   };
   // A tempo set by hand belongs to the tune it was set for.

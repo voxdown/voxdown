@@ -145,6 +145,37 @@ d|
     expect(lines[13]).toBe("d|");
     expect(music(out)).toBe(music(tune));
   });
+  it("does not count a leading bar line after an inline field, decoration or annotation", () => {
+    const tune = `X:3
+T:Élan
+T:Second title
+M:6/8
+L:1/8
+K:Am
+V:1 name="Fiddle"
+V:2 clef=bass
+[V:1] A2B c2d|e2f g3|a2g f2e|d6|
+[V:2] A,,3 E,3|A,,3 C,3|D,3 A,,3|D,6|
+[V:1] |:e2e d2B|c3 A3:|
+[V:2] |:A,3 G,3|A,6:|
+!segno!|:e2e d2B|c3 A3:|
+"^Intro"|:A,3 G,3|A,6:|
+`;
+    const out = applyChanges(tune, lineUpChanges(tune, indexFile(tune)));
+    const lines = out.split("\n");
+    // The bar lines after any leading |: (which stays where it is).
+    const bars = (line: string) => {
+      const lead = line.indexOf("|:");
+      const from = lead >= 0 && lead < 10 ? lead + 2 : 0;
+      return [...line.matchAll(/\|/g)].map((match) => match.index).filter((at) => at >= from);
+    };
+    // The voices of each system line up; the leading |: stays where it was.
+    expect(bars(lines[8] as string)).toEqual(bars(lines[9] as string));
+    expect(bars(lines[10] as string).slice(0, 2)).toEqual(bars(lines[11] as string).slice(0, 2));
+    expect(lines[10]?.startsWith("[V:1] |:e2e")).toBe(true);
+    expect(bars(lines[12] as string)).toEqual(bars(lines[13] as string));
+    expect(music(out)).toBe(music(tune));
+  });
   it("never changes the music of the examples", () => {
     for (const example of EXAMPLES) {
       const out = applyChanges(example.text, lineUpChanges(example.text, indexFile(example.text)));

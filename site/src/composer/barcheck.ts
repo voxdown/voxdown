@@ -252,3 +252,27 @@ export function describeBar(info: BarAt): string {
   if (!info.expected) return `${name} · ${inUnits(info.filled, info.unit)} (free meter)`;
   return `${name} · ${unitCount(info.filled, info.unit)} of ${inUnits(info.expected, info.unit)}`;
 }
+
+/**
+ * The meter in force at a tune's first note, as the bar check reads it: its bar and its beat in
+ * whole notes (a compound meter's beat is a dotted note). The one source for what a full first bar
+ * is, so a pickup is called a pickup in the summary, the ruler and the clock alike.
+ */
+export function tuneMeter(
+  text: string,
+  tune: TuneInfo,
+  file: FileIndex | null,
+): { meter: string; bar: number | null; beat: number } {
+  const first = tuneItems(text, tune, file).find((item) => item.type === "event");
+  const meter = first?.meter ?? tune.meter ?? "";
+  const length = meterLength(meter);
+  const bar = length ? value(length) : null;
+  const trimmed = meter.trim();
+  if (trimmed === "C|") return { meter, bar, beat: 0.5 };
+  const match = /^(\d+)(?:\+\d+)*\s*\/\s*(\d+)/.exec(trimmed);
+  if (!match) return { meter, bar, beat: 0.25 };
+  const num = Number(match[1]);
+  const den = Number(match[2]) || 4;
+  const compound = num > 3 && num % 3 === 0;
+  return { meter, bar, beat: (compound ? 3 : 1) / den };
+}

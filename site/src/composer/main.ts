@@ -1,6 +1,6 @@
 import "./composer.css";
-import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
-import { EditorSelection, type EditorState, type TransactionSpec } from "@codemirror/state";
+import { redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
+import { EditorSelection, type EditorState, Prec, type TransactionSpec } from "@codemirror/state";
 import { EditorView, type KeyBinding, type ViewUpdate } from "@codemirror/view";
 import { frac, lineKind, parseKey } from "./abc";
 import { barAt as barInText, checkBars, describeBar } from "./barcheck";
@@ -12,6 +12,7 @@ import {
   decorationMark,
   duplicate,
   eventsIn,
+  markSelection,
   newTuneTemplate,
   removeDots,
   scaleLengths,
@@ -117,6 +118,8 @@ const transportElement = $("transport");
 const nameInput = $<HTMLInputElement>("name");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const phone = window.matchMedia("(max-width: 760px)");
+/** Tablets and phones: Voices opens from the Sound sheet, so the transport keeps its labels. */
+const compactTransport = window.matchMedia("(max-width: 1100px)");
 /** Touch screens get touch words, not keyboard shortcuts. */
 const touch = window.matchMedia("(pointer: coarse)");
 
@@ -269,6 +272,30 @@ function tabHint() {
     });
   }, 0);
 }
+/* Edit › Cut, Copy and Paste work on the text, and on a score region through its text ranges
+   (several voices copy under their V: lines, as with the keys). */
+const hasSelection = () => view.state.selection.ranges.some((range) => !range.empty);
+function clipboard(kind: "cut" | "copy") {
+  view.focus();
+  // The editor's own copy and cut handlers run, so voices keep their V: lines.
+  if (!document.execCommand(kind))
+    notice(`Use ${shortcutLabel(kind === "cut" ? "Mod X" : "Mod C")} to ${kind} in this browser.`);
+}
+async function pasteText() {
+  view.focus();
+  try {
+    const pasted = await navigator.clipboard.readText();
+    view.dispatch(view.state.replaceSelection(pasted), {
+      scrollIntoView: true,
+      userEvent: "input.paste",
+    });
+  } catch {
+    notice(
+      `This browser lets the page paste only from the keyboard: use ${shortcutLabel("Mod V")}.`,
+    );
+  }
+}
+
 /** Find and replace, loading it first if this is the first time. */
 function openFind(): boolean {
   void loadEditorExtras(view).then((extras) => extras.openSearchPanel(view));
@@ -392,6 +419,36 @@ const copyVoices = EditorView.domEventHandlers({
   },
 });
 
+/*
+ * Typing ".", "~" or "(" over selected music marks the notes instead of replacing them, the way an
+ * editor wraps a selection in brackets: staccato, roll, or a slur, and again to remove. Anything
+ * that is not music (headers, lyrics, comments, free text, or a mix) is typed as usual, and so is
+ * text being composed with an input method.
+ */
+const MARK_NAMES = { staccato: "Staccato", roll: "Roll", slur: "Slur" } as const;
+/** A status message kept while the selection it describes stays as it is. */
+let statusNote: { message: string; selection: EditorSelection } | null = null;
+const typedMarks = Prec.highest(
+  EditorView.inputHandler.of((target, _from, _to, typed) => {
+    if (target.composing || target.compositionStarted) return false;
+    const state = target.state;
+    const ranges = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
+    const result = markSelection(state.doc.toString(), ranges, typed, state.field(fileIndexField));
+    if (!result || !result.changes.length) return false;
+    const changes = state.changes(result.changes);
+    const selection = state.selection.map(changes);
+    target.dispatch({ changes, selection, userEvent: "input.mark", scrollIntoView: true });
+    const notes = `${result.count} ${result.count === 1 ? "note" : "notes"}`;
+    const name = MARK_NAMES[result.mark];
+    const message = result.removed
+      ? `${name} removed from ${notes}`
+      : `${name} ${result.mark === "slur" ? "over" : "on"} ${notes} · type ${typed} again to remove`;
+    statusNote = { message, selection: target.state.selection };
+    $("explain").textContent = message;
+    return true;
+  }),
+);
+
 const view = new EditorView({
   parent: $("editor"),
   state: makeState(""),
@@ -406,7 +463,7 @@ function makeState(text: string): EditorState {
   return editorState(text, {
     onUpdate: safeUpdate,
     keys,
-    extra: [copyVoices, EditorView.exceptionSink.of((error) => recoverEditor(error))],
+    extra: [copyVoices, typedMarks, EditorView.exceptionSink.of((error) => recoverEditor(error))],
   });
 }
 
@@ -632,6 +689,12 @@ function explainCaret(update: ViewUpdate) {
     : null;
   const status = $("explain");
   status.replaceChildren();
+  // What a typed mark just did stays said while its selection does.
+  if (statusNote && statusNote.selection.eq(view.state.selection)) {
+    status.textContent = statusNote.message;
+    return;
+  }
+  statusNote = null;
   if (!view.state.selection.main.empty) {
     // Counted from the text itself, so it is right even before the score is redrawn.
     const count = eventsIn(text(), ranges(), fileIndex()).filter(
@@ -2067,11 +2130,9 @@ function drawTimeline() {
     // The first and the last bar are always named; others by the step, measured to fit below.
     const bar = written?.bar ?? (pickup ? index : played);
     // Written bar numbers on their first time through, so a repeat never names a bar twice.
+    // Where playback goes back, the band's "2nd" tag says so; no bar number there ("8 1").
     const labelled =
-      index === 0 ||
-      index === last ||
-      passStart ||
-      (bar > 0 && bar % step === 0 && (written?.pass ?? 1) === 1);
+      index === 0 || index === last || (bar > 0 && bar % step === 0 && (written?.pass ?? 1) === 1);
     if (labelled) {
       const label = document.createElement("span");
       label.textContent = index === 0 && bar === 0 ? "Pickup" : String(bar);
@@ -2503,7 +2564,7 @@ function soundPopover(anchor: HTMLElement) {
     savePrefs();
   });
   // On a phone, Voices has no room in the transport: it opens from here.
-  if (phone.matches && !$("voices-button").hidden) {
+  if (compactTransport.matches && !$("voices-button").hidden) {
     const voices = document.createElement("button");
     voices.type = "button";
     voices.className = "sheet-link";
@@ -2878,6 +2939,15 @@ function updateSavedState() {
           ? "Saved"
           : "";
   document.title = `${dirty() ? "• " : ""}${nameInput.value} — VoxDown Composer`;
+  // Narrow headers show a short mark instead of the words; the words stay as its title.
+  const unsaved = element.textContent !== "" && element.textContent !== "Saved";
+  element.dataset.short = unsaved ? "•" : "";
+  element.title = element.textContent ?? "";
+  // Save is filled only when there is something to save.
+  $("save-primary").classList.toggle(
+    "quiet",
+    !(started && (dirty() || Boolean(pendingLink && !local.linked))),
+  );
 }
 
 async function openFile() {
@@ -3572,6 +3642,18 @@ const menus = mountMenus(
         enabled: () => redoDepth(view.state) > 0,
       },
       "-",
+      { label: "Cut", run: () => clipboard("cut"), shortcut: "Mod X", enabled: hasSelection },
+      { label: "Copy", run: () => clipboard("copy"), shortcut: "Mod C", enabled: hasSelection },
+      { label: "Paste", run: () => void pasteText(), shortcut: "Mod V" },
+      {
+        label: "Select all",
+        run: () => {
+          view.focus();
+          selectAll(view);
+        },
+        shortcut: "Mod A",
+      },
+      "-",
       { label: "Find and replace…", run: openFind, shortcut: "Mod F" },
       { label: "Next bar or problem to check", run: () => stepProblem(1), shortcut: "F8" },
       {
@@ -3826,6 +3908,10 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "F1") {
     event.preventDefault();
     sheet.open();
+  } else if (event.key === "F10" && !event.shiftKey && !mod && !event.altKey) {
+    // F10 goes to the menu bar, as in desktop applications.
+    event.preventDefault();
+    $("file-menu").focus();
   } else if (event.key === "F8" && !inEditor) {
     event.preventDefault();
     stepProblem(event.shiftKey ? -1 : 1);

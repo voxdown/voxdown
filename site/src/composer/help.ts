@@ -89,6 +89,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
       ["!<(! … !<)!", "crescendo (diminuendo: !>(! !>)!)"],
       ['"^2nd time p"A', "a dynamic for the 2nd time through; playback follows it"],
       [".A  !>!A  !tenuto!A", "staccato, accent, tenuto"],
+      [". ~ (", "select notes and type . ~ ( to mark them all; again to remove"],
       ["~A  !trill!A  !fermata!A", "roll, trill, pause"],
     ],
     note: "Type ! for the full list.",

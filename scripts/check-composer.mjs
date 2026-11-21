@@ -1951,6 +1951,97 @@ console.log(
   "Composer: a new tune is named from its title until renamed; the bar check's grace is the bar being typed: passed",
 );
 
+{
+  // Tidy 9. Typing . over selected music puts staccato on every note, again removes it; over
+  // lyrics it is typed as usual.
+  await openExample("Twinkle, Twinkle, Little Star");
+  const doc = await docText();
+  const bars = '"C"C C | G G |';
+  const from = doc.indexOf(bars);
+  await page.locator(".cm-content").focus();
+  await page.evaluate(
+    ([a, b]) => window.composer.view.dispatch({ selection: { anchor: a, head: b } }),
+    [from, from + bars.length - 2],
+  );
+  const dots = () =>
+    page.evaluate(() => {
+      const text = window.composer.view.state.doc.toString();
+      return (text.slice(0, text.indexOf("\nw:")).match(/\./g) ?? []).length;
+    });
+  const drawnDecorations = () =>
+    page.evaluate(() => document.querySelectorAll('#score [data-name="scripts.staccato"]').length);
+  const before = await drawnDecorations();
+  await page.keyboard.type(".");
+  assert.equal(await dots(), 4, "four staccato marks written");
+  assert(
+    (await docText()).includes('"C".C .C | .G .G |'),
+    "placed before each note, after the chord symbol",
+  );
+  assert.match(
+    await page.locator("#explain").textContent(),
+    /^Staccato on 4 notes · type \. again to remove$/,
+  );
+  await page.waitForFunction(
+    (count) =>
+      document.querySelectorAll('#score [data-name="scripts.staccato"]').length >= count + 4,
+    before,
+  );
+  // One undo step takes them all back; type again to remove them too.
+  await page.keyboard.press("Control+z");
+  assert.equal(await dots(), 0, "one undo step");
+  await page.keyboard.press("Control+Shift+z");
+  assert.equal(await dots(), 4);
+  await page.keyboard.type(".");
+  assert.equal(await dots(), 0, "typing . again removes them");
+  await page.waitForFunction(
+    (count) => document.querySelectorAll('#score [data-name="scripts.staccato"]').length === count,
+    before,
+  );
+  // Over lyrics, . is typed.
+  const lyric = (await docText()).indexOf("Twin-kle");
+  await page.evaluate(
+    (a) => window.composer.view.dispatch({ selection: { anchor: a, head: a + 4 } }),
+    lyric,
+  );
+  await page.keyboard.type(".");
+  assert((await docText()).includes("w: .-kle"), "a lyric selection is replaced");
+}
+console.log(
+  "Composer: typing . over selected music marks staccato and again removes it; over lyrics it types: passed",
+);
+{
+  // Tidy 8. F10 goes to the menu bar; Edit has Cut, Copy, Paste and Select all.
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("F10");
+  assert.equal(await page.evaluate(() => document.activeElement.id), "file-menu");
+  await page.locator('[data-menu="edit"]').click();
+  for (const [name, keys] of [
+    ["Cut", "Ctrl+X"],
+    ["Copy", "Ctrl+C"],
+    ["Paste", "Ctrl+V"],
+    ["Select all", "Ctrl+A"],
+  ])
+    assert.equal(
+      (
+        await page
+          .getByRole("menuitem", { name: new RegExp(`^${name}`) })
+          .locator(".menu-shortcut")
+          .textContent()
+      ).trim(),
+      keys,
+    );
+  await page.getByRole("menuitem", { name: /^Select all/ }).click();
+  assert.equal(
+    await page.evaluate(() => {
+      const view = window.composer.view;
+      return view.state.selection.main.to - view.state.selection.main.from;
+    }),
+    (await docText()).length,
+    "Select all selects the text",
+  );
+}
+console.log("Composer: F10 goes to the menus; Edit has Cut, Copy, Paste, Select all: passed");
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,
@@ -1999,7 +2090,22 @@ await small.locator("#more-tools").click();
 for (const name of ["Focus", "ABC cheat sheet", "Tie or untie", "Up an octave"])
   assert(await small.getByRole("menuitem", { name }).isVisible(), `More has ${name}`);
 await small.keyboard.press("Escape");
-await small.locator("#rail-toggle").click();
+// The phone header keeps the file name beside the menus; the tunes panel opens from More.
+const chip = await small.evaluate(() => {
+  const name = document.getElementById("name").getBoundingClientRect();
+  const menus = document.querySelector(".workspace-menus").getBoundingClientRect();
+  return { sameRow: Math.abs(name.top - menus.top) < 8, width: name.width, height: name.height };
+});
+assert(
+  chip.sameRow && chip.width >= 70 && chip.height >= 40,
+  `file name chip ${JSON.stringify(chip)}`,
+);
+await small.locator("#more-tools").click();
+await small
+  .getByRole("menuitem", { name: "Tunes panel" })
+  .or(small.getByRole("menuitemcheckbox", { name: "Tunes panel" }))
+  .first()
+  .click();
 assert(await small.locator("#rail-close").isVisible(), "the tunes panel has a close button");
 const row = await small.locator(".tune-item").first().boundingBox();
 assert(row.height >= 40, "tune rows are at least 40 px tall");

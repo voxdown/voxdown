@@ -1,16 +1,19 @@
 import {
   type Fraction,
+  type MusicToken,
   type NoteToken,
   accidentalText,
   accidentalValue,
   alterationOf,
   formatLength,
   frac,
+  lineKind,
   midiOf,
   mul,
   octaveOf,
   parseLength,
   spell,
+  tokenizeMusic,
   transposeChordSymbol,
   writePitch,
 } from "./abc";
@@ -415,4 +418,90 @@ function merge(changes: Change[]): Change[] {
       (change, index, all) =>
         index === 0 || change.from >= (all[index - 1] as Change).to || change.from === change.to,
     );
+}
+
+/** What typing a mark onto selected music did: the edit, how many notes, added or removed. */
+export type MarkResult = {
+  changes: Change[];
+  mark: "staccato" | "roll" | "slur";
+  count: number;
+  removed: boolean;
+};
+
+/**
+ * Whether every range is music: non-empty, inside a tune's body, on music lines only, and with
+ * at least one note or chord. Headers, lyrics, comments, directives and free text are not.
+ */
+export function isMusicSelection(text: string, ranges: Range[], file = indexFile(text)): boolean {
+  if (!ranges.length) return false;
+  for (const range of ranges) {
+    if (range.from >= range.to) return false;
+    const tune = file.tunes.find((each) => range.from >= each.bodyFrom && range.to <= each.to);
+    if (!tune) return false;
+    let at = text.lastIndexOf("\n", range.from - 1) + 1;
+    while (at < range.to) {
+      const end = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+      if (lineKind(text.slice(at, end), true) !== "music") return false;
+      at = end + 1;
+    }
+    if (!eventsIn(text, [range], file).some((event) => !event.rest)) return false;
+  }
+  return true;
+}
+
+/** The bare marks ("." or "~") written before an event, among its decorations and grace notes. */
+function marksBefore(text: string, eventFrom: number, mark: string): number[] {
+  const lineFrom = text.lastIndexOf("\n", eventFrom - 1) + 1;
+  const tokens = tokenizeMusic(text.slice(lineFrom, eventFrom), lineFrom);
+  const found: number[] = [];
+  for (let at = tokens.length - 1; at >= 0; at--) {
+    const token = tokens[at] as MusicToken;
+    const prefix =
+      token.kind === "decoration" ||
+      token.kind === "annotation" ||
+      token.kind === "chord-symbol" ||
+      token.kind === "grace-open" ||
+      token.kind === "grace-close" ||
+      (token.kind === "note" && token.inGrace) ||
+      (token.kind === "slur" && token.text === "(");
+    if (!prefix) break;
+    if (token.kind === "decoration" && token.text === mark) found.push(token.from);
+  }
+  return found;
+}
+
+/**
+ * Typing ".", "~" or "(" over selected music: staccato or a roll on every selected note and
+ * chord (rests and bar lines skipped), placed right before the note (before its accidental, or a
+ * chord's "[", after other decorations and grace notes), or removed when every one has it
+ * already; "(" wraps each range in a slur, or removes the slur already wrapping it. Null when the
+ * selection is not music, so the character is typed as usual.
+ */
+export function markSelection(
+  text: string,
+  ranges: Range[],
+  typed: string,
+  file = indexFile(text),
+): MarkResult | null {
+  if (typed !== "." && typed !== "~" && typed !== "(") return null;
+  if (!isMusicSelection(text, ranges, file)) return null;
+  const notes = eventsIn(text, ranges, file).filter((event) => !event.rest);
+  if (typed === "(") {
+    const changes = toggleSlur(text, ranges, file);
+    const removed = changes.some((change) => change.insert === "");
+    return { changes, mark: "slur", count: notes.length, removed };
+  }
+  const existing = notes.map((event) => marksBefore(text, event.from, typed));
+  const removed = existing.every((found) => found.length > 0);
+  const changes = removed
+    ? existing.flat().map((from) => ({ from, to: from + 1, insert: "" }))
+    : notes
+        .filter((_, at) => (existing[at] ?? []).length === 0)
+        .map((event) => ({ from: event.from, to: event.from, insert: typed }));
+  return {
+    changes: merge(changes),
+    mark: typed === "." ? "staccato" : "roll",
+    count: notes.length,
+    removed,
+  };
 }

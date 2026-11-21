@@ -358,6 +358,35 @@ code {
   padding: 5px 13px;
   flex: none;
 }
+/* Nothing to save: a quiet secondary button; filled again as soon as there is. */
+#save-primary.quiet {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+#save-primary.quiet:hover {
+  background: var(--hover);
+}
+/* Narrow desks: a compact, truncating name and a short unsaved mark. */
+@media (max-width: 1199px) {
+  .filename,
+  .filename input {
+    max-width: 200px;
+  }
+  .saved-state {
+    font-size: 0;
+  }
+  .saved-state:not(:empty)::before {
+    content: none;
+  }
+  .saved-state::after {
+    content: attr(data-short);
+    font-size: 16px;
+    line-height: 1;
+    color: var(--accent);
+  }
+}
 #appearance {
   min-height: 32px;
   padding: 5px 10px;
@@ -1263,10 +1292,15 @@ body[data-layout="below"] #layout-toggle .beside {
 .timeline-tick span {
   position: absolute;
   top: 16px;
-  left: 3px;
+  left: 0;
+  transform: translateX(-50%);
   font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
+}
+/* The first label starts at the ruler's edge. */
+.timeline-tick:first-child span {
+  transform: none;
 }
 .timeline-loop {
   position: absolute;
@@ -1317,7 +1351,7 @@ body[data-layout="below"] #layout-toggle .beside {
   color: var(--muted);
 }
 .tempo-value input {
-  width: 44px;
+  width: 3.4ch;
   padding: 3px 2px;
   border: 0;
   background: transparent;
@@ -1797,17 +1831,40 @@ body.focus-mode .app-header {
   .workspace[data-layout="below"] {
     grid-template-columns: 188px minmax(0, 1fr);
   }
-  .transport-label {
+  /* Tablets keep the short labels; Voices moves into the Sound sheet to make room. */
+  .transport {
+    gap: 8px;
+  }
+  #voices-button,
+  #count-in .transport-label {
     display: none;
+  }
+  #sound-button #instrument-label {
+    display: none;
+  }
+  #sound-button .phone-label {
+    display: inline;
   }
   .clock {
     min-width: 0;
   }
 }
 @media (max-width: 900px) {
-  .saved-state,
-  .filename {
-    display: none;
+  .filename,
+  .filename input {
+    max-width: 150px;
+  }
+  /* Small tablets: the ruler takes its own row under the controls, as on a phone. */
+  .transport {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .position {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .transport-side {
+    margin-left: auto;
   }
   .wide-only {
     display: none !important;
@@ -2425,33 +2482,58 @@ dialog.composer-dialog[open]::backdrop {
   }
 }
 
-/* Phone header: the file name and its saved state on a slim second row. */
+/* Phone header: one row; the file name is a truncated chip beside the menus, with the unsaved
+   mark inside it. The tunes panel opens from More on a phone. */
 @media (max-width: 760px) {
-  .app-header {
-    height: auto;
-    flex-wrap: wrap;
-    row-gap: 0;
-  }
   .app-header .filebar {
     display: flex !important;
-    order: 10;
-    flex-basis: 100%;
-    min-height: 40px;
-    padding: 0 6px 2px;
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 0;
   }
   .app-header .filename {
     display: block !important;
-    flex: 0 1 auto;
-    max-width: 60%;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
   }
   .app-header .filename input {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
     min-height: 40px;
-    font-size: 13px;
-    padding: 2px 6px;
+    padding: 2px 16px 2px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--hover);
+    font-size: 12.5px;
+    field-sizing: fixed;
   }
   .app-header .saved-state {
-    display: inline !important;
-    font-size: 12px;
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    translate: 0 -50%;
+    pointer-events: none;
+  }
+  .workspace-menus {
+    flex: none;
+    overflow: visible;
+  }
+  .app-header {
+    gap: 2px;
+    padding-inline: 6px;
+  }
+  .workspace-menus button {
+    padding-inline: 3px;
+  }
+  #save-primary {
+    margin-left: 2px;
+    padding-inline: 9px;
+  }
+  .panel-toggles {
+    display: none;
   }
 }
 

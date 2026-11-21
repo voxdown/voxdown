@@ -22,6 +22,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Next / previous bar to check", "F8 / Shift F8"],
   ["Complete a field, key or decoration", "Ctrl Space"],
   ["Score beside or below", "Mod Backslash"],
+  ["Zoom the score or the text in / out / to actual size", "Mod Equal / Mod Minus / Mod 0"],
   ["Focus", "Mod Shift F"],
   ["Open / Save / Save as", "Mod O / Mod S / Mod Shift S"],
   ["Indent in the text / leave it (Escape, then Tab)", "Tab / Escape, Tab"],

@@ -2226,6 +2226,120 @@ console.log(
   "Composer: typing helpers write a bar line on Space and the nearest octave; undo returns the typing: passed",
 );
 
+{
+  // Sprint A 4. Zoom per pane, by keys on the focused pane; the score re-wraps and every hit,
+  // band and highlight stays exact at 50%, 100% and 200%.
+  await openExample("Greensleeves");
+  await drawn();
+  const zoom = () => page.evaluate(() => window.composer.state().zoom);
+  const redrawn = async (level) => {
+    await page.waitForFunction((want) => window.composer.state().zoom.score === want, level);
+    await settle(900);
+  };
+  await page.locator("#score-scroll").focus();
+  await page.keyboard.press("Control+Equal");
+  await redrawn(1.1);
+  await page.locator("#score-zoom.shown", { hasText: "Score 110%" }).waitFor();
+  for (const [keys, level] of [
+    [
+      [
+        "Control+Minus",
+        "Control+Minus",
+        "Control+Minus",
+        "Control+Minus",
+        "Control+Minus",
+        "Control+Minus",
+      ],
+      0.5,
+    ],
+    [["Control+0"], 1],
+    [
+      [
+        "Control+Equal",
+        "Control+Equal",
+        "Control+Equal",
+        "Control+Equal",
+        "Control+Equal",
+        "Control+Equal",
+        "Control+Equal",
+      ],
+      2,
+    ],
+  ]) {
+    await page.locator("#score-scroll").focus();
+    for (const key of keys) await page.keyboard.press(key);
+    await redrawn(level);
+    // Bring the first system into view.
+    const first = (await geometry()).notes.sort((a, b) => a.y - b.y)[0];
+    await page.evaluate((y) => {
+      const scroll = document.getElementById("score-scroll");
+      scroll.scrollTop += y - scroll.getBoundingClientRect().top - 160;
+    }, first.y);
+    await settle(200);
+    // Measure again after scrolling, and test the hits on what is in view.
+    const fresh = (await geometry()).notes;
+    const frame = await page.locator("#score-scroll").boundingBox();
+    const visible = fresh
+      .filter((note) => note.y > frame.y + 30 && note.y < frame.y + frame.height - 30)
+      .slice(0, 6);
+    assert(visible.length >= 2, `notes in view at ${level}`);
+    for (const note of visible) {
+      const hit = await page.evaluate(
+        ([x, y]) => window.composer.hit(x, y),
+        [note.head + 2, note.y],
+      );
+      assert.equal(hit?.start, note.start, `hit at ${level * 100}%: note at ${note.time}`);
+    }
+    // A selected note's band sits on its head.
+    const one = visible[0];
+    await page.evaluate(
+      ([from, to]) => window.composer.view.dispatch({ selection: { anchor: from, head: to } }),
+      [one.start, one.end],
+    );
+    await page.waitForFunction(() => document.querySelector("#score-bands .score-band.selection"));
+    const band = await page.locator("#score-bands .score-band.selection").first().boundingBox();
+    assert(
+      band.x <= one.head + 1 && band.x + band.width >= one.head + 2,
+      `band on the note at ${level * 100}%: ${JSON.stringify(band)} vs ${one.head}`,
+    );
+  }
+  await page.locator("#score-scroll").focus();
+  await page.keyboard.press("Control+0");
+  await redrawn(1);
+  // The text: its own zoom, 80–160%.
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+Equal");
+  await page.keyboard.press("Control+Equal");
+  assert.equal((await zoom()).editor, 1.2);
+  assert.equal(
+    await page.evaluate(() => getComputedStyle(document.querySelector(".cm-editor")).fontSize),
+    "18px",
+  );
+  await page.locator("#editor-zoom.shown", { hasText: "Text 120%" }).waitFor();
+  await page.keyboard.press("Control+0");
+  assert.equal((await zoom()).editor, 1);
+  // Outside the two panes, the keys are left to the browser.
+  await page.locator("#tempo").focus();
+  await page.mouse.move(5, 880);
+  const before = await zoom();
+  const prevented = await page.evaluate(() => {
+    const event = new KeyboardEvent("keydown", {
+      key: "=",
+      code: "Equal",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.getElementById("tempo").dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  assert(!prevented, "Ctrl + outside the panes is the browser's");
+  assert.deepEqual(await zoom(), before);
+}
+console.log(
+  "Composer: zoom per pane by keys; hits and bands exact at 50%, 100% and 200%; page zoom left alone: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

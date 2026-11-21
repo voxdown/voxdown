@@ -152,6 +152,9 @@ type Prefs = {
   /** Typing helpers, off unless chosen in Edit › Typing helpers. */
   barOnSpace: boolean;
   autoOctave: boolean;
+  /** Zoom per pane: the score 0.5–2, the text 0.8–1.6. */
+  scoreZoom: number;
+  editorZoom: number;
 };
 const PREFS_KEY = "vxd-composer-prefs";
 const prefs: Prefs = (() => {
@@ -171,6 +174,8 @@ const prefs: Prefs = (() => {
     focusScore: true,
     barOnSpace: false,
     autoOctave: false,
+    scoreZoom: 1,
+    editorZoom: 1,
   };
   try {
     const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
@@ -307,6 +312,131 @@ async function pasteText() {
       `This browser lets the page paste only from the keyboard: use ${shortcutLabel("Mod V")}.`,
     );
   }
+}
+
+/*
+ * Zoom, per pane: the score re-wraps to its width at the new size (keeping the reader's place),
+ * the text grows or shrinks. Ctrl/⌘ + − 0 act on the pane with focus, or under the pointer;
+ * elsewhere they are left to the browser's own page zoom.
+ */
+const ZOOMS = {
+  score: [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2],
+  editor: [0.8, 0.9, 1, 1.1, 1.2, 1.4, 1.6],
+} as const;
+type Pane = "score" | "editor";
+let pointerPane: Pane | null = null;
+let lastPane: Pane | null = null;
+function paneOf(element: Element | null): Pane | null {
+  if (!element) return null;
+  if (element.closest("#score-panel")) return "score";
+  if (element.closest("#writing")) return "editor";
+  return null;
+}
+for (const [id, pane] of [
+  ["score-panel", "score"],
+  ["writing", "editor"],
+] as const) {
+  $(id).addEventListener("pointerenter", () => {
+    pointerPane = pane;
+  });
+  $(id).addEventListener("pointerleave", () => {
+    if (pointerPane === pane) pointerPane = null;
+  });
+  $(id).addEventListener("focusin", () => {
+    lastPane = pane;
+  });
+}
+/** The pane a zoom key means: the focused one, else the one under the pointer. */
+function zoomPane(): Pane | null {
+  return paneOf(document.activeElement) ?? pointerPane;
+}
+function applyEditorZoom() {
+  $("editor").style.setProperty("--editor-zoom", String(prefs.editorZoom));
+  view.requestMeasure();
+}
+let zoomBadgeTimer: ReturnType<typeof setTimeout> | undefined;
+function setZoom(pane: Pane, value: number) {
+  const steps = ZOOMS[pane];
+  const level = Math.max(steps[0], Math.min(steps[steps.length - 1] as number, value));
+  if (pane === "score") {
+    if (level === prefs.scoreZoom) return showZoom(pane);
+    prefs.scoreZoom = level;
+    scheduleRender(0);
+  } else {
+    if (level === prefs.editorZoom) return showZoom(pane);
+    prefs.editorZoom = level;
+    applyEditorZoom();
+  }
+  savePrefs();
+  showZoom(pane);
+}
+/** The next step in or out from the current level. */
+function stepZoom(pane: Pane, direction: 1 | -1 | 0) {
+  const steps = ZOOMS[pane] as readonly number[];
+  const now = pane === "score" ? prefs.scoreZoom : prefs.editorZoom;
+  if (direction === 0) return setZoom(pane, 1);
+  const next =
+    direction > 0
+      ? steps.find((step) => step > now + 1e-6)
+      : [...steps].reverse().find((step) => step < now - 1e-6);
+  setZoom(pane, next ?? now);
+}
+/** The level, shown briefly in the pane. */
+function showZoom(pane: Pane) {
+  const badge = $(pane === "score" ? "score-zoom" : "editor-zoom");
+  const level = pane === "score" ? prefs.scoreZoom : prefs.editorZoom;
+  badge.textContent = `${pane === "score" ? "Score" : "Text"} ${Math.round(level * 100)}%`;
+  badge.hidden = false;
+  badge.classList.add("shown");
+  clearTimeout(zoomBadgeTimer);
+  zoomBadgeTimer = setTimeout(() => badge.classList.remove("shown"), 1100);
+}
+// Ctrl/⌘ wheel and a pinch on the score zoom it.
+{
+  let wheel = 0;
+  scoreScroll.addEventListener(
+    "wheel",
+    (event) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      wheel += event.deltaY;
+      if (Math.abs(wheel) < 40) return;
+      stepZoom("score", wheel < 0 ? 1 : -1);
+      wheel = 0;
+    },
+    { passive: false },
+  );
+  const touches = new Map<number, { x: number; y: number }>();
+  let pinchBase = 0;
+  const distance = () => {
+    const [a, b] = [...touches.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  };
+  scoreScroll.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch") return;
+    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (touches.size === 2) {
+      // A second finger: a pinch, not a drag.
+      drag = null;
+      pinchBase = distance();
+    }
+  });
+  scoreScroll.addEventListener("pointermove", (event) => {
+    if (!touches.has(event.pointerId)) return;
+    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (touches.size !== 2 || !pinchBase) return;
+    const ratio = distance() / pinchBase;
+    if (ratio > 1.18 || ratio < 0.85) {
+      stepZoom("score", ratio > 1 ? 1 : -1);
+      pinchBase = distance();
+    }
+  });
+  const lift = (event: PointerEvent) => {
+    touches.delete(event.pointerId);
+    if (touches.size < 2) pinchBase = 0;
+  };
+  scoreScroll.addEventListener("pointerup", lift);
+  scoreScroll.addEventListener("pointercancel", lift);
 }
 
 /** Find and replace, loading it first if this is the first time. */
@@ -584,6 +714,7 @@ const view = new EditorView({
   parent: $("editor"),
   state: makeState(""),
 });
+applyEditorZoom();
 // Completion and Find join as soon as the text is used: its first focus, or a first key press.
 {
   const load = () => void loadEditorExtras(view);
@@ -946,7 +1077,7 @@ async function render(force = false) {
   const doc = text();
   const width = scoreWidth();
   if (width < 50) return;
-  const key = `${width}|${tune.from}|${doc.slice(tune.from, tune.to)}|${index.header ? doc.slice(index.header.from, index.header.to) : ""}`;
+  const key = `${width}|${prefs.scoreZoom}|${tune.from}|${doc.slice(tune.from, tune.to)}|${index.header ? doc.slice(index.header.from, index.header.to) : ""}`;
   if (!force && key === renderedKey) return;
   if (rendering) {
     scheduleRender(60);
@@ -961,7 +1092,7 @@ async function render(force = false) {
     const sameTune = scoreIndex?.tune.from === tune.from;
     const result = await renderTune(
       stage,
-      { text: doc, file: index, tune, width, compact: phone.matches },
+      { text: doc, file: index, tune, width, compact: phone.matches, zoom: prefs.scoreZoom },
       workspace.dataset.layout === "below",
       sameTune ? breaks : null,
       () => authorBarsPerLine(doc, tuneItems(doc, tune, index)),
@@ -4085,6 +4216,18 @@ const menus = mountMenus(
         checked: () => resolvedLayout() === "below",
       },
       { label: "Tunes panel", run: toggleRail, checked: () => workspace.dataset.rail === "open" },
+      "-",
+      {
+        label: "Zoom in",
+        run: () => stepZoom(lastPane ?? "score", 1),
+        shortcut: "Mod Equal",
+      },
+      {
+        label: "Zoom out",
+        run: () => stepZoom(lastPane ?? "score", -1),
+        shortcut: "Mod Minus",
+      },
+      { label: "Actual size", run: () => stepZoom(lastPane ?? "score", 0), shortcut: "Mod 0" },
       {
         label: "Focus",
         run: () => setFocusMode(!body.classList.contains("focus-mode")),
@@ -4307,6 +4450,24 @@ document.addEventListener("keydown", (event) => {
     setFocusMode(!body.classList.contains("focus-mode"));
   } else if (
     mod &&
+    !event.altKey &&
+    zoomPane() &&
+    (event.key === "=" ||
+      event.key === "+" ||
+      event.key === "-" ||
+      event.key === "0" ||
+      event.code === "Equal" ||
+      event.code === "Minus" ||
+      event.code === "Digit0")
+  ) {
+    // Only for the score or the text; elsewhere the browser zooms the page.
+    event.preventDefault();
+    const pane = zoomPane() as Pane;
+    const out = event.key === "-" || event.code === "Minus";
+    const reset = event.key === "0" || event.code === "Digit0";
+    stepZoom(pane, reset ? 0 : out ? -1 : 1);
+  } else if (
+    mod &&
     event.altKey &&
     (event.key === "=" || event.key === "+" || event.code === "Equal")
   ) {
@@ -4477,6 +4638,7 @@ void start();
     scheduled: player.metrics.scheduled,
     metrics: { ...player.metrics },
     loop: loopOn,
+    zoom: { score: prefs.scoreZoom, editor: prefs.editorZoom },
     region: player.loopingRegion,
     notes: scoreIndex?.notes.length ?? 0,
     timeline: timeline

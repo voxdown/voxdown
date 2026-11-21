@@ -74,6 +74,8 @@ export type RenderInput = {
   width: number;
   /** A phone: smaller titles and closer spacing. */
   compact?: boolean | undefined;
+  /** The reader's zoom, 0.5–2: the score is laid out at width ÷ zoom and drawn that much larger. */
+  zoom?: number | undefined;
 };
 
 /** Builds the text abcjs reads for one tune, with the file header in front. */
@@ -352,7 +354,8 @@ export async function renderTune(
   // Narrow screens accept closer spacing and a slightly smaller drawing, so a phone still shows
   // two bars a line.
   const compact = input.compact ?? Math.floor(input.width) - 30 < 400;
-  const scale = compact ? COMPACT_SCALE : 1;
+  const zoom = input.zoom ?? 1;
+  const scale = (compact ? COMPACT_SCALE : 1) * zoom;
   const staffwidth = Math.max(240, Math.floor(input.width) - 30);
   // abcjs lays out at width ÷ scale, then draws it smaller; bars are measured in those units.
   const layoutWidth = Math.floor(staffwidth / scale);
@@ -372,7 +375,7 @@ export async function renderTune(
     ...(scale !== 1 ? { scale } : {}),
   };
   // While the bars and the width stay the same, the last line breaks still fit: one pass.
-  const key = `${breaksKey(source, staffwidth)}:${wide ? "w" : "n"}`;
+  const key = `${breaksKey(source, staffwidth)}:${wide ? "w" : "n"}:${zoom}`;
   let lineBreaks = cached && cached.key === key ? cached.lineBreaks : null;
   let measured = cached && cached.key === key ? cached.measured : undefined;
   if (!lineBreaks) {

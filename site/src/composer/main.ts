@@ -53,6 +53,7 @@ import {
   shortcutLabel,
 } from "./menus";
 import { applyPassDynamics, passMarks } from "./passes";
+import { pasteVoiced, voiceAt, voicedParts } from "./paste";
 import { plainMessage } from "./plain";
 import { Player } from "./player";
 import { checkSlurs, plainWarnings } from "./problems";
@@ -317,10 +318,34 @@ function clipboard(kind: "cut" | "copy") {
   if (!document.execCommand(kind))
     notice(`Use ${shortcutLabel(kind === "cut" ? "Mod X" : "Mod C")} to ${kind} in this browser.`);
 }
+/**
+ * A copy of several voices pasted: each place takes its own voice's part (./paste), in one undo
+ * step, or it is refused with the reason in the status line. False when it isn't such a copy.
+ */
+function pasteVoices(target: EditorView, pasted: string): boolean {
+  const parts = voicedParts(pasted);
+  if (!parts) return false;
+  const state = target.state;
+  const selected = state.selection.ranges.filter((range) => !range.empty);
+  const places = (selected.length ? selected : [state.selection.main]).map((range) => ({
+    from: range.from,
+    to: range.to,
+  }));
+  const plan = pasteVoiced(state.doc.toString(), places, parts);
+  if ("refused" in plan) {
+    sayAboutSelection(plan.refused);
+    notice(plan.refused);
+    return true;
+  }
+  target.dispatch({ changes: plan.changes, scrollIntoView: true, userEvent: "input.paste" });
+  notice(plan.message, "success");
+  return true;
+}
 async function pasteText() {
   view.focus();
   try {
     const pasted = await navigator.clipboard.readText();
+    if (pasteVoices(view, pasted)) return;
     view.dispatch(view.state.replaceSelection(pasted), {
       scrollIntoView: true,
       userEvent: "input.paste",
@@ -612,6 +637,12 @@ const keys: KeyBinding[] = [
 ];
 
 const copyVoices = EditorView.domEventHandlers({
+  paste(event, view) {
+    const pasted = event.clipboardData?.getData("text/plain");
+    if (!pasted || !pasteVoices(view, pasted)) return false;
+    event.preventDefault();
+    return true;
+  },
   copy(event, view) {
     const text = voicedCopy(view.state);
     if (!text || !event.clipboardData) return false;
@@ -866,14 +897,8 @@ function voicedCopy(state: EditorState): { text: string; voices: number } | null
   const selection = state.selection.ranges.filter((range) => !range.empty);
   if (selection.length < 2) return null;
   const doc = state.doc.toString();
-  const voiceOf = (position: number) => {
-    const before = doc.slice(0, position);
-    const lines = [...before.matchAll(/^V:\s*(\S+)|\[V:\s*([^\]\s]+)/gm)];
-    const last = lines[lines.length - 1];
-    return last ? (last[1] ?? last[2] ?? "") : "";
-  };
   const parts = selection.map((range) => ({
-    voice: voiceOf(range.from),
+    voice: voiceAt(doc, range.from),
     text: doc.slice(range.from, range.to),
   }));
   if (new Set(parts.map((part) => part.voice)).size < 2) return null;

@@ -240,3 +240,18 @@ export function shortcutTable(rows = SHORTCUTS): HTMLTableElement {
   }
   return table;
 }
+
+/** About VoxDown Composer. */
+export function aboutContent(): Node {
+  const panel = document.createElement("div");
+  for (const line of [
+    "Composer is a browser-only editor for ABC music notation. Your music stays on this device: there is no account, no server and no tracking, and nothing is sent anywhere.",
+    "Scores are drawn by abcjs (MIT licence). The piano is the Salamander Grand Piano by Alexander Holm; fiddle, flute, strings and guitar come from the FluidR3 General MIDI SoundFont by Frank Wen. Both are Creative Commons Attribution 3.0 and served from this site.",
+    "Composer is experimental. Keep your own copies of your files.",
+  ]) {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = line;
+    panel.append(paragraph);
+  }
+  return panel;
+}

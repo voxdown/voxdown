@@ -908,6 +908,10 @@ body[data-layout="below"] #layout-toggle .beside {
   line-height: 1.6;
   text-align: center;
 }
+.score-no-notes {
+  margin-top: 24px;
+  font-size: 14px;
+}
 .score-scroll.dragging {
   cursor: col-resize;
 }
@@ -2679,4 +2683,54 @@ dialog.composer-dialog[open]::backdrop {
 .dialog-note {
   color: var(--muted);
   font-size: 13px;
+}
+
+/* ⋯ holds Insert, View, Play and Help on a phone; on a wider screen they have their own titles. */
+#more-menus {
+  display: none;
+}
+/* Phone: 44 px targets for the menu titles, the editing buttons and the Text/Score switch, and
+   room for the file name (File, Edit, Tunes and ⋯ only). */
+@media (max-width: 760px) {
+  #insert-menu,
+  #view-menu,
+  #play-menu,
+  #help-menu {
+    display: none;
+  }
+  #more-menus {
+    display: inline-block;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .app-header {
+    height: 52px;
+    padding-block: 4px;
+  }
+  .app-header .workspace-menus button {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 6px;
+  }
+  .app-header .filename input,
+  #save-primary {
+    min-height: 44px;
+  }
+  .toolbar button,
+  .view-switch button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Desktop: the clock and the status line at 13px, the rail's hints at 12px, all in the muted
+   colour (5.4:1 on the paper, 4.7:1 on the rail). */
+@media (min-width: 761px) {
+  .clock,
+  #app > footer {
+    font-size: 13px;
+  }
+  .rail-hint code {
+    font-size: 12px;
+  }
 }

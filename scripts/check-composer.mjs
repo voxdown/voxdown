@@ -79,7 +79,12 @@ const openExample = async (title, p = page) => {
   if (await p.locator("#start").isVisible())
     await p.getByRole("button", { name: title }).first().click();
   else {
-    await p.locator('[data-menu="help"]').click();
+    if (await p.locator('[data-menu="help"]').isVisible())
+      await p.locator('[data-menu="help"]').click();
+    else {
+      await p.locator("#more-menus").click();
+      await p.locator(".workspace-dropdown").getByRole("menuitem", { name: "Help" }).click();
+    }
     await p.getByRole("menuitem", { name: `Example: ${title}` }).click();
   }
   await p.waitForFunction(
@@ -865,8 +870,10 @@ console.log("Composer: Loop is a mode; count-in shows its beats, not a bar and t
       .map((element) => element.getAttribute("aria-keyshortcuts")),
   );
   const listed = new Set();
-  for (const name of ["file", "edit", "insert", "view", "play", "help"]) {
+  for (const name of ["file", "edit", "tunes", "insert", "view", "play", "help"]) {
     await page.locator(`[data-menu="${name}"]`).click();
+    // Edit's note commands are in its Notes submenu.
+    if (name === "edit") await page.getByRole("menuitem", { name: "Notes" }).click();
     for (const value of await page
       .locator(".workspace-dropdown [aria-keyshortcuts]")
       .evaluateAll((items) => items.map((item) => item.getAttribute("aria-keyshortcuts"))))
@@ -1262,8 +1269,9 @@ await openExample("Greensleeves");
     const tags = [...document.querySelectorAll(".timeline-pass-tag:not([hidden])")].map(
       (tag) => tag.textContent,
     );
+    const rulerWidth = document.getElementById("timeline").getBoundingClientRect().width;
     const bands = [...document.querySelectorAll("#timeline-passes .timeline-pass.repeat")].map(
-      (band) => Number.parseFloat(band.style.width),
+      (band) => (band.getBoundingClientRect().width / rulerWidth) * 100,
     );
     const slider = document.getElementById("timeline");
     return {
@@ -1738,7 +1746,13 @@ for (const mac of [false, true]) {
     for (const name of ["cheatsheet", "shortcuts"]) {
       if (name === "cheatsheet") await help.keyboard.press("F1");
       else {
-        await help.locator('[data-menu="help"]').click();
+        // A phone keeps Help under ⋯.
+        if (await help.locator('[data-menu="help"]').isVisible())
+          await help.locator('[data-menu="help"]').click();
+        else {
+          await help.locator("#more-menus").click();
+          await help.locator(".workspace-dropdown").getByRole("menuitem", { name: "Help" }).click();
+        }
         await help.getByRole("menuitem", { name: "Keyboard shortcuts" }).click();
       }
       await help.locator(`#${name}[open] td`).first().waitFor();
@@ -1755,6 +1769,7 @@ for (const mac of [false, true]) {
     }
     if (width === 1440) {
       await help.locator('[data-menu="edit"]').click();
+      await help.getByRole("menuitem", { name: "Notes" }).click();
       const item = help.getByRole("menuitem", { name: /Remove a dot/ });
       assert.equal(
         (await item.locator(".menu-shortcut").textContent()).trim(),
@@ -2966,9 +2981,7 @@ console.log(
     await page.keyboard.press("Control+z");
     await settle(150);
   };
-  await page.locator('[data-menu="edit"]').click();
-  await page.getByRole("menuitem", { name: "Tune book" }).click();
-  await page.getByRole("menuitem", { name: "Sort tunes…" }).click();
+  await menu("tunes", "Sort tunes…");
   const sortDialog = page.locator("#sort-tunes[open]");
   await sortDialog.waitFor();
   assert.match(
@@ -3002,8 +3015,7 @@ console.log(
   const notesBefore = await page.evaluate(() =>
     window.composer.scoreIndex().notes.map((note) => `${note.voice}:${note.time}:${note.duration}`),
   );
-  await menu("edit", "Tune book");
-  await page.getByRole("menuitem", { name: "Line up bars" }).click();
+  await menu("tunes", "Line up bars");
   await page.waitForFunction(
     (before) => window.composer.view.state.doc.toString() !== before,
     tune,
@@ -3200,6 +3212,32 @@ const small40 = await small.evaluate(() =>
     .map(({ id, box }) => `${id} ${Math.round(box.width)}×${Math.round(box.height)}`),
 );
 assert.deepEqual(small40, [], "every touch target is at least 40 px");
+// Sprint C fixes 12. Menu titles, editing buttons and the Text/Score switch are 44 × 44.
+const small44 = await small.evaluate(() =>
+  [...document.querySelectorAll(".workspace-menus button, .toolbar button, .view-switch button")]
+    .filter((element) => element.getClientRects().length)
+    .map((element) => ({
+      id: element.id || element.getAttribute("aria-label") || element.textContent.trim(),
+      box: element.getBoundingClientRect(),
+    }))
+    .filter(({ box }) => box.height < 44 - 0.5 || box.width < 44 - 0.5)
+    .map(({ id, box }) => `${id} ${Math.round(box.width)}×${Math.round(box.height)}`),
+);
+assert.deepEqual(small44, [], "menus, editing buttons and Text/Score are 44 px");
+// File, Edit, Tunes and ⋯ (Insert, View, Play, Help) on a phone.
+assert.deepEqual(
+  await small.evaluate(() =>
+    [...document.querySelectorAll(".workspace-menus button")]
+      .filter((element) => element.getClientRects().length)
+      .map((element) => element.textContent),
+  ),
+  ["File", "Edit", "Tunes", "⋯"],
+);
+await small.locator("#more-menus").click();
+await small.locator(".workspace-dropdown").getByRole("menuitem", { name: "Play" }).click();
+assert(await small.getByRole("menuitemcheckbox", { name: "Follow D.C./D.S. jumps" }).isVisible());
+await small.keyboard.press("Escape");
+await small.keyboard.press("Escape");
 await small.locator("#more-tools").click();
 for (const name of ["Focus", "ABC cheat sheet", "Tie or untie", "Up an octave"])
   assert(await small.getByRole("menuitem", { name }).isVisible(), `More has ${name}`);
@@ -3208,10 +3246,31 @@ await small.keyboard.press("Escape");
 const chip = await small.evaluate(() => {
   const name = document.getElementById("name").getBoundingClientRect();
   const menus = document.querySelector(".workspace-menus").getBoundingClientRect();
-  return { sameRow: Math.abs(name.top - menus.top) < 8, width: name.width, height: name.height };
+  // How many of the name's characters show: at least twelve.
+  const input = document.getElementById("name");
+  const style = getComputedStyle(input);
+  const context = document.createElement("canvas").getContext("2d");
+  context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const room =
+    input.clientWidth -
+    Number.parseFloat(style.paddingLeft) -
+    Number.parseFloat(style.paddingRight);
+  let shown = 0;
+  while (
+    shown < input.value.length &&
+    context.measureText(input.value.slice(0, shown + 1)).width <= room
+  )
+    shown += 1;
+  return {
+    sameRow: Math.abs(name.top - menus.top) < 8,
+    width: name.width,
+    height: name.height,
+    shown,
+    value: input.value,
+  };
 });
 assert(
-  chip.sameRow && chip.width >= 70 && chip.height >= 40,
+  chip.sameRow && chip.shown >= Math.min(12, chip.value.length) && chip.height >= 44,
   `file name chip ${JSON.stringify(chip)}`,
 );
 await small.locator("#more-tools").click();

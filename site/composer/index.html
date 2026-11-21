@@ -20,10 +20,12 @@
     <nav class="workspace-menus" role="menubar" aria-label="Composer menus">
       <button id="file-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="file">File</button>
       <button id="edit-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="edit">Edit</button>
+      <button id="tunes-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="tunes">Tunes</button>
       <button id="insert-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="insert">Insert</button>
       <button id="view-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="view">View</button>
       <button id="play-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="play">Play</button>
       <button id="help-menu" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="help">Help</button>
+      <button id="more-menus" type="button" aria-haspopup="menu" aria-expanded="false" data-menu="more" aria-label="More menus: Insert, View, Play, Help">⋯</button>
     </nav>
     <div class="filebar">
       <label class="filename"><span class="sr-only">File name</span><input id="name" value="Untitled.abc" maxlength="180" spellcheck="false" autocomplete="off" aria-label="File name"></label>
@@ -46,8 +48,8 @@
         <div class="tool-group transpose-group" role="group" aria-label="Transpose">
           <button type="button" data-command="transpose-down" aria-label="Down a semitone" title="Down a semitone (Alt ↓)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3v10M2.5 9.5 6 13l3.5-3.5"/></svg><svg class="accidental" viewBox="0 0 10 16" aria-hidden="true"><path d="M3 2v11.5c2.6-1.2 4.5-2.6 4.5-4.4 0-1.5-1.6-2-4.5-.6"/></svg></button>
           <button type="button" data-command="transpose-up" aria-label="Up a semitone" title="Up a semitone (Alt ↑)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 13V3M2.5 6.5 6 3l3.5 3.5"/></svg><svg class="accidental" viewBox="0 0 10 16" aria-hidden="true"><path d="M3.5 2.5v11M6.5 2v11M1.5 6.8l7-1.6M1.5 10.8l7-1.6"/></svg></button>
-          <button type="button" data-command="octave-down" class="wide-only" aria-label="Down an octave" title="Down an octave (Alt Shift ↓)"><span class="tool-text">8va↓</span></button>
-          <button type="button" data-command="octave-up" class="wide-only" aria-label="Up an octave" title="Up an octave (Alt Shift ↑)"><span class="tool-text">8va↑</span></button>
+          <button type="button" data-command="octave-down" class="wide-only" aria-label="Down an octave" title="Down an octave (Alt Shift ↓)"><span class="tool-text">8vb</span></button>
+          <button type="button" data-command="octave-up" class="wide-only" aria-label="Up an octave" title="Up an octave (Alt Shift ↑)"><span class="tool-text">8va</span></button>
         </div>
         <div class="tool-group" role="group" aria-label="Lengths">
           <button type="button" data-command="halve" aria-label="Halve lengths" title="Halve lengths (Alt BracketLeft)"><span class="tool-text">½×</span></button>
@@ -118,6 +120,7 @@
           <div id="score-cursor" class="score-cursor" aria-hidden="true" hidden></div>
           <div id="score" class="score" aria-hidden="true"></div>
           <div id="score-stage" class="score-stage" aria-hidden="true"></div>
+          <p id="score-no-notes" class="score-empty score-no-notes" hidden>Type notes after <code>K:</code> and the score draws here.</p>
           <p id="score-empty" class="score-empty" hidden>Write a tune with an <code>X:</code> line and a <code>K:</code> line, then notes, or open a MusicXML file. The score draws itself here.</p>
         </div>
         <p id="score-live" class="sr-only" aria-live="polite"></p>

@@ -47,7 +47,6 @@ import {
   shortcutAria,
   shortcutLabel,
 } from "./menus";
-import { offlineStatus, prepareOffline } from "./offline";
 import { applyPassDynamics, passMarks } from "./passes";
 import { Player } from "./player";
 import { checkSlurs, plainWarnings } from "./problems";
@@ -1099,6 +1098,7 @@ async function render(force = false) {
     scoreElement.replaceChildren();
     bandsLayer.replaceChildren();
     $("score-empty").hidden = false;
+    $("score-no-notes").hidden = true;
     $("score-summary").textContent = "No tune yet";
     player.setTimeline(null);
     drawTimeline();
@@ -1148,6 +1148,8 @@ async function render(force = false) {
     performance.measure("composer:swap", "composer:swap");
     renderedKey = key;
     scoreIndex = result;
+    // A tune with its header and no notes yet (after New tune): a quiet hint under the title.
+    $("score-no-notes").hidden = result.notes.length > 0;
     geometry = null;
     attached = null;
     scoreCursor = null;
@@ -2254,67 +2256,23 @@ function music(command: string): boolean {
 }
 
 function decorationMenu(anchor: HTMLElement) {
-  const groups: [string, [string, string][]][] = [
-    [
-      "Articulations and ornaments",
-      [
-        [".", "Staccato"],
-        ["accent", "Accent"],
-        ["tenuto", "Tenuto"],
-        ["fermata", "Fermata"],
-        ["trill", "Trill"],
-        ["~", "Roll"],
-        ["mordent", "Mordent"],
-        ["breath", "Breath mark"],
-      ],
-    ],
-    [
-      "Dynamics",
-      [
-        ["ppp", "ppp — very very soft"],
-        ["pp", "pp — very soft"],
-        ["p", "p — soft"],
-        ["mp", "mp — moderately soft"],
-        ["mf", "mf — moderately loud"],
-        ["f", "f — loud"],
-        ["ff", "ff — very loud"],
-        ["fff", "fff — very very loud"],
-        ["sfz", "sfz — a sudden accent"],
-        ["crescendo(", "Crescendo starts"],
-        ["crescendo)", "Crescendo ends"],
-      ],
-    ],
-    [
-      "Repeats and jumps",
-      [
-        ["segno", "Segno 𝄋 — where D.S. goes back to"],
-        ["coda", "Coda 𝄌 — where the coda starts"],
-        ["dacoda", "To Coda — leave for 𝄌 from here"],
-        ["fine", "Fine — the end, after D.C. or D.S."],
-        ["D.C.", "D.C. — back to the start"],
-        ["D.C.alfine", "D.C. al Fine"],
-        ["D.C.alcoda", "D.C. al Coda"],
-        ["D.S.", "D.S. — back to 𝄋"],
-        ["D.S.alfine", "D.S. al Fine"],
-        ["D.S.alcoda", "D.S. al Coda"],
-      ],
-    ],
-  ];
-  popupMenu(anchor, [
-    ...groups.flatMap(([heading, choices]) => [
-      { heading },
-      ...choices.map(([name, label]) => ({
-        label,
-        shortcut: decorationMark(name),
-        run: () => {
-          apply(decorate(text(), ranges(), name, fileIndex()), "Decoration");
-          view.focus();
-        },
-      })),
+  void import("./decoration-groups").then(({ DECORATION_GROUPS: groups }) =>
+    popupMenu(anchor, [
+      ...groups.flatMap(([heading, choices]) => [
+        { heading },
+        ...choices.map(([name, label]) => ({
+          label,
+          shortcut: decorationMark(name),
+          run: () => {
+            apply(decorate(text(), ranges(), name, fileIndex()), "Decoration");
+            view.focus();
+          },
+        })),
+      ]),
+      "-" as const,
+      { label: "Dynamic for the 2nd time…", shortcut: '"^2nd time p"', run: insertPassDynamic },
     ]),
-    "-" as const,
-    { label: "Dynamic for the 2nd time…", shortcut: '"^2nd time p"', run: insertPassDynamic },
-  ]);
+  );
 }
 
 /** Writes "^2nd time p" before the note at the caret, with the dynamic selected to change. */
@@ -4131,23 +4089,16 @@ const shortcuts = lazyDialog("shortcuts", "Keyboard shortcuts", false, async () 
   const help = await import("./help");
   return help.shortcutTable(help.SHORTCUTS);
 });
-const about = createDialog("about", "About VoxDown Composer");
-for (const line of [
-  "Composer is a browser-only editor for ABC music notation. Your music stays on this device: there is no account, no server and no tracking, and nothing is sent anywhere.",
-  "Scores are drawn by abcjs (MIT licence). The piano is the Salamander Grand Piano by Alexander Holm; fiddle, flute, strings and guitar come from the FluidR3 General MIDI SoundFont by Frank Wen. Both are Creative Commons Attribution 3.0 and served from this site.",
-  "Composer is experimental. Keep your own copies of your files.",
-]) {
-  const paragraph = document.createElement("p");
-  paragraph.textContent = line;
-  about.body.append(paragraph);
-}
+const about = lazyDialog("about", "About VoxDown Composer", false, async () =>
+  (await import("./help")).aboutContent(),
+);
 $("cheatsheet-open").addEventListener("click", () => sheet.open());
 
 const LOOKS = [
   {
     id: "auto",
     label: "Auto",
-    tone: "Follows your device",
+    tone: "As your device",
     swatch: "linear-gradient(135deg, #ffffff 50%, #1b1d21 50%)",
     ink: "#25282d",
   },
@@ -4218,69 +4169,9 @@ const looks = createDialog("looks", "Appearance");
 $("appearance").addEventListener("click", () => looks.open());
 applyLook(prefs.look);
 
-const offlineDialog = createDialog("offline-dialog", "Work offline");
-{
-  const intro = document.createElement("p");
-  intro.textContent =
-    "Composer can open without a connection once it is prepared. Your music is kept in this browser either way; save files to keep copies elsewhere.";
-  const status = document.createElement("p");
-  status.id = "offline-status";
-  status.setAttribute("role", "status");
-  const prepare = document.createElement("button");
-  prepare.type = "button";
-  prepare.className = "primary";
-  prepare.textContent = "Prepare for offline use";
-  const sounds = document.createElement("button");
-  sounds.type = "button";
-  sounds.textContent = "Keep every instrument offline (2.6\u00a0MB)";
-  const actions = document.createElement("div");
-  actions.className = "dialog-actions";
-  actions.append(sounds, prepare);
-  offlineDialog.body.append(intro, status, actions);
-  const refresh = async () => {
-    status.textContent = "Checking…";
-    const state = await offlineStatus().catch(() => ({
-      ready: false,
-      message: "Offline status is unavailable.",
-    }));
-    status.textContent = state.message;
-  };
-  prepare.addEventListener("click", async () => {
-    status.textContent = "Preparing…";
-    const state = await prepareOffline().catch(() => ({
-      ready: false,
-      message: "Offline files could not be saved. Check your connection and storage, then retry.",
-    }));
-    if (!state.ready) {
-      status.textContent = state.message;
-      return;
-    }
-    // Playing offline needs the instrument too: keep the one in use.
-    const instrument = INSTRUMENTS[player.instrument].label.toLowerCase();
-    status.textContent = `${state.message} Keeping the ${instrument}…`;
-    try {
-      await player.load(player.instrument);
-      status.textContent = `${state.message} The ${instrument} is kept too, so tunes play offline.`;
-    } catch {
-      status.textContent = `${state.message} The ${instrument} could not be kept; reconnect and prepare again to play offline.`;
-    }
-  });
-  sounds.addEventListener("click", async () => {
-    sounds.disabled = true;
-    try {
-      for (const id of INSTRUMENT_ORDER) await player.load(id);
-      status.textContent = "Every instrument is kept in this browser.";
-    } catch {
-      status.textContent =
-        "Some instruments could not be downloaded. Check your connection and retry.";
-    } finally {
-      sounds.disabled = false;
-    }
-  });
-  offlineDialog.dialog.addEventListener("toggle", () => {
-    if (offlineDialog.dialog.open) void refresh();
-  });
-}
+const offlineDialog = lazyDialog("offline-dialog", "Work offline", false, async () =>
+  (await import("./offline-dialog")).offlinePanel(player),
+);
 
 /** Problems as a list above the footer button; the editor stays usable beside it. */
 function problemText(problem: Problem): string {
@@ -4385,274 +4276,294 @@ function stepProblem(direction: 1 | -1): boolean {
 }
 
 /* Menus. */
+const menuDefinitions: Record<string, () => MenuItem[]> = {
+  file: () => [
+    { label: "New tune file", run: newFile, shortcut: "" },
+    { label: "Open ABC or MusicXML…", run: () => void openFile(), shortcut: "Mod O" },
+    { label: "Recent…", run: () => void recentMenu($("file-menu")) },
+    {
+      label: "Examples",
+      id: "examples",
+      submenu: () =>
+        EXAMPLES.map((example) => ({
+          label: `${example.title} — ${example.blurb}`,
+          id: `example-${example.id}`,
+          run: () => openExample(example.id),
+        })),
+    },
+    { label: "Recover a draft…", run: () => void openRecover() },
+    "-",
+    { label: "Save", run: () => void save(), shortcut: "Mod S" },
+    { label: "Save as…", run: () => void save(true), shortcut: "Mod Shift S" },
+    { label: "Download .abc", run: downloadAbc },
+    "-",
+    {
+      label: "Export MusicXML",
+      id: "export-musicxml",
+      submenu: () => [
+        {
+          label: "This tune (.musicxml)…",
+          run: () => void exportMusicXmlFiles(false),
+          enabled: () => fileIndex().tunes.length > 0,
+        },
+        {
+          label:
+            fileIndex().tunes.length > 1
+              ? `Every tune, ${fileIndex().tunes.length} files in one .zip…`
+              : "Every tune in one .zip (this file has one tune)",
+          run: () => void exportMusicXmlFiles(true),
+          enabled: () => fileIndex().tunes.length > 1,
+        },
+      ],
+    },
+    {
+      label: "Export",
+      id: "export",
+      submenu: () => {
+        const some = () => fileIndex().tunes.length > 0;
+        return [
+          { label: "SVG of this tune…", run: exportRun("svg"), enabled: some },
+          { label: "HTML tune book…", run: exportRun("html"), enabled: some },
+          { label: "MIDI…", run: exportRun("midi"), enabled: some },
+          { label: "Audio (WAV)…", run: exportRun("wav"), enabled: some },
+        ];
+      },
+    },
+    { label: "Print or save as PDF…", run: () => void printScore(), shortcut: "Mod P" },
+  ],
+  edit: () => [
+    {
+      label: "Undo",
+      run: () => undo(view),
+      shortcut: "Mod Z",
+      enabled: () => undoDepth(view.state) > 0,
+    },
+    {
+      label: "Redo",
+      run: () => redo(view),
+      shortcut: "Mod Shift Z",
+      enabled: () => redoDepth(view.state) > 0,
+    },
+    "-",
+    { label: "Cut", run: () => clipboard("cut"), shortcut: "Mod X", enabled: hasSelection },
+    { label: "Copy", run: () => clipboard("copy"), shortcut: "Mod C", enabled: hasSelection },
+    { label: "Paste", run: () => void pasteText(), shortcut: "Mod V" },
+    {
+      label: "Select all",
+      run: () => {
+        view.focus();
+        selectAll(view);
+      },
+      shortcut: "Mod A",
+    },
+    "-",
+    { label: "Find and replace…", run: openFind, shortcut: "Mod F" },
+    {
+      label: "Typing helpers",
+      submenu: () => [
+        {
+          label: "Bar line on Space when the bar is full",
+          run: () => setHelper("barOnSpace", !prefs.barOnSpace),
+          checked: () => prefs.barOnSpace,
+        },
+        {
+          label: "Automatic octave",
+          run: () => setHelper("autoOctave", !prefs.autoOctave),
+          checked: () => prefs.autoOctave,
+        },
+      ],
+    },
+    { label: "Next bar or problem to check", run: () => stepProblem(1), shortcut: "F8" },
+    {
+      label: "Previous bar or problem to check",
+      run: () => stepProblem(-1),
+      shortcut: "Shift F8",
+    },
+    "-",
+    {
+      label: "Notes",
+      id: "notes",
+      submenu: () => [
+        { label: "Up a semitone", run: () => music("transpose-up"), shortcut: "Alt ↑" },
+        { label: "Down a semitone", run: () => music("transpose-down"), shortcut: "Alt ↓" },
+        { label: "Up an octave", run: () => music("octave-up"), shortcut: "Alt Shift ↑" },
+        { label: "Down an octave", run: () => music("octave-down"), shortcut: "Alt Shift ↓" },
+        "-",
+        { label: "Double lengths", run: () => music("double"), shortcut: "Alt BracketRight" },
+        { label: "Halve lengths", run: () => music("halve"), shortcut: "Alt BracketLeft" },
+        { label: "Add a dot", run: () => music("dot"), shortcut: "Alt Period" },
+        { label: "Remove a dot", run: () => music("undot"), shortcut: "Alt Comma" },
+        "-",
+        { label: "Tie or untie", run: () => music("tie"), shortcut: "Alt T" },
+        { label: "Slur or unslur", run: () => music("slur"), shortcut: "Alt S" },
+      ],
+    },
+    {
+      label: "Duplicate bar or selection",
+      run: () => music("duplicate"),
+      shortcut: "Mod Shift D",
+    },
+    {
+      label: "Extend selection by a note",
+      run: () => moveByNote(1, true),
+      shortcut: "Alt Shift →",
+    },
+  ],
+  insert: () => [
+    { label: "New tune", run: newTune },
+    { label: "Bar line", run: () => music("bar") },
+    { label: "Decoration…", run: () => decorationMenu($("insert-menu")), shortcut: "Alt D" },
+    { label: "Dynamic for the 2nd time…", run: insertPassDynamic },
+    "-",
+    { label: "Second voice", run: insertVoice },
+    { label: "Lyrics line", run: insertLyrics },
+    { label: "Chord symbol", run: () => insertAtCaret('""', 1) },
+    { label: "Triplet", run: () => insertAtCaret("(3", 2) },
+    { label: "Repeat", run: () => insertAtCaret("|:  :|", 3) },
+  ],
+  view: () => [
+    {
+      label: "Score beside",
+      run: () => setLayout("beside"),
+      checked: () => resolvedLayout() === "beside",
+      shortcut: "Mod Backslash",
+    },
+    {
+      label: "Score below",
+      run: () => setLayout("below"),
+      checked: () => resolvedLayout() === "below",
+    },
+    { label: "Tunes panel", run: toggleRail, checked: () => workspace.dataset.rail === "open" },
+    "-",
+    {
+      label: "Zoom in",
+      run: () => stepZoom(lastPane ?? "score", 1),
+      shortcut: "Mod Equal",
+    },
+    {
+      label: "Zoom out",
+      run: () => stepZoom(lastPane ?? "score", -1),
+      shortcut: "Mod Minus",
+    },
+    { label: "Actual size", run: () => stepZoom(lastPane ?? "score", 0), shortcut: "Mod 0" },
+    {
+      label: "Focus",
+      run: () => setFocusMode(!body.classList.contains("focus-mode")),
+      checked: () => body.classList.contains("focus-mode"),
+      shortcut: "Mod Shift F",
+    },
+    {
+      label: "Score in Focus",
+      run: () => {
+        prefs.focusScore = !prefs.focusScore;
+        savePrefs();
+        if (body.classList.contains("focus-mode")) setFocusMode(true);
+      },
+      checked: () => prefs.focusScore,
+    },
+    "-",
+    { label: "Appearance…", run: () => looks.open() },
+    { label: "Work offline…", run: () => offlineDialog.open() },
+  ],
+  play: () => [
+    {
+      label: player.status === "playing" ? "Pause" : "Play",
+      run: () => void togglePlay(),
+      shortcut: "Mod Enter",
+    },
+    {
+      label: "Play from the caret",
+      run: () => void playFromCaret(),
+      shortcut: "Mod Shift Enter",
+    },
+    {
+      label: "Play the selection",
+      run: () => void playSelection(false),
+      shortcut: "Mod Alt Enter",
+    },
+    {
+      label: "Loop the selection or bar",
+      run: toggleLoop,
+      checked: () => loopOn,
+      shortcut: "Mod Shift L",
+    },
+    { label: "Stop", run: stop, shortcut: "Mod Period" },
+    "-",
+    {
+      label: "Faster",
+      run: () => setTempo(Number($<HTMLInputElement>("tempo").value) + 4),
+      shortcut: "Mod Alt Equal",
+    },
+    {
+      label: "Slower",
+      run: () => setTempo(Number($<HTMLInputElement>("tempo").value) - 4),
+      shortcut: "Mod Alt Minus",
+    },
+    {
+      label: "Tempo from the tune",
+      run: () => {
+        tempoOverride = null;
+        applyTempo();
+      },
+      enabled: () => tempoOverride !== null,
+    },
+    "-",
+    {
+      label: "Metronome",
+      run: () => setMetronome(!prefs.metronome),
+      checked: () => prefs.metronome,
+      shortcut: "Mod Alt M",
+    },
+    {
+      label: "Count in one bar",
+      run: () => setCountIn(!prefs.countIn),
+      checked: () => prefs.countIn,
+    },
+    {
+      label: "Follow D.C./D.S. jumps",
+      run: () => setFollowJumps(!prefs.followJumps),
+      checked: () => prefs.followJumps,
+    },
+    {
+      label: "Hear notes as you write",
+      run: () => {
+        prefs.hear = !prefs.hear;
+        savePrefs();
+      },
+      checked: () => prefs.hear,
+    },
+    { label: "Sound…", run: () => soundPopover($("sound-button")) },
+  ],
+  help: () => [
+    { label: "ABC cheat sheet", run: () => sheet.open(), shortcut: "F1" },
+    { label: "Keyboard shortcuts", run: () => shortcuts.open() },
+    { label: "Say the note at the caret", run: sayNote, shortcut: "Alt N" },
+    "-",
+    ...EXAMPLES.map((example) => ({
+      label: `Example: ${example.title}`,
+      run: () => openExample(example.id),
+    })),
+    "-",
+    { label: "About VoxDown Composer", run: () => about.open() },
+  ],
+};
+// Tune-book commands have a menu of their own (and each tune's menu in the rail).
+menuDefinitions.tunes = () => [
+  { label: "New tune at the end", run: newTune },
+  ...bookItems(),
+  "-",
+  { label: "Tunes panel", run: toggleRail, checked: () => workspace.dataset.rail === "open" },
+];
+// A phone shows File, Edit and Tunes; Insert, View, Play and Help are under ⋯.
+menuDefinitions.more = () =>
+  (["insert", "view", "play", "help"] as const).map((name) => ({
+    label: name[0]?.toUpperCase() + name.slice(1),
+    id: `more-${name}`,
+    submenu: () => menuDefinitions[name]?.() ?? [],
+  }));
 const menus = mountMenus(
   [...document.querySelectorAll<HTMLButtonElement>(".workspace-menus button")],
-  {
-    file: () => [
-      { label: "New tune file", run: newFile, shortcut: "" },
-      { label: "Open ABC or MusicXML…", run: () => void openFile(), shortcut: "Mod O" },
-      { label: "Recent…", run: () => void recentMenu($("file-menu")) },
-      {
-        label: "Examples",
-        id: "examples",
-        submenu: () =>
-          EXAMPLES.map((example) => ({
-            label: `${example.title} — ${example.blurb}`,
-            id: `example-${example.id}`,
-            run: () => openExample(example.id),
-          })),
-      },
-      { label: "Recover a draft…", run: () => void openRecover() },
-      "-",
-      { label: "Save", run: () => void save(), shortcut: "Mod S" },
-      { label: "Save as…", run: () => void save(true), shortcut: "Mod Shift S" },
-      { label: "Download .abc", run: downloadAbc },
-      "-",
-      {
-        label: "Export MusicXML",
-        id: "export-musicxml",
-        submenu: () => [
-          {
-            label: "This tune (.musicxml)…",
-            run: () => void exportMusicXmlFiles(false),
-            enabled: () => fileIndex().tunes.length > 0,
-          },
-          {
-            label:
-              fileIndex().tunes.length > 1
-                ? `Every tune, ${fileIndex().tunes.length} files in one .zip…`
-                : "Every tune in one .zip (this file has one tune)",
-            run: () => void exportMusicXmlFiles(true),
-            enabled: () => fileIndex().tunes.length > 1,
-          },
-        ],
-      },
-      {
-        label: "Export",
-        id: "export",
-        submenu: () => {
-          const some = () => fileIndex().tunes.length > 0;
-          return [
-            { label: "SVG of this tune…", run: exportRun("svg"), enabled: some },
-            { label: "HTML tune book…", run: exportRun("html"), enabled: some },
-            { label: "MIDI…", run: exportRun("midi"), enabled: some },
-            { label: "Audio (WAV)…", run: exportRun("wav"), enabled: some },
-          ];
-        },
-      },
-      { label: "Print or save as PDF…", run: () => void printScore(), shortcut: "Mod P" },
-    ],
-    edit: () => [
-      {
-        label: "Undo",
-        run: () => undo(view),
-        shortcut: "Mod Z",
-        enabled: () => undoDepth(view.state) > 0,
-      },
-      {
-        label: "Redo",
-        run: () => redo(view),
-        shortcut: "Mod Shift Z",
-        enabled: () => redoDepth(view.state) > 0,
-      },
-      "-",
-      { label: "Cut", run: () => clipboard("cut"), shortcut: "Mod X", enabled: hasSelection },
-      { label: "Copy", run: () => clipboard("copy"), shortcut: "Mod C", enabled: hasSelection },
-      { label: "Paste", run: () => void pasteText(), shortcut: "Mod V" },
-      {
-        label: "Select all",
-        run: () => {
-          view.focus();
-          selectAll(view);
-        },
-        shortcut: "Mod A",
-      },
-      "-",
-      { label: "Find and replace…", run: openFind, shortcut: "Mod F" },
-      { label: "Tune book", id: "tune-book", submenu: () => bookItems() },
-      {
-        label: "Typing helpers",
-        submenu: () => [
-          {
-            label: "Bar line on Space when the bar is full",
-            run: () => setHelper("barOnSpace", !prefs.barOnSpace),
-            checked: () => prefs.barOnSpace,
-          },
-          {
-            label: "Automatic octave",
-            run: () => setHelper("autoOctave", !prefs.autoOctave),
-            checked: () => prefs.autoOctave,
-          },
-        ],
-      },
-      { label: "Next bar or problem to check", run: () => stepProblem(1), shortcut: "F8" },
-      {
-        label: "Previous bar or problem to check",
-        run: () => stepProblem(-1),
-        shortcut: "Shift F8",
-      },
-      "-",
-      { label: "Up a semitone", run: () => music("transpose-up"), shortcut: "Alt ↑" },
-      { label: "Down a semitone", run: () => music("transpose-down"), shortcut: "Alt ↓" },
-      { label: "Up an octave", run: () => music("octave-up"), shortcut: "Alt Shift ↑" },
-      { label: "Down an octave", run: () => music("octave-down"), shortcut: "Alt Shift ↓" },
-      "-",
-      { label: "Double lengths", run: () => music("double"), shortcut: "Alt BracketRight" },
-      { label: "Halve lengths", run: () => music("halve"), shortcut: "Alt BracketLeft" },
-      { label: "Add a dot", run: () => music("dot"), shortcut: "Alt Period" },
-      { label: "Remove a dot", run: () => music("undot"), shortcut: "Alt Comma" },
-      "-",
-      { label: "Tie or untie", run: () => music("tie"), shortcut: "Alt T" },
-      { label: "Slur or unslur", run: () => music("slur"), shortcut: "Alt S" },
-      {
-        label: "Duplicate bar or selection",
-        run: () => music("duplicate"),
-        shortcut: "Mod Shift D",
-      },
-      {
-        label: "Extend selection by a note",
-        run: () => moveByNote(1, true),
-        shortcut: "Alt Shift →",
-      },
-    ],
-    insert: () => [
-      { label: "New tune", run: newTune },
-      { label: "Bar line", run: () => music("bar") },
-      { label: "Decoration…", run: () => decorationMenu($("insert-menu")), shortcut: "Alt D" },
-      { label: "Dynamic for the 2nd time…", run: insertPassDynamic },
-      "-",
-      { label: "Second voice", run: insertVoice },
-      { label: "Lyrics line", run: insertLyrics },
-      { label: "Chord symbol", run: () => insertAtCaret('""', 1) },
-      { label: "Triplet", run: () => insertAtCaret("(3", 2) },
-      { label: "Repeat", run: () => insertAtCaret("|:  :|", 3) },
-    ],
-    view: () => [
-      {
-        label: "Score beside",
-        run: () => setLayout("beside"),
-        checked: () => resolvedLayout() === "beside",
-        shortcut: "Mod Backslash",
-      },
-      {
-        label: "Score below",
-        run: () => setLayout("below"),
-        checked: () => resolvedLayout() === "below",
-      },
-      { label: "Tunes panel", run: toggleRail, checked: () => workspace.dataset.rail === "open" },
-      "-",
-      {
-        label: "Zoom in",
-        run: () => stepZoom(lastPane ?? "score", 1),
-        shortcut: "Mod Equal",
-      },
-      {
-        label: "Zoom out",
-        run: () => stepZoom(lastPane ?? "score", -1),
-        shortcut: "Mod Minus",
-      },
-      { label: "Actual size", run: () => stepZoom(lastPane ?? "score", 0), shortcut: "Mod 0" },
-      {
-        label: "Focus",
-        run: () => setFocusMode(!body.classList.contains("focus-mode")),
-        checked: () => body.classList.contains("focus-mode"),
-        shortcut: "Mod Shift F",
-      },
-      {
-        label: "Score in Focus",
-        run: () => {
-          prefs.focusScore = !prefs.focusScore;
-          savePrefs();
-          if (body.classList.contains("focus-mode")) setFocusMode(true);
-        },
-        checked: () => prefs.focusScore,
-      },
-      "-",
-      { label: "Appearance…", run: () => looks.open() },
-      { label: "Work offline…", run: () => offlineDialog.open() },
-    ],
-    play: () => [
-      {
-        label: player.status === "playing" ? "Pause" : "Play",
-        run: () => void togglePlay(),
-        shortcut: "Mod Enter",
-      },
-      {
-        label: "Play from the caret",
-        run: () => void playFromCaret(),
-        shortcut: "Mod Shift Enter",
-      },
-      {
-        label: "Play the selection",
-        run: () => void playSelection(false),
-        shortcut: "Mod Alt Enter",
-      },
-      {
-        label: "Loop the selection or bar",
-        run: toggleLoop,
-        checked: () => loopOn,
-        shortcut: "Mod Shift L",
-      },
-      { label: "Stop", run: stop, shortcut: "Mod Period" },
-      "-",
-      {
-        label: "Faster",
-        run: () => setTempo(Number($<HTMLInputElement>("tempo").value) + 4),
-        shortcut: "Mod Alt Equal",
-      },
-      {
-        label: "Slower",
-        run: () => setTempo(Number($<HTMLInputElement>("tempo").value) - 4),
-        shortcut: "Mod Alt Minus",
-      },
-      {
-        label: "Tempo from the tune",
-        run: () => {
-          tempoOverride = null;
-          applyTempo();
-        },
-        enabled: () => tempoOverride !== null,
-      },
-      "-",
-      {
-        label: "Metronome",
-        run: () => setMetronome(!prefs.metronome),
-        checked: () => prefs.metronome,
-        shortcut: "Mod Alt M",
-      },
-      {
-        label: "Count in one bar",
-        run: () => setCountIn(!prefs.countIn),
-        checked: () => prefs.countIn,
-      },
-      {
-        label: "Follow D.C./D.S. jumps",
-        run: () => setFollowJumps(!prefs.followJumps),
-        checked: () => prefs.followJumps,
-      },
-      {
-        label: "Hear notes as you write",
-        run: () => {
-          prefs.hear = !prefs.hear;
-          savePrefs();
-        },
-        checked: () => prefs.hear,
-      },
-      { label: "Sound…", run: () => soundPopover($("sound-button")) },
-    ],
-    help: () => [
-      { label: "ABC cheat sheet", run: () => sheet.open(), shortcut: "F1" },
-      { label: "Keyboard shortcuts", run: () => shortcuts.open() },
-      { label: "Say the note at the caret", run: sayNote, shortcut: "Alt N" },
-      "-",
-      ...EXAMPLES.map((example) => ({
-        label: `Example: ${example.title}`,
-        run: () => openExample(example.id),
-      })),
-      "-",
-      { label: "About VoxDown Composer", run: () => about.open() },
-    ],
-  },
+  menuDefinitions,
 );
 
 function insertAtCaret(insert: string, caretOffset: number) {

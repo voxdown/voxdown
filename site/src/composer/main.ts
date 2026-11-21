@@ -566,6 +566,7 @@ function showStart(show: boolean) {
   for (const element of [document.querySelector(".documentbar"), $("transport")])
     element?.toggleAttribute("inert", show);
   for (const rover of rovers) rover.refresh();
+  updateSavedState();
   if (show) void fillRecentStart();
 }
 
@@ -690,7 +691,7 @@ function explainCaret(update: ViewUpdate) {
   const status = $("explain");
   status.replaceChildren();
   // What a typed mark just did stays said while its selection does.
-  if (statusNote && statusNote.selection.eq(view.state.selection)) {
+  if (statusNote?.selection.eq(view.state.selection)) {
     status.textContent = statusNote.message;
     return;
   }
@@ -4110,6 +4111,11 @@ void start();
   }),
   scoreIndex: () => scoreIndex,
   breaks: () => breaks,
+  /** Where a page point reads in the music: its note and how far it reached, for checks. */
+  hit: (x: number, y: number) => {
+    const found = hitPoint(x, y);
+    return found && { time: found.note.time, start: found.note.start, reach: found.reach };
+  },
   /** Note heads and bar lines in page coordinates, for checks that drag across bars. */
   geometry: () => {
     const geo = staffGeometry();

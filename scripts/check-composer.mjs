@@ -1911,42 +1911,40 @@ console.log(
   "Composer: paused or stopped, nothing glows; the hollow marker follows seeks and Stop clears it: passed",
 );
 
-{
-  // Tidy 3 and 4. A new tune is named from its first T: until renamed; the bar check's grace
-  // covers only the bar being typed, not the empty line below it.
-  await page.locator('[data-menu="file"]').click();
-  await page.getByRole("menuitem", { name: "New tune file" }).click();
-  await page.waitForFunction(() => document.getElementById("name").value === "Untitled.abc");
-  await page.evaluate(() => {
-    const view = window.composer.view;
-    const at = view.state.doc.toString().indexOf("Untitled tune");
-    view.dispatch({
-      changes: { from: at, to: at + "Untitled tune".length, insert: "Evening Song" },
-    });
+// Tidy 3 and 4. A new tune is named from its first T: until renamed; the bar check's grace
+// covers only the bar being typed, not the empty line below it.
+await page.locator('[data-menu="file"]').click();
+await page.getByRole("menuitem", { name: "New tune file" }).click();
+await page.waitForFunction(() => document.getElementById("name").value === "Untitled.abc");
+await page.evaluate(() => {
+  const view = window.composer.view;
+  const at = view.state.doc.toString().indexOf("Untitled tune");
+  view.dispatch({
+    changes: { from: at, to: at + "Untitled tune".length, insert: "Evening Song" },
   });
-  await page.waitForFunction(() => document.getElementById("name").value === "Evening Song.abc");
-  await page.locator("#name").fill("My copy");
-  await page.locator("#name").press("Enter");
-  await page.evaluate(() => {
-    const view = window.composer.view;
-    const at = view.state.doc.toString().indexOf("Evening Song");
-    view.dispatch({ changes: { from: at, to: at + "Evening Song".length, insert: "Night Song" } });
-  });
-  await page.waitForTimeout(200);
-  assert.equal(await page.locator("#name").inputValue(), "My copy.abc", "renamed: the name stays");
-  // An overfull last bar, then Enter: flagged while the caret sits on the empty line below.
-  await page.locator(".cm-content").focus();
-  await page.evaluate(() => {
-    const view = window.composer.view;
-    view.dispatch({ selection: { anchor: view.state.doc.length } });
-  });
-  await page.keyboard.type("C D E F G A B c d");
-  await page.waitForTimeout(1000);
-  assert(await page.locator("#problems").isHidden(), "the bar being typed is not flagged yet");
-  await page.keyboard.press("Enter");
-  await page.locator("#problems").waitFor({ timeout: 1500 });
-  assert.match(await page.locator("#problems").textContent(), /1 bar to check/);
-}
+});
+await page.waitForFunction(() => document.getElementById("name").value === "Evening Song.abc");
+await page.locator("#name").fill("My copy");
+await page.locator("#name").press("Enter");
+await page.evaluate(() => {
+  const view = window.composer.view;
+  const at = view.state.doc.toString().indexOf("Evening Song");
+  view.dispatch({ changes: { from: at, to: at + "Evening Song".length, insert: "Night Song" } });
+});
+await page.waitForTimeout(200);
+assert.equal(await page.locator("#name").inputValue(), "My copy.abc", "renamed: the name stays");
+// An overfull last bar, then Enter: flagged while the caret sits on the empty line below.
+await page.locator(".cm-content").focus();
+await page.evaluate(() => {
+  const view = window.composer.view;
+  view.dispatch({ selection: { anchor: view.state.doc.length } });
+});
+await page.keyboard.type("C D E F G A B c d");
+await page.waitForTimeout(1000);
+assert(await page.locator("#problems").isHidden(), "the bar being typed is not flagged yet");
+await page.keyboard.press("Enter");
+await page.locator("#problems").waitFor({ timeout: 1500 });
+assert.match(await page.locator("#problems").textContent(), /1 bar to check/);
 console.log(
   "Composer: a new tune is named from its title until renamed; the bar check's grace is the bar being typed: passed",
 );
@@ -2009,37 +2007,35 @@ console.log(
 console.log(
   "Composer: typing . over selected music marks staccato and again removes it; over lyrics it types: passed",
 );
-{
-  // Tidy 8. F10 goes to the menu bar; Edit has Cut, Copy, Paste and Select all.
-  await page.locator(".cm-content").focus();
-  await page.keyboard.press("F10");
-  assert.equal(await page.evaluate(() => document.activeElement.id), "file-menu");
-  await page.locator('[data-menu="edit"]').click();
-  for (const [name, keys] of [
-    ["Cut", "Ctrl+X"],
-    ["Copy", "Ctrl+C"],
-    ["Paste", "Ctrl+V"],
-    ["Select all", "Ctrl+A"],
-  ])
-    assert.equal(
-      (
-        await page
-          .getByRole("menuitem", { name: new RegExp(`^${name}`) })
-          .locator(".menu-shortcut")
-          .textContent()
-      ).trim(),
-      keys,
-    );
-  await page.getByRole("menuitem", { name: /^Select all/ }).click();
+// Tidy 8. F10 goes to the menu bar; Edit has Cut, Copy, Paste and Select all.
+await page.locator(".cm-content").focus();
+await page.keyboard.press("F10");
+assert.equal(await page.evaluate(() => document.activeElement.id), "file-menu");
+await page.locator('[data-menu="edit"]').click();
+for (const [name, keys] of [
+  ["Cut", "Ctrl+X"],
+  ["Copy", "Ctrl+C"],
+  ["Paste", "Ctrl+V"],
+  ["Select all", "Ctrl+A"],
+])
   assert.equal(
-    await page.evaluate(() => {
-      const view = window.composer.view;
-      return view.state.selection.main.to - view.state.selection.main.from;
-    }),
-    (await docText()).length,
-    "Select all selects the text",
+    (
+      await page
+        .getByRole("menuitem", { name: new RegExp(`^${name}`) })
+        .locator(".menu-shortcut")
+        .textContent()
+    ).trim(),
+    keys,
   );
-}
+await page.getByRole("menuitem", { name: /^Select all/ }).click();
+assert.equal(
+  await page.evaluate(() => {
+    const view = window.composer.view;
+    return view.state.selection.main.to - view.state.selection.main.from;
+  }),
+  (await docText()).length,
+  "Select all selects the text",
+);
 console.log("Composer: F10 goes to the menus; Edit has Cut, Copy, Paste, Select all: passed");
 
 const phone = await browser.newContext({

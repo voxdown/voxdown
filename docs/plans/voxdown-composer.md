@@ -293,3 +293,15 @@ Splitting further means drawing the start screen without the editor, a larger ch
 
 Final pass at 1440, 1024 and 390 in Paper, Night and High contrast: see the round 5 reply for
 the list of fixes.
+
+## Tidy-up after the polish rounds (round 5 scored Claude 8.6, Codex 8.2)
+
+Paused or stopped, nothing glows: a hollow marker shows where the music will go on and follows
+every seek, and Stop clears it. A drag starting or ending just past a bar line reads it as that
+bar's start, in one voice or two, and a note alone in its bar (a whole-bar rest drawn mid-bar)
+spans the bar. The bar check waits only for the bar being typed. A new tune's file name follows
+its first T: until it is renamed or saved. The header keeps a compact name and an unsaved dot on
+tablets and a name chip on phones, and Save is quiet when there is nothing to save. Tablets keep
+the transport's labels, with Voices in the Sound sheet. F10 goes to the menus, and Edit has Cut,
+Copy, Paste and Select all. Typing . ~ ( over selected music marks every note with staccato, a
+roll or a slur, and typing it again removes them; anything that is not music is typed as usual.

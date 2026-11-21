@@ -1,3 +1,4 @@
+import { DYNAMIC_WORD, passDynamics } from "./passes";
 import type { FileIndex, TuneInfo } from "./tunes";
 
 /* biome-ignore lint/suspicious/noExplicitAny: abcjs's tune objects are loosely typed. */
@@ -317,6 +318,7 @@ export async function renderTune(
   performance.mark("composer:engrave");
   const tunes = abcjs.renderAbc(stage, source, { ...params, lineBreaks } as Any) as Any[];
   const visual = tunes[0];
+  drawPassDynamics(stage);
   performance.measure("composer:engrave", "composer:engrave");
   performance.mark("composer:index");
   const index = indexScore(visual, input.tune, toDocument, source);
@@ -716,4 +718,73 @@ export function measure(
     });
   }
   return { notes, staves };
+}
+
+/**
+ * Beams, ties and slurs belong to several notes, and abcjs draws them apart from those notes. Each
+ * is matched by line, voice and position to the notes it spans, so it can share their colour.
+ */
+export type Attachment = { element: Element; notes: ScoreNote[] };
+export function attachments(index: ScoreIndex, container: HTMLElement): Attachment[] {
+  const voiceOf = (element: Element | undefined) =>
+    Number(/abcjs-v(\d+)/.exec(element?.getAttribute("class") ?? "")?.[1] ?? -1);
+  const lineOf = (element: Element) =>
+    Number(/abcjs-l(\d+)/.exec(element.getAttribute("class") ?? "")?.[1] ?? -1);
+  const heads = index.notes
+    .filter((note) => !note.rest && note.elements[0])
+    .map((note) => {
+      const box = (note.elements[0] as Element).getBoundingClientRect();
+      return { note, voice: voiceOf(note.elements[0]), center: box.left + box.width / 2 };
+    });
+  const found: Attachment[] = [];
+  for (const element of container.querySelectorAll(
+    ".abcjs-beam-elem, [data-name='tie'], [data-name='slur']",
+  )) {
+    const box = element.getBoundingClientRect();
+    if (!box.width) continue;
+    const line = lineOf(element);
+    const voice = voiceOf(element);
+    const notes = heads
+      .filter(
+        (head) =>
+          head.note.line === line &&
+          (voice < 0 || head.voice === voice) &&
+          head.center >= box.left - 8 &&
+          head.center <= box.right + 8,
+      )
+      .map((head) => head.note);
+    if (notes.length) found.push({ element, notes });
+  }
+  return found;
+}
+
+/** In annotations like "2nd time p", the dynamic letters are drawn as dynamics: bold italic. */
+export function drawPassDynamics(root: Element): number {
+  let drawn = 0;
+  for (const text of root.querySelectorAll("text.abcjs-annotation")) {
+    if (!passDynamics(text.textContent ?? "")) continue;
+    const walker = text.ownerDocument.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+    for (const node of nodes) {
+      const value = node.data;
+      const parts: Node[] = [];
+      let last = 0;
+      for (const match of value.matchAll(DYNAMIC_WORD)) {
+        const lead = match[1] ?? "";
+        const start = (match.index ?? 0) + lead.length;
+        parts.push(text.ownerDocument.createTextNode(value.slice(last, start)));
+        const span = text.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        span.setAttribute("class", "abc-dyn");
+        span.textContent = match[2] ?? "";
+        parts.push(span);
+        drawn += 1;
+        last = start + (match[2] ?? "").length;
+      }
+      if (!parts.length) continue;
+      parts.push(text.ownerDocument.createTextNode(value.slice(last)));
+      node.replaceWith(...parts);
+    }
+  }
+  return drawn;
 }

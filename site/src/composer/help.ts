@@ -123,6 +123,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
     rows: [
       ["!p!  !mf!  !ff!", "dynamics: playback follows them"],
       ["!<(! … !<)!", "crescendo (diminuendo: !>(! !>)!)"],
+      ['"^2nd time p"A', "a dynamic for the 2nd time through; playback follows it"],
       [".A  !>!A  !tenuto!A", "staccato, accent, tenuto"],
       ["~A  !trill!A  !fermata!A", "roll, trill, pause"],
     ],

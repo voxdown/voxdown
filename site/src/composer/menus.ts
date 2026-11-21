@@ -17,13 +17,13 @@ export type MenuItem =
   | "-"
   | { heading: string };
 
-const apple =
+export const isApple =
   typeof navigator !== "undefined" &&
   /Mac|iPad|iPhone|iPod/.test(`${navigator.platform} ${navigator.userAgent}`);
 
 /** "Mod Shift Enter" → "Ctrl+Shift+Enter" or "⌘⇧↩". */
 export function shortcutLabel(value: string): string {
-  if (apple)
+  if (isApple)
     return value
       .replace(/Mod\s*/g, "⌘")
       .replace(/Alt\s*/g, "⌥")
@@ -173,7 +173,7 @@ export function mountMenus(
         entry.append(shortcut);
         entry.setAttribute(
           "aria-keyshortcuts",
-          item.shortcut.replace(/Mod/g, apple ? "Meta" : "Control").replace(/\s+/g, "+"),
+          item.shortcut.replace(/Mod/g, isApple ? "Meta" : "Control").replace(/\s+/g, "+"),
         );
       }
       entry.disabled = item.enabled ? !item.enabled() : false;

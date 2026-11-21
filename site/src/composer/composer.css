@@ -16,8 +16,8 @@
   --story: var(--workspace-story);
   /* Music colours: the note at the caret, the note playing, a selected region. */
   --caret-note: #1f6f8b;
-  --play: #b3500b;
-  --play-soft: rgb(222 120 40 / 0.16);
+  --play: #2f6fde;
+  --play-soft: rgb(47 111 222 / 0.14);
   --band: rgb(36 95 97 / 0.13);
   --band-edge: rgb(36 95 97 / 0.42);
   --warn: #9a5b00;
@@ -55,8 +55,8 @@
   --primary-ink: #0d1718;
   --focus: #93b6f0;
   --caret-note: #69c6e6;
-  --play: #ffad5c;
-  --play-soft: rgb(255 173 92 / 0.18);
+  --play: #6ea6ff;
+  --play-soft: rgb(110 166 255 / 0.18);
   --band: rgb(79 176 179 / 0.17);
   --band-edge: rgb(79 176 179 / 0.55);
   --warn: #f0b85a;
@@ -89,8 +89,8 @@
     --primary-ink: #0d1718;
     --focus: #93b6f0;
     --caret-note: #69c6e6;
-    --play: #ffad5c;
-    --play-soft: rgb(255 173 92 / 0.18);
+    --play: #6ea6ff;
+    --play-soft: rgb(110 166 255 / 0.18);
     --band: rgb(79 176 179 / 0.17);
     --band-edge: rgb(79 176 179 / 0.55);
     --warn: #f0b85a;
@@ -121,7 +121,7 @@
   --border: #d4c6ab;
   --accent: #245f61;
   --caret-note: #1d5f77;
-  --play: #9c3f06;
+  --play: #2a5fc8;
   --syn-note: #33291d;
   --syn-value: #33291d;
   --syn-comment: #6b5d48;
@@ -129,6 +129,8 @@
   --syn-rest: #6b5d48;
 }
 :root[data-look="slate"] {
+  --play: #7fb0ff;
+  --play-soft: rgb(127 176 255 / 0.18);
   --desk: #1a1f26;
   --surface: #262c35;
   --chrome: #262c35;
@@ -143,6 +145,7 @@
   --syn-comment: #a0a9b5;
 }
 :root[data-look="contrast"] {
+  --play-soft: rgb(20 71 179 / 0.14);
   --desk: #d0d4da;
   --surface: #fff;
   --chrome: #fff;
@@ -153,7 +156,7 @@
   --accent: #1b4a4c;
   --focus: #1a46a0;
   --caret-note: #0b4f68;
-  --play: #8a3200;
+  --play: #1447b3;
   --band: rgb(27 74 76 / 0.16);
   --band-edge: rgb(27 74 76 / 0.7);
   --syn-field: #6b1f70;
@@ -818,9 +821,15 @@ body[data-layout="below"] #layout-toggle .beside {
 .score .is-selected {
   color: var(--accent);
 }
+/* The note being heard: a vivid blue with a soft glow, like light moving along. The glow is a
+   filter, so nothing moves; it wins over the selection's teal inside a selected loop. */
 .score .is-playing {
   color: var(--play);
-  filter: drop-shadow(0 0 2.5px color-mix(in srgb, var(--play) 55%, transparent));
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--play) 85%, transparent))
+    drop-shadow(0 0 6px color-mix(in srgb, var(--play) 45%, transparent));
+}
+.score .is-selected.is-playing {
+  color: var(--play);
 }
 .score svg .abcjs-cursor {
   stroke: var(--play);
@@ -976,7 +985,7 @@ body[data-layout="below"] #layout-toggle .beside {
 }
 .abc-playing {
   background: var(--play-soft);
-  box-shadow: 0 2px 0 var(--play);
+  box-shadow: 0 2px 0 var(--play), 0 0 8px color-mix(in srgb, var(--play) 30%, transparent);
   border-radius: 2px;
 }
 .abc-caret-note {
@@ -2120,7 +2129,7 @@ body.starting #transport {
 /* Stopped or paused, the place marker is a hollow outline in the accent, not the playing colour. */
 .transport:not([data-state="playing"]) .timeline-head {
   background: var(--surface);
-  box-shadow: inset 0 0 0 2px var(--accent);
+  box-shadow: inset 0 0 0 2px var(--play);
   width: 6px;
   margin-left: -3px;
   border-radius: 3px;
@@ -2282,4 +2291,13 @@ dialog.composer-dialog[open]::backdrop {
 .splitter:hover::after,
 .splitter:focus-visible::after {
   opacity: 1;
+}
+
+/* Dynamics written inside per-pass annotations, drawn like !p!. */
+.score text .abc-dyn {
+  font-family: "Literata Variable", Georgia, serif;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 1.3em;
+  letter-spacing: -0.02em;
 }

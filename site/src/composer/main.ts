@@ -12,6 +12,7 @@ import {
   decorate,
   decorationMark,
   duplicate,
+  eventsIn,
   newTuneTemplate,
   removeDots,
   scaleLengths,
@@ -26,17 +27,20 @@ import { describeKey, describeMeter, explainAt } from "./explain";
 import { SHORTCUTS, cheatsheet, createDialog, shortcutTable } from "./help";
 import { INSTRUMENTS, INSTRUMENT_ORDER, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
-import { type MenuItem, mountMenus, popupMenu } from "./menus";
+import { type MenuItem, isApple, mountMenus, popupMenu, shortcutLabel } from "./menus";
 import { offlineStatus, prepareOffline } from "./offline";
+import { applyPassDynamics, passMarks } from "./passes";
 import { Player, encodeWav, normalise } from "./player";
 import { roving } from "./roving";
 import {
+  type Attachment,
   type Breaks,
   type Placed,
   type Region,
   type ScoreIndex,
   type ScoreNote,
   type ScorePoint,
+  attachments,
   authorBarsPerLine,
   dragRegion,
   loadAbcjs,
@@ -522,11 +526,12 @@ function explainCaret(update: ViewUpdate) {
   const status = $("explain");
   status.replaceChildren();
   if (!view.state.selection.main.empty) {
-    const count = scoreIndex
-      ? notesInRanges(scoreIndex, ranges()).filter((note) => !note.rest).length
-      : 0;
+    // Counted from the text itself, so it is right even before the score is redrawn.
+    const count = eventsIn(text(), ranges(), fileIndex()).filter(
+      (event) => !event.rest && event.to > event.from,
+    ).length;
     const voices = view.state.selection.ranges.length;
-    status.textContent = `${count} ${count === 1 ? "note" : "notes"} selected${voices > 1 ? ` in ${voices} voices` : ""} · ${touch.matches ? "More › Play the selection plays it" : "Ctrl/⌘ Alt Enter plays it"}`;
+    status.textContent = `${count} ${count === 1 ? "note" : "notes"} selected${voices > 1 ? ` in ${voices} voices` : ""} · ${touch.matches ? "Tap More › Play selection to hear it" : `${shortcutLabel("Mod Alt Enter")} plays it`}`;
     return;
   }
   if (!explanation) {
@@ -660,6 +665,7 @@ async function render(force = false) {
     renderedKey = key;
     scoreIndex = result;
     geometry = null;
+    attached = null;
     updateSummary();
     // Timing and audio are built in a separate task, so the draw stays short.
     setTimeout(() => {
@@ -773,6 +779,9 @@ function buildPlayback(index: ScoreIndex) {
   }
   // Times in the description are whole notes at the starting tempo.
   timeline = buildTimeline(audio, meta, index.toDocument, lookup);
+  // Dynamics written for a pass ("^2nd time p") are applied on that pass.
+  const marks = passMarks(text(), index.tune, fileIndex());
+  timeline = applyPassDynamics(timeline, marks.rules, marks.written);
   player.setTimeline(timeline);
   player.hint = [...new Set(timeline.notes.map((note) => note.pitch))];
   if (player.loopingRegion && loopRegion) {
@@ -796,6 +805,21 @@ let litCaret: Element[] = [];
 let litSelection: Element[] = [];
 let lastCaretKey = "";
 
+let attached: Attachment[] | null = null;
+/** Beams, ties and slurs take a colour only when every note they join has it. */
+function paintAttached(notes: ScoreNote[], className: string): Element[] {
+  if (!scoreIndex || !notes.length) return [];
+  attached ??= attachments(scoreIndex, scoreElement);
+  const set = new Set(notes);
+  const painted: Element[] = [];
+  for (const attachment of attached)
+    if (attachment.notes.every((note) => set.has(note))) {
+      attachment.element.classList.add(className);
+      painted.push(attachment.element);
+    }
+  return painted;
+}
+
 function linkFromText() {
   const index = scoreIndex;
   if (!index) return;
@@ -810,7 +834,10 @@ function linkFromText() {
     const selected = notesInRanges(index, nonEmpty);
     for (const note of selected)
       for (const element of note.elements) element.classList.add("is-selected");
-    litSelection = selected.flatMap((note) => note.elements);
+    litSelection = [
+      ...selected.flatMap((note) => note.elements),
+      ...paintAttached(selected, "is-selected"),
+    ];
     drawBands(selected);
   } else {
     caretNotes = notesAt(index, selection.main.head);
@@ -1369,9 +1396,8 @@ function decorationMenu(anchor: HTMLElement) {
     ["crescendo)", "Crescendo ends"],
     ["breath", "Breath mark"],
   ];
-  popupMenu(
-    anchor,
-    choices.map(([name, label]) => ({
+  popupMenu(anchor, [
+    ...choices.map(([name, label]) => ({
       label,
       shortcut: decorationMark(name),
       run: () => {
@@ -1379,7 +1405,29 @@ function decorationMenu(anchor: HTMLElement) {
         view.focus();
       },
     })),
-  );
+    "-" as const,
+    { label: "Dynamic for the 2nd time…", shortcut: '"^2nd time p"', run: insertPassDynamic },
+  ]);
+}
+
+/** Writes "^2nd time p" before the note at the caret, with the dynamic selected to change. */
+function insertPassDynamic() {
+  const [event] = eventsIn(text(), [{ from: caret(), to: caret() }], fileIndex());
+  if (!event) {
+    notice(
+      "Put the caret on a note first: the dynamic goes on the note where the 2nd time changes.",
+    );
+    return;
+  }
+  const insert = '"^2nd time p"';
+  view.dispatch({
+    changes: { from: event.from, insert },
+    selection: { anchor: event.from + insert.length - 2, head: event.from + insert.length - 1 },
+    userEvent: "input.music",
+  });
+  view.focus();
+  $("explain").textContent =
+    "Type the dynamic for the 2nd time (pp, p, mp, mf, f, ff); playback follows it.";
 }
 
 function newTune() {
@@ -1589,7 +1637,7 @@ function playbackFrame() {
       const lit = scoreIndex.notes.filter((note) => starts.has(note.start));
       for (const note of lit)
         for (const element of note.elements) element.classList.add("is-playing");
-      litPlaying = lit.flatMap((note) => note.elements);
+      litPlaying = [...lit.flatMap((note) => note.elements), ...paintAttached(lit, "is-playing")];
       view.dispatch({
         effects: setMarks.of({
           playing: playing ? lit.map((note) => ({ from: note.start, to: note.end })) : [],
@@ -3041,6 +3089,7 @@ const menus = mountMenus(
       { label: "New tune", run: newTune },
       { label: "Bar line", run: () => music("bar") },
       { label: "Decoration…", run: () => decorationMenu($("insert-menu")), shortcut: "Alt D" },
+      { label: "Dynamic for the 2nd time…", run: insertPassDynamic },
       "-",
       { label: "Second voice", run: insertVoice },
       { label: "Lyrics line", run: insertLyrics },
@@ -3333,11 +3382,15 @@ $("rail-close").addEventListener("click", () => {
   $("rail-toggle").focus();
 });
 // Shortcuts named in titles are also given to assistive technology.
+// Titles name shortcuts in this platform's words: ⌘⌥↩ on a Mac, Ctrl+Alt+Enter elsewhere.
 for (const element of document.querySelectorAll<HTMLElement>("[title]")) {
   const match = /\(([^)]+)\)\s*$/.exec(element.title);
-  if (!match || element.hasAttribute("aria-keyshortcuts")) continue;
+  if (!match) continue;
+  const named = (match[1] as string).replace(/Ctrl\/⌘/g, "Mod").replace(/−/g, "-");
+  element.title = element.title.replace(/\(([^)]+)\)\s*$/, `(${shortcutLabel(named)})`);
+  if (element.hasAttribute("aria-keyshortcuts")) continue;
   const keys = (match[1] as string)
-    .replace(/Ctrl\/⌘/g, "Control")
+    .replace(/Ctrl\/⌘/g, isApple ? "Meta" : "Control")
     .replace(/−/g, "-")
     .split(/\s+/)
     .map(
@@ -3346,6 +3399,7 @@ for (const element of document.querySelectorAll<HTMLElement>("[title]")) {
           Alt: "Alt",
           Shift: "Shift",
           Control: "Control",
+          Meta: "Meta",
           "↑": "ArrowUp",
           "↓": "ArrowDown",
           "←": "ArrowLeft",

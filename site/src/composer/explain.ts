@@ -16,6 +16,7 @@ import {
   pitchName,
   value,
 } from "./abc";
+import { describePassDynamics, passDynamics } from "./passes";
 import { type FileIndex, type TuneInfo, tuneAt } from "./tunes";
 import { type WalkState, tuneItems, walkTune } from "./walk";
 
@@ -468,8 +469,15 @@ function explainToken(
         token: token.text,
         text: `Chord symbol ${token.text.slice(1, -1)}: printed above, and played as accompaniment.`,
       };
-    case "annotation":
-      return { token: token.text, text: "Annotation: text printed beside the note." };
+    case "annotation": {
+      const rules = passDynamics(token.text.slice(1, -1));
+      return {
+        token: token.text,
+        text: rules
+          ? `Dynamics by pass: ${describePassDynamics(rules)}. Playback follows; the score draws them as dynamics.`
+          : "Annotation: text printed beside the note.",
+      };
+    }
     case "decoration": {
       if (token.text.length === 1)
         return { token: token.text, text: `${SHORTHAND[token.text] ?? "decoration"}.` };
@@ -546,7 +554,10 @@ export function meterOf(tune: TuneInfo): Fraction | null {
 /** "mp (moderately soft)", "trill", "chord Am": what a mark before a note adds to it. */
 function attachedPhrase(token: MusicToken): string {
   if (token.kind === "chord-symbol") return `chord ${token.text.slice(1, -1)}`;
-  if (token.kind === "annotation") return `“${token.text.slice(2, -1)}”`;
+  if (token.kind === "annotation") {
+    const rules = passDynamics(token.text.slice(1, -1));
+    return rules ? describePassDynamics(rules) : `“${token.text.slice(2, -1)}”`;
+  }
   if (token.text.length === 1)
     return (SHORTHAND[token.text] ?? "decoration").split(":")[0] as string;
   const name = token.text.slice(1, -1);

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { humanDate } from "../src/composer/dates";
 import { KEYS, METERS, decorationOptions, inOrder } from "../src/composer/editor";
 import { INSTRUMENTS, findLoop, nearestSample, velocityGain } from "../src/composer/instruments";
+import { applyPassDynamics, passDynamics, passMarks } from "../src/composer/passes";
 import { normalise } from "../src/composer/player";
 import {
   type Placed,
@@ -328,6 +329,41 @@ describe("phrase-aware line breaks", () => {
     const [first, second] = tune.lines[0]?.staff[0]?.voices[0] ?? [];
     expect(first?.lyric[0]).toMatchObject({ syllable: "\u00a0sec\u202f", divider: "-\u00a0" });
     expect(second?.lyric[0]).toMatchObject({ syllable: "\u00a0onds", divider: "\u00a0" });
+  });
+});
+
+describe("dynamics per pass", () => {
+  it("reads the ways players write them", () => {
+    expect([...(passDynamics("^2nd time p") ?? [])]).toEqual([[2, "p"]]);
+    expect([...(passDynamics("^1st time f, 2nd time p") ?? [])]).toEqual([
+      [1, "f"],
+      [2, "p"],
+    ]);
+    expect([...(passDynamics("^f, 2nd time p") ?? [])]).toEqual([
+      [1, "f"],
+      [2, "p"],
+    ]);
+    expect([...(passDynamics("_on repeat pp") ?? [])]).toEqual([[2, "pp"]]);
+    expect([...(passDynamics("^2nd x mf") ?? [])]).toEqual([[2, "mf"]]);
+    expect(passDynamics("^rit.")).toBeNull();
+    expect(passDynamics("^p")).toBeNull();
+  });
+  it("plays the second time softer from the marked note", () => {
+    const text = 'X:1\nM:2/4\nL:1/4\nQ:1/4=120\nK:C\n|: !f!C D | "^2nd time p"E F :| G2 |]\n';
+    const { timeline } = prepare(text);
+    const file = indexFile(text);
+    const marks = passMarks(text, file.tunes[0] as never, file);
+    expect(marks.rules).toHaveLength(1);
+    const after = applyPassDynamics(timeline, marks.rules, marks.written);
+    const e = after.notes.filter((note) => note.track === 0 && note.pitch === 64);
+    const before = timeline.notes.filter((note) => note.track === 0 && note.pitch === 64);
+    expect(e[0]?.velocity).toBe(before[0]?.velocity);
+    expect(e[1]?.velocity).toBeLessThan((before[1]?.velocity ?? 0) * 0.7);
+    // The pass ends at the repeat: G after it is untouched.
+    const g = after.notes.find((note) => note.track === 0 && note.pitch === 67);
+    expect(g?.velocity).toBe(
+      timeline.notes.find((note) => note.track === 0 && note.pitch === 67)?.velocity,
+    );
   });
 });
 

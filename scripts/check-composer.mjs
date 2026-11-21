@@ -5022,9 +5022,21 @@ console.log(
       const view = window.composer.view;
       return view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to);
     });
+  // A tap selects its note; a quick drag (a scroll) then leaves that selection as it was, even
+  // starting from another note.
   await touch("touchStart", [a]);
-  await slide();
-  assert.equal(await picked(), "d", "a quick drag scrolls: the tapped note stays selected");
+  await touch("touchEnd", []);
+  await q.waitForTimeout(200);
+  assert.equal(await picked(), "d", "a tap selects its note");
+  const c = { x: heads[2].head + 4, y: heads[2].y };
+  await touch("touchStart", [c]);
+  for (let step = 1; step <= 10; step++) {
+    await touch("touchMove", [{ x: c.x + ((b.x - c.x) * step) / 10, y: c.y }]);
+    await q.waitForTimeout(16);
+  }
+  await touch("touchEnd", []);
+  await q.waitForTimeout(300);
+  assert.equal(await picked(), "d", "a quick drag scrolls: the selection stays as it was");
   await touch("touchStart", [a]);
   await q.waitForTimeout(600);
   assert.equal(await q.locator("#score-scroll.pressing").count(), 1, "a long press is shown");
@@ -5112,6 +5124,122 @@ console.log(
   await ctx.close();
   console.log(
     `Composer: ${checked} random text selections over a hard tune light, count and move the same notes: passed`,
+  );
+}
+
+/* 31. Selection hardening, round 2: each finding, as the reviewers found it. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      if (view.state.doc.toString() !== x)
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    await p.waitForFunction((x) => window.composer.scoreIndex()?.source === x, t);
+    await p.waitForTimeout(400);
+    return p.evaluate(() => window.composer.geometry());
+  };
+  const pull = async (a, b) => {
+    await p.mouse.move(a.x, a.y);
+    await p.mouse.down();
+    await p.mouse.move(b.x, b.y, { steps: 6 });
+    await p.mouse.up();
+  };
+  const select = (from, to) =>
+    p.evaluate(
+      ([anchor, head]) => window.composer.view.dispatch({ selection: { anchor, head } }),
+      [from, to],
+    );
+  // 1. A copy of two voices' bar 1, pasted over their bar 3: each voice gets its own part.
+  const paste =
+    "X:1\nT:Paste\nM:4/4\nL:1/4\n%%score (1 2)\nK:C\nV:1\nc d e f|g a b c'|c' b a g|f e d c|]\nV:2\nC D E F|G A B c|c B A G|F E D C|]\n";
+  let geo = await put(paste);
+  const bar = (voice, from) =>
+    geo.notes
+      .filter((box) => box.voice === voice && box.time >= from - 1e-6 && box.time < from + 1 - 1e-6)
+      .sort((a, b) => a.head - b.head);
+  const across = async (from) => {
+    const top = bar(0, from);
+    const low = bar(1, from);
+    await pull({ x: top[0].head + 3, y: top[0].y }, { x: low.at(-1).head + 3, y: low.at(-1).y });
+  };
+  await across(0);
+  await p.keyboard.press("Control+c");
+  assert.equal(
+    await p.evaluate(() => navigator.clipboard.readText()),
+    "V:1\nc d e f|\nV:2\nC D E F|\n",
+    "a two-voice copy keeps each voice under its V: line",
+  );
+  await across(2);
+  await p.keyboard.press("Enter");
+  await p.keyboard.press("Control+v");
+  assert.equal(
+    await docText(p),
+    "X:1\nT:Paste\nM:4/4\nL:1/4\n%%score (1 2)\nK:C\nV:1\nc d e f|g a b c'|c d e f|f e d c|]\nV:2\nC D E F|G A B c|C D E F|F E D C|]\n",
+    "pasted over two voices' bar 3, each voice gets its own part",
+  );
+  await p.keyboard.press("Control+z");
+  assert.equal(await docText(p), paste, "the paste is one undo step");
+  // 2. A double-clicked note, and one chord tone, move with Alt ↑.
+  await put("X:1\nT:Double\nM:4/4\nL:1/8\nK:C\nF/G/ [C,,C,]8 =G6 |\n");
+  await p.locator(".cm-content").focus();
+  const at = async (part) => (await docText(p)).indexOf(part);
+  await select(await at("F/"), (await at("F/")) + 1);
+  await p.keyboard.press("Alt+ArrowUp");
+  assert.match(await docText(p), /\n\^F\/G\/ /, "a double-clicked F (no length) moves up");
+  await select((await at("[C,,")) + 1, (await at("[C,,")) + 4);
+  await p.waitForFunction(() =>
+    /^1 chord tone selected/.test(document.getElementById("explain").textContent),
+  );
+  await p.keyboard.press("Alt+Shift+ArrowUp");
+  assert.match(await docText(p), /\[C,C,\]8/, "one chord tone moves an octave, the other stays");
+  // 4. Play the selection: exactly the notes selected, the pieces back to back.
+  geo = await put(paste);
+  const d = bar(0, 0)[1];
+  const e = bar(0, 3)[1];
+  await p.mouse.click(d.head + 3, d.y);
+  await p.keyboard.down("Control");
+  await p.mouse.click(e.head + 3, e.y);
+  await p.keyboard.up("Control");
+  await p.keyboard.press("Control+Alt+Enter");
+  await p.waitForFunction(() => window.composer.player.timeline?.pieces?.length === 2);
+  assert.deepEqual(
+    await p.evaluate(() => window.composer.player.timeline.notes.map((note) => note.pitch)),
+    [74, 76],
+    "a note (d) and another three bars on (e) play just those two",
+  );
+  await p.keyboard.press("Control+Period");
+  // 5. Find this melody from a selection reads the notes, not the text.
+  await put("X:1\nT:Sharp\nM:4/4\nL:1/8\nK:C\n^F2 GA F4 |\n");
+  await select(await at("GA F4"), (await at("GA F4")) + 5);
+  await p.locator(".cm-content").focus();
+  await p.keyboard.press("Control+Shift+M");
+  await p.waitForFunction(() => document.getElementById("melody-query")?.value === "G A ^F4");
+  await p.keyboard.press("Escape");
+  // 6. Insert › Triplet goes by the notes, whichever way the selection was dragged.
+  const plain = "X:1\nT:Insert\nM:4/4\nL:1/8\nK:C\nC d e f g4 |\n";
+  for (const backwards of [false, true]) {
+    await put(plain);
+    const from = await at("d e f");
+    if (backwards) await select(from + 5, from);
+    else await select(from, from + 5);
+    await menu("insert", "Triplet", p);
+    assert.match(
+      await docText(p),
+      /\nC \(3d e f g4 \|/,
+      `Triplet over d e f, dragged ${backwards ? "backwards" : "forwards"}`,
+    );
+  }
+  await ctx.close();
+  console.log(
+    "Composer: selection hardening round 2: voiced paste, double-clicked notes and chord tones, exactly the selected notes played, melodies from notes, Insert by the notes: passed",
   );
 }
 

@@ -2637,3 +2637,27 @@ dialog.composer-dialog[open]::backdrop {
   font-size: 13px;
   line-height: 1.55;
 }
+
+/* Tune book: Sort tunes and Incipits choose from a short list. */
+.book-choice {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+.book-choice.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.book-choice label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+}
+.dialog-note {
+  color: var(--muted);
+  font-size: 13px;
+}

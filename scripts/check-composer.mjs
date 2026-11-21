@@ -2955,6 +2955,84 @@ console.log(
   "Composer: a D.S. al Coda plays in order, lit and named on the clock; the setting turns it off: passed",
 );
 
+{
+  // Sprint C 2. Tune book: sort and renumber a three-tune file, each one undo step; line up bars.
+  const book =
+    "%abc-2.1\n% three tunes\n\nX:7\nT:The Swallowtail\nM:6/8\nL:1/8\nK:Em\nGEE BEE|dBA BAG|\n\n% a note on the next tune\nX:3\nT:Banish Misfortune\nM:6/8\nL:1/8\nK:Dmix\nfed cAG|A2d cAG|\n\nX:12\nT:Àfter the Fair\nM:3/4\nL:1/4\nK:D\nDFA|d2c|\n";
+  await setText(book, "The Swallowtail");
+  const titles = async () => (await docText()).match(/^T:.*$/gm).join(" / ");
+  const undoOnce = async () => {
+    await page.evaluate(() => window.composer.view.focus());
+    await page.keyboard.press("Control+z");
+    await settle(150);
+  };
+  await page.locator('[data-menu="edit"]').click();
+  await page.getByRole("menuitem", { name: "Tune book" }).click();
+  await page.getByRole("menuitem", { name: "Sort tunes…" }).click();
+  const sortDialog = page.locator("#sort-tunes[open]");
+  await sortDialog.waitFor();
+  assert.match(
+    await sortDialog.textContent(),
+    /text between two tunes move with the tune after them/,
+  );
+  await sortDialog.getByRole("button", { name: "Sort" }).click();
+  await page.waitForFunction(() =>
+    /^%abc-2\.1\n% three tunes\n\nX:12\nT:Àfter/.test(window.composer.view.state.doc.toString()),
+  );
+  assert.equal(await titles(), "T:Àfter the Fair / T:Banish Misfortune / T:The Swallowtail");
+  assert.match(await docText(), /% a note on the next tune\nX:3\nT:Banish Misfortune/);
+  await undoOnce();
+  assert.equal(await docText(), book, "one undo puts the old order back");
+  // Renumber from the rail's menu.
+  await page.locator(".tune-item").first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Renumber X: 1…n" }).click();
+  await page.waitForFunction(() => /^X:1$/m.test(window.composer.view.state.doc.toString()));
+  assert.deepEqual((await docText()).match(/^X:.*$/gm), ["X:1", "X:2", "X:3"]);
+  assert.equal(
+    (await docText()).replace(/^X:.*$/gm, ""),
+    book.replace(/^X:.*$/gm, ""),
+    "only the numbers",
+  );
+  await undoOnce();
+  assert.equal(await docText(), book, "one undo puts the numbers back");
+  // Line up bars: the bar lines of the lines below each other, the music the same.
+  const tune =
+    "X:1\nT:Lined\nM:4/4\nL:1/8\nK:G\n|:GABc d2B2|c2A2 B4|AGFE D2D2|G8:|\ngfed B2B2|cdcB A4|BAGF E2E2|D8|]\n";
+  await setText(tune, "Lined");
+  const notesBefore = await page.evaluate(() =>
+    window.composer.scoreIndex().notes.map((note) => `${note.voice}:${note.time}:${note.duration}`),
+  );
+  await menu("edit", "Tune book");
+  await page.getByRole("menuitem", { name: "Line up bars" }).click();
+  await page.waitForFunction(
+    (before) => window.composer.view.state.doc.toString() !== before,
+    tune,
+  );
+  const lines = (await docText()).split("\n");
+  const columns = (line) => [...line.matchAll(/\|/g)].map((match) => match.index);
+  assert.deepEqual(
+    columns(lines[5]).slice(1, 4),
+    columns(lines[6]).slice(0, 3),
+    "the bar lines line up",
+  );
+  await drawn();
+  await settle(300);
+  assert.deepEqual(
+    await page.evaluate(() =>
+      window.composer
+        .scoreIndex()
+        .notes.map((note) => `${note.voice}:${note.time}:${note.duration}`),
+    ),
+    notesBefore,
+    "the same notes",
+  );
+  await undoOnce();
+  assert.equal(await docText(), tune, "one undo");
+}
+console.log(
+  "Composer: tune book: sort and renumber, one undo each; bars lined up, the music the same: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,

@@ -2324,6 +2324,37 @@ function newTune() {
   view.focus();
 }
 
+/* Tune book: renumber, sort, line up bars, incipits, duplicate, new tune after (./book). */
+const bookContext = () => ({
+  view,
+  file: fileIndex(),
+  caret: caret(),
+  name: nameInput.value,
+  notice,
+  explain: (message: string) => {
+    $("explain").textContent = message;
+  },
+  newTune,
+  openDraft: (draft: string, name: string) => {
+    local.disconnect();
+    load(newSource(draft), abcName(name));
+    void persist();
+  },
+});
+const bookItems = (tune?: TuneInfo): MenuItem[] => {
+  const run = (command: import("./book").BookCommand) => () =>
+    void import("./book").then((module) => module.runBook(command, bookContext(), tune));
+  return [
+    { label: "Duplicate tune", run: run("duplicate") },
+    { label: "New tune after this one", run: run("new-after") },
+    "-",
+    { label: "Renumber X: 1…n", run: run("renumber") },
+    { label: "Sort tunes…", run: run("sort") },
+    { label: tune ? "Line up bars in this tune" : "Line up bars", run: run("line-up") },
+    { label: "Incipits…", run: run("incipits") },
+  ];
+};
+
 /* Playback. */
 let loopRegion: Region | null = null;
 let loopOn = false;
@@ -3491,6 +3522,18 @@ function updateRail() {
       .join(" · ");
     button.append(title, meta);
     button.addEventListener("click", () => goTo(Math.min(tune.bodyFrom, tune.to)));
+    // Right-click, Shift F10 or the menu key: what can be done with this tune.
+    button.setAttribute("aria-haspopup", "menu");
+    button.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      popupMenu(button, bookItems(tune));
+    });
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+        event.preventDefault();
+        popupMenu(button, bookItems(tune));
+      }
+    });
     list.append(button);
     if (
       (tune === current || tune.from === current?.from) &&
@@ -4431,6 +4474,7 @@ const menus = mountMenus(
       },
       "-",
       { label: "Find and replace…", run: openFind, shortcut: "Mod F" },
+      { label: "Tune book", id: "tune-book", submenu: () => bookItems() },
       {
         label: "Typing helpers",
         submenu: () => [

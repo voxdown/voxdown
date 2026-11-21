@@ -6,6 +6,7 @@ import { isZip, mxlDocuments } from "./zip";
 
 export { MusicXmlError, describeReport, type ImportReport, type ImportResult } from "./import";
 export { ZipError, writeZip } from "./zip";
+export { exportMusicXml } from "./export";
 
 /** Text from bytes: UTF-8, or UTF-16 when it starts with a byte-order mark. */
 function decodeText(bytes: Uint8Array): string {

@@ -3751,6 +3751,49 @@ nameInput.addEventListener("change", () => {
   updateSavedState();
 });
 
+/**
+ * MusicXML out, from abcjs's parse of each tune (the parse the score is drawn from): the tune at
+ * the caret as a .musicxml, or every tune as .musicxml files in one .zip.
+ */
+async function exportMusicXmlFiles(all: boolean) {
+  const index = fileIndex();
+  const current = tuneAt(index, caret());
+  const tunes = all ? index.tunes : current ? [current] : [];
+  if (!tunes.length) return notice("Write a tune first: there is nothing to export yet.");
+  try {
+    const [abcjs, musicxml] = await Promise.all([loadAbcjs(), import("./musicxml")]);
+    const encoder = new TextEncoder();
+    const date = new Date().toISOString().slice(0, 10);
+    const used = new Set<string>();
+    const files = tunes.map((tune) => {
+      const { source } = tuneSource({ text: text(), file: index, tune });
+      const parsed = (abcjs as Any).parseOnly(source)[0];
+      let base = abcName(tuneLabel(tune)).replace(/\.abc$/, "");
+      // Two tunes with one title get numbered names in the .zip.
+      for (let count = 2; used.has(base); count++)
+        base = `${abcName(tuneLabel(tune)).replace(/\.abc$/, "")} ${count}`;
+      used.add(base);
+      return {
+        name: `${base}.musicxml`,
+        data: encoder.encode(musicxml.exportMusicXml(parsed, { date })),
+      };
+    });
+    if (files.length === 1) {
+      const [file] = files as [(typeof files)[number]];
+      download(file.data as BlobPart, file.name, "application/vnd.recordare.musicxml+xml");
+      notice(`Exported ${file.name}: open it in MuseScore, Dorico, Finale or Sibelius.`, "success");
+    } else {
+      const zipName = `${abcName(nameInput.value).replace(/\.abc$/, "")} (MusicXML).zip`;
+      download(musicxml.writeZip(files) as BlobPart, zipName, "application/zip");
+      notice(`Exported ${files.length} tunes as MusicXML in ${zipName}.`, "success");
+    }
+  } catch (error) {
+    noticeError(
+      `The MusicXML could not be written${error instanceof Error && error.message ? `: ${error.message}` : "."}`,
+    );
+  }
+}
+
 async function exportMidi() {
   if (!scoreIndex) return notice("Draw a tune first: there is nothing to export yet.");
   const abcjs = await loadAbcjs();
@@ -4280,6 +4323,22 @@ const menus = mountMenus(
       { label: "Save as…", run: () => void save(true), shortcut: "Mod Shift S" },
       { label: "Download .abc", run: downloadAbc },
       "-",
+      {
+        label: "Export MusicXML",
+        id: "export-musicxml",
+        submenu: () => [
+          {
+            label: "This tune (.musicxml)…",
+            run: () => void exportMusicXmlFiles(false),
+            enabled: () => fileIndex().tunes.length > 0,
+          },
+          {
+            label: `Every tune, ${fileIndex().tunes.length} files in one .zip…`,
+            run: () => void exportMusicXmlFiles(true),
+            enabled: () => fileIndex().tunes.length > 1,
+          },
+        ],
+      },
       { label: "Export MIDI", run: () => void exportMidi(), enabled: () => Boolean(scoreIndex) },
       {
         label: "Export audio (WAV)",

@@ -1,6 +1,13 @@
 // Browser checks for VoxDown Composer. Run after pnpm site:build.
 import assert from "node:assert/strict";
-import { createReadStream, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  createReadStream,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import { extname, resolve } from "node:path";
 import { chromium } from "playwright";
@@ -2620,6 +2627,40 @@ console.log(
 console.log(
   "Composer: .mxl and .musicxml open as drafts that draw, play and pass the checks, with a report; a malformed file says why: passed",
 );
+
+{
+  // Sprint B. MusicXML out: File › Export MusicXML › This tune, and the file opens again as the
+  // same music.
+  await openExample("Greensleeves");
+  await drawn();
+  const notes = async () =>
+    page.evaluate(() =>
+      window.composer
+        .scoreIndex()
+        .notes.map((note) => `${note.voice}:${note.time.toFixed(4)}:${note.duration.toFixed(4)}`),
+    );
+  const original = await notes();
+  const summary = await page.locator("#score-summary").textContent();
+  await page.locator('[data-menu="file"]').click();
+  await page.getByRole("menuitem", { name: "Export MusicXML" }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("menuitem", { name: "This tune (.musicxml)…" }).click(),
+  ]);
+  assert.equal(download.suggestedFilename(), "Greensleeves.musicxml");
+  const saved = resolve(process.env.TMPDIR ?? "/tmp", `composer-export-${Date.now()}.musicxml`);
+  await download.saveAs(saved);
+  assert.match(readFileSync(saved, "utf8"), /<score-partwise version="4.0">/);
+  await page.locator("#file").setInputFiles(saved);
+  await page.locator("#import-report[open]").waitFor();
+  await page.locator("#import-report").getByRole("button", { name: "OK" }).click();
+  await drawn();
+  await settle(500);
+  assert.deepEqual(await notes(), original, "the same notes, voices, times and lengths");
+  assert.equal(await page.locator("#score-summary").textContent(), summary);
+  unlinkSync(saved);
+}
+console.log("Composer: a tune exported as MusicXML opens again as the same music: passed");
 
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },

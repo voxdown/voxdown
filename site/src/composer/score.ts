@@ -44,7 +44,14 @@ export type ScoreIndex = {
   source: string;
 };
 
-export type RenderInput = { text: string; file: FileIndex; tune: TuneInfo; width: number };
+export type RenderInput = {
+  text: string;
+  file: FileIndex;
+  tune: TuneInfo;
+  width: number;
+  /** A phone: smaller titles and closer spacing. */
+  compact?: boolean | undefined;
+};
 
 /** Builds the text abcjs reads for one tune, with the file header in front. */
 export function tuneSource(input: Pick<RenderInput, "text" | "file" | "tune">) {
@@ -255,7 +262,7 @@ export async function renderTune(
   stage.style.width = `${Math.floor(input.width)}px`;
   const font = '"Literata Variable", Georgia, serif';
   // Narrow screens accept closer spacing, so a phone still shows two bars a line.
-  const compact = staffwidth < 500;
+  const compact = input.compact ?? staffwidth < 400;
   const spacing = { min: compact ? 1.1 : 1.35, max: wide ? 2.4 : 2.7 };
   const params: Any = {
     add_classes: true,
@@ -266,8 +273,7 @@ export async function renderTune(
     paddingright: 12,
     selectTypes: false,
     format: {
-      // A phone keeps the title block tight, so the first staff is not pushed off the screen.
-      ...(compact ? { titlespace: 2, subtitlespace: 1, composerspace: 2, musicspace: 4 } : {}),
+      // A phone keeps the title block small, so the first staff is not pushed off the screen.
       titlefont: `${font} ${compact ? 16 : 19}`,
       subtitlefont: `${font} ${compact ? 12 : 14}`,
       composerfont: `${font} italic ${compact ? 11 : 12}`,

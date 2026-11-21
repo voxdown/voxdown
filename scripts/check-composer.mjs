@@ -1175,12 +1175,14 @@ const lyricGaps = (p) =>
   await setText(lyricTune, "Ten seconds");
   const wide = await lyricGaps(page);
   assert(wide.count >= 14 && wide.smallest >= wide.needed, `1440 beside: ${JSON.stringify(wide)}`);
-  // The narrowest score the splitter allows.
+  // Every width the splitter allows, down to the narrowest score (where the words used to meet).
   await page.locator("#splitter").focus();
-  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
-  await settle(900);
-  const narrow = await lyricGaps(page);
-  assert(narrow.smallest >= narrow.needed, `narrowest score: ${JSON.stringify(narrow)}`);
+  for (let step = 1; step <= 12; step++) {
+    await page.keyboard.press("ArrowRight");
+    await settle(650);
+    const narrow = await lyricGaps(page);
+    assert(narrow.smallest >= narrow.needed, `splitter step ${step}: ${JSON.stringify(narrow)}`);
+  }
   for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowLeft");
   for (const [width, height] of [
     [1024, 768],
@@ -1206,11 +1208,31 @@ const lyricGaps = (p) =>
     await other.waitForTimeout(900);
     const measured = await lyricGaps(other);
     assert(measured.smallest >= measured.needed, `${width}: ${JSON.stringify(measured)}`);
+    // Every example opens clean at this width: no warnings from how it is drawn.
+    for (const title of [
+      "Ode to Joy",
+      "Greensleeves",
+      "Twinkle, Twinkle, Little Star",
+      "Frère Jacques",
+    ]) {
+      await other.locator("#file-menu").click();
+      await other.getByRole("menuitem", { name: "Examples" }).click();
+      await other.getByRole("menuitem", { name: new RegExp(`^${title}`) }).click();
+      await other.waitForFunction(
+        (name) => document.getElementById("score-summary").textContent.startsWith(name),
+        title,
+      );
+      await other.waitForTimeout(1200);
+      assert(
+        await other.locator("#problems").isHidden(),
+        `${title} opens without problems at ${width}`,
+      );
+    }
     await sized.close();
   }
 }
 console.log(
-  "Composer: lyric words keep a clear gap at 1440, 1024, 390 and the narrowest score: passed",
+  "Composer: lyric words keep a clear gap at 1440 (every splitter position), 1024 and 390; examples open clean: passed",
 );
 
 /* 11. Phone: Text | Score switch with the transport at hand. */

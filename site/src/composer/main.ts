@@ -590,7 +590,7 @@ async function render(force = false) {
     const sameTune = scoreIndex?.tune.from === tune.from;
     const result = await renderTune(
       stage,
-      { text: doc, file: index, tune, width },
+      { text: doc, file: index, tune, width, compact: phone.matches },
       workspace.dataset.layout === "below",
       sameTune ? breaks : null,
       () => authorBarsPerLine(doc, tuneItems(doc, tune, index)),

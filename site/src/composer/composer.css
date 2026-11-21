@@ -1688,6 +1688,55 @@ body.focus-mode .rail {
   padding: 0;
   border: 0;
 }
+/* Without the score, the text alone in a centred column of comfortable measure. */
+body.focus-text .workspace,
+body.focus-text .workspace[data-layout="below"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "main";
+}
+body.focus-text .rail,
+body.focus-text .splitter,
+body.focus-text .score-panel {
+  display: none;
+}
+body.focus-text .writing {
+  grid-area: main;
+}
+body.focus-text .cm-scroller {
+  padding-inline: max(24px, calc((100% - 76ch) / 2));
+}
+/* The way out: quiet at the top right, clearer when the pointer moves or it has focus. */
+.focus-controls {
+  position: fixed;
+  top: 10px;
+  right: 14px;
+  z-index: 40;
+  display: flex;
+  gap: 6px;
+  opacity: 0.4;
+  transition: opacity 0.25s ease;
+}
+.focus-controls[hidden] {
+  display: none;
+}
+.focus-controls.awake,
+.focus-controls:hover,
+.focus-controls:focus-within {
+  opacity: 1;
+}
+.focus-controls button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--chrome);
+  color: var(--ink);
+  font: 13px / 1 var(--ui);
+}
+.focus-controls button[aria-pressed="false"] {
+  color: var(--muted);
+}
 
 /* Narrower desks. */
 @media (max-width: 1100px) {

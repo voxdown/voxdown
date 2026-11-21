@@ -1137,12 +1137,134 @@ await openExample("Greensleeves");
   assert.match(await page.locator("#clock").textContent(), /^Bar [1-8] · 2nd time · \d:\d\d$/);
   assert.match(
     await page.locator("#timeline").getAttribute("aria-valuetext"),
-    /2nd time, of 16 bars/,
+    /2nd time, played bar \d+ of \d+, \d:\d\d$/,
+  );
+  // 5. The timeline starts at the pickup, marks the 2nd time, bands only what is played again,
+  // and its value, maximum and text agree.
+  const timelineState = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll("#timeline-ticks span")].map(
+      (label) => label.textContent,
+    );
+    const bands = [...document.querySelectorAll("#timeline-passes .timeline-pass.repeat")].map(
+      (band) => Number.parseFloat(band.style.width),
+    );
+    const slider = document.getElementById("timeline");
+    return {
+      labels,
+      bands,
+      ticks: document.querySelectorAll("#timeline-ticks .timeline-tick").length,
+      max: Number(slider.getAttribute("aria-valuemax")),
+      now: Number(slider.getAttribute("aria-valuenow")),
+    };
+  });
+  assert.equal(timelineState.labels[0], "Pickup", `first label: ${timelineState.labels}`);
+  assert(
+    timelineState.labels.some((label) => /· 2nd$/.test(label)),
+    `a 2nd-time label: ${timelineState.labels}`,
+  );
+  assert.equal(timelineState.bands.length, 1, "one band for the repeated part");
+  assert(
+    timelineState.bands[0] < 45,
+    `the band covers part A's repeat only (${timelineState.bands[0]}%)`,
+  );
+  assert.equal(timelineState.max, timelineState.ticks, "the maximum counts played bars");
+  assert(
+    timelineState.now >= 1 && timelineState.now <= timelineState.max,
+    "the value is within it",
   );
   await page.locator("#stop").click();
 }
 console.log(
   "Composer: long bars come back after typing; overfull first bar is bar 1; lines follow phrases; written bars with passes: passed",
+);
+
+{
+  // 6. The browser's own Print: beforeprint fills the print score in the screen's fonts,
+  // afterprint clears it.
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+  const printed = await page.evaluate(() => {
+    const root = document.getElementById("print-score");
+    const texts = [...root.querySelectorAll("svg text")];
+    const title = texts.find((text) => text.textContent === "Greensleeves");
+    const lyric = root.querySelector("svg .abcjs-lyric");
+    return {
+      tunes: root.querySelectorAll(".print-tune svg").length,
+      notes: root.querySelectorAll(".abcjs-note").length,
+      titleFont: title
+        ? getComputedStyle(title).fontFamily || title.getAttribute("font-family")
+        : "",
+      lyricWeight: lyric ? getComputedStyle(lyric).fontWeight : "400",
+    };
+  });
+  assert.equal(printed.tunes, 1, "one tune in the print score");
+  assert(printed.notes > 20, `the print score has the notes (${printed.notes})`);
+  assert.match(printed.titleFont, /Literata/, `print title font: ${printed.titleFont}`);
+  assert(Number(printed.lyricWeight) < 600, `print lyrics weight ${printed.lyricWeight}`);
+  await page.emulateMedia({ media: "print" });
+  assert(
+    await page.locator("#print-score svg").first().isVisible(),
+    "the print score shows in print",
+  );
+  await page.emulateMedia({ media: "screen" });
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  assert.equal(await page.locator("#print-score > *").count(), 0, "afterprint clears it");
+}
+console.log(
+  "Composer: the browser's Print fills the score in the screen's fonts and clears after: passed",
+);
+
+{
+  // 7. Focus: a quiet way out at the top right, Escape leaves; without the score, a centred column.
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+Shift+F");
+  await page.waitForFunction(() => document.body.classList.contains("focus-mode"));
+  const controls = page.locator("#focus-controls");
+  assert(await controls.isVisible(), "the Exit focus control shows");
+  const box = await controls.boundingBox();
+  assert(box.y < 60 && box.x + box.width > 1440 - 40, `top right: ${JSON.stringify(box)}`);
+  assert(await page.locator("#score svg").first().isVisible(), "with the score, Focus keeps it");
+  assert(!(await page.locator(".documentbar").isVisible()), "and hides the chrome");
+  await page.mouse.move(700, 400);
+  await page.mouse.move(720, 420);
+  await page.waitForFunction(() =>
+    document.getElementById("focus-controls").classList.contains("awake"),
+  );
+  await page.waitForFunction(
+    () => getComputedStyle(document.getElementById("focus-controls")).opacity === "1",
+  );
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !document.body.classList.contains("focus-mode"));
+  assert(!(await controls.isVisible()), "the control goes with Focus");
+  // Without the score.
+  await page.keyboard.press("Control+Shift+F");
+  await page.locator("#focus-score").click();
+  await page.waitForFunction(() => document.body.classList.contains("focus-text"));
+  const column = await page.evaluate(() => {
+    const line = [...document.querySelectorAll(".cm-line")].reduce((a, b) =>
+      b.getBoundingClientRect().width > a.getBoundingClientRect().width ? b : a,
+    );
+    const rect = line.getBoundingClientRect();
+    const score = document.getElementById("score-panel").getBoundingClientRect();
+    const ch = Number.parseFloat(getComputedStyle(line).fontSize) * 0.6;
+    return { left: rect.left, right: rect.right, width: rect.width, ch, score: score.width };
+  });
+  assert.equal(column.score, 0, "the score is hidden");
+  assert(column.width < 90 * column.ch, `a comfortable measure (${column.width}px)`);
+  assert(
+    Math.abs((column.left + column.right) / 2 - 720) < 60,
+    `centred: ${column.left}–${column.right}`,
+  );
+  await page.locator("#focus-exit").click();
+  await page.waitForFunction(() => !document.body.classList.contains("focus-mode"));
+  assert(!(await page.evaluate(() => document.body.classList.contains("focus-text"))));
+  // Leave the preference as it was.
+  await page.keyboard.press("Control+Shift+F");
+  await page.locator("#focus-score").click();
+  await page.locator("#focus-exit").click();
+}
+console.log(
+  "Composer: Focus hides the chrome, shows a quiet way out, leaves with Escape; text alone sits centred: passed",
 );
 
 {

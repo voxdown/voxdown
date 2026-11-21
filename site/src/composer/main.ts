@@ -1,6 +1,7 @@
 import "./composer.css";
+import { completionStatus } from "@codemirror/autocomplete";
 import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
-import { openSearchPanel } from "@codemirror/search";
+import { openSearchPanel, searchPanelOpen } from "@codemirror/search";
 import { EditorSelection, type EditorState, type TransactionSpec } from "@codemirror/state";
 import { EditorView, type KeyBinding, type ViewUpdate } from "@codemirror/view";
 import { frac, lineKind, parseKey } from "./abc";
@@ -27,6 +28,7 @@ import { describeKey, describeMeter, explainAt } from "./explain";
 import { SHORTCUTS, cheatsheet, createDialog, shortcutTable } from "./help";
 import { INSTRUMENTS, INSTRUMENT_ORDER, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
+import { checkLyrics } from "./lyriccheck";
 import { type MenuItem, isApple, mountMenus, popupMenu, shortcutLabel } from "./menus";
 import { offlineStatus, prepareOffline } from "./offline";
 import { applyPassDynamics, passMarks } from "./passes";
@@ -43,16 +45,20 @@ import {
   attachments,
   authorBarsPerLine,
   dragRegion,
+  drawPassDynamics,
   loadAbcjs,
+  loadedAbcjs,
   measure,
   noteAtTime,
   noteUnder,
   notesAt,
   notesInRanges,
+  padLyrics,
   reachAt,
   regionOfRanges,
   regionRanges,
   renderTune,
+  scoreFormat,
   spanRegion,
   tuneSource,
 } from "./score";
@@ -115,6 +121,8 @@ type Prefs = {
   scoreShare: number;
   textShare: number;
   look: string;
+  /** Whether Focus keeps the score beside the text. */
+  focusScore: boolean;
 };
 const PREFS_KEY = "vxd-composer-prefs";
 const prefs: Prefs = (() => {
@@ -131,6 +139,7 @@ const prefs: Prefs = (() => {
     scoreShare: 52,
     textShare: 42,
     look: "auto",
+    focusScore: true,
   };
   try {
     const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
@@ -210,7 +219,27 @@ player.humanise = prefs.humanise;
 player.metronome = prefs.metronome;
 player.countIn = prefs.countIn;
 
+/** Said once in this browser, the first time Tab indents: how to leave the text by keyboard. */
+function tabHint() {
+  try {
+    if (localStorage.getItem("vxd-composer-tab-hint")) return;
+    localStorage.setItem("vxd-composer-tab-hint", "1");
+  } catch {
+    /* Without storage it is said once per visit. */
+    if (tabHintSaid) return;
+  }
+  tabHintSaid = true;
+  notice("Tab indents in the text. To leave it by keyboard, press Escape, then Tab.");
+}
+let tabHintSaid = false;
 const keys: KeyBinding[] = [
+  {
+    key: "Tab",
+    run: () => {
+      tabHint();
+      return false;
+    },
+  },
   {
     key: "Mod-Enter",
     run: () => {
@@ -278,10 +307,21 @@ const keys: KeyBinding[] = [
   { key: "Shift-F8", run: () => stepProblem(-1), preventDefault: true },
   {
     key: "Escape",
-    run: () => {
-      if (player.status !== "playing") return false;
-      stop();
-      return true;
+    run: (target) => {
+      if (player.status === "playing") {
+        stop();
+        return true;
+      }
+      // Focus leaves first; an open completion or search keeps its own Escape.
+      if (
+        body.classList.contains("focus-mode") &&
+        !completionStatus(target.state) &&
+        !searchPanelOpen(target.state)
+      ) {
+        setFocusMode(false);
+        return true;
+      }
+      return false;
     },
   },
 ];
@@ -934,7 +974,7 @@ type Problem = {
   to: number;
   message: string;
   severity: "warning" | "error";
-  kind: "bar" | "parse";
+  kind: "bar" | "parse" | "lyrics";
   /** "bar 3 — has 7 eighths, 6 expected", for the list. */
   label?: string;
 };
@@ -969,6 +1009,16 @@ function runChecks(caretLeft = false) {
       });
     }
   }
+  for (const tune of index.tunes)
+    for (const issue of checkLyrics(doc, tune))
+      list.push({
+        from: issue.from,
+        to: issue.to,
+        message: issue.message,
+        severity: "warning",
+        kind: "lyrics",
+        label: `lyrics — ${issue.extra} ${issue.extra === 1 ? "syllable has" : "syllables have"} no notes`,
+      });
   if (scoreIndex)
     for (const warning of scoreIndex.warnings)
       list.push({
@@ -1000,9 +1050,11 @@ function runChecks(caretLeft = false) {
 /** "1 bar to check", "2 problems", "1 bar to check · 1 problem". */
 function problemsLabel(list: Problem[]): string {
   const bars = list.filter((problem) => problem.kind === "bar").length;
-  const others = list.length - bars;
+  const lyrics = list.filter((problem) => problem.kind === "lyrics").length;
+  const others = list.length - bars - lyrics;
   const parts: string[] = [];
   if (bars) parts.push(`${bars} ${bars === 1 ? "bar" : "bars"} to check`);
+  if (lyrics) parts.push(`${lyrics} ${lyrics === 1 ? "lyrics line" : "lyrics lines"} to check`);
   if (others) parts.push(`${others} ${others === 1 ? "problem" : "problems"}`);
   return parts.join(" · ");
 }
@@ -1386,12 +1438,15 @@ function decorationMenu(anchor: HTMLElement) {
     ["trill", "Trill"],
     ["~", "Roll"],
     ["mordent", "Mordent"],
+    ["ppp", "ppp — very very soft"],
     ["pp", "pp — very soft"],
     ["p", "p — soft"],
-    ["mp", "mp"],
-    ["mf", "mf"],
+    ["mp", "mp — moderately soft"],
+    ["mf", "mf — moderately loud"],
     ["f", "f — loud"],
     ["ff", "ff — very loud"],
+    ["fff", "fff — very very loud"],
+    ["sfz", "sfz — a sudden accent"],
     ["crescendo(", "Crescendo starts"],
     ["crescendo)", "Crescendo ends"],
     ["breath", "Breath mark"],
@@ -1759,11 +1814,6 @@ function writtenBarAt(
 }
 const ordinal = (n: number) =>
   `${n}${n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"}`;
-/** The written bars, not counting a pickup. */
-function writtenBars(): number {
-  if (!scoreIndex) return 0;
-  return scoreIndex.measures - (timeline && timeline.pickup > 1e-6 ? 1 : 0);
-}
 
 function drawTimeline() {
   const line = timeline;
@@ -1783,27 +1833,52 @@ function drawTimeline() {
   const pickup = line.pickup > 1e-6;
   const step =
     line.bars.length > 64 ? 8 : line.bars.length > 24 ? 4 : line.bars.length > 12 ? 2 : 1;
+  let previous: { bar: number; pass: number } | null = null;
   line.bars.forEach((time, index) => {
     const tick = document.createElement("div");
-    const number = pickup ? index : index + 1;
-    tick.className = `timeline-tick${number % step === 0 || index === 0 ? " major" : ""}`;
+    const played = index + 1;
+    const written = writtenBarAt(line, time + 1e-6);
+    // Where playback goes back for another time through, the tick says which time.
+    const passStart = Boolean(
+      written &&
+        written.pass > 1 &&
+        previous &&
+        (previous.pass !== written.pass || previous.bar > written.bar),
+    );
+    previous = written;
+    tick.className = `timeline-tick${played % step === 0 || index === 0 || passStart ? " major" : ""}`;
     tick.style.left = `${(time / length) * 100}%`;
-    if ((number % (step * 2) === 0 || index === 0) && number > 0) {
-      // Labelled with the written bar, so a repeat reads as the same bars again.
+    const labelled = index === 0 || passStart || (played % (step * 2) === 0 && !written?.repeated);
+    if (labelled) {
       const label = document.createElement("span");
-      label.textContent = String(writtenBarAt(line, time + 1e-6)?.bar ?? number);
+      const bar = written?.bar ?? (pickup ? index : played);
+      label.textContent =
+        index === 0 && bar === 0
+          ? "Pickup"
+          : passStart && written
+            ? `${bar} · ${ordinal(written.pass)}`
+            : String(bar);
       tick.append(label);
     }
     ticks.append(tick);
   });
-  for (const pass of line.passes) {
-    const band = document.createElement("div");
-    band.className = `timeline-pass${pass.repeat ? " repeat" : ""}`;
-    band.style.left = `${(pass.from / length) * 100}%`;
-    band.style.width = `${((pass.to - pass.from) / length) * 100}%`;
-    band.title = pass.repeat ? "Repeat" : "";
-    passes.append(band);
-  }
+  // The repeat band covers only what is played again, not what follows it.
+  const reading = readingOf(line);
+  if (reading)
+    for (let at = 0; at < reading.times.length; at++) {
+      if ((reading.passes[at] ?? 1) < 2) continue;
+      let end = at;
+      while (end + 1 < reading.times.length && (reading.passes[end + 1] ?? 1) >= 2) end += 1;
+      const from = reading.times[at] as number;
+      const to = reading.times[end + 1] ?? length;
+      const band = document.createElement("div");
+      band.className = "timeline-pass repeat";
+      band.style.left = `${(from / length) * 100}%`;
+      band.style.width = `${((to - from) / length) * 100}%`;
+      band.title = "Played again";
+      passes.append(band);
+      at = end;
+    }
   if (loopOn && loopRegion) {
     const from = firstPlayOf(line, loopRegion.from);
     const to = Math.max(from, firstPlayOf(line, loopRegion.to - 1e-6) + 0.001);
@@ -1811,6 +1886,7 @@ function drawTimeline() {
     loopBand.style.left = `${(from / length) * 100}%`;
     loopBand.style.width = `${Math.max(0.6, ((to - from) / length) * 100)}%`;
   } else loopBand.hidden = true;
+  slider.setAttribute("aria-valuemin", "1");
   slider.setAttribute("aria-valuemax", String(line.bars.length));
   updateHead(player.status === "stopped" ? 0 : player.position());
 }
@@ -1873,10 +1949,11 @@ function updateHead(position: number) {
   const name = number === 0 ? "Pickup" : `Bar ${number}`;
   $("clock").textContent = `${player.loopingRegion ? "Loop · " : ""}${name}${time} · ${clock}`;
   const slider = $("timeline");
-  slider.setAttribute("aria-valuenow", String(bar));
+  // Value and maximum count bars as played; the text names the written bar.
+  slider.setAttribute("aria-valuenow", String(bar + 1));
   slider.setAttribute(
     "aria-valuetext",
-    `${name}${written?.repeated ? `, ${ordinal(written.pass)} time` : ""}, of ${writtenBars()} bars, ${clock}`,
+    `${name}${written?.repeated ? `, ${ordinal(written.pass)} time` : ""}, played bar ${bar + 1} of ${line.bars.length}, ${clock}`,
   );
 }
 
@@ -2256,10 +2333,37 @@ function toggleRail() {
 }
 $("rail-toggle").addEventListener("click", toggleRail);
 phone.addEventListener("change", applyLayout);
+/* Focus: only the music. With the score, the chrome goes; without it, the text sits in a
+   centred column. Escape or the quiet control at the top right leaves it. */
+let focusIdle: ReturnType<typeof setTimeout> | undefined;
 function setFocusMode(on: boolean) {
   body.classList.toggle("focus-mode", on);
+  body.classList.toggle("focus-text", on && !prefs.focusScore);
   $("focus-mode").setAttribute("aria-pressed", String(on));
+  $("focus-score").setAttribute("aria-pressed", String(prefs.focusScore));
+  $("focus-controls").hidden = !on;
+  if (on) wakeFocusControls();
+  else $("focus-controls").classList.remove("awake");
+  if (on && prefs.focusScore) scheduleRender(0);
 }
+function wakeFocusControls() {
+  const controls = $("focus-controls");
+  controls.classList.add("awake");
+  clearTimeout(focusIdle);
+  focusIdle = setTimeout(() => controls.classList.remove("awake"), 2200);
+}
+document.addEventListener("pointermove", () => {
+  if (body.classList.contains("focus-mode")) wakeFocusControls();
+});
+$("focus-exit").addEventListener("click", () => {
+  setFocusMode(false);
+  view.focus();
+});
+$("focus-score").addEventListener("click", () => {
+  prefs.focusScore = !prefs.focusScore;
+  savePrefs();
+  setFocusMode(true);
+});
 $("focus-mode").addEventListener("click", () =>
   setFocusMode(!body.classList.contains("focus-mode")),
 );
@@ -2607,8 +2711,9 @@ async function exportWav() {
     noticeError("The audio could not be rendered. Try again once the instrument has loaded.");
   }
 }
-async function printScore() {
-  const abcjs = await loadAbcjs();
+/** Every tune, drawn for paper with the screen's fonts. Synchronous, so the browser's own Print
+ * (which gives no time to wait) can use it too. */
+function fillPrint(abcjs: typeof import("abcjs")): boolean {
   const container = $("print-score");
   container.replaceChildren();
   const index = fileIndex();
@@ -2621,12 +2726,23 @@ async function printScore() {
       staffwidth: 680,
       paddingleft: 0,
       paddingright: 0,
-      add_classes: false,
+      add_classes: true,
+      format: scoreFormat(false),
+      afterParsing: padLyrics,
       wrap: { minSpacing: 1.8, maxSpacing: 2.6, preferredMeasuresPerLine: 4 },
     } as Any);
+    drawPassDynamics(holder);
   }
+  return index.tunes.length > 0;
+}
+async function printScore() {
+  fillPrint(await loadAbcjs());
   window.print();
 }
+window.addEventListener("beforeprint", () => {
+  if (loadedAbcjs && !$("print-score").childElementCount) fillPrint(loadedAbcjs);
+});
+window.addEventListener("afterprint", () => $("print-score").replaceChildren());
 
 /* Recovery: this tab's draft, kept as you type. */
 function flushDraft() {
@@ -2965,12 +3081,15 @@ function goToProblem(problem: Problem, focusEditor = true) {
 }
 function openProblems() {
   const bars = problems.filter((problem) => problem.kind === "bar").length;
+  const lyrics = problems.filter((problem) => problem.kind === "lyrics").length;
   const title =
     bars === problems.length
       ? "Bars to check"
-      : bars
-        ? "Bars and problems to check"
-        : "Problems to check";
+      : lyrics === problems.length
+        ? "Lyrics to check"
+        : bars
+          ? "Bars and problems to check"
+          : "Problems to check";
   const panel = popover($("problems"), title);
   panel.classList.add("problems-popover");
   const list = document.createElement("ul");
@@ -2995,7 +3114,7 @@ function openProblems() {
 /** F8 / Shift F8: the next or previous problem after the caret, wrapping around. */
 function stepProblem(direction: 1 | -1): boolean {
   if (!problems.length) {
-    notice("Nothing to check: every bar fits its meter.", "success");
+    notice("Nothing to check: every bar fits its meter, every syllable has a note.", "success");
     return true;
   }
   const sorted = [...problems].sort((a, b) => a.from - b.from);
@@ -3115,6 +3234,15 @@ const menus = mountMenus(
         run: () => setFocusMode(!body.classList.contains("focus-mode")),
         checked: () => body.classList.contains("focus-mode"),
         shortcut: "Mod Shift F",
+      },
+      {
+        label: "Score in Focus",
+        run: () => {
+          prefs.focusScore = !prefs.focusScore;
+          savePrefs();
+          if (body.classList.contains("focus-mode")) setFocusMode(true);
+        },
+        checked: () => prefs.focusScore,
       },
       "-",
       { label: "Appearance…", run: () => looks.open() },
@@ -3265,13 +3393,17 @@ document.addEventListener("keydown", (event) => {
   const inEditor = view.hasFocus;
   const inField =
     event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement;
-  if (
+  const quiet = !menus.isOpen() && !document.querySelector("dialog[open], .composer-popover");
+  if (event.key === "Escape" && !noticeElement.hidden && quiet) notice("");
+  else if (
     event.key === "Escape" &&
-    !noticeElement.hidden &&
-    !menus.isOpen() &&
-    !document.querySelector("dialog[open]")
-  )
-    notice("");
+    quiet &&
+    !event.defaultPrevented &&
+    body.classList.contains("focus-mode")
+  ) {
+    event.preventDefault();
+    setFocusMode(false);
+  }
   if (event.key === "F1") {
     event.preventDefault();
     sheet.open();

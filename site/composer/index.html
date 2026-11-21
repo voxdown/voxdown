@@ -157,6 +157,10 @@
     </footer>
   </main>
   <input id="file" type="file" accept=".abc,.txt,text/plain,text/vnd.abc" hidden>
+  <div id="focus-controls" class="focus-controls" role="group" aria-label="Focus" hidden>
+    <button id="focus-score" type="button" aria-pressed="true" title="Show the score while focusing">Score</button>
+    <button id="focus-exit" type="button" title="Exit focus: Escape also leaves">Exit focus</button>
+  </div>
   <div id="print-score" class="print-score" aria-hidden="true"></div>
   <noscript>Composer needs JavaScript to edit locally. No music is sent to a server.</noscript>
   <script type="module" src="../src/composer/main.ts"></script>

@@ -23,14 +23,24 @@ export const isApple =
 
 /** "Mod Shift Enter" → "Ctrl+Shift+Enter" or "⌘⇧↩". */
 export function shortcutLabel(value: string): string {
-  if (isApple)
-    return value
-      .replace(/Mod\s*/g, "⌘")
-      .replace(/Alt\s*/g, "⌥")
-      .replace(/Shift\s*/g, "⇧")
-      .replace(/Enter/g, "↩")
-      .replace(/\s+/g, "");
-  return value.replace(/Mod/g, "Ctrl").trim().replace(/\s+/g, "+");
+  // "Alt ↑ / Alt ↓", "Alt T, Alt S": each chord on its own, the separators kept.
+  return value
+    .split(/(\s*\/\s+|,\s*)/)
+    .map((part) => {
+      if (/^\s*\/\s+$/.test(part)) return " / ";
+      if (/^,\s*$/.test(part)) return ", ";
+      const keys = part.trim().split(/\s+/).filter(Boolean);
+      if (!isApple) return keys.map((key) => (key === "Mod" ? "Ctrl" : key)).join("+");
+      const symbol: Record<string, string> = {
+        Mod: "⌘",
+        Alt: "⌥",
+        Shift: "⇧",
+        Ctrl: "⌃",
+        Enter: "↩",
+      };
+      return keys.map((key) => symbol[key] ?? key).join("");
+    })
+    .join("");
 }
 
 export function mountMenus(

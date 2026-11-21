@@ -241,7 +241,7 @@ export type Marks = {
     to: number;
     message: string;
     severity: "warning" | "error";
-    kind: "bar" | "parse";
+    kind: "bar" | "parse" | "lyrics";
   }[];
 };
 export const setMarks = StateEffect.define<Marks>();
@@ -334,7 +334,7 @@ function updateMarks(value: MarkState, transaction: Transaction): MarkState {
               .filter((issue) => issue.to > issue.from)
               .sort((a, b) => a.from - b.from)
               .map((issue) =>
-                (issue.kind === "bar" ? barIssueMark : warningMark).range(issue.from, issue.to),
+                (issue.kind === "parse" ? warningMark : barIssueMark).range(issue.from, issue.to),
               ),
             true,
           )

@@ -61,6 +61,7 @@ export const SHORTCUTS: [string, string][] = [
   ["Score beside or below", "Mod \\"],
   ["Focus", "Mod Shift F"],
   ["Open / Save / Save as", "Mod O / Mod S / Mod Shift S"],
+  ["Indent in the text / leave it (Escape, then Tab)", "Tab / Escape, Tab"],
   ["This cheat sheet", "F1"],
 ];
 
@@ -193,7 +194,9 @@ export function cheatsheet(): HTMLElement {
     heading,
     shortcutTable([
       ...SHORTCUTS.slice(0, 12),
-      ...SHORTCUTS.filter(([action]) => action.startsWith("Next / previous bar")),
+      ...SHORTCUTS.filter(
+        ([action]) => action.startsWith("Next / previous bar") || action.startsWith("Indent"),
+      ),
     ]),
   );
   root.append(keys);

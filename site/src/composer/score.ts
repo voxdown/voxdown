@@ -6,10 +6,31 @@ type Any = any;
 type Abcjs = typeof import("abcjs");
 
 let abcjsModule: Promise<Abcjs> | null = null;
+/** abcjs once loaded, for work that cannot wait (the browser's own Print). */
+export let loadedAbcjs: Abcjs | null = null;
 /** abcjs is ~500 KB; it loads after the first paint, once there is a tune to draw. */
 export function loadAbcjs(): Promise<Abcjs> {
-  abcjsModule ??= import("abcjs").then((module) => ((module as Any).default ?? module) as Abcjs);
+  abcjsModule ??= import("abcjs").then((module) => {
+    loadedAbcjs = ((module as Any).default ?? module) as Abcjs;
+    return loadedAbcjs;
+  });
   return abcjsModule;
+}
+
+/** The score's fonts, the same on screen and on paper. */
+export function scoreFormat(compact = false): Any {
+  const font = '"Literata Variable", Georgia, serif';
+  return {
+    titlefont: `${font} ${compact ? 16 : 19}`,
+    subtitlefont: `${font} ${compact ? 12 : 14}`,
+    composerfont: `${font} italic ${compact ? 11 : 12}`,
+    gchordfont: '"Recursive Variable", sans-serif 12',
+    annotationfont: '"Recursive Variable", sans-serif 11',
+    vocalfont: `${font} 13`,
+    partsfont: '"Recursive Variable", sans-serif bold 12',
+    tempofont: '"Recursive Variable", sans-serif 11',
+    wordsfont: `${font} 13`,
+  };
 }
 
 /** One note, chord or rest as drawn, with its place in the text and in written time. */
@@ -273,18 +294,8 @@ export async function renderTune(
     paddingleft: 6,
     paddingright: 12,
     selectTypes: false,
-    format: {
-      // A phone keeps the title block small, so the first staff is not pushed off the screen.
-      titlefont: `${font} ${compact ? 16 : 19}`,
-      subtitlefont: `${font} ${compact ? 12 : 14}`,
-      composerfont: `${font} italic ${compact ? 11 : 12}`,
-      gchordfont: '"Recursive Variable", sans-serif 12',
-      annotationfont: '"Recursive Variable", sans-serif 11',
-      vocalfont: `${font} 13`,
-      partsfont: '"Recursive Variable", sans-serif bold 12',
-      tempofont: '"Recursive Variable", sans-serif 11',
-      wordsfont: `${font} 13`,
-    },
+    // A phone keeps the title block small, so the first staff is not pushed off the screen.
+    format: scoreFormat(compact),
     afterParsing: padLyrics,
   };
   // While the bars and the width stay the same, the last line breaks still fit: one pass.

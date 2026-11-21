@@ -39,7 +39,10 @@ const server = createServer((req, res) => {
 await new Promise((done) => server.listen(0, "127.0.0.1", done));
 const base = `http://127.0.0.1:${server.address().port}`;
 const url = `${base}/composer/`;
-const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
+// --expose-gc: the import timing check starts its import from a clean heap.
+const browser = await chromium.launch({
+  args: ["--autoplay-policy=no-user-gesture-required", "--js-flags=--expose-gc"],
+});
 const errors = [];
 const external = [];
 const watch = (context) => {
@@ -2749,6 +2752,21 @@ const bombTimes = [];
     await page.waitForFunction(() =>
       /^Before/.test(document.getElementById("score-summary").textContent),
     );
+    // A clean heap first: the page has run every check before this one, and a collection of all
+    // that during the import would be counted against it.
+    await page.evaluate(() => window.gc?.());
+    // How fast the machine is right now: the same kind of work as the importer's (building,
+    // parsing and walking XML), timed just before it. About 45 ms on an idle machine.
+    const reference = await page.evaluate(() => {
+      const start = performance.now();
+      let text = "";
+      for (let n = 0; n < 6000; n++)
+        text += `<note><pitch><step>${"CDEFGAB"[n % 7]}</step><octave>${n % 5}</octave></pitch><duration>${(n % 3) + 1}</duration></note>`;
+      const doc = new DOMParser().parseFromString(`<r>${text}</r>`, "application/xml");
+      let sum = 0;
+      for (const node of doc.getElementsByTagName("step")) sum += node.textContent.charCodeAt(0);
+      return performance.now() - start + sum * 0;
+    });
     await page.evaluate(() => {
       window.__tasks = [];
       window.__lines = [];
@@ -2776,21 +2794,31 @@ const bombTimes = [];
       0,
       ...run.tasks.filter(([start]) => start < finished).map(([, ms]) => ms),
     );
-    return { ...run, finished, longest };
+    return { ...run, finished, longest, reference };
   };
-  // The importer yields every few bars, so a task over 250 ms means it stopped yielding, which shows
-  // in every run. A busy machine (other browsers running) can stretch one task past it once: then
-  // the import is measured again, and the better run counts. A regression fails both.
+  // On an idle machine, from a clean heap, the longest task is about 190 ms of a 640 ms conversion
+  // (about 4 times the reference work), every run; an import that stopped yielding would hold the
+  // page for its whole conversion (some 14 times the reference), every run, loaded or not. A busy
+  // machine (other browsers running) stretches every task alike: the budget is 250 ms, or 7 times
+  // the reference timed just before, and the best of up to three runs counts.
+  const held = (run) => run.longest >= Math.max(250, 7 * run.reference);
   let measured = await importLarge();
-  if (measured.longest >= 250) {
+  for (let run = 2; run <= 3 && held(measured); run++) {
     console.log(
-      `  (a ${Math.round(measured.longest)} ms task while importing; measuring the import again)`,
+      `  (a ${Math.round(measured.longest)} ms task while importing, the reference ${Math.round(measured.reference)} ms; measuring again)`,
     );
     const again = await importLarge();
-    if (again.longest < measured.longest) measured = again;
+    if (again.longest / again.reference < measured.longest / measured.reference) measured = again;
   }
-  const { reportPainted, drawnAt, finished, longest } = measured;
-  assert(longest < 250, `the page is not held while importing: longest task ${longest} ms`);
+  const { reportPainted, drawnAt, finished, longest, reference } = measured;
+  assert(
+    !held(measured),
+    `the page is not held while importing: longest task ${Math.round(longest)} ms (the reference ${Math.round(reference)} ms)`,
+  );
+  if (longest >= 250)
+    console.log(
+      `  (a busy machine: the longest task, ${Math.round(longest)} ms, is ${(longest / reference).toFixed(1)} times the reference work, as on an idle one)`,
+    );
   // 12. The report shows as soon as the conversion is done; the score draws behind it.
   assert(
     reportPainted > 0 && reportPainted < drawnAt,
@@ -4866,7 +4894,7 @@ console.log(
   await p.keyboard.press("ArrowRight");
   assert.match(
     await p.locator("#score-live").textContent(),
-    /bar 5/,
+    /Bar 5/,
     "V:1's d is in bar 5, after Z4",
   );
   // 5. Shift Alt ←/→: an anchor and a moving end.

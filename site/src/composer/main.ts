@@ -3316,11 +3316,18 @@ function updateVoices() {
   $("sound-button").dataset.state = button.dataset.state;
 }
 /** The Voices popover (./sound-panel, loaded with the Sound popover): mute and solo per voice. */
+let soundPanel: typeof import("./sound-panel") | null = null;
 function voicesPopover(anchor: HTMLElement) {
   const tracks = timeline?.tracks ?? [];
-  void import("./sound-panel").then((module) =>
-    module.fillVoices(popover(anchor, "Voices"), tracks, { muted, soloed, update: updateVoices }),
-  );
+  const fill = (module: typeof import("./sound-panel")) =>
+    module.fillVoices(popover(anchor, "Voices"), tracks, { muted, soloed, update: updateVoices });
+  // Once loaded (with Sound), at once.
+  if (soundPanel) fill(soundPanel);
+  else
+    void import("./sound-panel").then((module) => {
+      soundPanel = module;
+      fill(module);
+    });
 }
 
 /* Popovers for the transport. */
@@ -3374,7 +3381,8 @@ function popover(anchor: HTMLElement, title: string): HTMLElement {
 
 /** The Sound popover (./sound-panel, loaded when first opened). */
 function soundPopover(anchor: HTMLElement) {
-  void import("./sound-panel").then((module) =>
+  void import("./sound-panel").then((module) => {
+    soundPanel = module;
     module.fillSound(popover(anchor, "Sound"), {
       player,
       prefs,
@@ -3392,8 +3400,8 @@ function soundPopover(anchor: HTMLElement) {
               open: () => voicesPopover(anchor),
             }
           : null,
-    }),
-  );
+    });
+  });
 }
 
 /* Toolbar and transport wiring. */

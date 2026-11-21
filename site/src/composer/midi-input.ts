@@ -175,8 +175,9 @@ function onMessage(event: MIDIMessageEvent) {
     if (!held.size && chord.size) {
       const pitches = [...chord];
       chord.clear();
+      // While melody search listens, the notes go to it rather than into the text.
       for (const listen of listeners) listen(pitches);
-      if (mode === "step") enter(pitches);
+      if (mode === "step" && !listeners.size) enter(pitches);
     }
   } else if (status === 0xb0 && note === 64) {
     const down = velocity >= 64;
@@ -241,11 +242,6 @@ async function connect() {
     refresh();
   };
   refresh();
-  say(
-    input
-      ? `Listening to ${input.name || "the keyboard"}.`
-      : "Plug in a MIDI keyboard: it shows here when it connects.",
-  );
   return true;
 }
 
@@ -432,7 +428,15 @@ export async function openKeyboard(given: KeyboardContext) {
   context = given;
   if (!panel) build();
   (panel as HTMLElement).focus();
-  if (supported()) await connect();
+  // Melody search may have connected already: the panel lists the keyboards and says which.
+  if (supported() && (await connect())) {
+    refresh();
+    say(
+      input
+        ? `Listening to ${input.name || "the keyboard"}.`
+        : "Plug in a MIDI keyboard: it shows here when it connects.",
+    );
+  }
 }
 
 let melodyReading: StepReading | null = null;

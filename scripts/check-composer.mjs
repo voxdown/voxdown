@@ -3696,7 +3696,7 @@ console.log(
     "the melody is found as written and a tone up",
   );
   await p.locator(".melody-result").nth(1).click();
-  assert.deepEqual(await selection(p), ["A3 ABc|B3 Bc"], "choosing a match selects its notes");
+  assert.deepEqual(await selection(p), ["A3 ABc|B3 Bce"], "choosing a match selects its notes");
   await p.waitForFunction(() => document.querySelectorAll("#score .is-selected").length >= 8);
   await p.keyboard.press("F3");
   assert.deepEqual(await selection(p), ["G3 GAB|A3 ABd"], "F3 steps to the next match");
@@ -3705,6 +3705,7 @@ console.log(
   // The keyboard plays a melody into the search.
   await p.locator("#melody-query").fill("");
   await p.getByRole("button", { name: "From the keyboard" }).click();
+  await p.locator('#melody-panel button[aria-pressed="true"]').waitFor();
   await p.evaluate(() => {
     for (const note of [67, 67, 67, 69, 71]) window.__midi.play([note]);
   });
@@ -3750,12 +3751,15 @@ console.log(
     (await docText(p)).split("\n").find((line) => line.startsWith(from)) ?? "";
   assert.equal(
     await lineOf("DF"),
-    "DF A=F [D^FA]2 ^A2 | z2 d/ e3/",
+    "DF A=F [D^FA]2 ^A2 | z2 d/e3/2",
     "notes spelled for D major and the bar, a chord, lengths, a bar line, the pedal's rest",
   );
   // A flat key, on a voice an octave down (treble-8): written an octave up, so it sounds as played.
   const low = (await docText(p)).indexOf("K:F clef=treble-8\n") + "K:F clef=treble-8\n".length;
   await p.evaluate((at) => window.composer.view.dispatch({ selection: { anchor: at } }), low);
+  // Dotted stays on until turned off, as in notation programs.
+  assert.equal(await p.locator(".midi-dotted").getAttribute("aria-pressed"), "true");
+  await p.keyboard.press(".");
   await p.keyboard.press("4");
   for (const note of [70, 71, 63]) await play([note]);
   assert.equal(await lineOf("b "), "b =b _e |", "B♭ from the key, B natural, E♭; a full bar");
@@ -3880,7 +3884,11 @@ console.log(
   assert.match(imported, /^V:1 name="Melody" clef=treble$/m, "the melody's track name");
   assert.match(imported, /^V:2 name="Bass" clef=bass$/m, "the bass on a bass clef");
   assert.match(imported, /^w: ?Here we go a- \| long the riv-er/m, "lyrics under the notes");
-  assert.match(imported, /E2 E2 F2 G2 \| G2 F2 E2 D2 \|/, "the melody's notes");
+  assert.match(
+    imported,
+    /^L:1\/4$[\s\S]*^E E F G \| G F E D \| C C D E \| E>D D2 \|\]$/m,
+    "the melody's notes, in quarters",
+  );
   // Import again with the drums, at another grid: the same draft, now with a percussion staff.
   await p
     .locator("#file")

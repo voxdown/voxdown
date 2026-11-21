@@ -1,0 +1,3 @@
+The MusicXML files in this folder were written by hand for Composer's tests. They contain only
+public-domain melodies (traditional tunes, and Jane Taylor's 1806 words to "Twinkle, Twinkle")
+or a few notes made up for testing, and are released into the public domain (CC0 1.0).

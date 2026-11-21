@@ -305,3 +305,33 @@ tablets and a name chip on phones, and Save is quiet when there is nothing to sa
 the transport's labels, with Voices in the Sound sheet. F10 goes to the menus, and Edit has Cut,
 Copy, Paste and Select all. Typing . ~ ( over selected music marks every note with staccato, a
 roll or a slur, and typing it again removes them; anything that is not music is typed as usual.
+
+## Sprint A: editing and selection (EasyABC parity, then better)
+
+EasyABC (GPLv2) was used for ideas only; none of its code.
+
+- Broken rhythm: typing `>` or `<` over selected music makes each neighbouring pair of notes
+  dotted-short or short-dotted. A chord counts as one note; a bar line, a rest or another voice
+  starts a new run, and an odd note is left alone. Typing the same sign again removes it, and
+  the other sign turns it round. It takes one undo step and sets the status line.
+- A selection in several places: Ctrl/⌘ click toggles a note, Ctrl/⌘ drag adds a region, and
+  ranges that overlap or touch (only spaces between) merge. The text selection holds every
+  range, so the commands, marks, copy and delete act on all of them. The score draws one band
+  per run of selected notes, and the status says "in 3 places" when the ranges cover separate
+  stretches of time ("in 2 voices" when one stretch spans voices). Play selection and Loop play
+  from the first selected note to the last. In the score, Ctrl/⌘ with the arrows moves a
+  dashed cursor without changing the selection, and Ctrl/⌘ Space toggles its note. `.` `~` `(`
+  `<` `>` also work from the score's keyboard. A mark at a range's edge joins the range, so the
+  selection stays on the same notes.
+- Typing helpers (Edit › Typing helpers; off by default, remembered):
+  - Bar line on Space: uses the bar check's arithmetic, only at the end of a music line right
+    after a note.
+  - Automatic octave: picks the octave nearest the previous note in the voice by staff steps.
+    A capital (Shift) takes the other side. That is our reading of "Shift flips the case", since
+    case no longer chooses the octave.
+  
+  Each writes what was typed, then its change as its own undo step, and each says once what it
+  did.
+- Zoom per pane: score 50–200% (abcjs lays out at width ÷ zoom and draws larger, so it
+  re-wraps) and text 80–160%. Ctrl/⌘ + − 0 act on the pane with focus or under the pointer,
+  and are left to the browser elsewhere. Ctrl/⌘ wheel and a pinch zoom the score.

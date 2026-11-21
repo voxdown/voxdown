@@ -1630,7 +1630,9 @@ function toggleNote(note: ScoreNote) {
     return;
   }
   const doc = text();
-  const keep = (from: number, to: number) => {
+  const keep = (start: number, end: number) => {
+    let from = start;
+    let to = end;
     while (to > from && /\s/.test(doc[to - 1] as string)) to -= 1;
     while (from < to && /\s/.test(doc[from] as string)) from += 1;
     return to > from && eventsIn(doc, [{ from, to }], fileIndex()).length ? [{ from, to }] : [];

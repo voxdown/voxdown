@@ -19,6 +19,7 @@ import { readMidi } from "./midi-read";
 
 /** A drawing shaped like abcjs's, with our highlight classes on it. */
 const DRAWN = `<svg xmlns="http://www.w3.org/2000/svg" class="abcjs-container" width="740.5" height="210" style="overflow: visible" aria-hidden="true" data-tune="1">
+<style>.abcjs-dragging-in-progress text { user-select: none; }</style><title xmlns="http://www.w3.org/1999/xhtml">Sheet Music for "A &amp; B"</title>
 <g class="abcjs-staff abcjs-l0"><path class="abcjs-note abcjs-n0 is-caret is-playing" fill="currentColor" stroke="none" d="M10 10h5"/></g>
 <text class="abcjs-annotation" font-family="&quot;Recursive Variable&quot;" font-size="11" fill="currentColor" x="20" y="30">2nd time <tspan class="abc-dyn">p</tspan></text>
 <text class="abcjs-title" font-family="&quot;Literata Variable&quot;, Georgia, serif" x="300" y="20">A &amp; B</text>
@@ -64,8 +65,11 @@ describe("SVG export", () => {
     expect(root.children[0]).toMatchObject({ name: "title", text: "A & B" });
     expect(root.children[1]).toMatchObject({
       name: "rect",
-      attrs: { fill: "#ffffff", width: "100%" },
+      attrs: { x: "0", y: "0", width: "740.5", height: "210", fill: "#ffffff", stroke: "none" },
     });
+    // abcjs's own stylesheet and XHTML title are gone; one title, ours.
+    expect(svg).not.toMatch(/<style|Sheet Music for|xhtml/);
+    expect(svg.match(/<title>/g)).toHaveLength(1);
     expect(svg).toContain('font-family="&quot;Recursive Variable&quot;, sans-serif"');
     expect(svg).toContain('font-family="&quot;Literata Variable&quot;, Georgia, serif"');
     expect(svg).toContain('<tspan font-weight="bold" font-style="italic">p</tspan>');
@@ -77,7 +81,7 @@ describe("SVG export", () => {
       declaration: false,
     });
     expect(svg.startsWith("<svg")).toBe(true);
-    expect(svg).toContain('<rect width="100%" height="100%" fill="rgb(20, 22, 24)"');
+    expect(svg).toContain('fill="rgb(20, 22, 24)" stroke="none"');
     expect(svg).toContain('fill="rgb(230, 230, 230)" stroke="none"');
   });
 });

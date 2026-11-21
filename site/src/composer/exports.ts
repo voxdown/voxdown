@@ -63,6 +63,11 @@ export function standaloneSvg(
   if (!svg.getAttribute("viewBox")) svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.setAttribute("width", String(Math.round(width)));
   svg.setAttribute("height", String(Math.round(height)));
+  const [boxX, boxY, boxWidth, boxHeight] = (svg.getAttribute("viewBox") as string)
+    .split(/[\s,]+/)
+    .map(Number) as [number, number, number, number];
+  // abcjs's own stylesheet (for its classes, gone) and its XHTML title (ours replaces it).
+  for (const element of [...svg.querySelectorAll("style, title")]) element.remove();
   svg.setAttribute("xmlns", SVG_NS);
   svg.setAttribute("role", "img");
   svg.removeAttribute("style");
@@ -94,9 +99,12 @@ export function standaloneSvg(
   svg.setAttribute("color", colours.ink);
   const document = svg.ownerDocument;
   const background = document.createElementNS(SVG_NS, "rect");
-  background.setAttribute("width", "100%");
-  background.setAttribute("height", "100%");
+  background.setAttribute("x", String(boxX));
+  background.setAttribute("y", String(boxY));
+  background.setAttribute("width", String(boxWidth));
+  background.setAttribute("height", String(boxHeight));
   background.setAttribute("fill", colours.paper);
+  background.setAttribute("stroke", "none");
   const title = document.createElementNS(SVG_NS, "title");
   title.textContent = options.title;
   svg.insertBefore(background, svg.firstChild);
@@ -106,6 +114,9 @@ export function standaloneSvg(
     ? markup
     : `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n${markup}\n`;
 }
+
+const round = (value: number) => Math.round(value * 100) / 100;
+const width0 = (holder: HTMLElement) => holder.getBoundingClientRect().width;
 
 /** Draws a tune off screen, as print does, and returns its SVG. */
 export function drawTune(abcjs: Abcjs, source: string, width = 740): Element | null {
@@ -124,7 +135,25 @@ export function drawTune(abcjs: Abcjs, source: string, width = 740): Element | n
     } as Any);
     drawPassDynamics(holder);
     const svg = holder.querySelector("svg");
-    return svg ? (svg.cloneNode(true) as Element) : null;
+    if (!svg) return null;
+    // abcjs draws to its width with no margin, and words can reach past it: the view box takes
+    // in everything drawn, with a margin all round.
+    const drawnWidth = Number.parseFloat(svg.getAttribute("width") ?? "") || width0(holder);
+    const drawnHeight = Number.parseFloat(svg.getAttribute("height") ?? "") || 0;
+    const box = (svg as unknown as SVGGraphicsElement).getBBox();
+    const margin = 14;
+    const left = Math.min(0, box.x) - margin;
+    const top = Math.min(0, box.y) - margin;
+    const right = Math.max(drawnWidth, box.x + box.width) + margin;
+    const bottom = Math.max(drawnHeight, box.y + box.height) + margin;
+    const copy = svg.cloneNode(true) as Element;
+    copy.setAttribute(
+      "viewBox",
+      `${round(left)} ${round(top)} ${round(right - left)} ${round(bottom - top)}`,
+    );
+    copy.setAttribute("width", String(Math.round(right - left)));
+    copy.setAttribute("height", String(Math.round(bottom - top)));
+    return copy;
   } finally {
     holder.remove();
   }
@@ -177,7 +206,7 @@ nav li{break-inside:avoid;margin:2px 0}
 nav a{color:var(--accent)}
 nav .meta{color:var(--muted);font:12px system-ui,sans-serif;margin-left:6px}
 .tune{padding:32px 0;border-bottom:1px solid var(--rule)}
-.tune h2{font-size:1.35rem;margin:0 0 4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .tune .sub{margin:0 0 8px;color:var(--muted)}
 .tune svg{display:block;width:100%;height:auto;max-width:100%}
 .tools{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-top:8px}
@@ -221,8 +250,8 @@ export function htmlBook(entries: BookEntry[], options: BookOptions): string {
           `<details${options.abc === "open" ? " open" : ""}><summary>ABC text</summary><pre>${escapeHtml(entry.abc)}</pre></details>`,
         );
       return `<section class="tune" id="${id}" aria-labelledby="${id}-title">
-<h2 id="${id}-title">${escapeHtml(entry.title)}</h2>
-${entry.subtitle ? `<p class="sub">${escapeHtml(entry.subtitle)}</p>\n` : ""}${entry.svg}
+<h2 id="${id}-title" class="sr">${escapeHtml(entry.title)}</h2>
+${entry.svg}
 ${tools.length ? `<div class="tools">${tools.join("")}</div>\n` : ""}<a class="top" href="#contents">Contents</a>
 </section>`;
     })

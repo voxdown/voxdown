@@ -2584,7 +2584,7 @@ function music(command: string): boolean {
       // After the selection, whichever way it was made.
       return apply([barLine(doc, view.state.selection.main.to)], "Bar line");
     case "duplicate":
-      return apply(duplicate(doc, list), "Duplicate");
+      return apply(duplicate(doc, list, index), "Duplicate");
     case "new-tune":
       newTune();
       return true;

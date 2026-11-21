@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { frac } from "../src/composer/abc";
 import {
   type Change,
+  duplicate,
   insertChordSymbol,
   insertRepeat,
   insertTriplet,
   scaleLengths,
+  toggleSlur,
   transpose,
 } from "../src/composer/commands";
 import { describePicked, selectedNotes } from "../src/composer/selected";
@@ -131,5 +133,32 @@ describe("Insert over a selection goes by its notes", () => {
     expect(apply(end.text, insertRepeat(end.text, end.ranges) ?? [])).toBe(
       `${HEAD}C D |: E F :|]\n`,
     );
+  });
+});
+
+describe("a voice written in V: blocks is one passage", () => {
+  const blocks =
+    "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nc d e f|\nV:2\nC D E F|\nV:1\ng a b c'|\nV:2\nG A B c|\n";
+  const both = [
+    { from: blocks.indexOf("c d e f|"), to: blocks.indexOf("c d e f|") + 8 },
+    { from: blocks.indexOf("g a b c'|"), to: blocks.indexOf("g a b c'|") + 9 },
+  ];
+  it("duplicates the passage once, after its end, in the voice's last block", () => {
+    expect(apply(blocks, duplicate(blocks, both))).toBe(
+      "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nc d e f|\nV:2\nC D E F|\nV:1\ng a b c'| c d e f| g a b c'|\nV:2\nG A B c|\n",
+    );
+  });
+  it("puts one slur over it, from its first note to its last", () => {
+    expect(apply(blocks, toggleSlur(blocks, both))).toBe(
+      "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\n(c d e f|\nV:2\nC D E F|\nV:1\ng a b c')|\nV:2\nG A B c|\n",
+    );
+  });
+  it("keeps ranges in different places, or voices, apart", () => {
+    const apart = [
+      { from: blocks.indexOf("c d"), to: blocks.indexOf("c d") + 3 },
+      { from: blocks.indexOf("b c'"), to: blocks.indexOf("b c'") + 4 },
+    ];
+    expect(apply(blocks, toggleSlur(blocks, apart))).toContain("(c d) e f|");
+    expect(apply(blocks, toggleSlur(blocks, apart))).toContain("g a (b c')|");
   });
 });

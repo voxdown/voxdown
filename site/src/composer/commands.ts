@@ -303,13 +303,61 @@ export function toggleTies(text: string, ranges: Range[], file = indexFile(text)
 }
 
 /** Wraps each selection in a slur, or removes the slur that already wraps it. */
+/**
+ * A selection's passages: its ranges, with the ranges of one voice joined where its music goes on
+ * from one to the next (a voice written in V: blocks is one passage across them). Each passage
+ * has its ranges in text order and its first and last selected notes.
+ */
+export function passagesOf(text: string, ranges: Range[], file = indexFile(text)) {
+  type Passage = {
+    voice: string;
+    ranges: Range[];
+    first: MusicEvent;
+    last: MusicEvent;
+    end: number;
+  };
+  // Each event's written start and end, voice by voice.
+  const times = new Map<number, { start: number; end: number }>();
+  for (const tune of file.tunes) {
+    if (!ranges.some((range) => range.from < tune.to && range.to > tune.bodyFrom)) continue;
+    const clocks = new Map<string, number>();
+    for (const item of tuneItems(text, tune, file)) {
+      if (item.type !== "event") continue;
+      const start = clocks.get(item.voice) ?? 0;
+      const end = start + item.duration.num / item.duration.den;
+      times.set(item.from, { start, end });
+      clocks.set(item.voice, end);
+    }
+  }
+  const passages: Passage[] = [];
+  for (const range of [...ranges].sort((a, b) => a.from - b.from)) {
+    if (range.to <= range.from) continue;
+    const events = eventsIn(text, [range], file);
+    const first = events[0];
+    const last = events[events.length - 1];
+    if (!first || !last) continue;
+    const voices = new Set(events.map((event) => event.voice));
+    const voice = voices.size === 1 ? first.voice : "";
+    const begins = times.get(first.from)?.start ?? -1;
+    const joined = passages.find(
+      (each) => voice && begins >= 0 && each.voice === voice && Math.abs(each.end - begins) < 1e-6,
+    );
+    if (joined) {
+      joined.ranges.push(range);
+      joined.last = last;
+      joined.end = times.get(last.from)?.end ?? joined.end;
+    } else
+      passages.push({ voice, ranges: [range], first, last, end: times.get(last.from)?.end ?? -1 });
+  }
+  return passages;
+}
+
 export function toggleSlur(text: string, ranges: Range[], file = indexFile(text)): Change[] {
   const changes: Change[] = [];
-  for (const range of ranges) {
-    const events = eventsIn(text, [range], file);
-    if (events.length === 0) continue;
-    const first = events[0] as MusicEvent;
-    const last = events[events.length - 1] as MusicEvent;
+  // One slur over each passage: a voice split across V: blocks opens at its first selected note
+  // and closes at its last.
+  for (const passage of passagesOf(text, ranges, file)) {
+    const { first, last } = passage;
     if (text[first.from - 1] === "(" && text[last.to] === ")")
       changes.push(
         { from: first.from - 1, to: first.from, insert: "" },
@@ -384,13 +432,26 @@ export function barAround(text: string, position: number): Range {
 }
 
 /** Puts a copy of the selection (or the bar at the caret) right after it. */
-export function duplicate(text: string, ranges: Range[]): Change[] {
-  return ranges.map((range) => {
+export function duplicate(text: string, ranges: Range[], file = indexFile(text)): Change[] {
+  const changes: Change[] = [];
+  // A voice selected across V: blocks is one passage: duplicated once, after its end, in that
+  // voice's last block (not each block's piece after itself).
+  const passages = passagesOf(text, ranges, file).filter((passage) => passage.ranges.length > 1);
+  const joined = new Set(passages.flatMap((passage) => passage.ranges));
+  for (const passage of passages) {
+    const end = passage.ranges[passage.ranges.length - 1] as Range;
+    const body = passage.ranges.map((range) => text.slice(range.from, range.to).trim()).join(" ");
+    const glue = /\s$/.test(text.slice(end.from, end.to)) ? "" : " ";
+    changes.push({ from: end.to, to: end.to, insert: `${glue}${body}` });
+  }
+  for (const range of ranges) {
+    if (joined.has(range)) continue;
     const target = range.from === range.to ? barAround(text, range.from) : range;
     const body = text.slice(target.from, target.to);
     const glue = /\s$/.test(body) ? "" : " ";
-    return { from: target.to, to: target.to, insert: `${glue}${body}` };
-  });
+    changes.push({ from: target.to, to: target.to, insert: `${glue}${body}` });
+  }
+  return changes;
 }
 
 /** A bar line at the caret, spaced like the music around it. */

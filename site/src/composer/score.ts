@@ -1,3 +1,4 @@
+import { lineKind } from "./abc";
 import { maxOf, minOf } from "./extent";
 import { DYNAMIC_WORD, passDynamics } from "./passes";
 import type { FileIndex, TuneInfo } from "./tunes";
@@ -439,6 +440,8 @@ export function indexScore(
     sinceBar: number;
     triplet: number;
     tripletLeft: boolean;
+    /** Bars a multi-bar rest (Z4) in this bar stands for. */
+    rests: number;
   }[] = [];
   const bars: ScoreIndex["bars"] = [];
   const lines: Any[] = visual?.lines ?? [];
@@ -461,7 +464,14 @@ export function indexScore(
               (fromTune ? `Voice ${fromTune.id}` : `Voice ${voice + 1}`),
             staff: staffIndex,
           });
-          clocks.push({ time: 0, measure: 0, sinceBar: 0, triplet: 1, tripletLeft: false });
+          clocks.push({
+            time: 0,
+            measure: 0,
+            sinceBar: 0,
+            triplet: 1,
+            tripletLeft: false,
+            rests: 1,
+          });
         }
         const clock = clocks[voice] as (typeof clocks)[number];
         for (const element of elements) {
@@ -471,6 +481,8 @@ export function indexScore(
               clock.tripletLeft = true;
             }
             const spacer = element.rest?.type === "spacer";
+            if (element.rest?.type === "multimeasure")
+              clock.rests = Math.max(1, Number(element.rest.text) || 1);
             const duration = spacer
               ? 0
               : (element.duration ?? 0) * (clock.tripletLeft ? clock.triplet : 1);
@@ -484,7 +496,11 @@ export function indexScore(
             // abcjs counts the space after a note in; the note itself ends before it.
             while (endChar > element.startChar && /\s/.test(source[endChar - 1] ?? ""))
               endChar -= 1;
-            if (typeof element.startChar === "number" && !spacer)
+            // An overlay's (&) closing bar line comes through as a note with nothing drawn: an
+            // entry with no drawing and no note or rest letter in its text is no note.
+            const phantom =
+              !elementsDrawn.length && !/[A-Ga-gzxZX]/.test(source.slice(startChar, endChar));
+            if (typeof element.startChar === "number" && !spacer && !phantom)
               notes.push({
                 start: toDocument(startChar),
                 end: toDocument(endChar),
@@ -516,8 +532,10 @@ export function indexScore(
                 voice,
               });
             }
-            if (clock.sinceBar > 0) clock.measure += 1;
+            // A bar holding a multi-bar rest (Z4) counts as the bars it stands for.
+            if (clock.sinceBar > 0) clock.measure += clock.rests;
             clock.sinceBar = 0;
+            clock.rests = 1;
           }
         }
       });
@@ -529,7 +547,7 @@ export function indexScore(
   );
   const measures = Math.max(
     0,
-    ...clocks.map((clock) => clock.measure + (clock.sinceBar > 0 ? 1 : 0)),
+    ...clocks.map((clock) => clock.measure + (clock.sinceBar > 0 ? clock.rests : 0)),
   );
   const warnings = parseWarnings(visual?.warnings ?? [], source, toDocument);
   return { tune, notes, byVoice, voices, bars, measures, toDocument, visual, warnings, source };
@@ -599,11 +617,28 @@ export function notesInRanges(
  * in the region when it starts at or after `from` and no later than `reach`. `to` is where the
  * last note taken ends (for playback). Without `reach`, notes starting before `to` are taken.
  */
-export type Region = { from: number; to: number; voices: number[]; reach?: number | undefined };
+export type Region = {
+  from: number;
+  to: number;
+  voices: number[];
+  reach?: number | undefined;
+  /**
+   * Each voice's own span, when the voices don't share one: a drag takes what is drawn under it,
+   * and voices drawn out of line with each other (a multi-bar rest drawn one bar wide) span
+   * different written times.
+   */
+  bounds?: Record<number, { from: number; reach: number }> | undefined;
+};
 
 const EPS = 1e-6;
 
 function takes(region: Region, note: ScoreNote): boolean {
+  if (region.bounds) {
+    const own = region.bounds[note.voice];
+    return (
+      Boolean(own) && note.time >= (own?.from ?? 0) - EPS && note.time <= (own?.reach ?? 0) + EPS
+    );
+  }
   if (note.time < region.from - EPS) return false;
   return region.reach !== undefined ? note.time <= region.reach + EPS : note.time < region.to - EPS;
 }
@@ -635,9 +670,23 @@ export function spanRegion(
 const VOICE_SWITCH = /(?:^|\n)[ \t]*V:|\[V:/;
 
 /**
+ * Whether the text between two notes of a voice holds something that isn't that voice's music, so
+ * a range must stop before it: a voice change, a comment, or a whole line that isn't music (a
+ * field such as P:, K: or T:, a w: line, a %% directive or a blank line).
+ */
+export function breaksRun(gap: string): boolean {
+  if (VOICE_SWITCH.test(gap)) return true;
+  if (gap.replace(/"[^"\n]*"/g, "").includes("%")) return true;
+  const lines = gap.split("\n");
+  for (const line of lines.slice(1, -1)) if (lineKind(line, true) !== "music") return true;
+  return false;
+}
+
+/**
  * The text ranges a region covers: per voice, from its first note to its last, split wherever the
- * voice's text is interrupted by another voice's (its music continuing in a later `V:` block), so a
- * range never takes another voice's text.
+ * voice's text is interrupted by another voice's (its music continuing in a later `V:` block) or by
+ * a line that isn't music (lyrics, fields, comments, directives, blank lines), so a range never
+ * takes another voice's text or anything but music.
  */
 export function regionRanges(
   index: ScoreIndex,
@@ -657,7 +706,7 @@ export function regionRanges(
       }
       if (!takes(region, note)) continue;
       const last = run.at(-1);
-      if (last && (interrupted || VOICE_SWITCH.test(text.slice(last.end, note.start)))) {
+      if (last && (interrupted || breaksRun(text.slice(last.end, note.start)))) {
         runs.push(run);
         run = [];
       }
@@ -696,7 +745,17 @@ export function regionOfRanges(
   const to = maxOf(notes.map((note) => note.time + note.duration));
   const reach = maxOf(notes.map((note) => note.time));
   const voices = [...new Set(notes.map((note) => note.voice))].sort((a, b) => a - b);
-  return { from, to, voices, reach };
+  // Each voice's own span: a selection taken from the drawing may span different times per voice.
+  const bounds: Record<number, { from: number; reach: number }> = {};
+  for (const note of notes) {
+    const own = bounds[note.voice];
+    if (!own) bounds[note.voice] = { from: note.time, reach: note.time };
+    else {
+      own.from = Math.min(own.from, note.time);
+      own.reach = Math.max(own.reach, note.time);
+    }
+  }
+  return { from, to, voices, reach, bounds };
 }
 
 /* The pointer in the score, in musical terms. */
@@ -777,6 +836,78 @@ export function spanLoneNotes(placed: Placed[], barsByLine: Map<number, number[]
 
 /** A point in a drag: the note under the pointer in its voice, and how far the pointer reached. */
 export type ScorePoint = { note: ScoreNote; line: number; staff: number; x: number; reach: number };
+
+/**
+ * The region a drag covers, read from what is drawn: in each voice, the notes whose heads lie
+ * between where the drag started (the anchor note's head) and where the pointer is (heads at or
+ * left of it), in reading order: system, then x. Left of a system's first head, the pointer is on
+ * that head. Dragging back, the pointer's note starts it and the anchor ends it. Voices drawn out
+ * of line with each other (a multi-bar rest is drawn one bar wide) each take what was dragged over.
+ */
+export function drawnRegion(
+  index: ScoreIndex,
+  placed: Placed[],
+  anchor: ScorePoint,
+  pointer: ScorePoint,
+  voices: number[],
+): Region {
+  const headOf = (note: ScoreNote, fallback: number) =>
+    placed.find((each) => each.note === note)?.x ?? fallback;
+  const firstHead = (line: number) =>
+    minOf(placed.filter((each) => each.line === line).map((each) => each.x));
+  const anchorHead = headOf(anchor.note, anchor.x);
+  const pointerX = Math.max(pointer.x, firstHead(pointer.line));
+  const forward =
+    pointer.line > anchor.line || (pointer.line === anchor.line && pointerX >= anchorHead);
+  // Heads of notes sounding together can sit a few pixels apart (a second, a clash of voices).
+  const slack = 6;
+  const [low, high] = forward
+    ? [
+        { line: anchor.line, x: anchorHead - slack },
+        { line: pointer.line, x: pointerX },
+      ]
+    : [
+        { line: pointer.line, x: headOf(pointer.note, pointer.x) - slack },
+        { line: anchor.line, x: Math.max(anchor.x, anchorHead) },
+      ];
+  const after = (each: Placed, point: { line: number; x: number }) =>
+    each.line > point.line || (each.line === point.line && each.x >= point.x);
+  const bounds: Record<number, { from: number; reach: number }> = {};
+  for (const each of placed) {
+    if (
+      !voices.includes(each.note.voice) ||
+      !after(each, low) ||
+      after(each, { ...high, x: high.x + 1e-6 })
+    )
+      continue;
+    const own = bounds[each.note.voice];
+    if (!own) bounds[each.note.voice] = { from: each.note.time, reach: each.note.time };
+    else {
+      own.from = Math.min(own.from, each.note.time);
+      own.reach = Math.max(own.reach, each.note.time);
+    }
+  }
+  // The anchor's own note is always taken.
+  const mine = bounds[anchor.note.voice];
+  if (!mine) bounds[anchor.note.voice] = { from: anchor.note.time, reach: anchor.note.time };
+  else {
+    mine.from = Math.min(mine.from, anchor.note.time);
+    mine.reach = Math.max(mine.reach, anchor.note.time);
+  }
+  const taken = Object.keys(bounds).map(Number);
+  const region: Region = {
+    from: minOf(taken.map((voice) => (bounds[voice] as { from: number }).from)),
+    to: 0,
+    voices: voices.filter((voice) => taken.includes(voice)),
+    reach: maxOf(taken.map((voice) => (bounds[voice] as { reach: number }).reach)),
+    bounds,
+  };
+  region.to = maxOf(
+    regionNotes(index, region).map((note) => note.time + note.duration),
+    region.from,
+  );
+  return region;
+}
 
 /** The region between where a drag started and where the pointer is now. */
 export function dragRegion(

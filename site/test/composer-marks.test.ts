@@ -5,6 +5,7 @@ import {
   doubledMarks,
   guardMarks,
   markSelection,
+  musicParts,
 } from "../src/composer/commands";
 
 const HEAD = "X:1\nT:Marks\nM:4/4\nL:1/4\nK:C\n";
@@ -61,8 +62,12 @@ describe("typing a mark onto selected notes", () => {
     expect(markSelection(text, at("T:Marks"), ".")).toBeNull();
     expect(markSelection(text, at("la la"), ".")).toBeNull();
     expect(markSelection(text, at("a comment"), ".")).toBeNull();
-    // Music and lyrics together, and an empty range, are not either.
-    expect(markSelection(text, at("E F |\nw: la"), ".")).toBeNull();
+    // Music and lyrics together: the notes are marked, the lyrics left as they are (never typed
+    // over). An empty range is typing.
+    const mixed = markSelection(text, at("E F |\nw: la"), ".");
+    expect(apply(text, mixed?.changes ?? [])).toBe(
+      `${HEAD}C D .E .F |\nw: la la la\n% a comment\n`,
+    );
     // Rests alone are music: nothing is typed over them, and the reason is given.
     const rests = markSelection(
       `${HEAD}z2 z2 |\n`,
@@ -269,5 +274,48 @@ describe("a note never gets a mark twice", () => {
       ".",
       ".",
     ]);
+  });
+});
+
+describe("marks over a selection that takes other lines", () => {
+  const reel =
+    "X:1\nT:Reel with parts\nM:4/4\nL:1/8\nK:D\nP:A\n|:dfaf gfed|cdeg fedc:|\nP:B\n|:d2fd ad fd|e2ge be ge:|\n";
+  const across = (text: string, from: string, to: string) => {
+    const start = text.indexOf(from);
+    const end = text.indexOf(to, start) + to.length;
+    return [{ from: start, to: end }];
+  };
+  it("marks the notes and leaves a part, a lyric line and a comment as they are", () => {
+    const ranges = across(reel, "gfed", "d2fd");
+    for (const mark of [".", "~", "("]) {
+      const result = markSelection(reel, ranges, mark);
+      expect(result).not.toBeNull();
+      const out = apply(reel, result?.changes ?? []);
+      expect(out).toContain("\nP:B\n");
+      expect(out.split("\n").filter((line) => !/^[|(.~]/.test(line))).toEqual(
+        reel.split("\n").filter((line) => !/^[|(.~]/.test(line)),
+      );
+    }
+    expect(apply(reel, markSelection(reel, ranges, ".")?.changes ?? [])).toBe(
+      "X:1\nT:Reel with parts\nM:4/4\nL:1/8\nK:D\nP:A\n|:dfaf .g.f.e.d|.c.d.e.g .f.e.d.c:|\nP:B\n|:.d2.f.d ad fd|e2ge be ge:|\n",
+    );
+    const song =
+      "X:1\nM:4/4\nL:1/4\nK:C\nC D E F |\nw: one two three four\n% important comment\nG A B c |\n";
+    const out = apply(song, markSelection(song, across(song, "C", "c |"), ".")?.changes ?? []);
+    expect(out).toBe(
+      "X:1\nM:4/4\nL:1/4\nK:C\n.C .D .E .F |\nw: one two three four\n% important comment\n.G .A .B .c |\n",
+    );
+  });
+  it("cuts a selection down to its music, line by line", () => {
+    const text = "X:1\nK:C\nC D |\nE F |\nw: la la\nG A |\n";
+    expect(
+      musicParts(text, [{ from: 0, to: text.length }]).map((range) =>
+        text.slice(range.from, range.to),
+      ),
+    ).toEqual(["C D |\nE F |", "G A |"]);
+  });
+  it("is just typing when no note is selected", () => {
+    const text = "X:1\nK:C\nC D |\nw: la la\n";
+    expect(markSelection(text, across(text, "la", "la"), ".")).toBeNull();
   });
 });

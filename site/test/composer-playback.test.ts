@@ -15,6 +15,7 @@ import {
   chooseBreaks,
   chosenBreaks,
   dragRegion,
+  drawnRegion,
   indexScore,
   noteUnder,
   padLyrics,
@@ -147,11 +148,40 @@ describe("score regions", () => {
       "G,4 |",
     ]);
   });
+  it("splits a voice's range at every line that isn't its music, and at comments", () => {
+    const whole = (text: string) => {
+      const { index } = prepare(text);
+      const region = spanRegion(index, 0, 100, [0]);
+      return regionRanges(index, region, text).map((range) => text.slice(range.from, range.to));
+    };
+    // Lyrics and a comment between two lines of music (Codex's case).
+    expect(
+      whole(
+        "X:1\nM:4/4\nL:1/4\nK:C\nC D E F |\nw: one two three four\n% important comment\nG A B c |\nw: five six se-ven eight\n",
+      ),
+    ).toEqual(["C D E F |", "G A B c |"]);
+    // Parts, a key change, a title, meter and unit fields, a directive (Claude's cases).
+    expect(
+      whole(
+        "X:1\nT:Reel with parts\nM:4/4\nL:1/8\nK:D\nP:A\n|:dfaf gfed|cdeg fedc:|\nP:B\n|:d2fd ad fd|e2ge be ge:|\nK:G\nT:Second strain\nM:3/4\nL:1/4\n%%vskip 10\nG A B |\n",
+      ),
+    ).toEqual(["dfaf gfed|cdeg fedc:|", "d2fd ad fd|e2ge be ge:|", "G A B |"]);
+    // A comment at the end of a line of music. (A blank line ends the tune, so none falls inside.)
+    expect(whole("X:1\nL:1/4\nK:C\nC D | % the end\nE F |\n")).toEqual(["C D |", "E F |"]);
+    // Music lines one after another stay one range; a % inside an annotation is not a comment.
+    expect(whole('X:1\nL:1/4\nK:C\nC "^50%"D |\nE F |\n')).toEqual(['C "^50%"D |\nE F |']);
+  });
   it("snaps a text selection to whole notes and back", () => {
     const { index } = prepare(twoVoices);
     const start = twoVoices.indexOf("D |");
     const region = regionOfRanges(index, [{ from: start, to: start + 1 }]);
-    expect(region).toEqual({ from: 0.25, to: 0.5, voices: [0], reach: 0.25 });
+    expect(region).toEqual({
+      from: 0.25,
+      to: 0.5,
+      voices: [0],
+      reach: 0.25,
+      bounds: { 0: { from: 0.25, reach: 0.25 } },
+    });
   });
 });
 
@@ -268,6 +298,63 @@ describe("reading the pointer in the score", () => {
     expect(
       regionRanges(index, region, text).map((range) => text.slice(range.from, range.to)),
     ).toEqual(["C D", "C, D,"]);
+  });
+});
+
+describe("a drag reads what is drawn, voice by voice", () => {
+  // abcjs draws V:1's Z4 one bar wide, so V:1's "c d e f" (bar 5) sits over V:2's bar 2.
+  const text =
+    "X:1\nM:4/4\nL:1/4\n%%score 1 2\nK:C\nV:1\nZ4|c d e f|g4|]\nV:2\nC D E F|G A B c|c B A G|F E D C|E4|D4|]\n";
+  const { index } = prepare(text);
+  // Drawn bar by bar: bar n's beats at x = 100 + (n - 1) * 200 + beat * 40, V:1 bar by bar too.
+  const drawnBar = (note: ScoreNote) => {
+    if (note.voice === 1) return note.measure;
+    // V:1: Z4 is drawn as bar 1, then its bars follow on: written bar 5 is drawn as bar 2.
+    return note.measure >= 4 ? note.measure - 3 : 0;
+  };
+  const placed: Placed[] = index.notes.map((note) => ({
+    note,
+    line: 0,
+    staff: note.voice,
+    x: 100 + drawnBar(note) * 200 + (note.time - Math.floor(note.time + 1e-9)) * 160,
+  }));
+  const at = (voice: number, time: number): ScorePoint => {
+    const each = placed.find(
+      (one) => one.note.voice === voice && Math.abs(one.note.time - time) < 1e-6,
+    ) as Placed;
+    return { note: each.note, line: 0, staff: voice, x: each.x + 2, reach: time };
+  };
+  it("counts a multi-bar rest as the bars it stands for", () => {
+    const c = index.notes.find((note) => note.voice === 0 && note.time === 4) as ScoreNote;
+    expect(c.measure).toBe(4);
+    expect(index.measures).toBe(6);
+  });
+  it("takes in each voice only what the pointer went over", () => {
+    // From V:2's G (bar 2) up to V:1's c drawn above it: V:2's G, and V:1's c.
+    const region = drawnRegion(index, placed, at(1, 1), at(0, 4), [0, 1]);
+    expect(
+      regionRanges(index, region, text).map((range) => text.slice(range.from, range.to)),
+    ).toEqual(["c", "G"]);
+    // Along V:2's bar 2: V:1's c d e f drawn over it, and V:2's G A B c.
+    const along = drawnRegion(index, placed, at(1, 1), at(1, 1.75), [0, 1]);
+    expect(
+      regionRanges(index, along, text).map((range) => text.slice(range.from, range.to)),
+    ).toEqual(["c d e f|", "G A B c|"]);
+  });
+  it("drags back from the anchor to the pointer's note", () => {
+    const back = drawnRegion(index, placed, at(1, 1.75), at(1, 1), [1]);
+    expect(
+      regionRanges(index, back, text).map((range) => text.slice(range.from, range.to)),
+    ).toEqual(["G A B c|"]);
+  });
+});
+
+describe("the score's index", () => {
+  it("takes no overlay closing bar line for a note", () => {
+    const text = "X:1\nM:4/4\nL:1/4\nK:C\nc d e f & A B c d|g a b c' & e f g a|c'4|]\n";
+    const { index } = prepare(text);
+    for (const note of index.notes) expect(text.slice(note.start, note.end)).toMatch(/[A-Ga-gz]/);
+    expect(index.notes.some((note) => text.slice(note.start, note.end).includes("|"))).toBe(false);
   });
 });
 

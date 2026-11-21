@@ -475,6 +475,40 @@ export function musicSelection(
   return notes ? "music" : "rests";
 }
 
+/**
+ * The music in a selection: each range cut down to the music lines of a tune's body it covers
+ * (consecutive music lines staying together), leaving out headers, fields, lyrics, comments and
+ * directives. A selection that mixes notes with other lines is acted on through these.
+ */
+export function musicParts(text: string, ranges: Range[], file = indexFile(text)): Range[] {
+  const parts: Range[] = [];
+  for (const range of ranges) {
+    if (range.from >= range.to) continue;
+    for (const tune of file.tunes) {
+      const from = Math.max(range.from, tune.bodyFrom);
+      const to = Math.min(range.to, tune.to);
+      if (from >= to) continue;
+      let at = text.lastIndexOf("\n", from - 1) + 1;
+      let part: Range | null = null;
+      while (at < to) {
+        const end = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+        if (lineKind(text.slice(at, end), true) === "music") {
+          const piece = { from: Math.max(at, from), to: Math.min(end, to) };
+          if (piece.from < piece.to) {
+            if (part) part.to = piece.to;
+            else {
+              part = { ...piece };
+              parts.push(part);
+            }
+          }
+        } else part = null;
+        at = end + 1;
+      }
+    }
+  }
+  return parts;
+}
+
 /** The same mark written in full: !staccato! for ".", !roll! for "~". */
 const FULL_MARK: Record<string, string> = { ".": "!staccato!", "~": "!roll!" };
 /** A decoration as the mark it makes: "." and !staccato! are one, "~" and !roll! another. */
@@ -619,8 +653,17 @@ export function markSelection(
 ): MarkResult | null {
   if (typed !== "." && typed !== "~" && typed !== "(" && typed !== ">" && typed !== "<")
     return null;
-  const kind = musicSelection(text, ranges, file);
-  if (!kind) return null;
+  let selected = ranges;
+  let kind = musicSelection(text, selected, file);
+  if (!kind) {
+    // Notes with other lines among them (lyrics, a part, a comment): mark the notes and leave the
+    // other lines as they are; never type over them. Without notes, it is just typing.
+    const parts = musicParts(text, ranges, file);
+    if (!parts.length || !eventsIn(text, parts, file).length) return null;
+    kind = musicSelection(text, parts, file);
+    if (!kind) return null;
+    selected = parts;
+  }
   const mark =
     typed === "."
       ? "staccato"
@@ -647,11 +690,11 @@ export function markSelection(
               ? "A slur joins notes, and this selection has only rests."
               : "Broken rhythm needs notes, and this selection has only rests.",
     };
-  if (typed === ">" || typed === "<") return brokenRhythm(text, ranges, typed, file, gapAt);
-  const notes = eventsIn(text, ranges, file).filter((event) => !event.rest);
+  if (typed === ">" || typed === "<") return brokenRhythm(text, selected, typed, file, gapAt);
+  const notes = eventsIn(text, selected, file).filter((event) => !event.rest);
   if (typed === "(") {
     // Ranges of rests alone are left out of the slur.
-    const withNotes = ranges.filter((range) =>
+    const withNotes = selected.filter((range) =>
       eventsIn(text, [range], file).some((event) => !event.rest),
     );
     const changes = toggleSlur(text, withNotes, file);

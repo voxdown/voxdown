@@ -65,6 +65,7 @@ import {
   caretNotesAt,
   dragRegion,
   drawPassDynamics,
+  drawnRegion,
   firstBarPickup,
   loadAbcjs,
   loadedAbcjs,
@@ -1940,7 +1941,7 @@ function voicesOnStaff(staff: number): number[] {
   if (!scoreIndex) return [];
   return scoreIndex.voices
     .map((voice, index) => ({ voice, index }))
-    .filter(({ voice }) => voice.staff === staff)
+    .filter(({ voice, index }) => voice.staff === staff && drawnVoice(index))
     .map(({ index }) => index);
 }
 
@@ -1958,7 +1959,14 @@ function selectRegion(region: Region, focusText = false) {
   if (focusText) view.focus();
 }
 
-const allVoices = () => (scoreIndex ? scoreIndex.voices.map((_, index) => index) : []);
+/**
+ * The voices a score selection takes: every voice with something drawn. A voice of invisible rests
+ * (`x`, a spacer) has nothing to see or select, and its ranges would only add noise.
+ */
+const drawnVoice = (voice: number) =>
+  (scoreIndex?.byVoice[voice] ?? []).some((note) => note.elements.length > 0);
+const allVoices = () =>
+  scoreIndex ? scoreIndex.voices.map((_, index) => index).filter(drawnVoice) : [];
 
 scoreScroll.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || !scoreIndex) return;
@@ -2029,7 +2037,9 @@ scoreScroll.addEventListener("pointermove", (event) => {
   // A drag along a staff takes every voice drawn on it, as far as the pointer reached: what was
   // dragged over is what is selected. (A click takes one note; Ctrl/⌘ click picks single notes.)
   const voices = drag.allVoices || !sameStaff ? allVoices() : voicesOnStaff(hit.staff);
-  const region = dragRegion(scoreIndex, drag.anchor, hit, voices);
+  // What is drawn decides: each voice takes the notes dragged over, even where voices are drawn
+  // out of line with each other (a multi-bar rest is drawn one bar wide).
+  const region = drawnRegion(scoreIndex, placedNotes(), drag.anchor, hit, voices);
   if (drag.base)
     selectRanges([...drag.base, ...regionRanges(scoreIndex, region, text())], hit.note.start);
   else selectRegion(region);
@@ -2057,8 +2067,11 @@ function selectionWhere(): string {
   if (selected.length < 2) return "";
   if (!scoreIndex) return ` in ${selected.length} places`;
   // Runs of selected notes in each voice, joined across voices where they overlap in time:
-  // a count that depends on the notes chosen, not on how the text ranges happen to fall.
-  const chosen = new Set(notesInRanges(scoreIndex, selected));
+  // a count that depends on the notes chosen, not on how the text ranges happen to fall. Only
+  // what is drawn counts: a voice of invisible rests (x) is no voice to the reader.
+  const chosen = new Set(
+    notesInRanges(scoreIndex, selected).filter((note) => note.elements.length > 0),
+  );
   const stretches: { from: number; to: number }[] = [];
   const voices = new Set<number>();
   for (const voiceNotes of scoreIndex.byVoice) {
@@ -2225,6 +2238,18 @@ scoreScroll.addEventListener("keydown", (event) => {
   // Keys with Ctrl/⌘ or Alt (and F8) mean in the score what they mean in the text: play, loop,
   // stop, transpose, lengths, ties, undo and redo, Find… The text's own keymap runs them; keys
   // that would delete text are not passed on.
+  // Ctrl/⌘ A in the score: every voice's music, never the headers, fields or lyrics.
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "a"
+  ) {
+    event.preventDefault();
+    selectRegion(spanRegion(scoreIndex, 0, Number.POSITIVE_INFINITY, allVoices()));
+    announceScore();
+    return;
+  }
   const modified = event.altKey || event.ctrlKey || event.metaKey || /^F\d+$/.test(event.key);
   if (modified && !["Backspace", "Delete"].includes(event.key)) {
     if (

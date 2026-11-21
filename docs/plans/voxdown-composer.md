@@ -763,7 +763,7 @@ These are under File › Export. Each choice is made in a small dialog.
   - **Printing:** a print stylesheet starts each tune on a new page (a tune longer than a page
     flows on) and hides the buttons and closed blocks.
   - **No scripts are needed to read it.**
-  - **Optional Play button per tune:** a triangle-wave synth in 1.3 KB of inline script, with
+  - **Optional Play button per tune:** a triangle-wave synth in about 1.1 KB of inline script, with
     each tune's notes in the order played as JSON beside it. It works offline.
   - **Size:** a book of four reels and jigs is 278 KB.
   - **Checked in a browser:** it opens offline with every tune drawn and no network requests, and

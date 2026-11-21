@@ -145,8 +145,9 @@
         <button id="metronome" type="button" aria-pressed="false" aria-label="Metronome" title="Metronome (Ctrl/⌘ Alt M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 14h5l-1.8-11H7.3z"/><path d="m8 10 3.5-5.5"/></svg></button>
         <button id="count-in" type="button" class="wide-only" aria-pressed="false" aria-label="Count in one bar" title="Count in one bar before playing"><span class="tool-text">1 2 3</span></button>
         <button id="voices-button" type="button" aria-haspopup="dialog" aria-label="Voices" title="Mute and solo voices" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5h10M3 8h10M3 11h10"/><circle cx="6" cy="5" r="1.2"/><circle cx="10" cy="8" r="1.2"/><circle cx="5" cy="11" r="1.2"/></svg><span class="transport-label">Voices</span></button>
-        <button id="sound-button" type="button" aria-haspopup="dialog" aria-label="Sound" title="Instrument, volume, room"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6v4h2.5l3.5 3V3L5 6z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4"/></svg><span id="instrument-label" class="transport-label">Piano</span></button>
+        <button id="sound-button" type="button" aria-haspopup="dialog" aria-label="Sound" title="Instrument, volume, room"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6v4h2.5l3.5 3V3L5 6z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4"/></svg><span id="instrument-label" class="transport-label">Piano</span><span class="transport-label phone-label" aria-hidden="true">Sound</span></button>
       </div>
+      <p class="transport-empty">Playback starts when there’s music.</p>
       <p id="sound-status" class="sound-status" role="status" aria-live="polite"></p>
     </div>
     <footer>

@@ -234,3 +234,31 @@ drawing task; typing redraws are 32–40 ms plus a 3–11 ms placing task. With 
 the drawing pass is 130–190 ms: abcjs engraves a tune in one synchronous pass, and splitting it
 needs per-system engraving (with ties, slurs, endings and lyrics across systems), planned as its
 own step. Redraws wait for a pause in typing, so keystrokes still reach the screen in 32–55 ms at 4×.
+
+## Polish round 4 (after round 3: Claude 7.6 with a HIGH data-loss bug, Codex 7.7 partial)
+
+Data loss (HIGH): the problem marks were stored with ranges past the end of a shortened document;
+the next edit's position mapping threw inside CodeMirror's state update, the transaction was
+dropped, and the screen and the draft stopped following the typing. Marks are now clamped to the
+document before they are stored and before they are mapped, every state field's update is
+guarded (a failure empties the marks and is reported), and a safety net resyncs the editor and
+keeps the draft from the visible text with an error notice. The browser check replays the three
+reported triggers and a seeded 300-edit fuzz, comparing document, screen and kept draft.
+
+Owner's requests: the playing note is a vivid blue per look (Paper #2f6fde) with a soft glow, and
+beams, stems, flags, dots, accidentals, ties and slurs take the selection or playing colour (a beam
+only when all its notes are in). Dynamics per pass are plain ABC annotations, `"^2nd time p"`,
+`"^1st time f, 2nd time p"`, `"_on repeat pp"`: playback scales the velocities of that pass from
+the marked note until the next written dynamic or the music jumps back; the score draws their
+dynamic letters as bold italic glyphs.
+
+Also: the selection status counts from the text at once; the timeline names passes ("1 · 2nd"),
+bands only what is played again and its value, maximum and text agree; Print uses the screen
+fonts and the browser's own Print fills the score on `beforeprint`; Focus has a quiet Exit focus
+control and Escape, and without the score the text sits in a centred column; shortcut text follows
+the platform; a w: line with more syllables than notes is a quiet problem; a header subtitle no
+longer adds abcjs's 60 px system gap (abcjs counts its line as a line before the first staff);
+narrow scores are drawn at 0.86 with tighter title and system spacing (set on the parsed tune's
+formatting, so no source offsets move), lyrics and chord symbols set larger to compensate, voice
+names once, and two bars per line wherever they fit; the phone transport labels its icons and
+Voices moves into the Sound sheet; the start screen's transport is a slim empty state.

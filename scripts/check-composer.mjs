@@ -915,6 +915,17 @@ console.log(
   assert(await start.locator("#transport").evaluate((element) => element.inert), "transport inert");
   assert(await start.locator(".documentbar").evaluate((element) => element.inert), "toolbar inert");
   assert.match(await start.locator(".start p").first().textContent(), /Type your tune/);
+  // 10. The transport is a slim empty state until there is music.
+  const slim = await start.locator("#transport").evaluate((element) => ({
+    height: element.getBoundingClientRect().height,
+    text: element.querySelector(".transport-empty").checkVisibility()
+      ? element.querySelector(".transport-empty").textContent
+      : "",
+    play: document.getElementById("play").checkVisibility(),
+  }));
+  assert(slim.height <= 40, `slim transport on the start screen (${slim.height}px)`);
+  assert.match(slim.text, /Playback starts when there’s music/);
+  assert(!slim.play, "no disabled controls across the start screen");
   // 4. Offline: prepare, go offline, reload, open an example and play.
   await start.locator("#view-menu").click();
   await start.getByRole("menuitem", { name: "Work offline…" }).click();
@@ -1268,6 +1279,93 @@ console.log(
 );
 
 {
+  // 2. The selection status counts from the text, at once, even before the score redraws.
+  const doc = await docText();
+  const at = doc.indexOf("e>fe");
+  await page.evaluate(
+    ([from, to]) => window.composer.view.dispatch({ selection: { anchor: from, head: to } }),
+    [at, at + 4],
+  );
+  await page.waitForFunction(() =>
+    /^3 notes selected/.test(document.getElementById("explain").textContent),
+  );
+  assert.match(
+    await page.locator("#explain").textContent(),
+    /^3 notes selected · Ctrl\+Alt\+Enter plays it$/,
+  );
+  // Typed into the selection's bar and selected again before any redraw.
+  await page.evaluate((from) => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from, insert: "ab" }, selection: { anchor: from, head: from + 6 } });
+  }, at);
+  await page.waitForFunction(
+    () => /^5 notes selected/.test(document.getElementById("explain").textContent),
+    null,
+    { timeout: 300 },
+  );
+  await page.evaluate(
+    (from) => window.composer.view.dispatch({ changes: { from, to: from + 2 } }),
+    at,
+  );
+  await drawn();
+  // 3. A selected region colours its beam only when all the beam's notes are in it.
+  await page.waitForTimeout(400);
+  const beamState = async () =>
+    page.evaluate(() => {
+      const beams = [...document.querySelectorAll("#score .abcjs-beam-elem")];
+      return beams.filter((beam) => beam.classList.contains("is-selected")).length;
+    });
+  await page.evaluate(
+    ([from, to]) => window.composer.view.dispatch({ selection: { anchor: from, head: to } }),
+    [at, at + 4],
+  );
+  await page.waitForFunction(() => document.querySelector("#score .abcjs-beam-elem.is-selected"));
+  assert.equal(await beamState(), 1, "the beam of e>fe takes the selection colour");
+  await page.evaluate(
+    ([from, to]) => window.composer.view.dispatch({ selection: { anchor: from, head: to } }),
+    [at, at + 2],
+  );
+  await page.waitForTimeout(300);
+  assert.equal(await beamState(), 0, "a beam half selected keeps the ink colour");
+  // 4. "^2nd time p" is drawn as a dynamic, and the second time through is softer from there.
+  const lineStart = doc.indexOf('"Am"c2 d e>fe | "G"d2 B G>AB | "Am"c>BA');
+  await page.evaluate(
+    (from) => window.composer.view.dispatch({ changes: { from, insert: '"^2nd time p"' } }),
+    lineStart,
+  );
+  await page.waitForFunction(() => document.querySelector("#score .abc-dyn"));
+  const glyph = await page.evaluate(() => {
+    const element = document.querySelector("#score .abc-dyn");
+    const style = getComputedStyle(element);
+    return { text: element.textContent, italic: style.fontStyle, weight: Number(style.fontWeight) };
+  });
+  assert.equal(glyph.text, "p");
+  assert.equal(glyph.italic, "italic");
+  assert(glyph.weight >= 600, `bold dynamic letter (${glyph.weight})`);
+  await page.waitForFunction((start) => {
+    const notes = window.composer.player.timeline?.notes ?? [];
+    return notes.filter((note) => note.start === start).length === 2;
+  }, lineStart);
+  const passes = await page.evaluate((start) => {
+    const notes = window.composer.player.timeline.notes;
+    const marked = notes.filter((note) => note.start === start).map((note) => note.velocity);
+    const after = notes
+      .filter((note) => note.start > start && note.start < start + 30)
+      .map((note) => note.velocity);
+    return { marked, after };
+  }, lineStart);
+  assert(passes.marked[1] < passes.marked[0] * 0.8, `second time softer: ${passes.marked}`);
+  await page.evaluate(
+    (from) => window.composer.view.dispatch({ changes: { from, to: from + 13 } }),
+    lineStart,
+  );
+  await drawn();
+}
+console.log(
+  'Composer: selection counts from the text at once; beams take the selection colour when whole; "^2nd time p" drawn and played softer the 2nd time: passed',
+);
+
+{
   // 9. Notices sit above the transport, fade, close with Escape and with the next edit.
   await setCaret((await docText()).indexOf("c2 d e"));
   await page.locator(".cm-content").focus();
@@ -1468,6 +1566,28 @@ console.log(
 );
 
 /* 11. Phone: Text | Score switch with the transport at hand. */
+{
+  // 9. Two-voice scores (with a subtitle) start as close below the composer line as Ode does.
+  const gapBelowComposer = () =>
+    page.evaluate(() => {
+      const svg = document.querySelector("#score svg");
+      const composer = svg.querySelector(".abcjs-composer").getBoundingClientRect();
+      // The first system begins with its tempo mark, above any chord symbols.
+      const system = svg.querySelector(".abcjs-tempo").getBoundingClientRect();
+      return Math.round(system.top - composer.bottom);
+    });
+  await openExample("Ode to Joy");
+  await drawn();
+  const ode = await gapBelowComposer();
+  await openExample("Frère Jacques");
+  await drawn();
+  const frere = await gapBelowComposer();
+  assert(Math.abs(frere - ode) <= 8, `composer to first system: Ode ${ode}px, Frère ${frere}px`);
+}
+console.log(
+  "Composer: two-voice scores start as close below the title block as one-voice ones: passed",
+);
+
 const phone = await browser.newContext({
   viewport: { width: 390, height: 844 },
   hasTouch: true,
@@ -1525,6 +1645,86 @@ assert.equal(
   await small.locator("#workspace").getAttribute("data-rail"),
   "closed",
   "the close button closes it",
+);
+{
+  // 9. Frère Jacques on a phone: two bars a line wherever they fit, the header kept whole.
+  await openExample("Frère Jacques", small);
+  await small.waitForFunction(() => (window.composer.state().timeline?.notes ?? 0) > 0);
+  await small.locator("#show-score").click();
+  await small.waitForTimeout(400);
+  const layout = await small.evaluate(() => {
+    const svg = document.querySelector("#score svg");
+    const perLine = {};
+    for (const bar of svg.querySelectorAll(".abcjs-bar.abcjs-v0")) {
+      const line = /abcjs-l(\d+)/.exec(bar.getAttribute("class"))?.[1];
+      perLine[line] = (perLine[line] ?? 0) + 1;
+    }
+    const summary = document.getElementById("score-summary");
+    const box = summary.getBoundingClientRect();
+    const parts = [...summary.querySelectorAll("span")].map((span) => {
+      const rect = span.getBoundingClientRect();
+      return { text: span.textContent, whole: rect.right <= box.right + 1 && rect.height < 24 };
+    });
+    return {
+      perLine: Object.values(perLine),
+      width: svg.getBoundingClientRect().right,
+      parts,
+    };
+  });
+  const paired = layout.perLine.filter((count) => count >= 2).length;
+  assert(
+    paired >= layout.perLine.length - 2 && layout.perLine.length <= 6,
+    `bars per line on a phone: ${layout.perLine}`,
+  );
+  assert(layout.width <= 390, `the score fits the phone (${layout.width})`);
+  assert(
+    layout.parts.some((part) => part.text === "2 voices") &&
+      layout.parts.every((part) => part.whole),
+    `the header keeps its parts whole: ${JSON.stringify(layout.parts)}`,
+  );
+}
+{
+  // 10. The phone transport: labelled icons on one row with Play, Voices in the Sound sheet,
+  // and a file name field tall enough to tap.
+  const transport = await small.evaluate(() => {
+    const middle = (id) => {
+      const box = document.getElementById(id).getBoundingClientRect();
+      return box.top + box.height / 2;
+    };
+    return {
+      oneRow: Math.abs(middle("play") - middle("sound-button")) < 8,
+      labels: [
+        ...document.querySelectorAll(
+          "#from-caret .transport-label, #loop .transport-label, #sound-button .phone-label",
+        ),
+      ].map((label) => (label.checkVisibility() ? label.textContent : "")),
+      size: Number.parseFloat(
+        getComputedStyle(document.querySelector("#loop .transport-label")).fontSize,
+      ),
+      name: document.getElementById("name").getBoundingClientRect().height,
+    };
+  });
+  assert(transport.oneRow, "Play and Sound share a row on a phone");
+  assert.deepEqual(transport.labels, ["From caret", "Loop", "Sound"]);
+  assert(transport.size >= 11 && transport.size <= 12, `label size ${transport.size}`);
+  assert(transport.name >= 40, `file name field ${transport.name}px tall`);
+  await small.locator("#sound-button").click();
+  const voices = small.getByRole("button", { name: /^Voices: mute and solo/ });
+  await voices.click();
+  assert(
+    await small
+      .getByRole("button", { name: /^Mute / })
+      .first()
+      .isVisible(),
+    "voices from Sound",
+  );
+  await small.keyboard.press("Escape");
+}
+console.log(
+  "Composer: Frère Jacques on a phone pairs its bars; the score header wraps whole: passed",
+);
+console.log(
+  "Composer: phone transport labels its icons on one row, voices in Sound, a 40 px file name: passed",
 );
 await phone.close();
 console.log(

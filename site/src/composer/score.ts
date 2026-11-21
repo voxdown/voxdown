@@ -24,9 +24,10 @@ export function scoreFormat(compact = false): Any {
     titlefont: `${font} ${compact ? 16 : 19}`,
     subtitlefont: `${font} ${compact ? 12 : 14}`,
     composerfont: `${font} italic ${compact ? 11 : 12}`,
-    gchordfont: '"Recursive Variable", sans-serif 12',
-    annotationfont: '"Recursive Variable", sans-serif 11',
-    vocalfont: `${font} 13`,
+    // A narrow score is drawn at COMPACT_SCALE; its words are set larger so they read the same.
+    gchordfont: `"Recursive Variable", sans-serif ${compact ? 13 : 12}`,
+    annotationfont: `"Recursive Variable", sans-serif ${compact ? 12 : 11}`,
+    vocalfont: `${font} ${compact ? 15.5 : 13}`,
     partsfont: '"Recursive Variable", sans-serif bold 12',
     tempofont: '"Recursive Variable", sans-serif 11',
     wordsfont: `${font} 13`,
@@ -134,6 +135,56 @@ export function padLyrics(tune: Any): void {
 }
 
 /**
+ * A subtitle (a second T:) is drawn with the title, yet abcjs still leaves a system's gap for
+ * its line before the first staff: 60 px more than a tune without one. Take that gap back.
+ */
+export function closeSubtitleGap(tune: Any): void {
+  const lines: Any[] = tune?.lines ?? [];
+  const first = lines.findIndex((line) => line.staff);
+  if (first <= 0 || !lines.slice(0, first).every((line) => line.subtitle) || lines[first].closed)
+    return;
+  const staffsep = tune.formatting?.staffsep;
+  const separation = typeof staffsep === "number" ? (staffsep * 4) / 3 : 61.33;
+  lines[first].closed = true;
+  lines[first].vskip = (lines[first].vskip ?? 0) - separation;
+}
+
+/** Everything Composer adjusts in a parsed tune before abcjs draws it. */
+export function prepareTune(tune: Any): void {
+  padLyrics(tune);
+  closeSubtitleGap(tune);
+}
+
+/**
+ * On a narrow score, tighter spacing around the title and between systems, set on the tune's own
+ * formatting (as %%titlespace, %%staffsep would), so no offsets in the source move.
+ */
+export function prepareCompactTune(tune: Any): void {
+  if (tune) {
+    // Voice names once, on the first system; later systems keep their width for the music.
+    let seen = false;
+    for (const line of tune.lines ?? []) {
+      if (!line.staff) continue;
+      if (seen) for (const staff of line.staff) if (staff.title) staff.title = undefined;
+      seen = true;
+    }
+    tune.formatting ??= {};
+    Object.assign(tune.formatting, {
+      topspace: 0,
+      titlespace: 0,
+      subtitlespace: 1,
+      composerspace: 2,
+      musicspace: 0,
+      staffsep: 34,
+    });
+  }
+  prepareTune(tune);
+}
+
+/** How much a narrow score is drawn smaller, so two bars still fit a line. */
+export const COMPACT_SCALE = 0.86;
+
+/**
  * Line breaks that follow phrases: the number of bars the author wrote per line when that is
  * consistent and fits, else 4 bars, else 2 (or 8 when 4 leave lines sparse), else 1; a pickup
  * rides with the first line, and a short last line joins the one above when it fits.
@@ -142,7 +193,13 @@ export function chooseBreaks(
   sections: { left: number; measureWidths: number[] }[],
   staffwidth: number,
   spacing: { min: number; max: number },
-  options: { authorBars?: number | null; pickup?: boolean; filled?: boolean[][] } = {},
+  options: {
+    authorBars?: number | null;
+    pickup?: boolean;
+    filled?: boolean[][];
+    /** A phone reads two bars a line at most. */
+    maxBars?: number;
+  } = {},
 ): number[][] {
   return sections.map((section, sectionIndex) => {
     const filled = options.filled?.[sectionIndex];
@@ -167,6 +224,17 @@ export function chooseBreaks(
       return out;
     };
     const total = (line: { width: number }[]) => line.reduce((sum, bar) => sum + bar.width, 0);
+    const greedy = (atMost: number): { width: number; index: number }[][] => {
+      const out: { width: number; index: number }[][] = [];
+      let at = 0;
+      while (at < real.length) {
+        let take = Math.min(atMost + (pickup && at === 0 ? 1 : 0), real.length - at);
+        while (take > 1 && total(real.slice(at, at + take)) > most + 0.5) take -= 1;
+        out.push(real.slice(at, at + take));
+        at += take;
+      }
+      return out;
+    };
     const fits = (perLine: number) => lines(perLine).every((line) => total(line) <= most + 0.5);
     const sparse = (perLine: number) =>
       lines(perLine)
@@ -177,8 +245,9 @@ export function chooseBreaks(
     if (options.authorBars && options.authorBars > 0) candidates.push(options.authorBars);
     if (fits(4) && sparse(4) && fits(8)) candidates.push(8);
     candidates.push(4, 2, 1);
-    const chosen = candidates.find(fits) ?? 1;
-    const result = lines(chosen);
+    const chosen = candidates.filter((count) => count <= (options.maxBars ?? 8)).find(fits) ?? 1;
+    // When two bars do not fit on every line, still pair them wherever they do.
+    const result = chosen === 1 ? greedy(2) : lines(chosen);
     // A short last line (under half the width) joins the line above when they fit together.
     if (result.length > 1) {
       const last = result[result.length - 1] as { width: number; index: number }[];
@@ -280,11 +349,14 @@ export async function renderTune(
 ): Promise<ScoreIndex & { breaks: Breaks | null }> {
   const abcjs = await loadAbcjs();
   const { source, toDocument } = tuneSource(input);
+  // Narrow screens accept closer spacing and a slightly smaller drawing, so a phone still shows
+  // two bars a line.
+  const compact = input.compact ?? Math.floor(input.width) - 30 < 400;
+  const scale = compact ? COMPACT_SCALE : 1;
   const staffwidth = Math.max(240, Math.floor(input.width) - 30);
+  // abcjs lays out at width ÷ scale, then draws it smaller; bars are measured in those units.
+  const layoutWidth = Math.floor(staffwidth / scale);
   stage.style.width = `${Math.floor(input.width)}px`;
-  const font = '"Literata Variable", Georgia, serif';
-  // Narrow screens accept closer spacing, so a phone still shows two bars a line.
-  const compact = input.compact ?? staffwidth < 400;
   const spacing = { min: compact ? 1.1 : 1.35, max: wide ? 2.4 : 2.7 };
   const params: Any = {
     add_classes: true,
@@ -296,7 +368,8 @@ export async function renderTune(
     selectTypes: false,
     // A phone keeps the title block small, so the first staff is not pushed off the screen.
     format: scoreFormat(compact),
-    afterParsing: padLyrics,
+    afterParsing: compact ? prepareCompactTune : prepareTune,
+    ...(scale !== 1 ? { scale } : {}),
   };
   // While the bars and the width stay the same, the last line breaks still fit: one pass.
   const key = `${breaksKey(source, staffwidth)}:${wide ? "w" : "n"}`;
@@ -310,7 +383,8 @@ export async function renderTune(
     const controller = new (abcjs as Any).test.EngraverController(stage, params);
     const sections = parsed ? controller.getMeasureWidths(parsed) : [];
     const { filled, pickup } = measuresOf(parsed);
-    lineBreaks = chooseBreaks(sections, staffwidth, spacing, {
+    lineBreaks = chooseBreaks(sections, layoutWidth, spacing, {
+      ...(compact ? { maxBars: 2 } : {}),
       authorBars: authorBars(),
       pickup,
       filled,
@@ -320,7 +394,7 @@ export async function renderTune(
         left: section.left,
         measureWidths: section.measureWidths,
       })),
-      staffwidth,
+      staffwidth: layoutWidth,
     };
     stage.replaceChildren();
     performance.measure("composer:measure", "composer:measure");

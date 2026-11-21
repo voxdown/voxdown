@@ -53,7 +53,7 @@ import {
   noteUnder,
   notesAt,
   notesInRanges,
-  padLyrics,
+  prepareTune,
   reachAt,
   regionOfRanges,
   regionRanges,
@@ -770,7 +770,14 @@ function updateSummary() {
   const bars = index.measures - (pickup ? 1 : 0);
   parts.push(`${bars} ${bars === 1 ? "bar" : "bars"}${pickup ? " and a pickup" : ""}`);
   if (index.voices.length > 1) parts.push(`${index.voices.length} voices`);
-  $("score-summary").textContent = parts.join(" · ");
+  // Each part stays whole when a phone wraps the line ("2 voices", never "2 voi…").
+  $("score-summary").replaceChildren(
+    ...parts.flatMap((part, at) => {
+      const span = document.createElement("span");
+      span.textContent = part;
+      return at ? [" · ", span] : [span];
+    }),
+  );
   scoreScroll.setAttribute(
     "aria-label",
     `Score of ${parts.join(", ")}. ← and → move by note, ↑ and ↓ change voice, Home and End go along the line, Shift extends, Space plays, Enter goes to the text.`,
@@ -2011,6 +2018,8 @@ function updateVoices() {
   button.setAttribute("aria-label", label ? `Voices: ${label}` : "Voices");
   const text = button.querySelector(".transport-label");
   if (text) text.textContent = label ? `Voices · ${label}` : "Voices";
+  // On a phone the voices live in the Sound sheet; its button carries the same mark.
+  $("sound-button").dataset.state = button.dataset.state;
 }
 function voicesPopover(anchor: HTMLElement) {
   const tracks = timeline?.tracks ?? [];
@@ -2176,6 +2185,19 @@ function soundPopover(anchor: HTMLElement) {
     player.humanise = value;
     savePrefs();
   });
+  // On a phone, Voices has no room in the transport: it opens from here.
+  if (phone.matches && (timeline?.tracks.length ?? 0) > 1) {
+    const voices = document.createElement("button");
+    voices.type = "button";
+    voices.className = "sheet-link";
+    voices.textContent = `Voices: mute and solo… ${
+      $("voices-button")
+        .getAttribute("aria-label")
+        ?.replace(/^Voices:?\s*/, "") ?? ""
+    }`.trim();
+    voices.addEventListener("click", () => voicesPopover(anchor));
+    panel.append(voices);
+  }
   const hint = document.createElement("p");
   hint.className = "hint";
   hint.textContent =
@@ -2728,7 +2750,7 @@ function fillPrint(abcjs: typeof import("abcjs")): boolean {
       paddingright: 0,
       add_classes: true,
       format: scoreFormat(false),
-      afterParsing: padLyrics,
+      afterParsing: prepareTune,
       wrap: { minSpacing: 1.8, maxSpacing: 2.6, preferredMeasuresPerLine: 4 },
     } as Any);
     drawPassDynamics(holder);

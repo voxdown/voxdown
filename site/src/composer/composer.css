@@ -746,6 +746,16 @@ body[data-layout="below"] #layout-toggle .beside {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.score-summary span {
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .score-summary {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.35;
+  }
+}
 .quiet-button,
 .follow {
   min-height: 26px;
@@ -1138,6 +1148,9 @@ body[data-layout="below"] #layout-toggle .beside {
   color: var(--accent);
   border-color: var(--border);
 }
+.transport .phone-label {
+  display: none;
+}
 .transport-main,
 .transport-side {
   display: flex;
@@ -1241,6 +1254,7 @@ body[data-layout="below"] #layout-toggle .beside {
   left: 3px;
   font-size: 11px;
   color: var(--muted);
+  white-space: nowrap;
 }
 .timeline-loop {
   position: absolute;
@@ -1706,11 +1720,19 @@ body.focus-text .writing {
 body.focus-text .cm-scroller {
   padding-inline: max(24px, calc((100% - 76ch) / 2));
 }
-/* The way out: quiet at the top right, clearer when the pointer moves or it has focus. */
+/* The way out: quiet at the top right, in the place of the look and panel buttons (which Focus
+   puts away), clearer when the pointer moves or it has focus. */
+body.focus-mode #appearance,
+body.focus-mode .panel-toggles {
+  display: none;
+}
+body.focus-mode .app-header {
+  padding-right: 200px;
+}
 .focus-controls {
   position: fixed;
-  top: 10px;
-  right: 14px;
+  top: 7px;
+  right: 18px;
   z-index: 40;
   display: flex;
   gap: 6px;
@@ -1913,6 +1935,50 @@ body.focus-text .cm-scroller {
     width: 46px;
     height: 46px;
   }
+  /* Short labels under the icons that are not obvious on their own. */
+  #from-caret,
+  #loop,
+  #voices-button,
+  #sound-button {
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 3px;
+  }
+  #from-caret .transport-label,
+  #loop .transport-label,
+  #voices-button .transport-label,
+  #sound-button .phone-label {
+    display: block;
+    font-size: 11px;
+    line-height: 1.1;
+    white-space: nowrap;
+    color: var(--muted);
+  }
+  #loop[aria-pressed="true"] .transport-label {
+    color: inherit;
+  }
+  #sound-button #instrument-label {
+    display: none;
+  }
+  /* Voices opens from the Sound sheet on a phone. */
+  #voices-button {
+    display: none;
+  }
+  #sound-button[data-state="muted"],
+  #sound-button[data-state="solo"] {
+    position: relative;
+  }
+  #sound-button[data-state="muted"]::after,
+  #sound-button[data-state="solo"]::after {
+    content: "";
+    position: absolute;
+    top: 5px;
+    right: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
   .position {
     order: 3;
     flex-basis: 100%;
@@ -2073,10 +2139,27 @@ body.focus-text .cm-scroller {
 .saved-state:not(:empty)::before {
   content: "· ";
 }
-/* While the start screen shows, tools and transport rest. */
-body.starting .documentbar .toolbar,
-body.starting #transport {
+/* While the start screen shows, the tools rest and the transport is a slim, quiet bar; it
+   changes in the same frame the music opens, so nothing below it moves later. */
+body.starting .documentbar .toolbar {
   opacity: 0.45;
+}
+.transport-empty {
+  display: none;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+body.starting #transport {
+  min-height: 36px;
+  padding-block: 6px;
+  justify-content: center;
+}
+body.starting #transport > :not(.transport-empty) {
+  display: none;
+}
+body.starting .transport-empty {
+  display: block;
 }
 /* More tools: only on narrow screens, where the toolbar cannot hold everything. */
 .more-group {
@@ -2292,7 +2375,7 @@ dialog.composer-dialog[open]::backdrop {
     display: flex !important;
     order: 10;
     flex-basis: 100%;
-    min-height: 26px;
+    min-height: 40px;
     padding: 0 6px 2px;
   }
   .app-header .filename {
@@ -2301,9 +2384,9 @@ dialog.composer-dialog[open]::backdrop {
     max-width: 60%;
   }
   .app-header .filename input {
-    min-height: 26px;
+    min-height: 40px;
     font-size: 13px;
-    padding: 2px 4px;
+    padding: 2px 6px;
   }
   .app-header .saved-state {
     display: inline !important;
@@ -2349,4 +2432,12 @@ dialog.composer-dialog[open]::backdrop {
   font-weight: 800;
   font-size: 1.3em;
   letter-spacing: -0.02em;
+}
+
+.composer-popover .sheet-link {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 8px;
+  text-align: left;
 }

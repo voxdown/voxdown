@@ -18,6 +18,9 @@ import {
   decorationMark,
   duplicate,
   eventsIn,
+  insertChordSymbol,
+  insertRepeat,
+  insertTriplet,
   markSelection,
   newTuneTemplate,
   removeDots,
@@ -2578,7 +2581,8 @@ function music(command: string): boolean {
     case "slur":
       return apply(toggleSlur(doc, list, index), "Slur");
     case "bar":
-      return apply([barLine(doc, caret())], "Bar line");
+      // After the selection, whichever way it was made.
+      return apply([barLine(doc, view.state.selection.main.to)], "Bar line");
     case "duplicate":
       return apply(duplicate(doc, list), "Duplicate");
     case "new-tune":
@@ -2615,7 +2619,9 @@ function decorationMenu(anchor: HTMLElement) {
 
 /** Writes "^2nd time p" before the note at the caret, with the dynamic selected to change. */
 function insertPassDynamic() {
-  const [event] = eventsIn(text(), [{ from: caret(), to: caret() }], fileIndex());
+  // The first selected note (or the one at the caret), whichever way the selection was made.
+  const at = view.state.selection.main.from;
+  const [event] = eventsIn(text(), [{ from: at, to: at }], fileIndex());
   if (!event) {
     notice(
       "Put the caret on a note first: the dynamic goes on the note where the 2nd time changes.",
@@ -4535,9 +4541,9 @@ const menuDefinitions: Record<string, () => MenuItem[]> = {
     "-",
     { label: "Second voice", run: insertVoice },
     { label: "Lyrics line", run: insertLyrics },
-    { label: "Chord symbol", run: () => insertAtCaret('""', 1) },
-    { label: "Triplet", run: () => insertAtCaret("(3", 2) },
-    { label: "Repeat", run: () => insertAtCaret("|:  :|", 3) },
+    { label: "Chord symbol", run: insertChordSymbolHere },
+    { label: "Triplet", run: insertTripletHere },
+    { label: "Repeat", run: insertRepeatHere },
   ],
   view: () => [
     {
@@ -4687,6 +4693,32 @@ const menus = mountMenus(
   menuDefinitions,
 );
 
+/* Insert › Chord symbol, Triplet and Repeat: over a selection, by its notes (./commands); at a
+   caret, where it is. */
+function insertChordSymbolHere() {
+  const change = view.state.selection.main.empty
+    ? null
+    : insertChordSymbol(text(), ranges(), fileIndex());
+  if (!change) return insertAtCaret('""', 1);
+  view.dispatch({ changes: change, selection: { anchor: change.from + 1 }, userEvent: "input" });
+  view.focus();
+}
+function insertTripletHere() {
+  const changes = view.state.selection.main.empty
+    ? null
+    : insertTriplet(text(), ranges(), fileIndex());
+  if (!changes) return insertAtCaret("(3", 2);
+  apply(changes, "Triplet");
+  view.focus();
+}
+function insertRepeatHere() {
+  const changes = view.state.selection.main.empty
+    ? null
+    : insertRepeat(text(), ranges(), fileIndex());
+  if (!changes) return insertAtCaret("|:  :|", 3);
+  apply(changes, "Repeat");
+  view.focus();
+}
 function insertAtCaret(insert: string, caretOffset: number) {
   const at = caret();
   view.dispatch({
@@ -4697,7 +4729,7 @@ function insertAtCaret(insert: string, caretOffset: number) {
   view.focus();
 }
 function insertVoice() {
-  const tune = tuneAt(fileIndex(), caret());
+  const tune = tuneAt(fileIndex(), view.state.selection.main.from);
   if (!tune) return;
   const ids = tune.voices.map((voice) => voice.id);
   const next = String(ids.length ? Math.max(0, ...ids.map((id) => Number(id) || 0)) + 1 : 2);
@@ -4717,7 +4749,8 @@ function insertVoice() {
   view.focus();
 }
 function insertLyrics() {
-  const line = view.state.doc.lineAt(caret());
+  // After the selection's last line, whichever way it was made.
+  const line = view.state.doc.lineAt(view.state.selection.main.to);
   const insert = "\nw: ";
   view.dispatch({
     changes: { from: line.to, insert },

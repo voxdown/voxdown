@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { frac } from "../src/composer/abc";
-import { type Change, scaleLengths, transpose } from "../src/composer/commands";
+import {
+  type Change,
+  insertChordSymbol,
+  insertRepeat,
+  insertTriplet,
+  scaleLengths,
+  transpose,
+} from "../src/composer/commands";
 import { describePicked, selectedNotes } from "../src/composer/selected";
 
 const HEAD = "X:1\nT:Rule\nM:4/4\nL:1/8\nK:C\n";
@@ -94,5 +101,35 @@ describe("the one rule: which notes a text selection selects", () => {
       { from: HEAD.length + 3, to: HEAD.length + 4 },
     ]);
     expect(describePicked(mixed).text).toBe("1 note and 1 chord tone");
+  });
+});
+
+describe("Insert over a selection goes by its notes", () => {
+  const over = (music: string, part: string) => {
+    const text = `${HEAD}${music}\n`;
+    const from = text.indexOf(part, HEAD.length);
+    return { text, ranges: [{ from, to: from + part.length }] };
+  };
+  it("puts a triplet's (3 before the first selected note, before its decorations", () => {
+    const { text, ranges } = over("C !trill!d e f g |", "!trill!d e f");
+    expect(apply(text, insertTriplet(text, ranges) ?? [])).toBe(`${HEAD}C (3!trill!d e f g |\n`);
+  });
+  it("attaches a chord symbol to the first selected note", () => {
+    const { text, ranges } = over("C d e f |", "d e");
+    expect(apply(text, [insertChordSymbol(text, ranges) as Change])).toBe(`${HEAD}C ""d e f |\n`);
+  });
+  it("wraps a repeat round the notes, making the bar lines there repeat signs", () => {
+    const bars = over("C D | E F G A | B c |]", "E F G A");
+    expect(apply(bars.text, insertRepeat(bars.text, bars.ranges) ?? [])).toBe(
+      `${HEAD}C D |: E F G A :| B c |]\n`,
+    );
+    const plain = over("C D E F G A |]", "D E");
+    expect(apply(plain.text, insertRepeat(plain.text, plain.ranges) ?? [])).toBe(
+      `${HEAD}C |: D E :| F G A |]\n`,
+    );
+    const end = over("C D | E F |]", "E F");
+    expect(apply(end.text, insertRepeat(end.text, end.ranges) ?? [])).toBe(
+      `${HEAD}C D |: E F :|]\n`,
+    );
   });
 });

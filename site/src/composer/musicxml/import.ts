@@ -1155,7 +1155,20 @@ type Tune = { text: string; title: string; parts: number; bars: number };
 /** A field written inside a voice's music at a time in a bar: [K:…], [M:…], [K:clef=…]. */
 type Field = { time: Fraction; text: string; alters?: Record<string, number> };
 /** What a voice has written so far: its key, meter and clef, and the key's accidentals. */
-type VoiceState = { key: string; meter: string; clef: string; alters: Record<string, number> };
+type VoiceState = {
+  key: string;
+  meter: string;
+  clef: string;
+  alters: Record<string, number>;
+  /** The key signature in force (the sharps or flats of each letter). */
+  signature?: Record<string, number>;
+};
+const signature = (alters: Record<string, number>) =>
+  Object.keys(alters)
+    .sort()
+    .map((letter) => `${letter}${alters[letter]}`)
+    .join(",");
+const keySignatureOf = (state: VoiceState) => state.signature ?? state.alters;
 
 /** The key as it sounds: a transposing part's written key moved, in its simplest spelling. */
 function concertFifths(transpose: Transposition | undefined, fifths: number) {
@@ -1368,7 +1381,13 @@ async function convertScore(
     const octave = inForce(part, "transpose", 0, frac(0))?.octave ?? 0;
     const shift = clef.octave === 0 && octave ? 12 * octave : 0;
     voiceTranspose.set(voice.id, shift);
-    states.set(voice.id, { key: tuneKey.name, meter, clef: clef.name, alters: tuneKey.alters });
+    states.set(voice.id, {
+      key: tuneKey.name,
+      meter,
+      clef: clef.name,
+      alters: tuneKey.alters,
+      signature: tuneKey.alters,
+    });
     const isFirst = voices.find((each) => each.part === voice.part) === voice;
     const nameText = isFirst && part.name ? ` name="${part.name.replace(/"/g, "'")}"` : "";
     if (voices.length > 1 || clef.name !== "treble" || part.name || shift)
@@ -1437,10 +1456,14 @@ async function convertScore(
         fields.push({ time, text: `[M:${meterHere}]` });
         state.meter = meterHere;
       }
+      // A key change is written only when the signature changes: E minor after G major is
+      // the same sharps, and abcjs would draw nothing for it anyway.
       const key = concertKey(part, index, time);
       if (key.name !== state.key) {
-        fields.push({ time, text: `[K:${key.name}]`, alters: key.alters });
+        if (signature(key.alters) !== signature(keySignatureOf(state)))
+          fields.push({ time, text: `[K:${key.name}]`, alters: key.alters });
         state.key = key.name;
+        state.signature = key.alters;
       }
       const clef = inForce(part, "clef", index, time, voice.staff);
       if (clef && clef.name !== state.clef) {

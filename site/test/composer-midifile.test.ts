@@ -284,6 +284,25 @@ describe("MIDI import: handmade files", () => {
     expect(result.report.notes.join(" ")).toMatch(/5 lyric syllables from the file are under/);
   });
 
+  it("writes a key change only when the signature changes", async () => {
+    const file = smf(0, [
+      track([
+        [0, meter(4, 4)],
+        [0, key(0)],
+        [480 * 4, key(0, true)],
+        [480 * 8, key(1)],
+        ...notes(0, [
+          [0, 4, 60],
+          [4, 4, 57],
+          [8, 4, 67],
+        ]),
+      ]),
+    ]);
+    const result = await readMidiFile(file, "keys.mid");
+    expect(musicOf(result.text)).toMatch(/^C(\d) \| A,\1 \| \[K:G\] G\1 \|/m);
+    expect(result.text.match(/\[K:/g)?.length).toBe(1);
+  });
+
   it("estimates the key and meter when the file gives none, and says so", async () => {
     // A minor, harmonic: the leading note spelled G♯.
     const file = smf(0, [

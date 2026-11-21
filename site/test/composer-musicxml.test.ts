@@ -259,6 +259,17 @@ describe("MusicXML import", () => {
     ]);
     expect(first).toContain("M:2/2\n");
     expect(first).toContain("c d [K:F] B A |]");
+    // A change of mode with the same signature (C major to A minor) writes no [K:].
+    const { text: same } = await importMusicXml([
+      score(
+        [
+          `${note("C", 5, 1)}${note("D", 5, 1)}<attributes><key><fifths>0</fifths><mode>minor</mode></key></attributes>${note("B", 4, 1)}${note("A", 4, 1)}`,
+        ],
+        1,
+      ),
+    ]);
+    expect(same).toContain("c d B A |]");
+    expect(same).not.toContain("[K:");
   });
   it("writes a lone whole-bar rest as a rest of the bar's length, and Zn only for several", async () => {
     const { text, report } = await imported("bar-rests.musicxml");

@@ -3936,6 +3936,187 @@ console.log(
   );
 }
 
+/* 25. Sprint D fixes, 1: key signatures, clefs and meters drawn right across the score's reflow. */
+{
+  const KEY_TUNES = [
+    {
+      name: "C to G mid-line",
+      text: "X:1\nT:C to G\nM:6/8\nL:1/8\nK:C\nEFG BGE | [K:G] DEF AFD |\nEFG Bde |\ncde dBG |]\n",
+      keys: [0, 1, 1, 1],
+      changes: [1],
+    },
+    {
+      name: "E minor to G",
+      text: "X:1\nT:Em to G\nM:6/8\nL:1/8\nK:Em\nEFG BGE | [K:G] DEF AFD |\nEFG Bde |\ncde dBG |]\n",
+      keys: [1, 1, 1, 1],
+      changes: [],
+    },
+    {
+      name: "D to F",
+      text: "X:1\nT:D to F\nM:4/4\nL:1/8\nK:D\nDEFG ABcd | [K:F] FGAB cdef |\nfedc BAGF |\nFGAB cdef |]\n",
+      keys: [2, 1, 1, 1],
+      changes: [1],
+    },
+    {
+      name: "a change at a line start",
+      text: "X:1\nT:Line start\nM:6/8\nL:1/8\nK:C\nEFG BGE | DEF AFD |\nK:G\nEFG Bde |\ncde dBG |]\n",
+      keys: [0, 0, 1, 1],
+      changes: [2],
+    },
+    {
+      name: "two voices",
+      text: "X:1\nT:Two voices\nM:6/8\nL:1/8\nK:C\nV:1\nEFG BGE | [K:G] DEF AFD |\nV:2\nC3 E3 | [K:G] D3 B,3 |\nV:1\nEFG Bde | cde dBG |]\nV:2\nC3 E3 | D3 G3 |]\n",
+      keys: [0, 1, 1, 1],
+      changes: [1],
+    },
+    {
+      name: "a clef in [K:]",
+      text: "X:1\nT:Clef\nM:4/4\nL:1/8\nK:C\nCDEF GABc | [K:G clef=bass] G,A,B,C DEFG |\nG,A,B,C DEFG |\nG,A,B,C DEFG |]\n",
+      keys: [0, 1, 1, 1],
+      changes: [1],
+      clef: { from: 1, name: "clefs.F" },
+    },
+    {
+      name: "a meter change",
+      text: "X:1\nT:Meter\nM:4/4\nL:1/8\nK:G\nGABc d4 | [M:3/4][L:1/4][Q:1/4=90] G A B |\nG A B |\nG A B |]\n",
+      keys: [1, 1, 1, 1],
+      changes: [],
+      meters: [0, 1],
+    },
+  ];
+  /** What the score draws: key signatures, clefs and time signatures by line and bar, and note accidentals. */
+  const drawnMarks = (p) =>
+    p.evaluate(() => {
+      const at = (g) => ({
+        line: Number(/abcjs-l(\d+)/.exec(g.getAttribute("class"))?.[1]),
+        m: Number(/abcjs-m(\d+)/.exec(g.getAttribute("class"))?.[1]),
+        mm: Number(/abcjs-mm(\d+)/.exec(g.getAttribute("class"))?.[1]),
+        staff: g.closest("svg") ? 0 : 0,
+        v: Number(/abcjs-v(\d+)/.exec(g.getAttribute("class"))?.[1] ?? 0),
+      });
+      const svg = document.querySelector("#score svg");
+      return {
+        keys: [...svg.querySelectorAll(".abcjs-key-signature")].map((g) => ({
+          ...at(g),
+          shown: [...g.querySelectorAll("path")]
+            .map((path) => path.dataset.name)
+            .filter((n) => n !== "accidentals.nat").length,
+        })),
+        clefs: [...svg.querySelectorAll(".abcjs-clef")].map((g) => ({
+          ...at(g),
+          name: g.querySelector("path")?.dataset.name ?? g.dataset.name,
+        })),
+        meters: [...svg.querySelectorAll(".abcjs-time-signature")].map((g) => at(g)),
+        lines: [
+          ...new Set(
+            [...svg.querySelectorAll(".abcjs-staff-extra")].map(
+              (g) => /abcjs-l(\d+)/.exec(g.getAttribute("class"))?.[1],
+            ),
+          ),
+        ].length,
+        noteAccidentals: svg.querySelectorAll(".abcjs-note path[data-name^='accidentals.']").length,
+        lineStarts: [...svg.querySelectorAll(".abcjs-clef")]
+          .filter((g) => /abcjs-m0\b/.test(g.getAttribute("class")))
+          .map((g) => ({
+            line: Number(/abcjs-l(\d+)/.exec(g.getAttribute("class"))[1]),
+            mm: Number(/abcjs-mm(\d+)/.exec(g.getAttribute("class"))?.[1]),
+          })),
+      };
+    });
+  const checkKeys = async (p, where) => {
+    for (const tune of KEY_TUNES) {
+      await p.evaluate((t) => {
+        const v = window.composer.view;
+        v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: t } });
+      }, tune.text);
+      await p.waitForFunction(
+        (title) => document.getElementById("score-summary").textContent.startsWith(title),
+        tune.text.split("\n")[1].slice(2),
+      );
+      await p.waitForTimeout(700);
+      const drawn = await drawnMarks(p);
+      const say = `${tune.name} at ${where}`;
+      assert.equal(drawn.noteAccidentals, 0, `${say}: no accidental appears on a note`);
+      const seen = new Set();
+      for (const key of drawn.keys) {
+        const spot = `${key.line}:${key.m}:${key.v}`;
+        assert(
+          !seen.has(spot),
+          `${say}: one key signature per place (line ${key.line}, bar ${key.mm})`,
+        );
+        seen.add(spot);
+        if (key.m === 0)
+          assert.equal(
+            key.shown,
+            tune.keys[key.mm],
+            `${say}: line ${key.line} starts in the key of bar ${key.mm + 1}`,
+          );
+        else {
+          assert(
+            tune.changes.includes(key.mm),
+            `${say}: a key signature mid-line only where a change is written (bar ${key.mm + 1})`,
+          );
+          assert.equal(key.shown, tune.keys[key.mm], `${say}: the change shows its own signature`);
+        }
+      }
+      // Every line that starts in a key with sharps or flats shows it.
+      for (const start of drawn.lineStarts)
+        if (tune.keys[start.mm])
+          assert(
+            drawn.keys.some((key) => key.line === start.line && key.m === 0),
+            `${say}: line ${start.line} shows its key`,
+          );
+      if (tune.clef)
+        for (const clef of drawn.clefs) {
+          if (clef.m === 0)
+            assert.equal(
+              clef.name,
+              clef.mm >= tune.clef.from ? tune.clef.name : "clefs.G",
+              `${say}: line ${clef.line} starts in its clef`,
+            );
+          else
+            assert.equal(
+              clef.mm,
+              tune.clef.from,
+              `${say}: the clef change is drawn once, where it is written`,
+            );
+        }
+      if (tune.meters)
+        assert.deepEqual(
+          drawn.meters.map((m) => m.mm),
+          tune.meters,
+          `${say}: time signatures only where written`,
+        );
+    }
+  };
+  const wide = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  watch(wide);
+  const w = await wide.newPage();
+  await w.goto(url);
+  await openExample("Ode to Joy", w);
+  await checkKeys(w, "1440 beside");
+  await w.keyboard.press("Control+Backslash");
+  await w.waitForFunction(() => document.getElementById("workspace")?.dataset.layout === "below");
+  await checkKeys(w, "1440 below");
+  await wide.close();
+  const narrow = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  watch(narrow);
+  const n = await narrow.newPage();
+  await n.goto(url);
+  await n.getByRole("button", { name: "Ode to Joy" }).click();
+  await drawn(n);
+  await n.locator("#show-score").click();
+  await checkKeys(n, "390");
+  await narrow.close();
+  console.log(
+    "Composer: key changes, clefs and meters are drawn once, and every line starts in its key, at 1440 beside, below and 390: passed",
+  );
+}
+
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");
 console.log("Composer: no console errors and no requests leaving the site: passed");

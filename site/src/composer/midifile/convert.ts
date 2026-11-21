@@ -694,7 +694,8 @@ export function midiToMusicXml(smf: Smf, fileTitle: string, options: MidiOptions
       out.push(`<measure number="${number + 1}">`);
       const attributes: string[] = [];
       if (!previous) attributes.push("<divisions>24</divisions>");
-      if (!previous || previous.fifths !== bar.fifths || previous.minor !== bar.minor)
+      // A key is written again only when its signature changes (C major to A minor isn't one).
+      if (!previous || previous.fifths !== bar.fifths)
         attributes.push(
           `<key><fifths>${bar.fifths}</fifths><mode>${bar.minor ? "minor" : "major"}</mode></key>`,
         );

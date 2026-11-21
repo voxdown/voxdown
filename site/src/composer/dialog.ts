@@ -56,3 +56,35 @@ export function lazyDialog(
     },
   };
 }
+
+/**
+ * A dialog's choices as a form: the action is its submit button, so Enter confirms from any
+ * field, and Cancel (or Escape) leaves without acting.
+ */
+export function dialogForm(
+  dialog: { close(): void },
+  fields: Node[],
+  label: string,
+  run: () => void,
+): HTMLFormElement {
+  const form = document.createElement("form");
+  form.method = "dialog";
+  const row = document.createElement("div");
+  row.className = "dialog-actions";
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", () => dialog.close());
+  const go = document.createElement("button");
+  go.type = "submit";
+  go.className = "primary";
+  go.textContent = label;
+  row.append(cancel, go);
+  form.append(...fields, row);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    dialog.close();
+    run();
+  });
+  return form;
+}

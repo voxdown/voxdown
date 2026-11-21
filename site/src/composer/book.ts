@@ -7,7 +7,7 @@ import { isolateHistory } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
 import { fieldOf, lineKind, meterLength, tokenizeMusic, value } from "./abc";
 import { newTuneTemplate } from "./commands";
-import { createDialog } from "./dialog";
+import { createDialog, dialogForm } from "./dialog";
 import {
   type FileIndex,
   type TuneInfo,
@@ -19,6 +19,8 @@ import {
 import { tuneItems } from "./walk";
 
 export type Change = { from: number; to: number; insert: string };
+
+const plural = (count: number, one: string) => `${count} ${count === 1 ? one : `${one}s`}`;
 
 /* Renumber. */
 
@@ -386,25 +388,6 @@ function choice(name: string, options: [string, string][], chosen: string): HTML
   }
   return set;
 }
-function actions(dialog: Dialog, label: string, run: () => void): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "dialog-actions";
-  const cancel = document.createElement("button");
-  cancel.type = "button";
-  cancel.textContent = "Cancel";
-  cancel.addEventListener("click", () => dialog.close());
-  const go = document.createElement("button");
-  go.type = "button";
-  go.className = "primary";
-  go.textContent = label;
-  go.addEventListener("click", () => {
-    dialog.close();
-    run();
-  });
-  row.append(cancel, go);
-  return row;
-}
-
 let sortDialog: Dialog | null = null;
 /** Sort tunes: by title, X: or key, and what moves with what. */
 export function openSort(make: DialogMaker, tunes: number, sort: (by: SortBy) => void) {
@@ -426,10 +409,7 @@ export function openSort(make: DialogMaker, tunes: number, sort: (by: SortBy) =>
   note.textContent =
     "The file's own header, before the first tune, stays first. Comments or other text between two tunes move with the tune after them. One undo puts the old order back.";
   dialog.body.replaceChildren(
-    lead,
-    options,
-    note,
-    actions(dialog, "Sort", () =>
+    dialogForm(dialog, [lead, options, note], "Sort", () =>
       sort((options.querySelector<HTMLInputElement>("input:checked")?.value ?? "title") as SortBy),
     ),
   );
@@ -456,9 +436,7 @@ export function openIncipits(make: DialogMaker, make2: (bars: number) => void) {
   );
   options.classList.add("inline");
   dialog.body.replaceChildren(
-    lead,
-    options,
-    actions(dialog, "Make incipits", () =>
+    dialogForm(dialog, [lead, options], "Make incipits", () =>
       make2(Number(options.querySelector<HTMLInputElement>("input:checked")?.value ?? 2)),
     ),
   );
@@ -493,7 +471,8 @@ export function runBook(command: BookCommand, context: BookContext, tune?: TuneI
       userEvent: "input.tunebook",
       scrollIntoView: true,
     });
-    context.explain(message);
+    // A notice: the status line goes back to explaining the caret as soon as it moves.
+    notice(message, "success");
   };
   const target =
     (tune && file.tunes.find((each) => each.from === tune.from)) ?? tuneAt(file, context.caret);
@@ -501,21 +480,17 @@ export function runBook(command: BookCommand, context: BookContext, tune?: TuneI
   switch (command) {
     case "renumber": {
       const changes = renumberChanges(text, file);
-      if (!changes.length)
-        return notice(`The tunes are already numbered X:1 to X:${count}.`, "success");
-      return apply(
-        changes,
-        `Renumbered the tunes X:1 to X:${count}; nothing else changed. Undo puts the numbers back.`,
-      );
+      if (!changes.length) return notice(`The tunes are already numbered X:1–${count}.`, "success");
+      return apply(changes, `Renumbered ${plural(count, "tune")} (X:1–${count}).`);
     }
     case "sort":
       if (count < 2) return notice("Sorting needs two tunes or more in the file.");
       return openSort(createDialog, count, (by) => {
         const latest = view.state.doc.toString();
         const change = sortChange(latest, indexFile(latest), by);
-        const how = by === "number" ? "X: number" : by;
+        const how = by === "number" ? "X:" : by;
         if (!change) return notice(`The tunes are already in order by ${how}.`, "success");
-        apply([change], `Sorted ${count} tunes by ${how}. Undo puts the old order back.`);
+        apply([change], `Sorted ${plural(count, "tune")} by ${how}.`);
       });
     case "line-up": {
       const selection = view.state.selection.main;
@@ -526,10 +501,17 @@ export function runBook(command: BookCommand, context: BookContext, tune?: TuneI
           ? null
           : { from: selection.from, to: selection.to };
       const changes = lineUpChanges(text, file, range);
-      if (!changes.length) return notice("The bar lines already line up.", "success");
+      if (!changes.length) return notice("Bars already line up.", "success");
+      const lineStarts = new Set(changes.map((change) => text.lastIndexOf("\n", change.from - 1)));
+      const tunes = new Set(
+        changes.map(
+          (change) =>
+            file.tunes.find((each) => change.from >= each.from && change.from < each.to)?.from,
+        ),
+      );
       return apply(
         changes,
-        `Lined up the bar lines ${lined ? `of ${tuneLabel(target)}` : range ? "in the selection" : "of every tune"} with spaces; the music is unchanged.`,
+        `Lined up ${plural(lineStarts.size, "line")} in ${plural(tunes.size, "tune")}.`,
       );
     }
     case "incipits":
@@ -537,8 +519,9 @@ export function runBook(command: BookCommand, context: BookContext, tune?: TuneI
       return openIncipits(createDialog, (bars) => {
         const name = context.name.replace(/\.abc$/i, "");
         context.openDraft(incipitsText(text, file, bars, context.name), `${name} incipits`);
+        const made = file.tunes.filter((each) => each.bodyFrom >= 0).length;
         notice(
-          `Incipits of ${name}: a new draft. ${name} itself is unchanged; Recent… opens it again.`,
+          `Made incipits of ${plural(made, "tune")}, in a new draft. ${name} is unchanged; Recent… opens it again.`,
           "success",
         );
       });
@@ -547,7 +530,7 @@ export function runBook(command: BookCommand, context: BookContext, tune?: TuneI
       const change = duplicateChange(text, file, target);
       return apply(
         [change],
-        `Duplicated ${tuneLabel(target)} after itself, with the next X: number.`,
+        `Duplicated ${tuneLabel(target)} as X:${nextTuneNumber(file)}.`,
         change.from + change.insert.indexOf("X:"),
       );
     }
@@ -556,7 +539,7 @@ export function runBook(command: BookCommand, context: BookContext, tune?: TuneI
       const change = newTuneAfterChange(text, file, target, newTuneTemplate);
       apply(
         [{ from: change.from, to: change.to, insert: change.insert }],
-        "A new tune after this one.",
+        `A new tune, X:${nextTuneNumber(file)}, after ${tuneLabel(target)}.`,
         change.caret,
       );
       return view.focus();

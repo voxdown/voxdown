@@ -2734,3 +2734,9 @@ dialog.composer-dialog[open]::backdrop {
     font-size: 12px;
   }
 }
+/* The radios of a dialog's choices show where the keyboard is. */
+.book-choice input:focus-visible,
+.book-check input:focus-visible {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: 2px;
+}

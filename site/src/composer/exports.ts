@@ -3,7 +3,7 @@
  * book, and MIDI or WAV for this tune or every tune (a .zip). Loaded the first time one is used.
  */
 import { tuneMeter } from "./barcheck";
-import { createDialog } from "./dialog";
+import { createDialog, dialogForm } from "./dialog";
 import type { InstrumentId } from "./instruments";
 import { download } from "./local-file";
 import { writeMidi } from "./midi";
@@ -447,28 +447,18 @@ export function openExport(kind: ExportKind, context: ExportContext) {
         : `Audio as Composer plays it, with the ${context.instrument}.`;
     if (count > 1) options = [which];
   }
-  const row = document.createElement("div");
-  row.className = "dialog-actions";
-  const cancel = document.createElement("button");
-  cancel.type = "button";
-  cancel.textContent = "Cancel";
-  cancel.addEventListener("click", () => dialog.close());
-  const go = document.createElement("button");
-  go.type = "button";
-  go.className = "primary";
-  go.textContent = "Export";
-  go.addEventListener("click", () => {
-    dialog.close();
-    const choice = options.map(chosen);
-    void runExport(kind, context, {
-      every: kind === "midi" || kind === "wav" ? chosen(which) === "all" && count > 1 : false,
-      look: choice[0] === "look",
-      abc: (kind === "html" ? choice[0] : "closed") as BookOptions["abc"],
-      player: Boolean(player?.checked),
-    });
-  });
-  row.append(cancel, go);
-  dialog.body.replaceChildren(lead, ...options, ...parts, row);
+  dialog.body.replaceChildren(
+    dialogForm(dialog, [lead, ...options, ...parts], "Export", () => {
+      const choice = options.map(chosen);
+      void runExport(kind, context, {
+        every: kind === "midi" || kind === "wav" ? chosen(which) === "all" && count > 1 : false,
+        look: choice[0] === "look",
+        abc: (kind === "html" ? choice[0] : "closed") as BookOptions["abc"],
+        player: Boolean(player?.checked),
+      });
+    }),
+  );
+
   dialog.open();
 }
 

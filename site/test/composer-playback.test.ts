@@ -11,6 +11,7 @@ import {
   type ScorePoint,
   authorBarsPerLine,
   breaksKey,
+  caretNotesAt,
   chooseBreaks,
   chosenBreaks,
   dragRegion,
@@ -456,5 +457,23 @@ describe("instruments", () => {
     const period = rate / 200;
     const length = ((loop?.end ?? 0) - (loop?.start ?? 0)) * rate;
     expect(Math.abs(length / period - Math.round(length / period))).toBeLessThan(0.05);
+  });
+});
+
+describe("the caret's note", () => {
+  it("is the note to its left, as the explanation says, for the highlight too", async () => {
+    const { explainAt } = await import("../src/composer/explain");
+    const text = "X:1\nT:Caret\nM:4/4\nL:1/8\nK:D\nc2 d/e/ f4|\n";
+    const { index } = prepare(text);
+    const at = text.indexOf("d/") + 2;
+    const [note] = caretNotesAt(index, at);
+    expect(text.slice(note?.start, note?.end)).toBe("d/");
+    expect(explainAt(text, indexFile(text), at)?.token).toBe("d/");
+    // Inside a note, or before the first: that note.
+    expect(
+      text.slice(caretNotesAt(index, at + 1)[0]?.start, caretNotesAt(index, at + 1)[0]?.end),
+    ).toBe("e/");
+    const first = text.indexOf("c2");
+    expect(caretNotesAt(index, first)[0]?.start).toBe(first);
   });
 });

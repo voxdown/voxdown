@@ -79,7 +79,35 @@ export function plainWarnings(warnings: Warning[], text: string): PlainProblem[]
         detail: `abcjs: ${raw}`,
       });
   }
-  return out;
+  return foldCascades(out, text);
+}
+
+/**
+ * One cause, one problem: after a chord symbol, decoration, chord or grace group that never
+ * closes, abcjs skips what follows on its line letter by letter. Those letters fold into it.
+ */
+function foldCascades(problems: PlainProblem[], text: string): PlainProblem[] {
+  const opens = problems.filter((problem) =>
+    /is missing its closing|are missing their closing/.test(problem.message),
+  );
+  if (!opens.length) return problems;
+  const lineEnd = (at: number) => {
+    const end = text.indexOf("\n", at);
+    return end < 0 ? text.length : end;
+  };
+  const folded = new Map<PlainProblem, string[]>();
+  const kept = problems.filter((problem) => {
+    if (!/isn't ABC music here/.test(problem.message)) return true;
+    const cause = opens.find(
+      (open) => problem.from > open.from && problem.from < lineEnd(open.from),
+    );
+    if (!cause) return true;
+    folded.set(cause, [...(folded.get(cause) ?? []), text.slice(problem.from, problem.to)]);
+    return false;
+  });
+  for (const [cause, letters] of folded)
+    cause.detail = `Until it is closed, abcjs skips what follows on this line (${letters.map((letter) => `“${letter}”`).join(", ")}).`;
+  return kept;
 }
 
 function readWarning(raw: string, at: number, text: string): PlainProblem | null {

@@ -22,6 +22,23 @@ describe("problems in plain words", () => {
     expect(problems[0]?.detail).toBeUndefined();
   });
 
+  it("one cause, one problem: an unclosed quote takes in the letters abcjs skips after it", () => {
+    const { text, problems } = read('"unclosed chord A B | (3abc d |');
+    expect(problems.map((problem) => problem.message)).toEqual([
+      'The chord symbol "unclosed is missing its closing\u00a0".',
+    ]);
+    expect(text.slice(problems[0]?.from, problems[0]?.to)).toBe('"unclosed');
+    expect(problems[0]?.detail).toBe(
+      "Until it is closed, abcjs skips what follows on this line (“h”, “o”, “r”).",
+    );
+    // An unclosed ! the same way, and a stray letter on another line still counts.
+    const bang = read("!trill hello A B|\nC D h E|");
+    expect(bang.problems.map((problem) => problem.message)).toEqual([
+      "!trill… is missing its closing\u00a0!.",
+      "“h” isn't ABC music here; abcjs skips it.",
+    ]);
+  });
+
   it("an unknown decoration, with a guess", () => {
     const { text, problems } = read("!fermatta!A B|");
     expect(problems[0]?.message).toBe(

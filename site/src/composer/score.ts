@@ -567,6 +567,16 @@ export function notesAt(index: ScoreIndex, position: number): ScoreNote[] {
   return index.notes.filter((note) => note.end === position);
 }
 
+/**
+ * The notes the caret is on, by the explanation's rule: between two notes ("d/|e"), the one to
+ * its left. The status line, the score's highlight and Say note all name the same note.
+ */
+export function caretNotesAt(index: ScoreIndex, position: number): ScoreNote[] {
+  const left = index.notes.filter((note) => note.end === position && note.start < position);
+  if (left.length) return left;
+  return index.notes.filter((note) => note.start <= position && position < note.end);
+}
+
 export function notesInRanges(
   index: ScoreIndex,
   ranges: { from: number; to: number }[],

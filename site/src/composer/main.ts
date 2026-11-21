@@ -61,6 +61,7 @@ import {
   type ScorePoint,
   attachments,
   authorBarsPerLine,
+  caretNotesAt,
   dragRegion,
   drawPassDynamics,
   firstBarPickup,
@@ -1357,7 +1358,7 @@ function linkFromText() {
     ];
     drawBands(selected);
   } else {
-    caretNotes = notesAt(index, selection.main.head);
+    caretNotes = caretNotesAt(index, selection.main.head);
     for (const note of caretNotes)
       for (const element of note.elements) element.classList.add("is-caret");
     litCaret = caretNotes.flatMap((note) => note.elements);

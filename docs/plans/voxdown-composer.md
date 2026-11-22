@@ -1473,3 +1473,5 @@ The rule decisions are written into "Editing rules" above: dynamics and hairpins
 
 **Browser checks.**
 - **Step 38:** typing and MIDI over two voices refused, a lone grace group deleted, a bar over-full after Duplicate said, a spacer not counted, and a drag from beside a triplet note.
+
+**First view.** 713 KB, under its 720 KB check.

@@ -778,7 +778,6 @@ const keys: KeyBinding[] = [
   { key: "Alt-ArrowLeft", run: () => moveByNote(-1, false) },
   { key: "Alt-Shift-ArrowRight", run: () => moveByNote(1, true) },
   { key: "Alt-Shift-ArrowLeft", run: () => moveByNote(-1, true) },
-  { key: "Mod-Shift-d", run: () => music("duplicate"), preventDefault: true },
   { key: "F8", run: () => stepProblem(1), preventDefault: true },
   { key: "Shift-F8", run: () => stepProblem(-1), preventDefault: true },
   {
@@ -1130,6 +1129,11 @@ function bracketMusic(target: EditorView, typed: string): boolean {
   return true;
 }
 const typedMarks = [
+  // Duplicate before everything else: the search's Mod-d (select the next match) would take
+  // Ctrl+Shift+D too, on a tune with figures repeated. Ctrl+D stays the search's.
+  Prec.highest(
+    keymap.of([{ key: "Mod-Shift-d", run: () => music("duplicate"), preventDefault: true }]),
+  ),
   Prec.highest(
     EditorView.inputHandler.of((target, _from, _to, typed) => {
       if (target.composing || target.compositionStarted) return false;

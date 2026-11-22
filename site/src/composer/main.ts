@@ -1083,6 +1083,17 @@ function replaceMusic(target: EditorView, typed: string): boolean {
     );
     return true;
   }
+  // A pitch typed over one note or chord re-pitches it, its length and marks kept.
+  const pitched = barwise.repitch(doc, list, typed, file);
+  if (pitched) {
+    target.dispatch({
+      changes: pitched.changes,
+      selection: { anchor: pitched.caret },
+      scrollIntoView: true,
+      userEvent: "input.type",
+    });
+    return true;
+  }
   const changes = barwise.replaceKeepingBars(
     state.doc.toString(),
     list,

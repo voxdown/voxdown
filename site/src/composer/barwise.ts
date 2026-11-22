@@ -2929,3 +2929,46 @@ export function lengthsInStep(
       : {}),
   };
 }
+
+/**
+ * A pitch typed over one selected note, chord or rest re-pitches it in place (round 8, rule (a)):
+ * its length, broken rhythm, tie, chord symbol and marks stay (`G6` + `A` is `A6`,
+ * `"Am"!f![ACE]2` + `B` is `"Am"!f!B2`, `!pp!G>G` + `c` is `!pp!c>G`). The caret goes after the
+ * letter, so `,` or `'` typed next set its octave. Null for anything else: typing replaces.
+ */
+export function repitch(
+  text: string,
+  ranges: Range[],
+  typed: string,
+  file: FileIndex = indexFile(text),
+): { changes: Change[]; caret: number } | null {
+  if (!/^[A-Ga-gz]$/.test(typed)) return null;
+  const selected = ranges.filter((range) => range.to > range.from);
+  if (selected.length !== 1 || !inMusic(text, selected, file)) return null;
+  const picked = selectedNotes(text, selected, file);
+  const one = picked[0];
+  if (picked.length !== 1 || !one?.whole) return null;
+  const tokens = tokenizeMusic(text.slice(one.event.from, one.event.to), one.event.from).filter(
+    (token) => token.kind !== "space",
+  );
+  const head = tokens[0];
+  if (!head) return null;
+  if (head.kind === "note" || head.kind === "rest") {
+    const to = head.lengthFrom;
+    return { changes: [{ from: head.from, to, insert: typed }], caret: head.from + 1 };
+  }
+  if (head.kind === "chord-open") {
+    const close = tokens.find((token) => token.kind === "chord-close");
+    if (!close || close.kind !== "chord-close") return null;
+    // A chord whose tones carry the length (`[A2C2]`): the first tone's.
+    const inner = tokens.find(
+      (token) => token.kind === "note" && token.from > head.from && token.to <= close.from,
+    );
+    const length = close.length || (inner?.kind === "note" ? inner.length : "");
+    return {
+      changes: [{ from: head.from, to: close.to, insert: `${typed}${length}` }],
+      caret: head.from + 1,
+    };
+  }
+  return null;
+}

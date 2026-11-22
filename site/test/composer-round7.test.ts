@@ -189,3 +189,19 @@ describe("typing over a note keeps its chord symbol and dynamic (finding 11)", (
     expect(apply(tune, typed)).toContain('\n"G"!f!E D E F|]');
   });
 });
+
+describe("Delete across two tunes (finding 13)", () => {
+  it("is refused, saying it's two tunes (not a repeat's), and nothing joins them", () => {
+    const file =
+      "X:1\nT:A\nM:3/4\nL:1/8\nK:G\n|:E3 B3|EBE AFD|1 BAG FED:|2 BAG FE2|]\n\nX:2\nT:B\nM:4/4\nL:1/4\nK:C\nC D E F|G A B c|]\n";
+    for (const [a, b] of [
+      ["AFD", "D E"],
+      ["FE2", "G A"],
+    ]) {
+      const range = { from: file.indexOf(a as string), to: file.indexOf(b as string) + 3 };
+      expect(cutPlan(file, musicParts(file, [range], indexFile(file)))).toEqual({
+        refused: "This selection is in 2 tunes: delete or cut in one tune at a time.",
+      });
+    }
+  });
+});

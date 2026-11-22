@@ -652,6 +652,18 @@ export function cutPlan(
   file: FileIndex = indexFile(text),
 ): CutPlan | null {
   const selected = ranges.filter((range) => range.to > range.from);
+  // (Across tunes: one at a time, each by its own meter and bars.)
+  const tunes = new Set(
+    selected.flatMap((range) =>
+      file.tunes
+        .filter((tune) => range.from < tune.to && range.to > tune.bodyFrom)
+        .map((tune) => tune.from),
+    ),
+  );
+  if (tunes.size > 1)
+    return {
+      refused: `This selection is in ${tunes.size} tunes: delete or cut in one tune at a time.`,
+    };
   if (!selected.length || !inMusic(text, selected, file)) return null;
   const structure = structureOf(text, file, (selected[0] as Range).from);
   // Some voices only, in a tune with several: rests, so the voices stay in step.

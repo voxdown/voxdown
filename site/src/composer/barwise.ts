@@ -453,11 +453,7 @@ function mergeBars(
     if (!c.end && section) said = `The ${ordinal(o.ending)} ending went with its last bar.`;
     else if (!c.end) ending = c.ending || o.ending;
     else if (!c.ending) said = `The ${ordinal(o.ending)} ending went with its last bar.`;
-    else if (
-      o.ending === "1" &&
-      c.ending === "2" &&
-      !/(^|[^0-9])3/.test(after.split("\n")[0] ?? "")
-    ) {
+    else if (o.ending === "1" && c.ending === "2" && !moreEndings(after)) {
       ending = "";
       said =
         "The 1st ending went with its only bar; the 2nd ending's bars now play after the repeat.";
@@ -483,6 +479,7 @@ function mergeRun(
   inner: string[],
   close: string,
   after: string,
+  body = false,
 ): { text: string; said?: string } | { refused: string } {
   if (inner.every((each) => /^\|\|?$/.test(each))) return mergeBars(open, close, after);
   const o = barParts(open);
@@ -511,23 +508,77 @@ function mergeRun(
     (o.start || parts.some((part) => part.start))
   )
     return { text: c.body === "|]" ? "|]" : close || "|", said: "The repeat went with its bars." };
-  if (!o.start || parts.some((part) => part.start)) return refused;
-  // Body and 1st ending: the 2nd ending's bars now follow, played once.
-  if (
-    c.end &&
-    c.ending === "2" &&
-    !ends &&
-    endings.join() === "1" &&
-    !/(^|[^0-9])3/.test(after.split("\n")[0] ?? "")
-  )
-    return {
-      text: "|",
-      said: "The repeat went with its 1st ending; the 2nd ending's bars now play once.",
-    };
+  if (parts.some((part) => part.start)) return refused;
+  // Nothing of the repeat's body is left before the run (its start is the run's, or the tune's).
+  const opened = o.start > 0 || !body;
+  // Body and 1st ending: the 2nd ending's bars now follow, played once; with some of the body
+  // left, the repeat stays and the 2nd ending's bars follow it.
+  if (c.end && c.ending === "2" && !ends && endings.join() === "1" && !moreEndings(after))
+    return opened
+      ? {
+          text: open ? "|" : "",
+          said: "The repeat went with its 1st ending; the 2nd ending's bars now play once.",
+        }
+      : {
+          text: ":|",
+          said: "The 1st ending went with its bars; the 2nd ending's bars now play after the repeat.",
+        };
   // The whole repeat with all its endings.
-  if (!c.end && !c.ending && ends === 1 && endings.includes("1") && endings.length >= 2)
+  if (opened && !c.end && !c.ending && ends === 1 && endings.includes("1") && endings.length >= 2)
     return { text: close, said: "The repeat went with its endings." };
   return refused;
+}
+
+/** Whether a 3rd (or later) ending follows, before the next repeat starts (`|3`, `[3`, `:|1,3`). */
+function moreEndings(after: string): boolean {
+  const scope = after.split(/\n\s*\n/)[0] ?? "";
+  const until = scope.search(/\|:|::/);
+  return /[|[][0-9,-]*[3-9](?![0-9])/.test(until < 0 ? scope : scope.slice(0, until));
+}
+
+/** Whether notes of a repeat's body come before a point, in its voice (back to the repeat's start). */
+function bodyBefore(structure: Structure, at: number): boolean {
+  const voice = structure.tokens.find(({ token }) => token.from >= at)?.voice;
+  const prior = structure.tokens.filter((each) => each.token.to <= at && each.voice === voice);
+  for (let index = prior.length - 1; index >= 0; index--) {
+    const { token } = prior[index] as (typeof prior)[number];
+    if (token.kind === "bar") {
+      const part = barParts(token.text);
+      if (part.start || part.end || part.ending) return false;
+    } else if (starts(token)) return true;
+  }
+  return false;
+}
+
+/** How much longer than its meter a bar is, in whole notes (0 when it isn't over-full). */
+function overBy(
+  text: string,
+  file: FileIndex,
+  segment: Segment,
+  times: Map<number, { start: number; end: number }>,
+): number {
+  const length = meterLength(readingAt(text, file, segment.from)?.meter ?? "");
+  if (!length) return 0;
+  const total = segment.events.reduce((sum, at) => {
+    const time = times.get(at);
+    return sum + (time ? time.end - time.start : 0);
+  }, 0);
+  return Math.max(0, total - length.num / length.den);
+}
+
+const inTupletOf = (structure: Structure, at: number) =>
+  structure.tuplets.some(({ notes }) => notes.includes(at));
+
+/** A note made a shorter rest: its own marks and ties go (a chord symbol stays, on the rest). */
+function restLess(text: string, each: Picked, rest: string): Change[] {
+  const changes: Change[] = [];
+  for (const token of tokenizeMusic(text.slice(each.span.from, each.event.from), each.span.from))
+    if (token.kind !== "space" && token.kind !== "chord-symbol" && !keeper(token))
+      changes.push({ from: token.from, to: token.to, insert: "" });
+  for (const token of tokenizeMusic(text.slice(each.event.to, each.span.to), each.event.to))
+    if (token.kind === "tie") changes.push({ from: token.from, to: token.to, insert: "" });
+  changes.push({ from: each.event.from, to: each.event.to, insert: rest });
+  return changes;
 }
 
 /** What a Cut does: the edit, where it leaves the caret (after the edit), and what it says. */
@@ -563,6 +614,11 @@ export function cutPlan(
       someVoices.said,
     );
   const picked = chosen(text, selected, file);
+  // (In a tune with several voices, time goes only where every voice is selected.)
+  const canGo = timeCanGo(text, selected, file);
+  const times = new Map(
+    timed(text, file, (selected[0] as Range).from).map((each) => [each.from, each]),
+  );
   const changes: Change[] = [];
   const said: string[] = [];
   const lines = new Map<number, Line>();
@@ -589,6 +645,8 @@ export function cutPlan(
     (each) => !each.event.rest || each.whole,
   );
   const resting: Picked[] = [];
+  let voicesKept = false;
+  let overFull = false;
   for (const line of chains) {
     // A bar of nothing (a line's end and the next line's start) joins the bars either side.
     const segments = segmentsOf(line, eventsOn(text, line, file)).filter(
@@ -597,20 +655,49 @@ export function cutPlan(
     const touches = (segment: Segment) =>
       selected.some((range) => segment.to > range.from && segment.from < range.to);
     const whole = (segment: Segment) =>
-      touches(segment) && segment.events.length > 0 && segment.events.every((at) => picked.has(at));
+      touches(segment) &&
+      segment.events.length > 0 &&
+      segment.events.every((at) => picked.has(at) && (!canGo || canGo.has(at)));
     for (let at = 0; at < segments.length; at++) {
       const segment = segments[at] as Segment;
       if (!touches(segment)) continue;
       if (!whole(segment)) {
         // Part of a bar: its notes become rests of the same length (as MuseScore does), so the
-        // bar keeps its length; a chord's tones alone go from the chord.
-        for (const each of picks)
-          if (each.event.from >= segment.from && each.event.from < segment.to) {
-            if (each.whole) resting.push(each);
-            else
-              for (const tone of each.tones)
-                changes.push({ from: tone.from, to: tone.to, insert: "" });
+        // bar keeps its length; a chord's tones alone go from the chord. In an over-full bar the
+        // notes simply go while the bar stays at least its length; any shortfall is a rest.
+        const own = picks.filter(
+          (each) => each.event.from >= segment.from && each.event.from < segment.to,
+        );
+        if (
+          canGo &&
+          own.some(
+            (each) => each.whole && picked.has(each.event.from) && !canGo.has(each.event.from),
+          )
+        )
+          voicesKept = true;
+        let spare = overBy(text, file, segment, times);
+        for (const each of own) {
+          if (!each.whole) {
+            for (const tone of each.tones)
+              changes.push({ from: tone.from, to: tone.to, insert: "" });
+            continue;
           }
+          const time = times.get(each.event.from);
+          const length = time ? time.end - time.start : 0;
+          const alone = !inTupletOf(structure, each.event.from) && !each.event.rest;
+          if (spare > 1e-9 && alone && length <= spare + 1e-9) {
+            // It simply goes, with its marks.
+            changes.push({ from: each.span.from, to: each.span.to, insert: "" });
+            spare -= length;
+            overFull = true;
+          } else if (spare > 1e-9 && alone) {
+            // The rest of the time it took, as a rest.
+            const unit = readingAt(text, file, each.event.from)?.unit ?? frac(1, 8);
+            changes.push(...restLess(text, each, restOf(length - spare, unit)));
+            spare = 0;
+            overFull = true;
+          } else resting.push(each);
+        }
         for (const range of selected) {
           const from = Math.max(range.from, segment.from);
           const to = Math.min(range.to, segment.to);
@@ -661,11 +748,19 @@ export function cutPlan(
           }
       }
       let bar: string;
-      const innerBars = line.tokens
+      const innerBars = joinedBars(line.tokens)
         .filter((token) => token.kind === "bar" && token.from >= first.to && token.to <= end.from)
         .map((token) => token.text);
+      // Whether some of the repeat's body stays before the run (its start is further back).
+      const body = bodyBefore(structure, span.from);
       if (innerBars.some((each) => !/^\|\|?$/.test(each))) {
-        const merged = mergeRun(O?.text ?? "", innerBars, C?.text ?? "", C ? text.slice(C.to) : "");
+        const merged = mergeRun(
+          O?.text ?? "",
+          innerBars,
+          C?.text ?? "",
+          C ? text.slice(C.to) : "",
+          body,
+        );
         if ("refused" in merged) return merged;
         bar = merged.text;
         if (merged.said) said.push(merged.said);
@@ -674,18 +769,39 @@ export function cutPlan(
         else if (PLAIN.test(O.text)) bar = C.text;
         else if (PLAIN.test(C.text)) bar = O.text;
         else {
-          const merged = mergeRun(O.text, innerBars, C.text, text.slice(C.to));
+          const merged = mergeRun(O.text, innerBars, C.text, text.slice(C.to), body);
           if ("refused" in merged) return merged;
           bar = merged.text;
           if (merged.said) said.push(merged.said);
         }
       } else if (C) bar = PLAIN.test(C.text) ? "" : C.text;
       else bar = O ? O.text : "";
-      const insert = [before.join(" "), bar, after.join(" ").replace(/\( /g, "(")]
+      // A plain bar line left first on its line, after a bar line or the tune's start, goes.
+      if (bar === "|" && O && !text.slice(text.lastIndexOf("\n", O.from - 1) + 1, O.from).trim()) {
+        const prior = structure.tokens.filter(({ token }) => token.to <= O.from).at(-1)?.token;
+        if (!prior || prior.kind === "bar") bar = "";
+      }
+      // A repeat's end left at a line's start goes onto the bar line ending the line before.
+      if (!O && /^:/.test(bar)) {
+        const prior = structure.tokens.filter(({ token }) => token.to <= span.from).at(-1)?.token;
+        if (prior?.kind === "bar" && !text.slice(prior.to, span.from).trim()) {
+          changes.push({ from: prior.from, to: prior.to, insert: joinBars(prior.text, bar) });
+          bar = "";
+        }
+      }
+      // An inline voice field stays at the start of its voice's line, before its music.
+      const voiceFields = O ? [] : after.filter((each) => /^\[V:/.test(each));
+      const rest = after.filter((each) => !voiceFields.includes(each));
+      const insert = [
+        voiceFields.join(" "),
+        before.join(" "),
+        bar,
+        rest.join(" ").replace(/\( /g, "("),
+      ]
         .filter(Boolean)
         .join(" ");
       let to = span.to;
-      if (!O && !insert) while (to < line.to && /[ \t]/.test(text[to] as string)) to += 1;
+      if ((!O || !bar) && !insert) while (to < line.to && /[ \t]/.test(text[to] as string)) to += 1;
       // The caret goes where the notes were: before marks kept for the bar before, after marks
       // and fields kept for the bar that follows (before them when some were inside the run,
       // which the copy has too).
@@ -726,7 +842,12 @@ export function cutPlan(
       resting.filter((each) => !each.event.rest),
     ),
   );
-  if (resting.some((each) => !each.event.rest))
+  if (overFull) said.push("The bar was over-full: its notes went as long as it stays its length.");
+  if (voicesKept)
+    said.push(
+      "Rests where not every voice is selected, so the voices stay in step: select the same whole bars in every voice to take the time out.",
+    );
+  else if (resting.some((each) => !each.event.rest))
     said.push(
       "Notes replaced by rests, so the bar keeps its length: select whole bars to take the time out.",
     );
@@ -1701,6 +1822,29 @@ function restChanges(text: string, file: FileIndex, picked: Picked[]): Change[] 
  * of the same length (their marks and ties go, a broken rhythm or tuplet around them stays), so
  * the voices stay in step. Null when every voice sounding there is selected (time can go).
  */
+/**
+ * In a tune with several voices, the selected notes whose time can go: those where every voice
+ * sounding then is selected too (each of its events over that time). Null with one voice (all).
+ */
+function timeCanGo(text: string, selected: Range[], file: FileIndex): Set<number> | null {
+  const times = timed(text, file, (selected[0] as Range).from);
+  if (new Set(times.map((each) => each.voice)).size < 2) return null;
+  const picked = new Set(
+    selectedNotes(text, selected, file)
+      .filter((each) => each.whole)
+      .map((each) => each.event.from),
+  );
+  const out = new Set<number>();
+  for (const each of times) {
+    if (!picked.has(each.from)) continue;
+    const over = times.filter(
+      (other) => other.start < each.end - 1e-9 && other.end > each.start + 1e-9,
+    );
+    if (over.every((other) => picked.has(other.from))) out.add(each.from);
+  }
+  return out;
+}
+
 function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan | null {
   const picked = selectedNotes(text, selected, file).filter(
     (each) => each.whole && !each.event.rest,
@@ -1718,7 +1862,9 @@ function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan
       .filter((each) => each.start < to - 1e-9 && each.end > from + 1e-9)
       .map((each) => each.voice),
   );
-  if ([...sounding].every((voice) => chosenVoices.has(voice))) return null;
+  // Time goes where every voice sounding then is selected (whole bars of each, then; the others
+  // become rests in the main path); none: rests throughout.
+  if ((timeCanGo(text, selected, file)?.size ?? 1) > 0) return null;
   const changes = restChanges(text, file, picked);
   const left = [...sounding]
     .filter((voice) => !chosenVoices.has(voice))
@@ -1735,7 +1881,9 @@ function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan
     clip: selected.map((range) => copyText(text, range, file)).join("\n"),
     caret: (picked[0] as (typeof picked)[number]).event.from,
     said: [
-      `Rests in place of the notes, so ${[...chosenVoices].map((voice) => `V:${voice}`).join(" and ")} stay${chosenVoices.size === 1 ? "s" : ""} in step with ${left.join(" and ")}: select every voice there to take the time out.`,
+      left.length
+        ? `Rests in place of the notes, so ${[...chosenVoices].map((voice) => `V:${voice}`).join(" and ")} stay${chosenVoices.size === 1 ? "s" : ""} in step with ${left.join(" and ")}: select every voice there to take the time out.`
+        : "Rests in place of the notes, so the voices stay in step: select the same whole bars in every voice to take the time out.",
     ],
   };
 }

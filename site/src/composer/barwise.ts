@@ -2972,6 +2972,15 @@ export function insertsAtNote(
   const { bars } = clipTiming(clip, reading.unit, reading.meter);
   if (!bars.length || bars.some((bar) => Math.abs(bar - length.num / length.den) > 1e-9))
     return null;
+  return noteStartsBar(text, file, range);
+}
+
+/** Where one selected note starts, when it starts its bar (its marks included); else null. */
+export function noteStartsBar(text: string, file: FileIndex, range: Range): number | null {
+  if (range.to <= range.from) return null;
+  const picked = selectedNotes(text, [range], file).filter((each) => each.whole);
+  const one = picked[0];
+  if (picked.length !== 1 || !one) return null;
   // The voice's last token before it, fields and marks aside: a bar line, or none.
   const before = tuneTokens(text, file, one.span.from).filter(
     ({ token, voice }) =>
@@ -3209,4 +3218,105 @@ export function repitchTo(
     };
   }
   return null;
+}
+
+/**
+ * A voice's part of a copy made whole bars for an insert (round 8, item 3): the last bar, if
+ * short, filled with rests to its bar line (by the beat), then whole-bar rests up to `bars`
+ * bars. Returns the text and how many bars it has.
+ */
+export function wholeBars(
+  part: string,
+  text: string,
+  file: FileIndex,
+  at: number,
+  voice: string,
+  bars = 0,
+): { text: string; bars: number } {
+  const reading = readingAt(text, file, at);
+  const length = meterLength(reading?.meter ?? "");
+  if (!reading || !length) return { text: part, bars: 0 };
+  const full = length.num / length.den;
+  const letter = restLetter(text, file, voice, at);
+  const written = (whole: number) => `${letter}${lengthText(whole, reading.unit)}`;
+  // Bars of another meter (a 4/4 copy into 3/4): barred again for this one, notes tied over.
+  const given = clipTiming(part, reading.unit, reading.meter);
+  const rebarred = given.bars.some((bar) => bar > full + 1e-9)
+    ? rebar(part, reading.unit, reading.meter, full)
+    : null;
+  const source = rebarred ?? part;
+  const timing = rebarred ? clipTiming(source, reading.unit, reading.meter) : given;
+  let out = source.trim();
+  let count = timing.bars.length;
+  const last = timing.bars.at(-1) ?? 0;
+  const ends = /\|\s*$/.test(out);
+  if (count && last < full - 1e-9 && !ends) {
+    out += ` ${restPieces(last, full - last, beatOf(reading.meter), false)
+      .map(written)
+      .join(" ")} |`;
+  } else if (count && !ends) out += " |";
+  if (!count) count = 0;
+  while (count < bars) {
+    out += ` ${written(full)} |`;
+    count += 1;
+  }
+  return { text: out.trim(), bars: count };
+}
+
+/**
+ * A copy barred again for a meter: its notes in bars of `full` (whole notes), each written in
+ * values that can be drawn, a note across a bar line tied over it, grouped by the beat. Null when
+ * a note that can't be tied (a tuplet's) would cross one.
+ */
+function rebar(part: string, unit: Fraction, meter: string, full: number): string | null {
+  const pieces = piecesOf(part, unit, meter);
+  if (!pieces) return null;
+  const beat = beatOf(meter);
+  const bars: string[] = [];
+  let items: { text: string; start: number; length: number; rest: boolean }[] = [];
+  let time = 0;
+  const close = () => {
+    let out = "";
+    items.forEach((item, index) => {
+      const previous = items[index - 1];
+      const together =
+        previous &&
+        !previous.rest &&
+        !item.rest &&
+        previous.length < beat - 1e-9 &&
+        item.length < beat - 1e-9 &&
+        Math.floor((previous.start + 1e-9) / beat) === Math.floor((item.start + 1e-9) / beat);
+      out += `${index && !together ? " " : ""}${item.text}`;
+    });
+    bars.push(out);
+    items = [];
+    time = 0;
+  };
+  const queue = [...pieces];
+  while (queue.length) {
+    const piece = queue[0] as Piece;
+    const room = full - time;
+    if (piece.length <= room + 1e-9) {
+      const text =
+        piece.cut && piece.render ? piece.render(piece.length, false, true, unit) : piece.text;
+      items.push({ text, start: time, length: piece.length, rest: piece.rest });
+      time += piece.length;
+      queue.shift();
+    } else {
+      if (!piece.render) return null;
+      items.push({
+        text: piece.render(room, !piece.cut, false, unit),
+        start: time,
+        length: room,
+        rest: piece.rest,
+      });
+      queue[0] = { ...piece, length: piece.length - room, cut: true };
+      time = full;
+    }
+    if (time >= full - 1e-9) close();
+  }
+  // (A last bar short of its length is left open, for its rests.)
+  const whole = !items.length;
+  if (items.length) close();
+  return `${bars.join(" | ")}${whole ? " |" : ""}`;
 }

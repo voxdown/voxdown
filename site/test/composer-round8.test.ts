@@ -163,3 +163,25 @@ describe("rule (d): bars put in a spacer voice are spacers", () => {
     expect(apply(text, dup.changes)).not.toMatch(/V:2\n[^\n]*z/);
   });
 });
+
+describe("a copy whose voices end at different points (item 3)", () => {
+  const ragged =
+    "X:1\nT:Ragged\nM:4/4\nL:1/8\n%%score (1 2)\nK:C\nV:1\nc2 d2 e2 f2 | g4 a4 | b2 a2 g4 | e2 d2 c4 | c8 |]\nV:2\nC4 E4 | G,4 C4 | D4 G,4 | C4 G,4 | C8 |]\n";
+  it("at a bar's start: each voice's part made whole bars, as many in each", () => {
+    const at = ragged.indexOf("b2 a2");
+    const clip = "V:1\nc2 d2 e2 f2 | g4\nV:2\nC4 E4 | G,4 C4 |\n";
+    const plan = planPaste(ragged, [{ from: at, to: at + 2 }], 0, clip, null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    const after = apply(ragged, plan.changes);
+    expect(after).toContain("V:1\nc2 d2 e2 f2 | g4 a4 | c2 d2 e2 f2 | g4 z4 | b2 a2 g4 |");
+    expect(after).toContain("V:2\nC4 E4 | G,4 C4 | C4 E4 | G,4 C4 | D4 G,4 |");
+    expect(plan.message).toMatch(/as 2 whole bars here, in step/);
+  });
+  it("into a voice the copy hasn't, the other voice gets rests as long", () => {
+    const at = ragged.indexOf("D4 G,4");
+    const plan = planPaste(ragged, [{ from: at, to: at + 2 }], 0, "V:1\nc2 d2 e2 f2 | g4\n", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    const after = apply(ragged, plan.changes);
+    expect(after).toContain("V:1\nc2 d2 e2 f2 | g4 a4 | z8 | z8 | b2 a2 g4 |");
+  });
+});

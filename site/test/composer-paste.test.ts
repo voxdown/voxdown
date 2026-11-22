@@ -37,13 +37,16 @@ describe("pasting a copy of several voices", () => {
   it("pastes the caret's voice's part, or one part into a voice the copy hasn't", () => {
     const at = tune.indexOf("f e d c");
     const plan = pasteVoiced(tune, [{ from: at, to: at }], voicedParts(copy) ?? []);
-    expect("changes" in plan && plan.changes[0]?.insert).toBe("c d e f|");
-    expect("message" in plan && plan.message).toMatch(/^Pasted V:1's part/);
+    // (At a bar's start, as whole bars, every voice in step: round 8, item 3.)
+    expect("changes" in plan && plan.changes[0]?.insert).toBe("c d e f| ");
+    expect("message" in plan && plan.message).toMatch(/^Pasted V:1 /);
     const three = `${tune.replace("%%score (1 2)", "%%score (1 2 3)")}V:3\nz4|]\n`;
     const z = three.indexOf("z4");
     const plain = pasteVoiced(three, [{ from: z, to: z }], voicedParts(copy) ?? []);
-    expect("changes" in plain && plain.changes[0]?.insert).toBe("c d e f|");
-    expect("message" in plain && plain.message).toBe("Pasted V:1's part; the copy also had V:2.");
+    expect("changes" in plain && plain.changes[0]?.insert).toBe("c d e f| ");
+    expect("message" in plain && plain.message).toBe(
+      "Pasted V:1's part as a whole bar here, in step; rests in V:1 and V:2 for as long. The copy also had V:2.",
+    );
   });
   it("a voice selected in two places, with one part, takes it in the first, said so", () => {
     const places = [range(tune, "c' b a g|"), range(tune, "f e d c|"), range(tune, "c B A G|")];
@@ -73,7 +76,8 @@ describe("pasting a copy of voices from several V: blocks (round 3)", () => {
   it("a voice's parts are joined, in order, at a caret in that voice", () => {
     const at = interleaved.indexOf("c d e f");
     const plan = pasteVoiced(interleaved, [{ from: at, to: at }], voicedParts(four) ?? []);
-    expect("changes" in plan && plan.changes[0]?.insert).toBe("g a b c' e f g a");
+    // (Barred again for the tune's meter: round 8.)
+    expect("changes" in plan && plan.changes[0]?.insert).toBe("g a b c' | e f g a | ");
   });
   it("over a place in each voice, each takes all of its voice's music", () => {
     const places = [range(interleaved, "c d e f"), range(interleaved, "C D E F")];
@@ -159,8 +163,8 @@ describe("plain music over places in several voices (round 3)", () => {
     const plan = planPaste(duet, [{ from: at, to: at }], 0, "V:1\na2 a2|\nV:2\nA2 A2|\n", null);
     if (!plan || "refused" in plan) throw new Error("no plan");
     const out = apply(duet, plan.changes);
-    expect(out).toContain("[V:1] d2 fd | a2 a2|ed cB |]");
-    expect(out).toContain("[V:2] F2 AF | A2 A2|GF ED |]");
+    expect(out).toContain("[V:1] d2 fd | a2 a2| ed cB |]");
+    expect(out).toContain("[V:2] F2 AF | A2 A2| GF ED |]");
   });
 });
 

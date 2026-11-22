@@ -20,11 +20,13 @@ import {
   insertsAtNote,
   joinedClip,
   lyricsFor,
+  noteStartsBar,
   notesIn,
   overwriteForward,
   pasteInStep,
   pasteKeepingBars,
   samePoint,
+  wholeBars,
 } from "./barwise";
 import { type ClipSource, convertClip, keyLabel } from "./clip-convert";
 import type { Change } from "./commands";
@@ -66,7 +68,14 @@ export function joinedParts(parts: VoicedPart[]): VoicedPart[] {
   return joined;
 }
 
-export type PastePlan = { changes: Change[]; message: string } | { refused: string };
+export type PastePlan =
+  | {
+      changes: Change[];
+      message: string;
+      /** Its inserts are already written for their places (units, keys, bar lines). */
+      final?: boolean;
+    }
+  | { refused: string };
 
 const tuneOf = (file: FileIndex, position: number): TuneInfo | undefined =>
   file.tunes.find((tune) => position >= tune.from && position <= tune.to);
@@ -98,6 +107,7 @@ export function pasteVoiced(
   copy: VoicedPart[],
   file: FileIndex = indexFile(text),
   staves?: Staves,
+  fit?: (insert: string, at: number) => string,
 ): PastePlan {
   const parts = joinedParts(copy);
   const all = names(parts);
@@ -167,6 +177,10 @@ export function pasteVoiced(
     };
   }
   const own = parts.find((part) => part.voice === here);
+  if (own && tune) {
+    const decided = voicedInStep(text, file, tune, given, own, parts, staves, fit);
+    if (decided) return decided;
+  }
   if (own) {
     // A staff holding the copy's other voices too takes them, at the same point, in step.
     const mates = tune ? staffMates(text, tune, here, staves) : [here];
@@ -196,9 +210,131 @@ export function pasteVoiced(
   const clef = clefOf(text, file, range.from, here);
   const chosen = parts.find((part) => (part.clef ?? "treble") === clef) ?? (parts[0] as VoicedPart);
   const others = parts.filter((part) => part !== chosen);
+  if (tune) {
+    // Into this voice, by the same rules (in step at a bar's start, forward over notes).
+    const mine = { ...chosen, voice: here };
+    const decided = voicedInStep(text, file, tune, given, mine, [mine], staves, fit);
+    if (decided && "refused" in decided) return decided;
+    if (decided)
+      return {
+        ...decided,
+        message: `${decided.message.replace(`V:${here}`, `V:${chosen.voice}'s part`)}${others.length ? ` The copy also had ${names(others)}.` : ""}`,
+      };
+  }
   return {
     changes: [{ ...range, insert: chosen.text }],
     message: `Pasted V:${chosen.voice}'s part${others.length ? `; the copy also had ${names(others)}` : ""}.`,
+  };
+}
+
+/**
+ * A copy of voices pasted at one place, decided once for the whole copy (round 8, item 3):
+ * - at a bar's start (a caret there, or a clicked note starting its bar), it goes in: each voice's
+ *   part is made whole bars (rests to its bar line) and as many bars as the longest, and every
+ *   other voice of the tune gets as many bars of rests at the same point;
+ * - over notes, it overwrites forward in every voice the copy has on that staff, from the same
+ *   point in each (./barwise overwriteForward); the other voices are as they were.
+ * Null where it goes in as before (a caret inside a bar, or at the music's end).
+ */
+function voicedInStep(
+  text: string,
+  file: FileIndex,
+  tune: TuneInfo,
+  given: Range,
+  own: VoicedPart,
+  parts: VoicedPart[],
+  staves: Staves | undefined,
+  fit: ((insert: string, at: number) => string) | undefined,
+): PastePlan | null {
+  const mates = staffMates(text, tune, own.voice, staves);
+  const pasted = [own, ...parts.filter((part) => part !== own && mates.includes(part.voice))];
+  const left = parts.filter((part) => !pasted.includes(part));
+  const written = (part: VoicedPart, at: number) => (fit ? fit(part.text, at) : part.text);
+  const not = left.length ? `; the copy also has ${names(left)}, not pasted` : "";
+  // Where it goes in: a clicked note starting its bar, or a caret just before one.
+  let start: number | null = null;
+  if (given.to > given.from) start = noteStartsBar(text, file, given);
+  else {
+    const lineEnd =
+      text.indexOf("\n", given.from) < 0 ? text.length : text.indexOf("\n", given.from);
+    const next = selectedNotes(text, [{ from: given.from, to: lineEnd }], file).find(
+      (each) => each.span.from >= given.from,
+    );
+    if (next && !text.slice(given.from, next.span.from).trim())
+      start = noteStartsBar(text, file, next.span);
+    if (start === null) return null;
+  }
+  const sounding = (voice: string) =>
+    `V:${voice} has a note sounding across this point: paste where every voice's notes start, or select a place in each.`;
+  if (start !== null) {
+    const points: number[] = [];
+    for (const part of pasted) {
+      const at = part === own ? start : samePoint(text, file, start, part.voice);
+      if (at === null) return { refused: sounding(part.voice) };
+      points.push(at);
+    }
+    const first = pasted.map((part, index) =>
+      wholeBars(
+        written(part, points[index] as number),
+        text,
+        file,
+        points[index] as number,
+        part.voice,
+      ),
+    );
+    const bars = Math.max(...first.map((each) => each.bars));
+    const changes: Change[] = pasted.map((part, index) => {
+      const at = points[index] as number;
+      const made = wholeBars(written(part, at), text, file, at, part.voice, bars);
+      return { from: at, to: at, insert: `${made.text} ` };
+    });
+    // Every other voice: as many bars of rests, at the same point.
+    const rested: string[] = [];
+    for (const voice of tune.voices.map((each) => each.id)) {
+      if (pasted.some((part) => part.voice === voice)) continue;
+      const at = samePoint(text, file, start, voice);
+      if (at === null) {
+        // (A voice that has ended before this point needs none.)
+        if (
+          selectedNotes(text, [{ from: start, to: tune.to }], file).some(
+            (each) => each.event.voice === voice,
+          )
+        )
+          return { refused: sounding(voice) };
+        continue;
+      }
+      const made = wholeBars("", text, file, at, voice, bars);
+      changes.push({ from: at, to: at, insert: `${made.text} ` });
+      rested.push(`V:${voice}`);
+    }
+    return {
+      changes,
+      message: `Pasted ${names(pasted)} as ${bars === 1 ? "a whole bar" : `${bars} whole bars`} here, in step${rested.length ? `; rests in ${rested.join(" and ")} for as long` : ""}${not}.`,
+      final: true,
+    };
+  }
+  // Over notes: forward in each voice from the same point.
+  const firstNote = selectedNotes(text, [given], file).find((each) => each.whole);
+  if (!firstNote) return null;
+  const changes: Change[] = [];
+  for (const part of pasted) {
+    let place: Range = given;
+    if (part !== own) {
+      const at = samePoint(text, file, firstNote.event.from, part.voice);
+      if (at === null) return { refused: sounding(part.voice) };
+      const there = selectedNotes(text, [{ from: at, to: at + 1 }], file)[0];
+      if (!there) return { refused: sounding(part.voice) };
+      place = there.span;
+    }
+    const over = overwriteForward(text, file, place, written(part, place.from));
+    if (!over) return null;
+    if ("refused" in over) return over;
+    changes.push(...over.changes);
+  }
+  return {
+    changes,
+    message: `Pasted ${names(pasted)} over the notes, forward from the same point in each; the other voices are as they were${not}.`,
+    final: true,
   };
 }
 
@@ -333,8 +469,13 @@ export function planPaste(
   };
   if (parts) {
     const places = selected.length ? selected : [ranges[main] ?? (ranges[0] as Range)];
-    const plan = pasteVoiced(text, places, parts, file, staves);
+    const plan = pasteVoiced(text, places, parts, file, staves, fit);
     if ("refused" in plan) return plan;
+    if (plan.final)
+      return {
+        changes: withLyrics(text, file, plan.changes),
+        message: [plan.message, ...said].join(" "),
+      };
     const changes: Change[] = [];
     for (const change of plan.changes) {
       const insert = change.insert ? fit(change.insert, change.from) : "";

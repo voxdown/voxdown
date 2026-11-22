@@ -6366,8 +6366,8 @@ console.log(
   await p.keyboard.press("Control+v");
   await settled(duet);
   doc = await docText(p);
-  assert.match(doc, /\[V:1\] d2 fd \| a2 a2\|ed cB/, "V:1's part");
-  assert.match(doc, /\[V:2\] F2 AF \| A2 A2\|GF ED/, "and V:2's, at the same point");
+  assert.match(doc, /\[V:1\] d2 fd \| a2 a2\| ?ed cB/, "V:1's part");
+  assert.match(doc, /\[V:2\] F2 AF \| A2 A2\| ?GF ED/, "and V:2's, at the same point");
   // 5. Nothing to paste: an empty clipboard over a note changes nothing.
   await put(duet);
   await p.evaluate(() => navigator.clipboard.writeText(""));

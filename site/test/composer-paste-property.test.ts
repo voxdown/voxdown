@@ -158,3 +158,34 @@ for (const name of ["trio", "piano", "song"]) {
       }
   });
 }
+
+describe("ragged copies of voices, ending at different points (round 8, item 3)", () => {
+  const clips = [
+    "V:1\nc2 d2 e2 f2 | g4\nV:2\nC4 E4 | G,4 C4 |\n",
+    "V:1\nc2 d2 e2 f2 | g4 a4 |\nV:2\nC4 E4 | G,4\n",
+    "V:1\nc2 d2 e2 f2 | g4\n",
+  ];
+  for (const name of ["ragged", "trio"]) {
+    const text = read(name);
+    const file = indexFile(text);
+    for (const clip of clips)
+      it(`${name}: ${JSON.stringify(clip)} over every note`, () => {
+        let pasted = 0;
+        for (const { bars } of barsOf(text))
+          for (const bar of bars)
+            for (const note of bar) {
+              const plan = planPaste(text, [note], 0, clip, null, file);
+              if (!plan) continue;
+              const at = `${name}, over ${JSON.stringify(text.slice(note.from, note.to))} at ${note.from}`;
+              if ("refused" in plan) {
+                expect(plan.refused, at).toMatch(/sounding across|repeat|end of the voice|tuplet/);
+                continue;
+              }
+              const after = apply(text, plan.changes);
+              expect(issues(after), `${at}\n${plan.message}\n${after}`).toEqual([]);
+              pasted += 1;
+            }
+        expect(pasted).toBeGreaterThan(0);
+      });
+  }
+});

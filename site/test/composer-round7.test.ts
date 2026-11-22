@@ -118,19 +118,19 @@ describe("a two-voice copy pasted on a clicked note of a shared staff (finding 5
     const plan = planPaste(duet, [{ from: at, to: at + 2 }], 0, clip, null);
     if (!plan || "refused" in plan) throw new Error("no plan");
     const after = apply(duet, plan.changes);
-    expect(after).toContain("[V:1] d2 fd | ed cB | A2 FA | ed cB |d4 :|");
-    expect(after).toContain("[V:2] F2 AF | GF ED | C2 DC | GF ED |D4 :|");
-    expect(plan.message).toMatch(/V:2's on the same staff/);
+    expect(after).toContain("[V:1] d2 fd | ed cB | A2 FA | ed cB | d4 :|");
+    expect(after).toContain("[V:2] F2 AF | GF ED | C2 DC | GF ED | D4 :|");
+    expect(plan.message).toMatch(/Pasted V:1 and V:2 as a whole bar here, in step/);
   });
-  it("without %%score, as the score draws the staves", () => {
+  it("without %%score, as the score draws the staves: over a note mid-bar, forward in both (round 8)", () => {
     const plain = duet.replace("%%score (1 2)\n", "");
     const at = plain.indexOf("FA |") + 1;
     const staves = () => ["1", "2"];
     const plan = planPaste(plain, [{ from: at, to: at + 1 }], 0, clip, null, undefined, staves);
     if (!plan || "refused" in plan) throw new Error("no plan");
     const after = apply(plain, plan.changes);
-    expect(after).toContain("| A2 FA | ed cB | d4 :|");
-    expect(after).toContain("| C2 DC | GF ED | D4 :|");
+    expect(after).toContain("| A2 Fe | dc B z :|");
+    expect(after).toContain("| C2 DG | FE D z :|");
   });
 });
 

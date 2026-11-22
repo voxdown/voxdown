@@ -12,17 +12,19 @@
 import {
   type Fraction,
   type MusicToken,
+  add,
   defaultUnit,
   formatLength,
   frac,
   lineKind,
   meterLength,
+  parseLength,
   parseUnit,
   tokenizeMusic,
 } from "./abc";
 import { type Change, type Range, barAround, barLine, passagesOf } from "./commands";
 import { markOf } from "./playorder";
-import { selectedNotes } from "./selected";
+import { type Picked, selectedNotes } from "./selected";
 import { readingAt } from "./stepentry";
 import { type FileIndex, indexFile } from "./tunes";
 import { tuneItems } from "./walk";
@@ -230,7 +232,7 @@ function jumpMark(token: MusicToken) {
 }
 /** What belongs to a bar line rather than to a note: kept in the tune when its bar goes. */
 function keeper(token: MusicToken): boolean {
-  if (token.kind === "inline-field") return /^\[[KMLQP]:/.test(token.text);
+  if (token.kind === "inline-field") return /^\[[KMLQPV]:/.test(token.text);
   if (token.kind === "annotation" && /^"\^/.test(token.text)) return true;
   return jumpMark(token) !== null;
 }
@@ -531,11 +533,9 @@ export function cutPlan(
   const selected = ranges.filter((range) => range.to > range.from);
   if (!selected.length || !inMusic(text, selected, file)) return null;
   const structure = structureOf(text, file, (selected[0] as Range).from);
-  if (splitTuplet(structure, selected))
-    return { refused: "This would cut a tuplet in two: select all of its notes, or none." };
   // Some voices only, in a tune with several: rests, so the voices stay in step.
-  const resting = restsInstead(text, selected, file);
-  if (resting) return resting;
+  const someVoices = restsInstead(text, selected, file);
+  if (someVoices) return someVoices;
   const picked = chosen(text, selected, file);
   const changes: Change[] = [];
   const said: string[] = [];
@@ -546,7 +546,10 @@ export function cutPlan(
   const chains: Line[] = [];
   for (const line of [...lines.values()].sort((a, b) => a.from - b.from)) {
     const last = chains[chains.length - 1];
-    if (last && line.from === last.to + 1)
+    // (Not into another voice's line: an inline [V:] starts a voice of its own.)
+    const voiced = line.tokens.find((token) => token.kind !== "space");
+    const otherVoice = voiced?.kind === "inline-field" && /^\[V:/.test(voiced.text);
+    if (last && line.from === last.to + 1 && !otherVoice)
       chains[chains.length - 1] = {
         from: last.from,
         to: line.to,
@@ -556,6 +559,10 @@ export function cutPlan(
   }
   const removed: Range[] = [];
   const carets: { at: number; offset: number }[] = [];
+  const picks = selectedNotes(text, selected, file).filter(
+    (each) => !each.event.rest || each.whole,
+  );
+  const resting: Picked[] = [];
   for (const line of chains) {
     // A bar of nothing (a line's end and the next line's start) joins the bars either side.
     const segments = segmentsOf(line, eventsOn(text, line, file)).filter(
@@ -569,23 +576,19 @@ export function cutPlan(
       const segment = segments[at] as Segment;
       if (!touches(segment)) continue;
       if (!whole(segment)) {
-        // Part of a bar: the selected text, less its keepers and slur ends whose pair stays.
+        // Part of a bar: its notes become rests of the same length (as MuseScore does), so the
+        // bar keeps its length; a chord's tones alone go from the chord.
+        for (const each of picks)
+          if (each.event.from >= segment.from && each.event.from < segment.to) {
+            if (each.whole) resting.push(each);
+            else
+              for (const tone of each.tones)
+                changes.push({ from: tone.from, to: tone.to, insert: "" });
+          }
         for (const range of selected) {
           const from = Math.max(range.from, segment.from);
           const to = Math.min(range.to, segment.to);
-          if (to <= from) continue;
-          let piece = from;
-          for (const token of segment.tokens) {
-            if (token.from < from || token.to > to) continue;
-            const pair = structure.slurs.get(token.from);
-            const kept = keeper(token) || (token.kind === "slur" && !inside(pair ?? -1, selected));
-            if (!kept) continue;
-            if (token.from > piece) changes.push({ from: piece, to: token.from, insert: "" });
-            piece = token.to;
-          }
-          if (to > piece) changes.push({ from: piece, to, insert: "" });
-          removed.push({ from, to });
-          carets.push({ at: from, offset: 0 });
+          if (to > from) carets.push({ at: from, offset: 0 });
         }
         continue;
       }
@@ -669,9 +672,29 @@ export function cutPlan(
       token?.kind === "note" ? `${token.accidental}${token.letter}${token.octave}` : "";
     if (pitch(note) !== pitch(next)) changes.push({ from: tie.from, to: tie.to, insert: "" });
   }
-  // The notes that go take their syllables with them.
+  // Whole bars only go when no tuplet is cut in two by them.
+  if (splitTuplet(structure, removed))
+    return { refused: "This would cut a tuplet in two: select all of its notes, or none." };
+  // Notes of part of a bar: rests in their place.
+  changes.push(
+    ...restChanges(
+      text,
+      file,
+      resting.filter((each) => !each.event.rest),
+    ),
+  );
+  if (resting.some((each) => !each.event.rest))
+    said.push(
+      "Notes replaced by rests, so the bar keeps its length: select whole bars to take the time out.",
+    );
+  // The notes that go, or become rests, take their syllables with them.
   const goneNotes = selectedNotes(text, selected, file)
-    .filter((each) => each.whole && !each.event.rest && inside(each.event.from, removed))
+    .filter(
+      (each) =>
+        each.whole &&
+        !each.event.rest &&
+        (inside(each.event.from, removed) || resting.includes(each)),
+    )
     .map((each) => each.event.from);
   changes.push(...lyricsFor(text, file, goneNotes, []));
   // The edit, then the caret in the text after it.
@@ -693,7 +716,7 @@ export function cutPlan(
   // A music line left empty goes with its line break (a blank line would end the tune), and so
   // does one left with only plain bar lines after a line ending on one (a stray bar line).
   const lo = Math.min(...fine.map((change) => change.from));
-  const hi =
+  let hi =
     lo +
     fine.reduce(
       (sum, change) => sum + change.insert.length - (change.to - change.from),
@@ -701,7 +724,7 @@ export function cutPlan(
     );
   let lineFrom = after.lastIndexOf("\n", lo - 1) + 1;
   while (lineFrom <= hi && lineFrom < after.length) {
-    const end = after.indexOf("\n", lineFrom) < 0 ? after.length : after.indexOf("\n", lineFrom);
+    let end = after.indexOf("\n", lineFrom) < 0 ? after.length : after.indexOf("\n", lineFrom);
     const content = after.slice(lineFrom, end);
     const previous = after.slice(0, lineFrom).replace(/\s+$/, "");
     // (A w: line whose syllables all went is empty too.)
@@ -710,12 +733,35 @@ export function cutPlan(
       after.lastIndexOf("\n", lineFrom - 2) + 1,
       Math.max(0, lineFrom - 1),
     );
-    const stray =
+    // Only bar lines left (`|`, `:|`, `|]`): after a line ending on a bar line (their sign joins
+    // it, so a final |] stays the music's end) or after no music, they go.
+    const barsOnly =
       !empty &&
-      /^[\s|]*$/.test(content) &&
-      (/\|[\]:0-9]*$/.test(previous) || lineKind(previousLine, true) !== "music");
+      tokenizeMusic(content, 0).every((token) => token.kind === "bar" || token.kind === "space");
+    const previousBar = /(\[\||\|\]|:\|\]|:*\|+:*[0-9]*|:{2,})$/.exec(previous);
+    const stray = barsOnly && (Boolean(previousBar) || lineKind(previousLine, true) !== "music");
     const touched = lineFrom <= hi && end >= lo;
-    if (touched && (empty || stray) && lineKind(content, true) !== "field") {
+    // (Never the blank line that keeps two tunes apart.)
+    const separator = empty && !content && /^X:/.test(after.slice(end + 1));
+    if (touched && !separator && (empty || stray) && lineKind(content, true) !== "field") {
+      if (stray && previousBar) {
+        const signs = tokenizeMusic(content, 0).filter(
+          (token) => token.kind === "bar" && !PLAIN.test(token.text),
+        );
+        if (signs.length) {
+          const joined = signs.reduce(
+            (bar, sign) => joinBars(bar, sign.text),
+            previousBar[1] as string,
+          );
+          const at = previous.length - (previousBar[1] as string).length;
+          after = after.slice(0, at) + joined + after.slice(previous.length);
+          const shift = joined.length - (previousBar[1] as string).length;
+          lineFrom += shift;
+          end += shift;
+          hi += shift;
+          if (caret > at) caret += shift;
+        }
+      }
       let to = end < after.length ? end + 1 : end;
       // A music line that goes takes its w: lines (their syllables were its notes').
       if (lineKind(content, true) !== "lyrics")
@@ -727,6 +773,8 @@ export function cutPlan(
       after = after.slice(0, from) + after.slice(to);
       if (caret >= to) caret -= to - from;
       else if (caret > from) caret = from;
+      // What follows moved up: the region the edit touched ends that much sooner.
+      hi -= to - from;
       continue;
     }
     lineFrom = end + 1;
@@ -1206,28 +1254,30 @@ function lyricsAlong(text: string, file: FileIndex, notes: number[]): Change[] {
   if (first === undefined) return [];
   const from = text.lastIndexOf("\n", first - 1) + 1;
   const to = text.indexOf("\n", first) < 0 ? text.length : text.indexOf("\n", first);
-  if (notes.some((each) => each >= to) || !text.startsWith("w:", to + 1)) return [];
-  const wordsTo = text.indexOf("\n", to + 1) < 0 ? text.length : text.indexOf("\n", to + 1);
-  const slots = lyricSlots(text.slice(to + 3, wordsTo), to + 3);
+  if (notes.some((each) => each >= to)) return [];
   const line = selectedNotes(text, [{ from, to }], file)
     .filter((each) => !each.event.rest && each.event.from >= from && each.event.from < to)
     .map((each) => each.event.from);
   const indices = notes.map((each) => line.indexOf(each)).filter((each) => each >= 0);
-  const own = indices.map((index) => slots[index]).filter(Boolean) as Range[];
-  const last = own.at(-1);
-  if (!last) return [];
-  // Syllables of one word stay joined by their hyphen.
-  const words = own
-    .map((slot) => text.slice(slot.from, slot.to).trim())
-    .map((word, at, all) => (at < all.length - 1 && !/-$/.test(word) ? `${word} ` : word))
-    .join("");
-  return [
-    {
+  // Each verse brings its own syllables of those notes.
+  const changes: Change[] = [];
+  for (const verse of versesUnder(text, to)) {
+    const slots = lyricSlots(text.slice(verse.from, verse.to), verse.from);
+    const own = indices.map((index) => slots[index]).filter(Boolean) as Range[];
+    const last = own.at(-1);
+    if (!last) continue;
+    // Syllables of one word stay joined by their hyphen.
+    const words = own
+      .map((slot) => text.slice(slot.from, slot.to).trim())
+      .map((word, at, all) => (at < all.length - 1 && !/-$/.test(word) ? `${word} ` : word))
+      .join("");
+    changes.push({
       from: last.to,
       to: last.to,
       insert: `${/-$/.test(text.slice(last.from, last.to)) ? "" : " "}${words}${/\s/.test(text[last.to] ?? "") ? "" : " "}`,
-    },
-  ];
+    });
+  }
+  return changes;
 }
 
 /** Each voice's events with their written start and end, in whole notes. */
@@ -1372,6 +1422,109 @@ function restFor(text: string, event: { from: number; to: number }): string {
   return `z${close?.length || inner?.length || ""}`;
 }
 
+/** A note's (or chord's, or rest's) written length, in units; null in a tuplet or broken rhythm. */
+function writtenUnits(
+  text: string,
+  event: { from: number; to: number },
+  span: Range,
+): Fraction | null {
+  const tokens = tokenizeMusic(text.slice(span.from, span.to), span.from);
+  if (tokens.some((token) => token.kind === "broken")) return null;
+  const head = tokens.find((token) => token.from >= event.from && token.kind !== "space");
+  if (head?.kind === "rest" || head?.kind === "note") return parseLength(head.length);
+  const close = tokens.find((token) => token.kind === "chord-close");
+  return parseLength(close?.length ?? "");
+}
+
+/**
+ * Notes deleted where time can't go (less than whole bars, or some voices only): rests of the
+ * same length (as MuseScore does). Their marks and ties go; a chord symbol stays, on the rest;
+ * a tuplet or broken rhythm around them stays. Rests side by side in a bar become one where the
+ * notation allows (`z2 z` is `z3`), across no tuplet, broken rhythm or chord symbol.
+ */
+function restChanges(text: string, file: FileIndex, picked: Picked[]): Change[] {
+  const changes: Change[] = [];
+  if (!picked.length) return changes;
+  const structure = structureOf(text, file, (picked[0] as Picked).event.from);
+  const inTuplet = new Set(structure.tuplets.flatMap(({ notes }) => notes));
+  const chosen = new Set(picked.map((each) => each.event.from));
+  type Item = { from: number; to: number; span: Range; units: Fraction | null; picked: boolean };
+  // Each line's events in order: runs of picked notes, with the rests beside them, in a bar.
+  const lines = new Set(picked.map((each) => text.lastIndexOf("\n", each.event.from - 1) + 1));
+  for (const lineFrom of lines) {
+    const lineTo = text.indexOf("\n", lineFrom) < 0 ? text.length : text.indexOf("\n", lineFrom);
+    const events = selectedNotes(text, [{ from: lineFrom, to: lineTo }], file).filter(
+      (each) => each.event.from >= lineFrom && each.event.from < lineTo,
+    );
+    const runs: Item[][] = [];
+    let run: Item[] = [];
+    let lastTo = lineFrom;
+    const close = () => {
+      if (run.length) runs.push(run);
+      run = [];
+    };
+    for (const each of events) {
+      const between = tokenizeMusic(text.slice(lastTo, each.span.from), lastTo);
+      if (
+        between.some(
+          (token) =>
+            token.kind === "bar" || token.kind === "tuplet" || token.kind === "inline-field",
+        )
+      )
+        close();
+      lastTo = each.span.to;
+      const isPicked = chosen.has(each.event.from);
+      if (!isPicked && !each.event.rest) {
+        close();
+        continue;
+      }
+      const symbol = tokenizeMusic(
+        text.slice(each.span.from, each.event.from),
+        each.span.from,
+      ).some((token) => token.kind === "chord-symbol");
+      const units = inTuplet.has(each.event.from)
+        ? null
+        : writtenUnits(text, each.event, each.span);
+      // A chord symbol starts its own rest (it stays on it); a tuplet's or broken rhythm's note
+      // stands alone.
+      if (symbol || units === null) close();
+      run.push({
+        from: each.event.from,
+        to: each.event.to,
+        span: each.span,
+        units,
+        picked: isPicked,
+      });
+      if (units === null) close();
+    }
+    close();
+    for (const group of runs) {
+      if (!group.some((item) => item.picked)) continue;
+      const first = group[0] as Item;
+      const last = group[group.length - 1] as Item;
+      const merge = group.length > 1 && group.every((item) => item.units !== null);
+      // The picked notes' marks go (not a bar line's marks or fields, nor a chord symbol), and
+      // their ties.
+      for (const item of group) {
+        if (!item.picked) continue;
+        if (!merge || item === first)
+          for (const token of tokenizeMusic(text.slice(item.span.from, item.from), item.span.from))
+            if (token.kind !== "space" && token.kind !== "chord-symbol" && !keeper(token))
+              changes.push({ from: token.from, to: token.to, insert: "" });
+        if (!merge || item === last)
+          for (const token of tokenizeMusic(text.slice(item.to, item.span.to), item.to))
+            if (token.kind === "tie") changes.push({ from: token.from, to: token.to, insert: "" });
+        if (!merge) changes.push({ from: item.from, to: item.to, insert: restFor(text, item) });
+      }
+      if (merge) {
+        const total = group.reduce((sum, item) => add(sum, item.units as Fraction), frac(0));
+        changes.push({ from: first.from, to: last.to, insert: `z${formatLength(total)}` });
+      }
+    }
+  }
+  return changes;
+}
+
 /**
  * Delete or Cut over notes in some voices only, in a tune with several: the notes become rests
  * of the same length (their marks and ties go, a broken rhythm or tuplet around them stays), so
@@ -1395,19 +1548,7 @@ function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan
       .map((each) => each.voice),
   );
   if ([...sounding].every((voice) => chosenVoices.has(voice))) return null;
-  const changes: Change[] = [];
-  for (const each of picked) {
-    const rest = restFor(text, each.event);
-    // Its marks before it go (not a bar line's marks or fields), and a tie after it.
-    const lead = tokenizeMusic(text.slice(each.span.from, each.event.from), each.span.from).filter(
-      (token) => token.kind !== "space" && !keeper(token),
-    );
-    for (const token of lead) changes.push({ from: token.from, to: token.to, insert: "" });
-    changes.push({ from: each.event.from, to: each.event.to, insert: rest });
-    const tail = tokenizeMusic(text.slice(each.event.to, each.span.to), each.event.to);
-    for (const token of tail)
-      if (token.kind === "tie") changes.push({ from: token.from, to: token.to, insert: "" });
-  }
+  const changes = restChanges(text, file, picked);
   const left = [...sounding]
     .filter((voice) => !chosenVoices.has(voice))
     .map((voice) => `V:${voice}`);
@@ -1459,6 +1600,18 @@ function lyricSlots(words: string, offset: number): Range[] {
  * so the words after them stay on their notes. `added` puts `*` placeholders (one each) where
  * notes come in: [position in the music line, how many].
  */
+/** Every verse under a music line: each w: line right after it, one after another. */
+function versesUnder(text: string, lineTo: number): Range[] {
+  const verses: Range[] = [];
+  let next = lineTo + 1;
+  while (next < text.length && text.startsWith("w:", next)) {
+    const end = text.indexOf("\n", next) < 0 ? text.length : text.indexOf("\n", next);
+    verses.push({ from: next + 2, to: end });
+    next = end + 1;
+  }
+  return verses;
+}
+
 export function lyricsFor(
   text: string,
   file: FileIndex,
@@ -1472,35 +1625,34 @@ export function lyricsFor(
     const to = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
     lines.set(from, { from, to });
   }
-  for (const line of lines.values()) {
-    const next = line.to + 1;
-    if (next >= text.length || !text.startsWith("w:", next)) continue;
-    const wordsTo = text.indexOf("\n", next) < 0 ? text.length : text.indexOf("\n", next);
-    const slots = lyricSlots(text.slice(next + 2, wordsTo), next + 2);
-    const notes = selectedNotes(text, [{ from: line.from, to: line.to }], file)
-      .filter(
-        (each) => !each.event.rest && each.event.from >= line.from && each.event.from < line.to,
-      )
-      .map((each) => each.event.from);
-    notes.forEach((note, index) => {
-      const slot = slots[index];
-      // The syllable and what separates it from the next.
-      const next = slots[index + 1];
-      if (slot && gone.includes(note))
-        changes.push({ from: slot.from, to: next ? next.from : slot.to, insert: "" });
-    });
-    for (const [at, count] of added) {
-      if (at < line.from || at > line.to) continue;
-      const index = notes.filter((note) => note < at).length;
-      const slot = slots[index];
-      const place = slot ? slot.from : wordsTo;
-      changes.push({
-        from: place,
-        to: place,
-        insert: `${slot ? "" : " "}${Array(count).fill("*").join(" ")}${slot ? " " : ""}`,
+  for (const line of lines.values())
+    for (const verse of versesUnder(text, line.to)) {
+      const wordsTo = verse.to;
+      const slots = lyricSlots(text.slice(verse.from, verse.to), verse.from);
+      const notes = selectedNotes(text, [{ from: line.from, to: line.to }], file)
+        .filter(
+          (each) => !each.event.rest && each.event.from >= line.from && each.event.from < line.to,
+        )
+        .map((each) => each.event.from);
+      notes.forEach((note, index) => {
+        const slot = slots[index];
+        // The syllable and what separates it from the next.
+        const next = slots[index + 1];
+        if (slot && gone.includes(note))
+          changes.push({ from: slot.from, to: next ? next.from : slot.to, insert: "" });
       });
+      for (const [at, count] of added) {
+        if (at < line.from || at > line.to) continue;
+        const index = notes.filter((note) => note < at).length;
+        const slot = slots[index];
+        const place = slot ? slot.from : wordsTo;
+        changes.push({
+          from: place,
+          to: place,
+          insert: `${slot ? "" : " "}${Array(count).fill("*").join(" ")}${slot ? " " : ""}`,
+        });
+      }
     }
-  }
   return changes;
 }
 

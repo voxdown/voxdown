@@ -24,6 +24,7 @@ import {
   decorationMark,
   eventsIn,
   markSelection,
+  musicParts,
   newTuneTemplate,
   removeDots,
   scaleLengths,
@@ -776,17 +777,20 @@ const copyVoices = EditorView.domEventHandlers({
  * The last Cut: its copy pasted back where it left the caret, nothing changed since, puts back
  * exactly what was cut.
  */
+let toldRests = false;
 let lastCut: { clip: string; after: string; caret: number; undo: ChangeSet; back: number } | null =
   null;
 /**
  * Cut, or Delete in the score: whole bars out with their bar lines, the structure kept
  * (./barwise), a plain caret left at the edit. False when it is refused, said why.
  */
-function cutMusic(target: EditorView, clip: string | null): boolean {
+function cutMusic(target: EditorView, clip: string | null, only?: Range[]): boolean {
   const state = target.state;
-  const list = state.selection.ranges
-    .filter((range) => !range.empty)
-    .map((range) => ({ from: range.from, to: range.to }));
+  const list =
+    only ??
+    state.selection.ranges
+      .filter((range) => !range.empty)
+      .map((range) => ({ from: range.from, to: range.to }));
   const plan = barwise?.cutPlan(state.doc.toString(), list, state.field(fileIndexField));
   if (plan && "refused" in plan) {
     sayAboutSelection(plan.refused);
@@ -802,6 +806,12 @@ function cutMusic(target: EditorView, clip: string | null): boolean {
     userEvent: clip === null ? "delete.selection" : "delete.cut",
     scrollIntoView: true,
   });
+  // "Notes replaced by rests" is said the first time, so it isn't a surprise; then not again.
+  if (plan && !("refused" in plan)) {
+    const rests = plan.said.findIndex((each) => each.startsWith("Notes replaced by rests"));
+    if (rests >= 0 && toldRests) plan.said.splice(rests, 1);
+    if (rests >= 0) toldRests = true;
+  }
   if (plan?.said.length) notice(plan.said.join(" "));
   sayAloud(
     plan?.said.length
@@ -929,10 +939,27 @@ function replaceMusic(target: EditorView, typed: string): boolean {
   const state = target.state;
   const list = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
   // Backspace and Delete are the score's Delete: one plan (./barwise cutPlan), its structure rules
-  // and refusals, so the text and the score never disagree.
+  // and refusals, so the text and the score never disagree. Over music and other lines (a voice's
+  // line into the next, lyrics, V: lines), only the music goes, voice by voice.
+  const doc = state.doc.toString();
+  const file = state.field(fileIndexField);
+  const parts = musicParts(doc, list, file);
+  const notes = selectedNotes(doc, parts, file);
   if (!typed) {
-    if (!barwise.cutPlan(state.doc.toString(), list, state.field(fileIndexField))) return false;
-    cutMusic(target, null);
+    if (!parts.length || !notes.length) return false;
+    if (!barwise.cutPlan(doc, parts, file)) return false;
+    cutMusic(target, null, parts);
+    return true;
+  }
+  // Typing writes in one voice: over several, or over lyrics or a V: line too, it is refused.
+  const whole = list.filter((range) => range.to > range.from);
+  const mixed =
+    parts.length !== whole.length ||
+    parts.some((part, at) => part.from !== whole[at]?.from || part.to !== whole[at]?.to);
+  if (notes.length && (new Set(notes.map((each) => each.event.voice)).size > 1 || mixed)) {
+    sayAboutSelection(
+      "Typing replaces notes in one voice: this selection crosses voices or other lines. Select within one voice, or press Delete to clear each voice's notes.",
+    );
     return true;
   }
   const changes = barwise.replaceKeepingBars(

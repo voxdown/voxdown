@@ -181,7 +181,7 @@ describe("voices kept in step (round 5, finding 6)", () => {
     const plan = cutPlan(hymn, [range]);
     if (!plan || "refused" in plan) throw new Error("refused");
     const after = apply(hymn, plan.changes);
-    expect(after).toContain("[V:T] B,2 | z z z z | B,2 C2");
+    expect(after).toContain("[V:T] B,2 | z4 | B,2 C2");
     expect(plan.said.join(" ")).toMatch(/Rests in place of the notes, so V:T stays in step/);
     expect(issues(after)).toEqual([]);
   });

@@ -82,9 +82,15 @@ describe("cut takes whole bars out with one bar line", () => {
       `${head}c d e f|f e d c|]\n`,
     );
   });
-  it("part of a bar loses only its notes", () => {
+  it("part of a bar: its notes become rests, merged, the bars keeping their lengths (round 6)", () => {
     expect(apply(tune, cutKeepingBars(tune, [span(tune, "e f|g a")]))).toBe(
-      `${head}c d | b c'|c' b a g|f e d c|]\n`,
+      `${head}c d z2|z2 b c'|c' b a g|f e d c|]\n`,
+    );
+  });
+  it("a deleted note's chord symbol stays, on its rest (round 6)", () => {
+    const chords = `${head}"C"c "G"d e2|]\n`;
+    expect(apply(chords, cutKeepingBars(chords, [span(chords, 'c "G"d')]))).toBe(
+      `${head}"C"z "G"z e2|]\n`,
     );
   });
   it("whole bars in two voices", () => {

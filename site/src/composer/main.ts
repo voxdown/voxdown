@@ -3225,6 +3225,22 @@ function apply(changes: Change[], label: string, outward = true): boolean {
   return true;
 }
 
+/** New lengths, the voices kept in step in a tune with several (./barwise lengthsInStep). */
+function lengths(changes: Change[], factor: number, label: string): boolean {
+  const step = barwise?.lengthsInStep(text(), fileIndex(), changes, factor, label);
+  if (step && "refused" in step) {
+    sayAboutSelection(step.refused);
+    notice(step.refused);
+    return true;
+  }
+  const done = apply(step?.changes ?? changes, label);
+  if (step?.said) {
+    notice(step.said, "success");
+    sayAboutSelection(step.said);
+  }
+  return done;
+}
+
 function music(command: string): boolean {
   // The commands load with the editor; one chosen before that runs once they have.
   if (!commands) {
@@ -3245,11 +3261,11 @@ function music(command: string): boolean {
     case "octave-down":
       return apply(transpose(doc, list, -12, index), "Octave");
     case "double":
-      return apply(scaleLengths(doc, list, frac(2), index), "Double");
+      return lengths(scaleLengths(doc, list, frac(2), index), 2, "Double");
     case "halve":
-      return apply(scaleLengths(doc, list, frac(1, 2), index), "Halve");
+      return lengths(scaleLengths(doc, list, frac(1, 2), index), 0.5, "Halve");
     case "dot":
-      return apply(scaleLengths(doc, list, frac(3, 2), index), "Dot");
+      return lengths(scaleLengths(doc, list, frac(3, 2), index), 1.5, "Dot");
     case "undot":
       return apply(removeDots(doc, list, index), "Remove dot");
     case "tie": {

@@ -1,7 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { copyText, cutPlan, overBarLine, replaceKeepingBars } from "../src/composer/barwise";
-import { type Change, musicParts } from "../src/composer/commands";
+import { frac } from "../src/composer/abc";
+import {
+  copyText,
+  cutPlan,
+  lengthsInStep,
+  overBarLine,
+  replaceKeepingBars,
+} from "../src/composer/barwise";
+import { type Change, musicParts, scaleLengths } from "../src/composer/commands";
 import { checkLyrics } from "../src/composer/lyriccheck";
 import { planPaste, sourceAt } from "../src/composer/paste";
 import { keyHere, toKey } from "../src/composer/transpose-key";
@@ -203,5 +210,39 @@ describe("Delete across two tunes (finding 13)", () => {
         refused: "This selection is in 2 tunes: delete or cut in one tune at a time.",
       });
     }
+  });
+});
+
+describe("½×, 2× and a dot in one voice of several (finding 12)", () => {
+  const two = "X:1\nT:t\nM:4/4\nL:1/4\n%%score 1 2\nK:C\nV:1\nc2 d2|e4|]\nV:2\nC2 D2|E4|]\n";
+  const bar = [{ from: two.indexOf("c2 d2"), to: two.indexOf("c2 d2") + 5 }];
+  it("halved: a rest for the time given up", () => {
+    const plan = lengthsInStep(
+      two,
+      indexFile(two),
+      scaleLengths(two, bar, frac(1, 2)),
+      0.5,
+      "Halve",
+    );
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    expect(apply(two, plan.changes)).toContain("V:1\nc d z2|e4|]");
+    expect(plan.said).toMatch(/voices stay in step/);
+  });
+  it("doubled or dotted past the bar: refused, saying which bar", () => {
+    expect(
+      lengthsInStep(two, indexFile(two), scaleLengths(two, bar, frac(2)), 2, "Double"),
+    ).toEqual({
+      refused: expect.stringMatching(/^Double would overfill bar 1 of V:1/),
+    });
+    expect(
+      lengthsInStep(two, indexFile(two), scaleLengths(two, bar, frac(3, 2)), 1.5, "Dot"),
+    ).toMatchObject({ refused: expect.stringMatching(/^Dot would overfill bar 1/) });
+  });
+  it("one voice: as before", () => {
+    const one = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\nc2 d2|e4|]\n";
+    const range = [{ from: one.indexOf("c2"), to: one.indexOf("c2") + 5 }];
+    expect(
+      lengthsInStep(one, indexFile(one), scaleLengths(one, range, frac(2)), 2, "Double"),
+    ).toBeNull();
   });
 });

@@ -2857,3 +2857,75 @@ function hairpinsKept(
   }
   return changes;
 }
+
+/**
+ * ½×, 2× and a dot in one voice of a tune with several (round 7): the voices stay in step. Halved,
+ * a bar's notes leave a rest for the time they gave up, after them; doubled or dotted past the
+ * bar's length, it's refused, saying which bar. `changes` are the lengths' own changes. Null in a
+ * tune with one voice (its bars may change length; the bar check says so).
+ */
+export function lengthsInStep(
+  text: string,
+  file: FileIndex,
+  changes: Change[],
+  factor: number,
+  label: string,
+): { changes: Change[]; said?: string } | { refused: string } | null {
+  const first = changes[0];
+  if (!first) return null;
+  const tune = file.tunes.find((each) => first.from >= each.from && first.from <= each.to);
+  if (!tune) return null;
+  type Event = { from: number; to: number; length: number; unit: Fraction };
+  type Bar = { voice: string; number: number; events: Event[]; meter: string; total: number };
+  const bars: Bar[] = [];
+  const open = new Map<string, Bar>();
+  const counts = new Map<string, number>();
+  for (const item of tuneItems(text, tune, file)) {
+    let bar = open.get(item.voice);
+    if (!bar) {
+      const number = (counts.get(item.voice) ?? 0) + 1;
+      counts.set(item.voice, number);
+      bar = { voice: item.voice, number, events: [], meter: item.meter, total: 0 };
+      open.set(item.voice, bar);
+      bars.push(bar);
+    }
+    if (item.type === "bar") {
+      if (bar.events.length) open.delete(item.voice);
+      continue;
+    }
+    const length = item.duration.num / item.duration.den;
+    bar.events.push({ from: item.from, to: item.to, length, unit: item.unit });
+    bar.total += length;
+  }
+  if (new Set(bars.map((bar) => bar.voice)).size < 2) return null;
+  const changed = (event: Event) =>
+    changes.some((change) => change.from >= event.from && change.from <= event.to);
+  const out = [...changes];
+  let rests = 0;
+  for (const bar of bars) {
+    const own = bar.events.filter(changed);
+    if (!own.length) continue;
+    const delta = own.reduce((sum, event) => sum + event.length, 0) * (factor - 1);
+    const length = meterLength(bar.meter);
+    const full = length ? length.num / length.den : null;
+    if (delta > 1e-9 && full !== null && bar.total + delta > full + 1e-9)
+      return {
+        refused: `${label} would overfill bar ${bar.number} of V:${bar.voice}, out of step with the other voices: make room in the bar first, or select fewer notes.`,
+      };
+    if (delta < -1e-9) {
+      const last = own[own.length - 1] as Event;
+      const span = selectedNotes(text, [{ from: last.from, to: last.from + 1 }], file)[0]?.span;
+      const at = span?.to ?? last.to;
+      out.push({ from: at, to: at, insert: ` ${restOf(-delta, last.unit)}` });
+      rests += 1;
+    }
+  }
+  return {
+    changes: out.sort((a, b) => a.from - b.from || a.to - b.to),
+    ...(rests
+      ? {
+          said: `${label}: a rest in ${rests === 1 ? "the bar" : `each of the ${rests} bars`} for the time given up, so the voices stay in step.`,
+        }
+      : {}),
+  };
+}

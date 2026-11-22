@@ -1,0 +1,420 @@
+/* Studio's screenplay is an editable sheet on the same desk as Writer.
+   Keep CodeMirror as the scroll owner: its viewport, selection and page gutters
+   must all share the same coordinate system. */
+#writing {
+  background: var(--desk, #e7eaee);
+  padding: 18px clamp(8px, 2vw, 28px) 0;
+}
+#writing > .panel-heading:has(.writing-tools:empty),
+#writing > .panel-heading:not(:has(.writing-tools)) {
+  display: none;
+}
+#editor {
+  width: 100%;
+  max-width: 816px;
+  margin-inline: auto;
+  background: var(--surface, white);
+  color: var(--ink, #25282d);
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 1px 2px rgb(30 40 60 / 8%), 0 8px 30px -12px rgb(30 40 60 / 25%);
+  container-type: inline-size;
+}
+#editor .cm-editor {
+  background: transparent;
+}
+#editor .cm-scroller {
+  scrollbar-color: var(--border) transparent;
+  overscroll-behavior: contain;
+}
+#editor .cm-content {
+  max-width: none;
+  padding-top: clamp(24px, 6cqw, 48px) !important;
+  padding-bottom: 50vh !important;
+}
+/* The screenplay's character/dialogue/parenthetical percentages remain intact. */
+#editor .cm-line:not(.f-character):not(.f-dialogue):not(.f-parenthetical) {
+  padding-inline: clamp(16px, 8cqw, 64px) !important;
+}
+#editor .cm-line.f-character {
+  padding-right: clamp(16px, 8cqw, 64px) !important;
+}
+#editor .cm-gutters {
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+#editor .cm-activeLine {
+  background-color: color-mix(in srgb, var(--accent) 4%, transparent) !important;
+}
+#editor .cm-line.f-scene,
+#editor .cm-line.f-title {
+  color: var(--ink);
+}
+#editor .cm-line.f-section,
+#editor .cm-line.f-synopsis,
+#editor .cm-line.f-note,
+#editor .cm-line.f-boneyard {
+  color: var(--muted);
+}
+#editor .cm-cursor {
+  border-left-color: var(--ink);
+}
+#editor .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
+}
+#editor .cm-panels {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--ui, system-ui, sans-serif);
+  border-color: var(--border);
+}
+#outline {
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 12px 16px;
+  overscroll-behavior: contain;
+}
+#outline .panel-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  min-height: 44px;
+}
+#outline .panel-heading h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+}
+#outline .panel-heading h2 span {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 6px;
+}
+#outline-close {
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  font-size: 20px;
+}
+#scene-search {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 4px;
+  margin-bottom: 12px;
+  padding: 8px;
+  font-size: 12px;
+}
+#scene-list:not(:empty) ~ .outline-hint,
+#outline .writer-link {
+  display: none;
+}
+#scene-list {
+  gap: 2px;
+}
+#scene-list button {
+  border-left: 2px solid transparent;
+  border-radius: 0 3px 3px 0;
+  font: 400 12px / 1.55 var(--ui, system-ui, sans-serif);
+  color: var(--ink);
+  padding: 8px;
+}
+#outline #scene-list button[aria-current="true"] {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--ink);
+}
+#outline #scene-list button:hover {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+#scene-cards {
+  width: 100%;
+  margin-top: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: transparent;
+}
+#preview {
+  background: var(--desk);
+  color: var(--ink);
+}
+#preview > .panel-heading {
+  display: none;
+}
+#preview .studio-side-tabs {
+  background: var(--surface);
+  padding: 0 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+#preview .studio-side-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  min-height: 40px;
+  padding: 8px 4px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  font-size: 13px;
+  text-decoration: none;
+}
+#preview .studio-side-tabs button[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+#preview .page-controls {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 4px 10px;
+  gap: 4px;
+}
+#preview .page-controls button {
+  min-width: 30px;
+  min-height: 32px;
+  border-color: transparent;
+  background: transparent;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+#preview .page-controls button:hover:not(:disabled) {
+  background: var(--hover);
+}
+#page-label {
+  font-size: 11px;
+  white-space: nowrap;
+}
+#preview #page-scroll {
+  padding: 16px 18px 24px;
+  overscroll-behavior: contain;
+}
+#preview .preview-hint {
+  background: var(--surface);
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  margin: 0;
+  line-height: 1.5;
+}
+#preview .studio-reference {
+  background: var(--surface);
+  color: var(--ink);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+#preview .studio-reference textarea {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 14px / 1.6 "Courier Prime", monospace;
+  padding: 12px;
+}
+#preview .studio-reference p {
+  line-height: 1.5;
+}
+#preview .reference-controls button {
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  /* Leave room for the scene-number targets while keeping the screenplay's
+     dialogue, parenthetical and character indentation hierarchy on phones. */
+  #editor .cm-line.f-dialogue {
+    padding-left: max(56px, 14%) !important;
+  }
+  #editor .cm-line.f-parenthetical {
+    padding-left: max(68px, 20%) !important;
+  }
+  #editor .cm-line.f-character {
+    padding-left: max(80px, 28%) !important;
+  }
+  #outline-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  #writing {
+    padding: 14px 8px 0;
+  }
+  #editor .cm-content {
+    padding-top: 24px !important;
+  }
+  #preview .studio-side-tabs button {
+    min-height: 44px;
+  }
+  #preview .page-controls {
+    gap: 2px;
+  }
+  #preview .page-controls button {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 4px;
+  }
+}
+@media (max-height: 550px) {
+  #writing {
+    padding-top: 4px;
+  }
+  #editor .cm-content {
+    padding-top: 16px !important;
+  }
+  #preview .page-controls {
+    padding-block: 0;
+  }
+  #preview #page-scroll {
+    padding-top: 8px;
+  }
+}
+@media (max-width: 700px) and (max-height: 550px) {
+  #app.mobile-preview .preview-hint,
+  #app.mobile-preview > footer {
+    display: none;
+  }
+}
+
+/* Zoom changes the writing sheet, never the print layout. */
+#editor {
+  max-width: calc(816px * var(--manuscript-scale, 1));
+}
+#app > footer #manuscript-page,
+#app > footer #writing-zoom {
+  flex: none;
+  min-height: 24px;
+  border: 0;
+  border-radius: 3px;
+  padding: 2px 4px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+}
+#app > footer #manuscript-page:hover:not(:disabled),
+#app > footer #writing-zoom:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.manuscript-navigation-dialog {
+  max-width: 460px;
+}
+.manuscript-navigation-dialog input {
+  width: 6rem;
+}
+@media (max-width: 700px) {
+  #app > footer #manuscript-page,
+  #app > footer #writing-zoom {
+    display: none;
+  }
+}
+
+/* The current scene remains reachable beside a full-length screenplay. */
+#outline {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#outline > .panel-heading,
+#outline > #scene-search,
+#outline > #scene-cards {
+  flex: none;
+}
+#scene-list {
+  flex: 1 1 auto;
+  min-height: 64px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#outline > .studio-scene-context {
+  flex: none;
+  max-height: 52%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 700px), (pointer: coarse) {
+  .studio-scene-context button,
+  .studio-scene-context select,
+  .studio-scene-context > summary {
+    min-height: 44px;
+  }
+}
+@media (max-height: 550px) {
+  #outline {
+    overflow-y: auto;
+  }
+  #scene-list {
+    flex: none;
+    max-height: 30vh;
+  }
+  #outline > .studio-scene-context {
+    max-height: none;
+    overflow: visible;
+  }
+}
+@media (max-width: 1100px) {
+  #outline {
+    display: none;
+  }
+  #app.outline-open:not(.focus-writing):not(.preview-expanded) #outline {
+    display: flex;
+  }
+}
+
+/* Preview sheets share the PDF's geometry in both reading modes. */
+#preview #page {
+  margin-inline: auto;
+}
+#preview #page.continuous-pages {
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.preview-sheet {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: white;
+  color: black;
+  container-type: inline-size;
+}
+.preview-sheet.has-next-page::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  border-bottom: 1px solid var(--border);
+}
+#preview-mode {
+  min-height: 32px;
+  max-width: 100%;
+  padding: 3px 6px;
+  font-size: 11px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+@media (max-width: 700px) {
+  #preview-mode {
+    min-height: 44px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 700px) and (max-height: 550px) {
+  /* Preserve room to read when the phone keyboard or browser zoom reduces height. */
+  #preview .page-controls {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-shrink: 0;
+    scrollbar-width: thin;
+  }
+  #preview .page-controls > * {
+    flex-shrink: 0;
+  }
+}

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!-- Handmade for Composer's tests: each MusicXML feature the importer maps, on a few bars. -->
+<score-partwise version="4.0">
+  <movement-title>Features</movement-title>
+  <identification>
+    <creator type="composer">Test Composer</creator>
+    <rights>Public domain test fixture</rights>
+  </identification>
+  <part-list>
+    <score-part id="P1"><part-name>Flute</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="0" implicit="yes">
+      <attributes>
+        <divisions>6</divisions>
+        <key><fifths>1</fifths><mode>major</mode></key>
+        <time><beats>6</beats><beat-type>8</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="below"><direction-type><dynamics><p/></dynamics></direction-type></direction>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type>
+        <lyric number="1"><syllabic>single</syllabic><text>Oh</text></lyric>
+        <lyric number="2"><syllabic>single</syllabic><text>And</text></lyric>
+      </note>
+    </measure>
+    <measure number="1">
+      <barline location="left"><repeat direction="forward"/></barline>
+      <harmony><root><root-step>A</root-step></root><kind>minor-seventh</kind></harmony>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type><beam number="1">begin</beam>
+        <notations><slur type="start" number="1"/><articulations><staccato/></articulations></notations>
+        <lyric number="1"><syllabic>begin</syllabic><text>hap</text></lyric>
+        <lyric number="2"><syllabic>single</syllabic><text>so</text></lyric>
+      </note>
+      <note><pitch><step>F</step><alter>1</alter><octave>5</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type><accidental>sharp</accidental><beam number="1">continue</beam>
+        <lyric number="1"><syllabic>end</syllabic><text>py</text><extend/></lyric>
+      </note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type><beam number="1">end</beam>
+        <notations><slur type="stop" number="1"/></notations>
+      </note>
+      <direction placement="above"><direction-type><words>dolce</words></direction-type></direction>
+      <note><pitch><step>C</step><alter>1</alter><octave>5</octave></pitch><duration>6</duration><voice>1</voice><type>quarter</type>
+        <notations><articulations><accent/><tenuto/></articulations></notations>
+        <lyric number="1"><syllabic>single</syllabic><text>day</text></lyric>
+        <lyric number="2"><syllabic>single</syllabic><text>we</text></lyric>
+      </note>
+      <note><pitch><step>C</step><alter>1</alter><octave>5</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type>
+        <notations><technical><fingering>2</fingering></technical></notations>
+        <lyric number="1"><syllabic>single</syllabic><text>to</text></lyric>
+        <lyric number="2"><syllabic>single</syllabic><elision/><text>go</text></lyric>
+      </note>
+    </measure>
+    <measure number="2">
+      <barline location="left"><ending number="1" type="start"/></barline>
+      <harmony><root><root-step>G</root-step></root><kind>major</kind><bass><bass-step>B</bass-step></bass></harmony>
+      <direction><direction-type><wedge type="crescendo" number="1"/></direction-type></direction>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><beam number="1">begin</beam>
+        <notations><tuplet type="start" bracket="yes"/></notations></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><beam number="1">continue</beam></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><beam number="1">end</beam>
+        <notations><tuplet type="stop"/></notations></note>
+      <direction><direction-type><wedge type="stop" number="1"/></direction-type></direction>
+      <note><grace slash="yes"/><pitch><step>A</step><octave>5</octave></pitch><voice>1</voice><type>eighth</type></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>9</duration><voice>1</voice><type>quarter</type><dot/>
+        <notations><ornaments><trill-mark/></ornaments><dynamics><f/></dynamics></notations></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type></note>
+      <note><chord/><pitch><step>B</step><octave>4</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type></note>
+      <note><chord/><pitch><step>D</step><octave>5</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type></note>
+      <barline location="right"><ending number="1" type="stop"/><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="3">
+      <barline location="left"><ending number="2" type="start"/></barline>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>9</duration><voice>1</voice><type>quarter</type><dot/>
+        <tie type="start"/><notations><tied type="start"/><ornaments><mordent/></ornaments></notations></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>6</duration><voice>1</voice><type>quarter</type>
+        <tie type="stop"/><notations><tied type="stop"/></notations></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>3</duration><voice>1</voice><type>eighth</type><accidental>natural</accidental>
+        <notations><ornaments><other-ornament>roll</other-ornament></ornaments></notations></note>
+      <barline location="right"><bar-style>light-light</bar-style><ending number="2" type="discontinue"/></barline>
+    </measure>
+    <measure number="4">
+      <attributes>
+        <key><fifths>2</fifths><mode>major</mode></key>
+        <time><beats>3</beats><beat-type>4</beat-type></time>
+        <clef><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <direction><direction-type><pedal type="start"/></direction-type></direction>
+      <note><pitch><step>D</step><octave>3</octave></pitch><duration>6</duration><voice>1</voice><type>quarter</type>
+        <notations><articulations><strong-accent/></articulations></notations></note>
+      <note><rest/><duration>6</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>F</step><alter>1</alter><octave>3</octave></pitch><duration>6</duration><voice>1</voice><type>quarter</type>
+        <notations><fermata type="upright"/></notations></note>
+    </measure>
+    <measure number="5">
+      <attributes><measure-style><multiple-rest>3</multiple-rest></measure-style></attributes>
+      <note><rest measure="yes"/><duration>18</duration><voice>1</voice></note>
+    </measure>
+    <measure number="6"><note><rest measure="yes"/><duration>18</duration><voice>1</voice></note></measure>
+    <measure number="7"><note><rest measure="yes"/><duration>18</duration><voice>1</voice></note></measure>
+    <measure number="8">
+      <note><pitch><step>D</step><octave>3</octave></pitch><duration>18</duration><voice>1</voice><type>half</type><dot/></note>
+      <direction placement="above"><direction-type><words>D.C. al Fine</words></direction-type></direction>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
+    </measure>
+  </part>
+</score-partwise>

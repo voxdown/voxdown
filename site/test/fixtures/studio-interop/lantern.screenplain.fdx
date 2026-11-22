@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<FinalDraft DocumentType="Script" Template="No" Version="1">
+
+  <Content>
+    <Paragraph Type="Scene Heading">
+      <Text>INT. SIGNAL ROOM - NIGHT</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>A </Text>
+      <Text Style="Bold">brass</Text>
+      <Text> lamp casts </Text>
+      <Text Style="Italic">quiet</Text>
+      <Text> light across an </Text>
+      <Text Style="Underline">old</Text>
+      <Text> map.
+</Text>
+      <Text>The label reads café &amp; 星; a dial shows &lt; 4 &gt; 2.</Text>
+    </Paragraph>
+    <Paragraph>
+      <DualDialogue>
+    <Paragraph Type="Character">
+      <Text>MIRA (V.O.)</Text>
+    </Paragraph>
+    <Paragraph Type="Parenthetical">
+      <Text>(softly)</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>Keep the </Text>
+      <Text Style="Bold+Italic">blue</Text>
+      <Text> lamp lit.</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>I can see the shore.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>SOL</Text>
+    </Paragraph>
+    <Paragraph Type="Parenthetical">
+      <Text>(counting)</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>One, two, </Text>
+      <Text Style="Underline">three</Text>
+      <Text>.</Text>
+    </Paragraph>
+      </DualDialogue>
+    </Paragraph>
+    <Paragraph Alignment="Center" Type="Action">
+      <Text>SIGNAL RECEIVED</Text>
+    </Paragraph>
+    <Paragraph Type="Transition">
+      <Text>CUT TO:</Text>
+    </Paragraph>
+    <Paragraph Type="Scene Heading">
+      <Text>EXT. PIER - DAWN</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>A gull lands beside the lantern.</Text>
+    </Paragraph>
+  </Content>
+</FinalDraft>

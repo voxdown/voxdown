@@ -4297,6 +4297,10 @@ function focusMode(on: boolean): void {
   keepPrefs();
   checkMenu("focus", on);
   document.body.toggleAttribute("data-focus", on);
+  const toolbarChoice = $('[data-view="toolbar"]');
+  toolbarChoice.setAttribute("aria-disabled", String(on));
+  checkMenu("toolbar", prefs.toolbar && !on);
+  $("#toolbar-focus-hint").hidden = !on;
   // The panels are away while it lasts: the bar's buttons say so, and bring one back by leaving.
   $("#focus-exit").hidden = !on;
   checkMenu("side", prefs.side && !on);
@@ -4695,6 +4699,7 @@ function viewCommand(name: string, on: boolean): void {
     keepPrefs();
     view.dispatch({ effects: setSmartPunctuation.of(on) });
   } else if (name === "toolbar") {
+    if (prefs.focus) return;
     prefs.toolbar = on;
     keepPrefs();
     $("#toolbar").hidden = !on;

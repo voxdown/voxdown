@@ -1,0 +1,202 @@
+{
+  "passed": true,
+  "timestamp": "2026-11-18T16:38:07.676Z",
+  "browser": "153.0.8010.12",
+  "mode": "production-build",
+  "budgets": {
+    "inputP95": 250,
+    "inputMax": 1500,
+    "commandP95": 500,
+    "commandMax": 2000,
+    "ready": 15000
+  },
+  "cpuRate": 1,
+  "adaptationFrameBudget": 150,
+  "measurements": {
+    "openMs": 227.04863299999994,
+    "sustainedTyping": {
+      "wallMs": 4094.9830230000002,
+      "keydownToNextFrameMs": {
+        "samples": 183,
+        "p50": 1.7999999970197678,
+        "p95": 15.400000005960464,
+        "max": 17.80000000447035
+      },
+      "longTasksMs": {
+        "samples": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "eventTimingMs": {
+        "samples": 128,
+        "p50": 16,
+        "p95": 24,
+        "max": 24
+      }
+    },
+    "typingAcrossWorkerUpdates": {
+      "wallMs": 4032.4037419999995,
+      "keydownToNextFrameMs": {
+        "samples": 96,
+        "p50": 2,
+        "p95": 15.799999997019768,
+        "max": 29.399999998509884
+      },
+      "longTasksMs": {
+        "samples": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "eventTimingMs": {
+        "samples": 102,
+        "p50": 16,
+        "p95": 24,
+        "max": 40
+      }
+    },
+    "bracketPairs": {
+      "wallMs": 189.65596099999857,
+      "keydownToNextFrameMs": {
+        "samples": 24,
+        "p50": 11.700000002980232,
+        "p95": 20.299999997019768,
+        "max": 20.700000002980232
+      },
+      "longTasksMs": {
+        "samples": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "eventTimingMs": {
+        "samples": 94,
+        "p50": 24,
+        "p95": 32,
+        "max": 32
+      }
+    },
+    "selectionFormatting": {
+      "wallMs": 172.30401800000072,
+      "keydownToNextFrameMs": {
+        "samples": 24,
+        "p50": 9.100000001490116,
+        "p95": 18.900000005960464,
+        "max": 19.299999997019768
+      },
+      "longTasksMs": {
+        "samples": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "eventTimingMs": {
+        "samples": 37,
+        "p50": 24,
+        "p95": 24,
+        "max": 24
+      }
+    },
+    "characterCompletion": {
+      "wallMs": 582.9231719999989,
+      "keydownToNextFrameMs": {
+        "samples": 24,
+        "p50": 7.100000001490116,
+        "p95": 15.100000001490116,
+        "max": 15.600000001490116
+      },
+      "longTasksMs": {
+        "samples": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "eventTimingMs": {
+        "samples": 11,
+        "p50": 16,
+        "p95": 16,
+        "max": 16
+      }
+    },
+    "completionVisibleMs": {
+      "samples": 8,
+      "p50": 76.59151999999995,
+      "p95": 77.22074199999952,
+      "max": 77.22074199999952
+    },
+    "adaptation": {
+      "characters": 444311,
+      "spokenRows": 4900,
+      "samples": [
+        {
+          "elapsedMs": 151.39999999850988,
+          "frameGapMs": {
+            "samples": 12,
+            "p50": 16.69999999999891,
+            "p95": 16.700000000000728,
+            "max": 16.700000000000728
+          },
+          "longTasksMs": {
+            "samples": 0,
+            "p50": 0,
+            "p95": 0,
+            "max": 0
+          }
+        },
+        {
+          "elapsedMs": 151.5,
+          "frameGapMs": {
+            "samples": 12,
+            "p50": 16.69999999999891,
+            "p95": 16.80000000000109,
+            "max": 16.80000000000109
+          },
+          "longTasksMs": {
+            "samples": 0,
+            "p50": 0,
+            "p95": 0,
+            "max": 0
+          }
+        },
+        {
+          "elapsedMs": 151.10000000149012,
+          "frameGapMs": {
+            "samples": 12,
+            "p50": 16.69999999999891,
+            "p95": 16.700000000000728,
+            "max": 16.700000000000728
+          },
+          "longTasksMs": {
+            "samples": 0,
+            "p50": 0,
+            "p95": 0,
+            "max": 0
+          }
+        }
+      ],
+      "cancellation": {
+        "pending": true,
+        "created": 1,
+        "terminated": 1,
+        "closeMs": 1,
+        "closed": true,
+        "cleared": true
+      }
+    }
+  },
+  "dom": {
+    "editorLines": 62,
+    "outlineButtons": 500,
+    "characterRows": 100,
+    "noteRows": 100,
+    "snapshotRows": 100
+  },
+  "source": {
+    "characters": 499500,
+    "lines": 19950,
+    "scenes": 1994,
+    "notes": 1995,
+    "charactersInCast": 1995
+  }
+}

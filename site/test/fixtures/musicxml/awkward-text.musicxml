@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <work><work-title>The Title
+T:Not a field
+X:9</work-title></work>
+  <movement-title>Second
+    movement</movement-title>
+  <identification><creator type="composer">Trad.
+X:2</creator><creator type="lyricist">Words  by %anon</creator></identification>
+  <credit page="1"><credit-type>subtitle</credit-type><credit-words>A 100% traditional air</credit-words></credit>
+  <part-list>
+    <score-part id="P1"><part-name>Voice
+%%score</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1"><attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes><direction placement="above"><direction-type><words>50% slower
+"rit."</words></direction-type></direction><note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type><lyric number="1"><syllabic>single</syllabic><text>100%</text></lyric></note><note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type><lyric number="1"><syllabic>single</syllabic><text>sure</text></lyric></note></measure>
+  </part>
+</score-partwise>

@@ -1,0 +1,17 @@
+X:1
+T:Little Prelude for Two Hands
+M:4/4
+L:1/8
+Q:1/4=72
+%%score {RH | LH}
+V:RH clef=treble name="Piano"
+V:LH clef=bass
+K:Bb
+V:RH
+!p![DFB]4 [CEA]4|[DFB]2 d2 c2 B2|[EGc]4 [DFB]4|[CEA]6 z2|
+V:LH
+[B,,F,]4 [F,,C,]4|[B,,D,F,]4 [B,,D,F,]4|[C,E,G,]4 [D,F,]4|[F,,C,F,]6 z2|
+V:RH
+!mf![FAd]2 f2 e2 d2|[EGc]2 e2 d2 c2|[DFB]2 [CEA]2 [B,DG]2 [CEA]2|[DFB]8|]
+V:LH
+[D,F,]4 [B,,D,]4|[C,E,]4 [F,,C,]4|[G,,D,]2 [F,,C,]2 [E,,B,,]2 [F,,C,]2|[B,,,F,,B,,]8|]

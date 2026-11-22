@@ -1,0 +1,15 @@
+/* Shared identity for the Writer and Studio workspaces. Fonts are bundled locally. */
+@import "@fontsource-variable/literata/index.css";
+@import "@fontsource-variable/literata/wght-italic.css";
+@import "@fontsource-variable/recursive/index.css";
+
+:root {
+  --workspace-desk: #e7eaee;
+  --workspace-edge: #d5dae1;
+  --workspace-paper: #ffffff;
+  --workspace-ink: #25282d;
+  --workspace-quiet: #646b75;
+  --workspace-brand: #245f61;
+  --workspace-story: "Literata Variable", "Iowan Old Style", Georgia, serif;
+  --workspace-ui: "Recursive Variable", ui-sans-serif, system-ui, sans-serif;
+}

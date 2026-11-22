@@ -2,27 +2,25 @@
  * The playground: a prompt book. The manuscript you write on the left page, what it becomes on the
  * facing page, chosen with index tabs along that page's top edge.
  */
-@import "@fontsource-variable/literata/index.css";
-@import "@fontsource-variable/literata/wght-italic.css";
-@import "@fontsource-variable/recursive/index.css";
+@import "./workspace-theme.css";
 
 :root {
-  --desk: #e7eaee;
-  --desk-edge: #d5dae1;
-  --paper: #ffffff;
+  --desk: var(--workspace-desk);
+  --desk-edge: var(--workspace-edge);
+  --paper: var(--workspace-paper);
   --tab: #f3f5f8;
-  --ink: #25282d;
-  --quiet: #646b75;
+  --ink: var(--workspace-ink);
+  --quiet: var(--workspace-quiet);
   --rule: #dde1e6;
   --pencil: #2f5da8;
-  --story: "Literata Variable", "Iowan Old Style", Georgia, serif;
-  --ui: "Recursive Variable", ui-sans-serif, system-ui, sans-serif;
+  --story: var(--workspace-story);
+  --ui: var(--workspace-ui);
   --mono: "Recursive Variable", ui-monospace, monospace;
   --mark-direction: #7c3aed;
   --mark-sound: #0f766e;
   --mark-page: #b45309;
   --mark-note: #854d0e;
-  --brand: #245f61;
+  --brand: var(--workspace-brand);
   --brand-ink: #ffffff;
   /* Warnings: red that reads at 4.5:1 or better on the paper. */
   --warning: #c81e1e;

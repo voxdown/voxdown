@@ -1,0 +1,14 @@
+X:1
+T:Untitled
+M:C
+L:1/4
+%%score (1 2)
+V:1 name="MusicXML Part" clef=treble
+V:2 clef=treble
+K:C
+V:1
+!>!!fermata!e2 !mf!d B | z d (B,>c) | z4 |]
+w:This is the | lyrics of Voice1
+V:2
+!>!!invertedfermata!c2 B G | z B (G,>A) | x4 |]
+w:This is the | lyrics of Voice2

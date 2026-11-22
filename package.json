@@ -16,12 +16,15 @@
     "format": "biome format --write .",
     "fixtures": "pnpm --filter voxdown fixtures",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "site:check": "pnpm site:build && node scripts/check-site.mjs && node scripts/check-looks.mjs",
-    "check:all": "pnpm check && pnpm site:check"
+    "site:check": "pnpm site:build && node scripts/check-site.mjs && node scripts/check-looks.mjs && node scripts/check-studio.mjs && node scripts/check-composer.mjs",
+    "composer:check": "pnpm site:build && node scripts/check-composer.mjs",
+    "check:all": "pnpm check && pnpm site:check",
+    "studio:check": "pnpm site:build && node scripts/check-studio.mjs && node scripts/check-studio-accessibility.mjs && node scripts/check-studio-performance.mjs && node scripts/check-studio-soak.mjs && node scripts/check-studio-files.mjs && node scripts/check-studio-offline.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^24.0.0",
+    "axe-core": "4.14.1",
     "fast-check": "^4.10.2",
     "playwright": "1.63.0",
     "tsup": "^8.5.0",

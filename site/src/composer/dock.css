@@ -1,0 +1,64 @@
+/* The dock: the rail's column, widened while a panel is open; panels in the dialog family's style. */
+@media (min-width: 761px) {
+  .workspace[data-dock] {
+    grid-template-columns: 340px minmax(280px, 1fr) 7px minmax(320px, var(--score-share));
+  }
+  .workspace[data-dock][data-layout="below"] {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+  /* The rail's own contents wait under the dock. */
+  .workspace[data-dock] .rail {
+    visibility: hidden;
+  }
+}
+.dock {
+  grid-area: rail;
+  z-index: 3;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  overflow-y: auto;
+  background: var(--paper, var(--surface));
+  border-right: 1px solid var(--border);
+}
+.dock[hidden] {
+  display: none;
+}
+.dock-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px 14px 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.dock-panel:focus {
+  outline: none;
+}
+/* Focus on the panel itself shows in its border, as the dialogs' do: no heavy ring. */
+.dock-panel:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+@media (max-width: 760px) {
+  .dock {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: var(--dock-bottom, 130px);
+    max-height: 55dvh;
+    padding: 0;
+    background: transparent;
+    border: 0;
+  }
+  .dock-panel {
+    box-shadow: 0 8px 24px #18202c24;
+  }
+}

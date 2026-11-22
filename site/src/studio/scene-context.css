@@ -1,0 +1,85 @@
+/* A quiet continuation of the scene list, using Writer's workspace tokens. */
+.studio-scene-context {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.studio-scene-context > summary {
+  padding-block: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.scene-context-body {
+  padding-bottom: 12px;
+}
+.scene-context-heading {
+  margin: 0 0 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.scene-context-navigation,
+.scene-context-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.scene-context-navigation {
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+}
+.studio-scene-context button {
+  min-height: 28px;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+.scene-context-navigation button {
+  border-color: transparent;
+  background: transparent;
+}
+.scene-context-synopsis {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 8lh;
+  overflow: auto;
+  margin: 12px 0 8px;
+}
+.studio-scene-context label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+}
+.studio-scene-context textarea,
+.studio-scene-context select,
+.studio-scene-context input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+}
+.studio-scene-context textarea {
+  resize: vertical;
+  min-height: 5rem;
+  max-height: 35vh;
+}
+.scene-context-help,
+.scene-context-status {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.scene-context-cast {
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+}
+.studio-scene-context [hidden] {
+  display: none !important;
+}

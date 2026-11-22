@@ -1,0 +1,44 @@
+/* The problems list (./problem-list), loaded with it. */
+.problem-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.problem-list li + li {
+  border-top: 1px solid var(--border);
+}
+.problem-list button {
+  display: block;
+  width: 100%;
+  padding: 9px 4px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  line-height: 1.45;
+}
+.problem-list .problem-detail {
+  margin: 0 4px 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.problem-list .problem-fix {
+  display: inline-flex;
+  width: auto;
+  min-height: 32px;
+  margin: 0 4px 10px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 600;
+}
+.problem-list .problem-fix:hover {
+  background: var(--hover);
+}
+.problem-list .where {
+  color: var(--muted);
+  font-size: 12px;
+  margin-right: 8px;
+}

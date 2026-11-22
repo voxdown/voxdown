@@ -1,0 +1,218 @@
+/* Shared dialog rhythm; individual tools retain their content and interaction model. */
+dialog:is(.studio-dialog-layout, .workbench-dialog, .studio-command-palette) {
+  overscroll-behavior: contain;
+  border: 1px solid var(--border, #d5dae1);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--ink, #25282d);
+  font: 400 14px / 1.5 var(--ui, system-ui, sans-serif);
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+}
+dialog.studio-dialog-layout {
+  padding: 20px;
+}
+dialog:is(.studio-dialog-layout, .workbench-dialog, .studio-command-palette)::backdrop {
+  background: rgb(20 25 35 / 0.35);
+}
+dialog:is(.studio-dialog-layout, .workbench-dialog) pre {
+  background: var(--hover, #edf0f3);
+  color: var(--ink, #25282d);
+}
+.studio-dialog-layout button {
+  font: 400 13.6px / 1.4 var(--ui, system-ui, sans-serif);
+}
+.studio-dialog-layout button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+.studio-dialog-layout .studio-dialog-close:hover {
+  background: var(--chrome, #eef0f3);
+  color: var(--ink);
+  border-color: transparent;
+}
+.studio-dialog-layout .studio-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: -20px;
+  z-index: 4;
+  background: var(--surface, #fff);
+  margin: -20px -20px 20px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border, #d5dae1);
+}
+.studio-dialog-layout .studio-dialog-header h2 {
+  margin: 3px 0 0;
+  font: 600 1.15rem / 1.3 var(--story, Georgia, serif);
+  letter-spacing: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studio-dialog-layout .studio-dialog-close {
+  flex: none;
+  max-width: 45%;
+  white-space: normal;
+  min-height: 36px;
+  font: 400 13.6px / 1.4 var(--ui, system-ui, sans-serif);
+  color: var(--muted);
+  border-color: transparent;
+  background: transparent;
+  margin: 0;
+  padding: 7px 12px;
+}
+.studio-dialog-layout > p {
+  margin: 12px 0;
+  line-height: 1.55;
+}
+.studio-dialog-layout > p:first-of-type {
+  margin-top: 0;
+}
+.studio-dialog-layout :is(p, ul, ol, label, section, fieldset) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studio-dialog-layout > :is(label, input, select) {
+  margin-top: 12px;
+}
+.studio-dialog-layout label:has(input:not([type="checkbox"])),
+.studio-dialog-layout label:has(select),
+.studio-dialog-layout label:has(textarea) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+.studio-dialog-layout label:has(input[type="checkbox"]) {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  line-height: 1.5;
+  margin-block: 12px;
+}
+.studio-dialog-layout input[type="checkbox"] {
+  flex: none;
+  margin-top: 4px;
+}
+.studio-dialog-layout :is(input:not([type="checkbox"]), select, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  font: 400 13.6px / 1.5 var(--ui, system-ui, sans-serif);
+}
+.studio-dialog-layout :is(input:not([type="checkbox"]):not([type="file"]), select, textarea) {
+  border: 1px solid var(--border, #d5dae1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-height: 38px;
+  color: inherit;
+  background: var(--surface, #fff);
+}
+.studio-dialog-layout input[type="file"] {
+  padding-block: 6px;
+  line-height: 1.5;
+}
+.studio-dialog-layout .studio-dialog-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 16px;
+}
+.studio-dialog-layout .studio-dialog-actions > button {
+  margin: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+.studio-dialog-layout .studio-dialog-section {
+  padding-top: 18px;
+  margin-top: 20px;
+  border-top: 1px solid var(--border, #d5dae1);
+}
+.studio-dialog-layout .studio-dialog-section h3 {
+  font: 600 14px / 1.4 var(--ui, system-ui, sans-serif);
+  margin: 0 0 12px;
+}
+.studio-dialog-layout .studio-dialog-section > :is(input, select) {
+  display: block;
+  margin-block: 8px;
+}
+.studio-dialog-layout .studio-dialog-section > button {
+  margin-top: 8px;
+}
+.studio-dialog-layout ul:empty,
+.studio-dialog-layout ol:empty {
+  display: none;
+}
+.studio-dialog-layout details {
+  margin-block: 12px;
+}
+.studio-dialog-layout summary {
+  cursor: pointer;
+  line-height: 1.5;
+}
+.studio-dialog-layout .library-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.studio-dialog-layout .library-controls label {
+  width: auto;
+}
+.studio-dialog-layout .library-controls button {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  dialog.studio-dialog-layout {
+    padding: 16px;
+    border-radius: 10px;
+    max-width: calc(100vw - 24px);
+  }
+  .studio-dialog-layout .studio-dialog-header {
+    gap: 10px;
+    top: -16px;
+    margin: -16px -16px 16px;
+    padding: 16px;
+  }
+  .studio-dialog-layout .studio-dialog-header h2 {
+    font-size: 1.1rem;
+  }
+  .studio-dialog-layout :is(button, select, input:not([type="checkbox"]), summary),
+  .studio-dialog-layout label:has(input[type="checkbox"]) {
+    min-height: 44px;
+  }
+  .studio-dialog-layout :is(input:not([type="checkbox"]), select, textarea) {
+    font-size: 16px;
+  }
+  .studio-dialog-layout .library-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.studio-dialog-layout input[type="file"]::file-selector-button {
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--border, #d5dae1);
+  border-radius: 6px;
+  background: transparent;
+  padding: 8px 10px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.studio-dialog-layout label[for] {
+  display: block;
+  min-height: 0;
+  margin-bottom: 6px;
+}
+.studio-dialog-layout label[for] + :is(input, select, textarea) {
+  margin-top: 0;
+}
+
+/* Keep live regions mounted for assistive-technology announcements. */
+.studio-dialog-layout [role="status"]:empty {
+  margin: 0;
+  min-height: 0;
+}

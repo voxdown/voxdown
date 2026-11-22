@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <work><work-title>Twinkle, Twinkle, Little Star</work-title></work>
+  <identification>
+    <creator type="composer">Traditional</creator>
+    <creator type="lyricist">Jane Taylor</creator>
+    <encoding>
+      <software>MuseScore 4.4.2</software>
+      <encoding-date>2026-11-21</encoding-date>
+      <supports element="accidental" type="yes"/>
+      <supports element="beam" type="yes"/>
+      </encoding>
+    </identification>
+  <defaults>
+    <scaling><millimeters>6.99911</millimeters><tenths>40</tenths></scaling>
+    <page-layout><page-height>1596.77</page-height><page-width>1233.87</page-width></page-layout>
+    <word-font font-family="Edwin" font-size="10"/>
+    <lyric-font font-family="Edwin" font-size="10"/>
+    </defaults>
+  <credit page="1"><credit-type>title</credit-type><credit-words default-x="616.9" default-y="1511" justify="center" valign="top" font-size="22">Twinkle, Twinkle, Little Star</credit-words></credit>
+  <part-list>
+    <score-part id="P1"><part-name>Voice</part-name><score-instrument id="P1-I1"><instrument-name>Voice</instrument-name></score-instrument><midi-instrument id="P1-I1"><midi-channel>1</midi-channel><midi-program>53</midi-program></midi-instrument></score-part>
+    <score-part id="P2"><part-name>Bass</part-name></score-part>
+    </part-list>
+  <part id="P1">
+    <measure number="1" width="150">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+        </attributes>
+      <direction placement="above"><direction-type><metronome parentheses="no"><beat-unit>quarter</beat-unit><per-minute>96</per-minute></metronome></direction-type><sound tempo="96"/></direction>
+      <note default-x="80" default-y="-30">
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>begin</syllabic><text>Twin</text></lyric>
+        </note>
+      <note default-x="80" default-y="-30">
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>end</syllabic><text>kle,</text></lyric>
+        </note>
+    </measure>
+    <measure number="2" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>begin</syllabic><text>twin</text></lyric>
+        </note>
+      <note default-x="80" default-y="-30">
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>end</syllabic><text>kle,</text></lyric>
+        </note>
+    </measure>
+    <measure number="3" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>begin</syllabic><text>lit</text></lyric>
+        </note>
+      <note default-x="80" default-y="-30">
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>end</syllabic><text>tle</text></lyric>
+        </note>
+    </measure>
+    <measure number="4" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>single</syllabic><text>star,</text></lyric>
+        </note>
+    </measure>
+    <measure number="5" width="150">
+      <print new-system="yes"/>
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>single</syllabic><text>how</text></lyric>
+        </note>
+      <note default-x="80" default-y="-30">
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>single</syllabic><text>I</text></lyric>
+        </note>
+    </measure>
+    <measure number="6" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>begin</syllabic><text>won</text></lyric>
+        </note>
+      <note default-x="80" default-y="-30">
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>end</syllabic><text>der</text></lyric>
+        </note>
+    </measure>
+    <measure number="7" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>single</syllabic><text>what</text></lyric>
+        </note>
+      <note default-x="80" default-y="-30">
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>single</syllabic><text>you</text></lyric>
+        </note>
+    </measure>
+    <measure number="8" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        <lyric number="1" default-x="6.5" default-y="-50"><syllabic>single</syllabic><text>are!</text></lyric>
+        </note>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
+    </measure>
+    </part>
+  <part id="P2">
+    <measure number="1" width="150">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>F</sign><line>4</line></clef>
+        </attributes>
+      <direction placement="above"><direction-type><metronome parentheses="no"><beat-unit>quarter</beat-unit><per-minute>96</per-minute></metronome></direction-type><sound tempo="96"/></direction>
+      <note default-x="80" default-y="-30">
+        <pitch><step>C</step><octave>3</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        
+        </note>
+    </measure>
+    <measure number="2" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>E</step><octave>3</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        
+        </note>
+    </measure>
+    <measure number="3" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>F</step><octave>3</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        
+        </note>
+    </measure>
+    <measure number="4" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>E</step><octave>3</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        
+        </note>
+    </measure>
+    <measure number="5" width="150">
+      <print new-system="yes"/>
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>D</step><octave>3</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        
+        </note>
+    </measure>
+    <measure number="6" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>C</step><octave>3</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        
+        </note>
+    </measure>
+    <measure number="7" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>G</step><octave>2</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        
+        </note>
+    </measure>
+    <measure number="8" width="150">
+
+      <note default-x="80" default-y="-30">
+        <pitch><step>C</step><octave>3</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>up</stem>
+        
+        </note>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
+    </measure>
+    </part>
+  </score-partwise>

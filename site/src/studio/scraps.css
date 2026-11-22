@@ -1,0 +1,285 @@
+/* The Writer's shelf of saved passages, using Studio's shared paper and chrome. */
+#preview .studio-scraps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#preview .studio-scraps[hidden] {
+  display: none;
+}
+.studio-scraps-composer,
+.studio-scrap-editor {
+  display: grid;
+  gap: 8px;
+}
+#preview .studio-scraps textarea,
+#preview .studio-scraps input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 8px;
+  font: inherit;
+  line-height: 1.5;
+}
+#preview .studio-scraps textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+.studio-scraps-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+#preview .studio-scraps-actions button {
+  min-height: 30px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.studio-scraps-list,
+.studio-scraps-deleted ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* Small manuscript excerpts, with controls kept in their own quiet header. */
+.studio-scraps-list {
+  display: grid;
+  gap: 10px;
+}
+.studio-scrap {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  min-width: 0;
+  overflow: hidden;
+}
+.studio-scrap-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 4px 2px 12px;
+  color: var(--muted);
+}
+.studio-scrap-label {
+  font-size: 11px;
+}
+.studio-scrap-pinned-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.studio-scrap-pinned-label svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--accent);
+}
+#preview .studio-scrap-heading button {
+  border: 0;
+  background: transparent;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 6px;
+  font-size: 20px;
+  line-height: 1;
+}
+#preview .studio-scrap-text {
+  display: block;
+  width: 100%;
+  padding: 3px 12px 10px;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+  background: transparent;
+  color: var(--ink);
+  max-height: 116px;
+  overflow: hidden;
+  font: 13px / 1.55 "Courier Prime", "Courier New", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#preview .studio-scrap-text:hover {
+  background: var(--hover);
+}
+#preview .studio-scrap-text:focus-visible {
+  outline-offset: -3px;
+}
+#preview .studio-scrap-note {
+  margin: 0;
+  padding: 6px 12px 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.studio-scrap-editor {
+  padding: 10px;
+}
+.studio-scrap-popover {
+  position: fixed;
+  z-index: 120;
+  margin: 0;
+  max-height: min(560px, calc(100dvh - 24px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 28px #0002;
+}
+.studio-scrap-popover[hidden] {
+  display: none;
+}
+.studio-scrap-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.studio-scrap-preview-heading button {
+  font-size: 12px;
+  background: transparent;
+  color: var(--muted);
+}
+.studio-scrap-full-text {
+  font: 14px / 1.6 "Courier Prime", "Courier New", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.studio-scrap-popover p {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.studio-scrap-popover.is-menu {
+  padding: 5px;
+}
+.studio-scrap-popover.is-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 13px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+.studio-scrap-popover.is-menu button:hover:not(:disabled),
+.studio-scrap-popover.is-menu button:focus-visible {
+  background: var(--hover);
+}
+.studio-scrap-popover.is-menu button:nth-child(4),
+.studio-scrap-popover.is-menu button:last-child {
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  margin-top: 4px;
+  padding-top: 9px;
+}
+.scrap-line {
+  display: inline-block;
+  min-height: 1.55em;
+  width: 100%;
+}
+.scrap-scene,
+.scrap-section {
+  font-weight: 700;
+}
+.scrap-character {
+  text-align: center;
+}
+.scrap-dialogue,
+.scrap-parenthetical {
+  padding-inline: 10%;
+}
+.scrap-parenthetical {
+  font-style: italic;
+}
+.scrap-transition {
+  text-align: right;
+}
+.scrap-centered {
+  text-align: center;
+}
+.scrap-comment,
+.scrap-note,
+.scrap-boneyard {
+  color: var(--studio-comment-ink, var(--accent));
+}
+.scrap-character,
+.scrap-dialogue,
+.scrap-parenthetical {
+  background: var(--studio-speech-wash, var(--hover));
+}
+:root[data-speech-colors="character"] :is(.scrap-character, .scrap-dialogue, .scrap-parenthetical) {
+  background: hsl(var(--studio-speaker-hue, 275) 48% var(--studio-speech-lightness, 93%));
+}
+:root[data-speech-colors="off"] :is(.scrap-character, .scrap-dialogue, .scrap-parenthetical) {
+  background: transparent;
+}
+.scrap-preview-limit {
+  color: var(--muted);
+  font: 12px / 1.5 system-ui, sans-serif;
+}
+#preview .studio-scraps-status,
+#preview .studio-scraps-hint,
+#preview .studio-scraps-empty {
+  margin: 0;
+  color: color-mix(in srgb, var(--muted) 85%, var(--ink));
+  font-size: 12px;
+  line-height: 1.6;
+}
+.studio-scraps-status:empty {
+  display: none;
+}
+.studio-scraps-files {
+  padding-top: 8px;
+}
+.studio-scraps-deleted summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--muted) 85%, var(--ink));
+}
+.studio-scraps-deleted li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.studio-scraps-deleted p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .studio-scrap-popover button,
+  .studio-scrap-popover.is-menu button,
+  #preview .studio-scrap-text,
+  #preview .studio-scrap-heading button,
+  #preview .studio-scraps-actions button,
+  #preview .studio-scraps input {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+.studio-scrap-popover.is-menu button svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  opacity: 0.75;
+}

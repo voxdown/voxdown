@@ -3,7 +3,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Plugin, defineConfig } from "vite";
 import { workspaceAliases } from "../vitest.shared";
+import { composerOffline } from "./composer-offline-plugin";
 import { markdownFile } from "./docs";
+import { studioOffline } from "./studio-offline-plugin";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -15,6 +17,39 @@ function markdownPages(): Plugin {
       return html.replace(/<!--markdown:([^>]+?)-->/g, (_match, path: string) =>
         markdownFile(resolve(here, path.trim())),
       );
+    },
+  };
+}
+
+/** Match static hosting's directory redirect before Vite's index.html fallback. */
+function studioSecurity(): Plugin {
+  return {
+    name: "voxdown-studio-security",
+    apply: "build",
+    transformIndexHtml(html) {
+      return html
+        .replace(
+          "<!--studio-csp-->",
+          `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+        )
+        .replace(
+          "<!--composer-csp-->",
+          // Composer: everything from this site; samples are fetched from it, audio is local.
+          `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+        );
+    },
+  };
+}
+function studioDirectory(): Plugin {
+  return {
+    name: "voxdown-studio-directory",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const match = /^\/(studio|composer)(\?.*)?$/.exec(request.url ?? "");
+        if (!match) return next();
+        response.writeHead(302, { Location: `/${match[1]}/${match[2] ?? ""}` });
+        response.end();
+      });
     },
   };
 }
@@ -38,7 +73,13 @@ function buildOf(): { commit: string; date: string } {
 export default defineConfig({
   base: "./",
   define: { __WRITER_BUILD__: JSON.stringify(buildOf()) },
-  plugins: [markdownPages()],
+  plugins: [
+    studioDirectory(),
+    studioSecurity(),
+    markdownPages(),
+    studioOffline(),
+    composerOffline(),
+  ],
   resolve: { alias: workspaceAliases },
   server: { fs: { allow: [".."] } },
   // The Writer draws a long story's script and book in a worker, which imports the packages.
@@ -56,6 +97,8 @@ export default defineConfig({
         cheatsheet: resolve(here, "cheatsheet.html"),
         listen: resolve(here, "listen.html"),
         writer: resolve(here, "writer/index.html"),
+        screenplayStudio: resolve(here, "studio/index.html"),
+        composer: resolve(here, "composer/index.html"),
         // The landing page directions not chosen, built but not linked (site/landing/*).
         stage: resolve(here, "landing/stage/index.html"),
         manuscript: resolve(here, "landing/manuscript/index.html"),

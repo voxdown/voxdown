@@ -1,0 +1,2676 @@
+/* VoxDown Composer: the Writer/Studio frame, with the score as the second page. */
+@import "../workspace-theme.css";
+
+:root {
+  --desk: var(--workspace-desk);
+  --surface: var(--workspace-paper);
+  --chrome: var(--workspace-paper);
+  --hover: #edf0f3;
+  --ink: var(--workspace-ink);
+  --muted: var(--workspace-quiet);
+  --border: var(--workspace-edge);
+  --accent: var(--workspace-brand);
+  --primary-ink: #fff;
+  --focus: #2c5596;
+  --ui: var(--workspace-ui);
+  --story: var(--workspace-story);
+  /* Music colours: the note at the caret, the note playing, a selected region. */
+  --caret-note: #1f6f8b;
+  --play: #2f6fde;
+  --play-soft: rgb(47 111 222 / 0.14);
+  --band: rgb(36 95 97 / 0.13);
+  --band-edge: rgb(36 95 97 / 0.42);
+  --warn: #9a5b00;
+  --warn-soft: rgb(214 150 30 / 0.16);
+  --error: #b3261e;
+  /* Syntax. */
+  --syn-field: #8a3b8f;
+  --syn-value: #25282d;
+  --syn-note: #25282d;
+  --syn-accidental: #a3410f;
+  --syn-octave: #1f6f8b;
+  --syn-length: #5b6c7a;
+  --syn-bar: #245f61;
+  --syn-chord: #6b4bb3;
+  --syn-deco: #a3410f;
+  --syn-comment: #6c737c;
+  --syn-lyrics: #4d6b2f;
+  --syn-rest: #6c737c;
+  color: var(--ink);
+  background: var(--desk);
+  font-family: var(--ui);
+  font-variation-settings: "CASL" 0.15;
+  color-scheme: light;
+}
+:root[data-theme="dark"],
+:root[data-look="night"] {
+  --desk: #121417;
+  --surface: #1b1d21;
+  --chrome: #1b1d21;
+  --hover: #2c3036;
+  --ink: #e4e5e3;
+  --muted: #9ea5af;
+  --border: #363c44;
+  --accent: #4fb0b3;
+  --primary-ink: #0d1718;
+  --focus: #93b6f0;
+  --caret-note: #69c6e6;
+  --play: #6ea6ff;
+  --play-soft: rgb(110 166 255 / 0.18);
+  --band: rgb(79 176 179 / 0.17);
+  --band-edge: rgb(79 176 179 / 0.55);
+  --warn: #f0b85a;
+  --warn-soft: rgb(240 184 90 / 0.16);
+  --error: #ff8a80;
+  --syn-field: #e09be3;
+  --syn-value: #e4e5e3;
+  --syn-note: #e4e5e3;
+  --syn-accidental: #ffab7a;
+  --syn-octave: #7fd0ec;
+  --syn-length: #a8b4bf;
+  --syn-bar: #6ccfd2;
+  --syn-chord: #b9a3f2;
+  --syn-deco: #ffab7a;
+  --syn-comment: #9198a2;
+  --syn-lyrics: #a9cf86;
+  --syn-rest: #a2a9b2;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --desk: #121417;
+    --surface: #1b1d21;
+    --chrome: #1b1d21;
+    --hover: #2c3036;
+    --ink: #e4e5e3;
+    --muted: #9ea5af;
+    --border: #363c44;
+    --accent: #4fb0b3;
+    --primary-ink: #0d1718;
+    --focus: #93b6f0;
+    --caret-note: #69c6e6;
+    --play: #6ea6ff;
+    --play-soft: rgb(110 166 255 / 0.18);
+    --band: rgb(79 176 179 / 0.17);
+    --band-edge: rgb(79 176 179 / 0.55);
+    --warn: #f0b85a;
+    --warn-soft: rgb(240 184 90 / 0.16);
+    --error: #ff8a80;
+    --syn-field: #e09be3;
+    --syn-value: #e4e5e3;
+    --syn-note: #e4e5e3;
+    --syn-accidental: #ffab7a;
+    --syn-octave: #7fd0ec;
+    --syn-length: #a8b4bf;
+    --syn-bar: #6ccfd2;
+    --syn-chord: #b9a3f2;
+    --syn-deco: #ffab7a;
+    --syn-comment: #9198a2;
+    --syn-lyrics: #a9cf86;
+    --syn-rest: #a2a9b2;
+    color-scheme: dark;
+  }
+}
+:root[data-look="sepia"] {
+  --desk: #e6dcc8;
+  --surface: #f7f0e1;
+  --chrome: #f7f0e1;
+  --hover: #efe5d1;
+  --ink: #33291d;
+  --muted: #66563f;
+  --border: #d4c6ab;
+  --accent: #245f61;
+  --caret-note: #1d5f77;
+  --play: #2a5fc8;
+  --syn-note: #33291d;
+  --syn-value: #33291d;
+  --syn-comment: #6b5d48;
+  --syn-length: #5c5546;
+  --syn-rest: #6b5d48;
+}
+:root[data-look="slate"] {
+  --play: #7fb0ff;
+  --play-soft: rgb(127 176 255 / 0.18);
+  --desk: #1a1f26;
+  --surface: #262c35;
+  --chrome: #262c35;
+  --hover: #353d48;
+  --ink: #d9dee5;
+  --muted: #a3adba;
+  --border: #3b4450;
+  --accent: #72c9cc;
+  --primary-ink: #101a1b;
+  --syn-note: #d9dee5;
+  --syn-value: #d9dee5;
+  --syn-comment: #a0a9b5;
+}
+:root[data-look="contrast"] {
+  --play-soft: rgb(20 71 179 / 0.14);
+  --desk: #d0d4da;
+  --surface: #fff;
+  --chrome: #fff;
+  --hover: #eef0f2;
+  --ink: #000;
+  --muted: #3d434b;
+  --border: #8a919b;
+  --accent: #1b4a4c;
+  --focus: #1a46a0;
+  --caret-note: #0b4f68;
+  --play: #1447b3;
+  --band: rgb(27 74 76 / 0.16);
+  --band-edge: rgb(27 74 76 / 0.7);
+  --syn-field: #6b1f70;
+  --syn-note: #000;
+  --syn-value: #000;
+  --syn-accidental: #8a2f00;
+  --syn-octave: #0b4f68;
+  --syn-length: #333c45;
+  --syn-bar: #123f41;
+  --syn-chord: #4b2a96;
+  --syn-deco: #8a2f00;
+  --syn-comment: #40464e;
+  --syn-lyrics: #2f4a14;
+  --syn-rest: #40464e;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+}
+body.composer {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background: var(--desk);
+  font-size: 14px;
+}
+.composer [hidden] {
+  display: none !important;
+}
+button,
+input,
+select,
+textarea {
+  font-family: var(--ui);
+  font-size: 13px;
+}
+button,
+select {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+button:hover:not(:disabled) {
+  background: var(--hover);
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.primary,
+.primary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--primary-ink);
+  border-color: var(--accent);
+}
+button svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+code {
+  font-family: var(--ui);
+  font-variation-settings: "MONO" 1;
+  font-size: 0.92em;
+  background: var(--hover);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 50;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.skip:focus {
+  top: 8px;
+}
+
+/* Header. */
+.app-header {
+  height: 46px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 5;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font: 650 19px / 1.2 var(--story);
+  letter-spacing: -0.5px;
+  text-decoration: none;
+  flex: none;
+}
+.brand em {
+  font-weight: 400;
+  color: var(--accent);
+}
+.workspace-menus {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.workspace-menus button,
+.panel-toggles button {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.workspace-menus button[aria-expanded="true"],
+.panel-toggles button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--accent);
+}
+.filebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+/* The name and its saved state read as one: "Ode to Joy.abc · Not saved to a file". */
+.filename {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 340px;
+}
+.filename input {
+  width: 100%;
+  field-sizing: content;
+  min-width: 90px;
+  max-width: 340px;
+  min-height: 30px;
+  padding: 4px 6px;
+  font-variation-settings: "MONO" 1;
+  font-size: 12px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+}
+.filename input:hover,
+.filename input:focus {
+  border-color: var(--border);
+  background: var(--surface);
+}
+.saved-state {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+#save-primary {
+  min-height: 32px;
+  padding: 5px 13px;
+  flex: none;
+}
+/* Nothing to save: a quiet secondary button; filled again as soon as there is. */
+#save-primary.quiet {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+#save-primary.quiet:hover {
+  background: var(--hover);
+}
+/* Narrow desks: a compact, truncating name and a short unsaved mark. */
+@media (max-width: 1199px) {
+  .filename,
+  .filename input {
+    max-width: 200px;
+  }
+  .saved-state {
+    font-size: 0;
+  }
+  .saved-state:not(:empty)::before {
+    content: none;
+  }
+  .saved-state::after {
+    content: attr(data-short);
+    font-size: 16px;
+    line-height: 1;
+    color: var(--accent);
+  }
+}
+#appearance {
+  min-height: 32px;
+  padding: 5px 10px;
+  flex: none;
+}
+.panel-toggles {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+.panel-toggles button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  padding: 6px;
+  color: var(--muted);
+}
+#layout-toggle .below,
+.workspace[data-layout="below"] ~ * #layout-toggle .beside {
+  display: none;
+}
+body[data-layout="below"] #layout-toggle .below {
+  display: block;
+}
+body[data-layout="below"] #layout-toggle .beside {
+  display: none;
+}
+
+/* Menus. */
+.workspace-dropdown {
+  position: fixed;
+  z-index: 30;
+  min-width: 260px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 60px);
+  padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 8px 24px #18202c24, 0 2px 4px #18202c0a;
+}
+.workspace-dropdown button {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  width: 100%;
+  min-height: 32px;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
+  border: 0;
+  background: transparent;
+}
+.workspace-dropdown button:hover:not(:disabled),
+.workspace-dropdown button:focus-visible {
+  background: var(--hover);
+  outline-offset: -2px;
+}
+.workspace-dropdown .menu-label {
+  flex: 1;
+}
+.workspace-dropdown .menu-shortcut {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.workspace-dropdown .menu-check {
+  width: 12px;
+  color: var(--accent);
+}
+.workspace-dropdown [role="menuitemcheckbox"][aria-checked="false"] .menu-check,
+.workspace-dropdown [role="menuitemradio"][aria-checked="false"] .menu-check {
+  visibility: hidden;
+}
+.workspace-dropdown hr {
+  margin: 5px 6px;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.workspace-dropdown .menu-heading {
+  margin: 6px 10px 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Toolbar. */
+#app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.documentbar {
+  flex: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  gap: 10px;
+  padding: 2px 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.tool-group + .tool-group {
+  position: relative;
+  padding-left: 10px;
+}
+.tool-group + .tool-group::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 1.1rem;
+  transform: translateY(-50%);
+  background: var(--border);
+}
+.tool-group.end {
+  margin-left: auto;
+}
+.toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 4px 7px;
+  font-size: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+}
+.toolbar .tool-text {
+  font: 500 13px / 1 var(--story);
+  letter-spacing: 0.01em;
+}
+.toolbar .tool-label {
+  font: 500 13px / 1 var(--story);
+  margin-left: -2px;
+}
+.toolbar .note-icon ellipse,
+.toolbar .note-icon .fill {
+  fill: currentColor;
+}
+.toolbar svg.caret {
+  width: 12px;
+  height: 12px;
+}
+.toolbar button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--accent);
+}
+.view-switch {
+  display: none !important;
+}
+
+/* Workspace. */
+/* Notices float over the workspace's top edge, so nothing below them moves. */
+#app {
+  position: relative;
+}
+.notice {
+  position: absolute;
+  z-index: 20;
+  right: 18px;
+  bottom: 90px;
+  width: max-content;
+  max-width: min(460px, calc(100% - 36px));
+  padding: 8px 8px 8px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #18202c24;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: notice-in 0.15s ease-out;
+}
+.notice.leaving {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease-in, transform 0.15s ease-in;
+}
+.notice[data-tone="info"] {
+  background: var(--surface);
+  border-color: var(--border);
+}
+.notice[data-tone="error"] {
+  border-color: var(--warn);
+  box-shadow: 0 8px 24px #18202c30, inset 3px 0 0 var(--warn);
+}
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.notice[data-tone="success"] {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.notice .notice-close {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.workspace {
+  --score-share: 52%;
+  --text-share: 42%;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 216px minmax(280px, 1fr) 7px minmax(320px, var(--score-share));
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "rail writing splitter score";
+}
+.workspace[data-rail="closed"] {
+  grid-template-columns: 0 minmax(280px, 1fr) 7px minmax(320px, var(--score-share));
+}
+.workspace[data-layout="below"] {
+  grid-template-columns: 216px minmax(0, 1fr);
+  grid-template-rows: minmax(110px, var(--text-share)) 7px minmax(0, 1fr);
+  grid-template-areas: "rail writing" "rail splitter" "rail score";
+}
+.workspace[data-layout="below"][data-rail="closed"] {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+.rail {
+  grid-area: rail;
+  min-width: 0;
+  overflow: auto;
+  padding: 14px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.workspace[data-rail="closed"] .rail {
+  visibility: hidden;
+  padding: 0;
+  border: 0;
+}
+.panel-heading h2 {
+  margin: 0 0 10px;
+  font: 600 13px / 1.4 var(--ui);
+}
+.panel-heading h2 span {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+#tune-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tune-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 8px;
+  background: transparent;
+  line-height: 1.3;
+}
+.tune-item .tune-title {
+  display: block;
+  font: 600 14px / 1.3 var(--story);
+  overflow-wrap: anywhere;
+}
+.tune-item .tune-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tune-item[aria-current="true"] {
+  background: var(--hover);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.tune-sub {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 6px 12px;
+  border-left: 1px solid var(--border);
+}
+.tune-sub button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  border-radius: 0 5px 5px 0;
+}
+.tune-sub button:hover {
+  color: var(--ink);
+}
+.tune-sub button[aria-current="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.rail-hint {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.writing {
+  grid-area: writing;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+#editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+#editor .cm-editor {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+.splitter {
+  grid-area: splitter;
+  background: var(--desk);
+  border-inline: 1px solid var(--border);
+  cursor: col-resize;
+  touch-action: none;
+}
+.workspace[data-layout="below"] .splitter {
+  border-inline: 0;
+  border-block: 1px solid var(--border);
+  cursor: row-resize;
+}
+.splitter:hover,
+.splitter:focus-visible {
+  background: var(--hover);
+}
+.score-panel {
+  grid-area: score;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.score-heading {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 14px 4px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.score-summary {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.score-summary span {
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .score-summary {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.35;
+  }
+}
+.quiet-button,
+.follow {
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.follow {
+  color: var(--accent);
+  border-color: var(--border);
+}
+.score-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 10px 14px 40px;
+  touch-action: pan-x pan-y;
+}
+.score-scroll:focus-visible {
+  outline-offset: -3px;
+}
+/* A long press has armed a touch selection: the drag that follows selects instead of scrolling. */
+.score-scroll.pressing {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.score {
+  position: relative;
+  color: var(--ink);
+  z-index: 1;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.score svg {
+  display: block;
+  overflow: visible;
+}
+.score-stage {
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  visibility: hidden;
+  pointer-events: none;
+  contain: layout paint;
+}
+/* Paused: where the music will go on from, a hollow outline like the timeline's head. */
+.score-place {
+  position: absolute;
+  width: 10px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 2px var(--play);
+  pointer-events: none;
+  z-index: 1;
+}
+.score-place[hidden] {
+  display: none;
+}
+/* The score cursor (Ctrl/⌘ with the arrows): a dashed ring that leaves the selection alone. */
+.score-cursor {
+  position: absolute;
+  border: 2px dashed var(--focus);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+.score-cursor[hidden] {
+  display: none;
+}
+.score-bands {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.score-band {
+  position: absolute;
+  background: var(--band);
+  border-radius: 4px;
+}
+.score-band.edge-start {
+  box-shadow: inset 2px 0 0 var(--band-edge);
+}
+.score-band.edge-end {
+  box-shadow: inset -2px 0 0 var(--band-edge);
+}
+.score-band.edge-start.edge-end {
+  box-shadow: inset 2px 0 0 var(--band-edge), inset -2px 0 0 var(--band-edge);
+}
+/* The passage a loop plays, kept in sight while the selection moves on. */
+.score-band.loop {
+  background: transparent;
+  box-shadow: none;
+  outline: 1.5px dashed var(--band-edge);
+  outline-offset: -1px;
+}
+.score-band.bar-issue {
+  background: var(--warn-soft);
+  border-bottom: 2px dotted var(--warn);
+  border-radius: 2px;
+}
+.score .is-caret {
+  color: var(--caret-note);
+}
+.score .is-selected {
+  color: var(--accent);
+}
+/* The note being heard: a vivid blue with a soft glow, like light moving along. The glow is a
+   filter, so nothing moves; it wins over the selection's teal inside a selected loop. */
+.score .is-playing {
+  color: var(--play);
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--play) 85%, transparent))
+    drop-shadow(0 0 6px color-mix(in srgb, var(--play) 45%, transparent));
+}
+.score .is-selected.is-playing {
+  color: var(--play);
+}
+/* While music plays, the selection is shown by its band alone: its notes go back to ink, so the
+   blue note being heard is the only coloured one (teal beside blue was hard to tell apart). */
+.score[data-playback="playing"] .is-selected:not(.is-playing) {
+  color: inherit;
+}
+.score svg .abcjs-cursor {
+  stroke: var(--play);
+}
+.score svg [data-name="staff"],
+.score svg .abcjs-staff {
+  opacity: 0.85;
+}
+.score-empty {
+  max-width: 420px;
+  margin: 40px auto;
+  color: var(--muted);
+  line-height: 1.6;
+  text-align: center;
+}
+.score-no-notes {
+  margin-top: 24px;
+  font-size: 14px;
+}
+.score-scroll.dragging {
+  cursor: col-resize;
+}
+
+/* Editor: Recursive Mono, so ABC lines up in columns (fonts/README.md). */
+@font-face {
+  font-family: "Composer Mono";
+  src: url("./fonts/recursive-mono-latin.woff2") format("woff2");
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: swap;
+}
+.cm-editor {
+  font-size: calc(15px * var(--editor-zoom, 1));
+  background: var(--surface);
+  color: var(--ink);
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-scroller {
+  font-family: var(--ui) !important;
+  font-variation-settings: normal;
+  line-height: 1.65 !important;
+}
+/* Once something is open (never behind the start screen, so the first view stays light). */
+body.editing .cm-scroller {
+  font-family: "Composer Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace !important;
+}
+.cm-content {
+  padding: 14px 0 40vh !important;
+  caret-color: var(--ink);
+}
+/* A wrapped line hangs: its continuation is indented, so it never looks like a new line. */
+.cm-line {
+  padding: 0 22px 0 calc(12px + 2.5ch) !important;
+  text-indent: -2.5ch;
+}
+.cm-gutters {
+  /* Line numbers in the interface's font: the editor's own loads once there is text to show. */
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface) !important;
+  border-right: 0 !important;
+  color: var(--muted) !important;
+}
+/* The gutter grows with the text's zoom, its numbers on the text's baseline. */
+.cm-lineNumbers .cm-gutterElement {
+  font-size: calc(12px * var(--editor-zoom, 1));
+  line-height: calc(15px * var(--editor-zoom, 1) * 1.65);
+  padding: 0 6px 0 14px !important;
+  min-width: calc(34px * var(--editor-zoom, 1)) !important;
+}
+.cm-activeLine {
+  background: color-mix(in srgb, var(--hover) 55%, transparent) !important;
+}
+.cm-activeLineGutter {
+  background: transparent !important;
+  color: var(--ink);
+}
+.cm-selectionBackground,
+.cm-focused .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
+}
+.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 27%, transparent) !important;
+}
+/* Over the active line's tint, so a selection always shows; it is translucent, so text reads through. */
+.cm-selectionLayer {
+  z-index: 1 !important;
+  pointer-events: none;
+}
+.cm-cursor {
+  border-left-color: var(--ink) !important;
+  border-left-width: 2px !important;
+}
+.cm-panels {
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  border-color: var(--border) !important;
+}
+.cm-search input,
+.cm-search button {
+  font-size: 12px;
+}
+.abc-field-key {
+  color: var(--syn-field);
+  font-weight: 650;
+}
+.abc-field-value {
+  color: var(--syn-value);
+}
+.abc-title {
+  font-weight: 650;
+}
+.abc-note {
+  color: var(--syn-note);
+}
+.abc-accidental {
+  color: var(--syn-accidental);
+}
+.abc-octave {
+  color: var(--syn-octave);
+  font-weight: 650;
+}
+.abc-length {
+  color: var(--syn-length);
+}
+.abc-rest {
+  color: var(--syn-rest);
+}
+.abc-bar {
+  color: var(--syn-bar);
+  font-weight: 700;
+}
+.abc-chord-symbol,
+.abc-annotation {
+  color: var(--syn-chord);
+}
+.abc-chord-bracket {
+  color: var(--syn-chord);
+  font-weight: 700;
+}
+.abc-decoration {
+  color: var(--syn-deco);
+}
+.abc-slur,
+.abc-tie,
+.abc-tuplet,
+.abc-broken,
+.abc-grace {
+  color: var(--syn-octave);
+}
+.abc-inline-field {
+  color: var(--syn-field);
+}
+.abc-comment {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+/* %%score, %%MIDI and other directives are instructions, so they read as such, not as comments. */
+.abc-directive {
+  color: var(--syn-field);
+}
+.abc-lyrics {
+  color: var(--syn-lyrics);
+}
+.abc-text {
+  color: var(--muted);
+}
+.abc-unknown {
+  text-decoration: underline wavy var(--error);
+  text-underline-offset: 3px;
+}
+.abc-playing {
+  background: var(--play-soft);
+  box-shadow: 0 2px 0 var(--play), 0 0 8px color-mix(in srgb, var(--play) 30%, transparent);
+  border-radius: 2px;
+}
+.abc-caret-note {
+  border-radius: 2px;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--caret-note) 70%, transparent);
+}
+.abc-bar-issue {
+  text-decoration: underline dotted var(--warn);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.abc-warning {
+  text-decoration: underline wavy var(--error);
+  text-underline-offset: 3px;
+}
+.abc-gutter {
+  width: calc(14px * var(--editor-zoom, 1));
+}
+.abc-gutter-mark {
+  display: block;
+  width: calc(7px * var(--editor-zoom, 1));
+  height: calc(7px * var(--editor-zoom, 1));
+  /* Centred on the first line of its text. */
+  margin: calc((15px * 1.65 - 7px) / 2 * var(--editor-zoom, 1)) auto 0;
+  border-radius: 50%;
+  background: var(--warn);
+  cursor: pointer;
+}
+.abc-gutter-mark.error {
+  background: var(--error);
+}
+.cm-tooltip {
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px #18202c24;
+  font-family: var(--ui);
+}
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--accent) !important;
+  color: var(--primary-ink) !important;
+}
+.cm-completionDetail {
+  color: inherit;
+  opacity: 0.75;
+  font-style: normal !important;
+  margin-left: 1em;
+}
+.cm-tooltip.abc-hint {
+  padding: 6px 9px;
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Start screen. */
+.workspace {
+  position: relative;
+}
+.start {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  overflow: auto;
+  background: var(--desk);
+}
+.start-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 9vh 32px 48px;
+}
+.start h2 {
+  margin: 0 0 12px;
+  font: 650 clamp(30px, 4vw, 44px) / 1.08 var(--story);
+  letter-spacing: -0.02em;
+}
+.start p {
+  max-width: 560px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 15px;
+}
+.start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 22px 0 28px;
+}
+.start-actions button {
+  min-height: 42px;
+  padding: 8px 16px;
+  font-size: 15px;
+}
+.start-label {
+  margin: 0 0 10px;
+  font-size: 13px !important;
+}
+/* Two by two (one column on a phone): never three and a stranded one. */
+.examples {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.example {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 74px;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: 6px;
+  background: var(--surface);
+}
+.example strong {
+  font: 650 16px / 1.25 var(--story);
+}
+.example span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Transport. */
+.transport {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 54px;
+  padding: 7px 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  position: relative;
+}
+.transport button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 4px 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 12.5px;
+}
+.transport button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--accent);
+  border-color: var(--border);
+}
+.transport .phone-label {
+  display: none;
+}
+.transport-main,
+.transport-side {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.transport .play {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--primary-ink);
+  border-color: var(--accent);
+  margin-right: 4px;
+}
+.transport .play:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+}
+.transport .play svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  stroke-width: 1.6;
+}
+.transport .play .icon-pause {
+  display: none;
+  fill: none;
+  stroke-width: 2.4;
+}
+.transport[data-state="playing"] .play .icon-play {
+  display: none;
+}
+.transport[data-state="playing"] .play .icon-pause {
+  display: block;
+}
+.transport[data-state="loading"] .play {
+  background: var(--hover);
+  color: var(--muted);
+  border-color: var(--border);
+}
+.position {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.timeline {
+  position: relative;
+  flex: 1;
+  height: 28px;
+  cursor: pointer;
+  border-radius: 5px;
+  touch-action: none;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.timeline-passes,
+.timeline-ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.timeline-pass {
+  position: absolute;
+  top: 10px;
+  height: 8px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.timeline-pass.repeat {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.timeline-tick {
+  position: absolute;
+  top: 9px;
+  width: 1px;
+  height: 10px;
+  background: var(--border);
+}
+.timeline-tick.major {
+  top: 6px;
+  height: 16px;
+  background: var(--muted);
+  opacity: 0.6;
+}
+.timeline-tick span {
+  position: absolute;
+  top: 16px;
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* The first label starts at the ruler's edge. */
+.timeline-tick:first-child span {
+  transform: none;
+}
+.timeline-loop {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 4px;
+  background: var(--band);
+  box-shadow: inset 0 0 0 1px var(--band-edge);
+  pointer-events: none;
+}
+.timeline-head {
+  position: absolute;
+  top: 3px;
+  width: 3px;
+  height: 22px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--play);
+  pointer-events: none;
+}
+.clock {
+  min-width: 96px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tempo {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-right: 6px;
+}
+.tempo button {
+  min-width: 26px !important;
+  min-height: 30px !important;
+  padding: 2px 4px !important;
+  font-size: 15px !important;
+}
+.tempo-value {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tempo-value input {
+  width: 3.4ch;
+  padding: 3px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.tempo-value input::-webkit-inner-spin-button {
+  appearance: none;
+}
+#tap {
+  font-size: 12px !important;
+  color: var(--muted);
+}
+.tool-text {
+  font-variant-numeric: tabular-nums;
+}
+#count-in .tool-text {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.sound-status {
+  position: absolute;
+  right: 18px;
+  bottom: calc(100% + 6px);
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  box-shadow: 0 6px 16px #18202c1f;
+  pointer-events: none;
+}
+.sound-status:empty {
+  display: none;
+}
+
+/* Popovers in the transport. */
+.composer-popover {
+  position: fixed;
+  z-index: 35;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 80px);
+  overflow: auto;
+  padding: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px #18202c30;
+}
+.composer-popover h3 {
+  margin: 0 0 10px;
+  font: 600 14px / 1.3 var(--story);
+}
+.composer-popover label,
+.composer-popover .row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.composer-popover label > span:first-child {
+  flex: 1;
+}
+.composer-popover input[type="range"] {
+  width: 140px;
+  accent-color: var(--accent);
+}
+.composer-popover select {
+  min-height: 30px;
+  padding: 3px 6px;
+}
+.composer-popover .hint {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.instrument-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.instrument-choices button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 9px;
+  text-align: left;
+  min-height: 44px;
+}
+.instrument-choices button[aria-checked="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.instrument-choices small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.instrument-choices .instrument-size {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.instrument-choices .instrument-size:empty {
+  display: none;
+}
+.voice-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.voice-row:last-child {
+  border-bottom: 0;
+}
+.voice-row button {
+  min-width: 34px;
+  min-height: 30px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.voice-row button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--primary-ink);
+  border-color: var(--accent);
+}
+
+/* Footer. */
+#app > footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+  min-height: 27px;
+  padding: 3px 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.explain {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.explain strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-variation-settings: "MONO" 1;
+}
+.problems {
+  min-height: 22px;
+  padding: 1px 8px;
+  font-size: 12px;
+  border-color: transparent;
+  background: var(--warn-soft);
+  color: var(--ink);
+}
+.recovery,
+.caret-position {
+  white-space: nowrap;
+}
+
+/* Dialogs. */
+dialog.composer-dialog {
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 40px);
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 14px / 1.55 var(--ui);
+  box-shadow: 0 20px 50px -20px rgb(20 30 50 / 0.5);
+}
+dialog.composer-dialog.wide {
+  width: min(880px, calc(100vw - 24px));
+}
+dialog.composer-dialog::backdrop {
+  background: rgb(20 25 35 / 0.35);
+}
+.dialog-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.dialog-header h2 {
+  margin: 0;
+  font: 600 1.15rem / 1.3 var(--story);
+}
+.dialog-header button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  min-height: 34px;
+}
+.dialog-body {
+  padding: 14px 20px 20px;
+}
+.dialog-body p {
+  margin: 0 0 10px;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.dialog-actions button {
+  min-height: 34px;
+  padding: 5px 14px;
+}
+.abc-gutter-mark {
+  cursor: pointer;
+}
+.recent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.recent-row .open {
+  flex: 1;
+  min-height: 44px;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 6px 8px;
+  font: 600 14px / 1.35 var(--story);
+  color: var(--ink);
+}
+.recent-row .open:hover {
+  background: var(--hover);
+}
+.recent-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font: 400 12px / 1.4 var(--ui);
+}
+/* Prose in sheets and lists ends on a word, never a lone mark. */
+.composer-dialog p,
+.composer-popover p,
+.problem-list button,
+.notice span {
+  text-wrap: pretty;
+}
+/* Focus mode: the music, the score and the transport. */
+body.focus-mode .documentbar,
+body.focus-mode #app > footer {
+  display: none;
+}
+body.focus-mode .workspace {
+  grid-template-columns: 0 minmax(280px, 1fr) 7px minmax(320px, var(--score-share));
+}
+body.focus-mode .workspace[data-layout="below"] {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+body.focus-mode .rail {
+  visibility: hidden;
+  padding: 0;
+  border: 0;
+}
+/* Without the score, the text alone in a centred column of comfortable measure. */
+body.focus-text .workspace,
+body.focus-text .workspace[data-layout="below"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "main";
+}
+body.focus-text .rail,
+body.focus-text .splitter,
+body.focus-text .score-panel {
+  display: none;
+}
+body.focus-text .writing {
+  grid-area: main;
+}
+body.focus-text .cm-scroller {
+  padding-inline: max(24px, calc((100% - 76ch) / 2));
+}
+/* The way out: quiet at the top right, in the place of the look and panel buttons (which Focus
+   puts away), clearer when the pointer moves or it has focus. */
+body.focus-mode #appearance,
+body.focus-mode .panel-toggles {
+  display: none;
+}
+body.focus-mode .app-header {
+  padding-right: 200px;
+}
+.focus-controls {
+  position: fixed;
+  top: 7px;
+  right: 18px;
+  z-index: 40;
+  display: flex;
+  gap: 6px;
+  opacity: 0.4;
+  transition: opacity 0.25s ease;
+}
+.focus-controls[hidden] {
+  display: none;
+}
+.focus-controls.awake,
+.focus-controls:hover,
+.focus-controls:focus-within {
+  opacity: 1;
+}
+.focus-controls button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--chrome);
+  color: var(--ink);
+  font: 13px / 1 var(--ui);
+}
+.focus-controls button:hover {
+  background: var(--hover);
+}
+/* Score on: the pressed fill, as Loop and Metronome have; off: a normal button. */
+.focus-controls button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+/* Narrower desks. */
+@media (max-width: 1100px) {
+  .app-header {
+    padding-inline: 12px;
+    gap: 8px;
+  }
+  .brand {
+    font-size: 17px;
+  }
+  .workspace-menus button {
+    padding-inline: 7px;
+  }
+  .toolbar,
+  .transport,
+  #app > footer {
+    padding-inline: 12px;
+  }
+  .workspace {
+    grid-template-columns: 188px minmax(240px, 1fr) 7px minmax(300px, var(--score-share));
+  }
+  .workspace[data-layout="below"] {
+    grid-template-columns: 188px minmax(0, 1fr);
+  }
+  /* Tablets keep the short labels; Voices moves into the Sound sheet to make room. */
+  .transport {
+    gap: 8px;
+  }
+  #voices-button,
+  #count-in .transport-label {
+    display: none;
+  }
+  #sound-button #instrument-label {
+    display: none;
+  }
+  #sound-button .phone-label {
+    display: inline;
+  }
+  .clock {
+    min-width: 0;
+  }
+}
+@media (max-width: 900px) {
+  .filename,
+  .filename input {
+    max-width: 150px;
+  }
+  /* Small tablets: the ruler takes its own row under the controls, as on a phone. */
+  .transport {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .position {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .transport-side {
+    margin-left: auto;
+  }
+  .wide-only {
+    display: none !important;
+  }
+}
+
+/* Phone: one page at a time, Text or Score, with the transport always at hand. */
+@media (max-width: 760px) {
+  .app-header {
+    height: 48px;
+    gap: 4px;
+    padding: 4px 8px;
+  }
+  .brand .word {
+    display: none;
+  }
+  .brand img {
+    width: 26px;
+    height: 26px;
+  }
+  .workspace-menus {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .workspace-menus button {
+    min-height: 40px;
+    padding-inline: 6px;
+    font-size: 13.5px;
+  }
+  /* Appearance lives in View › Appearance on a phone. */
+  #appearance {
+    display: none;
+  }
+  .filebar {
+    display: none;
+  }
+  #save-primary {
+    min-height: 36px;
+    padding-inline: 10px;
+  }
+  #layout-toggle {
+    display: none;
+  }
+  .panel-toggles button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .toolbar {
+    gap: 4px;
+    padding: 2px 6px;
+  }
+  .toolbar button {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  .tool-group + .tool-group {
+    padding-left: 4px;
+  }
+  .view-switch {
+    display: flex !important;
+    order: -1;
+    padding: 2px !important;
+    border-radius: 7px;
+    background: var(--hover);
+  }
+  .view-switch::before {
+    display: none;
+  }
+  .view-switch button[aria-pressed="true"] {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 2px #18202c22;
+  }
+  .tool-group.end {
+    margin-left: 0;
+  }
+  #cheatsheet-open span,
+  #focus-mode {
+    display: none;
+  }
+  .workspace,
+  .workspace[data-layout="below"],
+  .workspace[data-rail="closed"],
+  .workspace[data-layout="below"][data-rail="closed"],
+  body.focus-mode .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "main";
+  }
+  .writing,
+  .score-panel {
+    grid-area: main;
+  }
+  .splitter {
+    display: none;
+  }
+  .rail {
+    grid-area: main;
+    z-index: 6;
+    border: 0;
+    box-shadow: 0 0 0 100vmax rgb(20 25 35 / 0.3);
+    margin-right: 22%;
+  }
+  .workspace[data-rail="closed"] .rail {
+    display: none;
+  }
+  body[data-show="text"] .score-panel,
+  body[data-show="score"] .writing {
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .cm-line {
+    padding-right: 12px !important;
+  }
+  .transport {
+    flex-wrap: wrap;
+    gap: 2px 4px;
+    padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+  }
+  .transport-main,
+  .transport-side {
+    gap: 0;
+  }
+  /* Metronome and count-in stay in the Play menu on a phone. */
+  #metronome,
+  #count-in {
+    display: none;
+  }
+  .tempo {
+    margin-right: 2px;
+  }
+  .transport button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .transport .play {
+    width: 46px;
+    height: 46px;
+  }
+  /* Short labels under the icons that are not obvious on their own. */
+  #from-caret,
+  #loop,
+  #voices-button,
+  #sound-button {
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 1px;
+  }
+  #from-caret .transport-label,
+  #loop .transport-label,
+  #voices-button .transport-label,
+  #sound-button .phone-label {
+    display: block;
+    font-size: 11px;
+    line-height: 1.1;
+    white-space: nowrap;
+    color: var(--muted);
+  }
+  #loop[aria-pressed="true"] .transport-label {
+    color: inherit;
+  }
+  #sound-button #instrument-label {
+    display: none;
+  }
+  /* Voices opens from the Sound sheet on a phone. */
+  #voices-button {
+    display: none;
+  }
+  #sound-button[data-state="muted"],
+  #sound-button[data-state="solo"] {
+    position: relative;
+  }
+  #sound-button[data-state="muted"]::after,
+  #sound-button[data-state="solo"]::after {
+    content: "";
+    position: absolute;
+    top: 5px;
+    right: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .position {
+    order: 3;
+    flex-basis: 100%;
+    gap: 8px;
+  }
+  .transport-side {
+    margin-left: auto;
+  }
+  .tempo-value span {
+    display: none;
+  }
+  .tempo-value input {
+    width: 38px;
+  }
+  #app > footer {
+    padding: 3px 10px;
+    gap: 8px;
+  }
+  .recovery,
+  .caret-position {
+    display: none;
+  }
+  .start-inner {
+    padding: 28px 18px 40px;
+  }
+  .score-scroll {
+    padding: 6px 6px 40px;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Print: the score alone, in black on white. */
+.print-score {
+  display: none;
+}
+@media print {
+  @page {
+    margin: 14mm 12mm;
+  }
+  :root {
+    --ink: #000;
+    background: #fff;
+  }
+  body.composer {
+    height: auto;
+    overflow: visible;
+    display: block;
+    background: #fff;
+  }
+  body.composer > *:not(.print-score) {
+    display: none !important;
+  }
+  .print-score {
+    display: block !important;
+    color: #000;
+  }
+  .print-score .print-tune {
+    break-after: page;
+  }
+  .print-score .print-tune:last-child,
+  .print-score .print-tune.short {
+    break-after: auto;
+  }
+  .print-score .print-tune.short {
+    break-inside: avoid;
+    margin-bottom: 6mm;
+  }
+  .print-score svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    break-inside: avoid;
+  }
+}
+
+/* Count-in and the metronome's beat. */
+.clock .count {
+  display: inline-block;
+  min-width: 1.1em;
+  text-align: center;
+  border-radius: 3px;
+  color: var(--muted);
+}
+.clock .count.lit {
+  background: var(--play);
+  color: var(--surface);
+  font-weight: 700;
+}
+.clock[data-counting] {
+  color: var(--ink);
+}
+#metronome.beat {
+  animation: metronome-beat 0.18s ease-out;
+}
+#metronome.downbeat {
+  animation-name: metronome-downbeat;
+}
+@keyframes metronome-beat {
+  from {
+    background: color-mix(in srgb, var(--play) 28%, transparent);
+  }
+}
+@keyframes metronome-downbeat {
+  from {
+    background: color-mix(in srgb, var(--play) 55%, transparent);
+    color: var(--play);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #metronome.beat {
+    animation: none !important;
+    box-shadow: inset 0 -2px 0 var(--play);
+  }
+}
+
+/* Completion: the editor's own type, quiet details, the family's selection colour. */
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  font-family: var(--ui) !important;
+  font-variation-settings: "MONO" 1, "CASL" 0;
+  font-size: 13.5px;
+  max-height: 16em;
+}
+.cm-tooltip.cm-tooltip-autocomplete > ul > li {
+  padding: 3px 10px !important;
+  line-height: 1.5;
+}
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface)) !important;
+  color: var(--ink) !important;
+}
+.cm-tooltip-autocomplete .cm-completionDetail {
+  color: var(--muted);
+  font-size: 12px;
+  font-variation-settings: "MONO" 0, "CASL" 0.15;
+  opacity: 1;
+}
+.cm-tooltip-autocomplete ul li[aria-selected] .cm-completionDetail {
+  color: var(--ink);
+}
+.cm-completionMatchedText {
+  text-decoration: none !important;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* The saved state sits right after the file name. */
+.saved-state:not(:empty)::before {
+  content: "· ";
+}
+/* While the start screen shows, the tools rest and the transport is a slim, quiet bar; it
+   changes in the same frame the music opens, so nothing below it moves later. */
+body.starting .documentbar .toolbar {
+  opacity: 0.45;
+}
+.transport-empty {
+  display: none;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+body.starting #transport {
+  min-height: 36px;
+  padding-block: 6px;
+  justify-content: center;
+}
+body.starting #transport > :not(.transport-empty) {
+  display: none;
+}
+body.starting .transport-empty {
+  display: block;
+}
+/* More tools: only on narrow screens, where the toolbar cannot hold everything. */
+.more-group {
+  display: none !important;
+}
+.rail-close {
+  display: none;
+  margin-left: auto;
+  min-width: 40px;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  color: var(--muted);
+}
+.panel-heading {
+  display: flex;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .more-group {
+    display: flex !important;
+  }
+  .toolbar .marks,
+  .toolbar .tunes-group,
+  .toolbar .end,
+  .toolbar [data-command="octave-down"],
+  .toolbar [data-command="octave-up"],
+  .toolbar [data-command="undot"] {
+    display: none !important;
+  }
+  .rail-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tune-item,
+  .tune-sub button {
+    min-height: 44px;
+  }
+  .tempo-value input {
+    min-height: 44px;
+    width: 40px;
+  }
+  .tempo button {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  /* One row of controls on a phone: the tempo loses its frame, Play is a little smaller. */
+  .transport {
+    padding-inline: 6px;
+  }
+  .tempo {
+    padding: 0;
+    border: 0;
+    margin-right: 0;
+  }
+  .transport .play {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    margin-right: 2px;
+  }
+  .workspace-menus button {
+    min-width: 40px;
+  }
+  #save-primary {
+    min-height: 40px;
+  }
+  .score-heading button,
+  .problems,
+  .dialog-header button,
+  .notice .notice-close,
+  .workspace-dropdown button {
+    min-height: 40px;
+  }
+  .notice {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    width: auto;
+  }
+}
+
+/* The Voices button shows that voices are silenced. */
+#voices-button[data-state="muted"],
+#voices-button[data-state="solo"] {
+  color: var(--accent);
+}
+#voices-button[data-state="muted"]::after,
+#voices-button[data-state="solo"]::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  margin-left: 2px;
+}
+/* Stopped or paused, the place marker is a hollow outline in the accent, not the playing colour. */
+.transport:not([data-state="playing"]) .timeline-head {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--play);
+  width: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+}
+/* The clock keeps its width, so counting in or a long bar name never squeezes the timeline. */
+.clock {
+  min-width: 13.5em;
+}
+/* Tick labels: readable, full strength. */
+.timeline {
+  height: 32px;
+}
+.timeline-tick.major {
+  opacity: 1;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.timeline-tick span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.timeline-tick span[hidden],
+.timeline-pass-tag[hidden] {
+  display: none;
+}
+/* "2nd" under the band of bars played again. */
+.timeline-pass-tag {
+  position: absolute;
+  top: 18px;
+  transform: translateX(-50%);
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 14px;
+  white-space: nowrap;
+}
+/* The readout above the ruler: the bar under the pointer, or the bar a scrub will start from. */
+.timeline-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.14);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+}
+.timeline-tip[hidden] {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .clock {
+    min-width: 11.5em;
+  }
+}
+@media (max-width: 760px) {
+  .clock {
+    min-width: 9.5em;
+    font-size: 12px;
+  }
+  .timeline {
+    height: 44px;
+  }
+  /* Scrubbing on a phone: the ruler takes the whole row, the readout reads large over the finger. */
+  .position.scrubbing .clock {
+    display: none;
+  }
+  .scrubbing .timeline-tip {
+    bottom: calc(100% + 18px);
+    padding: 6px 12px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+}
+
+/* Accidentals in the toolbar, drawn like the other icons. */
+.toolbar svg.accidental {
+  width: 9px;
+  height: 15px;
+  margin-left: -1px;
+  stroke-width: 1.5;
+}
+.tool-group {
+  gap: 2px;
+}
+/* Light motion for menus, popovers and dialogs (none with reduced motion). */
+.workspace-dropdown,
+.composer-popover {
+  animation: pop-in 0.13s ease-out;
+  transform-origin: top left;
+}
+dialog.composer-dialog[open] {
+  animation: dialog-in 0.15s ease-out;
+}
+dialog.composer-dialog[open]::backdrop {
+  animation: fade-in 0.15s ease-out;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-3px);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+/* The status line wraps on a phone, and opens fully when tapped. */
+@media (max-width: 760px) {
+  .examples {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .toolbar .transpose-group ~ .tool-group:not(.more-group):not(.view-switch) {
+    display: none !important;
+  }
+  .toolbar svg.accidental {
+    display: none;
+  }
+  #app > footer {
+    align-items: flex-start;
+  }
+  .explain {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+  .explain.open {
+    display: block;
+    -webkit-line-clamp: unset;
+  }
+}
+
+/* Phone header: one row; the file name is a truncated chip beside the menus, with the unsaved
+   mark inside it. The tunes panel opens from More on a phone. */
+@media (max-width: 760px) {
+  .app-header .filebar {
+    display: flex !important;
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 0;
+  }
+  .app-header .filename {
+    display: block !important;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+  }
+  .app-header .filename input {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 40px;
+    padding: 2px 16px 2px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--hover);
+    font-size: 12.5px;
+    field-sizing: fixed;
+  }
+  .app-header .saved-state {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    translate: 0 -50%;
+    pointer-events: none;
+  }
+  .workspace-menus {
+    flex: none;
+    overflow: visible;
+  }
+  .app-header {
+    gap: 2px;
+    padding-inline: 6px;
+  }
+  .workspace-menus button {
+    padding-inline: 3px;
+  }
+  #save-primary {
+    margin-left: 2px;
+    padding-inline: 9px;
+  }
+  .panel-toggles {
+    display: none;
+  }
+}
+
+/* The splitter: a visible grip that answers to the pointer and the keyboard. */
+.splitter {
+  position: relative;
+  transition: background-color 0.12s;
+}
+.splitter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: repeating-linear-gradient(to bottom, var(--muted) 0 3px, transparent 3px 6px);
+  opacity: 0.7;
+}
+.workspace[data-layout="below"] .splitter::after {
+  width: 36px;
+  height: 3px;
+  background: repeating-linear-gradient(to right, var(--muted) 0 3px, transparent 3px 6px);
+}
+.splitter:hover,
+.splitter:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, var(--desk));
+}
+.splitter:hover::after,
+.splitter:focus-visible::after {
+  opacity: 1;
+}
+
+/* Dynamics written inside per-pass annotations, drawn like !p!. */
+.score text .abc-dyn {
+  font-family: "Literata Variable", Georgia, serif;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 1.3em;
+  letter-spacing: -0.02em;
+}
+
+.composer-popover .sheet-link {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 8px;
+  text-align: left;
+}
+
+/* Zoom: the level shows briefly in the pane it changed. */
+.zoom-badge {
+  position: absolute;
+  top: 44px;
+  right: 16px;
+  z-index: 6;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--chrome);
+  color: var(--ink);
+  font: 600 12.5px / 1.3 var(--ui);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.zoom-badge.shown {
+  opacity: 1;
+}
+#writing .zoom-badge {
+  top: 10px;
+}
+
+/* The MusicXML import report: what came in, what was left out. */
+#import-report h3 {
+  margin: 14px 0 4px;
+  font: 650 13.5px / 1.3 var(--story);
+  color: var(--accent);
+}
+.import-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* Tune book: Sort tunes and Incipits choose from a short list. */
+.book-choice {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+.book-choice.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.book-choice label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+}
+.dialog-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ⋯ holds Insert, View, Play and Help on a phone; on a wider screen they have their own titles. */
+#more-menus {
+  display: none;
+}
+/* Phone: 44 px targets for the menu titles, the editing buttons and the Text/Score switch, and
+   room for the file name (File, Edit, Tunes and ⋯ only). */
+@media (max-width: 760px) {
+  #insert-menu,
+  #view-menu,
+  #play-menu,
+  #help-menu {
+    display: none;
+  }
+  #more-menus {
+    display: inline-block;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .app-header {
+    height: 52px;
+    padding-block: 4px;
+  }
+  .app-header .workspace-menus button {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 6px;
+  }
+  .app-header .filename input,
+  #save-primary {
+    min-height: 44px;
+  }
+  .toolbar button,
+  .view-switch button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Desktop: the clock and the status line at 13px, the rail's hints at 12px, all in the muted
+   colour (5.4:1 on the paper, 4.7:1 on the rail). */
+@media (min-width: 761px) {
+  .clock,
+  #app > footer {
+    font-size: 13px;
+  }
+  .rail-hint code {
+    font-size: 12px;
+  }
+}
+/* The radios of a dialog's choices show where the keyboard is. */
+.book-choice input:focus-visible,
+.book-check input:focus-visible {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: 2px;
+}
+
+/* The status line can be folded away (View › Status line, or Hide on a phone), remembered. */
+.explain-toggle {
+  display: none;
+}
+body.explain-hidden #app > footer {
+  display: none;
+}
+@media (max-width: 760px) {
+  .explain-toggle {
+    display: inline-block;
+    flex: none;
+    order: 9;
+    min-height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+  }
+}

@@ -29,6 +29,8 @@ jobs:
       - run: pnpm build
       # The spec's examples, conformance.json, the round trip of every example and the
       # boundary rules are all part of the tests.
+      # Studio storage regressions exercise the real IndexedDB implementation.
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test
       - run: pnpm site:build
 
@@ -43,8 +45,15 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm site:check
+      - run: STUDIO_BROWSER=firefox node scripts/check-studio.mjs
+      - run: STUDIO_BROWSER=webkit node scripts/check-studio.mjs
+      - run: node scripts/check-studio-files.mjs
+      - run: node scripts/check-studio-offline.mjs
+      - run: node scripts/check-studio-accessibility.mjs
+      - run: node scripts/check-studio-performance.mjs
+      - run: node scripts/check-studio-soak.mjs
 
   vscode:
     name: VS Code extension in VS Code

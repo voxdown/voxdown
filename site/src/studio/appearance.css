@@ -1,0 +1,112 @@
+/* The same curated papers as Writer, scoped to Studio's own preference. */
+:root[data-studio-look="sepia"] {
+  --desk: #e6dcc8;
+  --surface: #f7f0e1;
+  --chrome: #f7f0e1;
+  --hover: #efe5d1;
+  --ink: #33291d;
+  --muted: #66563f;
+  --border: #d4c6ab;
+  --accent: #245f61;
+  --primary-ink: #fff;
+  --studio-focus: #2c5596;
+}
+:root[data-studio-look="slate"] {
+  --desk: #1a1f26;
+  --surface: #262c35;
+  --chrome: #262c35;
+  --hover: #353d48;
+  --ink: #d9dee5;
+  --muted: #a3adba;
+  --border: #353d48;
+  --accent: #72c9cc;
+  --primary-ink: #101a1b;
+  --studio-focus: #93b6f0;
+}
+:root[data-studio-look="contrast"] {
+  --desk: #d0d4da;
+  --surface: #fff;
+  --chrome: #fff;
+  --hover: #eef0f2;
+  --ink: #000;
+  --muted: #3d434b;
+  --border: #8a919b;
+  --accent: #1b4a4c;
+  --primary-ink: #fff;
+  --studio-focus: #1a46a0;
+}
+:root[data-studio-look] :focus-visible {
+  outline-color: var(--studio-focus, #537fba);
+}
+#studio-appearance {
+  width: 520px;
+  max-width: calc(100vw - 24px);
+}
+#studio-appearance .studio-appearance-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 16px 0;
+  min-width: 0;
+}
+#studio-appearance .studio-appearance-choice {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 72px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+#studio-appearance .studio-appearance-choice:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+#studio-appearance .studio-appearance-choice:has(input:focus-visible) {
+  outline: 2px solid var(--studio-focus, #537fba);
+  outline-offset: 2px;
+}
+#studio-appearance .studio-appearance-choice input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  min-height: 0;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+}
+#studio-appearance .studio-appearance-swatch {
+  display: grid;
+  place-items: center;
+  height: 38px;
+  width: 28px;
+  border: 1px solid #899099;
+  border-radius: 2px;
+  font: 12px / 1 "Courier Prime", monospace;
+}
+#studio-appearance .studio-appearance-name {
+  font-size: 13px;
+  line-height: 1.35;
+}
+#studio-appearance .studio-appearance-name small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+#studio-appearance .studio-appearance-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+@media (max-width: 540px) {
+  #studio-appearance .studio-appearance-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,0 +1,158 @@
+/* Find melody: a panel in the dock (./dock.css), beside the text, never over the match. */
+.melody-panel {
+  flex: 1 1 auto;
+  max-height: 100%;
+}
+.melody-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.melody-head h2 {
+  margin: 0;
+  font: 600 16px / 1.2 var(--story, Georgia, serif);
+}
+.melody-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  min-height: 32px;
+}
+.melody-panel label {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.melody-panel input[type="text"] {
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 15px / 1.3 "Composer Mono", ui-monospace, monospace;
+}
+.melody-reading {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.melody-sources,
+.melody-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: end;
+}
+.melody-sources button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+}
+.melody-sources button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.melody-panel select {
+  min-height: 32px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.melody-panel .melody-check {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--ink);
+  font-size: 13px;
+}
+.melody-count {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.melody-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  min-height: 0;
+}
+.melody-result {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+}
+.melody-result:hover {
+  background: var(--hover);
+}
+.melody-result[aria-current="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+.melody-where {
+  font-weight: 600;
+}
+.melody-result code {
+  color: var(--muted);
+  font: 13px / 1.4 "Composer Mono", ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.melody-folded {
+  justify-self: start;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.melody-more-button {
+  width: 100%;
+  min-height: 32px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+}
+
+/* On a phone, after a result is chosen, one line: "2 of 7 ‹ › Close". */
+.melody-bar {
+  display: none;
+}
+.melody-panel.collapsed > :not(.melody-bar) {
+  display: none;
+}
+.melody-panel.collapsed {
+  padding: 4px 6px;
+}
+.melody-panel.collapsed .melody-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.melody-bar button {
+  min-width: 40px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+}
+.melody-bar .melody-bar-count {
+  flex: 1;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+}

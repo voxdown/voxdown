@@ -2573,9 +2573,22 @@ function hitPoint(
     (box) =>
       box.note.line === staff.line && box.note.staff === staff.staff && box.note.voice === voice,
   );
-  for (const box of mine)
-    if (within(box, box.head) && (!over || Math.abs(box.head - x) < Math.abs(over.head - x)))
-      over = box;
+  // A press within a head's width (plus a few px either side) takes that head, before any long
+  // note's box it is also in: a drag from just left of a mid-triplet note starts on it (round 9).
+  if (nearest)
+    for (const box of mine)
+      if (
+        x >= box.head - 4 &&
+        x <= box.head + 14 &&
+        y >= box.top - 6 &&
+        y <= box.bottom + 6 &&
+        (!over || Math.abs(box.head + 5 - x) < Math.abs(over.head + 5 - x))
+      )
+        over = box;
+  if (!over)
+    for (const box of mine)
+      if (within(box, box.head) && (!over || Math.abs(box.head - x) < Math.abs(over.head - x)))
+        over = box;
   if (!over)
     for (const box of mine)
       if (

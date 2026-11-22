@@ -5,7 +5,7 @@ import {
   EditorSelection,
   type EditorState,
   Prec,
-  type Transaction,
+  Transaction,
   type TransactionSpec,
 } from "@codemirror/state";
 import {
@@ -1014,28 +1014,64 @@ function sayAloud(message: string) {
  * written at the range's start (".C .D" came back as "C .D" selected). Each such change is kept
  * with its selection, and the same change redone gets the same selection (on the same text).
  */
-const leftSelections: { changes: string; selection: EditorSelection }[] = [];
+const leftSelections: {
+  changes: string;
+  selection: EditorSelection;
+  /** The selection the edit started from: what Undo gives back, every time (round 10, item 13). */
+  before?: EditorSelection;
+}[] = [];
 function rememberSelection(transaction: Transaction) {
   leftSelections.push({
     changes: JSON.stringify(transaction.changes.toJSON()),
     selection: transaction.selection ?? transaction.startState.selection,
+    before: transaction.startState.selection,
   });
   if (leftSelections.length > 100) leftSelections.shift();
 }
-// The history redoes with filters off, so the selection is put back right after it.
+/*
+ * Every edit is kept with the selections either side of it. The history's own guess for an edit
+ * redone and then undone again is the selection mapped through the edit and back, which a deletion
+ * collapses (in Moonlight, reversed ranges lit the wrong bar): Undo and Redo each put back the
+ * selection the edit had, as often as they're repeated.
+ */
+const keepSelections = EditorView.updateListener.of((update) => {
+  for (const transaction of update.transactions) {
+    if (transaction.changes.empty) continue;
+    if (transaction.isUserEvent("undo") || transaction.isUserEvent("redo")) continue;
+    rememberSelection(transaction);
+  }
+});
+// The history undoes and redoes with filters off, so the selection is put back right after it,
+// outside the history (else Undo would first take back that selection alone).
 const redoSelection = EditorView.updateListener.of((update) => {
-  const redone = update.transactions.find(
-    (transaction) => transaction.isUserEvent("redo") && !transaction.changes.empty,
-  );
-  if (!redone) return;
-  const key = JSON.stringify(redone.changes.toJSON());
-  const found = [...leftSelections].reverse().find((each) => each.changes === key);
-  if (!found || found.selection.main.to > update.state.doc.length) return;
-  const target = update.view;
-  queueMicrotask(() => {
-    if (target.state.doc.eq(update.state.doc))
-      target.dispatch({ selection: found.selection, userEvent: "select.redo" });
-  });
+  for (const transaction of update.transactions) {
+    if (transaction.changes.empty) continue;
+    const undone = transaction.isUserEvent("undo");
+    if (!undone && !transaction.isUserEvent("redo")) continue;
+    // (Undone, the edit is these changes' inverse.)
+    const key = JSON.stringify(
+      (undone
+        ? transaction.changes.invert(transaction.startState.doc)
+        : transaction.changes
+      ).toJSON(),
+    );
+    const found = [...leftSelections].reverse().find((each) => each.changes === key);
+    const selection = undone ? found?.before : found?.selection;
+    if (!selection || selection.main.to > update.state.doc.length) continue;
+    if (selection.ranges.some((range) => Math.max(range.from, range.to) > update.state.doc.length))
+      continue;
+    if (selection.eq(update.state.selection)) continue;
+    const target = update.view;
+    const doc = update.state.doc;
+    queueMicrotask(() => {
+      if (target.state.doc.eq(doc))
+        target.dispatch({
+          selection,
+          userEvent: undone ? "select.undo" : "select.redo",
+          annotations: Transaction.addToHistory.of(false),
+        });
+    });
+  }
 });
 /** A new voice's rests, one a bar, that typing replaces bar by bar (./barwise). */
 let placeholders: number[] = [];
@@ -1182,14 +1218,31 @@ function replaceMusic(target: EditorView, typed: string): boolean {
     scrollIntoView: true,
     userEvent: typed ? "input.type" : "delete.selection",
   });
-  // (Typing over notes may change the bar's length: said in the status; round 9.)
+  // (Typing over notes may change the bar's length: said in the status (round 9), measured once
+  // typing pauses, not after the first letter (round 10, item 17).)
+  barsAfterTyping = { before: barsAfterTyping?.before ?? doc };
+  sayBarsWhenPaused();
+  return true;
+}
+/** Typing over notes: the text before it, so the bars it changed are said once typing pauses. */
+let barsAfterTyping: { before: string; timer?: ReturnType<typeof setTimeout> } | null = null;
+const TYPING_PAUSE = 1200;
+function sayBarsWhenPaused() {
+  const pending = barsAfterTyping;
+  if (!pending || !barwise) return;
+  clearTimeout(pending.timer);
+  const wait = lastTyped + TYPING_PAUSE - performance.now();
+  if (wait > 0) {
+    pending.timer = setTimeout(sayBarsWhenPaused, wait + 20);
+    return;
+  }
+  barsAfterTyping = null;
   const bars = barwise.barsChanged(
-    doc,
-    target.state.doc.toString(),
-    target.state.selection.main.head,
+    pending.before,
+    view.state.doc.toString(),
+    view.state.selection.main.head,
   );
   if (bars) sayAboutSelection(bars);
-  return true;
 }
 /** `"`, `[` or `{` typed over selected music: a chord symbol, a chord, grace notes (./barwise). */
 function bracketMusic(target: EditorView, typed: string): boolean {
@@ -1348,7 +1401,7 @@ function typeMark(target: EditorView, typed: string): boolean {
   sayAboutSelection(
     result.removed
       ? `${name} removed from ${count}`
-      : `${name} ${result.mark === "slur" ? "over" : "on"} ${count} · type ${typed} again to remove`,
+      : `${name} ${result.mark === "slur" ? "over" : "on"} ${count}${result.skipped ? ` (${result.skipped} ${result.skipped === 1 ? "pair" : "pairs"} of different lengths left as ${result.skipped === 1 ? "it was" : "they were"})` : ""} · type ${typed} again to remove`,
   );
   return true;
 }
@@ -1371,6 +1424,7 @@ function makeState(text: string): EditorState {
     extra: [
       copyVoices,
       redoSelection,
+      keepSelections,
       noCrossedRanges,
       keepPlaceholders,
       typedMarks,
@@ -1467,6 +1521,8 @@ function load(
 ) {
   // The tune being replaced keeps its own draft, written now rather than after a delay.
   if (started && !options.keepDraft) flushDraft();
+  if (barsAfterTyping) clearTimeout(barsAfterTyping.timer);
+  barsAfterTyping = null;
   player.stop();
   if (!options.keepDraft) {
     link = null;
@@ -2578,8 +2634,24 @@ function hitPoint(
   if (!onStaff.length) return null;
   let voice = preferVoice;
   if (voice === undefined || !onStaff.some((each) => each.note.voice === voice)) {
-    // Several voices on one staff: the one whose notes are nearest the pointer vertically.
-    let nearest = Number.POSITIVE_INFINITY;
+    // Several voices on one staff: first the voice of a head within a head's width of the pointer
+    // (−4…+14 px), the nearest such head, whatever voice it is in: a tall chord's box in another
+    // voice never wins over it (round 10, item 4). Else the voice whose notes are nearest the
+    // pointer vertically.
+    let headed: (typeof geo.notes)[number] | null = null;
+    for (const box of geo.notes)
+      if (
+        box.note.line === staff.line &&
+        box.note.staff === staff.staff &&
+        x >= box.head - 4 &&
+        x <= box.head + 14 &&
+        y >= box.top - 6 &&
+        y <= box.bottom + 6 &&
+        (!headed || Math.abs(box.head + 5 - x) < Math.abs(headed.head + 5 - x))
+      )
+        headed = box;
+    let nearest = headed ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+    if (headed) voice = headed.note.voice;
     for (const box of geo.notes) {
       if (box.note.line !== staff.line || box.note.staff !== staff.staff) continue;
       const distance = Math.abs(y - (box.top + box.bottom) / 2) + Math.abs(x - box.head) / 4;

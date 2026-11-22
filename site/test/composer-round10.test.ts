@@ -12,7 +12,7 @@ import {
   samePoint,
   tuneTokens,
 } from "../src/composer/barwise";
-import { type Change, musicParts, scaleLengths } from "../src/composer/commands";
+import { type Change, markSelection, musicParts, scaleLengths } from "../src/composer/commands";
 import { planPaste } from "../src/composer/paste";
 import { indexFile } from "../src/composer/tunes";
 import { played } from "./composer-played";
@@ -232,5 +232,93 @@ describe("what the seeded fuzz check found", () => {
     const out = cutParts(text, [{ from, to: text.indexOf("C8") + 2 }]);
     expect(out).toContain("V:1\nz8 | z8 |\nV:2\n!<(!!<)!x8 | x8 |\nV:3\nD8 | E8 |");
     expect(bars(out)).toEqual([]);
+  });
+});
+
+const pasted = (text: string, ranges: { from: number; to: number }[], clip: string) => {
+  const plan = planPaste(text, ranges, 0, clip, null, indexFile(text));
+  if (!plan || "refused" in plan) throw new Error(plan ? plan.refused : "no plan");
+  return { out: apply(text, plan.changes), message: plan.message };
+};
+const TWO =
+  "X:1\nT:t\nM:4/4\nL:1/8\n%%score {1 2}\nV:1\nV:2 clef=bass\nK:C\nV:1\nCDEF GABc | cBAG FEDC | E4 F4 | G8 |]\nV:2\nC,8 | D,8 | C,4 D,4 | G,8 |]\n";
+const VOICED = "V:1\nCDEF GABc |\nV:2 clef=bass\nC,8 |\n";
+const caretAt = (text: string, part: string) => {
+  const at = text.indexOf(part);
+  return { from: at, to: at };
+};
+
+describe("pasting into several places (item 12)", () => {
+  it("a copy of both voices over a note in each: no empty bar, the voices in step", () => {
+    const { out } = pasted(TWO, [at(TWO, "E4"), at(TWO, "C,4")], VOICED);
+    expect(out).not.toMatch(/\|\s*\|/);
+    expect(out).toContain("V:1\nCDEF GABc | cBAG FEDC | CDEF GABc | E4 F4 | G8 |]");
+    expect(out).toContain("V:2\nC,8 | D,8 | C,8 | C,4 D,4 | G,8 |]");
+    expect(bars(out)).toEqual([]);
+  });
+  it("carets in each voice take each voice's part", () => {
+    const { out, message } = pasted(TWO, [caretAt(TWO, "E4"), caretAt(TWO, "C,4")], VOICED);
+    expect(out).toContain("V:2\nC,8 | D,8 | C,8 | C,4 D,4 | G,8 |]");
+    expect(message).toMatch(/V:1 and V:2/);
+  });
+  it("carets in one voice of two: the first place, the other voices in step", () => {
+    const { out, message } = pasted(
+      TWO,
+      [caretAt(TWO, "| E4"), caretAt(TWO, "| G8")],
+      "CDEF GABc |",
+    );
+    expect(message).toMatch(/first of the 2 places/);
+    expect(bars(out)).toEqual([]);
+  });
+  it("carets in a tune of one voice: the copy at each, fitted to its bar lines", () => {
+    const one = "X:1\nM:4/4\nL:1/8\nK:C\nCDEF GABc | cBAG FEDC | E4 F4 | G8 |]\n";
+    const { out } = pasted(one, [caretAt(one, " | E4"), caretAt(one, " | G8")], "CDEF GABc |");
+    expect(out).toContain("cBAG FEDC | CDEF GABc | E4 F4 | CDEF GABc | G8 |]");
+  });
+});
+
+describe("a copy of several staves pasted at a bar's start pastes every part (item 14)", () => {
+  it("clicked in the treble, the bass takes its part at the same point", () => {
+    const { out, message } = pasted(TWO, [at(TWO, "E4")], VOICED);
+    expect(out).toContain("V:2\nC,8 | D,8 | C,8 | C,4 D,4 | G,8 |]");
+    expect(message).toBe("Pasted V:1 and V:2 as a whole bar here, in step.");
+  });
+  it("clicked in the bass, the same", () => {
+    const { out, message } = pasted(TWO, [at(TWO, "C,4")], VOICED);
+    expect(out).toContain("V:1\nCDEF GABc | cBAG FEDC | CDEF GABc | E4 F4 | G8 |]");
+    expect(message).toMatch(/^Pasted V:1 and V:2 /);
+  });
+});
+
+describe("typed > over notes of unequal length (item 15)", () => {
+  const text = "X:1\nM:4/4\nL:1/8\nK:C\nC2 D E2 F2 G A | c8 |]\n";
+  const range = { from: text.indexOf("C2"), to: text.indexOf("G A") + 3 };
+  it("leaves those pairs and says so", () => {
+    const result = markSelection(text, [range], ">", indexFile(text), () => undefined);
+    expect(result?.skipped).toBe(1);
+    expect(apply(text, result?.changes ?? [])).toContain("C2 D E2>F2 G>A");
+  });
+  it("refuses when every pair is uneven", () => {
+    const one = { from: text.indexOf("C2"), to: text.indexOf("D") + 1 };
+    const result = markSelection(text, [one], ">", indexFile(text), () => undefined);
+    expect(result?.changes).toEqual([]);
+    expect(result?.reason).toMatch(/same length/);
+  });
+});
+
+describe("paste says what it did, and keeps the groups as written (item 17)", () => {
+  const one = "X:1\nM:4/4\nL:1/8\nK:C\nCDEF GABc | cBAG FEDC | E4 F4 | G8 |]\n";
+  it("whole bars on a note starting its bar: in before it, said", () => {
+    const { out, message } = pasted(one, [at(one, "E4")], "CDEF GABc |");
+    expect(out).toContain("cBAG FEDC | CDEF GABc | E4 F4");
+    expect(message).toMatch(/before the selected note's bar/);
+  });
+  it("the same lengths over notes: their groups stay as they were", () => {
+    expect(pasted(one, [at(one, "cBAG FEDC")], "CDEF GABc").out).toContain(
+      "CDEF GABc | CDEF GABc | E4 F4",
+    );
+    expect(pasted(one, [at(one, "BAG")], "CDE").out).toContain("| cCDE FEDC |");
+    // (Other lengths: by the beat.)
+    expect(pasted(one, [at(one, "E4 F4")], "CDEF GABc").out).toContain("| CD EF GA Bc |");
   });
 });

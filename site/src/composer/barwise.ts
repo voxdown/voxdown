@@ -3436,17 +3436,33 @@ export function overwriteForward(
       filled = true;
       time = until;
     }
-    // Grouped by the beat: notes shorter than a beat within one beat are written together.
+    // Grouped by the beat: notes shorter than a beat within one beat are written together. Where
+    // it writes the same lengths at the same places as the notes it replaces, their groups stay
+    // as they were (`CDEF GABc` over `cBAG FEDC`, never `CD EF GA Bc`; round 10, item 17).
+    const same =
+      items.length === own.length &&
+      items.every((item, index) => {
+        const was = own[index] as Event;
+        return (
+          !item.text.includes(" ") &&
+          Math.abs(was.start - bar.start - item.start) < eps &&
+          Math.abs(was.end - was.start - item.length) < eps
+        );
+      });
     let out = "";
     items.forEach((item, index) => {
       const previous = items[index - 1];
       const together =
-        previous &&
-        !previous.rest &&
-        !item.rest &&
-        previous.length < beat - eps &&
-        item.length < beat - eps &&
-        Math.floor((previous.start + eps) / beat) === Math.floor((item.start + eps) / beat);
+        same && index > 0
+          ? !/\s/.test(
+              text.slice((own[index - 1] as Event).span.to, (own[index] as Event).span.from),
+            )
+          : previous &&
+            !previous.rest &&
+            !item.rest &&
+            previous.length < beat - eps &&
+            item.length < beat - eps &&
+            Math.floor((previous.start + eps) / beat) === Math.floor((item.start + eps) / beat);
       out += `${index && !together ? " " : ""}${item.text}`;
     });
     changes.push({ from, to, insert: out });

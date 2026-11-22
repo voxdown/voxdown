@@ -271,6 +271,23 @@ function voicedInStep(
   const sounding = (voice: string) =>
     `V:${voice} has a note sounding across this point: paste where every voice's notes start, or select a place in each.`;
   if (start !== null) {
+    // Going in at a bar's start, every part the copy has goes in, on every staff: each voice of
+    // the tune the copy has takes its own part (round 10, item 14).
+    // (Its voices as declared, and as its music has them: an inline [V:2] declares none.)
+    const ids = [
+      ...new Set([
+        ...tune.voices.map((each) => each.id),
+        ...mates,
+        ...selectedNotes(text, [{ from: tune.bodyFrom, to: tune.to }], file).map(
+          (each) => each.event.voice,
+        ),
+      ]),
+    ];
+    const inTune = (voice: string) => ids.includes(voice);
+    const order = (voice: string) => ids.indexOf(voice);
+    const pasted = [own, ...parts.filter((part) => part !== own && inTune(part.voice))];
+    const left = parts.filter((part) => !pasted.includes(part));
+    const not = left.length ? `; the copy also has ${names(left)}, not in this tune` : "";
     const points: number[] = [];
     for (const part of pasted) {
       const at = part === own ? start : samePoint(text, file, start, part.voice);
@@ -294,7 +311,7 @@ function voicedInStep(
     });
     // Every other voice: as many bars of rests, at the same point.
     const rested: string[] = [];
-    for (const voice of tune.voices.map((each) => each.id)) {
+    for (const voice of ids) {
       if (pasted.some((part) => part.voice === voice)) continue;
       const at = samePoint(text, file, start, voice);
       if (at === null) {
@@ -313,7 +330,7 @@ function voicedInStep(
     }
     return {
       changes,
-      message: `Pasted ${names(pasted)} as ${bars === 1 ? "a whole bar" : `${bars} whole bars`} here, in step${rested.length ? `; rests in ${rested.join(" and ")} for as long` : ""}${not}.`,
+      message: `Pasted ${names([...pasted].sort((a, b) => order(a.voice) - order(b.voice)))} as ${bars === 1 ? "a whole bar" : `${bars} whole bars`} here, in step${rested.length ? `; rests in ${rested.join(" and ")} for as long` : ""}${not}.`,
       final: true,
     };
   }
@@ -552,7 +569,11 @@ export function planPaste(
     }
     return converted.text;
   };
-  const selected = ranges.filter((range) => range.to > range.from);
+  // (Several carets in music are several places, as several selections are: round 10, item 12.)
+  const carets =
+    ranges.length > 1 &&
+    ranges.every((range) => range.to === range.from && inMusic(text, file, range.from));
+  const selected = carets ? ranges : ranges.filter((range) => range.to > range.from);
   // Several music lines (and their verses) into a music line with verses: one line, the verses
   // given the copy's syllables, or a `*` a note.
   const target = ranges[main] ?? (ranges[0] as Range);
@@ -615,17 +636,20 @@ export function planPaste(
   let targets = selected.length ? selected : ranges;
   const voices = new Set(selected.map((range) => voiceIn(text, file, range.from)));
   if (selected.length > 1 && voices.size > 1) {
-    const chosen = ranges[main]?.to !== ranges[main]?.from ? ranges[main] : selected[0];
+    const chosen = carets || ranges[main]?.to !== ranges[main]?.from ? ranges[main] : selected[0];
     targets = [chosen as Range];
     const voice = voiceIn(text, file, (chosen as Range).from);
     said.push(
       `Pasted into the main selection only${voice ? ` (V:${voice})` : ""}: the copy has no V: line to say which voice it is.`,
     );
+  } else if (carets && (tuneOf(file, (selected[0] as Range).from)?.voices.length ?? 0) < 2) {
+    // Carets in a tune of one voice: the copy goes in at each, fitted to its bar lines.
+    targets = selected;
   } else if (selected.length > 1) {
     // Several places in one voice: the first takes the copy, the others stay as they were.
     targets = [selected[0] as Range];
     said.push(
-      `Pasted into the first of the ${selected.length} selected places; the other${selected.length > 2 ? "s were" : " was"} left as ${selected.length > 2 ? "they were" : "it was"}.`,
+      `Pasted into the first of the ${selected.length} ${carets ? "places" : "selected places"}; the other${selected.length > 2 ? "s were" : " was"} left as ${selected.length > 2 ? "they were" : "it was"}.`,
     );
   }
   const changes: Change[] = [];
@@ -667,6 +691,13 @@ export function planPaste(
     if (fitted || insert !== copy || at !== null) special = true;
     const done = placed(range, insert);
     if ("refused" in done) return done;
+    // Bars put in before a selected note rather than over it: said (round 10, item 17).
+    if (at !== null && target.to > target.from) {
+      special = true;
+      said.push(
+        "Pasted as whole bars before the selected note's bar, which stays: whole bars pasted on a note starting its bar go in before it.",
+      );
+    }
     // One voice of several: over a selection it overwrites, at a caret it goes in with rests in
     // the other voices, so they stay in step.
     const inStep = targets.length === 1 ? pasteInStep(text, file, range, insert, done) : null;
@@ -712,6 +743,9 @@ function seams(text: string, changes: Change[]): Change[] {
       /[|\]]$/.test(text.slice(0, change.from)) &&
       /^[A-Ga-gzx"!^_=(.~]/.test(insert)
     )
+      insert = ` ${insert}`;
+    // (A bar line put in after a note: `FEDC | CDEF`, never `FEDC| CDEF`.)
+    if (pure && spaced && /^\|/.test(insert) && /[^\s|:\[]$/.test(text.slice(0, change.from)))
       insert = ` ${insert}`;
     return insert === change.insert ? change : { ...change, insert };
   });

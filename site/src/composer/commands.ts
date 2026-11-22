@@ -472,6 +472,8 @@ export type MarkResult = {
   reason?: string;
   /** For broken rhythm put on: each sign's place (before the edit) and the gap it replaced. */
   gaps?: { from: number; gap: string }[];
+  /** For broken rhythm put on: pairs left as they were, their notes of different lengths. */
+  skipped?: number;
 };
 /** The gap a broken-rhythm sign replaced, by the sign's place, when it is remembered. */
 export type GapAt = (position: number) => string | undefined;
@@ -837,7 +839,22 @@ function brokenRhythm(
     gap: brokenGap(text, first, second),
   }));
   const removed = pairs.length > 0 && pairs.every((pair) => pair.gap.sign === typed);
-  const changing = pairs.filter((pair) => removed || pair.gap.sign !== typed);
+  // Put on, a pair of notes of unequal length is left as it is, and said (round 10, item 15):
+  // `C2>D` would make a dotted half and a sixteenth, never what was meant.
+  const even = (pair: (typeof pairs)[number]) =>
+    Boolean(pair.gap.sign) ||
+    pair.first.duration.num * pair.second.duration.den ===
+      pair.second.duration.num * pair.first.duration.den;
+  const skipped = removed ? 0 : pairs.filter((pair) => !even(pair)).length;
+  const changing = pairs.filter((pair) => removed || (pair.gap.sign !== typed && even(pair)));
+  if (skipped && !changing.length)
+    return {
+      changes: [],
+      mark: typed === ">" ? "dotted-short" : "short-dotted",
+      count: 0,
+      removed: false,
+      reason: `Broken rhythm goes on two notes of the same length: ${skipped === 1 ? "this pair's notes are" : `these ${skipped} pairs' notes are`} of different lengths, left as they were.`,
+    };
   const changes = changing.map((pair) => ({
     from: pair.gap.from,
     to: pair.gap.to,
@@ -854,8 +871,9 @@ function brokenRhythm(
   return {
     changes: merge(changes),
     mark: typed === ">" ? "dotted-short" : "short-dotted",
-    count: pairs.length,
+    count: pairs.length - skipped,
     removed,
     gaps,
+    ...(skipped ? { skipped } : {}),
   };
 }

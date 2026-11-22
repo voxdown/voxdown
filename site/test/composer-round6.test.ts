@@ -63,7 +63,8 @@ describe("every verse follows edits (round 6, finding 2)", () => {
   it("Backspace over part of a bar (rests) takes those notes' syllables out of both", () => {
     const { out } = cut(verses, [of(verses, "D E")]);
     expect(out).toContain(
-      "C z2 F | G A B c |\nw: one four five six sev-en\nw: un quatre cinq six sept huit\n",
+      // (Beats 2 and 3 of 4/4: two quarter rests, as notation programs write them; round 8.)
+      "C z z F | G A B c |\nw: one four five six sev-en\nw: un quatre cinq six sept huit\n",
     );
   });
   it("Duplicate brings each verse's own syllables", () => {

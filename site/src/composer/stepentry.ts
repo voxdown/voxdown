@@ -165,7 +165,7 @@ export const STEP_LENGTHS: { key: string; name: string; length: Fraction }[] = [
 
 const sub = (a: Fraction, b: Fraction) => add(a, frac(-b.num, b.den));
 /** Note values a step can be written as (in whole notes): plain or dotted, a whole down to a 64th. */
-const VALUES = [
+export const VALUES = [
   1.5, 1, 0.75, 0.5, 0.375, 0.25, 0.1875, 0.125, 0.09375, 0.0625, 0.046875, 0.03125, 0.015625,
 ];
 /** A length as note values, largest first: 5/8 is a half tied to an eighth. */

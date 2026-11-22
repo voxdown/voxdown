@@ -6290,15 +6290,16 @@ console.log(
   await p.keyboard.press("Backspace");
   assert.match(
     await docText(p),
-    /\nC z2 F \| G A B c \|\]\n/,
-    "part of a bar: rests as long, merged",
+    // (By the beat, round 8: a half rest doesn't start on beat 2.)
+    /\nC z z F \| G A B c \|\]\n/,
+    "part of a bar: rests as long, by the beat",
   );
   await says("notice", /Notes replaced by rests/);
   await p.locator("#notice").getByRole("button", { name: "Dismiss" }).click();
   let doc = await docText(p);
   await choose([of(doc, "A B")]);
   await p.keyboard.press("Backspace");
-  assert.match(await docText(p), /\| G z2 c \|\]/, "again: rests");
+  assert.match(await docText(p), /\| G z z c \|\]/, "again: rests");
   assert(
     await p.evaluate(() => {
       const notice = document.getElementById("notice");

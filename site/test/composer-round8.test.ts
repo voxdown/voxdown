@@ -1,6 +1,6 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { repitch } from "../src/composer/barwise";
+import { cutPlan, repitch } from "../src/composer/barwise";
 import { caretAfter, sortChange } from "../src/composer/book";
 import { noCrossedRanges } from "../src/composer/selection-guard";
 import { indexFile } from "../src/composer/tunes";
@@ -72,5 +72,57 @@ describe("a pitch typed over one note or chord re-pitches it in place (rule a)",
     expect(
       repitch(text, [{ from: text.indexOf("G2"), to: text.indexOf("G2") + 2 }], "c'"),
     ).toBeNull();
+  });
+});
+
+const cutOf = (text: string, from: number, to: number) => {
+  const plan = cutPlan(text, [{ from, to }]);
+  if (!plan || "refused" in plan) throw new Error(plan ? plan.refused : "no plan");
+  return apply(text, plan.changes);
+};
+const cutText = (text: string, part: string, last = part) =>
+  cutOf(text, text.indexOf(part), text.indexOf(last, text.indexOf(part)) + last.length);
+const body = (text: string) => text.slice(text.indexOf("K:C\n") + 4);
+
+describe("the rests Delete leaves, merged by the beat or the bar (rule b)", () => {
+  it("a bar cleared in one voice of two is one whole-bar rest", () => {
+    const two = "X:1\nT:t\nM:4/4\nL:1/8\n%%score 1 2\nK:C\nV:1\nc2 d2 e2 f2|g8|]\nV:2\nC8|G8|]\n";
+    expect(cutText(two, "c2 d2 e2 f2")).toContain("V:1\nz8|g8|]");
+  });
+  it("a triplet deleted whole is one rest of its real length", () => {
+    expect(body(cutText(tune("(3efg e2 z2 z2|c8|]"), "efg"))).toBe("z2 e2 z2 z2|c8|]\n");
+  });
+  it("a broken pair deleted whole is one rest: never z>z", () => {
+    expect(body(cutText(tune("G6 A>B|c8|]"), "A>B"))).toBe("G6 z2|c8|]\n");
+  });
+  it("by the beat: a half rest only from beat 1 or 3 of 4/4; 6/8 in threes", () => {
+    expect(body(cutText(tune("C D E F|c4|]", "4/4", "1/4"), "C D"))).toBe("z2 E F|c4|]\n");
+    expect(body(cutText(tune("C D E F|c4|]", "4/4", "1/4"), "D E F"))).toBe("C z z2|c4|]\n");
+    expect(body(cutText(tune("dAF DFA|dAF DFA|]", "6/8"), "dAF"))).toBe("z3 DFA|dAF DFA|]\n");
+  });
+  it("never across a chord symbol", () => {
+    expect(body(cutText(tune('z2 "C"A2 B2 c2|c8|]'), "A2"))).toBe('z2 "C"z2 B2 c2|c8|]\n');
+  });
+});
+
+describe("rule (d): a voice of spacers keeps spacers", () => {
+  it("a bar deleted in an x voice is x", () => {
+    const text =
+      "X:1\nT:t\nM:4/4\nL:1/8\n%%score 1 2\nK:C\nV:1\nc2 d2 e2 f2|g8|g8|]\nV:2\nx8|x8|C8|]\n";
+    expect(cutText(text, "C8")).toContain("V:2\nx8|x8|x8|]");
+  });
+});
+
+describe("the over-full rule and tuplets (item 7)", () => {
+  it("a whole tuplet counts as one event of its real length and goes while the bar stays full", () => {
+    expect(body(cutText(tune("(3efg e2 z z|c4|]", "4/4", "1/4"), "efg"))).toBe("e2 z z|c4|]\n");
+  });
+  it("a rest of the shortfall when the bar would otherwise be short", () => {
+    expect(body(cutText(tune("(3efg e2 z|c4|]", "4/4", "1/4"), "efg"))).toBe("z e2 z|c4|]\n");
+  });
+  it("no double space left (item 8)", () => {
+    const text = tune("A B C D E|c4|]", "4/4", "1/4");
+    const at = text.indexOf("A B ") + 4;
+    expect(body(cutOf(text, at, at + 1))).toBe("A B D E|c4|]\n");
   });
 });

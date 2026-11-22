@@ -26,7 +26,7 @@ import { keyLabel } from "./clip-convert";
 import { type Change, type Range, barAround, barLine, passagesOf } from "./commands";
 import { markOf } from "./playorder";
 import { type Picked, selectedNotes } from "./selected";
-import { readingAt } from "./stepentry";
+import { VALUES, beatOf, readingAt } from "./stepentry";
 import { type FileIndex, type TuneInfo, indexFile } from "./tunes";
 import { tuneItems } from "./walk";
 
@@ -602,37 +602,6 @@ function bodyBefore(structure: Structure, at: number): boolean {
   return false;
 }
 
-/** How much longer than its meter a bar is, in whole notes (0 when it isn't over-full). */
-function overBy(
-  text: string,
-  file: FileIndex,
-  segment: Segment,
-  times: Map<number, { start: number; end: number }>,
-): number {
-  const length = meterLength(readingAt(text, file, segment.from)?.meter ?? "");
-  if (!length) return 0;
-  const total = segment.events.reduce((sum, at) => {
-    const time = times.get(at);
-    return sum + (time ? time.end - time.start : 0);
-  }, 0);
-  return Math.max(0, total - length.num / length.den);
-}
-
-const inTupletOf = (structure: Structure, at: number) =>
-  structure.tuplets.some(({ notes }) => notes.includes(at));
-
-/** A note made a shorter rest: its own marks and ties go (a chord symbol stays, on the rest). */
-function restLess(text: string, each: Picked, rest: string): Change[] {
-  const changes: Change[] = [];
-  for (const token of tokenizeMusic(text.slice(each.span.from, each.event.from), each.span.from))
-    if (token.kind !== "space" && !restKeeps(token))
-      changes.push({ from: token.from, to: token.to, insert: "" });
-  for (const token of tokenizeMusic(text.slice(each.event.to, each.span.to), each.event.to))
-    if (token.kind === "tie") changes.push({ from: token.from, to: token.to, insert: "" });
-  changes.push({ from: each.event.from, to: each.event.to, insert: rest });
-  return changes;
-}
-
 /** What a Cut does: the edit, where it leaves the caret (after the edit), and what it says. */
 export type CutPlan =
   | { changes: Change[]; clip: string; caret: number; said: string[] }
@@ -680,9 +649,6 @@ export function cutPlan(
   const picked = chosen(text, selected, file);
   // (In a tune with several voices, time goes only where every voice is selected.)
   const canGo = timeCanGo(text, selected, file);
-  const times = new Map(
-    timed(text, file, (selected[0] as Range).from).map((each) => [each.from, each]),
-  );
   const changes: Change[] = [];
   const said: string[] = [];
   const lines = new Map<number, Line>();
@@ -710,10 +676,6 @@ export function cutPlan(
   );
   const resting: Picked[] = [];
   let voicesKept = false;
-  let overFull = false;
-  // (Notes of an over-full bar that simply went, and those made shorter rests.)
-  const vanished: Range[] = [];
-  const restedLess: number[] = [];
   for (const line of chains) {
     // A bar of nothing (a line's end and the next line's start) joins the bars either side.
     const segments = segmentsOf(line, eventsOn(text, line, file)).filter(
@@ -742,36 +704,11 @@ export function cutPlan(
           )
         )
           voicesKept = true;
-        let spare = overBy(text, file, segment, times);
         for (const each of own) {
-          if (!each.whole) {
+          if (each.whole) resting.push(each);
+          else
             for (const tone of each.tones)
               changes.push({ from: tone.from, to: tone.to, insert: "" });
-            continue;
-          }
-          const time = times.get(each.event.from);
-          const length = time ? time.end - time.start : 0;
-          const alone = !inTupletOf(structure, each.event.from) && !each.event.rest;
-          if (spare > 1e-9 && alone && length <= spare + 1e-9) {
-            // It simply goes, with its marks (a dynamic or a text stays, for the next note).
-            for (const token of tokenizeMusic(
-              text.slice(each.span.from, each.event.from),
-              each.span.from,
-            ))
-              if (token.kind !== "space" && !restKeeps(token))
-                changes.push({ from: token.from, to: token.to, insert: "" });
-            changes.push({ from: each.event.from, to: each.span.to, insert: "" });
-            vanished.push({ from: each.event.from, to: each.span.to });
-            spare -= length;
-            overFull = true;
-          } else if (spare > 1e-9 && alone) {
-            // The rest of the time it took, as a rest.
-            const unit = readingAt(text, file, each.event.from)?.unit ?? frac(1, 8);
-            changes.push(...restLess(text, each, restOf(length - spare, unit)));
-            restedLess.push(each.event.from);
-            spare = 0;
-            overFull = true;
-          } else resting.push(each);
         }
         for (const range of selected) {
           const from = Math.max(range.from, segment.from);
@@ -925,20 +862,20 @@ export function cutPlan(
   // Whole bars only go when no tuplet is cut in two by them.
   if (splitTuplet(structure, removed))
     return { refused: "This would cut a tuplet in two: select all of its notes, or none." };
-  // Notes of part of a bar: rests in their place.
-  changes.push(
-    ...restChanges(
-      text,
-      file,
-      resting.filter((each) => !each.event.rest),
-    ),
+  // Notes of part of a bar: rests in their place (or gone, from an over-full bar).
+  const rests = restChanges(
+    text,
+    file,
+    resting.filter((each) => !each.event.rest),
   );
-  if (overFull) said.push("The bar was over-full: its notes went as long as it stays its length.");
+  changes.push(...rests.changes);
+  if (rests.overFull)
+    said.push("The bar was over-full: its notes went as long as it stays its length.");
   if (voicesKept)
     said.push(
       "Rests where not every voice is selected, so the voices stay in step: select the same whole bars in every voice to take the time out.",
     );
-  else if (resting.some((each) => !each.event.rest))
+  else if (rests.rested.size)
     said.push(
       "Notes replaced by rests, so the bar keeps its length: select whole bars to take the time out.",
     );
@@ -954,9 +891,14 @@ export function cutPlan(
     .map((each) => each.event.from);
   changes.push(...lyricsFor(text, file, goneNotes, []));
   // Hairpins whole: an end moved onto a note left inside, or both ends gone.
-  const rested = new Set([...resting.map((each) => each.event.from), ...restedLess]);
   changes.push(
-    ...hairpinsKept(text, file, (selected[0] as Range).from, [...removed, ...vanished], rested),
+    ...hairpinsKept(
+      text,
+      file,
+      (selected[0] as Range).from,
+      [...removed, ...rests.vanished],
+      rests.rested,
+    ),
   );
   return finishCut(text, selected, file, changes, carets, said);
 }
@@ -1810,108 +1752,302 @@ function restFor(text: string, event: { from: number; to: number }): string {
   return `z${close?.length || inner?.length || ""}`;
 }
 
-/** A note's (or chord's, or rest's) written length, in units; null in a tuplet or broken rhythm. */
-function writtenUnits(
-  text: string,
-  event: { from: number; to: number },
-  span: Range,
-): Fraction | null {
-  const tokens = tokenizeMusic(text.slice(span.from, span.to), span.from);
-  if (tokens.some((token) => token.kind === "broken")) return null;
-  const head = tokens.find((token) => token.from >= event.from && token.kind !== "space");
-  if (head?.kind === "rest" || head?.kind === "note") return parseLength(head.length);
-  const close = tokens.find((token) => token.kind === "chord-close");
-  return parseLength(close?.length ?? "");
+/**
+ * Rests for a stretch of a bar, as notation programs write them (round 8, rule (b)): a whole bar
+ * is one rest; else, from the stretch's start (`at`, in whole notes from the bar's start), the
+ * longest plain or dotted value that fits and keeps to the beat: within one beat, or whole beats
+ * from a beat its own length divides (a half rest on beat 1 or 3 of 4/4, never on 2).
+ */
+export function restPieces(at: number, length: number, beat: number, whole: boolean): number[] {
+  const eps = 1e-9;
+  if (whole) return [length];
+  const pieces: number[] = [];
+  let position = at;
+  const end = at + length;
+  const near = (x: number) => Math.abs(x - Math.round(x)) < 1e-6;
+  while (end - position > eps) {
+    const left = end - position;
+    const fits = VALUES.find((value) => {
+      if (value > left + eps) return false;
+      if (value < beat - eps)
+        return Math.floor((position + eps) / beat) === Math.floor((position + value - eps) / beat);
+      return near(position / beat) && near(value / beat) && near(position / value);
+    });
+    const piece = fits ?? Math.min(left, VALUES.find((value) => value <= left + eps) ?? left);
+    pieces.push(piece);
+    position += piece;
+  }
+  return pieces;
 }
 
 /**
- * Notes deleted where time can't go (less than whole bars, or some voices only): rests of the
- * same length (as MuseScore does). Their articulations and ties go; a chord symbol, a dynamic, a
- * text and a fermata stay, on the rest (hairpins: ./hairpinsKept); a tuplet or broken rhythm
- * around them stays. Rests side by side in a bar become one where the notation allows (`z2 z`
- * is `z3`), across no tuplet, broken rhythm or mark kept.
+ * Notes deleted where time can't go (less than whole bars, or some voices only), bar by bar:
+ * - in an over-full bar, notes simply go while the bar stays at least its length, and the one
+ *   that would take it short leaves a rest of the shortfall;
+ * - the rest become rests, written as notation programs write them (./restPieces), merged with
+ *   the rests beside them: a bar cleared is one rest, a tuplet or a broken pair (`G>A`) deleted
+ *   whole is one rest of its real length;
+ * - never merged across a tuplet left, a chord symbol, a dynamic, a text or a fermata (each stays
+ *   on its rest), or a bar line;
+ * - a voice of spacers (`x`) gets spacers.
+ * Their articulations and ties go (hairpins: ./hairpinsKept). Returns the changes, the notes
+ * that went (`vanished`) and those made rests (`rested`).
  */
-function restChanges(text: string, file: FileIndex, picked: Picked[]): Change[] {
-  const changes: Change[] = [];
-  if (!picked.length) return changes;
-  const structure = structureOf(text, file, (picked[0] as Picked).event.from);
-  const inTuplet = new Set(structure.tuplets.flatMap(({ notes }) => notes));
+type RestPlan = { changes: Change[]; vanished: Range[]; rested: Set<number>; overFull: boolean };
+function restChanges(text: string, file: FileIndex, picked: Picked[]): RestPlan {
+  const plan: RestPlan = { changes: [], vanished: [], rested: new Set(), overFull: false };
+  if (!picked.length) return plan;
+  const at = (picked[0] as Picked).event.from;
+  const tune = file.tunes.find((each) => at >= each.from && at <= each.to);
+  if (!tune) return plan;
+  const structure = structureOf(text, file, at);
   const chosen = new Set(picked.map((each) => each.event.from));
-  type Item = { from: number; to: number; span: Range; units: Fraction | null; picked: boolean };
-  // Each line's events in order: runs of picked notes, with the rests beside them, in a bar.
-  const lines = new Set(picked.map((each) => text.lastIndexOf("\n", each.event.from - 1) + 1));
-  for (const lineFrom of lines) {
-    const lineTo = text.indexOf("\n", lineFrom) < 0 ? text.length : text.indexOf("\n", lineFrom);
-    const events = selectedNotes(text, [{ from: lineFrom, to: lineTo }], file).filter(
-      (each) => each.event.from >= lineFrom && each.event.from < lineTo,
+  const spans = new Map(
+    selectedNotes(text, [{ from: tune.bodyFrom, to: tune.to }], file).map((each) => [
+      each.event.from,
+      each,
+    ]),
+  );
+  // Each voice's bars, with their events.
+  type Event = {
+    from: number;
+    to: number;
+    span: Range;
+    length: number;
+    rest: string | null;
+    unit: Fraction;
+  };
+  type Bar = { events: Event[]; meter: string; first: boolean };
+  const voices = new Map<string, Bar[]>();
+  for (const item of tuneItems(text, tune, file)) {
+    const bars = voices.get(item.voice) ?? [];
+    voices.set(item.voice, bars);
+    let bar = bars[bars.length - 1];
+    if (item.type === "bar") {
+      if (bar?.events.length) bars.push({ events: [], meter: item.meter, first: false });
+      continue;
+    }
+    if (!bar) {
+      bar = { events: [], meter: item.meter, first: true };
+      bars.push(bar);
+    }
+    const head = tokenizeMusic(text.slice(item.from, item.to), item.from).find(
+      (token) => token.kind !== "space",
     );
-    const runs: Item[][] = [];
-    let run: Item[] = [];
-    let lastTo = lineFrom;
-    const close = () => {
-      if (run.length) runs.push(run);
-      run = [];
-    };
-    for (const each of events) {
-      const between = tokenizeMusic(text.slice(lastTo, each.span.from), lastTo);
-      if (
-        between.some(
-          (token) =>
-            token.kind === "bar" || token.kind === "tuplet" || token.kind === "inline-field",
-        )
-      )
-        close();
-      lastTo = each.span.to;
-      const isPicked = chosen.has(each.event.from);
-      if (!isPicked && !each.event.rest) {
-        close();
-        continue;
-      }
-      const symbol = tokenizeMusic(
-        text.slice(each.span.from, each.event.from),
-        each.span.from,
-      ).some((token) => restKeeps(token));
-      const units = inTuplet.has(each.event.from)
-        ? null
-        : writtenUnits(text, each.event, each.span);
-      // A chord symbol, a dynamic, a text or a fermata starts its own rest (it stays on it); a
-      // tuplet's or broken rhythm's note stands alone.
-      if (symbol || units === null) close();
-      run.push({
-        from: each.event.from,
-        to: each.event.to,
-        span: each.span,
-        units,
-        picked: isPicked,
-      });
-      if (units === null) close();
-    }
-    close();
-    for (const group of runs) {
-      if (!group.some((item) => item.picked)) continue;
-      const first = group[0] as Item;
-      const last = group[group.length - 1] as Item;
-      const merge = group.length > 1 && group.every((item) => item.units !== null);
-      // The picked notes' marks go (not a bar line's marks or fields, nor a chord symbol), and
-      // their ties.
-      for (const item of group) {
-        if (!item.picked) continue;
-        if (!merge || item === first)
-          for (const token of tokenizeMusic(text.slice(item.span.from, item.from), item.span.from))
-            if (token.kind !== "space" && !restKeeps(token))
-              changes.push({ from: token.from, to: token.to, insert: "" });
-        if (!merge || item === last)
-          for (const token of tokenizeMusic(text.slice(item.to, item.span.to), item.to))
-            if (token.kind === "tie") changes.push({ from: token.from, to: token.to, insert: "" });
-        if (!merge) changes.push({ from: item.from, to: item.to, insert: restFor(text, item) });
-      }
-      if (merge) {
-        const total = group.reduce((sum, item) => add(sum, item.units as Fraction), frac(0));
-        changes.push({ from: first.from, to: last.to, insert: `z${formatLength(total)}` });
-      }
-    }
+    bar.events.push({
+      from: item.from,
+      to: item.to,
+      span: spans.get(item.from)?.span ?? item,
+      length: item.duration.num / item.duration.den,
+      rest: item.rest && head?.kind === "rest" ? (head.text[0] as string) : null,
+      unit: item.unit,
+    });
   }
-  return changes;
+  const tupletOf = new Map<number, (typeof structure.tuplets)[number]>();
+  for (const tuplet of structure.tuplets)
+    for (const note of tuplet.notes) tupletOf.set(note, tuplet);
+  const marked = (from: number, to: number) =>
+    tokenizeMusic(text.slice(from, to), from).some((token) => restKeeps(token));
+  const dropMarks = (from: number, to: number) => {
+    for (const token of tokenizeMusic(text.slice(from, to), from))
+      if (token.kind !== "space" && !restKeeps(token))
+        plan.changes.push({ from: token.from, to: token.to, insert: "" });
+  };
+  const dropTies = (from: number, to: number) => {
+    for (const token of tokenizeMusic(text.slice(from, to), from))
+      if (token.kind === "tie") plan.changes.push({ from: token.from, to: token.to, insert: "" });
+  };
+  const eps = 1e-9;
+  for (const bars of voices.values())
+    bars.forEach((bar, index) => {
+      if (!bar.events.some((each) => chosen.has(each.from))) return;
+      // The bar's units: a note, chord or rest; a tuplet or broken pair taken whole is one.
+      type Unit = {
+        from: number;
+        /** Where its marks start (a chord symbol, a dynamic…), before `from`. */
+        lead: number;
+        to: number;
+        /** Its end with ties and the like after it. */
+        end: number;
+        length: number;
+        picked: boolean;
+        rest: string | null;
+        /** Left as it is in place (a note in a tuplet kept, a broken rhythm's half). */
+        fixed: boolean;
+        members: number[];
+        unit: Fraction;
+      };
+      const units: Unit[] = [];
+      for (let i = 0; i < bar.events.length; i++) {
+        const event = bar.events[i] as Event;
+        const picks = chosen.has(event.from);
+        const tuplet = tupletOf.get(event.from);
+        if (tuplet) {
+          const all = tuplet.notes.every((note) => chosen.has(note));
+          const own = bar.events.filter((each) => tuplet.notes.includes(each.from));
+          if (all && own.length === tuplet.notes.length && tuplet.notes[0] === event.from) {
+            const last = own[own.length - 1] as Event;
+            units.push({
+              from: tuplet.sign.from,
+              lead: tuplet.sign.from,
+              to: last.span.to,
+              end: last.span.to,
+              length: own.reduce((sum, each) => sum + each.length, 0),
+              picked: true,
+              rest: null,
+              fixed: false,
+              members: own.map((each) => each.from),
+              unit: event.unit,
+            });
+            i += own.length - 1;
+            continue;
+          }
+          units.push({
+            from: event.from,
+            lead: event.span.from,
+            to: event.to,
+            end: event.span.to,
+            length: event.length,
+            picked: picks,
+            rest: event.rest,
+            fixed: true,
+            members: [event.from],
+            unit: event.unit,
+          });
+          continue;
+        }
+        const broken = tokenizeMusic(text.slice(event.to, event.span.to), event.to).some(
+          (token) => token.kind === "broken",
+        );
+        const next = bar.events[i + 1];
+        if (broken && next && picks && chosen.has(next.from) && !tupletOf.has(next.from)) {
+          units.push({
+            from: event.from,
+            lead: event.span.from,
+            to: next.to,
+            end: next.span.to,
+            length: event.length + next.length,
+            picked: true,
+            rest: null,
+            fixed: false,
+            members: [event.from, next.from],
+            unit: event.unit,
+          });
+          i += 1;
+          continue;
+        }
+        const previousBroken =
+          i > 0 &&
+          tokenizeMusic(
+            text.slice((bar.events[i - 1] as Event).to, (bar.events[i - 1] as Event).span.to),
+            (bar.events[i - 1] as Event).to,
+          ).some((token) => token.kind === "broken");
+        units.push({
+          from: event.from,
+          lead: event.span.from,
+          to: event.to,
+          end: event.span.to,
+          length: event.length,
+          picked: picks,
+          rest: event.rest,
+          fixed: broken || previousBroken,
+          members: [event.from],
+          unit: event.unit,
+        });
+      }
+      // Over-full: notes go while the bar stays its length.
+      const meter = meterLength(bar.meter);
+      const full = meter ? meter.num / meter.den : null;
+      const total = units.reduce((sum, unit) => sum + unit.length, 0);
+      let spare = full !== null ? Math.max(0, total - full) : 0;
+      const gone = new Set<Unit>();
+      for (const unit of units) {
+        if (spare <= eps || !unit.picked || unit.fixed) continue;
+        plan.overFull = true;
+        if (unit.length <= spare + eps) {
+          gone.add(unit);
+          spare -= unit.length;
+          dropMarks(unit.lead, unit.from);
+          // (One space of the two around it goes with it.)
+          const space = /\s/.test(text[unit.lead - 1] ?? "") && /[ \t]/.test(text[unit.end] ?? "");
+          plan.changes.push({ from: unit.from, to: unit.end + (space ? 1 : 0), insert: "" });
+          plan.vanished.push({ from: unit.from, to: unit.end });
+        } else {
+          unit.length -= spare;
+          spare = 0;
+        }
+      }
+      // A voice of spacers keeps them: its own rests' letter, or its neighbouring bars'.
+      const letterOf = (around: Bar | undefined) => {
+        const rests = around?.events ?? [];
+        return rests.length && rests.every((each) => each.rest === "x") ? "x" : null;
+      };
+      const letter = letterOf(bars[index - 1]) ?? letterOf(bars[index + 1]) ?? "z";
+      // Runs of rests (picked, or there already) in the bar, then written as rests.
+      const left = units.filter((unit) => !gone.has(unit));
+      const kept = left.length;
+      const startOf = new Map<Unit, number>();
+      let clock = 0;
+      for (const unit of left) {
+        startOf.set(unit, clock);
+        clock += unit.length;
+      }
+      // A short first bar (a pickup) keeps to the beat counted back from its end.
+      const offset = bar.first && full !== null && clock < full - eps ? full - clock : 0;
+      const beat = beatOf(bar.meter);
+      let run: Unit[] = [];
+      const write = () => {
+        if (!run.some((unit) => unit.picked)) {
+          run = [];
+          return;
+        }
+        const first = run[0] as Unit;
+        const last = run[run.length - 1] as Unit;
+        const length = run.reduce((sum, unit) => sum + unit.length, 0);
+        const own = run.find((unit) => unit.rest)?.rest ?? letter;
+        const pieces = restPieces(
+          (startOf.get(first) ?? 0) + offset,
+          length,
+          beat,
+          run.length === kept,
+        );
+        const insert = pieces.map((piece) => `${own}${lengthText(piece, first.unit)}`).join(" ");
+        dropMarks(first.lead, first.from);
+        dropTies(last.to, last.end);
+        if (insert !== text.slice(first.from, last.to))
+          plan.changes.push({ from: first.from, to: last.to, insert });
+        for (const unit of run) if (unit.picked) for (const at of unit.members) plan.rested.add(at);
+        run = [];
+      };
+      for (const unit of left) {
+        const restful = (unit.picked || unit.rest !== null) && !unit.fixed;
+        if (!restful) {
+          write();
+          if (unit.picked) {
+            // In place: a tuplet's note, a broken rhythm's half.
+            dropMarks(unit.lead, unit.from);
+            dropTies(unit.to, unit.end);
+            plan.changes.push({
+              from: unit.from,
+              to: unit.to,
+              insert: restFor(text, unit),
+            });
+            for (const at of unit.members) plan.rested.add(at);
+          }
+          continue;
+        }
+        // A mark that stays (a chord symbol, a dynamic…) starts its own rest.
+        if (run.length && marked(unit.lead, unit.from)) write();
+        run.push(unit);
+      }
+      write();
+    });
+  return plan;
+}
+
+/** A length in whole notes as written under a unit ("2", "3/2"). */
+function lengthText(whole: number, unit: Fraction): string {
+  return restOf(whole, unit).slice(1);
 }
 
 /**
@@ -1962,7 +2098,8 @@ function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan
   // Time goes where every voice sounding then is selected (whole bars of each, then; the others
   // become rests in the main path); none: rests throughout.
   if ((timeCanGo(text, selected, file)?.size ?? 1) > 0) return null;
-  const changes = restChanges(text, file, picked);
+  const rests = restChanges(text, file, picked);
+  const changes = rests.changes;
   const left = [...sounding]
     .filter((voice) => !chosenVoices.has(voice))
     .map((voice) => `V:${voice}`);
@@ -1975,13 +2112,7 @@ function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan
   const all = [
     ...changes,
     ...lyrics,
-    ...hairpinsKept(
-      text,
-      file,
-      (selected[0] as Range).from,
-      [],
-      new Set(picked.map((each) => each.event.from)),
-    ),
+    ...hairpinsKept(text, file, (selected[0] as Range).from, rests.vanished, rests.rested),
   ].sort((a, b) => a.from - b.from);
   return {
     changes: all,
@@ -2478,8 +2609,6 @@ type Piece = {
   /** Written as two tied halves at a bar line: its parts (null when it can't be: a tuplet's). */
   split: ((first: number, unit: Fraction) => [string, string]) | null;
 };
-
-const lengthText = (whole: number, unit: Fraction) => restOf(whole, unit).slice(1);
 
 function piecesOf(clip: string, unit: Fraction, meter: string): Piece[] | null {
   const body = clip

@@ -477,7 +477,26 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
     target.state.field(fileIndexField),
     drawnStaves,
   );
-  if (!plan) return false;
+  if (!plan) {
+    // The editor's own paste replaces the selection as text: never over music across other
+    // lines (a voice's line into the next, its V: line, lyrics); round 10.
+    const doc = state.doc.toString();
+    const file = state.field(fileIndexField);
+    const across = list.some(
+      (range) =>
+        range.to > range.from &&
+        doc.slice(range.from, range.to).includes("\n") &&
+        selectedNotes(doc, [range], file).length > 0,
+    );
+    if (across) {
+      const why =
+        "A paste goes over one voice's music: this selection reaches other lines. Select within one voice's music, or put the caret where the copy goes.";
+      sayAboutSelection(why);
+      notice(why);
+      return true;
+    }
+    return false;
+  }
   if ("refused" in plan) {
     sayAboutSelection(plan.refused);
     notice(plan.refused);
@@ -841,6 +860,26 @@ let lastCut: { clip: string; after: string; caret: number; undo: ChangeSet; back
  * Cut, or Delete in the score: whole bars out with their bar lines, the structure kept
  * (./barwise), a plain caret left at the edit. False when it is refused, said why.
  */
+/**
+ * What Cut or Delete does with some ranges (round 10, item 5): the music in them, voice by voice
+ * (across V: lines, lyrics and fields, only the music), through the one structural plan
+ * (./barwise cutPlan); with no music in them at all (a header, lyrics), they are text, cut as
+ * text. Music the plan can't take is refused, saying why, never deleted raw.
+ */
+function deletePlan(
+  doc: string,
+  list: Range[],
+  file: FileIndex,
+): import("./barwise").CutPlan | "text" {
+  if (!barwise || !commands) return "text";
+  const parts = commands.musicParts(doc, list, file);
+  if (!parts.length || !selectedNotes(doc, parts, file).length) return "text";
+  return (
+    barwise.cutPlan(doc, parts, file) ?? {
+      refused: "This selection can't be cut as music: select notes in one tune's music.",
+    }
+  );
+}
 function cutMusic(target: EditorView, clip: string | null, only?: Range[]): boolean {
   const state = target.state;
   const list =
@@ -848,12 +887,14 @@ function cutMusic(target: EditorView, clip: string | null, only?: Range[]): bool
     state.selection.ranges
       .filter((range) => !range.empty)
       .map((range) => ({ from: range.from, to: range.to }));
-  const plan = barwise?.cutPlan(state.doc.toString(), list, state.field(fileIndexField));
-  if (plan && "refused" in plan) {
-    sayAboutSelection(plan.refused);
-    notice(plan.refused);
+  const decided = deletePlan(state.doc.toString(), list, state.field(fileIndexField));
+  if (decided !== "text" && "refused" in decided) {
+    sayAboutSelection(decided.refused);
+    notice(decided.refused);
     return false;
   }
+  const plan = decided === "text" ? null : decided;
+  // (No music in the selection: text, cut as text.)
   const changes = plan?.changes ?? list.map((range) => ({ ...range, insert: "" }));
   const set = state.changes(changes);
   const caret = plan?.caret ?? set.mapPos(Math.min(...changes.map((change) => change.from)), -1);
@@ -894,9 +935,11 @@ function copyOut(event: ClipboardEvent, target: EditorView, cut: boolean): boole
   if (cut && barwise) {
     // A refused Cut leaves the clipboard as it was.
     const state = target.state;
-    const list = state.selection.ranges.filter((range) => !range.empty);
-    const plan = barwise.cutPlan(state.doc.toString(), list, state.field(fileIndexField));
-    if (plan && "refused" in plan) {
+    const list = state.selection.ranges
+      .filter((range) => !range.empty)
+      .map((range) => ({ from: range.from, to: range.to }));
+    const plan = deletePlan(state.doc.toString(), list, state.field(fileIndexField));
+    if (plan !== "text" && "refused" in plan) {
       event.preventDefault();
       sayAboutSelection(plan.refused);
       notice(plan.refused);
@@ -1085,7 +1128,7 @@ function replaceMusic(target: EditorView, typed: string): boolean {
     // Only a grace group, a mark, a chord symbol or a text selected: just that goes (the
     // editor's own delete), never the note (round 9).
     if (barwise.onlyAttachments(doc, list)) return false;
-    if (!barwise.cutPlan(doc, parts, file)) return false;
+    // (Never the editor's raw delete over music: the plan, or a refusal; round 10.)
     cutMusic(target, null, parts);
     return true;
   }

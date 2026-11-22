@@ -272,7 +272,12 @@ function enter(pitches: number[] | "rest") {
     say(kept.refused);
     return;
   }
-  const cleared = main.empty ? null : (kept ?? [{ from: main.from, to: main.to, insert: "" }]);
+  // (Over a selection the step goes through stepOver; never a raw delete of it here.)
+  if (!main.empty && !kept) {
+    say("Step entry can't write over this selection: select notes in one voice's music.");
+    return;
+  }
+  const cleared = main.empty ? null : kept;
   const left = cleared ? applied(text, cleared) : text;
   const step = stepInsert(left, indexFile(left), at, pitches, length());
   if (!step) {

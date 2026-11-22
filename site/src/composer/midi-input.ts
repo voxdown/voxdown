@@ -10,11 +10,19 @@ import "./midi.css";
 import { isolateHistory } from "@codemirror/commands";
 import { StateEffect, StateField } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
-import { type Fraction, frac, mul, parseKey, value } from "./abc";
+import { type Fraction, frac, lineKind, mul, parseKey, value } from "./abc";
 import { barAt } from "./barcheck";
-import { replaceKeepingBars } from "./barwise";
+import { overwriteForward, repitchTo, replaceKeepingBars } from "./barwise";
 import { dockPanel, undockPanel } from "./dock";
-import { STEP_LENGTHS, type StepReading, pitchText, stepInsert } from "./stepentry";
+import { selectedNotes } from "./selected";
+import {
+  STEP_LENGTHS,
+  type StepReading,
+  pitchText,
+  readingAt,
+  stepInsert,
+  stepText,
+} from "./stepentry";
 import { indexFile } from "./tunes";
 import { tuneItems } from "./walk";
 
@@ -144,9 +152,82 @@ function say(message: string) {
   context?.status(message);
 }
 
+/** The panel's length: "Keep" (-1) keeps a selected note's own; at a caret, an eighth. */
+const KEEP = -1;
 function length(): Fraction {
   const base = (STEP_LENGTHS[lengthIndex] ?? STEP_LENGTHS[2])?.length ?? frac(1, 8);
   return dotted ? mul(base, frac(3, 2)) : base;
+}
+
+/**
+ * A step over a selection (round 8, item 2), in one voice only: with Keep and one note selected,
+ * the note re-pitched in place (its length and marks kept); else written forward from the
+ * selection's first note as a paste of one note overwrites, and the next note selected, so the
+ * next step goes over it. Null when the step goes in as at a caret.
+ */
+function stepOver(
+  view: EditorView,
+  pitches: number[] | "rest",
+): { said: string } | { refused: string } | null {
+  const text = view.state.doc.toString();
+  const main = view.state.selection.main;
+  if (main.empty) return null;
+  const file = indexFile(text);
+  // In one voice: not across voices, nor into a V: line or lyrics.
+  let line = text.lastIndexOf("\n", main.from - 1) + 1;
+  while (line < main.to) {
+    const end = text.indexOf("\n", line) < 0 ? text.length : text.indexOf("\n", line);
+    if (lineKind(text.slice(line, end), true) !== "music")
+      return {
+        refused:
+          "Step entry writes in one voice: this selection reaches other lines. Select within one voice's music.",
+      };
+    line = end + 1;
+  }
+  const picked = selectedNotes(text, [main], file).filter((each) => each.whole);
+  if (new Set(picked.map((each) => each.event.voice)).size > 1)
+    return {
+      refused:
+        "Step entry writes in one voice: this selection crosses voices. Select within one voice.",
+    };
+  const reading = readingAt(text, file, main.from);
+  if (!picked.length || !reading) return null;
+  const sign = stepText(pitches, frac(1), reading).replace(/\d+$/, "");
+  if (lengthIndex === KEEP && picked.length === 1) {
+    const pitched = repitchTo(text, [main], sign, file);
+    if (pitched) {
+      view.dispatch({
+        changes: pitched.changes,
+        selection: { anchor: pitched.caret },
+        annotations: isolateHistory.of("full"),
+        userEvent: "input.midi",
+        scrollIntoView: true,
+      });
+      return { said: `Re-pitched to ${sign}, its length and marks kept.` };
+    }
+  }
+  // Keep over several notes: the first one's length.
+  const first = picked[0] as (typeof picked)[number];
+  const own = first.event.duration;
+  const written = stepText(pitches, lengthIndex === KEEP ? own : length(), reading);
+  const over = overwriteForward(text, file, main, written);
+  if (!over) return null;
+  if ("refused" in over) return over;
+  const set = view.state.changes(over.changes);
+  const after = set.apply(view.state.doc).toString();
+  const head = (over.changes[0]?.from ?? main.from) + written.length;
+  // The next note in the voice, selected: the next step goes over it.
+  const next = selectedNotes(after, [{ from: head, to: after.length }], indexFile(after)).find(
+    (each) => each.event.voice === first.event.voice && each.event.from >= head,
+  );
+  view.dispatch({
+    changes: set,
+    selection: next ? { anchor: next.span.from, head: next.span.to } : { anchor: head },
+    annotations: isolateHistory.of("full"),
+    userEvent: "input.midi",
+    scrollIntoView: true,
+  });
+  return { said: `Wrote ${written} over the selection, from its first note; ${over.said}` };
 }
 
 /**
@@ -157,6 +238,11 @@ function length(): Fraction {
 function enter(pitches: number[] | "rest") {
   if (!context) return;
   const { view } = context;
+  const overSelection = stepOver(view, pitches);
+  if (overSelection) {
+    say("refused" in overSelection ? overSelection.refused : overSelection.said);
+    return;
+  }
   const text = view.state.doc.toString();
   const main = view.state.selection.main;
   const others = view.state.selection.ranges.filter((range) => range !== main && !range.empty);
@@ -343,6 +429,7 @@ function showLengths() {
   for (const [index, button] of [...(panel?.querySelectorAll(".midi-length") ?? [])].entries())
     button.setAttribute("aria-pressed", String(index === lengthIndex));
   $(".midi-dotted")?.setAttribute("aria-pressed", String(dotted));
+  $(".midi-keep")?.setAttribute("aria-pressed", String(lengthIndex === KEEP));
 }
 
 function build() {
@@ -433,6 +520,18 @@ function build() {
       showLengths();
     });
     lengths.append(dot);
+    const keep = element("button", {
+      type: "button",
+      className: "midi-keep",
+      textContent: "Keep",
+      title: "Key 0: over a selected note, its own length (the note re-pitched)",
+    });
+    keep.addEventListener("click", () => {
+      lengthIndex = lengthIndex === KEEP ? 2 : KEEP;
+      save({ length: lengthIndex });
+      showLengths();
+    });
+    lengths.append(keep);
     const learn = element("button", { type: "button", textContent: "Use a key…" });
     learn.addEventListener("click", () => {
       learning = true;
@@ -493,8 +592,9 @@ function build() {
     );
     panel.addEventListener("keydown", (event) => {
       if ((event.target as HTMLElement).tagName === "SELECT") return;
-      const index = STEP_LENGTHS.findIndex((step) => step.key === event.key);
-      if (index >= 0) {
+      const index =
+        event.key === "0" ? KEEP : STEP_LENGTHS.findIndex((step) => step.key === event.key);
+      if (index >= 0 || index === KEEP) {
         event.preventDefault();
         lengthIndex = index;
         save({ length: index });

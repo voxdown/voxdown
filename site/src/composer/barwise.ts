@@ -2733,7 +2733,7 @@ export function overwriteForward(
 ): { changes: Change[]; said: string } | { refused: string } | null {
   if (range.to <= range.from || !inMusic(text, [range], file)) return null;
   const picked = selectedNotes(text, [range], file).filter((each) => each.whole);
-  if (!picked.length || !notesIn(clip)) return null;
+  if (!picked.length || !/[A-Ga-gzx]/.test(clip.replace(/"[^"]*"|![^!]*!/g, ""))) return null;
   const first = picked[0] as Picked;
   const voice = first.event.voice;
   const reading = readingAt(text, file, first.event.from);
@@ -3167,6 +3167,17 @@ export function repitch(
   file: FileIndex = indexFile(text),
 ): { changes: Change[]; caret: number } | null {
   if (!/^[A-Ga-gz]$/.test(typed)) return null;
+  return repitchTo(text, ranges, typed, file);
+}
+
+/** One selected note, chord or rest given a new pitch (a note `^F,`, a chord `[CEG]`, or `z`). */
+export function repitchTo(
+  text: string,
+  ranges: Range[],
+  pitch: string,
+  file: FileIndex = indexFile(text),
+): { changes: Change[]; caret: number } | null {
+  const typed = pitch;
   const selected = ranges.filter((range) => range.to > range.from);
   if (selected.length !== 1 || !inMusic(text, selected, file)) return null;
   const picked = selectedNotes(text, selected, file);
@@ -3179,7 +3190,10 @@ export function repitch(
   if (!head) return null;
   if (head.kind === "note" || head.kind === "rest") {
     const to = head.lengthFrom;
-    return { changes: [{ from: head.from, to, insert: typed }], caret: head.from + 1 };
+    return {
+      changes: [{ from: head.from, to, insert: typed }],
+      caret: head.from + typed.length,
+    };
   }
   if (head.kind === "chord-open") {
     const close = tokens.find((token) => token.kind === "chord-close");
@@ -3191,7 +3205,7 @@ export function repitch(
     const length = close.length || (inner?.kind === "note" ? inner.length : "");
     return {
       changes: [{ from: head.from, to: close.to, insert: `${typed}${length}` }],
-      caret: head.from + 1,
+      caret: head.from + typed.length,
     };
   }
   return null;

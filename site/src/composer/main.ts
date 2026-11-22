@@ -3126,10 +3126,11 @@ function transposeToKey() {
   if (!tune) return;
   transposeDialog ??= createDialog("transpose-dialog", "Transpose to key");
   const dialog = transposeDialog;
-  void import("./transpose-key").then(({ openTransposeDialog, toKey }) =>
+  void import("./transpose-key").then(({ keyHere, openTransposeDialog, toKey }) =>
     openTransposeDialog({
       dialog,
-      current: tune.key,
+      // The key at the selection's start (after a [K:] there), else the tune's.
+      current: keyHere(text(), ranges(), fileIndex()),
       run: (target) => {
         const result = toKey(text(), ranges(), target, fileIndex());
         if ("refused" in result) {

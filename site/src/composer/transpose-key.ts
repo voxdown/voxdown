@@ -4,8 +4,10 @@
  * notes and chord symbols spelled for the new key.
  */
 import { type Key, parseKey } from "./abc";
+import { keyLabel } from "./clip-convert";
 import { type Change, type Range, transpose } from "./commands";
 import { dialogForm } from "./dialog";
+import { readingAt } from "./stepentry";
 import { type FileIndex, indexFile } from "./tunes";
 
 const PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -32,6 +34,21 @@ export function interval(from: string, to: string): number {
   return up > 6 ? up - 12 : up;
 }
 
+/**
+ * The key the music is in where it would move from: at the selection's start (a [K:] before it
+ * counts), or the tune's own key for the whole tune.
+ */
+export function keyHere(text: string, ranges: Range[], file: FileIndex = indexFile(text)): string {
+  const at = ranges[0]?.from ?? 0;
+  const tune = file.tunes.find((each) => at >= each.from && at <= each.to);
+  if (!tune) return "C";
+  const selected = ranges.filter((range) => range.to > range.from);
+  if (!selected.length) return tune.key;
+  const start = Math.min(...selected.map((range) => range.from));
+  const key = readingAt(text, file, start)?.key;
+  return key?.tonic ? keyLabel(key) : tune.key;
+}
+
 /** The text to a new key: the selection's notes, or the whole tune with its K: fields. */
 export function toKey(
   text: string,
@@ -42,7 +59,7 @@ export function toKey(
   const at = ranges[0]?.from ?? 0;
   const tune = file.tunes.find((each) => at >= each.from && at <= each.to);
   if (!tune) return { refused: "Put the caret in a tune to transpose it." };
-  const from = /^\s*([A-G][#b]?)/.exec(tune.key)?.[1];
+  const from = /^\s*([A-G][#b]?)/.exec(keyHere(text, ranges, file))?.[1];
   const to = /^\s*([A-G][#b]?)/.exec(target)?.[1];
   if (!from || !to) return { refused: "This tune's key has no tonic to transpose from (K:none)." };
   const semitones = interval(from, to);

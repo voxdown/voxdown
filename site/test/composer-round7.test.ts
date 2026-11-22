@@ -4,6 +4,7 @@ import { copyText, cutPlan, overBarLine } from "../src/composer/barwise";
 import { type Change, musicParts } from "../src/composer/commands";
 import { checkLyrics } from "../src/composer/lyriccheck";
 import { planPaste, sourceAt } from "../src/composer/paste";
+import { keyHere, toKey } from "../src/composer/transpose-key";
 import { indexFile } from "../src/composer/tunes";
 import { played } from "./composer-played";
 
@@ -161,4 +162,20 @@ describe("a copy of several lines pasted into a line with verses (finding 3)", (
       expect(after).toMatch(/Oh, the lan- tern, oh, the light,/);
       expect(plan.message).toMatch(/lines went in as one/);
     });
+});
+
+describe("Transpose to key… on a section after a key change (finding 8)", () => {
+  const tune =
+    'X:1\nT:Key change test\nM:6/8\nL:1/8\nK:G\n|:"G"GBd gdB|"D"AFD DEF:|\n[K:D]|:"D"faf "A"gec|"D"dfa "G"bag|"D"faf "Bm"dcB|"A"ABc "D"d3:|\n';
+  const section = [{ from: tune.indexOf('"D"faf'), to: tune.lastIndexOf("d3") + 2 }];
+  it("the dialog starts from the key in force there, and the interval is from it", () => {
+    expect(keyHere(tune, section)).toBe("D");
+    expect(keyHere(tune, [{ from: 0, to: 0 }])).toBe("G");
+    const plan = toKey(tune, section, "E");
+    if ("refused" in plan) throw new Error(plan.refused);
+    expect(plan.said).toMatch(/2 semitones up/);
+    const after = apply(tune, plan.changes);
+    // (The key signature stays D: the new key's sharps are written.)
+    expect(after).toContain('[K:D]|:"E"^gbg "B"af^d|');
+  });
 });

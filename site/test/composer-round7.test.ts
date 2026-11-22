@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { cutPlan, overBarLine } from "../src/composer/barwise";
+import { copyText, cutPlan, overBarLine } from "../src/composer/barwise";
 import { type Change, musicParts } from "../src/composer/commands";
-import { planPaste } from "../src/composer/paste";
+import { checkLyrics } from "../src/composer/lyriccheck";
+import { planPaste, sourceAt } from "../src/composer/paste";
 import { indexFile } from "../src/composer/tunes";
 import { played } from "./composer-played";
 
@@ -134,4 +136,29 @@ describe("a bar line typed at the end of a second voice's filled bar (finding 6)
     expect(overBarLine(text, text.indexOf("A |"), bars)).toBeNull();
     expect(overBarLine(text, text.indexOf(" | z3"), [])).toBeNull();
   });
+});
+
+describe("a copy of several lines pasted into a line with verses (finding 3)", () => {
+  const song = readFileSync(new URL("./fixtures/composer/song.abc", import.meta.url), "utf8");
+  const file = indexFile(song);
+  const chorus = song.indexOf('"C"e2', song.indexOf("P:B"));
+  const clip = copyText(song, { from: chorus, to: song.lastIndexOf("z2|]") + 2 }, file);
+  const lyricIssues = (text: string) =>
+    indexFile(text).tunes.flatMap((tune) => checkLyrics(text, tune)).length;
+  const lines = (text: string) => text.split("\n").length;
+  for (const [label, at] of [
+    ["after the final |]", song.indexOf("z2|]\nw:Ev") + 4],
+    ["at a caret in the first bar", song.indexOf('"G"G2 GA ') + 9],
+  ] as const)
+    it(`${label}: one music line, each verse its syllables`, () => {
+      expect(clip).toMatch(/\nw:Oh, the lan-tern/);
+      const plan = planPaste(song, [{ from: at, to: at }], 0, clip, sourceAt(song, file, chorus));
+      if (!plan || "refused" in plan) throw new Error("no plan");
+      const after = apply(song, plan.changes);
+      expect(lines(after)).toBe(lines(song));
+      expect(lyricIssues(after)).toBeLessThanOrEqual(lyricIssues(song));
+      // The copy's own syllables in the first verse, a `*` a note in the others.
+      expect(after).toMatch(/Oh, the lan- tern, oh, the light,/);
+      expect(plan.message).toMatch(/lines went in as one/);
+    });
 });

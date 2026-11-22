@@ -15,9 +15,10 @@
  * - Bar lines: see ./barwise.
  * Every paste says what went where, or is refused; none succeeds in part in silence.
  */
-import { lineKind } from "./abc";
+import { lineKind, tokenizeMusic } from "./abc";
 import {
   insertsAtNote,
+  joinedClip,
   lyricsFor,
   notesIn,
   overwriteForward,
@@ -238,19 +239,37 @@ export function sourceAt(text: string, file: FileIndex, position: number): ClipS
   return reading ? { unit: reading.unit, key: reading.key, meter: reading.meter } : null;
 }
 
+/** A caret inside a note (between its letter and its length) is after the note. */
+function outOfNotes(text: string, file: FileIndex, ranges: Range[]): Range[] {
+  return ranges.map((range) => {
+    if (range.from !== range.to || !inMusic(text, file, range.from)) return range;
+    const lineFrom = text.lastIndexOf("\n", range.from - 1) + 1;
+    const lineTo =
+      text.indexOf("\n", range.from) < 0 ? text.length : text.indexOf("\n", range.from);
+    const inside = tokenizeMusic(text.slice(lineFrom, lineTo), lineFrom).find(
+      (token) =>
+        ["note", "rest", "chord-close"].includes(token.kind) &&
+        token.from < range.from &&
+        token.to > range.from,
+    );
+    return inside ? { from: inside.to, to: inside.to } : range;
+  });
+}
+
 /**
  * What a paste writes over the selection (`main` is the main range's index), or null when the
  * editor's own paste does just the same. `source` is where Composer copied it, when it did.
  */
 export function planPaste(
   text: string,
-  ranges: Range[],
+  given: Range[],
   main: number,
   clip: string,
   source: ClipSource | null,
   file: FileIndex = indexFile(text),
   staves?: Staves,
 ): PastePlan | null {
+  const ranges = outOfNotes(text, file, given);
   const copy = clip.replace(/\r\n?/g, "\n");
   const said: string[] = [];
   // A whole tune (from its X: line): a blank line before it, and after it when music follows,
@@ -286,6 +305,22 @@ export function planPaste(
     return converted.text;
   };
   const selected = ranges.filter((range) => range.to > range.from);
+  // Several music lines (and their verses) into a music line with verses: one line, the verses
+  // given the copy's syllables, or a `*` a note.
+  const target = ranges[main] ?? (ranges[0] as Range);
+  const joined = versed(text, file, target.from) ? joinedClip(copy) : null;
+  if (joined) {
+    const plan = planPaste(text, ranges, main, joined.music, source, file, staves);
+    if (!plan) {
+      const changes = ranges.map((range) => ({ ...range, insert: joined.music }));
+      return { changes: withLyrics(text, file, changes, joined.verses), message: JOINED };
+    }
+    if ("refused" in plan) return plan;
+    return {
+      changes: relyric(text, file, plan.changes, joined.verses),
+      message: [plan.message, JOINED].filter(Boolean).join(" "),
+    };
+  }
   const parts = voicedParts(copy);
   // Fitted to the bar lines around each place (./barwise), whole bars under their own meter.
   const meter = source?.meter ? { meter: source.meter } : null;
@@ -382,7 +417,36 @@ function seams(text: string, changes: Change[]): Change[] {
   });
 }
 
-function withLyrics(text: string, file: FileIndex, changes: Change[]): Change[] {
+const JOINED =
+  "The copy's lines went in as one, so the line keeps its verses; its syllables went with it.";
+
+/** Whether a place is in a music line (or at its end) with w: lines under it. */
+function versed(text: string, file: FileIndex, at: number): boolean {
+  const from = text.lastIndexOf("\n", at - 1) + 1;
+  const to = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+  return (
+    inMusic(text, file, at) &&
+    lineKind(text.slice(from, to), true) === "music" &&
+    text.startsWith("w:", to + 1)
+  );
+}
+
+/** A plan's changes, their lyrics worked out again with the copy's own syllables. */
+function relyric(text: string, file: FileIndex, changes: Change[], verses: string[][]): Change[] {
+  // (The lyric changes the plan made are the ones in w: lines: they're made again.)
+  const music = changes.filter((change) => {
+    const line = text.slice(text.lastIndexOf("\n", change.from - 1) + 1, change.from);
+    return !line.startsWith("w:");
+  });
+  return withLyrics(text, file, music, verses);
+}
+
+function withLyrics(
+  text: string,
+  file: FileIndex,
+  changes: Change[],
+  verses?: string[][],
+): Change[] {
   const extra: Change[] = [];
   for (const change of changes) {
     const gone =
@@ -399,7 +463,7 @@ function withLyrics(text: string, file: FileIndex, changes: Change[]): Change[] 
         : [];
     const count = notesIn(change.insert);
     if (!gone.length && !count) continue;
-    extra.push(...lyricsFor(text, file, gone, count ? [[change.from, count]] : []));
+    extra.push(...lyricsFor(text, file, gone, count ? [[change.from, count, verses]] : []));
   }
   return seams(text, [...changes, ...extra]).sort((a, b) => a.from - b.from || a.to - b.to);
 }

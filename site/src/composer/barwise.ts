@@ -333,7 +333,26 @@ function splitTuplet(structure: Structure, spans: Range[]): boolean {
  */
 export function copyText(text: string, range: Range, file: FileIndex = indexFile(text)): string {
   const written = text.slice(range.from, range.to);
-  if (range.to <= range.from || !inMusic(text, [range], file)) return written;
+  if (range.to <= range.from) return written;
+  if (!inMusic(text, [range], file)) {
+    // Music lines with their verses (w: lines) between: each line's music as Copy takes it, the
+    // verses as written.
+    const tune = file.tunes.find((each) => range.from >= each.bodyFrom && range.to <= each.to);
+    if (!tune) return written;
+    const out: string[] = [];
+    let at = text.lastIndexOf("\n", range.from - 1) + 1;
+    while (at < range.to) {
+      const end = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+      const line = text.slice(at, end);
+      const piece = { from: Math.max(at, range.from), to: Math.min(end, range.to) };
+      if (lineKind(line, true) === "music") {
+        if (piece.to > piece.from) out.push(copyText(text, piece, file));
+      } else if (line.startsWith("w:")) out.push(line);
+      else return written;
+      at = end + 1;
+    }
+    return out.join("\n");
+  }
   const structure = structureOf(text, file, range.from);
   const spans = [range];
   const dropped = new Set<number>();
@@ -1935,7 +1954,7 @@ export function lyricsFor(
   text: string,
   file: FileIndex,
   gone: number[],
-  added: [number, number][],
+  added: [number, number, (string[][] | undefined)?][],
 ): Change[] {
   const changes: Change[] = [];
   const lines = new Map<number, { from: number; to: number }>();
@@ -1945,7 +1964,7 @@ export function lyricsFor(
     lines.set(from, { from, to });
   }
   for (const line of lines.values())
-    for (const verse of versesUnder(text, line.to)) {
+    for (const [verseIndex, verse] of versesUnder(text, line.to).entries()) {
       const wordsTo = verse.to;
       const slots = lyricSlots(text.slice(verse.from, verse.to), verse.from);
       const notes = selectedNotes(text, [{ from: line.from, to: line.to }], file)
@@ -1960,19 +1979,56 @@ export function lyricsFor(
         if (slot && gone.includes(note))
           changes.push({ from: slot.from, to: next ? next.from : slot.to, insert: "" });
       });
-      for (const [at, count] of added) {
+      for (const [at, count, words] of added) {
         if (at < line.from || at > line.to) continue;
         const index = notes.filter((note) => note < at).length;
         const slot = slots[index];
         const place = slot ? slot.from : wordsTo;
+        // The copy's own syllables for this verse, when it has them; else a `*` a note.
+        const own = words?.[verseIndex];
+        const syllables = own && own.length === count ? own : Array<string>(count).fill("*");
         changes.push({
           from: place,
           to: place,
-          insert: `${slot ? "" : " "}${Array(count).fill("*").join(" ")}${slot ? " " : ""}`,
+          insert: `${slot ? "" : " "}${syllables.join(" ")}${slot ? " " : ""}`,
         });
       }
     }
   return changes;
+}
+
+/**
+ * A copy of several music lines with their verses (w: lines), made one line for a music line
+ * that has verses of its own: its lines joined with spaces (bar lines kept), and each verse's
+ * syllables, line after line (a `*` a note where a line has none for it). Null for a copy of one
+ * music line without verses, or with other fields in it.
+ */
+export function joinedClip(clip: string): { music: string; verses: string[][] } | null {
+  const lines = clip.split("\n").filter((line) => line.trim());
+  const groups: { music: string; verses: string[] }[] = [];
+  for (const line of lines) {
+    if (line.startsWith("w:")) {
+      const last = groups[groups.length - 1];
+      if (!last) return null;
+      last.verses.push(line.slice(2));
+    } else if (lineKind(line, true) === "music") groups.push({ music: line.trim(), verses: [] });
+    else return null;
+  }
+  if (groups.length < 2 && !groups.some((group) => group.verses.length)) return null;
+  const count = Math.max(0, ...groups.map((group) => group.verses.length));
+  const verses: string[][] = [];
+  for (let verse = 0; verse < count; verse++)
+    verses.push(
+      groups.flatMap((group) => {
+        const notes = notesIn(group.music);
+        const words = group.verses[verse] ?? "";
+        const syllables = lyricSlots(words, 0)
+          .map((slot) => words.slice(slot.from, slot.to))
+          .slice(0, notes);
+        return [...syllables, ...Array<string>(notes - syllables.length).fill("*")];
+      }),
+    );
+  return { music: groups.map((group) => group.music).join(" "), verses };
 }
 
 /** How many notes (and chords) a copy holds: the syllables a paste of it needs. */

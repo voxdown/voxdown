@@ -1,3 +1,4 @@
+import { hairpinPairs } from "./barwise";
 /**
  * Where a mark from the decoration menu goes over a selection, as a musician expects (MuseScore
  * and Dorico do the same), by kind (loaded with the menu):
@@ -11,7 +12,14 @@
  * - articulations and ornaments (staccato, accent, trill, roll…): on every note, and off again
  *   when every note has one; never two on a note.
  */
-import { type Change, type Range, decorationMark, guardMarks, prefixMarks } from "./commands";
+import {
+  type Change,
+  type Range,
+  decorationMark,
+  guardMarks,
+  markOf,
+  prefixMarks,
+} from "./commands";
 import { type Picked, selectedNotes } from "./selected";
 import { type FileIndex, indexFile } from "./tunes";
 
@@ -27,10 +35,11 @@ const spellings = (name: string): string[] => {
   const full = `!${name}!`;
   if (name === "." || name === "staccato") return [".", "!staccato!"];
   if (name === "~" || name === "roll") return ["~", "!roll!"];
-  return [full];
+  return [full, decorationMark(name)];
 };
+// (Any spelling of the mark: !>! is !accent!, H is !fermata!; round 9.)
 const has = (text: string, at: number, names: string[]) =>
-  prefixMarks(text, at).filter((mark) => names.includes(mark.mark));
+  prefixMarks(text, at).filter((mark) => names.map(markOf).includes(markOf(mark.mark)));
 
 /** The selected notes by voice, in text order, the top voice (the tune's first) first. */
 function byVoice(text: string, ranges: Range[], file: FileIndex): Picked[][] {
@@ -51,6 +60,33 @@ function byVoice(text: string, ranges: Range[], file: FileIndex): Picked[][] {
   return [...voices.entries()]
     .sort(([a], [b]) => (order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999))
     .map(([, list]) => list);
+}
+
+/**
+ * Per staff, not per voice (round 9): of the voices selected on one staff (as %%score groups them
+ * in (…), wherever in the tune it is), the top one; a voice on a staff of its own is its own top.
+ */
+function perStaff(text: string, voices: Picked[][], file: FileIndex): Picked[][] {
+  const first = voices[0]?.[0];
+  const tune =
+    first &&
+    file.tunes.find((each) => first.event.from >= each.from && first.event.from <= each.to);
+  if (!tune) return voices;
+  const line = /^%%(?:score|staves)(.*)$/m.exec(text.slice(tune.from, tune.to))?.[1] ?? "";
+  const groups = [...line.matchAll(/\(([^()]*)\)/g)].map((group) =>
+    (group[1] as string).split(/[\s|{}[\]]+/).filter(Boolean),
+  );
+  const staff = (voice: string) => {
+    const group = groups.find((ids) => ids.includes(voice));
+    return group ? `(${group.join(" ")})` : voice;
+  };
+  const seen = new Set<string>();
+  return voices.filter((list) => {
+    const key = staff((list[0] as Picked).event.voice);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -83,8 +119,10 @@ export function placeMark(
   name: string,
   file: FileIndex = indexFile(text),
 ): MarkPlan {
-  const voices = byVoice(text, ranges, file);
-  if (!voices.length) return { refused: "Put the caret on a note, or select notes, to mark them." };
+  const all = byVoice(text, ranges, file);
+  if (!all.length) return { refused: "Put the caret on a note, or select notes, to mark them." };
+  // Dynamics and hairpins go per staff (its top voice); everything else per voice.
+  const voices = DYNAMIC.test(name) || HAIRPIN.has(name) ? perStaff(text, all, file) : all;
   const label = plainName(name);
   const changes: Change[] = [];
   const several = voices.length > 1;
@@ -121,16 +159,39 @@ export function placeMark(
       return { refused: `A ${name} goes over a stretch of notes: select them, then choose it.` };
     const lengths: number[] = [];
     let removed = 0;
+    let replaced = 0;
+    // (Every hairpin of the tune, each end with its note: one crossing the selection is replaced.)
+    const first0 = voices[0]?.[0] as Picked;
+    const { pairs } = hairpinPairs(text, file, first0.event.from);
+    const seen = new Set<number>();
     for (const list of voices) {
       if (list.length < 2) continue;
       const first = list[0] as Picked;
       const last = list[list.length - 1] as Picked;
-      const started = has(text, first.event.from, opens);
-      const ended = has(text, last.event.from, closes);
-      if (started.length && ended.length) {
-        for (const mark of [...started, ...ended]) changes.push({ ...mark, insert: "" });
-        removed += 1;
-      } else {
+      const voice = first.event.voice;
+      const crossing = pairs.filter(
+        (pair) =>
+          pair.voice === voice &&
+          pair.open.event &&
+          pair.close.event &&
+          pair.open.event.from <= last.event.from &&
+          pair.close.event.from >= first.event.from,
+      );
+      const same = crossing.find(
+        (pair) =>
+          pair.open.event?.from === first.event.from &&
+          pair.close.event?.from === last.event.from &&
+          opens.includes(pair.open.token.text),
+      );
+      for (const pair of crossing)
+        for (const mark of [pair.open.token, pair.close.token])
+          if (!seen.has(mark.from)) {
+            seen.add(mark.from);
+            changes.push({ from: mark.from, to: mark.to, insert: "" });
+          }
+      if (same) removed += 1;
+      else {
+        if (crossing.length) replaced += 1;
         changes.push({ from: first.event.from, to: first.event.from, insert: open });
         changes.push({ from: last.event.from, to: last.event.from, insert: close });
       }
@@ -142,7 +203,7 @@ export function placeMark(
       said:
         removed === lengths.length
           ? `${word} taken off.`
-          : `${word} over ${count(lengths[0] ?? 0, "note")}${several ? " in each voice" : ""}.`,
+          : `${word} over ${count(lengths[0] ?? 0, "note")}${several ? " in each voice" : ""}${replaced ? ", in place of the hairpin there" : ""}.`,
     };
   }
   if (START.has(name) || END.test(name)) {

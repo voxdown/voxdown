@@ -18,8 +18,10 @@ const apply = (text: string, plan: ReturnType<typeof placeMark>) => {
 const count = (text: string, mark: string) => text.split(mark).length - 1;
 const one = "X:1\nT:t\nM:4/4\nL:1/8\nK:G\nGABc dBAG|FGAB cAGF|EFGA BGFE|]\n";
 const all = (text: string) => [{ from: text.indexOf("GABc"), to: text.indexOf("|]") }];
+// (Two staves: per staff, dynamics and hairpins go on each; round 9.)
 const two =
-  "X:1\nT:t\nM:4/4\nL:1/4\n%%score (1 2)\nK:C\nV:1\nc d e f|g a b c'|\nV:2\nC D E F|G A B c|\n";
+  "X:1\nT:t\nM:4/4\nL:1/4\n%%score 1 2\nK:C\nV:1\nc d e f|g a b c'|\nV:2\nC D E F|G A B c|\n";
+const shared = two.replace("%%score 1 2", "%%score (1 2)");
 const both = (text: string) => [
   { from: text.indexOf("c d e f"), to: text.indexOf("c'|") + 2 },
   { from: text.indexOf("C D E F"), to: text.lastIndexOf("c|") + 1 },
@@ -101,5 +103,39 @@ describe("articulations go on every note, and toggle", () => {
     );
     const more = apply(some, placeMark(some, all(some), "."));
     expect(count(more, ".")).toBe(24);
+  });
+});
+
+describe("dynamics and hairpins go per staff, not per voice (round 9)", () => {
+  const sharedBoth = (text: string) => both(text);
+  it("on a staff shared by two voices, the top voice only", () => {
+    const f = apply(shared, placeMark(shared, sharedBoth(shared), "f"));
+    expect(count(f, "!f!")).toBe(1);
+    expect(f).toContain("V:1\n!f!c d e f");
+    const cresc = apply(shared, placeMark(shared, sharedBoth(shared), "crescendo"));
+    expect(count(cresc, "!<(!")).toBe(1);
+    expect(count(cresc, "!<)!")).toBe(1);
+  });
+  it("an imported !>! accent is the Accent: toggled off, never doubled (item 12)", () => {
+    const text = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\n!>!C2 D2|]\n";
+    const at = text.indexOf("!>!C2");
+    const out = apply(text, placeMark(text, [{ from: at, to: at + 5 }], "accent"));
+    expect(out).toContain("\nC2 D2|]");
+    const held = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\nC2 HD2|]\n";
+    const all = [{ from: held.indexOf("C2"), to: held.indexOf("D2") + 2 }];
+    expect(apply(held, placeMark(held, all, "fermata"))).toContain("\nC2 D2|]");
+  });
+});
+
+describe("a hairpin over one it crosses replaces it (round 9)", () => {
+  it("bars 1–2 over a crescendo in bar 2: one hairpin, the new one", () => {
+    const text = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\nC D E F|!<(!G A B !<)!c|]\n";
+    const range = [{ from: text.indexOf("C D"), to: text.indexOf("c|]") + 1 }];
+    const plan = placeMark(text, range, "crescendo");
+    const out = apply(text, plan);
+    expect(count(out, "!<(!")).toBe(1);
+    expect(count(out, "!<)!")).toBe(1);
+    expect(out).toContain("\n!<(!C D E F|G A B !<)!c|]");
+    expect(plan).toMatchObject({ said: expect.stringMatching(/in place of the hairpin there/) });
   });
 });

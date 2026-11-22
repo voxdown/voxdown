@@ -3069,17 +3069,13 @@ export function noteStartsBar(text: string, file: FileIndex, range: Range): numb
  * rest) moves to the nearest note left inside the hairpin; with none left, both ends go.
  * `gone` are the stretches cut away, `rested` the notes made rests.
  */
-function hairpinsKept(
-  text: string,
-  file: FileIndex,
-  at: number,
-  gone: Range[],
-  rested: Set<number>,
-): Change[] {
+/** A hairpin's end and the note it's on. */
+type PairMark = { token: MusicToken; event: MusicToken | null };
+/** Every hairpin of a tune, each end with its note, by voice; and every note, rest and chord. */
+export function hairpinPairs(text: string, file: FileIndex, at: number) {
   const tokens = tuneTokens(text, file, at);
-  type Mark = { token: MusicToken; event: MusicToken | null };
-  const pairs: { open: Mark; close: Mark; voice: string }[] = [];
-  const opened = new Map<string, Mark>();
+  const pairs: { open: PairMark; close: PairMark; voice: string }[] = [];
+  const opened = new Map<string, PairMark>();
   const pending: { token: MusicToken; voice: string; open: boolean }[] = [];
   const events: { token: MusicToken; voice: string }[] = [];
   const owner = new Map<MusicToken, MusicToken | null>();
@@ -3108,6 +3104,18 @@ function hairpinsKept(
       opened.delete(voice);
     }
   }
+  return { pairs, events };
+}
+
+function hairpinsKept(
+  text: string,
+  file: FileIndex,
+  at: number,
+  gone: Range[],
+  rested: Set<number>,
+): Change[] {
+  type Mark = PairMark;
+  const { pairs, events } = hairpinPairs(text, file, at);
   const cut = (at: number) => gone.some((range) => at >= range.from && at < range.to);
   const lost = (mark: Mark) =>
     cut(mark.token.from) || !mark.event || cut(mark.event.from) || rested.has(mark.event.from);

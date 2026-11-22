@@ -550,9 +550,31 @@ export function musicParts(text: string, ranges: Range[], file = indexFile(text)
 
 /** The same mark written in full: !staccato! for ".", !roll! for "~". */
 const FULL_MARK: Record<string, string> = { ".": "!staccato!", "~": "!roll!" };
-/** A decoration as the mark it makes: "." and !staccato! are one, "~" and !roll! another. */
-const markOf = (decoration: string) =>
-  decoration === "!staccato!" ? "." : decoration === "!roll!" ? "~" : decoration;
+/**
+ * Spellings abcjs reads as one mark (round 9, item 12): each list's first is the one compared.
+ */
+const SAME_MARKS: string[][] = [
+  [".", "!staccato!"],
+  ["~", "!roll!"],
+  ["T", "!trill!"],
+  ["H", "!fermata!"],
+  ["u", "!upbow!"],
+  ["v", "!downbow!"],
+  ["M", "!lowermordent!", "!mordent!"],
+  ["P", "!uppermordent!", "!pralltriller!"],
+  ["L", "!>!", "!accent!", "!emphasis!"],
+  ["S", "!segno!"],
+  ["O", "!coda!"],
+  ["!<(!", "!crescendo(!"],
+  ["!<)!", "!crescendo)!"],
+  ["!>(!", "!diminuendo(!"],
+  ["!>)!", "!diminuendo)!"],
+];
+const SAME_AS = new Map(
+  SAME_MARKS.flatMap((list) => list.map((each) => [each, list[0] as string])),
+);
+/** A decoration as the mark it makes: "." and !staccato! are one, !>! and !accent! another. */
+export const markOf = (decoration: string) => SAME_AS.get(decoration) ?? decoration;
 
 /**
  * The decorations a note carries, as written before it: across other decorations, chord symbols,

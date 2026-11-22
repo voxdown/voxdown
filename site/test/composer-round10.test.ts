@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { checkBars } from "../src/composer/barcheck";
-import { newVoice, samePoint, tuneTokens } from "../src/composer/barwise";
+import { cutPlan, newVoice, samePoint, tuneTokens } from "../src/composer/barwise";
 import type { Change } from "../src/composer/commands";
 import { planPaste } from "../src/composer/paste";
 import { indexFile } from "../src/composer/tunes";
+import { played } from "./composer-played";
 
 /* Round 10 (selection hardening, final): Claude's evening of real work, and Codex's fuzzing. */
 
@@ -69,5 +70,37 @@ describe("a voiced paste at a bar's start goes before another voice's (3 or ( (i
     expect(after).toContain("V:1\nC2 D2 E2 F2 | c8 | G8 |]");
     expect(after).toContain("V:2\nC4 E4 | C,8 | (3GAB c2 d4 |]");
     expect(samePoint(text, indexFile(text), from, "2")).toBe(text.indexOf("(3GAB"));
+  });
+});
+
+describe("Copy and Cut of a whole repeat with endings carry its |: (item 3)", () => {
+  const head = "X:1\nT:Set\nM:6/8\nL:1/8\nK:D\n";
+  const A = "|:dAF DFA|BGB AFA|1 GBE FEA:|2 GBE FED||\n";
+  const B = "|:faf gec|dfa bag|1 gBE FED:|2 gBE FEA|]\n";
+  const tune = head + A + B;
+  const pitches = (text: string) => played(text, null).map((note) => note.pitch);
+  const move = (from: number, to: number, place: (after: string) => number) => {
+    const cut = cutPlan(tune, [{ from, to }]);
+    if (!cut || "refused" in cut) throw new Error("no cut");
+    expect(cut.clip.startsWith("|:")).toBe(true);
+    const after = apply(tune, cut.changes);
+    const at = place(after);
+    const plan = planPaste(after, [{ from: at, to: at }], 0, cut.clip, null);
+    if (plan && "refused" in plan) throw new Error(plan.refused);
+    return plan ? apply(after, plan.changes) : `${after.slice(0, at)}${cut.clip}${after.slice(at)}`;
+  };
+  it("A after B plays B, then A, endings and all", () => {
+    const out = move(
+      tune.indexOf("dAF"),
+      tune.indexOf("FED||") + 3,
+      (after) => after.lastIndexOf("FEA") + 3,
+    );
+    expect(pitches(out)).toEqual(pitches(head + B.replace("|]", "||") + A.replace("||", "|]")));
+  });
+  it("B before A plays B, then A", () => {
+    const out = move(tune.indexOf("faf"), tune.lastIndexOf("FEA") + 3, (after) =>
+      after.indexOf("|:dAF"),
+    );
+    expect(pitches(out)).toEqual(pitches(head + B.replace("|]", "||") + A.replace("||", "|]")));
   });
 });

@@ -379,6 +379,14 @@ export function copyText(text: string, range: Range, file: FileIndex = indexFile
         !text.slice(own.to, range.from).trim(),
     );
     if (sign) return copyText(text, { from: sign.sign.from, to: range.to }, file);
+    // A whole repeat with its endings: copied whole, its |: included, so a paste of it plays it
+    // as written (round 10, item 3).
+    const repeat = wholeRepeatOf(text, file, range);
+    if (repeat) {
+      const opened = /^(\|:|::|:\|:)/.test(text.slice(repeat.from));
+      const body = text.slice(repeat.from, repeat.to).replace(/\|\]$/, "|");
+      return `${opened ? "" : "|:"}${body.replace(/^::/, "|:").replace(/^:\|:/, "|:")}`;
+    }
   }
   if (!inMusic(text, [range], file)) {
     // Music lines with their verses (w: lines) between: each line's music as Copy takes it, the
@@ -464,7 +472,9 @@ function joinBars(first: string, second: string): string {
   const b = barParts(second);
   const end = a.end || b.end;
   const start = b.start || a.start;
-  const body = a.body === "|]" || b.body === "|]" ? "|]" : "|";
+  // (A final |] with a repeat starting after it: the music goes on, so the repeat's start, |:,
+  // stands; round 10.)
+  const body = b.body === "|]" || (a.body === "|]" && !b.start) ? "|]" : "|";
   if (end && start && body === "|") return `${":".repeat(end)}:${b.ending}`;
   return `${":".repeat(end)}${body}${body === "|]" ? "" : ":".repeat(start)}${b.ending}`;
 }
@@ -1441,39 +1451,29 @@ export function duplicate(
   const padded = new Set<string>();
   const place = (body: Range, bodies: Range[]) => {
     // A whole repeat with its endings, every note of it selected: copied whole after its last
-    // ending (round 9, item 11).
-    if (bodies.length === 1) {
-      const voice = selectedNotes(text, [body], file)[0]?.event.voice ?? "";
-      const chosenNotes = new Set(selectedNotes(text, [body], file).map((each) => each.event.from));
-      for (const region of repeatsOf(text, file, body.from, voice)) {
-        const inside = selectedNotes(text, [region], file).filter(
-          (each) => each.event.voice === voice,
-        );
-        const endsOnEnding = /[0-9]/.test(text.slice(region.from, region.to));
-        if (
-          !endsOnEnding ||
-          !inside.length ||
-          inside.some((each) => !chosenNotes.has(each.event.from)) ||
-          chosenNotes.size !== inside.length
-        )
-          continue;
-        const closing = tokenizeMusic(text.slice(region.from, region.to), region.from)
-          .filter((token) => token.kind === "bar")
-          .at(-1);
-        if (!closing) continue;
-        const opened = /^(\|:|::|:\|:)/.test(text.slice(region.from));
+    // ending (round 9, item 11; ./wholeRepeatOf, as Copy and Cut take it).
+    const repeat = bodies.length === 1 ? wholeRepeatOf(text, file, body) : null;
+    if (repeat) {
+      const closing = tokenizeMusic(text.slice(repeat.from, repeat.to), repeat.from)
+        .filter((token) => token.kind === "bar")
+        .at(-1);
+      if (closing) {
+        const opened = /^(\|:|::|:\|:)/.test(text.slice(repeat.from));
         const copy = {
           from: closing.from,
           to: closing.from,
-          insert: `${opened ? "" : "|:"}${text.slice(region.from, closing.from)}`,
+          insert: `${opened ? "" : "|:"}${text.slice(repeat.from, closing.from)}`,
         };
         changes.push(copy);
         copies.push(copy);
+        const voice = selectedNotes(text, [body], file)[0]?.event.voice;
         changes.push(
           ...lyricsAlong(
             text,
             file,
-            inside.filter((each) => !each.event.rest).map((each) => each.event.from),
+            selectedNotes(text, [repeat], file)
+              .filter((each) => each.event.voice === voice && !each.event.rest)
+              .map((each) => each.event.from),
           ),
         );
         said.push("The repeat duplicated whole, with its endings, after them.");
@@ -3732,6 +3732,29 @@ export function inOneVoice(
 ): boolean {
   const selected = ranges.filter((range) => range.to > range.from);
   return new Set(selectedNotes(text, selected, file).map((each) => each.event.voice)).size <= 1;
+}
+
+/**
+ * A whole repeat with its endings that a range selects, every note of it (round 9's Duplicate
+ * detection, shared with Copy and Cut in round 10): the region from its `|:` (or the tune's
+ * start) to its last ending's bar line, or null.
+ */
+export function wholeRepeatOf(text: string, file: FileIndex, range: Range): Range | null {
+  const notes = selectedNotes(text, [range], file);
+  const voice = notes[0]?.event.voice;
+  if (!voice) return null;
+  const chosen = new Set(notes.map((each) => each.event.from));
+  for (const region of repeatsOf(text, file, range.from, voice)) {
+    const inside = selectedNotes(text, [region], file).filter((each) => each.event.voice === voice);
+    if (
+      /[0-9]/.test(text.slice(region.from, region.to)) &&
+      inside.length > 0 &&
+      inside.length === chosen.size &&
+      inside.every((each) => chosen.has(each.event.from))
+    )
+      return region;
+  }
+  return null;
 }
 
 /** One change, from the first character that differs to the last. */

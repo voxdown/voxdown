@@ -214,3 +214,13 @@ describe("melody search results follow the edits (item 5)", () => {
     expect(doc).toContain("C D E G2 | G F E D | C D E G2 | C D E G2 |]");
   });
 });
+
+describe("a paste after the final |] puts its syllables after the verse's last word (item 6)", () => {
+  it("even when the verse runs on past its notes", () => {
+    const text = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\nC D E F|]\nw: one two three four load.\n";
+    const at = text.indexOf("|]") + 2;
+    const plan = planPaste(text, [{ from: at, to: at }], 0, "G A B c|", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    expect(apply(text, plan.changes)).toContain("w: one two three four load. * * * *");
+  });
+});

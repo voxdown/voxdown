@@ -2202,7 +2202,8 @@ export function lyricsFor(
       for (const [at, count, words] of added) {
         if (at < line.from || at > line.to) continue;
         const index = notes.filter((note) => note < at).length;
-        const slot = slots[index];
+        // After the line's last note, after every syllable (a verse may run on past its notes).
+        const slot = index < notes.length ? slots[index] : undefined;
         const place = slot ? slot.from : wordsTo;
         // The copy's own syllables for this verse, when it has them; else a `*` a note.
         const own = words?.[verseIndex];

@@ -221,3 +221,24 @@ describe("voices kept in step (round 5, finding 6)", () => {
     ]);
   });
 });
+
+describe("whole bars pasted over part of a bar (round 5, finding 7)", () => {
+  it("go after the bar, the selection left as it was, said so", () => {
+    const tune = `${head}C D E|F G A|B c d|]\n`;
+    const at = tune.indexOf("G A");
+    const plan = planPaste(tune, [{ from: at, to: at + 3 }], 0, "e f g|", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    expect(apply(tune, plan.changes)).toBe(`${head}C D E|F G A| e f g|B c d|]\n`);
+    expect(plan.message).toMatch(/after the bar the selection is in/);
+  });
+});
+
+describe("a tune pasted after music gets its blank line (round 5, finding 11)", () => {
+  it("before the X: line, and after it when music follows", () => {
+    const two = `${head}C D E|]\n`;
+    const end = two.length;
+    const plan = planPaste(two, [{ from: end, to: end }], 0, "X:2\nT:u\nK:C\nG A B|]\n", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    expect(apply(two, plan.changes)).toBe(`${two}\nX:2\nT:u\nK:C\nG A B|]\n`);
+  });
+});

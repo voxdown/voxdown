@@ -370,6 +370,29 @@ function caretsAfter(state: EditorState, changes: Change[]): EditorSelection {
     ? EditorSelection.create(ends)
     : EditorSelection.single(set.mapPos(state.selection.main.from));
 }
+/**
+ * What a paste leaves selected: the music it wrote (not the bar lines put round it, nor a w:
+ * line's placeholders), so the next transpose or mark acts on it; else carets after it.
+ */
+function pastedSelection(state: EditorState, changes: Change[]): EditorSelection {
+  const set = state.changes(changes);
+  const music = changes.filter(
+    (change) =>
+      /[A-Ga-gz]/.test(change.insert) && !state.doc.lineAt(change.from).text.startsWith("w:"),
+  );
+  if (!music.length) return caretsAfter(state, changes);
+  return EditorSelection.create(
+    music.map((change) => {
+      const from = set.mapPos(change.from, -1);
+      const lead = /^[\s|]*(?:\[M:[^\]]*\]\s*)?/.exec(change.insert)?.[0].length ?? 0;
+      const trail = /(?:\s*\[M:[^\]]*\])?[\s|:]*$/.exec(change.insert)?.[0].length ?? 0;
+      return EditorSelection.range(
+        from + lead,
+        Math.max(from + lead, from + change.insert.length - trail),
+      );
+    }),
+  );
+}
 /** A paste, decided by ./paste; false when the editor's own paste does the same. */
 function pastePlanned(target: EditorView, pasted: string, sourceData = ""): boolean {
   if (!paster) {
@@ -421,11 +444,14 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
   }
   target.dispatch({
     changes: plan.changes,
-    selection: caretsAfter(state, plan.changes),
+    selection: pastedSelection(state, plan.changes),
     scrollIntoView: true,
     userEvent: "input.paste",
   });
-  if (plan.message) notice(plan.message, "success");
+  if (plan.message) {
+    notice(plan.message, "success");
+    sayAloud(plan.message);
+  }
   return true;
 }
 async function pasteText() {
@@ -765,6 +791,11 @@ function cutMusic(target: EditorView, clip: string | null): boolean {
     scrollIntoView: true,
   });
   if (plan?.said.length) notice(plan.said.join(" "));
+  sayAloud(
+    plan?.said.length
+      ? plan.said.join(" ")
+      : `${clip === null ? "Deleted" : "Cut"} ${describePicked(selectedNotes(state.doc.toString(), list, state.field(fileIndexField))).text}.`,
+  );
   lastCut =
     clip === null
       ? null
@@ -802,6 +833,18 @@ function copyOut(event: ClipboardEvent, target: EditorView, cut: boolean): boole
   lastCopy = copy;
   event.preventDefault();
   if (cut) cutMusic(target, copy.text);
+  if (!cut)
+    sayAloud(
+      `Copied ${
+        describePicked(
+          selectedNotes(
+            target.state.doc.toString(),
+            target.state.selection.ranges.filter((range) => !range.empty),
+            target.state.field(fileIndexField),
+          ),
+        ).text
+      }.`,
+    );
   if (copy.voices > 1)
     notice(
       `${cut ? "Cut" : "Copied"} ${copy.voices} voices, each ${cut ? "copied " : ""}with its V: line.`,
@@ -831,7 +874,9 @@ function sayAboutSelection(message: string) {
   sayAloud(message);
 }
 /** Said in the score's live region too (polite): #explain is quiet, for the eye. */
+let lastSaid: { message: string; at: number } | null = null;
 function sayAloud(message: string) {
+  lastSaid = { message, at: performance.now() };
   const live = $("score-live");
   live.textContent = "";
   requestAnimationFrame(() => {
@@ -1566,8 +1611,10 @@ async function render(force = false) {
       linkFromText();
       runChecks();
       refreshPlace();
-      // The status read the old drawing ("in 2 places" before it knew the voices): read again.
+      // The status read the old drawing ("in 2 places" before it knew the voices): read again,
+      // and the score's live region too, when the score has the keys.
       explainCaret({ transactions: [], selectionSet: false } as unknown as ViewUpdate);
+      if (document.activeElement === scoreScroll) announceScore();
     }, 0);
   } catch (error) {
     console.warn("Composer could not draw this tune.", error);
@@ -1825,6 +1872,15 @@ function staffGeometry() {
 }
 
 /** Soft bands behind a selection, one per system and staff. */
+let loopRegion: Region | null = null;
+/**
+ * The text a selection's loop plays, mapped through every edit: the loop's notes are found again
+ * from it whenever the score is rebuilt, so an edit before, inside or after it never leaves the
+ * loop with notes that moved (or nothing to play).
+ */
+let loopRanges: Range[] | null = null;
+let loopOn = false;
+
 function drawBands(selected: ScoreNote[], issueNotes: ScoreNote[] = currentIssueNotes) {
   bandsLayer.replaceChildren();
   const geo = staffGeometry();
@@ -1912,6 +1968,9 @@ function drawBands(selected: ScoreNote[], issueNotes: ScoreNote[] = currentIssue
     }
   };
   add(issueNotes, "bar-issue");
+  // While a selection loops, the passage looped stays shown (a quiet outline), whatever is
+  // clicked to fix a note.
+  if (loopOn && loopRanges) add(pickedNotes(loopRanges), "loop");
   if (selected.length) add(selected, "selection");
 }
 
@@ -2595,7 +2654,10 @@ function announceScore() {
     const explanation = explainAt(caret());
     message = explanation ? `${explanation.text}${placeOf(caret())}` : "No note here.";
   }
-  live.textContent = message;
+  // What an edit just said, still news, goes first (the score's redraw re-announces after it).
+  const said = lastSaid && performance.now() - lastSaid.at < 2000 ? `${lastSaid.message} ` : "";
+  lastSaid = null;
+  live.textContent = `${said}${message}`;
 }
 
 /** ↑/↓ in the score: the note sounding at the same time in the voice above or below. */
@@ -2750,8 +2812,8 @@ scoreScroll.addEventListener("keydown", (event) => {
   if (!modified && ["Backspace", "Delete"].includes(event.key) && hasSelection()) {
     event.preventDefault();
     const list = ranges().filter((range) => range.to > range.from);
+    // Said by cutMusic now, and announced again once the score is redrawn.
     if (list.length) cutMusic(view, null);
-    announceScore();
     return;
   }
   if (modified && !["Backspace", "Delete"].includes(event.key)) {
@@ -3098,14 +3160,6 @@ const bookItems = (tune?: TuneInfo): MenuItem[] => {
 };
 
 /* Playback. */
-let loopRegion: Region | null = null;
-/**
- * The text a selection's loop plays, mapped through every edit: the loop's notes are found again
- * from it whenever the score is rebuilt, so an edit before, inside or after it never leaves the
- * loop with notes that moved (or nothing to play).
- */
-let loopRanges: Range[] | null = null;
-let loopOn = false;
 
 function caretWritten(): { note: ScoreNote; written: number } | null {
   if (!scoreIndex) return null;
@@ -3195,6 +3249,7 @@ async function playSelection(loop: boolean) {
   loopRegion = region;
   const selected = ranges().filter((range) => range.to > range.from);
   loopRanges = selected.length ? selected : null;
+  if (loop) linkFromText();
   following.on = true;
   // It starts inside a repeat: its repeats and endings aren't followed, and it says so.
   if (regionLine.asWritten)
@@ -3213,6 +3268,7 @@ function setLoop(on: boolean) {
   if (!on) {
     loopRegion = null;
     loopRanges = null;
+    linkFromText();
     if (player.loopingRegion && player.status === "playing") {
       // Carry on through the tune from where the loop was.
       const at = player.timeline ? regionWritten(player.timeline, player.position()) : 0;
@@ -3235,6 +3291,7 @@ function toggleLoop() {
   if (!region || !line || !line.notes.length) return;
   loopRegion = region;
   loopRanges = selected.length ? selected : null;
+  linkFromText();
   const from = written >= region.from && written < region.to ? written - region.from : 0;
   drawTimeline();
   void player.play({ region: line, loop: true, from });

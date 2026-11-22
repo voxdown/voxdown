@@ -828,6 +828,20 @@ export function pasteKeepingBars(
           : undefined;
     if (
       whole &&
+      place.from !== place.to &&
+      (notes(before) || (after && barLater(place, after)?.kind !== "bar"))
+    ) {
+      // Over part of a bar: replacing it would leave the bar short. After it, as from a caret.
+      const next = around(text, place).tokens.find(
+        (token) => token.from >= place.to && token.kind === "bar",
+      );
+      const at = next ? next.from : lineTo;
+      place = { from: at, to: at };
+      ({ before, after } = around(text, place));
+      said =
+        "Pasted the bars after the bar the selection is in, so no bar is short; the selection was left as it was.";
+    } else if (
+      whole &&
       place.from === place.to &&
       notes(before) &&
       after &&

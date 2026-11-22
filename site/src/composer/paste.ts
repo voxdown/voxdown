@@ -204,6 +204,23 @@ export function planPaste(
 ): PastePlan | null {
   const copy = clip.replace(/\r\n?/g, "\n");
   const said: string[] = [];
+  // A whole tune (from its X: line): a blank line before it, and after it when music follows,
+  // keeps the tunes apart (a tune runs to the first blank line).
+  if (/^\s*X:/.test(copy)) {
+    const range = ranges[main] ?? (ranges[0] as Range);
+    const before = text.slice(0, range.from);
+    const after = text.slice(range.to);
+    const lead =
+      !before.trim() || /\n\s*\n$/.test(before) ? "" : before.endsWith("\n") ? "\n" : "\n\n";
+    const body = copy.replace(/^\s+/, "").replace(/\n*$/, "\n");
+    const tail = after.trim() && !/^\n/.test(after) ? "\n" : "";
+    if (!lead && !tail) return null;
+    return {
+      changes: [{ ...range, insert: `${lead}${body}${tail}` }],
+      message:
+        "Pasted the tune with a blank line between it and the music beside it, which keeps tunes apart.",
+    };
+  }
   // Rewritten for each place's unit and key, when Composer copied it elsewhere.
   const fit = (insert: string, at: number) => {
     if (!source) return insert;

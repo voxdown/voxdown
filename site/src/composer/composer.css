@@ -877,6 +877,13 @@ body[data-layout="below"] #layout-toggle .beside {
 .score-band.edge-start.edge-end {
   box-shadow: inset 2px 0 0 var(--band-edge), inset -2px 0 0 var(--band-edge);
 }
+/* The passage a loop plays, kept in sight while the selection moves on. */
+.score-band.loop {
+  background: transparent;
+  box-shadow: none;
+  outline: 1.5px dashed var(--band-edge);
+  outline-offset: -1px;
+}
 .score-band.bar-issue {
   background: var(--warn-soft);
   border-bottom: 2px dotted var(--warn);

@@ -242,3 +242,61 @@ describe("a tune pasted after music gets its blank line (round 5, finding 11)", 
     expect(apply(two, plan.changes)).toBe(`${two}\nX:2\nT:u\nK:C\nG A B|]\n`);
   });
 });
+
+describe("moving the Kesh's parts, every way of pasting (round 6, finding 1)", () => {
+  const split = kesh.indexOf("|:BAB");
+  const a = played(kesh).filter((note) => note.start < split);
+  const b = played(kesh).filter((note) => note.start >= split);
+  const pitches = (list: { pitch: number }[]) => list.map((note) => note.pitch);
+  const move = (part: "A" | "B", where: (after: string) => { from: number; to: number }) => {
+    const range =
+      part === "B"
+        ? { from: kesh.indexOf("BAB dBd"), to: kesh.lastIndexOf("g3") + 2 }
+        : { from: kesh.indexOf("GAG GAB"), to: kesh.indexOf("AGF G3") + 6 };
+    const plan = cutPlan(kesh, [range]);
+    if (!plan || "refused" in plan) throw new Error("refused");
+    const after = apply(kesh, plan.changes);
+    const place = where(after);
+    const paste = planPaste(after, [place], 0, plan.clip, null);
+    if (paste && "refused" in paste) throw new Error(paste.refused);
+    return paste
+      ? apply(after, paste.changes)
+      : `${after.slice(0, place.from)}${plan.clip}${after.slice(place.to)}`;
+  };
+  it("B before A: at a caret at A's start", () => {
+    const out = move("B", (after) => ({
+      from: after.indexOf("|:GAG"),
+      to: after.indexOf("|:GAG"),
+    }));
+    expect(pitches(played(out)), out).toEqual(pitches([...b, ...a]));
+  });
+  it("B before A: on A's first note, clicked", () => {
+    const out = move("B", (after) => ({
+      from: after.indexOf("GAG"),
+      to: after.indexOf("GAG") + 1,
+    }));
+    expect(pitches(played(out)), out).toEqual(pitches([...b, ...a]));
+  });
+  it("B before A: over A's first bar, selected (never inside A)", () => {
+    const out = move("B", (after) => ({
+      from: after.indexOf("GAG GAB"),
+      to: after.indexOf("GAG GAB") + 7,
+    }));
+    expect(pitches(played(out)), out).toEqual(pitches([...b, ...a]));
+  });
+  it("A after B: at a caret after B's last note, before its end repeat", () => {
+    const out = move("A", (after) => ({
+      from: after.lastIndexOf("g3") + 2,
+      to: after.lastIndexOf("g3") + 2,
+    }));
+    expect(pitches(played(out)), out).toEqual(pitches([...b, ...a]));
+    expect(out).toMatch(/bgf g3::GAG|bgf g3:\|\n?\|:GAG/);
+  });
+  it("A after B: on B's last note, clicked", () => {
+    const out = move("A", (after) => ({
+      from: after.lastIndexOf("g3"),
+      to: after.lastIndexOf("g3") + 2,
+    }));
+    expect(pitches(played(out)), out).toEqual(pitches([...b, ...a]));
+  });
+});

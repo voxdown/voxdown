@@ -16,7 +16,7 @@
  * Every paste says what went where, or is refused; none succeeds in part in silence.
  */
 import { lineKind } from "./abc";
-import { lyricsFor, notesIn, pasteKeepingBars } from "./barwise";
+import { lyricsFor, notesIn, pasteInStep, pasteKeepingBars, samePoint } from "./barwise";
 import { type ClipSource, convertClip, keyLabel } from "./clip-convert";
 import type { Change } from "./commands";
 import { selectedNotes } from "./selected";
@@ -155,10 +155,28 @@ export function pasteVoiced(
   }
   const own = parts.find((part) => part.voice === here);
   if (own) {
-    const others = parts.filter((part) => part !== own);
+    // A staff holding the copy's other voices too takes them, at the same point, in step.
+    const mates = tune ? staffMates(text, tune, here) : [here];
+    const changes: Change[] = [{ ...range, insert: own.text }];
+    const also: VoicedPart[] = [];
+    for (const part of parts) {
+      if (part === own || !mates.includes(part.voice)) continue;
+      const at = samePoint(text, file, range.from, part.voice);
+      if (at === null)
+        return {
+          refused: `V:${part.voice} has a note sounding across this point: paste where both voices' notes start, or select a place in each.`,
+        };
+      changes.push({
+        from: at,
+        to: at,
+        insert: /\|\s*$/.test(part.text) ? part.text : `${part.text} `,
+      });
+      also.push(part);
+    }
+    const others = parts.filter((part) => part !== own && !also.includes(part));
     return {
-      changes: [{ ...range, insert: own.text }],
-      message: `Pasted V:${here}'s part here${others.length ? `; the copy also has ${names(others)}, not pasted` : ""}.`,
+      changes,
+      message: `Pasted V:${here}'s part here${also.length ? ` and ${names(also)}'s on the same staff, at the same point` : ""}${others.length ? `; the copy also has ${names(others)}, not pasted` : ""}.`,
     };
   }
   // A voice the copy doesn't have: one part, the one in this voice's clef, else the first.
@@ -169,6 +187,16 @@ export function pasteVoiced(
     changes: [{ ...range, insert: chosen.text }],
     message: `Pasted V:${chosen.voice}'s part${others.length ? `; the copy also had ${names(others)}` : ""}.`,
   };
+}
+
+/** The voices drawn on one staff with a voice, as %%score (or %%staves) groups them in (…). */
+function staffMates(text: string, tune: TuneInfo, voice: string): string[] {
+  const line = /^%%(?:score|staves)(.*)$/m.exec(text.slice(tune.from, tune.bodyFrom))?.[1] ?? "";
+  for (const group of line.matchAll(/\(([^()]*)\)/g)) {
+    const ids = (group[1] as string).split(/[\s|{}[\]]+/).filter(Boolean);
+    if (ids.includes(voice)) return ids;
+  }
+  return [voice];
 }
 
 /** A voice's clef, as its V: line in the tune says (treble when none does). */
@@ -285,10 +313,22 @@ export function planPaste(
     if (fitted || insert !== copy) special = true;
     const done = placed(range, insert);
     if ("refused" in done) return done;
+    // One voice of several: over a selection it overwrites, at a caret it goes in with rests in
+    // the other voices, so they stay in step.
+    const inStep = targets.length === 1 ? pasteInStep(text, file, range, insert, done) : null;
+    if (inStep && "refused" in inStep) return inStep;
+    if (inStep) {
+      special = true;
+      said.push(inStep.said);
+      changes.push(...inStep.changes);
+      continue;
+    }
     changes.push(...done);
   }
-  if (!special) return null;
-  return { changes: withLyrics(text, file, changes), message: said.join(" ") };
+  const lyrical = withLyrics(text, file, changes);
+  // (A paste with nothing else to fit still keeps the words on their notes.)
+  if (!special && lyrical.length === changes.length) return null;
+  return { changes: lyrical, message: said.join(" ") };
 }
 
 /**

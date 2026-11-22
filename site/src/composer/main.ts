@@ -15,7 +15,7 @@ import {
   keymap,
   runScopeHandlers,
 } from "@codemirror/view";
-import { frac, lineKind, parseKey } from "./abc";
+import { frac, lineKind, parseKey, tokenizeMusic } from "./abc";
 import { barAt as barInText, checkBars, describeBar, tuneMeter } from "./barcheck";
 import {
   type Change,
@@ -321,6 +321,28 @@ function tabHint() {
    (several voices copy under their V: lines, as with the keys). */
 const hasSelection = () => view.state.selection.ranges.some((range) => !range.empty);
 function clipboard(kind: "cut" | "copy") {
+  // With the text hidden (the score alone, on a phone), the editor can't take focus: the copy is
+  // written to the clipboard directly, from the same text the editor's handlers would put there.
+  if (!view.dom.offsetParent) {
+    const copy = copyText(view.state);
+    if (!copy) {
+      notice("Select some music first: tap a note, or hold and drag.");
+      return;
+    }
+    lastCopy = copy;
+    void navigator.clipboard.writeText(copy.text).then(
+      () => {
+        if (kind === "cut") cutMusic(view, copy.text);
+        else
+          sayAloud(`Copied ${describePicked(selectedNotes(text(), ranges(), fileIndex())).text}.`);
+      },
+      () =>
+        notice(
+          `This browser didn't let the page ${kind}: use ${shortcutLabel(kind === "cut" ? "Mod X" : "Mod C")}.`,
+        ),
+    );
+    return;
+  }
   // The editor's own copy and cut handlers run, so voices keep their V: lines; focus goes back
   // where it was (the score keeps its keys: Delete, typing, arrows).
   const back = document.activeElement;
@@ -396,6 +418,21 @@ function pastedSelection(state: EditorState, changes: Change[]): EditorSelection
 }
 /** A paste, decided by ./paste; false when the editor's own paste does the same. */
 function pastePlanned(target: EditorView, pasted: string, sourceData = ""): boolean {
+  // An empty clipboard, or one holding no music, pasted over notes: nothing happens, said so.
+  const over = target.state.selection.ranges.filter((range) => !range.empty);
+  const lines = pasted.split("\n").filter((line) => line.trim() && !/^[A-Za-z]:/.test(line));
+  const tokens = lines.flatMap((line) => tokenizeMusic(line, 0));
+  const music =
+    tokens.some(
+      (token) => token.kind === "note" || token.kind === "rest" || token.kind === "bar",
+    ) && !tokens.some((token) => token.kind === "unknown");
+  if (over.length && !music) {
+    const doc = target.state.doc.toString();
+    if (selectedNotes(doc, over, target.state.field(fileIndexField)).length) {
+      sayAboutSelection("Nothing to paste: the clipboard holds no music.");
+      return true;
+    }
+  }
   if (!paster) {
     // A copy of voices before ./paste loads: told at once, done when it has.
     if (!/^V:\s*\S/.test(pasted)) return false;
@@ -472,6 +509,10 @@ async function pasteText() {
   try {
     const pasted = await navigator.clipboard.readText();
     if (pastePlanned(view, pasted)) return;
+    if (!pasted) {
+      sayAboutSelection("Nothing to paste: the clipboard is empty.");
+      return;
+    }
     view.dispatch(view.state.replaceSelection(pasted), {
       scrollIntoView: true,
       userEvent: "input.paste",
@@ -933,6 +974,47 @@ const redoSelection = EditorView.updateListener.of((update) => {
       target.dispatch({ selection: found.selection, userEvent: "select.redo" });
   });
 });
+/** A new voice's rests, one a bar, that typing replaces bar by bar (./barwise). */
+let placeholders: number[] = [];
+const keepPlaceholders = EditorView.updateListener.of((update) => {
+  if (!update.docChanged || !placeholders.length) return;
+  const doc = update.state.doc;
+  placeholders = placeholders
+    .map((at) => update.changes.mapPos(at, 1))
+    .filter((at) => /^[zx]/.test(doc.sliceString(at, at + 1)));
+  if (!barwise || !update.transactions.some((each) => each.isUserEvent("input.type"))) return;
+  const target = update.view;
+  queueMicrotask(() => {
+    const changes = barwise?.fillPlaceholder(
+      target.state.doc.toString(),
+      target.state.field(fileIndexField),
+      target.state.selection.main.head,
+      placeholders,
+    );
+    if (changes?.length) target.dispatch({ changes, userEvent: "input.type" });
+  });
+});
+/** Typing at a placeholder: before it (it shrinks), or on into the next bar's, a bar full. */
+function typePlaceholder(target: EditorView, typed: string): boolean {
+  if (!barwise || !placeholders.length || !/^[A-Ga-g^_=]/.test(typed)) return false;
+  const { main } = target.state.selection;
+  const doc = target.state.doc.toString();
+  let at: number | null = null;
+  if (
+    !main.empty &&
+    placeholders.includes(main.from) &&
+    /^[zx][0-9/]*$/.test(doc.slice(main.from, main.to))
+  )
+    at = main.from;
+  else if (main.empty) at = barwise.nextPlaceholder(doc, main.head, placeholders);
+  if (at === null) return false;
+  target.dispatch({
+    changes: { from: at, insert: `${typed}` },
+    selection: { anchor: at + typed.length },
+    userEvent: "input.type",
+  });
+  return true;
+}
 /** Typing over selected music, or Backspace/Delete: the notes go, the bar lines stay. */
 function replaceMusic(target: EditorView, typed: string): boolean {
   if (!barwise || target.state.selection.ranges.every((range) => range.empty)) return false;
@@ -1022,7 +1104,12 @@ const typedMarks = [
   Prec.highest(
     EditorView.inputHandler.of((target, _from, _to, typed) => {
       if (target.composing || target.compositionStarted) return false;
-      return typeMark(target, typed) || bracketMusic(target, typed) || replaceMusic(target, typed);
+      return (
+        typePlaceholder(target, typed) ||
+        typeMark(target, typed) ||
+        bracketMusic(target, typed) ||
+        replaceMusic(target, typed)
+      );
     }),
   ),
   Prec.highest(
@@ -1157,6 +1244,7 @@ function makeState(text: string): EditorState {
     extra: [
       copyVoices,
       redoSelection,
+      keepPlaceholders,
       typedMarks,
       typingHelpers,
       EditorView.exceptionSink.of((error) => recoverEditor(error)),
@@ -2979,6 +3067,30 @@ let noteSpan: {
   voices: number[];
   selection: EditorSelection;
 } | null = null;
+
+/** Edit › Notes › Transpose to key… (./transpose-key, loaded when chosen). */
+let transposeDialog: ReturnType<typeof createDialog> | null = null;
+function transposeToKey() {
+  const tune = tuneAt(fileIndex(), caret());
+  if (!tune) return;
+  transposeDialog ??= createDialog("transpose-dialog", "Transpose to key");
+  const dialog = transposeDialog;
+  void import("./transpose-key").then(({ openTransposeDialog, toKey }) =>
+    openTransposeDialog({
+      dialog,
+      current: tune.key,
+      run: (target) => {
+        const result = toKey(text(), ranges(), target, fileIndex());
+        if ("refused" in result) {
+          sayAboutSelection(result.refused);
+          return;
+        }
+        if (apply(result.changes, "Transpose")) sayAboutSelection(result.said);
+        view.focus();
+      },
+    }),
+  );
+}
 
 /* Musical commands. */
 /** Duplicate: the copy goes in, and is what is selected, ready to vary (./barwise). */
@@ -5034,6 +5146,7 @@ const menuDefinitions: Record<string, () => MenuItem[]> = {
         { label: "Down a semitone", run: () => music("transpose-down"), shortcut: "Alt ↓" },
         { label: "Up an octave", run: () => music("octave-up"), shortcut: "Alt Shift ↑" },
         { label: "Down an octave", run: () => music("octave-down"), shortcut: "Alt Shift ↓" },
+        { label: "Transpose to key…", run: transposeToKey },
         "-",
         { label: "Double lengths", run: () => music("double"), shortcut: "Alt BracketRight" },
         { label: "Halve lengths", run: () => music("halve"), shortcut: "Alt BracketLeft" },
@@ -5273,12 +5386,15 @@ function insertVoice() {
   const made = barwise.newVoice(text(), view.state.selection.main.from, fileIndex());
   if (!made) return;
   const set = view.state.changes(made.changes);
+  const start = set.mapPos(made.at, -1);
+  // Its first rest selected: typing over the rests writes the voice bar by bar.
   view.dispatch({
     changes: set,
-    selection: { anchor: Math.min(set.mapPos(made.at, -1) + made.offset, set.newLength) },
+    selection: { anchor: start + made.offset, head: start + made.offset + made.first },
     scrollIntoView: true,
     userEvent: "input",
   });
+  placeholders = made.rests.map((offset) => start + offset);
   notice(made.said, "success");
   view.focus();
 }

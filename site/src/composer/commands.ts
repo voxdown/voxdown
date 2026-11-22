@@ -1,5 +1,6 @@
 import {
   type Fraction,
+  type Key,
   type MusicToken,
   type NoteToken,
   accidentalText,
@@ -12,6 +13,7 @@ import {
   mul,
   octaveOf,
   parseLength,
+  prefersFlats,
   spell,
   tokenizeMusic,
   transposeChordSymbol,
@@ -65,6 +67,8 @@ export function transpose(
   selection: Range[],
   semitones: number,
   file = indexFile(text),
+  /** The key the notes are written in afterwards (Transpose to key… moves K: too). */
+  written: (key: Key) => Key = (key) => key,
 ): Change[] {
   const changes: Change[] = [];
   const octaveOnly = semitones % 12 === 0;
@@ -91,9 +95,10 @@ export function transpose(
         dirty.set(state.voice, false);
         return;
       }
+      const key = written(state.key);
       if (token.kind === "chord-symbol" && isAttached(token.from) && !octaveOnly) {
         const symbol = token.text.slice(1, -1);
-        const moved = transposeChordSymbol(symbol, semitones, state.key);
+        const moved = transposeChordSymbol(symbol, semitones, key);
         if (moved !== symbol)
           changes.push({ from: token.from + 1, to: token.to - 1, insert: moved });
         return;
@@ -108,7 +113,7 @@ export function transpose(
         if (dirty.get(state.voice)) {
           const implied =
             bar.get(place(token.letter, octave)) ??
-            state.key.accidentals[token.letter.toUpperCase()] ??
+            key.accidentals[token.letter.toUpperCase()] ??
             0;
           if (implied !== alter) {
             const accidental = accidentalText(alter);
@@ -128,12 +133,10 @@ export function transpose(
       const midi = midiOf(token.letter, octave, alter) + semitones;
       const spelled = octaveOnly
         ? { letter: token.letter.toUpperCase(), alter, octave: octave + semitones / 12 }
-        : spell(midi, state.key, state.key.flats || (state.key.fifths === 0 && semitones < 0));
+        : spell(midi, key, prefersFlats(key, midi));
       if (spelled.octave < 0 || spelled.octave > 9) return;
       const implied =
-        bar.get(place(spelled.letter, spelled.octave)) ??
-        state.key.accidentals[spelled.letter] ??
-        0;
+        bar.get(place(spelled.letter, spelled.octave)) ?? key.accidentals[spelled.letter] ?? 0;
       let accidental = "";
       if (implied !== spelled.alter) {
         accidental = accidentalText(spelled.alter);

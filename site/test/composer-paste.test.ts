@@ -136,9 +136,31 @@ describe("plain music over places in several voices (round 3)", () => {
       { ...places[0], insert: "e e e e" },
     ]);
   });
-  it("pasted in one place, it replaces that place (round 5: always ours, to select it after)", () => {
+  it("pasted over notes in one voice of two, it overwrites them, a rest for the time left (round 6)", () => {
     const plan = planPaste(tune, [places[0] as { from: number; to: number }], 0, "e e", null);
-    expect(plan && "changes" in plan && plan.changes).toEqual([{ ...places[0], insert: "e e" }]);
+    expect(plan && "changes" in plan && plan.changes).toEqual([{ ...places[0], insert: "e e z2" }]);
+    expect(plan && "message" in plan && plan.message).toMatch(
+      /Pasted over the selected notes in V:1, a rest for the time left/,
+    );
+  });
+  it("pasted at a caret in one voice of two, the other gets rests as long (round 6)", () => {
+    const at = tune.indexOf("c' b a g");
+    const plan = planPaste(tune, [{ from: at, to: at }], 0, "e e e e|", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    const out = apply(tune, plan.changes);
+    expect(out).toContain("V:1\nc d e f|g a b c'|e e e e|c' b a g|");
+    expect(out).toContain("V:2\nC D E F|G A B c|z4|c B A G|");
+    expect(plan.message).toMatch(/rests in V:2 keep it in step/);
+  });
+  it("a two-voice copy on one note of a staff holding both: both, in step (round 6)", () => {
+    const duet =
+      "X:1\nT:Duet\nM:2/4\nL:1/8\n%%score (1 2)\nK:D\n[V:1] d2 fd | ed cB |]\n[V:2] F2 AF | GF ED |]\n";
+    const at = duet.indexOf("ed cB");
+    const plan = planPaste(duet, [{ from: at, to: at }], 0, "V:1\na2 a2|\nV:2\nA2 A2|\n", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    const out = apply(duet, plan.changes);
+    expect(out).toContain("[V:1] d2 fd | a2 a2|ed cB |]");
+    expect(out).toContain("[V:2] F2 AF | A2 A2|GF ED |]");
   });
 });
 

@@ -543,12 +543,17 @@ export function spell(
 }
 
 /** Transposes a chord symbol's root and bass ("Am7", "D/F#", "Bbmaj7"). */
+/** Whether a pitch is spelled with a flat in a key: in flat keys, and E♭ and B♭ in C (as step entry spells). */
+export function prefersFlats(key: Key, midi: number): boolean {
+  const pc = ((midi % 12) + 12) % 12;
+  return key.fifths === 0 ? pc === 3 || pc === 10 : key.flats;
+}
 export function transposeChordSymbol(symbol: string, semitones: number, key: Key): string {
   const one = (text: string) =>
     text.replace(/^([A-G])([#b♯♭]?)/, (_match, letter: string, sign: string) => {
       const alter = sign === "#" || sign === "♯" ? 1 : sign === "b" || sign === "♭" ? -1 : 0;
       const midi = midiOf(letter, 4, alter) + semitones;
-      const spelled = spell(midi, key, key.flats || (semitones < 0 && key.fifths === 0 && false));
+      const spelled = spell(midi, key, prefersFlats(key, midi));
       const out =
         spelled.alter === 1
           ? "#"

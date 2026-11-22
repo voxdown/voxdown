@@ -110,6 +110,8 @@ for (const name of ["trio", "piano", "song"]) {
                   : []),
               ]) {
                 const plan = planPaste(text, [range], 0, clip, source, file);
+                // (Over a note, always ours: the editor's own paste would replace its text.)
+                expect(plan, `${name}: a paste over a note is planned`).not.toBeNull();
                 if (!plan) continue;
                 const at = `${name} V:${voice}, over ${JSON.stringify(text.slice(range.from, range.to))} at ${range.from}`;
                 if ("refused" in plan) {
@@ -175,6 +177,7 @@ describe("ragged copies of voices, ending at different points (round 8, item 3)"
           for (const bar of bars)
             for (const note of bar) {
               const plan = planPaste(text, [note], 0, clip, null, file);
+              expect(plan, `${name}: a paste over a note is planned`).not.toBeNull();
               if (!plan) continue;
               const at = `${name}, over ${JSON.stringify(text.slice(note.from, note.to))} at ${note.from}`;
               if ("refused" in plan) {

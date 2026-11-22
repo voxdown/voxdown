@@ -224,3 +224,17 @@ describe("a paste after the final |] puts its syllables after the verse's last w
     expect(apply(text, plan.changes)).toContain("w: one two three four load. * * * *");
   });
 });
+
+describe("spacing and syllables (item 8)", () => {
+  it("bars put in a spaced line keep a space before the music after them", () => {
+    const text = tune("C D E F | G A B c | c' b a g |]", "4/4", "1/4");
+    const at = text.indexOf("G A B c");
+    const plan = planPaste(text, [{ from: at, to: at + 1 }], 0, "G2 A2 |", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    expect(body(apply(text, plan.changes))).toBe("C D E F | G2 A2 | G A B c | c' b a g |]\n");
+  });
+  it("a word's last syllable gone, the one before it ends the word", () => {
+    const text = tune("C D E F|]\nw: Ma-had a lamb", "4/4", "1/4");
+    expect(body(cutText(text, "D"))).toContain("w: Ma a lamb");
+  });
+});

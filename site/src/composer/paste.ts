@@ -520,7 +520,8 @@ export function planPaste(
     }
     const fitted = pasteKeepingBars(text, [range], insert, file, meter);
     if (fitted && "refused" in fitted) return fitted;
-    if (fitted || insert !== copy) special = true;
+    // (A clicked note made a caret is ours too: the editor's own paste would replace the note.)
+    if (fitted || insert !== copy || at !== null) special = true;
     const done = placed(range, insert);
     if ("refused" in done) return done;
     // One voice of several: over a selection it overwrites, at a caret it goes in with rests in
@@ -554,6 +555,21 @@ function seams(text: string, changes: Change[]): Change[] {
     if (change.from === 0 || /\s/.test(text[change.from - 1] ?? ""))
       insert = insert.replace(/^[ \t]+/, "");
     if (/^[ \t]/.test(text.slice(change.to))) insert = insert.replace(/[ \t]+$/, "");
+    // Bars put in keep a space from the music beside them (`G4 A4 | G6`, `|] "C"e2`).
+    // (In a line that writes its bar lines spaced, `G4 A4 | G6`; a compact one stays compact.)
+    const lineTo =
+      text.indexOf("\n", change.from) < 0 ? text.length : text.indexOf("\n", change.from);
+    const spaced = /\S \|+ \S/.test(` ${line}${text.slice(change.from, lineTo)} `);
+    const pure = change.from === change.to;
+    if (pure && spaced && /[|\]]$/.test(insert) && /^[^\s|\]:]/.test(text[change.to] ?? "\n"))
+      insert += " ";
+    if (
+      pure &&
+      spaced &&
+      /[|\]]$/.test(text.slice(0, change.from)) &&
+      /^[A-Ga-gzx"!^_=(.~]/.test(insert)
+    )
+      insert = ` ${insert}`;
     return insert === change.insert ? change : { ...change, insert };
   });
 }

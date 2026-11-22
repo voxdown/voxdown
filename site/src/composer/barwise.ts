@@ -2192,12 +2192,32 @@ export function lyricsFor(
           (each) => !each.event.rest && each.event.from >= line.from && each.event.from < line.to,
         )
         .map((each) => each.event.from);
+      const goneSlots = new Set(
+        notes.flatMap((note, index) => (gone.includes(note) ? [index] : [])),
+      );
       notes.forEach((note, index) => {
         const slot = slots[index];
         // The syllable and what separates it from the next.
         const next = slots[index + 1];
-        if (slot && gone.includes(note))
-          changes.push({ from: slot.from, to: next ? next.from : slot.to, insert: "" });
+        if (!slot || !gone.includes(note)) return;
+        // The end of a word (`had` of `Ma-had`) gone, the syllable before it kept: that one
+        // ends the word now, without its hyphen (round 8, item 8).
+        const previous = slots[index - 1];
+        const ends = !/-$/.test(text.slice(slot.from, slot.to));
+        if (
+          ends &&
+          previous &&
+          !goneSlots.has(index - 1) &&
+          /-$/.test(text.slice(previous.from, previous.to))
+        ) {
+          changes.push({
+            from: previous.to - 1,
+            to: next ? next.from : slot.to,
+            insert: next ? " " : "",
+          });
+          return;
+        }
+        changes.push({ from: slot.from, to: next ? next.from : slot.to, insert: "" });
       });
       for (const [at, count, words] of added) {
         if (at < line.from || at > line.to) continue;

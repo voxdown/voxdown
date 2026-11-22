@@ -4,6 +4,7 @@ import { cutPlan, duplicate, repitch } from "../src/composer/barwise";
 import { caretAfter, sortChange } from "../src/composer/book";
 import { mapMatches, queryNotes, searchFile } from "../src/composer/melody";
 import { planPaste } from "../src/composer/paste";
+import { describePicked, selectedNotes } from "../src/composer/selected";
 import { noCrossedRanges } from "../src/composer/selection-guard";
 import { indexFile } from "../src/composer/tunes";
 
@@ -236,5 +237,17 @@ describe("spacing and syllables (item 8)", () => {
   it("a word's last syllable gone, the one before it ends the word", () => {
     const text = tune("C D E F|]\nw: Ma-had a lamb", "4/4", "1/4");
     expect(body(cutText(text, "D"))).toContain("w: Ma a lamb");
+  });
+});
+
+describe("the status count after a paste (item 9)", () => {
+  it("counts the rests the paste selected with its notes", () => {
+    const text = tune("c2 f2 e2 z2|]");
+    const picked = selectedNotes(
+      text,
+      [{ from: text.indexOf("c2"), to: text.indexOf("|]") }],
+      indexFile(text),
+    );
+    expect(describePicked(picked).text).toBe("3 notes and 1 rest");
   });
 });

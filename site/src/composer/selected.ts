@@ -170,5 +170,7 @@ export function describePicked(picked: Picked[]): { count: number; text: string 
     return { count: rests, text: `${rests} ${rests === 1 ? "rest" : "rests"}` };
   if (notes || !tones) parts.push(`${notes} ${notes === 1 ? "note" : "notes"}`);
   if (tones) parts.push(`${tones} chord ${tones === 1 ? "tone" : "tones"}`);
-  return { count: notes + tones, text: parts.join(" and ") };
+  // Rests among them too (a paste's, after its notes): counted, so the count is what's selected.
+  if (rests) parts.push(`${rests} ${rests === 1 ? "rest" : "rests"}`);
+  return { count: notes + tones + rests, text: parts.join(" and ") };
 }

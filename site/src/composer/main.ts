@@ -2860,10 +2860,12 @@ function announceScore() {
     const bars = [...new Set(pickedNotes(selected).map((note) => note.measure + 1))];
     const span =
       bars.length > 1 ? `bars ${Math.min(...bars)} to ${Math.max(...bars)}` : `bar ${bars[0]}`;
+    // (As the status line counts them: notes, and rests among them too.)
+    const restsSaid = rests ? `${rests} ${rests === 1 ? "rest" : "rests"}` : "";
     message =
       !notes.length && rests
-        ? `${rests} ${rests === 1 ? "rest" : "rests"} selected${selectionWhere()}, ${span}.`
-        : `${notes.length} ${notes.length === 1 ? "note" : "notes"} selected${selectionWhere()}, ${span}.`;
+        ? `${restsSaid} selected${selectionWhere()}, ${span}.`
+        : `${notes.length} ${notes.length === 1 ? "note" : "notes"}${restsSaid ? ` and ${restsSaid}` : ""} selected${selectionWhere()}, ${span}.`;
   } else {
     const explanation = explainAt(caret());
     message = explanation ? `${explanation.text}${placeOf(caret())}` : "No note here.";

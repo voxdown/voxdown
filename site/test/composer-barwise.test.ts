@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  barLinesAcross,
   bracketOver,
   copyText,
   cutPlan,
+  newVoice,
   pasteKeepingBars,
   replaceKeepingBars,
 } from "../src/composer/barwise";
@@ -154,5 +156,30 @@ describe('", [ and { typed over selected music act on its notes (round 3)', () =
   });
   it("outside music it is typed as usual", () => {
     expect(bracketOver(eighths, [span(eighths, "T:t")], "[")).toBeNull();
+  });
+});
+
+describe("Insert › Bar line and Second voice keep voices in step (round 4)", () => {
+  const three = `X:1\nT:t\nM:4/4\nL:1/4\n%%score 1 2 3\nK:C\nV:1\nc d e f g a b c'|]\nV:2\nC D E F G A B c|]\nV:3\nC,2 D,2 E,2 F,2|]\n`;
+  it("a bar line goes into every selected voice at the same point", () => {
+    const ranges = [span(three, "c d e f"), span(three, "C D E F"), span(three, "C,2 D,2")];
+    const result = barLinesAcross(three, ranges, 0);
+    expect(apply(three, result)).toBe(
+      "X:1\nT:t\nM:4/4\nL:1/4\n%%score 1 2 3\nK:C\nV:1\nc d e f | g a b c'|]\nV:2\nC D E F | G A B c|]\nV:3\nC,2 D,2 | E,2 F,2|]\n",
+    );
+  });
+  it("refused where a voice's note sounds across the point", () => {
+    const ranges = [span(three, "c d e"), span(three, "C D E"), span(three, "C,2 D,2")];
+    const result = barLinesAcross(three, ranges, 0);
+    expect(result && "refused" in result && result.refused).toMatch(/V:3 has a note sounding/);
+  });
+  it("a second voice has a rest for each bar, as long as the bar, and joins %%score", () => {
+    const tune =
+      "X:1\nT:t\nM:4/4\nL:1/8\n%%score 1\nK:C\nV:1\nG2|c2 d2 e2 f2|[M:3/4] g2 a2 b2|c'8|]\n";
+    const made = newVoice(tune, tune.indexOf("c2"));
+    expect(made && apply(tune, made.changes)).toBe(
+      "X:1\nT:t\nM:4/4\nL:1/8\n%%score 1 2\nK:C\nV:1\nG2|c2 d2 e2 f2|[M:3/4] g2 a2 b2|c'8|]\nV:2 clef=bass\nz2 | z8 | z6 | z8 |\n",
+    );
+    expect(made?.said).toMatch(/V:2, a bass voice of 4 bars of rests/);
   });
 });

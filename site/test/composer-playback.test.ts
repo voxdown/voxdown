@@ -650,3 +650,75 @@ describe("dragging back mirrors dragging on (round 3)", () => {
     expect(slices(point(head(1.25).x + 2, 1.25), point(head(1.75).x + 3, 1.75))).toEqual(["A B c"]);
   });
 });
+
+describe("playing a selection over repeats and endings (round 4)", () => {
+  // Written: C D | G A (1st ending) | c B (2nd). Played: C D G A C D c B.
+  const notes = (spec: [number, number, number][]) =>
+    spec.map(([time, written, start]) => ({
+      time,
+      duration: 0.25,
+      pitch: 60 + start,
+      velocity: 80,
+      track: 0,
+      start,
+      end: start + 1,
+      articulation: "normal" as never,
+      written,
+    }));
+  const timeline = {
+    notes: notes([
+      [0, 0, 0],
+      [0.25, 0.25, 1],
+      [0.5, 0.5, 2],
+      [0.75, 0.75, 3],
+      [1, 0, 0],
+      [1.25, 0.25, 1],
+      [1.5, 1, 4],
+      [1.75, 1.25, 5],
+    ]),
+    length: 2,
+    bpm: 120,
+    beat: 0.25,
+    bar: 0.5,
+    pickup: 0,
+    tracks: [{ name: "1", voice: 0 }],
+    bars: [0],
+    passes: [],
+    offset: 0,
+  } as never;
+  it("covering the repeat's start, it plays the 1st ending, the repeat, then the 2nd", () => {
+    const line = selectionTimeline(
+      timeline,
+      [{ from: 0, to: 1.5 }],
+      new Set([0, 1, 2, 3, 4, 5]),
+      [0],
+      false,
+    );
+    expect(line.notes.map((note) => note.start)).toEqual([0, 1, 2, 3, 0, 1, 4, 5]);
+    expect(line.asWritten).toBeUndefined();
+  });
+  it("the endings alone play as written, and say so", () => {
+    const line = selectionTimeline(
+      timeline,
+      [{ from: 0.5, to: 1.5 }],
+      new Set([2, 3, 4, 5]),
+      [0],
+      false,
+    );
+    expect(line.notes.map((note) => note.start)).toEqual([2, 3, 4, 5]);
+    expect(line.asWritten).toBe(true);
+  });
+  it("the repeat's body from its start plays twice, as the music does", () => {
+    const line = selectionTimeline(timeline, [{ from: 0, to: 0.5 }], new Set([0, 1]), [0], false);
+    expect(line.notes.map((note) => note.start)).toEqual([0, 1, 0, 1]);
+    expect(line.pieces?.map((piece) => [piece.from, piece.to])).toEqual([
+      [0, 0.5],
+      [0, 0.5],
+    ]);
+  });
+  it("inside the repeat, not from its start: as written, said", () => {
+    const line = selectionTimeline(timeline, [{ from: 0.25, to: 0.5 }], new Set([1]), [0], false);
+    expect(line.notes.map((note) => note.start)).toEqual([1]);
+    expect(line.asWritten).toBe(true);
+  });
+});

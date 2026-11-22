@@ -41,6 +41,8 @@ export type Timeline = {
   returns?: { from: number; to: number; label: "D.C." | "D.S." | "Coda" }[];
   /** Written time of the region start, when this is a region's timeline. */
   offset: number;
+  /** A selection played as written, though the play order would repeat or skip some of it. */
+  asWritten?: boolean;
   /**
    * A selection in pieces, played back to back: where each piece starts in this timeline (`at`)
    * and in the written music (`from`).

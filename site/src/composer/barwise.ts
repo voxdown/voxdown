@@ -9,12 +9,23 @@
  * - Paste fits the copy to the bars around it: a copy ending in a bar line pasted just before one
  *   doesn't double it, and a copy without bar lines over a selection with some keeps them.
  */
-import { type MusicToken, lineKind, tokenizeMusic } from "./abc";
-import { type Change, type Range, barAround, passagesOf } from "./commands";
+import {
+  type Fraction,
+  type MusicToken,
+  defaultUnit,
+  formatLength,
+  frac,
+  lineKind,
+  meterLength,
+  parseUnit,
+  tokenizeMusic,
+} from "./abc";
+import { type Change, type Range, barAround, barLine, passagesOf } from "./commands";
 import { markOf } from "./playorder";
 import { selectedNotes } from "./selected";
 import { readingAt } from "./stepentry";
 import { type FileIndex, indexFile } from "./tunes";
+import { tuneItems } from "./walk";
 
 type Line = { from: number; to: number; tokens: MusicToken[] };
 
@@ -948,4 +959,129 @@ export function duplicate(
     if (body) place(body, [body]);
   }
   return changes;
+}
+
+/** Each voice's events with their written start and end, in whole notes. */
+function timed(text: string, file: FileIndex, at: number) {
+  const tune = file.tunes.find((each) => at >= each.from && at <= each.to);
+  const out: { voice: string; from: number; to: number; start: number; end: number }[] = [];
+  if (!tune) return out;
+  const clocks = new Map<string, number>();
+  for (const item of tuneItems(text, tune, file)) {
+    if (item.type !== "event") continue;
+    const start = clocks.get(item.voice) ?? 0;
+    const end = start + item.duration.num / item.duration.den;
+    clocks.set(item.voice, end);
+    out.push({ voice: item.voice, from: item.from, to: item.to, start, end });
+  }
+  return out;
+}
+
+/**
+ * Insert › Bar line over a selection in several voices: one in each selected voice at the same
+ * point, the end of the main range's last note. Refused when a voice has a note sounding across
+ * that point. Null for a selection in one voice (the bar line goes after it).
+ */
+export function barLinesAcross(
+  text: string,
+  ranges: Range[],
+  main: number,
+  file: FileIndex = indexFile(text),
+): Change[] | { refused: string } | null {
+  const selected = ranges.filter((range) => range.to > range.from);
+  const picked = selectedNotes(text, selected, file);
+  const voices = [...new Set(picked.map((each) => each.event.voice))];
+  if (voices.length < 2) return null;
+  const mainRange = ranges[main]?.to !== ranges[main]?.from ? ranges[main] : selected.at(-1);
+  const events = timed(text, file, (selected[0] as Range).from);
+  const own = events.filter(
+    (each) => mainRange && each.from >= mainRange.from && each.from < mainRange.to,
+  );
+  const time = own.at(-1)?.end;
+  if (time === undefined) return null;
+  const changes: Change[] = [];
+  for (const voice of voices) {
+    const ends = events.filter((each) => each.voice === voice);
+    const at = ends.find((each) => Math.abs(each.end - time) < 1e-9);
+    if (!at) {
+      const across = ends.find((each) => each.start < time - 1e-9 && each.end > time + 1e-9);
+      return {
+        refused: `V:${voice} has ${across ? "a note sounding" : "no note ending"} where the bar line would go: shorten or split it there first, or select one voice.`,
+      };
+    }
+    const after = selectedNotes(text, [{ from: at.from, to: at.from + 1 }], file)[0];
+    changes.push(barLine(text, after?.span.to ?? at.to));
+  }
+  return changes;
+}
+
+/**
+ * Insert › Second voice: a new bass voice of rests, bar for bar with the first voice (a pickup's
+ * rest as long as the pickup, a bar under another meter as long as that bar), in the tune's unit,
+ * added to %%score (or %%staves) when the tune has one.
+ */
+export function newVoice(
+  text: string,
+  at: number,
+  file: FileIndex = indexFile(text),
+): { changes: Change[]; at: number; offset: number; said: string } | null {
+  const tune = file.tunes.find((each) => at >= each.from && at <= each.to);
+  if (!tune) return null;
+  const ids = tune.voices.map((voice) => voice.id);
+  const next = String(ids.length ? Math.max(0, ...ids.map((id) => Number(id) || 0)) + 1 : 2);
+  const unit = parseUnit(tune.unit) ?? defaultUnit(tune.meter);
+  const items = tuneItems(text, tune, file);
+  const first = items.find((item) => item.type === "event")?.voice;
+  const bars: number[] = [];
+  let length = 0;
+  let any = false;
+  for (const item of items) {
+    if (item.voice !== first) continue;
+    if (item.type === "bar") {
+      if (any) bars.push(length);
+      length = 0;
+      any = false;
+    } else {
+      length += item.duration.num / item.duration.den;
+      any = true;
+    }
+  }
+  if (any) bars.push(length);
+  if (!bars.length)
+    bars.push(
+      meterLength(tune.meter)
+        ? (meterLength(tune.meter) as Fraction).num / (meterLength(tune.meter) as Fraction).den
+        : 1,
+    );
+  const rest = (whole: number) => {
+    // In the unit: whole / unit, as a fraction of small numbers.
+    const units = whole / (unit.num / unit.den);
+    const den =
+      [1, 2, 4, 8, 16, 3, 6, 12].find(
+        (each) => Math.abs(units * each - Math.round(units * each)) < 1e-9,
+      ) ?? 1;
+    return `z${formatLength(frac(Math.round(units * den), den))}`;
+  };
+  const lines: string[] = [];
+  for (let start = 0; start < bars.length; start += 4)
+    lines.push(
+      `${bars
+        .slice(start, start + 4)
+        .map(rest)
+        .join(" | ")} |`,
+    );
+  const doc = text;
+  const lead = doc.slice(0, tune.to).endsWith("\n") ? "" : "\n";
+  const addition = `${lead}V:${next} clef=bass\n${lines.join("\n")}\n`;
+  const changes: Change[] = [{ from: tune.to, to: tune.to, insert: addition }];
+  if (!ids.length) changes.push({ from: tune.bodyFrom, to: tune.bodyFrom, insert: "V:1\n" });
+  const score = /^%%(score|staves)(.*)$/m.exec(doc.slice(tune.from, tune.bodyFrom));
+  let said = `Added V:${next}, a bass voice of ${bars.length} ${bars.length === 1 ? "bar" : "bars"} of rests, bar for bar with the first voice.`;
+  if (score) {
+    const lineEnd = tune.from + (score.index ?? 0) + score[0].length;
+    changes.push({ from: lineEnd, to: lineEnd, insert: ` ${next}` });
+    said += ` It is on its own staff in %%${score[1]}.`;
+  } else if (ids.length > 1) said += " Each voice has its own staff (the tune has no %%score).";
+  // The caret on the first rest: where the voice goes, and into it.
+  return { changes, at: tune.to, offset: lead.length + `V:${next} clef=bass\n`.length, said };
 }

@@ -2597,13 +2597,27 @@ function moveByVoice(direction: 1 | -1): boolean {
 }
 
 /** Home/End in the score: the first or last note of the voice on this line of music. */
-function moveToLineEnd(end: boolean): boolean {
+/** Home/End in the score: to the line's first or last note; with Shift, the selection grows to it. */
+function moveToLineEnd(end: boolean, extend = false): boolean {
   const index = scoreIndex;
   if (!index) return false;
   const note = notesAt(index, caret())[0] ?? index.notes.find((each) => each.start >= caret());
   if (!note) return false;
   const line = (index.byVoice[note.voice] ?? []).filter((each) => each.line === note.line);
   const target = end ? line[line.length - 1] : line[0];
+  if (target && extend) {
+    // From the selection's other end (or the caret's note) to the line's end, in its voices.
+    const selected = ranges().filter((range) => range.to > range.from);
+    const region = selected.length ? regionOfNotes(index, pickedNotes(selected)) : null;
+    const from = region ? (end ? region.from : target.time) : Math.min(note.time, target.time);
+    const reach = region
+      ? end
+        ? target.time
+        : (region.reach ?? region.from)
+      : Math.max(note.time, target.time);
+    selectRegion(spanRegion(index, from, reach, region ? region.voices : [note.voice]));
+    return true;
+  }
   if (target)
     view.dispatch({
       selection: { anchor: target.start },
@@ -2750,7 +2764,7 @@ scoreScroll.addEventListener("keydown", (event) => {
     }
   } else if (event.key === "Home" || event.key === "End") {
     event.preventDefault();
-    moveToLineEnd(event.key === "End");
+    moveToLineEnd(event.key === "End", event.shiftKey);
     announceScore();
   } else if (event.key === " ") {
     event.preventDefault();
@@ -2902,9 +2916,16 @@ function music(command: string): boolean {
     }
     case "slur":
       return apply(toggleSlur(doc, list, index), "Slur");
-    case "bar":
-      // After the selection, whichever way it was made.
-      return apply([barLine(doc, view.state.selection.main.to)], "Bar line");
+    case "bar": {
+      // Over several voices: in each, at the same point (./barwise); else after the selection.
+      const across = barwise?.barLinesAcross(doc, list, view.state.selection.mainIndex, index);
+      if (across && "refused" in across) {
+        sayAboutSelection(across.refused);
+        notice(across.refused);
+        return true;
+      }
+      return apply(across ?? [barLine(doc, view.state.selection.main.to)], "Bar line");
+    }
     case "duplicate":
       // Duplicate goes by ./barwise's copy rules, loaded with the editor.
       if (!barwise) {
@@ -3112,6 +3133,11 @@ async function playSelection(loop: boolean) {
   const selected = ranges().filter((range) => range.to > range.from);
   loopRanges = selected.length ? selected : null;
   following.on = true;
+  // It starts inside a repeat: its repeats and endings aren't followed, and it says so.
+  if (regionLine.asWritten)
+    sayAboutSelection(
+      "Playing the selection as written: it starts inside a repeat, so its repeats and endings aren't followed. Select from the repeat's start to hear them as played.",
+    );
   await player.play({ region: regionLine, loop });
 }
 
@@ -5081,23 +5107,20 @@ function insertAtCaret(insert: string, caretOffset: number) {
   view.focus();
 }
 function insertVoice() {
-  const tune = tuneAt(fileIndex(), view.state.selection.main.from);
-  if (!tune) return;
-  const ids = tune.voices.map((voice) => voice.id);
-  const next = String(ids.length ? Math.max(0, ...ids.map((id) => Number(id) || 0)) + 1 : 2);
-  const insert = `${ids.length ? "" : "V:1\n"}`;
-  const doc = text();
-  const end = tune.to;
-  const lead = doc.slice(0, end).endsWith("\n") ? "" : "\n";
-  const addition = `${lead}V:${next} clef=bass\nz4 |\n`;
-  const changes = [{ from: end, insert: addition }];
-  if (insert) changes.unshift({ from: tune.bodyFrom, insert });
+  if (!barwise) {
+    void loadEditing().then(() => barwise && insertVoice());
+    return;
+  }
+  const made = barwise.newVoice(text(), view.state.selection.main.from, fileIndex());
+  if (!made) return;
+  const set = view.state.changes(made.changes);
   view.dispatch({
-    changes,
-    selection: { anchor: end + addition.length - 2 + insert.length },
+    changes: set,
+    selection: { anchor: Math.min(set.mapPos(made.at, -1) + made.offset, set.newLength) },
     scrollIntoView: true,
     userEvent: "input",
   });
+  notice(made.said, "success");
   view.focus();
 }
 function insertLyrics() {

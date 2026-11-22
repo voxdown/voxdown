@@ -1555,6 +1555,8 @@ function onUpdate(update: ViewUpdate) {
       from: update.changes.mapPos(range.from, 1),
       to: Math.max(update.changes.mapPos(range.from, 1), update.changes.mapPos(range.to, -1)),
     }));
+  // Melody search's results follow the edit (those it touched go).
+  if (update.docChanged) melodyPanel?.mapMelody(update.changes, update.state.doc.length);
   if (update.docChanged || update.selectionSet) {
     $<HTMLButtonElement>("undo").disabled = undoDepth(update.state) === 0;
     $<HTMLButtonElement>("redo").disabled = redoDepth(update.state) === 0;

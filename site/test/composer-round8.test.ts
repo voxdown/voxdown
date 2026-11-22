@@ -1,7 +1,8 @@
-import { EditorSelection, EditorState } from "@codemirror/state";
+import { ChangeSet, EditorSelection, EditorState, Text } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { cutPlan, duplicate, repitch } from "../src/composer/barwise";
 import { caretAfter, sortChange } from "../src/composer/book";
+import { mapMatches, queryNotes, searchFile } from "../src/composer/melody";
 import { planPaste } from "../src/composer/paste";
 import { noCrossedRanges } from "../src/composer/selection-guard";
 import { indexFile } from "../src/composer/tunes";
@@ -183,5 +184,33 @@ describe("a copy whose voices end at different points (item 3)", () => {
     if (!plan || "refused" in plan) throw new Error("no plan");
     const after = apply(ragged, plan.changes);
     expect(after).toContain("V:1\nc2 d2 e2 f2 | g4 a4 | z8 | z8 | b2 a2 g4 |");
+  });
+});
+
+describe("melody search results follow the edits (item 5)", () => {
+  // Find a figure, fix each occurrence in turn, stepping on as F3 does.
+  const text = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\nC D E F | G F E D | C D E F | C D E F |]\n";
+  it("an edited match drops out, the others move with the text, the next one is next", () => {
+    const file = indexFile(text);
+    let matches = searchFile(queryNotes("C D E F", "C"), text, file);
+    expect(matches).toHaveLength(3);
+    let doc = text;
+    let current = 0;
+    // Fix the first: C D E F → C D E G (longer: everything after moves).
+    for (let round = 0; round < 3; round++) {
+      const match = matches[current === -1 ? 0 : current] as (typeof matches)[number];
+      const last = match.ranges.at(-1) as { from: number; to: number };
+      const change = ChangeSet.of([{ from: last.to - 1, to: last.to, insert: "G2" }], doc.length);
+      doc = change.apply(Text.of(doc.split("\n"))).toString();
+      const mapped = mapMatches(matches, current, change, doc.length);
+      expect(mapped.matches).toHaveLength(matches.length - 1);
+      for (const each of mapped.matches) expect(doc.slice(each.from, each.to)).toMatch(/^C D E F$/);
+      matches = mapped.matches;
+      // F3: the one after the edited one.
+      current = mapped.current + 1;
+      if (!matches.length) break;
+      expect(current).toBeLessThan(matches.length);
+    }
+    expect(doc).toContain("C D E G2 | G F E D | C D E G2 | C D E G2 |]");
   });
 });

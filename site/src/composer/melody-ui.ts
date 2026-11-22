@@ -13,6 +13,7 @@ import {
   type MelodyMatch,
   type MelodyOptions,
   describeMatch,
+  mapMatches,
   queryFromSelection,
   queryNotes,
   rankMatches,
@@ -74,11 +75,44 @@ function readingOf(
   };
 }
 
+/**
+ * After every edit: the results mapped through it, those it touched dropped (round 8, item 5),
+ * and the list drawn again, the current one kept.
+ */
+export function mapMelody(changes: Parameters<typeof mapMatches>[2], length: number) {
+  if (!panel || !results.length) return;
+  const mapped = mapMatches(results, current, changes, length);
+  if (mapped.matches.length === results.length && mapped.current === current) {
+    results = mapped.matches;
+    return;
+  }
+  results = mapped.matches;
+  current = mapped.current;
+  const list = panel.querySelector(".melody-results");
+  if (list) list.replaceChildren();
+  shown = 0;
+  showMore();
+  for (const [index, row] of [...panel.querySelectorAll(".melody-result")].entries())
+    row.setAttribute("aria-current", String(index === current));
+  const count = panel.querySelector(".melody-count");
+  if (count)
+    count.textContent = results.length
+      ? `${results.length} ${results.length === 1 ? "match" : "matches"} left`
+      : "No matches left: search again.";
+}
+
 /** Selects a match's notes in the text (the score follows the selection). */
 function choose(at: number) {
   if (!context || !results.length) return;
   current = ((at % results.length) + results.length) % results.length;
   const match = results[current] as Found;
+  // (Never outside the text, whatever happened to it since.)
+  const length = context.view.state.doc.length;
+  const inside = match.draft
+    ? match.ranges
+    : match.ranges
+        .map((range) => ({ from: Math.min(range.from, length), to: Math.min(range.to, length) }))
+        .filter((range) => range.from <= range.to);
   while (current >= shown) showMore();
   // On a phone the panel folds to one line, so the match is in view.
   panel?.classList.toggle("collapsed", phone());
@@ -94,12 +128,13 @@ function choose(at: number) {
     return;
   }
   const { view } = context;
+  if (!inside.length) return;
   view.dispatch({
     selection: EditorSelection.create(
-      match.ranges.map((range) => EditorSelection.range(range.from, range.to)),
+      inside.map((range) => EditorSelection.range(range.from, range.to)),
       0,
     ),
-    effects: EditorView.scrollIntoView(match.from, { y: "center" }),
+    effects: EditorView.scrollIntoView(Math.min(match.from, length), { y: "center" }),
   });
   context.reveal?.();
 }

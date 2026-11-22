@@ -385,3 +385,44 @@ export function queryFromSelection(
     .join(" ");
   return { query, key, unit };
 }
+
+/**
+ * Matches kept through an edit (round 8, item 5): each one's ranges mapped through the change,
+ * and one the change touched dropped, so a result never points at notes that moved or went.
+ * `current` stays on the match it was on, or, when that one went, just before the one after
+ * it (so F3 goes on to it). Matches in other drafts aren't in this text: kept as they are.
+ */
+export function mapMatches<
+  T extends { from: number; to: number; ranges: { from: number; to: number }[]; draft?: unknown },
+>(
+  matches: T[],
+  current: number,
+  changes: {
+    mapPos: (pos: number, assoc?: number) => number;
+    touchesRange: (from: number, to?: number) => boolean | "cover";
+  },
+  length: number,
+): { matches: T[]; current: number } {
+  const kept: T[] = [];
+  let at = -1;
+  matches.forEach((match, index) => {
+    if (match.draft) {
+      kept.push(match);
+      if (index <= current) at = kept.length - 1;
+      return;
+    }
+    if (match.ranges.some((range) => changes.touchesRange(range.from, range.to))) {
+      if (index === current) at = kept.length - 1;
+      return;
+    }
+    const map = (pos: number, assoc: number) => Math.min(length, changes.mapPos(pos, assoc));
+    kept.push({
+      ...match,
+      from: map(match.from, 1),
+      to: map(match.to, -1),
+      ranges: match.ranges.map((range) => ({ from: map(range.from, 1), to: map(range.to, -1) })),
+    });
+    if (index <= current) at = kept.length - 1;
+  });
+  return { matches: kept, current: current < 0 ? -1 : at };
+}

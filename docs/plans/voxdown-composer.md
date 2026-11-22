@@ -1375,3 +1375,6 @@ The cheat sheet says so.
 **Browser checks:**
 - **Step 36:** Duplicate on a jig, the SR repeat's body and 1st ending deleted in the score, the score's typing hint and Escape, the hymn across a text delete, a paste overwriting forward, the duet's two voices on a clicked note, halved in step, Undone, and bar lines typed into a second voice.
 - **Step 35:** the phone check now taps a note first.
+- **Step 34:** round 5's check of whole bars pasted over part of a bar now expects the forward overwrite.
+
+**First view.** 711 KB, under its 720 KB check.

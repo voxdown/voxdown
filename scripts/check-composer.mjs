@@ -6191,7 +6191,8 @@ console.log(
     true,
     "no problems: the voices are in step",
   );
-  // 7. and 9. Whole bars pasted over part of a bar go after it; the music pasted is selected.
+  // 7. and 9. A bar pasted over part of a bar overwrites forward from its first note (round 7,
+  // finding 1: MuseScore's way), the bar lines where they were; what was pasted is selected.
   await put(two);
   await p.evaluate(() => navigator.clipboard.writeText("e e e e|"));
   await choose([of(two, "a b")]);
@@ -6199,10 +6200,10 @@ console.log(
   await settled(two);
   assert.match(
     await docText(p),
-    /\|g a b c'\| e e e e\|c' b a g\|/,
-    "after the bar, which stays whole",
+    /\|g e e e\|e z3\|f e d c\|\]/,
+    "forward from the first note, every bar its length",
   );
-  assert.deepEqual(await selected(), ["e e e e"], "the pasted notes are selected");
+  assert.deepEqual(await selected(), ["e e e", "e z3"], "the pasted notes are selected");
   // 10. Duplicate selects only the copy.
   await put(two);
   await choose([of(two, "c' b a g")]);

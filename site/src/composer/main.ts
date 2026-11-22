@@ -87,6 +87,7 @@ import {
 } from "./score";
 import { isMidiFile, isScoreFile } from "./score-files";
 import { describePicked, selectedNotes } from "./selected";
+import { noCrossedRanges } from "./selection-guard";
 import { type SourceFile, abcName, encodeText, newSource, readBytes, readText } from "./source";
 import {
   claimDraft,
@@ -1288,6 +1289,7 @@ function makeState(text: string): EditorState {
     extra: [
       copyVoices,
       redoSelection,
+      noCrossedRanges,
       keepPlaceholders,
       typedMarks,
       typingHelpers,

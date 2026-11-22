@@ -449,6 +449,33 @@ export function openIncipits(make: DialogMaker, make2: (bars: number) => void) {
   dialog.open();
 }
 
+/**
+ * Where the caret goes after a Tunes command rewrote the file: in the tune it was in, at the same
+ * offset from the tune's start (the tune found again by its text below the X: line, wherever it
+ * moved), else at that tune's start, else where it was, within the text.
+ */
+export function caretAfter(text: string, file: FileIndex, caret: number, after: string): number {
+  const tune = tuneAt(file, caret);
+  if (!tune) return Math.min(caret, after.length);
+  const below = (from: number, to: number, source: string) => {
+    const own = source.slice(from, to);
+    return own.slice(own.indexOf("\n") + 1).replace(/\s+$/, "");
+  };
+  const mine = below(tune.from, tune.to, text);
+  // (From the line after X:, whose number may have changed, when the caret is below it.)
+  const second = text.indexOf("\n", tune.from) + 1;
+  const tunes = indexFile(after).tunes;
+  const same =
+    tunes.find((each) => below(each.from, each.to, after) === mine) ??
+    tunes[file.tunes.findIndex((each) => each.from === tune.from)];
+  if (!same) return Math.min(caret, after.length);
+  const at =
+    second > 0 && caret >= second
+      ? after.indexOf("\n", same.from) + 1 + (caret - second)
+      : same.from + Math.min(caret - tune.from, after.indexOf("\n", same.from) - same.from);
+  return Math.max(same.from, Math.min(at, same.to));
+}
+
 /* The commands, run from the Edit menu or a tune's menu in the rail. */
 
 export type BookCommand = "renumber" | "sort" | "line-up" | "incipits" | "duplicate" | "new-after";
@@ -470,9 +497,14 @@ export function runBook(command: BookCommand, context: BookContext, tune?: TuneI
   const text = view.state.doc.toString();
   /** Each command's changes are one undo step of their own. */
   const apply = (changes: Change[], message: string, caret?: number) => {
+    // Always an explicit caret: a selection inside a span the command rewrites would map to an
+    // inverted range, and the next key would replace the file (round 8).
+    const set = view.state.changes(changes);
+    const after = set.apply(view.state.doc).toString();
+    const anchor = caret ?? caretAfter(text, file, view.state.selection.main.head, after);
     view.dispatch({
-      changes,
-      ...(caret === undefined ? {} : { selection: { anchor: caret } }),
+      changes: set,
+      selection: { anchor: Math.max(0, Math.min(anchor, after.length)) },
       annotations: isolateHistory.of("full"),
       userEvent: "input.tunebook",
       scrollIntoView: true,

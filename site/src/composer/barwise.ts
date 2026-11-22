@@ -745,7 +745,12 @@ export function cutPlan(
           else if (token.kind === "slur" && !inside(structure.slurs.get(token.from) ?? -1, [span]))
             (token.text === "(" ? after : before).push(token.text);
         }
-      after.unshift(...fields.values());
+      // Fields go on to the bar after; with no music after in the voice, they go (round 9).
+      const runVoice = structure.tokens.find(({ token }) => token.from >= span.from)?.voice;
+      const follows = structure.tokens.some(
+        ({ token, voice }) => voice === runVoice && token.from >= span.to && starts(token),
+      );
+      if (follows) after.unshift(...fields.values());
       // The dynamic in force after the run goes on to the note that follows (unless it has its own).
       const level = run
         .flatMap((segment) => segment.tokens)
@@ -897,6 +902,13 @@ export function cutPlan(
   // Hairpins whole: an end moved onto a note left inside, or both ends gone.
   changes.push(
     ...hairpinsKept(
+      text,
+      file,
+      (selected[0] as Range).from,
+      [...removed, ...rests.vanished],
+      rests.rested,
+    ),
+    ...slursKept(
       text,
       file,
       (selected[0] as Range).from,
@@ -2241,6 +2253,7 @@ function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan
     ...changes,
     ...lyrics,
     ...hairpinsKept(text, file, (selected[0] as Range).from, rests.vanished, rests.rested),
+    ...slursKept(text, file, (selected[0] as Range).from, rests.vanished, rests.rested),
   ].sort((a, b) => a.from - b.from);
   return {
     changes: all,
@@ -3662,4 +3675,96 @@ export function barsChanged(before: string, after: string, at: number): string |
   if (!first) return null;
   const more = now.length > 1 ? `, and ${now.length - 1} more` : "";
   return `${first.message.replace(/^Bar (\d+) /, "Bar $1 now ")} F8 goes to it${more}.`;
+}
+
+/**
+ * Slurs kept whole by a cut (round 9, item 14), as hairpins are: a slur whose notes all go (cut
+ * away, or made rests) goes with them; one that loses an end has that end moved to the nearest
+ * note left inside it; with fewer than two notes left, both ends go. Ends moved with whole bars
+ * cut (to the bar line kept) are left as they are.
+ */
+function slursKept(
+  text: string,
+  file: FileIndex,
+  at: number,
+  gone: Range[],
+  rested: Set<number>,
+): Change[] {
+  const structure = structureOf(text, file, at);
+  const cut = (pos: number) => gone.some((range) => pos >= range.from && pos < range.to);
+  const tokens = structure.tokens;
+  const changes: Change[] = [];
+  for (const [open, close] of structure.slurs) {
+    if (close < 0 || close < open) continue;
+    if (cut(open) || cut(close)) continue;
+    const openToken = tokens.find(({ token }) => token.from === open);
+    const closeToken = tokens.find(({ token }) => token.from === close);
+    if (!openToken || !closeToken) continue;
+    const voice = openToken.voice;
+    const notes = tokens.filter(
+      ({ token, voice: own }) =>
+        own === voice &&
+        token.from > open &&
+        token.from < close &&
+        starts(token) &&
+        token.kind !== "rest",
+    );
+    const left = notes.filter(({ token }) => !cut(token.from) && !rested.has(token.from));
+    if (left.length === notes.length) continue;
+    const drop = (token: MusicToken) =>
+      changes.push({ from: token.from, to: token.to, insert: "" });
+    if (left.length < 2) {
+      drop(openToken.token);
+      drop(closeToken.token);
+      continue;
+    }
+    const first = (left[0] as (typeof left)[number]).token;
+    const last = (left[left.length - 1] as (typeof left)[number]).token;
+    if (first.from !== (notes[0] as (typeof notes)[number]).token.from) {
+      drop(openToken.token);
+      const span = selectedNotes(text, [{ from: first.from, to: first.from + 1 }], file)[0]?.span;
+      const place = span?.from ?? first.from;
+      changes.push({ from: place, to: place, insert: "(" });
+    }
+    if (last.from !== (notes[notes.length - 1] as (typeof notes)[number]).token.from) {
+      drop(closeToken.token);
+      const event = selectedNotes(text, [{ from: last.from, to: last.from + 1 }], file)[0]?.event;
+      const place = event?.to ?? last.to;
+      changes.push({ from: place, to: place, insert: ")" });
+    }
+  }
+  return changes;
+}
+
+/**
+ * Whether a selection holds only what attaches to notes (a grace group, a decoration, a chord
+ * symbol, an annotation): Delete or Backspace then removes just that, never the note (round 9).
+ */
+export function onlyAttachments(text: string, ranges: Range[]): boolean {
+  const selected = ranges.filter((range) => range.to > range.from);
+  if (!selected.length) return false;
+  return selected.every((range) => {
+    const lineFrom = text.lastIndexOf("\n", range.from - 1) + 1;
+    const lineTo =
+      text.indexOf("\n", range.from) < 0 ? text.length : text.indexOf("\n", range.from);
+    if (range.to > lineTo) return false;
+    // Tokens of the line that the range touches: each of them an attachment, wholly inside it.
+    const touched = tokenizeMusic(text.slice(lineFrom, lineTo), lineFrom).filter(
+      (token) => token.kind !== "space" && token.to > range.from && token.from < range.to,
+    );
+    return (
+      touched.length > 0 &&
+      touched.every(
+        (token) =>
+          token.from >= range.from &&
+          token.to <= range.to &&
+          (token.kind === "decoration" ||
+            token.kind === "chord-symbol" ||
+            token.kind === "annotation" ||
+            token.kind === "grace-open" ||
+            token.kind === "grace-close" ||
+            (token.kind === "note" && token.inGrace)),
+      )
+    );
+  });
 }

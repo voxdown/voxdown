@@ -8,6 +8,7 @@ import {
   inOneVoice,
   lengthsInStep,
   noteStartsBar,
+  onlyAttachments,
 } from "../src/composer/barwise";
 import { type Change, scaleLengths, toggleTies } from "../src/composer/commands";
 import { planPaste } from "../src/composer/paste";
@@ -226,5 +227,36 @@ describe("Duplicate (items 5, 11, 15, and the partial-bar rule)", () => {
     expect(barsChanged(text, out, text.indexOf("D2"))).toBe(
       "Bar 1 now has 10 eighths, 8 expected (M:4/4). F8 goes to it.",
     );
+  });
+});
+
+describe("slurs follow Delete as hairpins do (item 14)", () => {
+  const text = tune("(c2 d2 e2 f2)|(g2 a2 b2 c'2)|]");
+  it("all its notes gone (made rests): the slur goes too", () => {
+    expect(body(cut(text, [at(text, "c2 d2 e2 f2")]).out)).not.toMatch(/\(z|z8\)/);
+  });
+  it("an end lost moves to the nearest note left inside it", () => {
+    expect(body(cut(text, [at(text, "c2 d2")]).out)).toBe("z4 (e2 f2)|(g2 a2 b2 c'2)|]\n");
+    expect(body(cut(text, [at(text, "e2 f2")]).out)).toBe("(c2 d2) z4|(g2 a2 b2 c'2)|]\n");
+  });
+});
+
+describe("selecting only an attachment (rule)", () => {
+  const text = 'X:1\nK:C\n{g}a2 "C"b2 !f!c2|]\n';
+  it("a grace group, a chord symbol or a mark alone: Delete takes only that", () => {
+    expect(onlyAttachments(text, [at(text, "{g}")])).toBe(true);
+    expect(onlyAttachments(text, [at(text, '"C"')])).toBe(true);
+    expect(onlyAttachments(text, [at(text, "!f!")])).toBe(true);
+    expect(onlyAttachments(text, [at(text, "{g}a")])).toBe(false);
+  });
+});
+
+describe("fields left by whole bars cut (rule)", () => {
+  const text = tune("A2 B2 c2 d2 | [L:1/4] B c d e | [M:2/4] f g | [M:3/4] a b c' |]");
+  it("go on to the next bar, or go when nothing follows", () => {
+    expect(body(cut(text, [at(text, "a b c'")]).out)).toBe(
+      "A2 B2 c2 d2 | [L:1/4] B c d e | [M:2/4] f g |]\n",
+    );
+    expect(body(cut(text, [at(text, "B c d e")]).out)).toContain("[L:1/4] [M:2/4] f g |");
   });
 });

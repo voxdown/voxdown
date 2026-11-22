@@ -1082,6 +1082,9 @@ function replaceMusic(target: EditorView, typed: string): boolean {
   const notes = selectedNotes(doc, parts, file);
   if (!typed) {
     if (!parts.length || !notes.length) return false;
+    // Only a grace group, a mark, a chord symbol or a text selected: just that goes (the
+    // editor's own delete), never the note (round 9).
+    if (barwise.onlyAttachments(doc, list)) return false;
     if (!barwise.cutPlan(doc, parts, file)) return false;
     cutMusic(target, null, parts);
     return true;

@@ -2635,19 +2635,20 @@ function hitPoint(
   let voice = preferVoice;
   if (voice === undefined || !onStaff.some((each) => each.note.voice === voice)) {
     // Several voices on one staff: first the voice of a head within a head's width of the pointer
-    // (−4…+14 px), the nearest such head, whatever voice it is in: a tall chord's box in another
-    // voice never wins over it (round 10, item 4). Else the voice whose notes are nearest the
-    // pointer vertically.
+    // (−4…+14 px across), whatever voice it is in and wherever on the staff the pointer is (a
+    // drag starting on the staff lines): a tall chord's box in another voice never wins over it
+    // (round 10, item 4). Two voices' heads there: the one nearer the pointer up and down. Else
+    // the voice whose notes are nearest the pointer vertically.
     let headed: (typeof geo.notes)[number] | null = null;
+    const off = (box: (typeof geo.notes)[number]) =>
+      Math.abs(box.head + 5 - x) + Math.abs(y - (box.top + box.bottom) / 2) / 8;
     for (const box of geo.notes)
       if (
         box.note.line === staff.line &&
         box.note.staff === staff.staff &&
         x >= box.head - 4 &&
         x <= box.head + 14 &&
-        y >= box.top - 6 &&
-        y <= box.bottom + 6 &&
-        (!headed || Math.abs(box.head + 5 - x) < Math.abs(headed.head + 5 - x))
+        (!headed || off(box) < off(headed))
       )
         headed = box;
     let nearest = headed ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;

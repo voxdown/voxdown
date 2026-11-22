@@ -6034,7 +6034,7 @@ console.log(
   await settled(pickup);
   assert.match(
     await docText(p),
-    /%%score 1 2\n[\s\S]*\nV:2 clef=bass\nz2 \| z8 \| z8 \|\n$/,
+    /%%score 1 2\n[\s\S]*\nV:2 clef=treble\nz2 \| z8 \| z8 \|\]\n$/,
     "rests bar for bar, in %%score",
   );
   // 10. Shift+End in the score grows the selection to the line's end.
@@ -6420,7 +6420,7 @@ console.log(
   );
   await p.keyboard.type("c2");
   await p.waitForFunction(() =>
-    /V:2 clef=bass\nc2z6 \| z8 \|/.test(window.composer.view.state.doc.toString()),
+    /V:2 clef=treble\nc2z6 \| z8 \|/.test(window.composer.view.state.doc.toString()),
   );
   // 10. Transpose to key: the whole tune to F, its key signature with it.
   const tune = 'X:1\nT:Up\nM:4/4\nL:1/4\nK:C\n"C"C E G c |]\n';
@@ -6882,6 +6882,189 @@ console.log(
   await ctx.close();
   console.log(
     "Composer: selection hardening round 9: typing and MIDI over two voices refused, a grace group deleted alone, a bar over-full after Duplicate said, spacers not counted, a drag from beside a triplet note: passed",
+  );
+}
+
+/* 39. Selection hardening, round 10 (final): the items that need the UI. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    await p.waitForFunction((x) => x.includes(window.composer.scoreIndex()?.source ?? "\u0000"), t);
+    await p.waitForTimeout(400);
+  };
+  const choose = (list) =>
+    p.evaluate((list) => {
+      const view = window.composer.view;
+      const S = view.state.selection.constructor;
+      view.dispatch({ selection: S.create(list.map(([a, b]) => S.range(a, b))) });
+      view.focus();
+    }, list);
+  const of = (text, part) => [text.indexOf(part), text.indexOf(part) + part.length];
+  const says = (id, pattern) =>
+    p.waitForFunction(
+      ([id, source]) => new RegExp(source).test(document.getElementById(id).textContent),
+      [id, pattern.source],
+    );
+  const ranges = () =>
+    p.evaluate(() =>
+      window.composer.view.state.selection.ranges.map((range) => [range.anchor, range.head]),
+    );
+  // 5. Ctrl+X across standalone V: lines: by the plan, the voices kept, never a raw delete.
+  const blocks =
+    "X:1\nT:Blocks\nM:4/4\nL:1/8\n%%score (1 2)\nK:C\nV:1\nC2 D2 E2 F2 | G8 |]\nV:2\nC,8 | E,8 |]\n";
+  await put(blocks);
+  await choose([[blocks.indexOf("C2"), blocks.indexOf("C,8") + 3]]);
+  await p.keyboard.press("Control+x");
+  await p.waitForFunction((was) => window.composer.view.state.doc.toString() !== was, blocks);
+  const cut = await docText(p);
+  assert.match(cut, /\nV:1\n[^\n]*\|\]\nV:2\n[^\n]*\|\]\n$/, `both voices kept: ${cut}`);
+  assert.equal(
+    cut.split("|").length - 1,
+    blocks.split("|").length - 3,
+    `one bar out of each: ${cut}`,
+  );
+  // 1. Insert › Second voice on the fiddle tune: its bars, repeats, endings and lines as written.
+  const fiddle =
+    "X:1\nT:Fiddle\nM:4/4\nL:1/8\n%%score 1\nK:D\nA2|:d2fd A2FA|d2fd e2c2:|\n|:f2af g2bg|1 f2d2 e4:|2 f2d2 d4|]\n";
+  await put(fiddle);
+  await p.evaluate(() => window.composer.view.dispatch({ selection: { anchor: 60 } }));
+  await menu("insert", "Second voice", p);
+  await p.waitForFunction(() => /\nV:2 /.test(window.composer.view.state.doc.toString()));
+  const two = await docText(p);
+  const bars = (line) => line.replace(/[A-Ga-gzx][,']*\d*/g, "").replace(/\s/g, "");
+  const firstVoice = fiddle.split("K:D\n")[1].trim().split("\n");
+  const secondVoice = two
+    .split(/\nV:2[^\n]*\n/)[1]
+    .trim()
+    .split("\n");
+  assert.deepEqual(secondVoice.map(bars), firstVoice.map(bars), `bar for bar: ${secondVoice}`);
+  // 13. Delete, Undo, Redo, Undo: the selection each time is the edit's own.
+  const moon = readFileSync(
+    resolve(import.meta.dirname, "../site/test/fixtures/composer/conformance/moonlight.abc"),
+    "utf8",
+  );
+  await put(moon);
+  const from = moon.indexOf("|", moon.indexOf("\nV:1\n", moon.indexOf("K:")) + 5) + 2;
+  const to = moon.indexOf("|", from) - 1;
+  // (Taken backwards, as a drag to the left makes it.)
+  await p.evaluate(
+    ([a, h]) => {
+      const view = window.composer.view;
+      view.dispatch({ selection: { anchor: a, head: h } });
+      view.focus();
+    },
+    [to, from],
+  );
+  const before = await ranges();
+  await p.keyboard.press("Delete");
+  await p.waitForFunction((was) => window.composer.view.state.doc.toString() !== was, moon);
+  const deleted = await docText(p);
+  const after = await ranges();
+  await p.keyboard.press("Control+z");
+  await p.waitForFunction((was) => window.composer.view.state.doc.toString() === was, moon);
+  await p.waitForTimeout(100);
+  assert.deepEqual(await ranges(), before, "Undo: the selection deleted");
+  await p.keyboard.press("Control+Shift+Z");
+  await p.waitForFunction((was) => window.composer.view.state.doc.toString() === was, deleted);
+  await p.waitForTimeout(100);
+  assert.deepEqual(await ranges(), after, "Redo: the selection after the delete");
+  await p.keyboard.press("Control+z");
+  await p.waitForFunction((was) => window.composer.view.state.doc.toString() === was, moon);
+  await p.waitForTimeout(100);
+  assert.deepEqual(await ranges(), before, "Undo again: the same selection, not mapped and back");
+  // 4. Drags from beside a head on Moonlight's bass staves take that head's voice's point, never
+  // a tall chord's in another voice: the notes whose heads are passed, and no others.
+  await p.keyboard.press("Escape");
+  let total = 0;
+  const wrong = [];
+  for (const line of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+    await p.evaluate((line) => {
+      document.querySelector(`#score .abcjs-l${line}`)?.scrollIntoView({ block: "center" });
+    }, line);
+    await p.waitForTimeout(150);
+    const geo = await p.evaluate(() => window.composer.geometry());
+    const staff = geo.staves.find((each) => each.line === line && each.staff === 1);
+    if (!staff) continue;
+    const xs = [
+      ...new Set(
+        geo.notes
+          .filter((each) => each.line === line && each.staff === 1)
+          .map((each) => Math.round(each.head)),
+      ),
+    ].sort((a, b) => a - b);
+    for (const i of [1, Math.floor(xs.length / 2), xs.length - 2]) {
+      const j = Math.min(xs.length - 1, i + 2);
+      if (i < 1 || j <= i) continue;
+      const y = (staff.top + staff.bottom) / 2;
+      await p.keyboard.press("Escape");
+      await p.mouse.move(xs[i] - 3, y);
+      await p.mouse.down();
+      await p.mouse.move(xs[j] + 3, y, { steps: 8 });
+      await p.mouse.up();
+      total += 1;
+      const extra = await p.evaluate(
+        ([fx, line]) => {
+          const view = window.composer.view;
+          const doc = view.state.doc.toString();
+          const chosen = view.state.selection.ranges.filter((range) => !range.empty);
+          return window.composer
+            .geometry()
+            .notes.filter(
+              (note) =>
+                note.line === line &&
+                note.staff === 1 &&
+                note.head < fx - 1 &&
+                chosen.some((range) => range.from < note.end && note.start < range.to),
+            )
+            .map((note) => doc.slice(note.start, note.end));
+        },
+        [xs[i] - 3, line],
+      );
+      if (extra.length) wrong.push(`line ${line} from x ${xs[i] - 3}: ${extra.join(" ")}`);
+    }
+  }
+  assert(total >= 12, `drags on the bass staves: ${total}`);
+  assert.deepEqual(wrong, [], "no notes before the press");
+  // 12. Pasting into several places: a copy of both voices, a note clicked in each: no `| |`.
+  const two2 =
+    "X:1\nT:t\nM:4/4\nL:1/8\n%%score {1 2}\nV:1\nV:2 clef=bass\nK:C\nV:1\nCDEF GABc | cBAG FEDC | E8 | G8 |]\nV:2\nC,8 | D,8 | C,8 | G,8 |]\n";
+  await put(two2);
+  await choose([of(two2, "CDEF GABc"), of(two2, "C,8")]);
+  await p.keyboard.press("Control+c");
+  await choose([of(two2, "E8"), [two2.lastIndexOf("C,8"), two2.lastIndexOf("C,8") + 3]]);
+  await p.keyboard.press("Control+v");
+  await p.waitForFunction((was) => window.composer.view.state.doc.toString() !== was, two2);
+  const placed = await docText(p);
+  assert(!/\|\s*\|/.test(placed), `no bar of nothing: ${placed}`);
+  assert.match(placed, /\nV:1\nCDEF GABc \| cBAG FEDC \| CDEF GABc \| E8 \| G8 \|\]\n/);
+  assert.match(placed, /\nV:2\nC,8 \| D,8 \| C,8 \| C,8 \| G,8 \|\]\n/);
+  // 17. Typing over notes: the bar's length said once typing pauses, not after the first letter.
+  // (Bar 2: a short first bar is a pickup.)
+  const typing = "X:1\nT:T\nM:4/4\nL:1/8\nK:C\nC2 D2 E2 F2 | G4 E4 | c8 |]\n";
+  await put(typing);
+  await choose([of(typing, "G4 E4")]);
+  await p.keyboard.type("A");
+  await p.waitForTimeout(300);
+  const early = await p.evaluate(() => document.getElementById("explain").textContent);
+  assert(!/Bar 2 now/.test(early), `nothing said of the bar while typing: ${early}`);
+  await p.keyboard.type("2B2", { delay: 60 });
+  const typed = await p.evaluate(() => document.getElementById("explain").textContent);
+  assert(!/Bar 2 now/.test(typed), `still nothing while typing: ${typed}`);
+  // (Then, typing paused: the bar as it now is, 4 eighths, not the 1 of the first letter.)
+  await says("explain", /Bar 2 now has 4 eighths/);
+  await ctx.close();
+  console.log(
+    `Composer: selection hardening round 10: Cut across V: lines by the plan, Second voice bar for bar, Undo/Redo/Undo selections, ${total} drags on Moonlight's bass staves, a voiced paste into two places, the bar said once typing pauses: passed`,
   );
 }
 

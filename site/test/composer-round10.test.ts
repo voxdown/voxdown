@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { checkBars } from "../src/composer/barcheck";
-import { newVoice, tuneTokens } from "../src/composer/barwise";
+import { newVoice, samePoint, tuneTokens } from "../src/composer/barwise";
 import type { Change } from "../src/composer/commands";
+import { planPaste } from "../src/composer/paste";
 import { indexFile } from "../src/composer/tunes";
 
 /* Round 10 (selection hardening, final): Claude's evening of real work, and Codex's fuzzing. */
@@ -55,4 +56,18 @@ describe("Insert › Second voice copies its pair's structure (item 1)", () => {
           .map((each) => each.token.text);
       expect(barLines(newest)).toEqual(barLines(pair));
     });
+});
+
+describe("a voiced paste at a bar's start goes before another voice's (3 or ( (item 2)", () => {
+  it("V:2's part goes in before its bar's tuplet sign, not inside it", () => {
+    const text =
+      "X:1\nT:t\nM:4/4\nL:1/8\n%%score (1 2)\nK:C\nV:1\nC2 D2 E2 F2 | G8 |]\nV:2\nC4 E4 | (3GAB c2 d4 |]\n";
+    const from = text.indexOf("G8");
+    const plan = planPaste(text, [{ from, to: from + 2 }], 0, "V:1\nc8 |\nV:2\nC,8 |\n", null);
+    if (!plan || "refused" in plan) throw new Error(plan ? plan.refused : "no plan");
+    const after = apply(text, plan.changes);
+    expect(after).toContain("V:1\nC2 D2 E2 F2 | c8 | G8 |]");
+    expect(after).toContain("V:2\nC4 E4 | C,8 | (3GAB c2 d4 |]");
+    expect(samePoint(text, indexFile(text), from, "2")).toBe(text.indexOf("(3GAB"));
+  });
 });

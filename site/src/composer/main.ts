@@ -508,6 +508,8 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
     scrollIntoView: true,
     userEvent: "input.paste",
   });
+  // The score drawn again at once, so what is lit matches the text (round 10).
+  scheduleRender(0);
   // (A paste that went in adds time: a bar left short or over-full is said; round 9.)
   const bars = barwise?.barsChanged(
     state.doc.toString(),

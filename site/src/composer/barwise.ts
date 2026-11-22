@@ -2781,11 +2781,15 @@ export function samePoint(text: string, file: FileIndex, at: number, voice: stri
   if (!here) return null;
   const theirs = times.filter((each) => each.voice === voice);
   const starting = theirs.find((each) => Math.abs(each.start - here.start) < 1e-9);
+  // (Before what opens the note there too, a tuplet's sign, a slur's start, graces: round 10.)
   if (starting)
-    return (
+    return opening(
+      text,
+      file,
       selectedNotes(text, [{ from: starting.from, to: starting.from + 1 }], file)[0]?.span.from ??
-      starting.from
-    );
+        starting.from,
+      voice,
+    ).start;
   const ending = theirs.find((each) => Math.abs(each.end - here.start) < 1e-9);
   if (ending)
     return (
@@ -3333,9 +3337,23 @@ export function noteStartsBar(text: string, file: FileIndex, range: Range): numb
   const picked = selectedNotes(text, [range], file).filter((each) => each.whole);
   const one = picked[0];
   if (picked.length !== 1 || !one) return null;
-  // Back from it over what opens a bar before its first note (fields, marks, chord symbols, a
-  // tuplet's sign, a slur's start, grace notes; round 9, item 3): a bar line there, or nothing,
-  // and the paste goes before all of them.
+  // Back from it over what opens a bar before its first note (round 9, item 3): a bar line
+  // there, or nothing, and the paste goes before all of them.
+  const { start, last } = opening(text, file, one.span.from, one.event.voice);
+  return !last || last.kind === "bar" ? start : null;
+}
+
+/**
+ * Where a note's music starts, back from its span over what opens it in its voice (round 10,
+ * item 2): fields other than [V:], marks, chord symbols, a tuplet's sign, a slur's start, grace
+ * notes. With the token before all that (a bar line, or none at the voice's start).
+ */
+export function opening(
+  text: string,
+  file: FileIndex,
+  from: number,
+  voice: string,
+): { start: number; last: MusicToken | undefined } {
   const prefix = (token: MusicToken) =>
     (token.kind === "inline-field" && !/^\[V:/.test(token.text)) ||
     ["decoration", "annotation", "chord-symbol", "space", "tuplet"].includes(token.kind) ||
@@ -3343,17 +3361,16 @@ export function noteStartsBar(text: string, file: FileIndex, range: Range): numb
     token.kind === "grace-open" ||
     token.kind === "grace-close" ||
     (token.kind === "note" && token.inGrace);
-  const before = tuneTokens(text, file, one.span.from).filter(
-    ({ token, voice }) => voice === one.event.voice && token.to <= one.span.from,
+  const before = tuneTokens(text, file, from).filter(
+    (each) => each.voice === voice && each.token.to <= from,
   );
   let index = before.length - 1;
-  let start = one.span.from;
+  let start = from;
   while (index >= 0 && prefix((before[index] as (typeof before)[number]).token)) {
     start = (before[index] as (typeof before)[number]).token.from;
     index -= 1;
   }
-  const last = before[index]?.token;
-  return !last || last.kind === "bar" ? start : null;
+  return { start, last: before[index]?.token };
 }
 
 /**

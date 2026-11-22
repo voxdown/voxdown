@@ -705,6 +705,14 @@ function openFind(): boolean {
   return true;
 }
 const keys: KeyBinding[] = [
+  // (Undo with nothing to undo, first after a reload: said once; the history's own key runs on.)
+  {
+    key: "Mod-z",
+    run: () => {
+      sayUndoStartsAgain();
+      return false;
+    },
+  },
   { key: "Mod-f", run: openFind, preventDefault: true },
   { key: "Mod-Shift-m", run: findMelody, preventDefault: true },
   // F3 steps through melody matches while they are listed; else it is the search's.
@@ -4277,7 +4285,19 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command
       if (!phone.matches) view.focus();
     }
   });
+/**
+ * A draft recovered after a reload has no undo history: the first time Undo has nothing to undo,
+ * it says so, once (round 8, item 10).
+ */
+let reloaded = false;
+function sayUndoStartsAgain(): boolean {
+  if (!reloaded || undoDepth(view.state) > 0) return false;
+  reloaded = false;
+  notice("Undo history starts again after a reload: the draft is as it was, its edits kept.");
+  return true;
+}
 $("undo").addEventListener("click", () => {
+  sayUndoStartsAgain();
   undo(view);
   view.focus();
 });
@@ -5791,6 +5811,7 @@ async function start() {
             .catch(() => {});
         }
         $("recovery").textContent = "Recovered this tab's draft";
+        reloaded = true;
         return;
       }
     } catch {

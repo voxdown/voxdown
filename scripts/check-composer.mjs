@@ -203,8 +203,16 @@ await second.waitForTimeout(1200);
 await second.close();
 await page.reload();
 await page.waitForFunction((text) => window.composer?.view.state.doc.toString() === text, edited);
+// Undo with nothing to undo after the reload says why, once (round 8, item 10).
+await page.locator(".cm-content").focus();
+await page.keyboard.press("Control+z");
+await page.waitForFunction(() =>
+  /Undo history starts again after a reload/.test(document.getElementById("notice").textContent),
+);
+assert.equal(await docText(), edited, "nothing undone");
+await page.locator("#notice").getByRole("button", { name: "Dismiss" }).click();
 console.log(
-  "Composer: reload recovers this tab's draft; another tab keeps a separate draft: passed",
+  "Composer: reload recovers this tab's draft; another tab keeps a separate draft; Undo says its history starts again: passed",
 );
 
 /* 4. Playback: sound is scheduled, and the lit note advances in the score and the text. */

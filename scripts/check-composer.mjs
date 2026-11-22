@@ -1831,6 +1831,10 @@ console.log(
   });
   await tab.locator("#problems").waitFor();
   assert.match(await tab.locator("#problems").textContent(), /1 problem/);
+  // The problems can show before the new tune is drawn: its summary, once it is.
+  await tab.waitForFunction(() =>
+    /^Air/.test(document.getElementById("score-summary").textContent),
+  );
   assert.match(
     await tab.locator("#score-summary").textContent(),
     /0 bars · music below a blank line left out/,
@@ -4832,8 +4836,13 @@ console.log(
               .sort(),
           );
         };
-        const here = { x: anchorBox.head + 4, y: anchorBox.y };
-        const there = { x: other.head + 4, y: other.y };
+        // Where the two heads are drawn now (a late redraw under load moves them).
+        const now = await p.evaluate(() => window.composer.geometry());
+        const find = (box) =>
+          now.notes.find((each) => each.start === box.start && each.voice === box.voice) ?? box;
+        const [fromBox, toBox] = [find(anchorBox), find(other)];
+        const here = { x: fromBox.head + 4, y: fromBox.y };
+        const there = { x: toBox.head + 4, y: toBox.y };
         assert.deepEqual(
           await drag(here, there),
           await drag(there, here),
@@ -5992,7 +6001,7 @@ console.log(
   await settled(pickup);
   assert.match(
     await docText(p),
-    /%%score 1 2\n[^]*\nV:2 clef=bass\nz2 \| z8 \| z8 \|\n$/,
+    /%%score 1 2\n[\s\S]*\nV:2 clef=bass\nz2 \| z8 \| z8 \|\n$/,
     "rests bar for bar, in %%score",
   );
   // 10. Shift+End in the score grows the selection to the line's end.

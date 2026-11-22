@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cutPlan } from "../src/composer/barwise";
 import { type Change, musicParts } from "../src/composer/commands";
+import { planPaste } from "../src/composer/paste";
 import { indexFile } from "../src/composer/tunes";
 import { played } from "./composer-played";
 
@@ -64,5 +65,35 @@ describe("a repeat's body with its 1st ending (Codex 4)", () => {
   it("a note's length 3 isn't a 3rd ending", () => {
     const one = "X:1\nT:t\nM:6/8\nL:1/8\nK:G\n|:E3 B3|1 G3 FGA:|2 BAG FE2|d3 d3|]\n";
     expect(() => cut(one, one.indexOf("E3"), one.indexOf("FGA") + 3)).not.toThrow();
+  });
+});
+
+describe("a copy longer than the notes it's pasted over (finding 1)", () => {
+  const trio =
+    "X:1\nT:t\nM:3/4\nL:1/8\n%%score 1 2\nK:F\nV:1\nc4 f2|e4 g2|f2 a2 c'2|\nV:2\nA4 c2|c4 e2|c2 f2 a2|\n";
+  it("overwrites forward from the first note, tied over the bar line, the other voice untouched", () => {
+    const at = trio.indexOf("A4 c2") + 3;
+    const plan = planPaste(trio, [{ from: at, to: at + 2 }], 0, "f4 g2|", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    const after = apply(trio, plan.changes);
+    expect(after).toContain("V:2\nA4 f2-|f2 g2 z2|c2 f2 a2|");
+    expect(after).toContain("V:1\nc4 f2|e4 g2|f2 a2 c'2|");
+    expect(plan.message).toMatch(
+      /from its first note in V:2; it ran on over 2 more notes, replaced; rests fill the rest of the last bar; the other voices are as they were/,
+    );
+  });
+  it("across a repeat sign or an ending, refused, saying why", () => {
+    const tune = "X:1\nT:t\nM:3/4\nL:1/4\nK:C\n|:C D E:|F G A|]\n";
+    const at = tune.indexOf("E");
+    expect(planPaste(tune, [{ from: at, to: at + 1 }], 0, "c d e|", null)).toMatchObject({
+      refused: expect.stringMatching(/across a repeat sign or an ending/),
+    });
+  });
+  it("past the voice's end, refused, saying why", () => {
+    const tune = "X:1\nT:t\nM:3/4\nL:1/4\nK:C\nC D E|F G A|]\n";
+    const at = tune.indexOf("A|]");
+    expect(planPaste(tune, [{ from: at, to: at + 1 }], 0, "c d e|", null)).toMatchObject({
+      refused: expect.stringMatching(/past the end of the voice/),
+    });
   });
 });

@@ -140,7 +140,7 @@ describe("plain music over places in several voices (round 3)", () => {
     const plan = planPaste(tune, [places[0] as { from: number; to: number }], 0, "e e", null);
     expect(plan && "changes" in plan && plan.changes).toEqual([{ ...places[0], insert: "e e z2" }]);
     expect(plan && "message" in plan && plan.message).toMatch(
-      /Pasted over the selected notes in V:1, a rest for the time left/,
+      /Pasted over the selection from its first note in V:1; rests fill the selection left; the other voices are as they were/,
     );
   });
   it("pasted at a caret in one voice of two, the other gets rests as long (round 6)", () => {

@@ -16,7 +16,15 @@
  * Every paste says what went where, or is refused; none succeeds in part in silence.
  */
 import { lineKind } from "./abc";
-import { lyricsFor, notesIn, pasteInStep, pasteKeepingBars, samePoint } from "./barwise";
+import {
+  insertsAtNote,
+  lyricsFor,
+  notesIn,
+  overwriteForward,
+  pasteInStep,
+  pasteKeepingBars,
+  samePoint,
+} from "./barwise";
 import { type ClipSource, convertClip, keyLabel } from "./clip-convert";
 import type { Change } from "./commands";
 import { selectedNotes } from "./selected";
@@ -306,8 +314,21 @@ export function planPaste(
   }
   const changes: Change[] = [];
   let special = said.length > 0;
-  for (const range of targets) {
-    const insert = fit(copy, range.from);
+  for (const target of targets) {
+    const insert = fit(copy, target.from);
+    // Over notes, the copy overwrites forward from the first (as MuseScore does); a single note
+    // starting its bar takes whole bars in before it, as at a caret there.
+    const at = insertsAtNote(text, file, target, insert);
+    const range = at === null ? target : { from: at, to: at };
+    const over =
+      targets.length === 1 && at === null ? overwriteForward(text, file, range, insert) : null;
+    if (over && "refused" in over) return over;
+    if (over) {
+      special = true;
+      said.push(over.said);
+      changes.push(...over.changes);
+      continue;
+    }
     const fitted = pasteKeepingBars(text, [range], insert, file, meter);
     if (fitted && "refused" in fitted) return fitted;
     if (fitted || insert !== copy) special = true;

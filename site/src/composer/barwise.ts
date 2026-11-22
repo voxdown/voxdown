@@ -2312,3 +2312,306 @@ export function nextPlaceholder(
   const close = bar.close;
   return placeholders.find((at) => at >= close.to && at <= following.to) ?? null;
 }
+
+/** A copy's notes, rests and chords one by one, as written, with how long each lasts. */
+type Piece = {
+  text: string;
+  /** In whole notes. */
+  length: number;
+  /** A space after it in the copy (its beam ends). */
+  gap: boolean;
+  /** Written as two tied halves at a bar line: its parts (null when it can't be: a tuplet's). */
+  split: ((first: number, unit: Fraction) => [string, string]) | null;
+};
+
+const lengthText = (whole: number, unit: Fraction) => restOf(whole, unit).slice(1);
+
+function piecesOf(clip: string, unit: Fraction, meter: string): Piece[] | null {
+  const body = clip
+    .split("\n")
+    .filter((line) => !/^[A-Za-z]:/.test(line))
+    .join(" ");
+  const head = `X:1\nM:${meter || "none"}\nL:${unit.num}/${unit.den}\nK:C\n`;
+  const mini = `${head}${body}\n`;
+  const file = indexFile(mini);
+  const tune = file.tunes[0] as TuneInfo;
+  const tokens = tokenizeMusic(body, head.length);
+  // (A copy with repeat signs or endings goes in at a bar line instead: ./paste.)
+  if (tokens.some((token) => token.kind === "bar" && /[:0-9]/.test(token.text))) return null;
+  const structure = structureOf(mini, file, head.length);
+  const inTuplet = new Set(structure.tuplets.flatMap(({ notes }) => notes));
+  // A tuplet's sign goes with its first note.
+  const signs = new Map(
+    structure.tuplets.map(({ sign, notes }) => [notes[0] ?? -1, sign.from] as const),
+  );
+  const pieces: Piece[] = [];
+  for (const item of tuneItems(mini, tune, file)) {
+    if (item.type !== "event") continue;
+    const picked = selectedNotes(mini, [{ from: item.from, to: item.from + 1 }], file)[0];
+    const found = picked?.span ?? item;
+    const span = { from: Math.min(found.from, signs.get(item.from) ?? found.from), to: found.to };
+    const text = mini.slice(span.from, span.to);
+    const own = tokenizeMusic(text, span.from);
+    const broken = own.some((token) => token.kind === "broken");
+    const at = own.findIndex((token) => token.from >= item.from && token.kind !== "space");
+    const lead = mini.slice(span.from, item.from);
+    let split: Piece["split"] = null;
+    const first = own[at];
+    if (!broken && !inTuplet.has(item.from) && first && !item.bars) {
+      if (first.kind === "rest" && /^[zx]$/.test(first.text[0] ?? ""))
+        split = (part, u) => [
+          `${lead}${first.text[0]}${lengthText(part, u)}`,
+          `${first.text[0]}${lengthText(item.duration.num / item.duration.den - part, u)}`,
+        ];
+      else if (first.kind === "note") {
+        const pitch = `${first.accidental}${first.letter}${first.octave}`;
+        const tail = mini.slice(first.to, span.to).replace(/^-/, "");
+        split = (part, u) => [
+          `${lead}${pitch}${lengthText(part, u)}-`,
+          `${pitch}${lengthText(item.duration.num / item.duration.den - part, u)}${tail}`,
+        ];
+      } else if (first.kind === "chord-open") {
+        const close = own.find((token) => token.kind === "chord-close");
+        const inner = own.filter(
+          (token) =>
+            token.kind === "note" && token.from > first.from && close && token.to <= close.from,
+        );
+        if (close && inner.every((token) => token.kind === "note" && !token.length)) {
+          const chord = mini.slice(first.from, close.from + 1);
+          const tail = mini.slice(close.to, span.to).replace(/^-/, "");
+          split = (part, u) => [
+            `${lead}${chord}${lengthText(part, u)}-`,
+            `${chord}${lengthText(item.duration.num / item.duration.den - part, u)}${tail}`,
+          ];
+        }
+      }
+    }
+    pieces.push({
+      text,
+      length: item.duration.num / item.duration.den,
+      gap: /^[ \t|]/.test(mini.slice(span.to)) || span.to >= mini.length - 1,
+      split,
+    });
+  }
+  return pieces;
+}
+
+/**
+ * A paste over notes, as MuseScore does it: the copy overwrites forward from the selection's
+ * first note for as long as it lasts, the tune's bar lines staying where they are (a note across
+ * one is written tied over it); notes it runs over past the selection's end are replaced (the
+ * notice says how many); rests fill the selection left, or the rest of the last bar it reaches.
+ * In a tune with several voices, the others are untouched. Refused across a repeat sign or an
+ * ending, past the end of the voice, or where a note would have to split a tuplet. Null when the
+ * range selects no whole note.
+ */
+export function overwriteForward(
+  text: string,
+  file: FileIndex,
+  range: Range,
+  clip: string,
+): { changes: Change[]; said: string } | { refused: string } | null {
+  if (range.to <= range.from || !inMusic(text, [range], file)) return null;
+  const picked = selectedNotes(text, [range], file).filter((each) => each.whole);
+  if (!picked.length || !notesIn(clip)) return null;
+  const first = picked[0] as Picked;
+  const voice = first.event.voice;
+  const reading = readingAt(text, file, first.event.from);
+  const tune = file.tunes.find((each) => range.from >= each.from && range.from <= each.to);
+  if (!reading || !tune) return null;
+  const pieces = piecesOf(clip, reading.unit, reading.meter);
+  if (!pieces) return null;
+  const total = pieces.reduce((sum, piece) => sum + piece.length, 0);
+  if (total < 1e-9) return null;
+  // The voice's bars, each with its events and their times, and the bar line after it.
+  type Event = { from: number; to: number; start: number; end: number; rest: boolean; span: Range };
+  type Bar = {
+    start: number;
+    end: number;
+    events: Event[];
+    after?: { from: number; to: number; text: string };
+  };
+  const bars: Bar[] = [{ start: 0, end: 0, events: [] }];
+  let clock = 0;
+  const spans = new Map(
+    selectedNotes(text, [{ from: tune.bodyFrom, to: tune.to }], file).map((each) => [
+      each.event.from,
+      each.span,
+    ]),
+  );
+  for (const item of tuneItems(text, tune, file)) {
+    if (item.voice !== voice) continue;
+    const bar = bars[bars.length - 1] as Bar;
+    if (item.type === "bar") {
+      if (!bar.events.length && bar.after) {
+        // Bar lines side by side (`|` `[1`): one.
+        bar.after = {
+          from: bar.after.from,
+          to: item.to,
+          text: text.slice(bar.after.from, item.to),
+        };
+        continue;
+      }
+      bar.after = { from: item.from, to: item.to, text: item.text };
+      if (bar.events.length) bars.push({ start: clock, end: clock, events: [] });
+      continue;
+    }
+    if (item.bars)
+      bar.events.push({
+        from: item.from,
+        to: item.to,
+        start: clock,
+        end: Number.NaN,
+        rest: true,
+        span: item,
+      });
+    const end = clock + item.duration.num / item.duration.den;
+    if (!item.bars)
+      bar.events.push({
+        from: item.from,
+        to: item.to,
+        start: clock,
+        end,
+        rest: item.rest,
+        span: spans.get(item.from) ?? item,
+      });
+    clock = end;
+    bar.end = end;
+  }
+  const real = bars.filter((bar) => bar.events.length);
+  const lastPicked = picked[picked.length - 1] as Picked;
+  const all = real.flatMap((bar) => bar.events);
+  const startEvent = all.find((each) => each.from === first.event.from);
+  const endEvent = all.find((each) => each.from === lastPicked.event.from);
+  if (!startEvent || !endEvent) return null;
+  const t0 = startEvent.start;
+  const selEnd = endEvent.end;
+  const t1 = t0 + total;
+  const eps = 1e-9;
+  const reach = real.find((bar) => bar.start < t1 - eps && bar.end >= t1 - eps);
+  const tE = t1 > selEnd + eps ? reach?.end : selEnd;
+  if (tE === undefined || Number.isNaN(tE))
+    return {
+      refused:
+        "The copy runs past the end of the voice: paste it at the end to add bars, or select further back.",
+    };
+  if (all.some((each) => Number.isNaN(each.end) && each.start >= t0 - eps && each.start < tE - eps))
+    return { refused: "The paste would run over a multi-bar rest: write its bars out first." };
+  const windows = real.filter((bar) => bar.end > t0 + eps && bar.start < tE - eps);
+  for (const bar of windows.slice(0, -1))
+    if (bar.after && /[:0-9]/.test(bar.after.text))
+      return {
+        refused:
+          "The paste would run across a repeat sign or an ending: select up to it, or paste a shorter copy.",
+      };
+  const structure = structureOf(text, file, range.from);
+  const gone = new Set(
+    all.filter((each) => each.start >= t0 - eps && each.start < tE - eps).map((each) => each.from),
+  );
+  if (
+    structure.tuplets.some(
+      ({ notes }) => notes.some((at) => gone.has(at)) && !notes.every((at) => gone.has(at)),
+    )
+  )
+    return {
+      refused: "The paste would cut a tuplet in two: select all of its notes, or paste elsewhere.",
+    };
+  // A tuplet replaced whole goes with its sign.
+  const signs = new Map(
+    structure.tuplets
+      .filter(({ notes }) => notes.length && notes.every((at) => gone.has(at)))
+      .map(({ sign, notes }) => [notes[0] as number, sign.from]),
+  );
+  const changes: Change[] = [];
+  const queue = [...pieces];
+  let time = t0;
+  let rests = false;
+  for (const bar of windows) {
+    const own = bar.events.filter((each) => gone.has(each.from));
+    if (!own.length) continue;
+    const from = Math.min(
+      (own[0] as Event).span.from,
+      signs.get((own[0] as Event).from) ?? Number.POSITIVE_INFINITY,
+    );
+    const to = (own[own.length - 1] as Event).span.to;
+    if (text.slice(from, to).includes("\n"))
+      return {
+        refused: "The paste would run across a bar written over two lines: paste it bar by bar.",
+      };
+    const until = Math.min(bar.end, tE);
+    let out = "";
+    while (time < until - eps) {
+      const piece = queue[0];
+      if (!piece) {
+        out += `${restOf(until - time, reading.unit)} `;
+        rests = true;
+        time = until;
+        break;
+      }
+      if (time + piece.length <= until + eps) {
+        out += `${piece.text}${piece.gap ? " " : ""}`;
+        time += piece.length;
+        queue.shift();
+        continue;
+      }
+      if (!piece.split)
+        return {
+          refused:
+            "A note of the copy would cross a bar line where it can't be tied over (in a tuplet or broken rhythm): paste where its bars meet the tune's.",
+        };
+      const [head, rest] = piece.split(until - time, reading.unit);
+      out += head;
+      queue[0] = { ...piece, text: rest, length: piece.length - (until - time) };
+      time = until;
+    }
+    changes.push({ from, to, insert: out.replace(/[ \t]+$/, "") });
+  }
+  const over = all.filter(
+    (each) => gone.has(each.from) && !each.rest && each.start >= selEnd - eps,
+  ).length;
+  const several = new Set(timed(text, file, range.from).map((each) => each.voice)).size > 1;
+  const said = [
+    `Pasted over the selection from its first note${several ? ` in V:${voice}` : ""}`,
+    over ? `it ran on over ${over} more note${over === 1 ? "" : "s"}, replaced` : "",
+    rests
+      ? t1 > selEnd + eps
+        ? "rests fill the rest of the last bar"
+        : "rests fill the selection left"
+      : "",
+    several ? "the other voices are as they were" : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return { changes, said: `${said}.` };
+}
+
+/**
+ * Where a paste on one clicked note goes in before it rather than over it (round 6): when the
+ * note starts its bar and the copy is whole bars, each its full length. Null: it overwrites.
+ */
+export function insertsAtNote(
+  text: string,
+  file: FileIndex,
+  range: Range,
+  clip: string,
+): number | null {
+  if (range.to <= range.from || !/\|[ \t]*$/.test(clip.trimEnd())) return null;
+  const picked = selectedNotes(text, [range], file).filter((each) => each.whole);
+  const one = picked[0];
+  if (picked.length !== 1 || !one) return null;
+  const reading = readingAt(text, file, one.event.from);
+  const length = meterLength(reading?.meter ?? "");
+  if (!reading || !length) return null;
+  const { bars } = clipTiming(clip, reading.unit, reading.meter);
+  if (!bars.length || bars.some((bar) => Math.abs(bar - length.num / length.den) > 1e-9))
+    return null;
+  // The voice's last token before it, fields and marks aside: a bar line, or none.
+  const before = tuneTokens(text, file, one.span.from).filter(
+    ({ token, voice }) =>
+      voice === one.event.voice &&
+      token.to <= one.span.from &&
+      !["inline-field", "decoration", "annotation", "chord-symbol", "space"].includes(token.kind),
+  );
+  const last = before.at(-1)?.token;
+  return !last || last.kind === "bar" ? one.span.from : null;
+}

@@ -19,16 +19,16 @@ import { indexFile } from "../src/composer/tunes";
 
 /* Round 9 (selection hardening): the written rules, conformed to. */
 
-export const apply = (text: string, changes: Change[]) =>
+const apply = (text: string, changes: Change[]) =>
   [...changes]
     .sort((a, b) => b.from - a.from || b.to - a.to)
     .reduce(
       (out, change) => out.slice(0, change.from) + change.insert + out.slice(change.to),
       text,
     );
-export const tune = (body: string, meter = "4/4", unit = "1/8", head = "") =>
+const tune = (body: string, meter = "4/4", unit = "1/8", head = "") =>
   `X:1\nT:t\nM:${meter}\nL:${unit}\n${head}K:C\n${body}\n`;
-export const body = (text: string) => text.slice(text.indexOf("K:C\n") + 4);
+const body = (text: string) => text.slice(text.indexOf("K:C\n") + 4);
 const cut = (text: string, ranges: { from: number; to: number }[]) => {
   const plan = cutPlan(text, ranges);
   if (!plan || "refused" in plan) throw new Error(plan ? plan.refused : "no plan");

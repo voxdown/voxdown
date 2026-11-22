@@ -1,7 +1,13 @@
 import { ChangeSet, Text } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { checkBars } from "../src/composer/barcheck";
-import { copyText, cutPlan, duplicate, replaceKeepingBars } from "../src/composer/barwise";
+import {
+  copyText,
+  cutPlan,
+  duplicate,
+  replaceKeepingBars,
+  tuneTokens,
+} from "../src/composer/barwise";
 import { type Change, musicParts } from "../src/composer/commands";
 import { planPaste, sourceAt } from "../src/composer/paste";
 import { selectedNotes } from "../src/composer/selected";
@@ -32,6 +38,9 @@ const TUNES = {
     "X:1\nT:Voices\nM:4/4\nL:1/4\n%%score (1 2) 3\nK:C\nV:1\nC D E F|G A B c|\nw: one two three four five six sev en\nw: un deux trois quatre cinq six sept huit\nV:2\nE F G A|B c d e|\nV:3\nG A B c|d e f g|\nV:1\nc B A G|F E D C|]\nw: eight nine ten more words go here now\nw: neuf dix onze douze treize quatorze quinze seize\nV:2\ne d c B|A G F E|]\nV:3\ng f e d|c B A G|]\n",
   // Four voices on inline [V:] lines (round 7, Codex's hymn).
   hymn: HYMN,
+  // Dynamics, hairpins, texts and a fermata (round 7).
+  marks:
+    'X:1\nT:Marks\nM:4/4\nL:1/4\nK:C\n!p!C !<(!D E !<)!F | !f!G "_6"A !fermata!B c | !>(!d c B !>)!A | !mf!G2 !<(!G !<)!A |]\n',
 };
 
 type Range = { from: number; to: number };
@@ -48,6 +57,31 @@ const issues = (text: string) => {
   const file = indexFile(text);
   return file.tunes.flatMap((tune) => checkBars(text, tune, file)).map((issue) => issue.message);
 };
+
+/** Every hairpin's ends in each voice, in order: each opened, then closed. */
+function hairpinsPaired(text: string): boolean {
+  const file = indexFile(text);
+  const byVoice = new Map<string, string>();
+  for (const { token, voice } of tuneTokens(text, file, file.tunes[0]?.bodyFrom ?? 0))
+    if (token.kind === "decoration" && /^!(<|>)[()]!$/.test(token.text))
+      byVoice.set(voice, `${byVoice.get(voice) ?? ""}${token.text[2]}`);
+  return [...byVoice.values()].every((ends) => /^(\(\))*$/.test(ends));
+}
+
+/** The dynamic in force at each note (not rest), per voice, in the text's order. */
+function levels(text: string, skip: Set<number> = new Set()): string[] {
+  const file = indexFile(text);
+  const now = new Map<string, string>();
+  const out: string[] = [];
+  for (const { token, voice } of tuneTokens(text, file, file.tunes[0]?.bodyFrom ?? 0)) {
+    if (token.kind === "decoration" && /^!(p+|f+|mp|mf)!$/.test(token.text))
+      now.set(voice, token.text);
+    const starts =
+      (token.kind === "note" && !token.inGrace && !token.inChord) || token.kind === "chord-open";
+    if (starts && !skip.has(token.from)) out.push(`${voice}:${now.get(voice) ?? ""}`);
+  }
+  return out;
+}
 
 /** Each music line's verses, as syllables per note (in the line's note order). */
 function verses(text: string): string[][] {
@@ -150,6 +184,13 @@ describe("the edit sweep: every selection of six tunes, six edits (round 6)", ()
           edits += 1;
           expect(undone, `${at}: Delete undone`).toBe(tune);
           expect(fused(after), `${at}: Delete fused bar lines\n${after}`).toBe(false);
+          // Hairpins still paired, and every note left at the dynamic it was (round 7).
+          expect(hairpinsPaired(after), `${at}: Delete left a hairpin end alone\n${after}`).toBe(
+            true,
+          );
+          expect(levels(after), `${at}: Delete changed a dynamic\n${after}`).toEqual(
+            levels(tune, gone),
+          );
           expect(issues(after), `${at}: Delete bar lengths\n${after}`).toEqual([]);
           expect(
             played(after, null).map((note) => note.pitch),

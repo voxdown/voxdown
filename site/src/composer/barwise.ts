@@ -237,6 +237,22 @@ function keeper(token: MusicToken): boolean {
   if (token.kind === "annotation" && /^"\^/.test(token.text)) return true;
   return jumpMark(token) !== null;
 }
+const DYNAMIC_MARK = /^!(p{1,4}|f{1,4}|mp|mf|sfz?|sffz|fp|rfz)!$/;
+const HAIRPIN_OPEN = /^!(<\(|>\(|crescendo\(|diminuendo\()!$/;
+const HAIRPIN_CLOSE = /^!(<\)|>\)|crescendo\)|diminuendo\))!$/;
+/**
+ * What a note made a rest gives the rest (round 7): its dynamic, its texts ("_6", "^rit."), its
+ * fermata, and the marks of the bar (segno, coda): they belong to the moment, not the pitch.
+ */
+function restKeeps(token: MusicToken): boolean {
+  if (token.kind === "chord-symbol" || token.kind === "annotation" || keeper(token)) return true;
+  if (token.kind !== "decoration") return false;
+  return (
+    DYNAMIC_MARK.test(token.text) ||
+    token.text === "H" ||
+    /^!(fermata|invertedfermata)!$/.test(token.text)
+  );
+}
 /** Kept before the bar that follows (a segno, a coda, a field), or else after the bar before. */
 function leads(token: MusicToken): boolean {
   if (token.kind !== "decoration" && token.kind !== "annotation") return true;
@@ -592,7 +608,7 @@ const inTupletOf = (structure: Structure, at: number) =>
 function restLess(text: string, each: Picked, rest: string): Change[] {
   const changes: Change[] = [];
   for (const token of tokenizeMusic(text.slice(each.span.from, each.event.from), each.span.from))
-    if (token.kind !== "space" && token.kind !== "chord-symbol" && !keeper(token))
+    if (token.kind !== "space" && !restKeeps(token))
       changes.push({ from: token.from, to: token.to, insert: "" });
   for (const token of tokenizeMusic(text.slice(each.event.to, each.span.to), each.event.to))
     if (token.kind === "tie") changes.push({ from: token.from, to: token.to, insert: "" });
@@ -666,6 +682,9 @@ export function cutPlan(
   const resting: Picked[] = [];
   let voicesKept = false;
   let overFull = false;
+  // (Notes of an over-full bar that simply went, and those made shorter rests.)
+  const vanished: Range[] = [];
+  const restedLess: number[] = [];
   for (const line of chains) {
     // A bar of nothing (a line's end and the next line's start) joins the bars either side.
     const segments = segmentsOf(line, eventsOn(text, line, file)).filter(
@@ -705,14 +724,22 @@ export function cutPlan(
           const length = time ? time.end - time.start : 0;
           const alone = !inTupletOf(structure, each.event.from) && !each.event.rest;
           if (spare > 1e-9 && alone && length <= spare + 1e-9) {
-            // It simply goes, with its marks.
-            changes.push({ from: each.span.from, to: each.span.to, insert: "" });
+            // It simply goes, with its marks (a dynamic or a text stays, for the next note).
+            for (const token of tokenizeMusic(
+              text.slice(each.span.from, each.event.from),
+              each.span.from,
+            ))
+              if (token.kind !== "space" && !restKeeps(token))
+                changes.push({ from: token.from, to: token.to, insert: "" });
+            changes.push({ from: each.event.from, to: each.span.to, insert: "" });
+            vanished.push({ from: each.event.from, to: each.span.to });
             spare -= length;
             overFull = true;
           } else if (spare > 1e-9 && alone) {
             // The rest of the time it took, as a rest.
             const unit = readingAt(text, file, each.event.from)?.unit ?? frac(1, 8);
             changes.push(...restLess(text, each, restOf(length - spare, unit)));
+            restedLess.push(each.event.from);
             spare = 0;
             overFull = true;
           } else resting.push(each);
@@ -749,6 +776,22 @@ export function cutPlan(
             (token.text === "(" ? after : before).push(token.text);
         }
       after.unshift(...fields.values());
+      // The dynamic in force after the run goes on to the note that follows (unless it has its own).
+      const level = run
+        .flatMap((segment) => segment.tokens)
+        .filter((token) => token.kind === "decoration" && DYNAMIC_MARK.test(token.text))
+        .at(-1);
+      if (level && C) {
+        const voice = structure.tokens.find(({ token }) => token.from >= span.from)?.voice;
+        const next = structure.tokens.filter(
+          (each) => each.voice === voice && each.token.from >= C.to,
+        );
+        const head = next.findIndex(({ token }) => starts(token));
+        const own = next
+          .slice(0, head < 0 ? 0 : head)
+          .some(({ token }) => token.kind === "decoration" && DYNAMIC_MARK.test(token.text));
+        if (head >= 0 && !own) after.push(level.text);
+      }
       // A D.S. and its segno (and its coda) both in what goes: the jump goes with them.
       const marks = run
         .flatMap((segment) => segment.tokens)
@@ -881,6 +924,11 @@ export function cutPlan(
     )
     .map((each) => each.event.from);
   changes.push(...lyricsFor(text, file, goneNotes, []));
+  // Hairpins whole: an end moved onto a note left inside, or both ends gone.
+  const rested = new Set([...resting.map((each) => each.event.from), ...restedLess]);
+  changes.push(
+    ...hairpinsKept(text, file, (selected[0] as Range).from, [...removed, ...vanished], rested),
+  );
   return finishCut(text, selected, file, changes, carets, said);
 }
 
@@ -1749,9 +1797,10 @@ function writtenUnits(
 
 /**
  * Notes deleted where time can't go (less than whole bars, or some voices only): rests of the
- * same length (as MuseScore does). Their marks and ties go; a chord symbol stays, on the rest;
- * a tuplet or broken rhythm around them stays. Rests side by side in a bar become one where the
- * notation allows (`z2 z` is `z3`), across no tuplet, broken rhythm or chord symbol.
+ * same length (as MuseScore does). Their articulations and ties go; a chord symbol, a dynamic, a
+ * text and a fermata stay, on the rest (hairpins: ./hairpinsKept); a tuplet or broken rhythm
+ * around them stays. Rests side by side in a bar become one where the notation allows (`z2 z`
+ * is `z3`), across no tuplet, broken rhythm or mark kept.
  */
 function restChanges(text: string, file: FileIndex, picked: Picked[]): Change[] {
   const changes: Change[] = [];
@@ -1792,12 +1841,12 @@ function restChanges(text: string, file: FileIndex, picked: Picked[]): Change[] 
       const symbol = tokenizeMusic(
         text.slice(each.span.from, each.event.from),
         each.span.from,
-      ).some((token) => token.kind === "chord-symbol");
+      ).some((token) => restKeeps(token));
       const units = inTuplet.has(each.event.from)
         ? null
         : writtenUnits(text, each.event, each.span);
-      // A chord symbol starts its own rest (it stays on it); a tuplet's or broken rhythm's note
-      // stands alone.
+      // A chord symbol, a dynamic, a text or a fermata starts its own rest (it stays on it); a
+      // tuplet's or broken rhythm's note stands alone.
       if (symbol || units === null) close();
       run.push({
         from: each.event.from,
@@ -1820,7 +1869,7 @@ function restChanges(text: string, file: FileIndex, picked: Picked[]): Change[] 
         if (!item.picked) continue;
         if (!merge || item === first)
           for (const token of tokenizeMusic(text.slice(item.span.from, item.from), item.span.from))
-            if (token.kind !== "space" && token.kind !== "chord-symbol" && !keeper(token))
+            if (token.kind !== "space" && !restKeeps(token))
               changes.push({ from: token.from, to: token.to, insert: "" });
         if (!merge || item === last)
           for (const token of tokenizeMusic(text.slice(item.to, item.span.to), item.to))
@@ -1894,7 +1943,17 @@ function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan
     picked.map((each) => each.event.from),
     [],
   );
-  const all = [...changes, ...lyrics].sort((a, b) => a.from - b.from);
+  const all = [
+    ...changes,
+    ...lyrics,
+    ...hairpinsKept(
+      text,
+      file,
+      (selected[0] as Range).from,
+      [],
+      new Set(picked.map((each) => each.event.from)),
+    ),
+  ].sort((a, b) => a.from - b.from);
   return {
     changes: all,
     clip: selected.map((range) => copyText(text, range, file)).join("\n"),
@@ -2681,4 +2740,91 @@ export function insertsAtNote(
   );
   const last = before.at(-1)?.token;
   return !last || last.kind === "bar" ? one.span.from : null;
+}
+
+/**
+ * Hairpins kept whole by a cut (round 7): an end on a note that goes (with its bar, or made a
+ * rest) moves to the nearest note left inside the hairpin; with none left, both ends go.
+ * `gone` are the stretches cut away, `rested` the notes made rests.
+ */
+function hairpinsKept(
+  text: string,
+  file: FileIndex,
+  at: number,
+  gone: Range[],
+  rested: Set<number>,
+): Change[] {
+  const tokens = tuneTokens(text, file, at);
+  type Mark = { token: MusicToken; event: MusicToken | null };
+  const pairs: { open: Mark; close: Mark; voice: string }[] = [];
+  const opened = new Map<string, Mark>();
+  const pending: { token: MusicToken; voice: string; open: boolean }[] = [];
+  const events: { token: MusicToken; voice: string }[] = [];
+  const owner = new Map<MusicToken, MusicToken | null>();
+  for (const { token, voice } of tokens) {
+    if (
+      token.kind === "decoration" &&
+      (HAIRPIN_OPEN.test(token.text) || HAIRPIN_CLOSE.test(token.text))
+    )
+      pending.push({ token, voice, open: HAIRPIN_OPEN.test(token.text) });
+    else if (starts(token)) {
+      events.push({ token, voice });
+      for (const mark of pending.filter((each) => each.voice === voice))
+        owner.set(mark.token, token);
+      for (let index = pending.length - 1; index >= 0; index--)
+        if ((pending[index] as (typeof pending)[number]).voice === voice) pending.splice(index, 1);
+    }
+  }
+  for (const mark of pending) owner.set(mark.token, null);
+  for (const { token, voice } of tokens) {
+    if (token.kind !== "decoration") continue;
+    const mark = { token, event: owner.get(token) ?? null };
+    if (HAIRPIN_OPEN.test(token.text)) opened.set(voice, mark);
+    else if (HAIRPIN_CLOSE.test(token.text)) {
+      const open = opened.get(voice);
+      if (open) pairs.push({ open, close: mark, voice });
+      opened.delete(voice);
+    }
+  }
+  const cut = (at: number) => gone.some((range) => at >= range.from && at < range.to);
+  const lost = (mark: Mark) =>
+    cut(mark.token.from) || !mark.event || cut(mark.event.from) || rested.has(mark.event.from);
+  const changes: Change[] = [];
+  for (const { open, close, voice } of pairs) {
+    const openLost = lost(open);
+    const closeLost = lost(close);
+    if (!openLost && !closeLost) continue;
+    const from = open.event?.from ?? open.token.from;
+    const to = close.event?.from ?? close.token.to;
+    const left = events.filter(
+      ({ token, voice: own }) =>
+        own === voice &&
+        token.kind !== "rest" &&
+        token.from >= from &&
+        token.from <= to &&
+        !cut(token.from) &&
+        !rested.has(token.from),
+    );
+    // A mark that's still there (not cut away, not on a note made a rest: those go with it).
+    const remove = (mark: Mark) => {
+      if (!cut(mark.token.from) && !(mark.event && rested.has(mark.event.from)))
+        changes.push({ from: mark.token.from, to: mark.token.to, insert: "" });
+    };
+    if (left.length < 2) {
+      remove(open);
+      remove(close);
+      continue;
+    }
+    if (openLost) {
+      remove(open);
+      const first = (left[0] as (typeof left)[number]).token.from;
+      changes.push({ from: first, to: first, insert: open.token.text });
+    }
+    if (closeLost) {
+      remove(close);
+      const last = (left[left.length - 1] as (typeof left)[number]).token.from;
+      changes.push({ from: last, to: last, insert: close.token.text });
+    }
+  }
+  return changes;
 }

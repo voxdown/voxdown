@@ -1770,9 +1770,13 @@ export function barLinesAcross(
 }
 
 /**
- * Insert › Second voice: a new bass voice of rests, bar for bar with the first voice (a pickup's
- * rest as long as the pickup, a bar under another meter as long as that bar), in the tune's unit,
- * added to %%score (or %%staves) when the tune has one.
+ * Insert › Second voice (round 10, item 1): a new voice of rests with the structure of the voice
+ * it pairs with (the one at the caret, else the first), line by line: its bar lines, repeats and
+ * endings, inline fields and line breaks copied, its notes replaced by one rest a bar (a pickup's
+ * as long as the pickup, a bar under another meter or unit as long as that bar, a multi-bar rest
+ * as itself), so the play order, the bar count and the systems stay as they were. Its clef is the
+ * paired voice's (by its range when it has none). Added to %%score (or %%staves) on its own staff
+ * when the tune has one.
  */
 export function newVoice(
   text: string,
@@ -1790,32 +1794,15 @@ export function newVoice(
   if (!tune) return null;
   const ids = tune.voices.map((voice) => voice.id);
   const next = String(ids.length ? Math.max(0, ...ids.map((id) => Number(id) || 0)) + 1 : 2);
-  const unit = parseUnit(tune.unit) ?? defaultUnit(tune.meter);
   const items = tuneItems(text, tune, file);
-  const first = items.find((item) => item.type === "event")?.voice;
-  const bars: number[] = [];
-  let length = 0;
-  let any = false;
-  for (const item of items) {
-    if (item.voice !== first) continue;
-    if (item.type === "bar") {
-      if (any) bars.push(length);
-      length = 0;
-      any = false;
-    } else {
-      length += item.duration.num / item.duration.den;
-      any = true;
-    }
-  }
-  if (any) bars.push(length);
-  if (!bars.length)
-    bars.push(
-      meterLength(tune.meter)
-        ? (meterLength(tune.meter) as Fraction).num / (meterLength(tune.meter) as Fraction).den
-        : 1,
-    );
-  const rest = (whole: number) => {
-    // In the unit: whole / unit, as a fraction of small numbers.
+  const events = items.filter((item) => item.type === "event");
+  // The voice it pairs with: the caret's, else the first.
+  const source =
+    [...events].reverse().find((item) => item.from <= at)?.voice ?? events[0]?.voice ?? "1";
+  const own = new Map(
+    events.filter((item) => item.voice === source).map((item) => [item.from, item] as const),
+  );
+  const restText = (whole: number, unit: Fraction) => {
     const units = whole / (unit.num / unit.den);
     const den =
       [1, 2, 4, 8, 16, 3, 6, 12].find(
@@ -1823,21 +1810,84 @@ export function newVoice(
       ) ?? 1;
     return `z${formatLength(frac(Math.round(units * den), den))}`;
   };
+  // The source voice's music lines, each made a line of rests with its bar lines and fields.
   const lines: string[] = [];
-  for (let start = 0; start < bars.length; start += 4)
+  let voice = tune.voices[0]?.id ?? "1";
+  let line = tune.bodyFrom;
+  let bars = 0;
+  while (line < tune.to) {
+    const end = text.indexOf("\n", line) < 0 ? text.length : text.indexOf("\n", line);
+    const content = text.slice(line, end);
+    const field = /^V:\s*(\S+)/.exec(content);
+    if (field) voice = field[1] as string;
+    else if (lineKind(content, true) === "music") {
+      let out = "";
+      let length = 0;
+      let unit = parseUnit(tune.unit) ?? defaultUnit(tune.meter);
+      let mine = voice === source;
+      const flush = () => {
+        if (length > 1e-9) out += `${out && !/\s$/.test(out) ? " " : ""}${restText(length, unit)} `;
+        length = 0;
+      };
+      for (const token of tokenizeMusic(content, line)) {
+        if (token.kind === "inline-field") {
+          const inline = /^\[V:\s*([^\]\s]+)/.exec(token.text);
+          if (inline) {
+            if (mine) flush();
+            mine = inline[1] === source;
+            continue;
+          }
+          if (mine && /^\[[MLK]:/.test(token.text)) out += `${token.text} `;
+          continue;
+        }
+        if (!mine) continue;
+        if (token.kind === "bar") {
+          flush();
+          out = `${out.replace(/\s+$/, " ")}${token.text} `;
+          bars += 1;
+          continue;
+        }
+        const event = own.get(token.from);
+        if (!event || event.type !== "event") continue;
+        unit = event.unit;
+        if (event.bars) {
+          flush();
+          out += `Z${event.bars > 1 ? event.bars : ""} `;
+        } else length += event.duration.num / event.duration.den;
+      }
+      if (mine) flush();
+      if (out.trim()) lines.push(out.trim());
+    }
+    line = end + 1;
+  }
+  if (!lines.length) {
+    const full = meterLength(tune.meter);
     lines.push(
-      `${bars
-        .slice(start, start + 4)
-        .map(rest)
-        .join(" | ")} |`,
+      `${restText(full ? full.num / full.den : 1, parseUnit(tune.unit) ?? defaultUnit(tune.meter))} |`,
     );
+  }
+  // The clef: the paired voice's, else by its range (below middle C mostly: bass).
+  const fields = [...text.slice(tune.from, tune.to).matchAll(/^V:\s*(\S+)(.*)$/gm)];
+  const line0 = fields.find((match) => match[1] === source)?.[2] ?? "";
+  const pairedClef = /\bclef=(\S+)/.exec(line0)?.[1] ?? null;
+  const pitches = [...own.values()].flatMap((item) =>
+    item.type === "event"
+      ? item.notes.map((note) =>
+          /[a-g]/.test(note.letter) ? 1 : note.octave.includes(",") ? -1 : 0,
+        )
+      : [],
+  );
+  const low = pitches.filter((each) => each < 0).length > pitches.length / 2;
+  const clef = pairedClef ?? (low ? "bass" : "treble");
   const doc = text;
   const lead = doc.slice(0, tune.to).endsWith("\n") ? "" : "\n";
-  const addition = `${lead}V:${next} clef=bass\n${lines.join("\n")}\n`;
+  const head = `V:${next} clef=${clef}\n`;
+  const addition = `${lead}${head}${lines.join("\n")}\n`;
   const changes: Change[] = [{ from: tune.to, to: tune.to, insert: addition }];
   if (!ids.length) changes.push({ from: tune.bodyFrom, to: tune.bodyFrom, insert: "V:1\n" });
   const score = /^%%(score|staves)(.*)$/m.exec(doc.slice(tune.from, tune.bodyFrom));
-  let said = `Added V:${next}, a bass voice of ${bars.length} ${bars.length === 1 ? "bar" : "bars"} of rests, bar for bar with the first voice.`;
+  const count = Math.max(bars, 1);
+  let said = `Added V:${next} (clef ${clef}), rests bar for bar with V:${source}: its ${count} ${count === 1 ? "bar" : "bars"}, repeats and lines as written.`;
   if (score) {
     const lineEnd = tune.from + (score.index ?? 0) + score[0].length;
     changes.push({ from: lineEnd, to: lineEnd, insert: ` ${next}` });
@@ -1846,16 +1896,18 @@ export function newVoice(
   // The first rest selected (typing over the rests writes the voice bar by bar), and where each
   // rest is, from the voice's first line.
   const restsAt: number[] = [];
-  let offset = lead.length + `V:${next} clef=bass\n`.length;
-  for (const line of lines) {
-    for (const match of line.matchAll(/z[0-9/]*/g)) restsAt.push(offset + (match.index ?? 0));
-    offset += line.length + 1;
+  let offset = lead.length + head.length;
+  for (const each of lines) {
+    for (const match of each.matchAll(/(?<![A-Za-z[])z[0-9/]*/g))
+      restsAt.push(offset + (match.index ?? 0));
+    offset += each.length + 1;
   }
+  const firstRest = /(?<![A-Za-z[])z[0-9/]*/.exec(lines[0] ?? "");
   return {
     changes,
     at: tune.to,
-    offset: lead.length + `V:${next} clef=bass\n`.length,
-    first: rest(bars[0] as number).length,
+    offset: lead.length + head.length + (firstRest?.index ?? 0),
+    first: firstRest?.[0].length ?? 0,
     rests: restsAt,
     said,
   };

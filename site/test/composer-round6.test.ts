@@ -116,12 +116,12 @@ describe("a second voice's rests are placeholders, typed over bar by bar (round 
     let places = rests.map((at) => (at >= first ? at + 2 : at));
     let shrink = fillPlaceholder(typed, indexFile(typed), first + 2, places);
     typed = apply(typed, shrink);
-    expect(typed).toContain("V:2 clef=bass\nc2z6 | z8 |");
+    expect(typed).toContain("V:2 clef=treble\nc2z6 | z8 |");
     typed = `${typed.slice(0, first + 2)} d6${typed.slice(first + 2)}`;
     places = places.map((at) => (at > first ? at + 3 : at));
     shrink = fillPlaceholder(typed, indexFile(typed), first + 5, places);
     typed = apply(typed, shrink);
-    expect(typed).toContain("V:2 clef=bass\nc2 d6 | z8 |");
+    expect(typed).toContain("V:2 clef=treble\nc2 d6 | z8 |");
     // At the full bar's end, typing goes on into the next bar's placeholder.
     const next = nextPlaceholder(typed, first + 5, [typed.indexOf("z8", first)]);
     expect(next).toBe(typed.indexOf("z8", first));

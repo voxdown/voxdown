@@ -185,8 +185,9 @@ describe("Insert › Bar line and Second voice keep voices in step (round 4)", (
       "X:1\nT:t\nM:4/4\nL:1/8\n%%score 1\nK:C\nV:1\nG2|c2 d2 e2 f2|[M:3/4] g2 a2 b2|c'8|]\n";
     const made = newVoice(tune, tune.indexOf("c2"));
     expect(made && apply(tune, made.changes)).toBe(
-      "X:1\nT:t\nM:4/4\nL:1/8\n%%score 1 2\nK:C\nV:1\nG2|c2 d2 e2 f2|[M:3/4] g2 a2 b2|c'8|]\nV:2 clef=bass\nz2 | z8 | z6 | z8 |\n",
+      // (Since round 10: the first voice's bar lines and fields copied, its clef by its range.)
+      "X:1\nT:t\nM:4/4\nL:1/8\n%%score 1 2\nK:C\nV:1\nG2|c2 d2 e2 f2|[M:3/4] g2 a2 b2|c'8|]\nV:2 clef=treble\nz2 | z8 | [M:3/4] z6 | z8 |]\n",
     );
-    expect(made?.said).toMatch(/V:2, a bass voice of 4 bars of rests/);
+    expect(made?.said).toMatch(/Added V:2 \(clef treble\), rests bar for bar with V:1/);
   });
 });

@@ -2299,6 +2299,17 @@ export function fillPlaceholder(
   return written === token.text ? [] : [{ from: rest, to: token.to, insert: written }];
 }
 
+/**
+ * A `|` typed where only spaces are left before one of these bar lines: where the caret goes
+ * instead, over it (and the space after it). Null: the `|` is typed.
+ */
+export function overBarLine(text: string, caret: number, bars: number[]): number | null {
+  const bar = barRange(text, caret);
+  if (!bar.close || !bars.includes(bar.close.from) || /\S/.test(text.slice(caret, bar.to)))
+    return null;
+  return text[bar.close.to] === " " ? bar.close.to + 1 : bar.close.to;
+}
+
 /** At a full bar's end before a bar line, the next bar's placeholder: where typing goes on. */
 export function nextPlaceholder(
   text: string,

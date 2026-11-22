@@ -971,9 +971,15 @@ const redoSelection = EditorView.updateListener.of((update) => {
 });
 /** A new voice's rests, one a bar, that typing replaces bar by bar (./barwise). */
 let placeholders: number[] = [];
+/** The bar lines closing those bars: a `|` typed at a filled bar's end moves over its own. */
+let placeholderBars: number[] = [];
 const keepPlaceholders = EditorView.updateListener.of((update) => {
-  if (!update.docChanged || !placeholders.length) return;
+  if (!update.docChanged) return;
   const doc = update.state.doc;
+  placeholderBars = placeholderBars
+    .map((at) => update.changes.mapPos(at, 1))
+    .filter((at) => doc.sliceString(at, at + 1) === "|");
+  if (!placeholders.length) return;
   placeholders = placeholders
     .map((at) => update.changes.mapPos(at, 1))
     .filter((at) => /^[zx]/.test(doc.sliceString(at, at + 1)));
@@ -991,9 +997,27 @@ const keepPlaceholders = EditorView.updateListener.of((update) => {
 });
 /** Typing at a placeholder: before it (it shrinks), or on into the next bar's, a bar full. */
 function typePlaceholder(target: EditorView, typed: string): boolean {
-  if (!barwise || !placeholders.length || !/^[A-Ga-g^_=]/.test(typed)) return false;
+  if (!barwise) return false;
   const { main } = target.state.selection;
   const doc = target.state.doc.toString();
+  // A bar line typed at the end of a placeholder's bar: over the one there, not a bar of nothing;
+  // and a space after it isn't doubled.
+  if (main.empty && typed === "|") {
+    const over = barwise.overBarLine(doc, main.head, placeholderBars);
+    if (over !== null) {
+      target.dispatch({ selection: { anchor: over }, userEvent: "select" });
+      return true;
+    }
+  }
+  if (
+    main.empty &&
+    typed === " " &&
+    /\s/.test(doc[main.head - 1] ?? "") &&
+    doc[main.head - 2] === "|" &&
+    placeholders.includes(main.head)
+  )
+    return true;
+  if (!placeholders.length || !/^[A-Ga-g^_=]/.test(typed)) return false;
   let at: number | null = null;
   if (
     !main.empty &&
@@ -5423,6 +5447,11 @@ function insertVoice() {
     userEvent: "input",
   });
   placeholders = made.rests.map((offset) => start + offset);
+  const written = text();
+  placeholderBars = placeholders.flatMap((at) => {
+    const bar = written.indexOf("|", at);
+    return bar >= 0 && !written.slice(at, bar).includes("\n") ? [bar] : [];
+  });
   notice(made.said, "success");
   view.focus();
 }

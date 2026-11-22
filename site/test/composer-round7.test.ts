@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cutPlan } from "../src/composer/barwise";
+import { cutPlan, overBarLine } from "../src/composer/barwise";
 import { type Change, musicParts } from "../src/composer/commands";
 import { planPaste } from "../src/composer/paste";
 import { indexFile } from "../src/composer/tunes";
@@ -120,5 +120,18 @@ describe("a two-voice copy pasted on a clicked note of a shared staff (finding 5
     const after = apply(plain, plan.changes);
     expect(after).toContain("| A2 FA | ed cB | d4 :|");
     expect(after).toContain("| C2 DC | GF ED | D4 :|");
+  });
+});
+
+describe("a bar line typed at the end of a second voice's filled bar (finding 6)", () => {
+  const text = "X:1\nT:t\nM:3/4\nL:1/4\nK:C\nV:2\nF2 A | z3 | z3 |]\n";
+  const bars = [text.indexOf("| z3"), text.indexOf("| z3 |]") + 5];
+  it("moves over the bar line there, after its space", () => {
+    expect(overBarLine(text, text.indexOf(" | z3"), bars)).toBe(text.indexOf("z3"));
+    expect(overBarLine(text, text.indexOf(" | z3") + 1, bars)).toBe(text.indexOf("z3"));
+  });
+  it("is typed where notes are left before the bar line, or the bar line isn't a placeholder's", () => {
+    expect(overBarLine(text, text.indexOf("A |"), bars)).toBeNull();
+    expect(overBarLine(text, text.indexOf(" | z3"), [])).toBeNull();
   });
 });

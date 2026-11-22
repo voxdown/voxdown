@@ -25,8 +25,8 @@ export const DECORATION_GROUPS: [string, [string, string][]][] = [
       ["ff", "ff — very loud"],
       ["fff", "fff — very very loud"],
       ["sfz", "sfz — a sudden accent"],
-      ["crescendo(", "Crescendo starts"],
-      ["crescendo)", "Crescendo ends"],
+      ["crescendo", "Crescendo — over the selection"],
+      ["diminuendo", "Diminuendo — over the selection"],
     ],
   ],
   [

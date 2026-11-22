@@ -55,8 +55,30 @@ type Segment = {
   tokens: MusicToken[];
 };
 
+/** Bar lines written side by side (`|[1`, `:| [2`) are one bar line. */
+function joinedBars(tokens: MusicToken[]): MusicToken[] {
+  const out: MusicToken[] = [];
+  for (const token of tokens) {
+    const last = out.filter((each) => each.kind !== "space").at(-1);
+    const between = last ? out.slice(out.indexOf(last) + 1) : [];
+    if (
+      token.kind === "bar" &&
+      last?.kind === "bar" &&
+      between.every((each) => each.kind === "space") &&
+      /^\[?[0-9]/.test(token.text)
+    ) {
+      out.splice(out.indexOf(last));
+      out.push({ ...last, to: token.to, text: `${last.text}${token.text}` });
+      continue;
+    }
+    out.push(token);
+  }
+  return out;
+}
+
 function segmentsOf(line: Line, events: number[]): Segment[] {
   const segments: Segment[] = [];
+  line = { ...line, tokens: joinedBars(line.tokens) };
   let open: MusicToken | undefined;
   let from = line.from;
   const push = (to: number, close?: MusicToken) => {
@@ -225,11 +247,12 @@ const starts = (token: MusicToken) =>
   token.kind === "chord-open";
 
 /** Every music token of a tune's lines in order, with its voice, for pairing slurs and tuplets. */
-function tuneTokens(text: string, file: FileIndex, at: number) {
+export function tuneTokens(text: string, file: FileIndex, at: number) {
   const tune = file.tunes.find((each) => at >= each.from && at <= each.to);
   const out: { token: MusicToken; voice: string }[] = [];
   if (!tune) return out;
-  let voice = "";
+  // As the walk reads it: the tune's first voice, until a V: says otherwise.
+  let voice = tune.voices[0]?.id ?? "1";
   let line = tune.bodyFrom;
   while (line < tune.to) {
     const end = text.indexOf("\n", line) < 0 ? text.length : text.indexOf("\n", line);
@@ -345,12 +368,45 @@ export function copyText(text: string, range: Range, file: FileIndex = indexFile
   const after = text.slice(range.to, end.close.from);
   if (!/^\s*$/.test(after.replace(/!.*?!|"[^"]*"/g, ""))) return out;
   if (/\|\s*$/.test(out)) return out;
+  // A whole repeat (from just after its |: to just before its :|): its signs come too, so a paste
+  // of it is the repeat.
+  const tokens = tuneTokens(text, file, range.from).map(({ token }) => token);
+  const opener = tokens.filter((token) => token.to <= range.from && token.kind !== "space").at(-1);
+  const closing = barParts(end.close.text);
+  if (
+    opener?.kind === "bar" &&
+    barParts(opener.text).start > 0 &&
+    closing.end > 0 &&
+    !closing.ending &&
+    !tokens.some(
+      (token) =>
+        token.kind === "bar" &&
+        token.from >= range.from &&
+        token.to <= range.to &&
+        !/^\|\|?$/.test(token.text),
+    )
+  )
+    return `|:${out}${/\s/.test(text[range.to] ?? "") ? " " : ""}:|`;
   return `${out}${/\s/.test(text[range.to] ?? "") ? " " : ""}|`;
+}
+
+/** Two bar lines written side by side, as the one they mean: `:|` and `|:` make `::`. */
+function joinBars(first: string, second: string): string {
+  const a = barParts(first);
+  const b = barParts(second);
+  const end = a.end || b.end;
+  const start = b.start || a.start;
+  const body = a.body === "|]" || b.body === "|]" ? "|]" : "|";
+  if (end && start && body === "|") return `${":".repeat(end)}:${b.ending}`;
+  return `${":".repeat(end)}${body}${body === "|]" ? "" : ":".repeat(start)}${b.ending}`;
 }
 
 /** Parts of a bar line: `:|2` is an end of repeat, a bar, and the 2nd ending. */
 function barParts(text: string) {
   const match = /^(:*)(\[\||\|\]|\|\||\||)(:*)\[?([0-9][0-9,-]*)?$/.exec(text);
+  // "::" is the end of one repeat and the start of the next.
+  if (match && !match[2] && !match[3] && (match[1]?.length ?? 0) >= 2)
+    return { end: 1, body: "|", start: 1, ending: match[4] ?? "" };
   return {
     end: match?.[1]?.length ?? 0,
     body: match?.[2] ?? "|",
@@ -385,7 +441,8 @@ function mergeBars(
       refused: "Cutting this would leave an ending without its repeat: cut the endings too.",
     };
   const end = whole ? 0 : o.end || c.end;
-  const start = c.body === "|]" || whole ? 0 : o.start || c.start;
+  // (The bar line after it may start the next repeat: that stays.)
+  const start = c.body === "|]" ? 0 : whole ? c.start : o.start || c.start;
   let ending = c.ending;
   let said: string | undefined;
   const section = c.body === "|]" || c.body === "||" || c.start > 0;
@@ -649,7 +706,14 @@ export function cutPlan(
     const previous = after.slice(0, lineFrom).replace(/\s+$/, "");
     // (A w: line whose syllables all went is empty too.)
     const empty = !content.trim() || /^w:\s*$/.test(content);
-    const stray = !empty && /^[\s|]*$/.test(content) && /\|[\]:0-9]*$/.test(previous);
+    const previousLine = after.slice(
+      after.lastIndexOf("\n", lineFrom - 2) + 1,
+      Math.max(0, lineFrom - 1),
+    );
+    const stray =
+      !empty &&
+      /^[\s|]*$/.test(content) &&
+      (/\|[\]:0-9]*$/.test(previous) || lineKind(previousLine, true) !== "music");
     const touched = lineFrom <= hi && end >= lo;
     if (touched && (empty || stray) && lineKind(content, true) !== "field") {
       const to = end < after.length ? end + 1 : end;
@@ -789,7 +853,18 @@ export function pasteKeepingBars(
       } else if (lead?.kind === "bar" && before)
         insert = insert.slice(lead.to).replace(/^[ \t]+/, "");
       let closing = "";
-      if (barAfter?.kind === "bar") insert = insert.replace(/\|[ \t]*$/, "");
+      const trailing = tokenizeMusic(insert, 0)
+        .filter((token) => token.kind !== "space")
+        .at(-1);
+      if (barAfter?.kind === "bar" && trailing?.kind === "bar" && !PLAIN.test(trailing.text)) {
+        // A repeat's end against the next bar line: the two make one (`:|` `|:` is `::`).
+        extra.push({
+          from: barAfter.from,
+          to: barAfter.to,
+          insert: joinBars(trailing.text, barAfter.text),
+        });
+        insert = insert.slice(0, trailing.from).replace(/[ \t]+$/, "");
+      } else if (barAfter?.kind === "bar") insert = insert.replace(/\|[ \t]*$/, "");
       else if (/\|$/.test(insert)) {
         insert = insert.replace(/\|$/, "");
         closing = "|";
@@ -1121,7 +1196,11 @@ function lyricsAlong(text: string, file: FileIndex, notes: number[]): Change[] {
   const own = indices.map((index) => slots[index]).filter(Boolean) as Range[];
   const last = own.at(-1);
   if (!last) return [];
-  const words = own.map((slot) => text.slice(slot.from, slot.to).trim()).join(" ");
+  // Syllables of one word stay joined by their hyphen.
+  const words = own
+    .map((slot) => text.slice(slot.from, slot.to).trim())
+    .map((word, at, all) => (at < all.length - 1 && !/-$/.test(word) ? `${word} ` : word))
+    .join("");
   return [
     {
       from: last.to,
@@ -1385,7 +1464,10 @@ export function lyricsFor(
       .map((each) => each.event.from);
     notes.forEach((note, index) => {
       const slot = slots[index];
-      if (slot && gone.includes(note)) changes.push({ ...slot, insert: "" });
+      // The syllable and what separates it from the next.
+      const next = slots[index + 1];
+      if (slot && gone.includes(note))
+        changes.push({ from: slot.from, to: next ? next.from : slot.to, insert: "" });
     });
     for (const [at, count] of added) {
       if (at < line.from || at > line.to) continue;
@@ -1417,4 +1499,54 @@ export function notesIn(clip: string): number {
         ).length,
       0,
     );
+}
+
+/**
+ * The repeats a voice already has, each from its start (`|:`, or the tune's start) to the end of
+ * its last ending, with its bars (numbered from 1).
+ */
+export function repeatsOf(
+  text: string,
+  file: FileIndex,
+  at: number,
+  voice: string,
+): { from: number; to: number; first: number; last: number }[] {
+  const tokens = tuneTokens(text, file, at).filter((each) => each.voice === voice);
+  const regions: { from: number; to: number; first: number; last: number }[] = [];
+  let bar = 1;
+  let music = false;
+  let start = { at: tokens[0]?.token.from ?? 0, bar: 1 };
+  // After a repeat's end: whether its endings follow, and whether one is under way.
+  let after = false;
+  let ending = false;
+  for (const { token } of tokens) {
+    if (token.kind !== "bar") {
+      if (starts(token)) music = true;
+      continue;
+    }
+    if (music) bar += 1;
+    music = false;
+    const parts = barParts(token.text);
+    const region = regions[regions.length - 1];
+    if (after && region) {
+      if (parts.ending) ending = true;
+      if (ending) {
+        region.to = token.to;
+        region.last = bar - 1;
+      }
+      const section = parts.body === "|]" || parts.body === "||" || parts.start > 0;
+      if (!ending || section || (parts.end && !parts.ending)) {
+        if (!parts.end) after = false;
+        ending = false;
+      }
+    }
+    if (parts.end && !(after && ending)) {
+      regions.push({ from: start.at, to: token.to, first: start.bar, last: bar - 1 });
+      after = true;
+      ending = Boolean(parts.ending);
+    }
+    if (parts.start) start = { at: token.from, bar };
+    else if (parts.end) start = { at: token.to, bar };
+  }
+  return regions;
 }

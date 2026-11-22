@@ -1,4 +1,5 @@
 import { tokenizeMusic } from "./abc";
+import { repeatsOf } from "./barwise";
 import { type Change, type Range, passagesOf } from "./commands";
 import { selectedNotes } from "./selected";
 import { type FileIndex, indexFile } from "./tunes";
@@ -96,6 +97,15 @@ export function insertRepeat(
   for (const notes of groups) {
     const start = (notes[0] as (typeof notes)[number]).span.from;
     const end = (notes[notes.length - 1] as (typeof notes)[number]).span.to;
+    // Never a repeat inside (or around part of) another: say where the one already there is.
+    const voice = (notes[0] as (typeof notes)[number]).event.voice;
+    const inside = repeatsOf(text, file, start, voice).find(
+      (region) => start < region.to && end > region.from,
+    );
+    if (inside)
+      return {
+        refused: `Already inside a repeat (bars ${inside.first}–${inside.last}${inside.last > inside.first ? "" : ""}): a repeat can't go inside another. Select bars outside it.`,
+      };
     const line = (at: number) => {
       const from = text.lastIndexOf("\n", at - 1) + 1;
       const to = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);

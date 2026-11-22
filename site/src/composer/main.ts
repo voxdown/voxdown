@@ -21,7 +21,6 @@ import {
   type Change,
   type Range,
   barLine,
-  decorate,
   decorationMark,
   eventsIn,
   markSelection,
@@ -829,6 +828,15 @@ let statusNote: { message: string; selection: EditorSelection } | null = null;
 function sayAboutSelection(message: string) {
   statusNote = { message, selection: view.state.selection };
   $("explain").textContent = message;
+  sayAloud(message);
+}
+/** Said in the score's live region too (polite): #explain is quiet, for the eye. */
+function sayAloud(message: string) {
+  const live = $("score-live");
+  live.textContent = "";
+  requestAnimationFrame(() => {
+    live.textContent = message;
+  });
 }
 /*
  * Redo puts back the selection a mark or music command left: the history's own guess loses a mark
@@ -2984,23 +2992,39 @@ function music(command: string): boolean {
   return false;
 }
 
+/**
+ * The decoration menu (Alt D, the toolbar's !f!, Insert › Decoration…): each mark where a musician
+ * expects it over the selection (./marks: a dynamic on the first note, a hairpin from first to
+ * last, a jump once in the top voice, a fermata on the last note, articulations on every note).
+ */
 function decorationMenu(anchor: HTMLElement) {
-  void import("./decoration-groups").then(({ DECORATION_GROUPS: groups }) =>
-    popupMenu(anchor, [
-      ...groups.flatMap(([heading, choices]) => [
-        { heading },
-        ...choices.map(([name, label]) => ({
-          label,
-          shortcut: decorationMark(name),
-          run: () => {
-            apply(decorate(text(), ranges(), name, fileIndex()), "Decoration");
-            view.focus();
-          },
-        })),
+  void Promise.all([import("./decoration-groups"), import("./marks")]).then(
+    ([{ DECORATION_GROUPS: groups }, { placeMark }]) =>
+      popupMenu(anchor, [
+        ...groups.flatMap(([heading, choices]) => [
+          { heading },
+          ...choices.map(([name, label]) => ({
+            label,
+            shortcut:
+              name === "crescendo"
+                ? "!<( !<)!"
+                : name === "diminuendo"
+                  ? "!>( !>)!"
+                  : decorationMark(name),
+            run: () => {
+              const plan = placeMark(text(), ranges(), name, fileIndex());
+              if ("refused" in plan) {
+                sayAboutSelection(plan.refused);
+              } else if (apply(plan.changes, "Decoration")) {
+                sayAboutSelection(plan.said);
+              }
+              view.focus();
+            },
+          })),
+        ]),
+        "-" as const,
+        { label: "Dynamic for the 2nd time…", shortcut: '"^2nd time p"', run: insertPassDynamic },
       ]),
-      "-" as const,
-      { label: "Dynamic for the 2nd time…", shortcut: '"^2nd time p"', run: insertPassDynamic },
-    ]),
   );
 }
 

@@ -321,10 +321,14 @@ function tabHint() {
    (several voices copy under their V: lines, as with the keys). */
 const hasSelection = () => view.state.selection.ranges.some((range) => !range.empty);
 function clipboard(kind: "cut" | "copy") {
+  // The editor's own copy and cut handlers run, so voices keep their V: lines; focus goes back
+  // where it was (the score keeps its keys: Delete, typing, arrows).
+  const back = document.activeElement;
   view.focus();
-  // The editor's own copy and cut handlers run, so voices keep their V: lines.
   if (!document.execCommand(kind))
     notice(`Use ${shortcutLabel(kind === "cut" ? "Mod X" : "Mod C")} to ${kind} in this browser.`);
+  if (back instanceof HTMLElement && back !== view.contentDOM && !view.contentDOM.contains(back))
+    back.focus({ preventScroll: true });
 }
 /*
  * Editing selected music: ./barwise (bar lines kept by typing and deleting, whole bars cut and
@@ -859,6 +863,13 @@ function replaceMusic(target: EditorView, typed: string): boolean {
   if (!barwise || target.state.selection.ranges.every((range) => range.empty)) return false;
   const state = target.state;
   const list = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
+  // Backspace and Delete are the score's Delete: one plan (./barwise cutPlan), its structure rules
+  // and refusals, so the text and the score never disagree.
+  if (!typed) {
+    if (!barwise.cutPlan(state.doc.toString(), list, state.field(fileIndexField))) return false;
+    cutMusic(target, null);
+    return true;
+  }
   const changes = barwise.replaceKeepingBars(
     state.doc.toString(),
     list,
@@ -1944,7 +1955,8 @@ function runChecks(caretLeft = false) {
         message: issue.message,
         severity: "warning",
         kind: "bar",
-        label: `${issue.bar === 0 ? "pickup" : `bar ${issue.bar}`} — ${issue.detail}`,
+        label:
+          issue.label ?? `${issue.bar === 0 ? "pickup" : `bar ${issue.bar}`} — ${issue.detail}`,
       });
     }
   }
@@ -2860,6 +2872,33 @@ let noteSpan: {
 } | null = null;
 
 /* Musical commands. */
+/** Duplicate: the copy goes in, and is what is selected, ready to vary (./barwise). */
+function duplicateHere(plan: import("./barwise").DuplicatePlan): boolean {
+  if ("refused" in plan) {
+    sayAboutSelection(plan.refused);
+    notice(plan.refused);
+    return true;
+  }
+  if (!plan.changes.length) return apply([], "Duplicate");
+  const state = view.state;
+  const set = state.changes(plan.changes);
+  const picked = plan.copies.map((copy) => {
+    const from = set.mapPos(copy.from, -1);
+    const lead = /^[\s|]*/.exec(copy.insert)?.[0].length ?? 0;
+    const trail = /[\s|-]*$/.exec(copy.insert)?.[0].length ?? 0;
+    return EditorSelection.range(from + lead, from + copy.insert.length - trail);
+  });
+  const done = state.update({
+    changes: set,
+    selection: picked.length ? EditorSelection.create(picked) : undefined,
+    userEvent: "input.music",
+    scrollIntoView: true,
+  });
+  rememberSelection(done);
+  view.dispatch(done);
+  if (plan.said.length) notice(plan.said.join(" "), "success");
+  return true;
+}
 function apply(changes: Change[], label: string, outward = true): boolean {
   if (!changes.length) {
     notice(`${label}: nothing to change here. Put the caret on a note or select some music.`);
@@ -2932,7 +2971,7 @@ function music(command: string): boolean {
         void loadEditing().then(() => barwise && music("duplicate"));
         return true;
       }
-      return apply(barwise.duplicate(doc, list, index), "Duplicate");
+      return duplicateHere(barwise.duplicate(doc, list, index));
     case "new-tune":
       newTune();
       return true;

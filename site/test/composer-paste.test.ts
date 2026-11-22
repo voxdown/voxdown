@@ -136,8 +136,9 @@ describe("plain music over places in several voices (round 3)", () => {
       { ...places[0], insert: "e e e e" },
     ]);
   });
-  it("pasted in one place, it is left to the editor", () => {
-    expect(planPaste(tune, [places[0] as { from: number; to: number }], 0, "e e", null)).toBeNull();
+  it("pasted in one place, it replaces that place (round 5: always ours, to select it after)", () => {
+    const plan = planPaste(tune, [places[0] as { from: number; to: number }], 0, "e e", null);
+    expect(plan && "changes" in plan && plan.changes).toEqual([{ ...places[0], insert: "e e" }]);
   });
 });
 

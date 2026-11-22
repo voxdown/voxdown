@@ -5,6 +5,12 @@ import { type Change, scaleLengths, toggleSlur, transpose } from "../src/compose
 import { insertChordSymbol, insertRepeat, insertTriplet } from "../src/composer/inserts";
 import { describePicked, selectedNotes } from "../src/composer/selected";
 
+const dup = (text: string, ranges: { from: number; to: number }[]) => {
+  const plan = duplicate(text, ranges);
+  if ("refused" in plan) throw new Error(plan.refused);
+  return plan.changes;
+};
+
 const HEAD = "X:1\nT:Rule\nM:4/4\nL:1/8\nK:C\n";
 const apply = (text: string, given: Change[] | { refused: string }) => {
   if ("refused" in given) throw new Error(given.refused);
@@ -142,8 +148,9 @@ describe("a voice written in V: blocks is one passage", () => {
     { from: blocks.indexOf("g a b c'|"), to: blocks.indexOf("g a b c'|") + 9 },
   ];
   it("duplicates the passage once, after its end, in the voice's last block", () => {
-    expect(apply(blocks, duplicate(blocks, both))).toBe(
-      "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nc d e f|\nV:2\nC D E F|\nV:1\ng a b c'|c d e f| g a b c'|\nV:2\nG A B c|\n",
+    expect(apply(blocks, dup(blocks, both))).toBe(
+      // Round 5: V:2 gets a bar of rests for each, so the voices stay in step.
+      "X:1\nM:4/4\nL:1/4\nK:C\nV:1\nV:2\nV:1\nc d e f|\nV:2\nC D E F|\nV:1\ng a b c'|c d e f| g a b c'|\nV:2\nG A B c|z4 | z4|\n",
     );
   });
   it("puts one slur over it, from its first note to its last", () => {
@@ -166,26 +173,26 @@ describe("Duplicate copies the selected notes, not the raw text (round 3)", () =
   it("a chord tone selected duplicates its whole chord", () => {
     const text = `${head}[CEG]2 A2 B4|\n`;
     const at = text.indexOf("E");
-    expect(apply(text, duplicate(text, [{ from: at, to: at + 1 }]))).toBe(
+    expect(apply(text, dup(text, [{ from: at, to: at + 1 }]))).toBe(
       `${head}[CEG]2 [CEG]2 A2 B4|\n`,
     );
   });
   it("a note selected through its decoration duplicates with it, and its broken rhythm", () => {
     const text = `${head}B>!trill!c2 d4|\n`;
     const at = text.indexOf(">");
-    expect(apply(text, duplicate(text, [{ from: at, to: at + 4 }]))).toBe(
+    expect(apply(text, dup(text, [{ from: at, to: at + 4 }]))).toBe(
       `${head}B>!trill!c2 B>!trill!c2 d4|\n`,
     );
   });
   it("a triplet's first notes take its sign", () => {
     const text = `${head}(3abc d4|\n`;
     const from = text.indexOf("abc");
-    expect(apply(text, duplicate(text, [{ from, to: from + 3 }]))).toBe(`${head}(3abc (3abc d4|\n`);
+    expect(apply(text, dup(text, [{ from, to: from + 3 }]))).toBe(`${head}(3abc (3abc d4|\n`);
   });
   it("whole bars are duplicated as bars, after the bar line", () => {
     const text = `${head}c2 d2 e2 f2|g2 a2 b2 c'2|]\n`;
     const from = text.indexOf("g2");
-    expect(apply(text, duplicate(text, [{ from, to: from + 11 }]))).toBe(
+    expect(apply(text, dup(text, [{ from, to: from + 11 }]))).toBe(
       `${head}c2 d2 e2 f2|g2 a2 b2 c'2|g2 a2 b2 c'2|]\n`,
     );
   });
@@ -218,33 +225,33 @@ describe("Duplicate keeps tuplets, slurs, ties and bar-line marks whole (round 4
   it("after the tuplet the last note is in, not inside it", () => {
     const text = `${head}(3cde (3fga b2 c'2 |\n`;
     const from = text.indexOf("e (3f");
-    expect(apply(text, duplicate(text, [{ from, to: from + 5 }]))).toBe(
+    expect(apply(text, dup(text, [{ from, to: from + 5 }]))).toBe(
       `${head}(3cde (3fga e f b2 c'2 |\n`,
     );
   });
   it("half a slur isn't copied", () => {
     const text = `${head}a2 b2 c'2 c'2 | (d'4 e'4) |\n`;
     const from = text.indexOf("c'2 |");
-    const out = apply(text, duplicate(text, [{ from, to: text.indexOf("d'4") + 3 }]));
+    const out = apply(text, dup(text, [{ from, to: text.indexOf("d'4") + 3 }]));
     expect(out.split("(").length).toBe(2);
     expect(out.split(")").length).toBe(2);
   });
   it("a bar ending in a D.S. is a whole bar: duplicated as a bar, the D.S. after both", () => {
     const text = `${head}A2 B2 c2 d2 | e2 f2 g2 a2 !D.S.! | b8 |]\n`;
     const from = text.indexOf("e2");
-    expect(apply(text, duplicate(text, [{ from, to: from + 11 }]))).toBe(
+    expect(apply(text, dup(text, [{ from, to: from + 11 }]))).toBe(
       `${head}A2 B2 c2 d2 | e2 f2 g2 a2 | e2 f2 g2 a2 !D.S.! | b8 |]\n`,
     );
   });
   it("a tie on the last note stays on the copy when the note is the same", () => {
     const text = `${head}A2 c2- c4 |\n`;
     const from = text.indexOf("c2-");
-    expect(apply(text, duplicate(text, [{ from, to: from + 3 }]))).toBe(`${head}A2 c2- c2- c4 |\n`);
+    expect(apply(text, dup(text, [{ from, to: from + 3 }]))).toBe(`${head}A2 c2- c2- c4 |\n`);
   });
   it("the original's tie goes when the copy starts on another note", () => {
     const text = `${head}A2 c2- c4 |\n`;
     const from = text.indexOf("A2");
-    expect(apply(text, duplicate(text, [{ from, to: text.indexOf("c2-") + 3 }]))).toBe(
+    expect(apply(text, dup(text, [{ from, to: text.indexOf("c2-") + 3 }]))).toBe(
       `${head}A2 c2 A2 c2- c4 |\n`,
     );
   });

@@ -16,9 +16,10 @@
  * Every paste says what went where, or is refused; none succeeds in part in silence.
  */
 import { lineKind } from "./abc";
-import { pasteKeepingBars } from "./barwise";
+import { lyricsFor, notesIn, pasteKeepingBars } from "./barwise";
 import { type ClipSource, convertClip, keyLabel } from "./clip-convert";
 import type { Change } from "./commands";
+import { selectedNotes } from "./selected";
 import { readingAt } from "./stepentry";
 import { type FileIndex, type TuneInfo, indexFile, voiceAt } from "./tunes";
 
@@ -240,7 +241,7 @@ export function planPaste(
       if ("refused" in done) return done;
       changes.push(...done);
     }
-    return { changes, message: [plan.message, ...said].join(" ") };
+    return { changes: withLyrics(text, file, changes), message: [plan.message, ...said].join(" ") };
   }
   let targets = selected.length ? selected : ranges;
   const voices = new Set(selected.map((range) => voiceIn(text, file, range.from)));
@@ -270,5 +271,31 @@ export function planPaste(
     changes.push(...done);
   }
   if (!special) return null;
-  return { changes, message: said.join(" ") };
+  return { changes: withLyrics(text, file, changes), message: said.join(" ") };
+}
+
+/**
+ * A paste under a w: line keeps its words on their notes: the syllables of the notes it replaces
+ * go, and each note it adds gets a `*` (no syllable) in their place.
+ */
+function withLyrics(text: string, file: FileIndex, changes: Change[]): Change[] {
+  const extra: Change[] = [];
+  for (const change of changes) {
+    const gone =
+      change.to > change.from
+        ? selectedNotes(text, [change], file)
+            .filter(
+              (each) =>
+                each.whole &&
+                !each.event.rest &&
+                each.event.from >= change.from &&
+                each.event.from < change.to,
+            )
+            .map((each) => each.event.from)
+        : [];
+    const count = notesIn(change.insert);
+    if (!gone.length && !count) continue;
+    extra.push(...lyricsFor(text, file, gone, count ? [[change.from, count]] : []));
+  }
+  return [...changes, ...extra].sort((a, b) => a.from - b.from || a.to - b.to);
 }

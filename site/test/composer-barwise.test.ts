@@ -52,8 +52,10 @@ describe("typing over selected music keeps its bar lines", () => {
     expect(out).toContain(":|[2");
     expect(out).toContain("|]");
   });
-  it("a selection without a bar line inside is left to the editor", () => {
-    expect(replaceKeepingBars(tune, [span(tune, "d e")], "")).toBeNull();
+  it("a selection without a bar line inside is replaced as written (round 5: always ours)", () => {
+    expect(apply(tune, replaceKeepingBars(tune, [span(tune, "d e")], "z"))).toBe(
+      `${head}c z f|g a b c'|c' b a g|f e d c|]\n`,
+    );
   });
   it("a bar line selected alone deletes as text", () => {
     const bar = at(tune, "|g");

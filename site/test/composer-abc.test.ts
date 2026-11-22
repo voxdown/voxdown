@@ -25,6 +25,12 @@ import { explainAt } from "../src/composer/explain";
 import { indexFile } from "../src/composer/tunes";
 import { tuneItems } from "../src/composer/walk";
 
+const dup = (text: string, ranges: { from: number; to: number }[]) => {
+  const plan = duplicate(text, ranges);
+  if ("refused" in plan) throw new Error(plan.refused);
+  return plan.changes;
+};
+
 const apply = (text: string, changes: Change[]) => {
   let out = text;
   for (const change of [...changes].sort((a, b) => b.from - a.from))
@@ -200,6 +206,14 @@ describe("bar check", () => {
     expect(issues[0]?.voice).toBe("2");
     expect(issues[0]?.kind).toBe("long");
   });
+  it("lists voices out of step: a voice with a bar fewer (round 5)", () => {
+    const text = "X:1\nM:3/4\nL:1/4\nK:C\nV:1\nC D E | F G A | B c d |\nV:2\nC2 D | E3 |\n";
+    const issues = bars(text);
+    expect(issues.map((issue) => [issue.voice, issue.kind, issue.detail])).toEqual([
+      ["2", "voices", "2 bars against V:1's 3"],
+    ]);
+    expect(issues[0]?.label).toBe("V:2 out of step — 2 bars against V:1's 3");
+  });
   it("allows short bars beside repeats and endings", () => {
     expect(bars(tune("|: G2 AB c2 BA | G6 :|[2 G4 z2 |]"))).toEqual([]);
   });
@@ -303,7 +317,7 @@ describe("length commands", () => {
   it("duplicates a selection or the bar at the caret", () => {
     const text = tune("A B c d | e f g a |");
     const at = text.indexOf("f");
-    expect(apply(text, duplicate(text, [{ from: at, to: at }]))).toContain(
+    expect(apply(text, dup(text, [{ from: at, to: at }]))).toContain(
       "A B c d | e f g a | e f g a |",
     );
   });

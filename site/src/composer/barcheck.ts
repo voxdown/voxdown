@@ -6,7 +6,9 @@ export type BarIssue = {
   from: number;
   to: number;
   voice: string;
-  kind: "long" | "short";
+  kind: "long" | "short" | "voices";
+  /** How it is listed, when not by its bar number (voices out of step). */
+  label?: string;
   message: string;
   /** The bar's number in its voice; 0 is a pickup. */
   bar: number;
@@ -100,6 +102,9 @@ export function checkItems(items: Item[]): BarIssue[] {
     /** Bars finished so far (a pickup does not count). */
     number: number;
     multiBars: number;
+    /** All its music so far, in whole notes, and where it ends. */
+    length: number;
+    last: { from: number; to: number };
   };
   // The bar being closed is the next number, or 0 when it is a pickup.
   const describe = (voice: Voice, expected: Fraction) => {
@@ -158,6 +163,8 @@ export function checkItems(items: Item[]): BarIssue[] {
         events: 0,
         number: 0,
         multiBars: 0,
+        length: 0,
+        last: { from: item.from, to: item.to },
       };
       voices.set(item.voice, voice);
     }
@@ -169,6 +176,8 @@ export function checkItems(items: Item[]): BarIssue[] {
       }
       voice.total = add(voice.total, item.duration);
       voice.events += 1;
+      voice.length += value(item.duration);
+      voice.last = { from: item.from, to: item.to };
       if (item.bars) {
         voice.multi = true;
         voice.multiBars = item.bars;
@@ -197,6 +206,39 @@ export function checkItems(items: Item[]): BarIssue[] {
       });
     }
   }
+  // Voices out of step: one with less music, or fewer bars, than the longest.
+  const all = [...voices].filter(([, voice]) => voice.length > 0);
+  const longest = all.reduce<[string, Voice] | null>(
+    (best, each) => (!best || each[1].length > best[1].length + 1e-9 ? each : best),
+    null,
+  );
+  // (A bar too long or short says it first; with every bar right, a voice that lost or gained a
+  // bar is what is left.)
+  if (all.length > 1 && longest && !issues.length)
+    for (const [id, voice] of all) {
+      const bars = voice.number + (voice.events ? 1 : 0);
+      const most = longest[1].number + (longest[1].events ? 1 : 0);
+      const short = longest[1].length - voice.length;
+      if (short < 1e-9 && bars >= most) continue;
+      const detail =
+        bars !== most
+          ? `${bars} ${bars === 1 ? "bar" : "bars"} against V:${longest[0]}'s ${most}`
+          : `ends ${inUnits(frac(Math.round(short * 64), 64), voice.unit)} before V:${longest[0]}`;
+      issues.push({
+        from: voice.last.from,
+        to: voice.last.to,
+        voice: id,
+        kind: "voices",
+        bar: bars,
+        detail,
+        message:
+          `V:${id} ${bars !== most ? "has" : ""} ${detail}: the voices are out of step.`.replace(
+            "  ",
+            " ",
+          ),
+        label: `V:${id} out of step — ${detail}`,
+      });
+    }
   return issues.sort((a, b) => a.from - b.from);
 }
 

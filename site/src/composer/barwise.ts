@@ -3053,15 +3053,27 @@ export function noteStartsBar(text: string, file: FileIndex, range: Range): numb
   const picked = selectedNotes(text, [range], file).filter((each) => each.whole);
   const one = picked[0];
   if (picked.length !== 1 || !one) return null;
-  // The voice's last token before it, fields and marks aside: a bar line, or none.
+  // Back from it over what opens a bar before its first note (fields, marks, chord symbols, a
+  // tuplet's sign, a slur's start, grace notes; round 9, item 3): a bar line there, or nothing,
+  // and the paste goes before all of them.
+  const prefix = (token: MusicToken) =>
+    (token.kind === "inline-field" && !/^\[V:/.test(token.text)) ||
+    ["decoration", "annotation", "chord-symbol", "space", "tuplet"].includes(token.kind) ||
+    (token.kind === "slur" && token.text === "(") ||
+    token.kind === "grace-open" ||
+    token.kind === "grace-close" ||
+    (token.kind === "note" && token.inGrace);
   const before = tuneTokens(text, file, one.span.from).filter(
-    ({ token, voice }) =>
-      voice === one.event.voice &&
-      token.to <= one.span.from &&
-      !["inline-field", "decoration", "annotation", "chord-symbol", "space"].includes(token.kind),
+    ({ token, voice }) => voice === one.event.voice && token.to <= one.span.from,
   );
-  const last = before.at(-1)?.token;
-  return !last || last.kind === "bar" ? one.span.from : null;
+  let index = before.length - 1;
+  let start = one.span.from;
+  while (index >= 0 && prefix((before[index] as (typeof before)[number]).token)) {
+    start = (before[index] as (typeof before)[number]).token.from;
+    index -= 1;
+  }
+  const last = before[index]?.token;
+  return !last || last.kind === "bar" ? start : null;
 }
 
 /**

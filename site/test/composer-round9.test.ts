@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { frac } from "../src/composer/abc";
 import { checkBars } from "../src/composer/barcheck";
-import { cutPlan, inOneVoice, lengthsInStep } from "../src/composer/barwise";
+import { cutPlan, inOneVoice, lengthsInStep, noteStartsBar } from "../src/composer/barwise";
 import { type Change, scaleLengths, toggleTies } from "../src/composer/commands";
+import { planPaste } from "../src/composer/paste";
 import { describePicked, selectedNotes } from "../src/composer/selected";
 import { indexFile } from "../src/composer/tunes";
 
@@ -110,4 +111,26 @@ describe("spacers are never counted (item 19)", () => {
     );
     expect(describePicked(picked, text).text).toBe("2 notes");
   });
+});
+
+describe("a paste on a bar's first note behind a tuplet, slur or grace goes in before the bar (item 3)", () => {
+  const moon =
+    'X:1\nT:Moon\nM:4/4\nL:1/8\n%%score {1 (2 3 4)}\nK:E\nV:1\n(3"^Adagio"!pp!G,CE (3G,CE (3G,CE (3G,CE | B8 |\nV:2\nx8 | x8 |\nV:3\n[C,,C,]8 | [B,,,B,,]8 |\nV:4\nx8 | x8 |\n';
+  it("Moonlight's bar 1: the copy goes in before it, every voice in step, its marks kept", () => {
+    const from = moon.indexOf("G,CE");
+    const plan = planPaste(moon, [{ from, to: from + 2 }], 0, "B8 |", null);
+    if (!plan || "refused" in plan) throw new Error(plan ? plan.refused : "no plan");
+    const out = apply(moon, plan.changes);
+    expect(out).toContain('V:1\nB8 | (3"^Adagio"!pp!G,CE (3G,CE');
+    expect(out).toMatch(/V:2\nx8 \| ?x8 \| x8 \|/);
+    expect(out).toMatch(/V:3\nz8 \| ?\[C,,C,\]8/);
+  });
+  for (const lead of ["(", "{g}", "(3"])
+    it(`a bar opening with ${lead}`, () => {
+      const text = tune(`C2 D2 E2 F2 | ${lead}G2 A2 B2 c2${lead === "(" ? ")" : ""} | d8 |]`);
+      const from = text.indexOf("G2");
+      expect(noteStartsBar(text, indexFile(text), { from, to: from + 2 })).toBe(
+        text.indexOf(`| ${lead}G2`) + 2,
+      );
+    });
 });

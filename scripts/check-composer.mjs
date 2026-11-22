@@ -5569,15 +5569,13 @@ console.log(
   }
   await p.keyboard.press("Control+Shift+L");
   await p.keyboard.press("Control+Period");
-  // 7. A triplet over a voice across V: blocks is one triplet.
+  // 7. A triplet over a voice across V: blocks: never two. (Round 4: a triplet takes 3 notes in
+  // one bar, so f and g across the bar line are refused, saying why.)
   geo = await put(blocks);
   await choose([of(blocks, "f"), [blocks.indexOf("g a b c'"), blocks.indexOf("g a b c'") + 1]]);
-  doc = await docText(p);
   await menu("insert", "Triplet", p);
-  await changed(doc);
-  const tripled = await docText(p);
-  assert.equal(tripled.split("(3").length - 1, 1, "one triplet over V:1's f and g across blocks");
-  assert.match(tripled, /\nc d e \(3f\|/, "before the passage's first note");
+  await statusSays(/A triplet takes exactly 3 notes/);
+  assert.equal(await docText(p), blocks, "no triplet across the blocks' bar line");
   // 8. ", [ and { over selected music act on its notes.
   const eighths = "X:1\nT:Keys\nM:4/4\nL:1/8\nK:C\nc2 d2 e2 f2|g a b c' d'4|]\n";
   geo = await put(eighths);
@@ -5737,6 +5735,288 @@ console.log(
   await ctx.close();
   console.log(
     `Composer: selection hardening round 3: bar lines kept by typing, Delete, Cut, Copy and Paste; voiced copies from interleaved blocks; drags back; plain paste over voices; Duplicate by notes; loops through edits; one triplet over blocks; " [ { over notes; paste between keys and units; status after cut, across tunes; a resize mid-drag; Shift Alt back to the caret; step entry over a selection; a 220-bar drag (8 moves in ${Math.round(longest)} ms): passed`,
+  );
+}
+
+/* 33. Selection hardening, round 4: every edit keeps the music's structure. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      if (view.state.doc.toString() !== x)
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    await p.waitForFunction((x) => x.includes(window.composer.scoreIndex()?.source ?? "\u0000"), t);
+    await p.waitForTimeout(400);
+    return p.evaluate(() => window.composer.geometry());
+  };
+  const choose = (list, main = list.length - 1) =>
+    p.evaluate(
+      ([list, main]) => {
+        const view = window.composer.view;
+        const S = view.state.selection.constructor;
+        view.dispatch({
+          selection: S.create(
+            list.map(([a, b]) => S.range(a, b)),
+            main,
+          ),
+        });
+        view.focus();
+      },
+      [list, main],
+    );
+  const of = (text, part, nth = 0) => {
+    let at = text.indexOf(part);
+    for (let n = 0; n < nth; n++) at = text.indexOf(part, at + 1);
+    return [at, at + part.length];
+  };
+  const settled = (was) =>
+    p.waitForFunction((w) => window.composer.view.state.doc.toString() !== w, was).catch(() => {});
+  const statusSays = (pattern) =>
+    p.waitForFunction(
+      (source) => new RegExp(source).test(document.getElementById("explain").textContent),
+      pattern.source,
+    );
+  const noticeSays = (pattern) =>
+    p.waitForFunction(
+      (source) => new RegExp(source).test(document.getElementById("notice").textContent),
+      pattern.source,
+    );
+  const jumps =
+    "X:1\nT:Jumps\nM:4/4\nL:1/4\nK:C\n|: C D E F |1 G A B c :|2 c B A G |]\nS d e f g | a b c' d' !D.S.alcoda! |\nO e f g a | g f e d |]\n";
+  const tunes = {
+    jumps,
+    fields:
+      "X:1\nT:Fields\nM:4/4\nL:1/8\nK:G\nG2 A2 B2 c2 | [K:Bb][L:1/4] B c d e | [M:2/4] f g | [M:3/4] a b c' | B A G |]\n",
+    endings:
+      "X:1\nT:Endings\nM:3/4\nL:1/4\nK:D\n|: D E F | G A B |1 c d e | f g a :|2 B c d | A3 |]\n",
+    triplets: "X:1\nT:Triplets\nM:4/4\nL:1/8\nK:C\n(3cde (3fga b2 c'2 | d'2 (c'2 b2) a2 | g8 |]\n",
+  };
+  /** The drawn bars of voice 1: each bar's first and last note. */
+  const barsOf = async () =>
+    p.evaluate(() => {
+      const index = window.composer.scoreIndex();
+      const bars = new Map();
+      for (const note of index.byVoice[0]) {
+        const bar = bars.get(note.measure) ?? [];
+        bar.push(note);
+        bars.set(note.measure, bar);
+      }
+      return [...bars.values()].map((bar) => ({
+        first: bar[0].start,
+        last: bar.at(-1).start,
+        end: bar.at(-1).end,
+      }));
+    });
+  const headOf = (geo, start) => geo.notes.find((each) => each.start === start);
+  const pick = async (geo, first, last) => {
+    const a = headOf(geo, first);
+    const b = headOf(geo, last);
+    await p.mouse.click(a.head + 3, a.y);
+    await p.keyboard.down("Shift");
+    await p.mouse.click(b.head + 3, b.y);
+    await p.keyboard.up("Shift");
+  };
+  // 1. The property: Cut then Paste at the caret gives back the text exactly, for every bar and
+  // run of bars (up to 3), through the score and the keys, in tunes with repeats, endings,
+  // D.S. al Coda, inline fields, tuplets and slurs.
+  let cycles = 0;
+  for (const [name, tune] of Object.entries(tunes)) {
+    let geo = await put(tune);
+    const bars = await barsOf();
+    for (let a = 0; a < bars.length; a++)
+      for (let b = a; b < Math.min(bars.length, a + 3); b++) {
+        await pick(geo, bars[a].first, bars[b].last);
+        await p.keyboard.press("Control+x");
+        const cut = await docText(p);
+        if (cut === tune) {
+          // Refused (a cut across part of a repeat's signs): it says why, and nothing changed.
+          await statusSays(/repeat|ending|tuplet/);
+          continue;
+        }
+        assert.deepEqual(
+          await p.evaluate(() =>
+            window.composer.view.state.selection.ranges.map((r) => r.to - r.from),
+          ),
+          [0],
+          `${name}: after Cut of bars ${a + 1}–${b + 1}, a plain caret`,
+        );
+        await p.keyboard.press("Control+v");
+        await settled(cut);
+        assert.equal(
+          await docText(p),
+          tune,
+          `${name}: Cut then Paste of bars ${a + 1}–${b + 1} gives the text back`,
+        );
+        cycles += 1;
+        geo = await put(tune);
+      }
+  }
+  // 2. Delete in the score of each bar of the D.S. tune: the play order loses just that bar.
+  for (const key of ["Delete", "Control+x"]) {
+    let geo = await put(jumps);
+    const bars = await barsOf();
+    for (const bar of bars) {
+      geo = await put(jumps);
+      await p.waitForFunction(() => window.composer.timelineNotes().length > 0);
+      const before = await p.evaluate(() => window.composer.timelineNotes());
+      await pick(geo, bar.first, bar.last);
+      const was = await docText(p);
+      await p.keyboard.press(key);
+      await settled(was);
+      if ((await docText(p)) === was) continue;
+      await p.waitForFunction((n) => window.composer.timelineNotes().length !== n, before.length);
+      const after = await p.evaluate(() =>
+        window.composer.timelineNotes().map((note) => note.pitch),
+      );
+      assert.deepEqual(
+        after,
+        before
+          .filter((note) => note.start < bar.first || note.start >= bar.end)
+          .map((note) => note.pitch),
+        `${key} of the bar at ${bar.first}: the play order loses just its notes`,
+      );
+    }
+  }
+  // 3. Cut of a bar opening with fields keeps them; its D.S. bar duplicates as one bar.
+  let geo = await put(tunes.fields);
+  await choose([of(tunes.fields, "B c d e")]);
+  await p.keyboard.press("Control+x");
+  assert.match(
+    await docText(p),
+    /\[K:Bb\]\s*\[L:1\/4\]\s*\[M:2\/4\] f g/,
+    "the fields move to the next bar",
+  );
+  geo = await put(jumps);
+  await choose([of(jumps, "a b c' d'")]);
+  await p.keyboard.press("Control+Shift+D");
+  assert.match(
+    await docText(p),
+    /\| a b c' d' \| a b c' d' !D\.S\.alcoda! \|/,
+    "a D.S. bar duplicates as a bar",
+  );
+  // 4. Cut of the 1st ending: its marker goes, said so, and the 2nd ending still plays.
+  geo = await put(jumps);
+  await choose([of(jumps, "G A B c")]);
+  await p.keyboard.press("Control+x");
+  assert.match(await docText(p), /\|: C D E F :\| c B A G \|\]/, "the endings' numbers go");
+  await noticeSays(/1st ending went with its only bar/);
+  // 5. A two-voice copy over V:1 in two places and V:2 in one: V:1's other place as it was.
+  const two =
+    "X:1\nT:Two\nM:4/4\nL:1/4\n%%score 1 2\nK:C\nV:1\nc d e f|g a b c'|c' b a g|\nV:2 clef=bass\nC, D, E, F,|G, A, B, C|C B, A, G,|\n";
+  geo = await put(two);
+  await choose([of(two, "c d e f"), of(two, "C, D, E, F,")]);
+  await p.keyboard.press("Control+c");
+  await choose([of(two, "g a b c'"), of(two, "c' b a g"), of(two, "G, A, B, C")]);
+  await p.keyboard.press("Control+v");
+  await settled(two);
+  let doc = await docText(p);
+  assert.match(
+    doc,
+    /\nc d e f\|c d e f\|c' b a g\|\n/,
+    "V:1's first place takes it, the second is as it was",
+  );
+  assert.match(doc, /\|C, D, E, F,\|C B, A, G,\|\n/, "V:2's place takes V:2's part");
+  await noticeSays(/V:1 into the first of its 2 places \(the other was left as it was\)/);
+  // 6. The copy pasted into a third voice it lacks: the part in that voice's clef.
+  const three = `${two.replace("%%score 1 2", "%%score 1 2 3")}V:3 clef=bass\nz4|z4|z4|\n`;
+  geo = await put(three);
+  await choose([of(three, "c d e f"), of(three, "C, D, E, F,")]);
+  await p.keyboard.press("Control+c");
+  await p.evaluate(
+    (at) => window.composer.view.dispatch({ selection: { anchor: at } }),
+    three.lastIndexOf("z4"),
+  );
+  await p.keyboard.press("Control+v");
+  await settled(three);
+  assert.match(
+    await docText(p),
+    /\nV:3 clef=bass\nz4\|z4\|C, D, E, F,\|z4\|/,
+    "the bass part goes into the bass voice",
+  );
+  await noticeSays(/Pasted V:2's part; the copy also had V:1\./);
+  // 7. Repeat over e…a goes to the bar lines; a triplet inside a triplet is refused.
+  geo = await put(tunes.triplets);
+  await choose([of(tunes.triplets, "e (3fga")]);
+  await menu("insert", "Repeat", p);
+  await settled(tunes.triplets);
+  assert.match(
+    await docText(p),
+    /\n\|: \(3cde \(3fga b2 c'2 :\| d'2/,
+    "the repeat goes round the bar",
+  );
+  assert.doesNotMatch(
+    await p.evaluate(() => {
+      const view = window.composer.view;
+      return view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to);
+    }),
+    /\|/,
+    "the selection after it holds no bar line",
+  );
+  geo = await put(tunes.triplets);
+  await choose([of(tunes.triplets, "fga")]);
+  await menu("insert", "Triplet", p);
+  await statusSays(/already in a tuplet/);
+  // 8. Duplicate after the tuplet, and no half slur.
+  geo = await put(tunes.triplets);
+  await choose([of(tunes.triplets, "e (3f")]);
+  await p.keyboard.press("Control+Shift+D");
+  assert.match(await docText(p), /\(3cde \(3fga e f b2/, "after the tuplet the last note is in");
+  geo = await put(tunes.triplets);
+  await choose([[tunes.triplets.indexOf("c'2 |"), tunes.triplets.indexOf("(c'2") + 4]]);
+  await p.keyboard.press("Control+Shift+D");
+  doc = await docText(p);
+  assert.equal(doc.split("(").length, tunes.triplets.split("(").length, "no stray ( copied");
+  // 9. A bar line over three voices goes into each; a second voice in step and in %%score.
+  const voices3 =
+    "X:1\nT:Three\nM:4/4\nL:1/4\n%%score 1 2 3\nK:C\nV:1\nc d e f g a b c'|]\nV:2\nC D E F G A B c|]\nV:3\nC,2 D,2 E,2 F,2|]\n";
+  geo = await put(voices3);
+  await choose([of(voices3, "c d e f"), of(voices3, "C D E F"), of(voices3, "C,2 D,2")], 0);
+  await menu("insert", "Bar line", p);
+  await settled(voices3);
+  assert.match(
+    await docText(p),
+    /c d e f \| g[^\n]*\nV:2\nC D E F \| G[^\n]*\nV:3\nC,2 D,2 \| E,2/,
+    "one in each voice",
+  );
+  const pickup = "X:1\nT:Pickup\nM:4/4\nL:1/8\n%%score 1\nK:C\nV:1\nG2|c2 d2 e2 f2|g8|]\n";
+  geo = await put(pickup);
+  await menu("insert", "Second voice", p);
+  await settled(pickup);
+  assert.match(
+    await docText(p),
+    /%%score 1 2\n[^]*\nV:2 clef=bass\nz2 \| z8 \| z8 \|\n$/,
+    "rests bar for bar, in %%score",
+  );
+  // 10. Shift+End in the score grows the selection to the line's end.
+  geo = await put("X:1\nT:Ends\nM:4/4\nL:1/4\nK:C\nC D E F | G A B c |]\n");
+  const d = geo.notes.find((each) => Math.abs(each.time - 0.25) < 1e-6);
+  await p.mouse.click(d.head + 3, d.y);
+  await p.keyboard.press("Shift+End");
+  assert.deepEqual(
+    await p.evaluate(() => {
+      const view = window.composer.view;
+      return view.state.selection.ranges.map((r) => view.state.sliceDoc(r.from, r.to));
+    }),
+    ["D E F | G A B c"],
+    "Shift End takes the rest of the line",
+  );
+  // 11. Play selection over the endings alone: as written, said so.
+  geo = await put(jumps);
+  await choose([[jumps.indexOf("G A B c"), jumps.indexOf("c B A G") + 7]]);
+  await p.keyboard.press("Control+Alt+Enter");
+  await statusSays(/as written/);
+  await p.keyboard.press("Control+Period");
+  await ctx.close();
+  console.log(
+    `Composer: selection hardening round 4: Cut then Paste gives the text back over ${cycles} bars and runs (repeats, endings, D.S. al Coda, fields, tuplets); Delete and Cut keep the play order; fields, D.S. and endings kept; voiced paste leaves other places and picks by clef; Repeat, Triplet, Duplicate, Bar line, Second voice, Shift End and Play selection keep the structure: passed`,
   );
 }
 

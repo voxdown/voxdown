@@ -5419,8 +5419,12 @@ void start();
   scoreIndex: () => scoreIndex,
   /** What the player schedules: each note's time, MIDI pitch and track, for checks. */
   timelineNotes: () =>
-    timeline?.notes.map((note) => ({ time: note.time, pitch: note.pitch, track: note.track })) ??
-    [],
+    timeline?.notes.map((note) => ({
+      time: note.time,
+      pitch: note.pitch,
+      track: note.track,
+      start: note.start,
+    })) ?? [],
   breaks: () => breaks,
   /** Where a page point reads in the music: its note and how far it reached, for checks. */
   hit: (x: number, y: number) => {

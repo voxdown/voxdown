@@ -117,9 +117,8 @@ describe("paste fits the bars around it", () => {
   });
   it("whole bars pasted at the start of a bar add a bar", () => {
     const caret = at(tune, "g a");
-    expect(
-      apply(tune, fitted(pasteKeepingBars(tune, [{ from: caret, to: caret }], "e e e e|"))),
-    ).toBe(`${head}c d e f|e e e e| g a b c'|c' b a g|f e d c|]\n`);
+    // Nothing to fit: the editor's own paste writes it, a whole bar before g.
+    expect(pasteKeepingBars(tune, [{ from: caret, to: caret }], "e e e e|")).toBeNull();
   });
   it("notes pasted over a selection with a bar line keep it", () => {
     const out = apply(tune, fitted(pasteKeepingBars(tune, [span(tune, "e f|g a")], "B B")));

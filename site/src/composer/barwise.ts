@@ -754,7 +754,6 @@ export function pasteKeepingBars(
           extra.push({ from: barAfter.to, to: barAfter.to, insert: ` [M:${reading.meter}]` });
       }
       insert = `${prefix}${opened}${insert}${closing}`;
-      if (closing && after && !/^\s/.test(text.slice(place.to))) insert += " ";
       changed = changed || insert !== clip || place.from !== range.from || extra.length > 0;
     }
     return [{ from: place.from, to: place.to, insert }, ...extra];

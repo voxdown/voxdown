@@ -1197,3 +1197,44 @@ The pieces:
 **First view.** 714 KB, under its 720 KB check. To make room:
 - `problems.ts` loads with the editing modules, and the checks run again when it arrives.
 - The decoration names (`decorations.ts`) load with the first `!` typed, and with the explainer.
+
+### Round 4 fixes (after Codex 8.5 provisional, Claude 7.0)
+
+The theme: every edit keeps the music's structure. Bars stay whole, inline fields and bar-line marks are kept, tuplets and slurs aren't split, endings stay paired, and voices stay in step.
+
+1. and 2. **Cut, Copy and Paste** (`barwise.ts`):
+   - **The clipboard:** Cut and Copy put the same text on it. A run of whole bars carries its closing `|`. A slur end whose pair isn't copied, a tuplet sign without all its notes, a tie to a note outside, and jump marks are left out. Inline fields inside the copied bars are kept.
+   - **Whole bars:**
+     - **Bar lines:** a whole-bar run goes with its bar lines. The one bar line left between its neighbours keeps the repeats and endings they start and end.
+     - **Endings:** a 1st ending cut with its only bar takes the 2nd ending's number too, so the bars after the repeat still play (abcjs never reaches `:|2` without a 1st ending). A whole repeat with its endings, or its body with its 1st ending, goes cleanly. Other cuts across a repeat's signs are refused, saying why.
+     - **Kept in the tune:** inline fields and bar-line marks (segno, coda, D.S., Fine, `"^…"`). Fields and segno/coda go before the bar that follows; D.S. and Fine go after the bar before. Slur ends whose pair stays are kept too.
+   - **Part of a bar** loses only its notes.
+   - **Tuplets and ties:** a tuplet is cut whole or not at all. A tie left pointing at a different note is dropped. Typing over and Backspace keep the same marks, and Backspace that would leave a tuplet short is refused.
+   - **The caret** after a Cut goes where the notes were, as a plain caret (finding 8).
+   - **Paste back:** a Cut pasted back at that caret, nothing changed since, puts back exactly the text that was cut.
+   - **Paste elsewhere:**
+     - whole bars pasted after notes get a `| ` in front;
+     - they lose their own bar line before a bar line (or before a D.S. and its bar line);
+     - pasted in the middle of a bar, they go after it, said so;
+     - copied under another meter, they take theirs, and the place's meter comes back after them;
+     - never inside a tuplet.
+   - **Unit and key conversion** follows the copy's own `[K:]` and `[L:]`.
+   - **Tests:** a property test over every bar and run of bars in four tunes (repeats and endings, D.S. al Coda, inline fields, two lines). It checks the bar lengths and the play order through abcjs after each Cut. Pasted back by rule alone, the tune plays as before. A Copy pasted at every bar line adds whole bars. check-composer step 33 checks Cut then Paste through the app gives the text back exactly.
+3. **One voice selected in more places than the copy has parts:** the first place takes it, and the others are left as they were, said so. A plain copy over several places in one voice does the same.
+4. **A voice the copy lacks** takes one part: the one in that voice's clef (copies now carry clefs on their `V:` lines), else the first. The notice names the rest: "Pasted V:1's part; the copy also had V:2".
+5. **Insert:**
+   - Triplet needs exactly 3 notes in one bar, none already in a tuplet; otherwise it is refused, saying why.
+   - Repeat goes to the bar lines around the selection, merging with them (`|` → `|:`/`:|`, `:|` → `::`, `|]` → `:|]`), and is refused inside an ending. The selection afterwards holds no bar line.
+6. **Duplicate** uses Copy's rules:
+   - It goes after the tuplet the last note is in.
+   - The copy's last note ties on when the next note is the same; the original's tie goes when the copy starts on another note.
+   - A bar ending in a D.S. is duplicated as a bar.
+7. **Endings and play order:** see 1. Step 33 deletes and cuts every bar of the D.S. tune and checks the play order loses exactly that bar's notes.
+8. **After Cut or Delete in the score:** a plain caret (see 1).
+9. **Insert › Bar line and Second voice:**
+   - Bar line over several voices goes into each at the same point (the end of the main range's last note), or is refused, naming the voice with a note sounding across it.
+   - Second voice writes a rest for each bar of the first voice, as long as that bar (pickups and meter changes included), in the tune's unit, and joins `%%score`/`%%staves`.
+10. **Shift+Home/End in the score** grow the selection to the line's first or last note.
+11. **Play selection:** covering where a repeat starts, it plays as the music does (1st ending, repeat, 2nd), its ruler pieces in written time. Otherwise it plays as written, and the status says so.
+
+**First view.** 714 KB, under its 720 KB check. Duplicate moved into `barwise.ts`, loaded with the editor.

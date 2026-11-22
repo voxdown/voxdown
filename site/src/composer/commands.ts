@@ -263,15 +263,24 @@ export function toggleTies(text: string, ranges: Range[], file = indexFile(text)
   // Within one voice, text order is time order.
   const next = (event: MusicEvent) =>
     all.find((each) => each.voice === event.voice && each.from >= event.to);
-  const tied = (event: MusicEvent) => text[event.to] === "-";
+  // A tie after the note or chord, or one on every tone inside a chord (`[C-E-]2`): tied.
+  const ties = (event: MusicEvent): number[] => {
+    if (text[event.to] === "-") return [event.to];
+    if (text[event.from] !== "[") return [];
+    const inner = [...text.slice(event.from, event.to).matchAll(/-/g)].map(
+      (match) => event.from + (match.index ?? 0),
+    );
+    return inner.length && inner.length >= event.notes.length ? inner : [];
+  };
+  const tied = (event: MusicEvent) => ties(event).length > 0;
   const toggle = (targets: MusicEvent[]): Change[] => {
     const allTied = targets.every(tied);
     return targets
       .filter((event) => (allTied ? tied(event) : !tied(event)))
-      .map((event) =>
+      .flatMap((event) =>
         allTied
-          ? { from: event.to, to: event.to + 1, insert: "" }
-          : { from: event.to, to: event.to, insert: "-" },
+          ? ties(event).map((at) => ({ from: at, to: at + 1, insert: "" }))
+          : [{ from: event.to, to: event.to, insert: "-" }],
       );
   };
   const selected = eventsIn(text, ranges, file).filter((event) => !event.rest);

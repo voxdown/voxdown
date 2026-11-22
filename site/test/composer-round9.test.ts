@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { cutPlan } from "../src/composer/barwise";
-import type { Change } from "../src/composer/commands";
+import { frac } from "../src/composer/abc";
+import { checkBars } from "../src/composer/barcheck";
+import { cutPlan, inOneVoice, lengthsInStep } from "../src/composer/barwise";
+import { type Change, scaleLengths, toggleTies } from "../src/composer/commands";
+import { indexFile } from "../src/composer/tunes";
 
 /* Round 9 (selection hardening): the written rules, conformed to. */
 
@@ -58,5 +61,40 @@ describe("a whole tuplet whose real length can't be drawn keeps its bracket (ite
     expect(
       body(cut(text, [{ from: text.indexOf("(3:2:4"), to: text.indexOf(" c ") + 2 }]).out),
     ).toBe("(3:2:4zzz z e2 d z2|]\n");
+  });
+});
+
+describe("½× on beamed notes (item 6)", () => {
+  it("only the note halved gives up time: CDEF G4 halving C", () => {
+    const text = tune("CDEF G4 | A8 |]");
+    const range = [{ from: text.indexOf("CDEF"), to: text.indexOf("CDEF") + 1 }];
+    const plan = lengthsInStep(
+      text,
+      indexFile(text),
+      scaleLengths(text, range, frac(1, 2)),
+      0.5,
+      "Halve",
+    );
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    const out = apply(text, plan.changes);
+    expect(body(out)).toBe("C/ z/DEF G4 | A8 |]\n");
+    expect(checkBars(out, indexFile(out).tunes[0] as never, indexFile(out))).toEqual([]);
+  });
+});
+
+describe("typing and step entry write in one voice, all ranges together (items 7, 8)", () => {
+  const two = tune("V:1\nC2 D2 E2 F2|]\nV:2\nC,4 E,4|]", "4/4", "1/8", "%%score (1 2)\n");
+  it("a range in each of two voices is refused", () => {
+    expect(inOneVoice(two, [at(two, "C2 D2 E2 F2"), at(two, "C,4 E,4")])).toBe(false);
+    expect(inOneVoice(two, [at(two, "C2 D2"), at(two, "E2 F2")])).toBe(true);
+  });
+});
+
+describe("Alt+T on a chord tied inside (item 17)", () => {
+  it("[C-E-]2 toggles the ties off, never a second tie", () => {
+    const text = tune("[C-E-]2 [CE]2 z4|]");
+    const from = text.indexOf("[C-E-]2");
+    const tie = toggleTies(text, [{ from, to: from + 7 }]);
+    expect(body(apply(text, tie.changes))).toBe("[CE]2 [CE]2 z4|]\n");
   });
 });

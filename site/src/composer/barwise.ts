@@ -3193,8 +3193,10 @@ export function lengthsInStep(
     bar.total += length;
   }
   const several = new Set(bars.map((bar) => bar.voice)).size > 1;
+  // (A length is written after its note's letter: a change at a note's end, which is where the
+  // next beamed note starts, is this note's, never the next one's.)
   const changed = (event: Event) =>
-    changes.some((change) => change.from >= event.from && change.from <= event.to);
+    changes.some((change) => change.from > event.from && change.from <= event.to);
   const out = [...changes];
   let rests = 0;
   for (const bar of bars) {
@@ -3223,7 +3225,12 @@ export function lengthsInStep(
       const written = restPieces(position, -delta, beatOf(bar.meter), false).map(
         (piece) => `${letter}${lengthText(piece, last.unit)}`,
       );
-      out.push({ from: at, to: at, insert: ` ${written.join(" ")}` });
+      // (After the note's own new length, when that change ends where the rest goes.)
+      const itself = out.find((change) => change.to === at && change.from > last.from);
+      if (itself) {
+        const index = out.indexOf(itself);
+        out[index] = { ...itself, insert: `${itself.insert} ${written.join(" ")}` };
+      } else out.push({ from: at, to: at, insert: ` ${written.join(" ")}` });
       rests += 1;
     }
   }
@@ -3393,4 +3400,17 @@ function rebar(part: string, unit: Fraction, meter: string, full: number): strin
   const whole = !items.length;
   if (items.length) close();
   return `${bars.join(" | ")}${whole ? " |" : ""}`;
+}
+
+/**
+ * Whether a selection's notes are in one voice, all its ranges together (round 9, items 7 and 8):
+ * typing and step entry write in one voice, so a range in each of two voices is refused too.
+ */
+export function inOneVoice(
+  text: string,
+  ranges: Range[],
+  file: FileIndex = indexFile(text),
+): boolean {
+  const selected = ranges.filter((range) => range.to > range.from);
+  return new Set(selectedNotes(text, selected, file).map((each) => each.event.voice)).size <= 1;
 }

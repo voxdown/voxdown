@@ -1082,11 +1082,8 @@ function replaceMusic(target: EditorView, typed: string): boolean {
   const mixed =
     parts.length !== whole.length ||
     parts.some((part, at) => part.from !== whole[at]?.from || part.to !== whole[at]?.to);
-  // (A range in each voice, as the score selects, is typed into each: one range across voices,
-  // or reaching lyrics or V: lines, isn't.)
-  const crosses = parts.some(
-    (part) => new Set(selectedNotes(doc, [part], file).map((each) => each.event.voice)).size > 1,
-  );
+  // (One voice, all the ranges together: a range in each of two voices is refused too; round 9.)
+  const crosses = !barwise.inOneVoice(doc, parts, file);
   if (notes.length && (crosses || mixed)) {
     sayAboutSelection(
       "Typing replaces notes in one voice: this selection crosses voices or other lines. Select within one voice, or press Delete to clear each voice's notes.",

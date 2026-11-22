@@ -12,7 +12,7 @@ import { StateEffect, StateField } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { type Fraction, frac, lineKind, mul, parseKey, value } from "./abc";
 import { barAt } from "./barcheck";
-import { overwriteForward, repitchTo, replaceKeepingBars } from "./barwise";
+import { inOneVoice, overwriteForward, repitchTo, replaceKeepingBars } from "./barwise";
 import { dockPanel, undockPanel } from "./dock";
 import { selectedNotes } from "./selected";
 import {
@@ -185,13 +185,19 @@ function stepOver(
     line = end + 1;
   }
   const picked = selectedNotes(text, [main], file).filter((each) => each.whole);
-  if (new Set(picked.map((each) => each.event.voice)).size > 1)
+  // (Every selected range together: one in each of two voices is refused too; round 9.)
+  if (!inOneVoice(text, [...view.state.selection.ranges], file))
     return {
       refused:
         "Step entry writes in one voice: this selection crosses voices. Select within one voice.",
     };
   const reading = readingAt(text, file, main.from);
-  if (!picked.length || !reading) return null;
+  // (Over something it can't write over, it says why rather than doing nothing; round 9.)
+  if (!picked.length || !reading)
+    return {
+      refused:
+        "Step entry writes over notes or rests: this selection has none. Select notes in one voice's music, or put the caret where the step goes.",
+    };
   const sign = stepText(pitches, frac(1), reading).replace(/\d+$/, "");
   if (lengthIndex === KEEP && picked.length === 1) {
     const pitched = repitchTo(text, [main], sign, file);
@@ -211,8 +217,13 @@ function stepOver(
   const own = first.event.duration;
   const written = stepText(pitches, lengthIndex === KEEP ? own : length(), reading);
   const over = overwriteForward(text, file, main, written);
-  if (!over) return null;
+  if (!over)
+    return {
+      refused: `Step entry can't write ${written} over this selection: select notes or rests in one voice's music.`,
+    };
   if ("refused" in over) return over;
+  // (The other places selected, counted before the step selects the next note.)
+  const others = view.state.selection.ranges.filter((range) => range !== main && !range.empty);
   const set = view.state.changes(over.changes);
   const after = set.apply(view.state.doc).toString();
   const head = (over.changes[0]?.from ?? main.from) + written.length;
@@ -227,7 +238,6 @@ function stepOver(
     userEvent: "input.midi",
     scrollIntoView: true,
   });
-  const others = view.state.selection.ranges.filter((range) => range !== main && !range.empty);
   const rest = over.said.replace(
     /^Pasted over the selection from its first note( in V:\S+)?;? ?/,
     "",

@@ -22,6 +22,7 @@ import {
   parseUnit,
   tokenizeMusic,
 } from "./abc";
+import { keyLabel } from "./clip-convert";
 import { type Change, type Range, barAround, barLine, passagesOf } from "./commands";
 import { markOf } from "./playorder";
 import { type Picked, selectedNotes } from "./selected";
@@ -552,7 +553,15 @@ export function cutPlan(
   const structure = structureOf(text, file, (selected[0] as Range).from);
   // Some voices only, in a tune with several: rests, so the voices stay in step.
   const someVoices = restsInstead(text, selected, file);
-  if (someVoices) return someVoices;
+  if (someVoices && "changes" in someVoices)
+    return finishCut(
+      text,
+      selected,
+      file,
+      someVoices.changes,
+      [{ at: someVoices.caret, offset: 0 }],
+      someVoices.said,
+    );
   const picked = chosen(text, selected, file);
   const changes: Change[] = [];
   const said: string[] = [];
@@ -634,6 +643,23 @@ export function cutPlan(
             (token.text === "(" ? after : before).push(token.text);
         }
       after.unshift(...fields.values());
+      // A D.S. and its segno (and its coda) both in what goes: the jump goes with them.
+      const marks = run
+        .flatMap((segment) => segment.tokens)
+        .map((token) => ({ token, mark: jumpMark(token) }));
+      const ds = marks.find(({ mark }) => mark?.kind === "jump" && mark.jump === "D.S.");
+      const segno = marks.find(({ mark }) => mark?.kind === "segno");
+      if (ds && segno) {
+        const gone = [ds.token.text, segno.token.text];
+        const until = ds.mark?.kind === "jump" ? ds.mark.until : null;
+        const coda = marks.find(({ mark }) => mark?.kind === "coda");
+        if (until === "coda" && coda) gone.push(coda.token.text);
+        for (const list of [before, after])
+          for (const mark of gone) {
+            const at = list.indexOf(mark);
+            if (at >= 0) list.splice(at, 1);
+          }
+      }
       let bar: string;
       const innerBars = line.tokens
         .filter((token) => token.kind === "bar" && token.from >= first.to && token.to <= end.from)
@@ -715,6 +741,18 @@ export function cutPlan(
     )
     .map((each) => each.event.from);
   changes.push(...lyricsFor(text, file, goneNotes, []));
+  return finishCut(text, selected, file, changes, carets, said);
+}
+
+/** A cut's edit made: the text after it, its emptied lines dropped, as one change and a caret. */
+function finishCut(
+  text: string,
+  selected: Range[],
+  file: FileIndex,
+  changes: Change[],
+  carets: { at: number; offset: number }[],
+  said: string[],
+): CutPlan {
   // The edit, then the caret in the text after it.
   const fine = changes
     .sort((a, b) => a.from - b.from || a.to - b.to)
@@ -863,6 +901,11 @@ export function pasteKeepingBars(
   if (!music) return null;
   for (const range of ranges) {
     const structure = structureOf(text, file, range.from);
+    if (range.to > range.from && splitTuplet(structure, [range]))
+      return {
+        refused:
+          "Pasting over part of a tuplet would leave it short: select all of its notes, or none.",
+      };
     const within = structure.tuplets.find(
       ({ notes }) =>
         notes.length > 1 &&
@@ -1149,6 +1192,12 @@ export function duplicate(
   ranges: Range[],
   file: FileIndex = indexFile(text),
 ): DuplicatePlan {
+  // Duplicate copies music: a text selection across other voices' lines or lyrics is refused.
+  if (ranges.some((range) => range.to > range.from && !inMusic(text, [range], file)))
+    return {
+      refused:
+        "Duplicate copies one voice's music: this selection crosses other lines (voices, lyrics or fields). Select within one voice, or in each voice's music.",
+    };
   const changes: Change[] = [];
   const copies: Change[] = [];
   const said: string[] = [];
@@ -1165,6 +1214,18 @@ export function duplicate(
   );
   let refused: string | null = null;
   const place = (body: Range, bodies: Range[]) => {
+    // Bars with a repeat's signs or an ending inside them aren't duplicated (their copy would
+    // scramble the play order); a whole repeat is.
+    for (const each of bodies) {
+      const inner = tokenizeMusic(text.slice(each.from, each.to), each.from).filter(
+        (token) => token.kind === "bar" && !/^\|\|?$/.test(token.text),
+      );
+      if (inner.length && !copyText(text, each, file).startsWith("|:")) {
+        refused =
+          "Bars with a repeat's sign or an ending inside them aren't duplicated: duplicate the bars before or after it, or the whole repeat.";
+        return;
+      }
+    }
     const structure = structureOf(text, file, body.from);
     const pieces = bodies.map((each) => copyText(text, each, file).replace(/\s*\|$/, ""));
     const bar = wholeBarsEnd(text, body);
@@ -1228,6 +1289,21 @@ export function duplicate(
       if (tie && pitchOf(firstNote) !== pitchOf(lastNote))
         changes.push({ from: tie.from, to: tie.to, insert: "" });
       insertAt = at;
+    }
+    // The copy is written under the fields its notes were (a key or unit changed inside them is
+    // in force after them, where it goes): those that differ there come first.
+    const fromState = readingAt(text, file, (bodies[0] as Range).from);
+    const thereState = readingAt(text, file, insertAt);
+    if (fromState && thereState) {
+      const fields: string[] = [];
+      if (fromState.key.name !== thereState.key.name) fields.push(`[K:${keyLabel(fromState.key)}]`);
+      if (fromState.unit.num * thereState.unit.den !== thereState.unit.num * fromState.unit.den)
+        fields.push(`[L:${fromState.unit.num}/${fromState.unit.den}]`);
+      if (fromState.meter !== thereState.meter) fields.push(`[M:${fromState.meter}]`);
+      if (fields.length) {
+        const lead = /^(\s*\|?\s*)/.exec(insert)?.[1] ?? "";
+        insert = `${lead}${fields.join("")} ${insert.slice(lead.length)}`;
+      }
     }
     const copy = { from: insertAt, to: insertAt, insert };
     changes.push(copy);
@@ -1884,7 +1960,8 @@ export function pasteInStep(
     (voices[0] as string);
   const byFrom = new Map(times.map((each) => [each.from, each]));
   const whole = /\|[ \t]*$/.test(clip);
-  if (picked.length > 1) {
+  // A clicked note takes whole bars in at it; notes over it, from it, as over a selection.
+  if (picked.length > 1 || (picked.length === 1 && !whole)) {
     // Over a selection: overwrite it.
     const first = picked[0] as Picked;
     const last = picked[picked.length - 1] as Picked;

@@ -134,7 +134,7 @@ const SHEET: { title: string; rows?: [string, string][]; example?: string; note?
       ["Score: Home End", "first / last note of the line"],
       ["Score: Shift ← →", "select by note; Space plays, Enter goes to the text"],
     ],
-    note: "A region selects its text in each voice. Play, loop, transpose, change lengths, copy or delete it.",
+    note: "A region selects its text in each voice. Play, loop, transpose, change lengths, copy or delete it. Delete or Backspace over less than whole bars leaves rests as long as the notes (as in MuseScore), so every bar keeps its length; whole bars in every voice go, bar lines and all. Paste over a selection in one voice of several overwrites it; at a caret it goes in, with rests in the other voices.",
   },
   {
     title: "Finding a melody",

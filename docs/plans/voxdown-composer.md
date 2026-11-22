@@ -1434,3 +1434,5 @@ The cheat sheet says so.
 - **Step 37:** Sort with a selection, a note re-pitched by typing, melody results after an edit, and MIDI steps over a selection.
 - **Step 3:** the reload's Undo message.
 - **Steps 34–36:** follow the refined rules (rests by the beat, later notes kept).
+
+**First view.** 712 KB, under its 720 KB check.

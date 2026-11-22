@@ -6477,6 +6477,142 @@ console.log(
   );
 }
 
+/* 36. Selection hardening, round 7: what the regression replay found. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      if (view.state.doc.toString() !== x)
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    await p.waitForFunction((x) => x.includes(window.composer.scoreIndex()?.source ?? "\u0000"), t);
+    await p.waitForTimeout(400);
+  };
+  const choose = (list) =>
+    p.evaluate((list) => {
+      const view = window.composer.view;
+      const S = view.state.selection.constructor;
+      view.dispatch({ selection: S.create(list.map(([a, b]) => S.range(a, b))) });
+      view.focus();
+    }, list);
+  const of = (text, part, nth = 0) => {
+    let at = text.indexOf(part);
+    for (let n = 0; n < nth; n++) at = text.indexOf(part, at + 1);
+    return [at, at + part.length];
+  };
+  const says = (id, pattern) =>
+    p.waitForFunction(
+      ([id, source]) => new RegExp(source).test(document.getElementById(id).textContent),
+      [id, pattern.source],
+    );
+  const changed = (was) =>
+    p.waitForFunction((w) => window.composer.view.state.doc.toString() !== w, was);
+  const toScore = () => p.evaluate(() => document.getElementById("score-scroll").focus());
+  // 9. Ctrl+Shift+D on a jig with figures repeated duplicates (the search's Ctrl+D doesn't).
+  const jig = "X:1\nT:Jig\nM:6/8\nL:1/8\nK:D\n|:dAF DFA|BGB AFA|dAF DFA|GBE FED:|\n";
+  await put(jig);
+  await choose([of(jig, "dAF DFA")]);
+  await p.keyboard.press("Control+Shift+D");
+  await changed(jig);
+  assert.match(
+    await docText(p),
+    /\|:dAF DFA\|dAF DFA\|BGB AFA\|/,
+    "Ctrl+Shift+D duplicates the bar",
+  );
+  assert.equal(
+    await p.evaluate(() => window.composer.view.state.selection.ranges.length),
+    1,
+    "not the next match selected",
+  );
+  // 7. A repeat's body with its 1st ending, Delete in the score: the 2nd ending plays once.
+  const sr = "X:1\nT:SR\nM:6/8\nL:1/8\nK:G\nGAG GAB|:E3 B3|EBE AFD|1 G3 FGA:|2 BAG FE2|d3 d3|]\n";
+  await put(sr);
+  await choose([[sr.indexOf("E3 B3"), sr.indexOf("FGA") + 3]]);
+  await toScore();
+  await p.keyboard.press("Delete");
+  await changed(sr);
+  assert.equal(await docText(p), "X:1\nT:SR\nM:6/8\nL:1/8\nK:G\nGAG GAB| BAG FE2|d3 d3|]\n");
+  await says("notice", /2nd ending's bars now play once/);
+  // 11. A note letter in the score says where notes are typed; 13. Escape leaves no stale count.
+  await choose([of(sr, "GAG GAB")]);
+  await toScore();
+  await p.keyboard.press("c");
+  await says("explain", /Press Enter to edit in the text/);
+  await p.keyboard.press("Escape");
+  await p.waitForFunction(
+    () => !/selected/.test(document.getElementById("score-live").textContent),
+  );
+  // 4. A text selection across the hymn's four voices: each voice's line its own, in step.
+  const hymn =
+    "X:1\nT:Old Hundredth\nM:2/2\nL:1/4\n%%score (S A) (T B)\nV:S clef=treble\nV:A clef=treble\nV:T clef=bass\nV:B clef=bass\nK:G\n[V:S] G2 | G F E D | G2 A2 | B2 B2 | B A G c | B2 A2 | G2 |]\n[V:A] D2 | D D C B, | D2 D2 | D2 D2 | G F G E | D2 D2 | D2 |]\n[V:T] B,2 | B, A, G, G, | B,2 C2 | B,2 G,2 | D D B, C | D2 C2 | B,2 |]\n[V:B] G,2 | G, D, E, G, | G,2 F,2 | G,2 G,2 | G, D, E, C, | D,2 D,2 | G,,2 |]\n";
+  await put(hymn);
+  await choose([[hymn.indexOf("G2 A2"), hymn.indexOf("| G,2 G,2") + 1]]);
+  await p.keyboard.press("Delete");
+  await changed(hymn);
+  const voiced = (await docText(p)).split("\n").filter((line) => line.includes("[V:"));
+  assert.deepEqual(
+    voiced.map((line) => line.slice(0, 5)),
+    ["[V:S]", "[V:A]", "[V:T]", "[V:B]"],
+    "every voice marker first on its own line",
+  );
+  assert.equal(new Set(voiced.map((line) => line.split("|").length)).size, 1, "voices in step");
+  // 1. A copy longer than the notes it's pasted over: forward, the other voice as it was.
+  const trio =
+    "X:1\nT:t\nM:3/4\nL:1/8\n%%score 1 2\nK:F\nV:1\nc4 f2|e4 g2|f2 a2 c'2|\nV:2\nA4 c2|c4 e2|c2 f2 a2|\n";
+  await put(trio);
+  await p.evaluate(() => navigator.clipboard.writeText("f4 g2|"));
+  await choose([[trio.indexOf("A4 c2") + 3, trio.indexOf("A4 c2") + 5]]);
+  await p.keyboard.press("Control+v");
+  await changed(trio);
+  assert.match(
+    await docText(p),
+    /V:1\nc4 f2\|e4 g2\|f2 a2 c'2\|\nV:2\nA4 f2-\|f2 g2 z2\|c2 f2 a2\|/,
+  );
+  await says("notice", /ran on over 2 more notes, replaced/);
+  // 5. A two-voice copy on a clicked note of the duet (%%score after K:): both voices.
+  const duet =
+    'X:1\nT:Fiddle Duet\nM:2/4\nL:1/8\nK:D\n%%score (1 2)\nV:1 name="Fiddle 1"\nV:2 name="Fiddle 2"\n[V:1] d2 fd | ed cB | A2 FA | d4 :|\n[V:2] F2 AF | GF ED | C2 DC | D4 :|\n';
+  await put(duet);
+  await p.evaluate(() => navigator.clipboard.writeText("V:1\ned cB |\nV:2\nGF ED |\n"));
+  await choose([of(duet, "d4")]);
+  await toScore();
+  await p.keyboard.press("Control+v");
+  await changed(duet);
+  assert.match(await docText(p), /\| A2 FA \| ed cB \|\s*d4 :\|/);
+  assert.match(await docText(p), /\| C2 DC \| GF ED \|\s*D4 :\|/);
+  // 12. Halved in one voice of two: a rest, in step.
+  const two = "X:1\nT:t\nM:4/4\nL:1/4\n%%score 1 2\nK:C\nV:1\nc2 d2|e4|]\nV:2\nC2 D2|E4|]\n";
+  await put(two);
+  await choose([of(two, "c2 d2")]);
+  await p.keyboard.press("Alt+BracketLeft");
+  await changed(two);
+  assert.match(await docText(p), /V:1\nc d z2\|e4\|\]/);
+  // 13. Undo says so, in place of what the edit said.
+  await p.keyboard.press("Control+z");
+  await says("explain", /^Undone\.$/);
+  // 6. Bar lines typed into a second voice's placeholders: no bars of nothing.
+  const solo = "X:1\nT:Solo\nM:4/4\nL:1/8\n%%score 1\nK:C\nV:1\nc2 d2 e2 f2|g8|]\n";
+  await put(solo);
+  await menu("insert", "Second voice", p);
+  await changed(solo);
+  await p.keyboard.type("c2 d2 e2 f2 | g8 |");
+  await p.waitForTimeout(300);
+  const second = (await docText(p)).split("V:2")[1]?.split("\n")[1] ?? "";
+  assert(!/\|\s*\|/.test(second), `no bar of nothing: ${second}`);
+  assert.match(second, /^c2 d2 e2 f2 ?\| ?g8 ?\|/, second);
+  await ctx.close();
+  console.log(
+    "Composer: selection hardening round 7: Duplicate on a jig, a repeat's body and 1st ending deleted, the score's typing hint and Escape, the hymn's voices across a text delete, a paste overwriting forward, the duet's voices pasted, halved in step, Undone said, bar lines typed into a second voice: passed",
+  );
+}
+
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");
 console.log("Composer: no console errors and no requests leaving the site: passed");

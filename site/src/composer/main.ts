@@ -1012,6 +1012,16 @@ function typePlaceholder(target: EditorView, typed: string): boolean {
       return true;
     }
   }
+  // (A space typed where one is already, before a placeholder's bar line or after it: over it.)
+  if (
+    main.empty &&
+    typed === " " &&
+    doc[main.head] === " " &&
+    barwise.overBarLine(doc, main.head, placeholderBars) !== null
+  ) {
+    target.dispatch({ selection: { anchor: main.head + 1 }, userEvent: "select" });
+    return true;
+  }
   if (
     main.empty &&
     typed === " " &&

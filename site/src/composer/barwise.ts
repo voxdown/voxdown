@@ -716,7 +716,13 @@ export function cutPlan(
       (/\|[\]:0-9]*$/.test(previous) || lineKind(previousLine, true) !== "music");
     const touched = lineFrom <= hi && end >= lo;
     if (touched && (empty || stray) && lineKind(content, true) !== "field") {
-      const to = end < after.length ? end + 1 : end;
+      let to = end < after.length ? end + 1 : end;
+      // A music line that goes takes its w: lines (their syllables were its notes').
+      if (lineKind(content, true) !== "lyrics")
+        while (after.startsWith("w:", to)) {
+          const next = after.indexOf("\n", to);
+          to = next < 0 ? after.length : next + 1;
+        }
       const from = to === end && lineFrom > 0 ? lineFrom - 1 : lineFrom;
       after = after.slice(0, from) + after.slice(to);
       if (caret >= to) caret -= to - from;

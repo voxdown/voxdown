@@ -4915,8 +4915,9 @@ console.log(
   for (const [keys, left] of [
     [["Control+x"], "|:dfaf g:|"],
     [["Delete"], "|:dfaf g:|"],
-    [["Enter", "Delete"], "|:dfaf g| :|"],
-    [["Enter", "Backspace"], "|:dfaf g| :|"],
+    // Round 5: the text's Delete and Backspace are the score's Delete (one plan).
+    [["Enter", "Delete"], "|:dfaf g:|"],
+    [["Enter", "Backspace"], "|:dfaf g:|"],
   ]) {
     await put(reel);
     await pull(...span);
@@ -4942,7 +4943,9 @@ console.log(
   await p.keyboard.press("Backspace");
   assert.equal(
     await docText(p),
-    "X:1\nT:Words\nM:4/4\nL:1/4\nK:C\n |\nw: one two three four\n% important comment\n |\nw: five six se-ven eight\n",
+    // Round 5: Backspace is the score's Delete: the music's lines go, with the w: lines under
+    // them (their syllables were those notes'); the comment stays.
+    "X:1\nT:Words\nM:4/4\nL:1/4\nK:C\n% important comment\n",
     "Backspace deletes the music, not the words, the comment or the bar lines",
   );
   // Ctrl/⌘ A in the score: every voice's music, no header.
@@ -5426,10 +5429,11 @@ console.log(
   await p.mouse.click(f.head + 3, f.y);
   assert.deepEqual(await texts(), ["f"], "a click on f takes f, not its bar line");
   await p.keyboard.press("Backspace");
+  // (Round 5: in one voice of two, a rest as long, so the voices stay in step.)
   assert.match(
     await docText(p),
-    /\nc d e \|g a b c'\|/,
-    "Backspace in the score keeps bar 1's bar line",
+    /\nc d e z\|g a b c'\|/,
+    "Backspace in the score of one voice's note leaves a rest, bar 1's bar line kept",
   );
   await p.keyboard.press("Control+z");
   await pull(
@@ -5464,8 +5468,8 @@ console.log(
   await p.keyboard.press("Control+x");
   assert.match(
     await docText(p),
-    /\nc d e f\|c' b a g\|f e d c\|\]\n/,
-    "Cut of a whole bar takes it out with one bar line",
+    /\nc d e f\|z z z z\|c' b a g\|f e d c\|\]\n/,
+    "Cut of a whole bar in one voice of two leaves rests (round 5: voices in step)",
   );
   assert.equal(
     await p.evaluate(() => navigator.clipboard.readText()),
@@ -5481,7 +5485,7 @@ console.log(
   await changed(doc);
   assert.match(
     await docText(p),
-    /\nc d e f\|c' b a g\|g a b c'\|f e d c\|\]\n/,
+    /\nc d e f\|z z z z\|c' b a g\|g a b c'\|f e d c\|\]\n/,
     "pasted back at a bar's start: a whole bar, no double bar line",
   );
   // 2. A copy of four parts in interleaved blocks: a voice's parts joined; a header caret refused.
@@ -5807,6 +5811,9 @@ console.log(
     endings:
       "X:1\nT:Endings\nM:3/4\nL:1/4\nK:D\n|: D E F | G A B |1 c d e | f g a :|2 B c d | A3 |]\n",
     triplets: "X:1\nT:Triplets\nM:4/4\nL:1/8\nK:C\n(3cde (3fga b2 c'2 | d'2 (c'2 b2) a2 | g8 |]\n",
+    // Round 5: repeats and endings across line breaks.
+    morrison:
+      "X:3\nT:Morrison's\nM:6/8\nL:1/8\nK:Edor\n|:E3 B3|EBE AFD|EDE B3|dcB AFD|\nE3 B3|EBE AFD|G3 FGA|1 BAG FED:|2 BAG FE2||\n",
   };
   /** The drawn bars of voice 1: each bar's first and last note. */
   const barsOf = async () =>
@@ -6026,6 +6033,216 @@ console.log(
   await ctx.close();
   console.log(
     `Composer: selection hardening round 4: Cut then Paste gives the text back over ${cycles} bars and runs (repeats, endings, D.S. al Coda, fields, tuplets); Delete and Cut keep the play order; fields, D.S. and endings kept; voiced paste leaves other places and picks by clef; Repeat, Triplet, Duplicate, Bar line, Second voice, Shift End and Play selection keep the structure: passed`,
+  );
+}
+
+/* 34. Selection hardening, round 5: what a musician expects. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      if (view.state.doc.toString() !== x)
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    await p.waitForFunction((x) => x.includes(window.composer.scoreIndex()?.source ?? "\u0000"), t);
+    await p.waitForTimeout(400);
+    return p.evaluate(() => window.composer.geometry());
+  };
+  const choose = (list, main = list.length - 1) =>
+    p.evaluate(
+      ([list, main]) => {
+        const view = window.composer.view;
+        const S = view.state.selection.constructor;
+        view.dispatch({
+          selection: S.create(
+            list.map(([a, b]) => S.range(a, b)),
+            main,
+          ),
+        });
+        view.focus();
+      },
+      [list, main],
+    );
+  const of = (text, part, nth = 0) => {
+    let at = text.indexOf(part);
+    for (let n = 0; n < nth; n++) at = text.indexOf(part, at + 1);
+    return [at, at + part.length];
+  };
+  const settled = (was) =>
+    p.waitForFunction((w) => window.composer.view.state.doc.toString() !== w, was).catch(() => {});
+  const says = (id, pattern) =>
+    p.waitForFunction(
+      ([id, source]) => new RegExp(source).test(document.getElementById(id).textContent),
+      [id, pattern.source],
+    );
+  const selected = () =>
+    p.evaluate(() => {
+      const view = window.composer.view;
+      return view.state.selection.ranges
+        .filter((r) => !r.empty)
+        .map((r) => view.state.sliceDoc(r.from, r.to));
+    });
+  // 1. Backspace over a repeat's notes in the text: no fused signs, the repeat goes as one.
+  const reel = "X:1\nT:Reel\nM:3/4\nL:1/8\nK:G\nGAB|:EBE AFD:|G3 G3|]\n";
+  await put(reel);
+  await choose([of(reel, "EBE AFD")]);
+  await p.keyboard.press("Backspace");
+  let doc = await docText(p);
+  assert.doesNotMatch(doc, /\|::\||\|:\||::\|/, "no bar lines fused into new signs");
+  assert.match(doc, /\nGAB\|G3 G3\|\]\n/, "the repeat went with its notes");
+  // 2. Copy in the score keeps the keys there: Delete then acts as the score's Delete.
+  const two = "X:1\nT:Two\nM:4/4\nL:1/4\nK:C\nc d e f|g a b c'|c' b a g|f e d c|]\n";
+  let geo = await put(two);
+  const g = geo.notes.find((each) => Math.abs(each.time - 1) < 1e-6);
+  await p.mouse.click(g.head + 3, g.y);
+  await p.keyboard.down("Shift");
+  const c = geo.notes.find((each) => Math.abs(each.time - 1.75) < 1e-6);
+  await p.mouse.click(c.head + 3, c.y);
+  await p.keyboard.up("Shift");
+  await p.keyboard.press("Control+c");
+  assert.equal(
+    await p.evaluate(() => document.activeElement?.id),
+    "score-scroll",
+    "after Ctrl C the score still has the keys",
+  );
+  await p.keyboard.type("A");
+  assert.equal(await docText(p), two, "a letter typed in the score doesn't replace the notes");
+  await p.keyboard.press("Delete");
+  await settled(two);
+  assert.match(
+    await docText(p),
+    /\nc d e f\|c' b a g\|f e d c\|\]\n/,
+    "Delete is the score's: the bar goes whole",
+  );
+  await says("score-live", /Deleted 4 notes/);
+  // 8. The live region says the new state once the score is redrawn.
+  await p.waitForFunction(() =>
+    /Deleted 4 notes\. /.test(document.getElementById("score-live").textContent),
+  );
+  // 3. Crescendo then f over twelve notes: one hairpin and one f, said so.
+  const twelve = "X:1\nT:Marks\nM:4/4\nL:1/8\nK:G\nGABc dBAG|FGAB cAGF|EFGA BGFE|]\n";
+  await put(twelve);
+  for (const label of ["Crescendo — over the selection", "f — loud"]) {
+    await choose([[twelve.indexOf("GABc"), twelve.indexOf("|]")]]);
+    doc = await docText(p);
+    await p.keyboard.press("Alt+d");
+    await p.getByRole("menuitem", { name: label }).click();
+    await settled(doc);
+  }
+  doc = await docText(p);
+  assert.deepEqual(
+    ["!f!", "!<(!", "!<)!"].map((mark) => doc.split(mark).length - 1),
+    [1, 1, 1],
+    "one f, one hairpin's start and end",
+  );
+  await says("explain", /^f on the first note\./);
+  // 4. Insert › Repeat inside a repeat is refused, saying where it is.
+  const ended =
+    "X:1\nT:Ends\nM:4/4\nL:1/4\nK:C\n|: C D E F | G A B c |[1 d e f g :|[2 c B A G | C4 |]\n";
+  await put(ended);
+  await choose([of(ended, "C D E F")]);
+  await menu("insert", "Repeat", p);
+  await says("explain", /Already inside a repeat \(bars 1–5\)/);
+  assert.equal(await docText(p), ended, "nothing nested");
+  // 5. Moving the Kesh's B part before its A part: Cut, then Paste at the start.
+  const kesh =
+    "X:2\nT:Kesh\nM:6/8\nL:1/8\nK:G\n|:GAG GAB|ABA ABd|edd gdd|edB dBA|\nGAG GAB|ABA ABd|edd gdB|AGF G3:|\n|:BAB dBd|ege dBA|BAB dBG|ABA AGA|\nBAB dBd|ege dBd|gfg aga|bgf g3:|\n";
+  await put(kesh);
+  await choose([[kesh.indexOf("BAB dBd"), kesh.lastIndexOf("g3") + 2]]);
+  await p.keyboard.press("Control+x");
+  doc = await docText(p);
+  assert.equal(
+    doc,
+    kesh.slice(0, kesh.indexOf("|:BAB")),
+    "the B part goes whole, its signs with it",
+  );
+  await p.evaluate(
+    (at) => window.composer.view.dispatch({ selection: { anchor: at } }),
+    doc.indexOf("|:GAG"),
+  );
+  await p.keyboard.press("Control+v");
+  await settled(doc);
+  doc = await docText(p);
+  assert.match(
+    doc,
+    /K:G\n\|:BAB dBd\|[\s\S]*bgf g3::GAG GAB\|/,
+    "B now before A, the repeats joined as ::",
+  );
+  // 6. In the chorale, Delete in the tenor only leaves rests; the bar check finds nothing.
+  const hymn =
+    "X:1\nT:Old Hundredth\nM:2/2\nL:1/4\n%%score (S A) (T B)\nV:S clef=treble\nV:A clef=treble\nV:T clef=bass\nV:B clef=bass\nK:G\n[V:S] G2 | G F E D | G2 A2 | B2 B2 |]\nw: All peo-ple that on earth do dwell,\n[V:A] D2 | D D C B, | D2 D2 | D2 D2 |]\n[V:T] B,2 | B, A, G, G, | B,2 C2 | B,2 G,2 |]\n[V:B] G,2 | G, D, E, G, | G,2 F,2 | G,2 G,2 |]\n";
+  await put(hymn);
+  await choose([of(hymn, "B, A, G, G,")]);
+  await p.keyboard.press("Backspace");
+  assert.match(
+    await docText(p),
+    /\[V:T\] B,2 \| z z z z \| B,2 C2/,
+    "the tenor's bar becomes rests",
+  );
+  await says("notice", /Rests in place of the notes, so V:T stays in step/);
+  await p.waitForTimeout(1000);
+  assert.equal(
+    await p.locator("#problems").isHidden(),
+    true,
+    "no problems: the voices are in step",
+  );
+  // 7. and 9. Whole bars pasted over part of a bar go after it; the music pasted is selected.
+  await put(two);
+  await p.evaluate(() => navigator.clipboard.writeText("e e e e|"));
+  await choose([of(two, "a b")]);
+  await p.keyboard.press("Control+v");
+  await settled(two);
+  assert.match(
+    await docText(p),
+    /\|g a b c'\| e e e e\|c' b a g\|/,
+    "after the bar, which stays whole",
+  );
+  assert.deepEqual(await selected(), ["e e e e"], "the pasted notes are selected");
+  // 10. Duplicate selects only the copy.
+  await put(two);
+  await choose([of(two, "c' b a g")]);
+  await p.keyboard.press("Control+Shift+D");
+  await settled(two);
+  assert.deepEqual(await selected(), ["c' b a g"], "the copy is selected");
+  assert.match(await docText(p), /\|c' b a g\|c' b a g\|f e d c/, "after the bar it copies");
+  // 11. A tune pasted right after music gets its blank line.
+  await put(two);
+  await p.evaluate(() => navigator.clipboard.writeText("X:2\nT:Next\nK:C\nG A B c|]\n"));
+  await p.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    view.focus();
+  });
+  await p.keyboard.press("Control+v");
+  await settled(two);
+  assert.equal(
+    await docText(p),
+    `${two}\nX:2\nT:Next\nK:C\nG A B c|]\n`,
+    "a blank line keeps the tunes apart",
+  );
+  // 12. While a selection loops, clicking a note keeps the loop in sight.
+  geo = await put(two);
+  await choose([of(two, "g a b c'")]);
+  await p.keyboard.press("Control+Alt+Enter");
+  await p.waitForFunction(() => window.composer.player.status === "playing");
+  await p.keyboard.press("Control+Shift+L");
+  await p.waitForFunction(() => window.composer.player.loopingRegion);
+  const d = geo.notes.find((each) => Math.abs(each.time - 0.25) < 1e-6);
+  await p.mouse.click(d.head + 3, d.y);
+  await p.waitForFunction(() => document.querySelectorAll(".score-band.loop").length > 0);
+  await p.keyboard.press("Control+Shift+L");
+  await p.keyboard.press("Control+Period");
+  await p.waitForFunction(() => document.querySelectorAll(".score-band.loop").length === 0);
+  await ctx.close();
+  console.log(
+    "Composer: selection hardening round 5: Backspace over a repeat, the score keeping its keys, marks placed by kind, no nested repeats, the Kesh's parts swapped, the chorale's voices in step, bars pasted after a part-bar selection, pasted and duplicated notes selected, tunes kept apart, the loop in sight: passed",
   );
 }
 

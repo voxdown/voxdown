@@ -1238,3 +1238,42 @@ The theme: every edit keeps the music's structure. Bars stay whole, inline field
 11. **Play selection:** covering where a repeat starts, it plays as the music does (1st ending, repeat, 2nd), its ruler pieces in written time. Otherwise it plays as written, and the status says so.
 
 **First view.** 714 KB, under its 720 KB check. Duplicate moved into `barwise.ts`, loaded with the editor.
+
+### Round 5 fixes (after Codex 7.5, Claude 6.5): what a musician expects
+
+MuseScore and Dorico are the reference for what Delete, Cut, Paste and the decoration menu do to a passage.
+
+1. and 2. **One plan for deleting:**
+   - The text's Backspace and Delete use the score's Delete and Cut plan (`barwise.cutPlan`), with its structure rules and refusals, so the text and the score can't drift apart.
+   - Typing over notes keeps every bar line its own token, an emptied bar's bar lines kept apart. `|::|`, `|:|` and `||` are never made.
+   - Bar lines side by side (`|[1`, `:| [2`) are read as one, and `::` as an end and a start.
+   - Copy and Cut in the score leave focus there, and Ctrl/⌘ V in the score pastes into the music.
+   - Tested on every bar of compact and spaced tunes with every kind of bar line: no fused signs, and the play order loses exactly the deleted notes.
+3. **The decoration menu** (Alt D, the toolbar's `!f!`, Insert › Decoration…) places each mark by kind (`marks.ts`):
+   - a dynamic on the first note of each voice (again to take it off, another to replace it);
+   - a hairpin from the first note to the last, per voice (again to remove). Crescendo and Diminuendo replace "Crescendo starts/ends";
+   - a jump once, in the top voice: segno and coda at the start; D.C., D.S., Fine and To Coda at the end;
+   - a fermata on each voice's last note;
+   - articulations and ornaments on every note, toggling, never doubled.
+
+   The status line, and the score's live region, say what was done.
+4. **Insert › Repeat** inside an existing repeat (its endings included) is refused, naming its bars, and never nests. Tested over every bar and run of a tune with repeats and endings, by the play order.
+5. **Repeats across line breaks:**
+   - Adjacent music lines are one stream for Cut, so a repeat is one unit across a line break.
+   - A whole repeat goes with its signs, and is copied with them.
+   - A line left with only plain bar lines (after a bar line or a header) goes, with its newline.
+   - Pasted against a bar line, a repeat's sign joins it (`:|` `|:` is `::`).
+   - The Kesh's B part cut and pasted before the A part plays B then A. Morrison's two-line repeat with its endings goes as one. Step 33's Cut→Paste identity sweep now includes it.
+6. **Voices kept in step:**
+   - **Delete and Cut:** in a tune with several voices, over some voices only, they leave rests as long as the notes. Time goes only when every voice sounding there is selected.
+   - **Duplicate in some voices** fills the others with rests at the same point, or refuses, naming a voice with a note across that point, and says which it did.
+   - **Lyrics:** notes that go take their syllables (with their separators) from the `w:` line, and a music line that goes takes its `w:` lines. A duplicate brings its syllables, and a paste puts `*` where its notes have none.
+   - **The bar check (F8)** lists voices out of step (a bar fewer, or less music) once every bar has its length.
+   - Tested on the chorale.
+7. **Whole bars pasted over part of a bar** go after that bar, the selection left as it was, said so.
+8. **The score's live region** is announced again when the new score index arrives, with what an edit just said first. Typed marks, Cut, Copy, Delete, Paste and refusals are said there too.
+9. and 10. **After a paste** the music pasted is selected; **after Duplicate**, only the copy.
+11. **A tune** (from an `X:` line) pasted after music gets the blank line that keeps tunes apart.
+12. **While a selection loops**, the looped passage stays outlined (a dashed band) whatever is clicked.
+
+**First view.** 716.6 KB, under its 720 KB check.

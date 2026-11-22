@@ -454,6 +454,18 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
   }
   return true;
 }
+// Ctrl/⌘ V in the score pastes into the music at its selection, as in the text, the score
+// keeping the keys (the browser's paste event comes to the score itself).
+scoreScroll.addEventListener("paste", (event) => {
+  const pasted = event.clipboardData?.getData("text/plain");
+  if (!pasted) return;
+  event.preventDefault();
+  if (pastePlanned(view, pasted, event.clipboardData?.getData(CLIP_SOURCE))) return;
+  view.dispatch(view.state.replaceSelection(pasted), {
+    scrollIntoView: true,
+    userEvent: "input.paste",
+  });
+});
 async function pasteText() {
   view.focus();
   try {

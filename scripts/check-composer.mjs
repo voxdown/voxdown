@@ -6765,6 +6765,118 @@ console.log(
   );
 }
 
+/* 38. Selection hardening, round 9: the conformance sweep's cases that need the UI. */
+{
+  const fakeMidi = () => {
+    const input = { id: "fake-1", name: "Fake Keys 49", type: "input", state: "connected" };
+    const access = {
+      inputs: new Map([[input.id, input]]),
+      outputs: new Map(),
+      sysexEnabled: false,
+    };
+    navigator.requestMIDIAccess = async () => access;
+    const send = (bytes) => input.onmidimessage?.({ data: new Uint8Array(bytes) });
+    window.__midi = {
+      play: (notes) => {
+        for (const note of notes) send([0x90, note, 90]);
+        for (const note of notes) send([0x80, note, 0]);
+      },
+    };
+  };
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  await ctx.addInitScript(fakeMidi);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    await p.waitForFunction((x) => x.includes(window.composer.scoreIndex()?.source ?? "\u0000"), t);
+    await p.waitForTimeout(400);
+  };
+  const choose = (list) =>
+    p.evaluate((list) => {
+      const view = window.composer.view;
+      const S = view.state.selection.constructor;
+      view.dispatch({ selection: S.create(list.map(([a, b]) => S.range(a, b))) });
+      view.focus();
+    }, list);
+  const of = (text, part) => [text.indexOf(part), text.indexOf(part) + part.length];
+  const says = (id, pattern) =>
+    p.waitForFunction(
+      ([id, source]) => new RegExp(source).test(document.getElementById(id).textContent),
+      [id, pattern.source],
+    );
+  // 7. Typing over a range in each of two voices is refused, saying why; nothing changes.
+  const duo =
+    "X:1\nT:Duo\nM:4/4\nL:1/8\n%%score (1 2)\nK:C\nV:1\nC2 D2 E2 F2 | G8 |]\nV:2\nC,4 E,4 | G,8 |]\n";
+  await put(duo);
+  await choose([of(duo, "C2 D2 E2 F2"), of(duo, "C,4 E,4")]);
+  await p.keyboard.type("A");
+  await says("explain", /Typing replaces notes in one voice/);
+  assert.equal(await docText(p), duo, "typing over two voices changes nothing");
+  // 8. MIDI step entry over a range in each of two voices: refused too.
+  await menu("play", "MIDI keyboard…", p);
+  await p.locator("#midi-panel").waitFor();
+  await p.getByLabel("Write it at the caret (step entry)").check();
+  await choose([of(duo, "D2"), of(duo, "E,4")]);
+  await p.evaluate(() => window.__midi.play([69]));
+  await p.waitForFunction(() =>
+    /writes in one voice/.test(document.querySelector(".midi-status")?.textContent ?? ""),
+  );
+  assert.equal(await docText(p), duo, "no step written in either voice");
+  await p
+    .locator(".midi-close, #midi-panel button[aria-label^='Close']")
+    .first()
+    .click()
+    .catch(() => {});
+  // Selecting only a grace group, then Delete: just it goes, never the note.
+  const graces = "X:1\nT:G\nM:4/4\nL:1/8\nK:D\n{g}A2 B2 c2 d2 | e8 |]\n";
+  await put(graces);
+  await choose([of(graces, "{g}")]);
+  await p.keyboard.press("Delete");
+  await p.waitForFunction(() => !window.composer.view.state.doc.toString().includes("{g}"));
+  assert.match(await docText(p), /\nA2 B2 c2 d2 \| e8 \|\]/, "the grace group alone went");
+  // Duplicate of part of a bar: after it, the bar over-full, said so.
+  const part = "X:1\nT:P\nM:4/4\nL:1/8\nK:C\nC2 D2 E2 F2 | G8 |]\n";
+  await put(part);
+  await choose([of(part, "D2")]);
+  await p.keyboard.press("Control+Shift+D");
+  await says("notice", /Bar 1 now has 10 eighths, 8 expected \(M:4\/4\)\. F8 goes to it/);
+  assert.match(await docText(p), /\nC2 D2 D2 E2 F2 \| G8 \|\]/);
+  // 19. A spacer selected with notes is never counted.
+  const spaced = "X:1\nT:S\nM:4/4\nL:1/8\nK:C\nC2 D2 x4 | G8 |]\n";
+  await put(spaced);
+  await choose([[spaced.indexOf("C2"), spaced.indexOf("x4") + 2]]);
+  await says("explain", /^2 notes selected/);
+  // 18. A press just left of a mid-triplet note starts the drag on it, not on the note before.
+  const trip = "X:1\nT:T\nM:4/4\nL:1/8\nK:C\nc4 (3def g2 | a8 |]\n";
+  await put(trip);
+  const heads = await p.evaluate(() =>
+    [...document.querySelectorAll("#score .abcjs-note")].map((element) => {
+      const head = element.querySelector("path").getBoundingClientRect();
+      return { x: head.x, y: head.y + head.height / 2, width: head.width };
+    }),
+  );
+  const e = heads[2];
+  const g = heads[4];
+  await p.mouse.move(e.x - 3, e.y);
+  await p.mouse.down();
+  await p.mouse.move(g.x + g.width + 3, g.y, { steps: 6 });
+  await p.mouse.up();
+  const picked = (await selection(p)).join(" ");
+  assert.match(picked, /^ef g2/, `the drag starts on e: ${picked}`);
+  await ctx.close();
+  console.log(
+    "Composer: selection hardening round 9: typing and MIDI over two voices refused, a grace group deleted alone, a bar over-full after Duplicate said, spacers not counted, a drag from beside a triplet note: passed",
+  );
+}
+
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");
 console.log("Composer: no console errors and no requests leaving the site: passed");

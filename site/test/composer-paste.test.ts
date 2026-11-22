@@ -82,10 +82,11 @@ describe("pasting a copy of voices from several V: blocks (round 3)", () => {
   it("over a place in each voice, each takes all of its voice's music", () => {
     const places = [range(interleaved, "c d e f"), range(interleaved, "C D E F")];
     const plan = pasteVoiced(interleaved, places, voicedParts(four) ?? []);
-    expect("changes" in plan && plan.changes.map((change) => change.insert)).toEqual([
-      "g a b c' e f g a",
-      "G A B c E F G A",
-    ]);
+    // (Since round 10: over notes it overwrites forward in each voice, in time, bar lines kept.)
+    if (!("changes" in plan)) throw new Error("no plan");
+    expect(apply(interleaved, plan.changes)).toContain(
+      "V:1\ng a b c'|e f g a|\nV:2\nG A B c|E F G A|\n",
+    );
   });
   it("over two places per voice, piece by piece", () => {
     const places = [

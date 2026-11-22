@@ -118,6 +118,9 @@ export function pasteVoiced(
     // Every place in a voice the copy has, or a copy of one voice: by voice. Places in other
     // voices are left as they are, and said so.
     if (matched.length === voices.length || (parts.length === 1 && matched.length)) {
+      // In a tune of several voices, decided once for the whole selection, in time (round 10).
+      const placed = placesInStep(text, file, ranges, voices, parts, copy, fit);
+      if (placed) return placed;
       const changes: Change[] = [];
       const said: string[] = [];
       for (const part of parts) {
@@ -335,6 +338,114 @@ function voicedInStep(
   return {
     changes,
     message: `Pasted ${names(pasted)} over the notes, forward from the same point in each; the other voices are as they were${not}.`,
+    final: true,
+  };
+}
+
+/**
+ * A copy of voices pasted into several places (round 10, item 6), each in a voice the copy has,
+ * decided once for the whole selection: every place a caret or a note starting its bar, it goes
+ * in (each part made whole bars, as many as the longest, at its place; every other voice gets
+ * rests as long at the first place's point); else it overwrites forward at each place (a voice's
+ * pieces one a place, in order, or its part at its first place). Null in a tune of one voice.
+ */
+function placesInStep(
+  text: string,
+  file: FileIndex,
+  ranges: Range[],
+  voices: string[],
+  parts: VoicedPart[],
+  copy: VoicedPart[],
+  fit: ((insert: string, at: number) => string) | undefined,
+): PastePlan | null {
+  const tune = tuneOf(file, (ranges[0] as Range).from);
+  if (!tune || tune.voices.length < 2) return null;
+  const written = (part: VoicedPart, at: number) => (fit ? fit(part.text, at) : part.text);
+  const starts = ranges.map((range) =>
+    range.from === range.to ? range.from : noteStartsBar(text, file, range),
+  );
+  const changes: Change[] = [];
+  if (starts.every((at) => at !== null)) {
+    const entries = parts
+      .map((part) => {
+        const index = voices.indexOf(part.voice);
+        return index < 0 ? null : { part, at: starts[index] as number };
+      })
+      .filter((each): each is { part: VoicedPart; at: number } => each !== null);
+    if (!entries.length) return null;
+    const first = entries.map((each) =>
+      wholeBars(written(each.part, each.at), text, file, each.at, each.part.voice),
+    );
+    const bars = Math.max(...first.map((each) => each.bars));
+    for (const { part, at } of entries)
+      changes.push({
+        from: at,
+        to: at,
+        insert: `${wholeBars(written(part, at), text, file, at, part.voice, bars).text} `,
+      });
+    const anchor = Math.min(...entries.map((each) => each.at));
+    const rested: string[] = [];
+    for (const voice of tune.voices.map((each) => each.id)) {
+      if (entries.some((each) => each.part.voice === voice)) continue;
+      const at = samePoint(text, file, anchor, voice);
+      if (at === null) {
+        if (
+          selectedNotes(text, [{ from: anchor, to: tune.to }], file).some(
+            (each) => each.event.voice === voice,
+          )
+        )
+          return {
+            refused: `V:${voice} has a note sounding across this point: paste where every voice's notes start, or select a place in each.`,
+          };
+        continue;
+      }
+      changes.push({
+        from: at,
+        to: at,
+        insert: `${wholeBars("", text, file, at, voice, bars).text} `,
+      });
+      rested.push(`V:${voice}`);
+    }
+    return {
+      changes,
+      message: `Pasted ${names(entries.map((each) => each.part))} as ${bars === 1 ? "a whole bar" : `${bars} whole bars`} at their places, in step${rested.length ? `; rests in ${rested.join(" and ")} for as long` : ""}.`,
+      final: true,
+    };
+  }
+  // Over notes: forward at each place.
+  const said: string[] = [];
+  for (const part of parts) {
+    const places = ranges.filter((_, at) => voices[at] === part.voice);
+    if (!places.length) continue;
+    const pieces = copy.filter((each) => each.voice === part.voice);
+    const piecewise = pieces.length === places.length && places.length > 1;
+    const pairs = piecewise
+      ? places.map((place, at) => ({ place, piece: pieces[at] as VoicedPart }))
+      : [{ place: places[0] as Range, piece: part }];
+    said.push(
+      piecewise
+        ? `V:${part.voice} piece by piece into its ${places.length} places`
+        : places.length > 1
+          ? `V:${part.voice} into the first of its ${places.length} places (the other${places.length > 2 ? "s were" : " was"} left as ${places.length > 2 ? "they were" : "it was"})`
+          : `V:${part.voice} into V:${part.voice}`,
+    );
+    for (const { place, piece } of pairs) {
+      const over = overwriteForward(text, file, place, written(piece, place.from));
+      if (!over) return null;
+      if ("refused" in over) return over;
+      changes.push(...over.changes);
+    }
+  }
+  // (Places that ran into each other: refused, never written over twice.)
+  const sorted = [...changes].sort((a, b) => a.from - b.from);
+  if (sorted.some((change, at) => at > 0 && change.from < (sorted[at - 1] as Change).to))
+    return {
+      refused:
+        "The copy's parts would run into each other's places: select one place in each voice, or paste them one at a time.",
+    };
+  return {
+    changes,
+    message: `Pasted ${said.join(", ")}, over the notes forward from each place; the other voices are as they were.`,
     final: true,
   };
 }

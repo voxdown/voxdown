@@ -126,3 +126,36 @@ describe("a second voice's rests are placeholders, typed over bar by bar (round 
     expect(next).toBe(typed.indexOf("z8", first));
   });
 });
+
+describe("accessibility and layout (round 6, findings 11 and 12)", () => {
+  it("a selection of rests is 3 rests", async () => {
+    const { describePicked, selectedNotes } = await import("../src/composer/selected");
+    const text = `${head()}C z z z |]\n`;
+    expect(describePicked(selectedNotes(text, [of(text, "z z z")])).text).toBe("3 rests");
+  });
+  it("Duplicate of a whole line adds a new line, its verse with it", () => {
+    const text = `${head()}C D E F |\nw: one two three four\nG A B c |]\n`;
+    const plan = duplicate(text, [of(text, "C D E F")]);
+    if ("refused" in plan) throw new Error(plan.refused);
+    expect(apply(text, plan.changes)).toBe(
+      `${head()}C D E F |\nw: one two three four\nC D E F |\nw: one two three four\nG A B c |]\n`,
+    );
+  });
+  it("the status calls jumps by their names", async () => {
+    const { placeMark } = await import("../src/composer/marks");
+    const text = `${head()}C D E F |]\n`;
+    expect(placeMark(text, [of(text, "C D E F")], "D.C.alfine")).toMatchObject({
+      said: "D.C. al Fine at the end of the selection.",
+    });
+    expect(placeMark(text, [of(text, "C D E F")], "fine")).toMatchObject({
+      said: "Fine at the end of the selection.",
+    });
+  });
+  it("a paste's seams get single spaces", () => {
+    const text = `${head()}C D E F | G A B c |]\n`;
+    const range = of(text, "G A");
+    const plan = planPaste(text, [range], 0, " e f ", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    expect(apply(text, plan.changes)).toContain("| e f B c |]");
+  });
+});

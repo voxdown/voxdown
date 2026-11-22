@@ -2772,11 +2772,16 @@ function announceScore() {
   let message: string;
   const selected = ranges().filter((range) => range.to > range.from);
   if (selected.length && scoreIndex) {
-    const notes = pickedNotes(selected).filter((note) => !note.rest);
+    const all = pickedNotes(selected);
+    const notes = all.filter((note) => !note.rest);
+    const rests = all.length - notes.length;
     const bars = [...new Set(pickedNotes(selected).map((note) => note.measure + 1))];
     const span =
       bars.length > 1 ? `bars ${Math.min(...bars)} to ${Math.max(...bars)}` : `bar ${bars[0]}`;
-    message = `${notes.length} ${notes.length === 1 ? "note" : "notes"} selected${selectionWhere()}, ${span}.`;
+    message =
+      !notes.length && rests
+        ? `${rests} ${rests === 1 ? "rest" : "rests"} selected${selectionWhere()}, ${span}.`
+        : `${notes.length} ${notes.length === 1 ? "note" : "notes"} selected${selectionWhere()}, ${span}.`;
   } else {
     const explanation = explainAt(caret());
     message = explanation ? `${explanation.text}${placeOf(caret())}` : "No note here.";
@@ -2953,10 +2958,12 @@ scoreScroll.addEventListener("keydown", (event) => {
       clipboard(event.key.toLowerCase() === "x" ? "cut" : "copy");
       return;
     }
+    const was = view.state.doc;
     if (runScopeHandlers(view, event, "editor")) {
       event.preventDefault();
       event.stopPropagation();
-      announceScore();
+      // An edit is announced once the score is redrawn (its new count, not the old one).
+      if (view.state.doc === was) announceScore();
       return;
     }
   }
@@ -3231,7 +3238,6 @@ function decorationMenu(anchor: HTMLElement) {
               } else if (apply(plan.changes, "Decoration")) {
                 sayAboutSelection(plan.said);
               }
-              view.focus();
             },
           })),
         ]),

@@ -1181,7 +1181,24 @@ export function duplicate(
     const end = Math.max(...span.map((each) => each.end));
     let insertAt: number;
     let insert: string;
-    if (bar) {
+    const lineStart = text.lastIndexOf("\n", (bodies[0] as Range).from - 1) + 1;
+    const lineEnd = bar
+      ? text.indexOf("\n", bar.to) < 0
+        ? text.length
+        : text.indexOf("\n", bar.to)
+      : -1;
+    const wholeLines =
+      bar &&
+      bodies.length === 1 &&
+      !tokenizeMusic(text.slice(lineStart, body.from), lineStart).some((token) => starts(token)) &&
+      !text.slice(bar.to, lineEnd).trim();
+    if (wholeLines) {
+      // Whole lines: duplicated as new lines after them, their verses with them.
+      const verses = versesUnder(text, lineEnd);
+      const end = verses.at(-1)?.to ?? lineEnd;
+      insertAt = end;
+      insert = `\n${text.slice(lineStart, end)}`;
+    } else if (bar) {
       const gap = /\s/.test(text[body.to] ?? "") ? " " : "";
       insertAt = body.to;
       insert = `${gap}|${gap}${written}`;
@@ -1215,14 +1232,15 @@ export function duplicate(
     const copy = { from: insertAt, to: insertAt, insert };
     changes.push(copy);
     copies.push(copy);
-    // The copy's syllables, after the last duplicated note's.
-    changes.push(
-      ...lyricsAlong(
-        text,
-        file,
-        notes.filter((each) => !each.event.rest).map((each) => each.event.from),
-      ),
-    );
+    // The copy's syllables, after the last duplicated note's (whole lines brought their own).
+    if (!wholeLines)
+      changes.push(
+        ...lyricsAlong(
+          text,
+          file,
+          notes.filter((each) => !each.event.rest).map((each) => each.event.from),
+        ),
+      );
     // The other voices sounding then get rests as long, at the same point, to stay in step.
     if (!Number.isFinite(start)) return;
     const others = [

@@ -89,6 +89,14 @@ export function mountMenus(
   definitions: Record<string, () => MenuItem[]>,
 ) {
   let open: { button: HTMLButtonElement; panel: HTMLElement } | null = null;
+  // Where focus was before a menu: an item chosen goes back there (the text or the score) first,
+  // so Cut, Copy and Paste act where you were, by mouse as by key.
+  let outside: HTMLElement | null = null;
+  document.addEventListener("focusin", (event) => {
+    const target = event.target as HTMLElement;
+    if (!buttons.includes(target as HTMLButtonElement) && !target.closest?.(".workspace-dropdown"))
+      outside = target;
+  });
   let child: { entry: HTMLButtonElement; panel: HTMLElement } | null = null;
   const closeChild = (focusEntry = false) => {
     if (!child) return;
@@ -230,7 +238,8 @@ export function mountMenus(
       });
       entry.addEventListener("click", () => {
         close();
-        focusButton();
+        if (outside?.isConnected) outside.focus({ preventScroll: true });
+        else focusButton();
         item.run();
       });
       panel.append(entry);
@@ -358,6 +367,7 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[], onClose?: () =
     }
     entry.addEventListener("click", () => {
       finish();
+      if (back?.isConnected && back !== document.body) back.focus({ preventScroll: true });
       item.run();
     });
     buttons.push(entry);
@@ -370,6 +380,8 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[], onClose?: () =
   panel.style.top = below
     ? `${rect.bottom + 4}px`
     : `${Math.max(8, rect.top - panel.offsetHeight - 4)}px`;
+  // Where focus was: Escape, or an item chosen, goes back there.
+  const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   buttons[0]?.focus();
   const outside = (event: PointerEvent) => {
     if (!panel.contains(event.target as Node) && !anchor.contains(event.target as Node)) finish();
@@ -389,7 +401,7 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[], onClose?: () =
     } else if (event.key === "Escape" || event.key === "Tab") {
       event.preventDefault();
       finish();
-      anchor.focus();
+      (back?.isConnected && back !== document.body ? back : anchor).focus({ preventScroll: true });
     }
   });
   setTimeout(() => document.addEventListener("pointerdown", outside), 0);

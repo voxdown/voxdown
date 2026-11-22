@@ -164,6 +164,10 @@ export function describePicked(picked: Picked[]): { count: number; text: string 
     .filter((each) => !each.event.rest && !each.whole)
     .reduce((sum, each) => sum + each.tones.length, 0);
   const parts: string[] = [];
+  // Rests alone: said as rests ("3 rests"), counted as what is selected.
+  const rests = picked.filter((each) => each.event.rest).length;
+  if (!notes && !tones && rests)
+    return { count: rests, text: `${rests} ${rests === 1 ? "rest" : "rests"}` };
   if (notes || !tones) parts.push(`${notes} ${notes === 1 ? "note" : "notes"}`);
   if (tones) parts.push(`${tones} chord ${tones === 1 ? "tone" : "tones"}`);
   return { count: notes + tones, text: parts.join(" and ") };

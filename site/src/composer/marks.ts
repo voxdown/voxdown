@@ -55,6 +55,28 @@ function byVoice(text: string, ranges: Range[], file: FileIndex): Picked[][] {
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** What a mark is called in words: "Fine", "D.C. al Fine", "To Coda", "Staccato". */
+const PLAIN: Record<string, string> = {
+  ".": "Staccato",
+  "~": "Roll",
+  fine: "Fine",
+  segno: "Segno",
+  coda: "Coda",
+  dacoda: "To Coda",
+  dacapo: "Da capo",
+  "D.C.alfine": "D.C. al Fine",
+  "D.C.alcoda": "D.C. al Coda",
+  "D.S.alfine": "D.S. al Fine",
+  "D.S.alcoda": "D.S. al Coda",
+  breath: "Breath mark",
+};
+function plainName(name: string): string {
+  return (
+    PLAIN[name] ??
+    (/^[a-z]/.test(name) && name.length > 3 ? `${name[0]?.toUpperCase()}${name.slice(1)}` : name)
+  );
+}
+
 export function placeMark(
   text: string,
   ranges: Range[],
@@ -63,7 +85,7 @@ export function placeMark(
 ): MarkPlan {
   const voices = byVoice(text, ranges, file);
   if (!voices.length) return { refused: "Put the caret on a note, or select notes, to mark them." };
-  const label = name === "." ? "Staccato" : name === "~" ? "Roll" : name;
+  const label = plainName(name);
   const changes: Change[] = [];
   const several = voices.length > 1;
   const where = (what: string) => (several ? `${what} of each voice` : what);

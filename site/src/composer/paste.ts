@@ -335,6 +335,19 @@ export function planPaste(
  * A paste under a w: line keeps its words on their notes: the syllables of the notes it replaces
  * go, and each note it adds gets a `*` (no syllable) in their place.
  */
+/** Single spaces at a paste's seams: none doubled with the text beside it (lyrics aside). */
+function seams(text: string, changes: Change[]): Change[] {
+  return changes.map((change) => {
+    const line = text.slice(text.lastIndexOf("\n", change.from - 1) + 1, change.from);
+    if (!change.insert || line.startsWith("w:")) return change;
+    let insert = change.insert;
+    if (change.from === 0 || /\s/.test(text[change.from - 1] ?? ""))
+      insert = insert.replace(/^[ \t]+/, "");
+    if (/^[ \t]/.test(text.slice(change.to))) insert = insert.replace(/[ \t]+$/, "");
+    return insert === change.insert ? change : { ...change, insert };
+  });
+}
+
 function withLyrics(text: string, file: FileIndex, changes: Change[]): Change[] {
   const extra: Change[] = [];
   for (const change of changes) {
@@ -354,5 +367,5 @@ function withLyrics(text: string, file: FileIndex, changes: Change[]): Change[] 
     if (!gone.length && !count) continue;
     extra.push(...lyricsFor(text, file, gone, count ? [[change.from, count]] : []));
   }
-  return [...changes, ...extra].sort((a, b) => a.from - b.from || a.to - b.to);
+  return seams(text, [...changes, ...extra]).sort((a, b) => a.from - b.from || a.to - b.to);
 }

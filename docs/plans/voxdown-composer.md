@@ -1073,6 +1073,33 @@ The pieces:
 - the Appearance and Recover drafts dialogs fill when first opened;
 - the problems list and those dialogs' styles load with them.
 
+## Editing rules
+
+What each edit does to selected music, in tunes of one voice and of several ("multi-voice"); where nothing is said, both are alike. Reviewers and checks test against this (round 8).
+
+- **Delete, Backspace and Cut.** A caret deletes characters, as text does. Refused across two tunes.
+  - Whole bars go with their bar lines; the one left keeps the repeats and endings around them. A repeat's body with its 1st ending: the 2nd ending's bars play once (after the repeat, if some of its body stays). Any other cut across repeat signs or endings is refused, saying why.
+  - Multi-voice: time goes only where every voice sounding there is selected, as whole bars of each; everywhere else the notes become rests.
+  - Part of a bar: the notes become rests, merged by the beat or the bar. A cleared bar is one rest; a tuplet or `A>B` deleted whole is one rest of its real length; no half rest from beat 2 of 4/4; 6/8 goes in threes. Never merged across a tuplet left, a chord symbol, a dynamic, a text or a bar line. A spacer voice gets `x`.
+  - An over-full bar loses time first: notes go while the bar stays at least its length, and any shortfall is a rest.
+  - Kept: chord symbols, dynamics, `"_"`/`"^"` texts, fermatas, segno and coda (on the rest; a dynamic of bars cut goes to the next note). Hairpins stay paired. Verses lose the gone notes' syllables.
+- **Copy.** What is written, less marks that would be broken out of place; a whole last bar brings its bar line; several voices come under their `V:` lines.
+- **Paste.**
+  - Over a selection (one note or more): it overwrites forward from the first selected note for the copy's length. Bar lines stay put, notes across them are tied, lengths can be drawn and are grouped by the beat. Notes after the copy stay; a note it partly covers keeps the rest of its time as a rest; the selection left becomes rests. Multi-voice: the other voices are untouched. Refused across a repeat sign or ending, past the voice's end, or splitting a tuplet.
+  - At a caret, or on a clicked note that starts its bar with whole bars: it goes in before it. Multi-voice: the other voices get rests as long.
+  - A copy of voices is decided once: at a bar's start each part is made whole bars, as many as the longest, and the other voices get rests; over notes it overwrites forward in each voice on that staff, from the same point.
+  - Several lines into a line with verses go in as one line; each verse gets the copy's syllables, or a `*` a note.
+- **Duplicate** (Ctrl+Shift+D): the selection again, after it (whole lines as new lines, with their verses). Multi-voice: the other voices get rests (spacers in a spacer voice). Refused across repeat signs, unless it's a whole repeat.
+- **Typing over notes.** One pitch over one note or chord re-pitches it, keeping its length, broken rhythm, tie, chord symbol and marks. Anything else replaces the notes, keeping bar lines, fields, jump marks, slur ends, and the first note's chord symbol and dynamic. Typing across voices is refused. In the score, a note letter says "Press Enter to edit in the text".
+- **Step entry** (MIDI): at a caret, it writes the step, with a bar line when the bar fills, tied over it. Over a selection, it writes forward as a paste of one note and selects the next note. With Keep, it re-pitches one selected note. Across voices it is refused.
+- **½×, 2× and dot.** Halved, the notes leave rests after them for the time given up; doubled or dotted past the bar's length, it's refused, naming the bar (and voice). The same in one voice and several.
+- **Decorations.**
+  - A dynamic goes on the first note of each voice: the same again takes it off, another replaces it.
+  - A hairpin goes from the first note to the last, per voice.
+  - Segno and coda go once, in the top voice, at the start; D.C., D.S. and Fine at the end.
+  - A fermata goes on the last note of each voice.
+  - Articulations go on every note, toggled, never doubled.
+
 ## Selection hardening
 
 ### Round 1 fixes (after Codex 7.0, Claude 7.6)
@@ -1378,3 +1405,32 @@ The cheat sheet says so.
 - **Step 34:** round 5's check of whole bars pasted over part of a bar now expects the forward overwrite.
 
 **First view.** 711 KB, under its 720 KB check.
+
+### Round 8 fixes (after Codex 8.6, Claude 6.5): the editing rules, written down
+
+**The rules, refined (Claude's (a)–(e), adopted)** and written down above, in "Editing rules":
+- **(a)** A pitch typed over one note or chord re-pitches it in place (`G6` + `A` → `A6`, `"Am"!f![ACE]2` + `B` → `"Am"!f!B2`, `!pp!G>G` + `c` → `!pp!c>G`).
+- **(b)** Delete's rests are planned bar by bar (`restChanges`, `restPieces`): a cleared bar is one rest, a whole tuplet or broken pair one rest of its real length, merged by the beat, never across a tuplet, chord symbol, mark or bar line.
+- **(c)** An overwrite writes lengths that can be drawn, tied over bar lines (a 5/8 is a half tied to an eighth), grouped by the beat (6/8 in threes).
+- **(d)** Rests written into a spacer voice (by Delete, a paste at a caret or Duplicate) are `x`.
+- **(e)** ½×, 2× and dot keep every bar its length in one-voice tunes too.
+
+1. **Tunes › Sort with a selection.** Every Tunes command places the caret itself, in the same tune at the same place. No change without a selection of its own can leave a crossed range (`selection-guard.ts`); such a range becomes a caret.
+2. **MIDI step entry over a selection** writes forward and selects the next note. Keep (key 0) re-pitches one note. Across voices or other lines it's refused.
+3. **Copies of voices that end at different points** are decided once, as in the rules; a copy in another meter is barred again for this one. Ragged copies are in the paste property test.
+4. **An overwrite keeps the notes after the copy**; a note it partly covers leaves a rest for its time left. The property test checks every later note keeps its time and text.
+5. **Melody search results follow every edit:** results an edit touched drop out, F3 goes on to the next, a match is clamped to the text, and the panel keeps the focus.
+6. **A paste after the final `|]`** puts its syllables after the verse's last word.
+7. **The over-full rule and tuplets:** a whole tuplet counts as one event of its real length, going while the bar stays full, with a rest for any shortfall.
+8. **Spacing:**
+   - Bars put into a spaced line keep a space before the music after them (`G4 A4 | G6`); a compact line stays compact.
+   - Deleting in an over-full bar leaves no double space.
+   - When a word's last syllable goes (`Ma-had`), the one before it ends the word.
+   - Found on the way: a whole bar pasted on a clicked bar-start note in a one-voice tune was left to the editor's own paste, which replaced the note. It's now planned, and the property test requires a plan over every note.
+9. **The selection count** says the rests a paste selected too ("3 notes and 1 rest selected"), in the status and in the score's live region.
+10. **Undo after a reload:** the first Undo with nothing to undo says "Undo history starts again after a reload", once.
+
+**Browser checks.**
+- **Step 37:** Sort with a selection, a note re-pitched by typing, melody results after an edit, and MIDI steps over a selection.
+- **Step 3:** the reload's Undo message.
+- **Steps 34–36:** follow the refined rules (rests by the beat, later notes kept).

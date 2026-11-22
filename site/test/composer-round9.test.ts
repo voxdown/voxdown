@@ -3,6 +3,7 @@ import { frac } from "../src/composer/abc";
 import { checkBars } from "../src/composer/barcheck";
 import { cutPlan, inOneVoice, lengthsInStep } from "../src/composer/barwise";
 import { type Change, scaleLengths, toggleTies } from "../src/composer/commands";
+import { describePicked, selectedNotes } from "../src/composer/selected";
 import { indexFile } from "../src/composer/tunes";
 
 /* Round 9 (selection hardening): the written rules, conformed to. */
@@ -96,5 +97,17 @@ describe("Alt+T on a chord tied inside (item 17)", () => {
     const from = text.indexOf("[C-E-]2");
     const tie = toggleTies(text, [{ from, to: from + 7 }]);
     expect(body(apply(text, tie.changes))).toBe("[CE]2 [CE]2 z4|]\n");
+  });
+});
+
+describe("spacers are never counted (item 19)", () => {
+  it("x4 selected with notes: only the notes", () => {
+    const text = tune("C2 D2 x4|]");
+    const picked = selectedNotes(
+      text,
+      [{ from: text.indexOf("C2"), to: text.indexOf("|]") }],
+      indexFile(text),
+    );
+    expect(describePicked(picked, text).text).toBe("2 notes");
   });
 });

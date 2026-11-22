@@ -158,7 +158,16 @@ export function selectedNotes(
 }
 
 /** What a selection is, in words: "3 notes", "1 chord tone", "2 notes and 1 chord tone". */
-export function describePicked(picked: Picked[]): { count: number; text: string } {
+export function describePicked(given: Picked[], text?: string): { count: number; text: string } {
+  // (Spacers, `x` and `X`, are never counted: nothing is drawn or heard; round 9.)
+  const picked = text
+    ? given.filter(
+        (each) =>
+          !(
+            each.event.rest && /^[xX]/.test(text.slice(each.event.from, each.event.to).trimStart())
+          ),
+      )
+    : given;
   const notes = picked.filter((each) => !each.event.rest && each.whole).length;
   const tones = picked
     .filter((each) => !each.event.rest && !each.whole)

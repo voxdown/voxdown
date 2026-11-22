@@ -328,7 +328,9 @@ function clipboard(kind: "cut" | "copy") {
       () => {
         if (kind === "cut") cutMusic(view, copy.text);
         else
-          sayAloud(`Copied ${describePicked(selectedNotes(text(), ranges(), fileIndex())).text}.`);
+          sayAloud(
+            `Copied ${describePicked(selectedNotes(text(), ranges(), fileIndex()), text()).text}.`,
+          );
       },
       () =>
         notice(
@@ -864,7 +866,7 @@ function cutMusic(target: EditorView, clip: string | null, only?: Range[]): bool
   sayAloud(
     plan?.said.length
       ? plan.said.join(" ")
-      : `${clip === null ? "Deleted" : "Cut"} ${describePicked(selectedNotes(state.doc.toString(), list, state.field(fileIndexField))).text}.`,
+      : `${clip === null ? "Deleted" : "Cut"} ${describePicked(selectedNotes(state.doc.toString(), list, state.field(fileIndexField)), state.doc.toString()).text}.`,
   );
   lastCut =
     clip === null
@@ -1640,7 +1642,7 @@ function explainCaret(update: ViewUpdate) {
     // Counted by the one rule, from the text itself, so it is right even before the score is
     // redrawn, and it agrees with what is lit.
     const picked = selectedNotes(text(), ranges(), fileIndex());
-    const said = describePicked(picked);
+    const said = describePicked(picked, text());
     const count = said.count;
     // Across tunes: commands change each tune by its own key and meter; one tune is drawn.
     const tunes = new Set(picked.map((each) => tuneAt(fileIndex(), each.event.from)?.from)).size;

@@ -239,11 +239,23 @@ describe("½×, 2× and a dot in one voice of several (finding 12)", () => {
       lengthsInStep(two, indexFile(two), scaleLengths(two, bar, frac(3, 2)), 1.5, "Dot"),
     ).toMatchObject({ refused: expect.stringMatching(/^Dot would overfill bar 1/) });
   });
-  it("one voice: as before", () => {
+  it("one voice: the same rules since round 8 (rule e)", () => {
     const one = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\nc2 d2|e4|]\n";
     const range = [{ from: one.indexOf("c2"), to: one.indexOf("c2") + 5 }];
     expect(
       lengthsInStep(one, indexFile(one), scaleLengths(one, range, frac(2)), 2, "Double"),
-    ).toBeNull();
+    ).toEqual({
+      refused: "Double would overfill bar 1: make room in the bar first, or select fewer notes.",
+    });
+    const halved = lengthsInStep(
+      one,
+      indexFile(one),
+      scaleLengths(one, range, frac(1, 2)),
+      0.5,
+      "Halve",
+    );
+    if (!halved || "refused" in halved) throw new Error("no plan");
+    expect(apply(one, halved.changes)).toContain("\nc d z2|e4|]");
+    expect(halved.said).toMatch(/every bar keeps its length/);
   });
 });

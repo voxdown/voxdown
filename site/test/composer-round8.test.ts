@@ -1,6 +1,6 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { cutPlan, repitch } from "../src/composer/barwise";
+import { cutPlan, duplicate, repitch } from "../src/composer/barwise";
 import { caretAfter, sortChange } from "../src/composer/book";
 import { planPaste } from "../src/composer/paste";
 import { noCrossedRanges } from "../src/composer/selection-guard";
@@ -148,5 +148,18 @@ describe("overwrite writes what can be drawn, by the beat (rule c, item 4)", () 
     const { out, message } = pasteOver(tune("C2 D2 E2 F2|G8|]"), "D2", "e2");
     expect(out).toBe("C2 e2 E2 F2|G8|]\n");
     expect(message).not.toMatch(/rest/);
+  });
+});
+
+describe("rule (d): bars put in a spacer voice are spacers", () => {
+  it("a paste at a caret, and Duplicate, write x in an x voice", () => {
+    const text = "X:1\nT:t\nM:4/4\nL:1/4\n%%score 1 2\nK:C\nV:1\nC D E F|G A B c|]\nV:2\nx4|x4|]\n";
+    const at = text.indexOf("G A B c");
+    const plan = planPaste(text, [{ from: at, to: at }], 0, "c c c c|", null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    expect(apply(text, plan.changes)).toMatch(/V:2\nx4\|\s*x4\s*\|\s*x4\|\]/);
+    const dup = duplicate(text, [{ from: at, to: at + 7 }]);
+    if ("refused" in dup) throw new Error(dup.refused);
+    expect(apply(text, dup.changes)).not.toMatch(/V:2\n[^\n]*z/);
   });
 });

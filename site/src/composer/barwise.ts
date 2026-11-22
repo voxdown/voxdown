@@ -1495,13 +1495,14 @@ export function duplicate(
       const at = after?.span.to ?? ending.to;
       const reading = readingAt(text, file, at);
       const unit = reading?.unit ?? frac(1, 8);
+      const letter = restLetter(text, file, voice, at);
       const rest = (whole: number) => {
         const units = whole / (unit.num / unit.den);
         const den =
           [1, 2, 4, 8, 16, 3, 6, 12].find(
             (each) => Math.abs(units * each - Math.round(units * each)) < 1e-9,
           ) ?? 1;
-        return `z${formatLength(frac(Math.round(units * den), den))}`;
+        return `${letter}${formatLength(frac(Math.round(units * den), den))}`;
       };
       // Whole bars: a bar of rests for each; else one rest as long as the notes.
       const lengths: number[] = [];
@@ -2339,6 +2340,21 @@ function clipTiming(
   return { total: filled.reduce((sum, each) => sum + each, 0), bars: filled };
 }
 
+/**
+ * The rest a voice writes at a place (round 8, rule (d)): `x` where the voice is spacers there
+ * (the event before or after it is an `x` rest), else `z`.
+ */
+export function restLetter(text: string, file: FileIndex, voice: string, at: number): "x" | "z" {
+  const own = timed(text, file, at).filter((each) => each.voice === voice);
+  const spacer = (event?: { from: number; to: number }) =>
+    Boolean(event) && /^x/.test(text.slice(event?.from, event?.to).trimStart());
+  const before = own.filter((each) => each.from < at).at(-1);
+  const after = own.find((each) => each.from >= at);
+  return spacer(before) || spacer(after) ? "x" : "z";
+}
+const lettered = (rest: string, letter: "x" | "z") =>
+  letter === "x" ? rest.replace(/^z/, "x") : rest;
+
 /** A rest as long as some whole notes, in a unit: "z8", "z3/2". */
 function restOf(whole: number, unit: Fraction): string {
   const units = whole / (unit.num / unit.den);
@@ -2455,9 +2471,15 @@ export function pasteInStep(
         refused: `V:${other} has a note sounding across where the paste would go: paste at a bar line, or in every voice.`,
       };
     }
-    const rests = whole
-      ? bars.map((length) => restOf(length, reading.unit))
-      : [restOf(total, reading.unit)];
+    const letter = restLetter(
+      text,
+      file,
+      other,
+      theirs.find((each) => each.end >= time - 1e-9)?.from ?? 0,
+    );
+    const rests = (
+      whole ? bars.map((length) => restOf(length, reading.unit)) : [restOf(total, reading.unit)]
+    ).map((rest) => lettered(rest, letter));
     if (ending) {
       const after = selectedNotes(text, [{ from: ending.from, to: ending.from + 1 }], file)[0];
       const spot = after?.span.to ?? ending.to;
@@ -3049,10 +3071,10 @@ function hairpinsKept(
 }
 
 /**
- * ½×, 2× and a dot in one voice of a tune with several (round 7): the voices stay in step. Halved,
- * a bar's notes leave a rest for the time they gave up, after them; doubled or dotted past the
- * bar's length, it's refused, saying which bar. `changes` are the lengths' own changes. Null in a
- * tune with one voice (its bars may change length; the bar check says so).
+ * ½×, 2× and a dot keep every bar its length, in any tune (round 7; one voice too since round 8,
+ * rule (e)): halved, a bar's notes leave rests for the time they gave up, after them, by the
+ * beat; doubled or dotted past the bar's length, it's refused, saying which bar. `changes` are
+ * the lengths' own changes.
  */
 export function lengthsInStep(
   text: string,
@@ -3087,7 +3109,7 @@ export function lengthsInStep(
     bar.events.push({ from: item.from, to: item.to, length, unit: item.unit });
     bar.total += length;
   }
-  if (new Set(bars.map((bar) => bar.voice)).size < 2) return null;
+  const several = new Set(bars.map((bar) => bar.voice)).size > 1;
   const changed = (event: Event) =>
     changes.some((change) => change.from >= event.from && change.from <= event.to);
   const out = [...changes];
@@ -3100,13 +3122,25 @@ export function lengthsInStep(
     const full = length ? length.num / length.den : null;
     if (delta > 1e-9 && full !== null && bar.total + delta > full + 1e-9)
       return {
-        refused: `${label} would overfill bar ${bar.number} of V:${bar.voice}, out of step with the other voices: make room in the bar first, or select fewer notes.`,
+        refused: several
+          ? `${label} would overfill bar ${bar.number} of V:${bar.voice}, out of step with the other voices: make room in the bar first, or select fewer notes.`
+          : `${label} would overfill bar ${bar.number}: make room in the bar first, or select fewer notes.`,
       };
     if (delta < -1e-9) {
       const last = own[own.length - 1] as Event;
       const span = selectedNotes(text, [{ from: last.from, to: last.from + 1 }], file)[0]?.span;
       const at = span?.to ?? last.to;
-      out.push({ from: at, to: at, insert: ` ${restOf(-delta, last.unit)}` });
+      // Where the rests start in the bar, the notes before them at their new lengths.
+      const upTo = bar.events.slice(0, bar.events.indexOf(last) + 1);
+      const position = upTo.reduce(
+        (sum, event) => sum + (changed(event) ? event.length * factor : event.length),
+        0,
+      );
+      const letter = restLetter(text, file, bar.voice, last.from);
+      const written = restPieces(position, -delta, beatOf(bar.meter), false).map(
+        (piece) => `${letter}${lengthText(piece, last.unit)}`,
+      );
+      out.push({ from: at, to: at, insert: ` ${written.join(" ")}` });
       rests += 1;
     }
   }
@@ -3114,7 +3148,7 @@ export function lengthsInStep(
     changes: out.sort((a, b) => a.from - b.from || a.to - b.to),
     ...(rests
       ? {
-          said: `${label}: a rest in ${rests === 1 ? "the bar" : `each of the ${rests} bars`} for the time given up, so the voices stay in step.`,
+          said: `${label}: a rest in ${rests === 1 ? "the bar" : `each of the ${rests} bars`} for the time given up, so ${several ? "the voices stay in step" : "every bar keeps its length"}.`,
         }
       : {}),
   };

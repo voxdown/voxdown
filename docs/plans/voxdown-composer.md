@@ -1277,3 +1277,58 @@ MuseScore and Dorico are the reference for what Delete, Cut, Paste and the decor
 12. **While a selection loops**, the looped passage stays outlined (a dashed band) whatever is clicked.
 
 **First view.** 716.6 KB, under its 720 KB check.
+
+### Round 6 fixes (after Claude 7.0; Codex's 1,020-case sweep unscored)
+
+**The rule change (the owner's, following MuseScore).** Delete, Backspace and Cut over notes that are less than whole bars leave rests of the same length, in every tune:
+- Rests side by side in a bar merge where the notation allows (`z2 z` → `z3`), never across a tuplet, a broken rhythm or a chord symbol.
+- Whole bars, in every sounding voice, still go.
+- A caret still deletes characters, and typing over a selection still replaces its notes.
+- "Notes replaced by rests" is said the first time.
+
+The cheat sheet says so.
+
+1. **Moving repeats by paste.**
+   - Whole bars pasted on a clicked note go in at it.
+   - Moved after part of a bar, they go after a repeat's or ending's sign, never inside it.
+   - A copy holding a repeat that lands in another repeat goes outside it (before it from its first note, else after its last ending), said so.
+   - A repeat sign at either end of the copy joins the bar line it meets (`:|` `|:` is `::`).
+   - The Kesh's A and B parts move both ways, by caret, clicked note or selected bar.
+2. **Every verse:** every `w:` line under a music line follows Delete, Cut, Duplicate and Paste.
+3. **Text selections across voice lines:** only the music goes, voice by voice. `V:`/`[V:]` markers, lyrics and headers stay. Typing over a range that crosses voices is refused, saying why; a range in each voice, as the score selects, is typed into each.
+4. **Paste in one voice of several:**
+   - Over a selection it overwrites: bar for bar, or notes within one bar, with rests for any time left. It's refused when it doesn't fit.
+   - At a caret it goes in, with rests in the other voices, said so.
+   - A clicked note takes whole bars in at it, and notes over it.
+5. **Copy and Cut with the text hidden** (the score alone, on a phone) write the clipboard themselves. An empty or non-music clipboard pasted over notes does nothing: "Nothing to paste".
+6. **Blank lines:** a Cut or Delete drops only the lines it emptied, never the blank line between tunes. A line left with only bar lines goes, its sign joining the bar line before, so a final `|]` stays the music's end.
+7. **A two-voice copy** on one note of a staff holding both voices (as `%%score (1 2)` groups them) pastes both, at the same point.
+8. **Chord symbols:** a deleted note's chord symbol stays, on its rest.
+9. **Insert › Second voice** selects its first rest. Typing over the voice's rests writes it bar by bar: a bar's rest shrinks, then goes, and a full bar goes on into the next bar's rest.
+10. **Transposing** spells for the key (B♭ in F; E♭ and B♭ in C, as step entry does). **Edit › Notes › Transpose to key…** moves the selection, or the whole tune with its `K:` and `[K:]` fields, the nearer way.
+11. **Accessibility:**
+    - Menus (by mouse, or Escape in the decoration menu) give focus back where it was.
+    - An edit from the score's keys is announced once, with its new count.
+    - Rests selected are "3 rests selected".
+12. **Layout:**
+    - Duplicate of whole lines adds new lines, with their verses.
+    - No line of only `:|` or `|]` is left.
+    - A paste's seams get single spaces.
+    - The status names marks plainly ("Fine", "D.C. al Fine").
+
+**The edit sweep** (`test/composer-edit-sweep.test.ts`, under a second):
+- **Edits:** Delete, Backspace, typing, Duplicate, Cut then Paste and Copy then Paste.
+- **Selections:** every note, part of each bar, and runs of one to three whole bars, per voice, in six tunes (compact and spaced repeats, D.S. al Coda, tuplets, inline fields, interleaved voices with two verses).
+- **After each edit:**
+  - no fused bar lines;
+  - every bar of every voice its length, and equal bar counts;
+  - the play order changed as it should;
+  - verses kept;
+  - undo exact, through CodeMirror's own changes.
+- **What it found:**
+  - Duplicate across repeat signs (now refused), and of bars opening with fields (now written under them);
+  - a paste over part of a tuplet (refused);
+  - a segno and its D.S. cut together (they go together);
+  - emptied verses after rests in some voices only (dropped).
+
+**First view.** 710 KB, under its 720 KB check. The musical commands (`commands.ts`) now load with the editing modules, not with the start screen.

@@ -443,10 +443,6 @@ export function barLine(text: string, position: number): Change {
   return { from: position, to: position, insert: `${lead}|${tail}` };
 }
 
-export function newTuneTemplate(number: number, title = "Untitled tune"): string {
-  return `X:${number}\nT:${title}\nM:4/4\nL:1/8\nQ:1/4=100\nK:C\n`;
-}
-
 function merge(changes: Change[]): Change[] {
   return changes
     .sort((a, b) => a.from - b.from || a.to - b.to)

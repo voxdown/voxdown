@@ -6,8 +6,8 @@
 import { isolateHistory } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
 import { fieldOf, lineKind, meterLength, tokenizeMusic, value } from "./abc";
-import { newTuneTemplate } from "./commands";
 import { createDialog, dialogForm } from "./dialog";
+import { newTuneTemplate } from "./examples";
 import {
   type FileIndex,
   type TuneInfo,

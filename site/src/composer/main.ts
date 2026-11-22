@@ -17,21 +17,8 @@ import {
 } from "@codemirror/view";
 import { frac, lineKind, parseKey, tokenizeMusic } from "./abc";
 import { barAt as barInText, checkBars, describeBar, tuneMeter } from "./barcheck";
-import {
-  type Change,
-  type Range,
-  barLine,
-  decorationMark,
-  eventsIn,
-  markSelection,
-  musicParts,
-  newTuneTemplate,
-  removeDots,
-  scaleLengths,
-  toggleSlur,
-  toggleTies,
-  transpose,
-} from "./commands";
+// The musical commands load with the editing modules (loadEditing), not with the start screen.
+import type { Change, Range } from "./commands";
 import { humanDate } from "./dates";
 import { createDialog, lazyDialog } from "./dialog";
 import {
@@ -45,7 +32,7 @@ import {
   rememberGaps,
   setMarks,
 } from "./editor";
-import { EXAMPLES, NEW_TUNE } from "./examples";
+import { EXAMPLES, NEW_TUNE, newTuneTemplate } from "./examples";
 import type { Explanation } from "./explain";
 import { INSTRUMENTS, type InstrumentId, isInstrument } from "./instruments";
 import { LocalFiles, download } from "./local-file";
@@ -358,6 +345,7 @@ function clipboard(kind: "cut" | "copy") {
  * another unit or key), loaded once the editor is in use; until then the editor's own ways do.
  */
 let barwise: typeof import("./barwise") | null = null;
+let commands: typeof import("./commands") | null = null;
 let paster: typeof import("./paste") | null = null;
 /** abcjs's warnings and unclosed slurs as problems (./problems), loaded with the rest. */
 let problemChecks: typeof import("./problems") | null = null;
@@ -367,11 +355,13 @@ function loadEditing() {
     import("./barwise"),
     import("./paste"),
     import("./problems"),
+    import("./commands"),
   ]).then(
-    ([bars, paste, checks]) => {
+    ([bars, paste, checks, musical]) => {
       barwise = bars;
       paster = paste;
       problemChecks = checks;
+      commands = musical;
       runChecks();
     },
     () => {
@@ -429,10 +419,15 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
   if (over.length && !music) {
     const doc = target.state.doc.toString();
     if (selectedNotes(doc, over, target.state.field(fileIndexField)).length) {
-      sayAboutSelection("Nothing to paste: the clipboard holds no music.");
+      sayAboutSelection(
+        pasted.trim()
+          ? "Nothing to paste: the clipboard holds no music."
+          : "Nothing to paste: the clipboard is empty.",
+      );
       return true;
     }
   }
+  if (!pasted) return false;
   if (!paster) {
     // A copy of voices before ./paste loads: told at once, done when it has.
     if (!/^V:\s*\S/.test(pasted)) return false;
@@ -495,8 +490,7 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
 // Ctrl/⌘ V in the score pastes into the music at its selection, as in the text, the score
 // keeping the keys (the browser's paste event comes to the score itself).
 scoreScroll.addEventListener("paste", (event) => {
-  const pasted = event.clipboardData?.getData("text/plain");
-  if (!pasted) return;
+  const pasted = event.clipboardData?.getData("text/plain") ?? "";
   event.preventDefault();
   if (pastePlanned(view, pasted, event.clipboardData?.getData(CLIP_SOURCE))) return;
   view.dispatch(view.state.replaceSelection(pasted), {
@@ -805,9 +799,9 @@ const keys: KeyBinding[] = [
 
 const copyVoices = EditorView.domEventHandlers({
   paste(event, view) {
-    const pasted = event.clipboardData?.getData("text/plain");
-    if (!pasted || !pastePlanned(view, pasted, event.clipboardData?.getData(CLIP_SOURCE)))
-      return false;
+    // (An empty clipboard too: over notes, nothing is pasted, said so.)
+    const pasted = event.clipboardData?.getData("text/plain") ?? "";
+    if (!pastePlanned(view, pasted, event.clipboardData?.getData(CLIP_SOURCE))) return false;
     event.preventDefault();
     return true;
   },
@@ -1025,7 +1019,8 @@ function replaceMusic(target: EditorView, typed: string): boolean {
   // line into the next, lyrics, V: lines), only the music goes, voice by voice.
   const doc = state.doc.toString();
   const file = state.field(fileIndexField);
-  const parts = musicParts(doc, list, file);
+  if (!commands) return false;
+  const parts = commands.musicParts(doc, list, file);
   const notes = selectedNotes(doc, parts, file);
   if (!typed) {
     if (!parts.length || !notes.length) return false;
@@ -1038,7 +1033,12 @@ function replaceMusic(target: EditorView, typed: string): boolean {
   const mixed =
     parts.length !== whole.length ||
     parts.some((part, at) => part.from !== whole[at]?.from || part.to !== whole[at]?.to);
-  if (notes.length && (new Set(notes.map((each) => each.event.voice)).size > 1 || mixed)) {
+  // (A range in each voice, as the score selects, is typed into each: one range across voices,
+  // or reaching lyrics or V: lines, isn't.)
+  const crosses = parts.some(
+    (part) => new Set(selectedNotes(doc, [part], file).map((each) => each.event.voice)).size > 1,
+  );
+  if (notes.length && (crosses || mixed)) {
     sayAboutSelection(
       "Typing replaces notes in one voice: this selection crosses voices or other lines. Select within one voice, or press Delete to clear each voice's notes.",
     );
@@ -1176,7 +1176,8 @@ function typeMark(target: EditorView, typed: string): boolean {
   const state = target.state;
   const ranges = state.selection.ranges.map((range) => ({ from: range.from, to: range.to }));
   const gaps = state.field(brokenGapsField);
-  const result = markSelection(
+  if (!commands) return false;
+  const result = commands.markSelection(
     state.doc.toString(),
     ranges,
     typed,
@@ -2329,7 +2330,9 @@ function toggleNote(note: ScoreNote) {
     let to = end;
     while (to > from && /\s/.test(doc[to - 1] as string)) to -= 1;
     while (from < to && /\s/.test(doc[from] as string)) from += 1;
-    return to > from && eventsIn(doc, [{ from, to }], fileIndex()).length ? [{ from, to }] : [];
+    return to > from && selectedNotes(doc, [{ from, to }], fileIndex()).length
+      ? [{ from, to }]
+      : [];
   };
   selectRanges(
     [
@@ -3153,6 +3156,12 @@ function apply(changes: Change[], label: string, outward = true): boolean {
 }
 
 function music(command: string): boolean {
+  // The commands load with the editor; one chosen before that runs once they have.
+  if (!commands) {
+    void loadEditing().then(() => commands && music(command));
+    return true;
+  }
+  const { barLine, removeDots, scaleLengths, toggleSlur, toggleTies, transpose } = commands;
   const doc = text();
   const index = fileIndex();
   const list = ranges();
@@ -3218,8 +3227,8 @@ function music(command: string): boolean {
  * last, a jump once in the top voice, a fermata on the last note, articulations on every note).
  */
 function decorationMenu(anchor: HTMLElement) {
-  void Promise.all([import("./decoration-groups"), import("./marks")]).then(
-    ([{ DECORATION_GROUPS: groups }, { placeMark }]) =>
+  void Promise.all([import("./decoration-groups"), import("./marks"), import("./commands")]).then(
+    ([{ DECORATION_GROUPS: groups }, { placeMark }, { decorationMark }]) =>
       popupMenu(anchor, [
         ...groups.flatMap(([heading, choices]) => [
           { heading },
@@ -3251,7 +3260,7 @@ function decorationMenu(anchor: HTMLElement) {
 function insertPassDynamic() {
   // The first selected note (or the one at the caret), whichever way the selection was made.
   const at = view.state.selection.main.from;
-  const [event] = eventsIn(text(), [{ from: at, to: at }], fileIndex());
+  const event = selectedNotes(text(), [{ from: at, to: at }], fileIndex())[0]?.event;
   if (!event) {
     notice(
       "Put the caret on a note first: the dynamic goes on the note where the 2nd time changes.",

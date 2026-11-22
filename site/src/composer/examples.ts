@@ -115,3 +115,8 @@ L:1/8
 Q:1/4=100
 K:C
 `;
+
+/** A new tune's header: its number and title, 4/4 in eighths at a walking pace, in C. */
+export function newTuneTemplate(number: number, title = "Untitled tune"): string {
+  return `X:${number}\nT:${title}\nM:4/4\nL:1/8\nQ:1/4=100\nK:C\n`;
+}

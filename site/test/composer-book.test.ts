@@ -10,7 +10,7 @@ import {
   sortChange,
   titleKey,
 } from "../src/composer/book";
-import { newTuneTemplate } from "../src/composer/commands";
+import { newTuneTemplate } from "../src/composer/examples";
 import { EXAMPLES } from "../src/composer/examples";
 import { indexFile } from "../src/composer/tunes";
 

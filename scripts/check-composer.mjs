@@ -4912,19 +4912,21 @@ console.log(
   // Ctrl/⌘ X and Delete in the score take the whole bar out (the repeat's end kept), and the
   // part of a bar only its notes; Delete and Backspace in the text (after Enter) keep every bar
   // line, an emptied bar kept apart from the next bar line. P:B stays either way.
+  // Round 6: the part of a bar taken (fed, d2fd) leaves rests, so every bar keeps its length;
+  // the whole bar (cdeg fedc) goes, its repeat's end kept.
   for (const [keys, left] of [
-    [["Control+x"], "|:dfaf g:|"],
-    [["Delete"], "|:dfaf g:|"],
+    [["Control+x"], "|:dfaf gz3:|"],
+    [["Delete"], "|:dfaf gz3:|"],
     // Round 5: the text's Delete and Backspace are the score's Delete (one plan).
-    [["Enter", "Delete"], "|:dfaf g:|"],
-    [["Enter", "Backspace"], "|:dfaf g:|"],
+    [["Enter", "Delete"], "|:dfaf gz3:|"],
+    [["Enter", "Backspace"], "|:dfaf gz3:|"],
   ]) {
     await put(reel);
     await pull(...span);
     for (const key of keys) await p.keyboard.press(key);
     assert.equal(
       await docText(p),
-      `X:1\nT:Reel with parts\nM:4/4\nL:1/8\nK:D\nP:A\n${left}\nP:B\n|: ad fd|e2ge be ge:|\n`,
+      `X:1\nT:Reel with parts\nM:4/4\nL:1/8\nK:D\nP:A\n${left}\nP:B\n|:z4 ad fd|e2ge be ge:|\n`,
       `${keys.join(" then ")} on a score selection deletes its music and leaves P:B`,
     );
   }
@@ -5448,8 +5450,8 @@ console.log(
   await p.keyboard.press("Control+x");
   assert.match(
     await docText(p),
-    /\nc \|g a b c'\|[^\n]*\nV:2\nC \|G A B c\|/,
-    "Cut of part of a bar keeps its bar lines",
+    /\nc z3\|g a b c'\|[^\n]*\nV:2\nC z3\|G A B c\|/,
+    "Cut of part of a bar keeps its bar lines (round 6: rests in its notes' place)",
   );
   await p.keyboard.press("Control+z");
   await pull(
@@ -5468,7 +5470,7 @@ console.log(
   await p.keyboard.press("Control+x");
   assert.match(
     await docText(p),
-    /\nc d e f\|z z z z\|c' b a g\|f e d c\|\]\n/,
+    /\nc d e f\|z4\|c' b a g\|f e d c\|\]\n/,
     "Cut of a whole bar in one voice of two leaves rests (round 5: voices in step)",
   );
   assert.equal(
@@ -5485,7 +5487,7 @@ console.log(
   await changed(doc);
   assert.match(
     await docText(p),
-    /\nc d e f\|z z z z\|c' b a g\|g a b c'\|f e d c\|\]\n/,
+    /\nc d e f\|z4\|c' b a g\|g a b c'\|f e d c\|\]\n/,
     "pasted back at a bar's start: a whole bar, no double bar line",
   );
   // 2. A copy of four parts in interleaved blocks: a voice's parts joined; a header caret refused.
@@ -6181,11 +6183,7 @@ console.log(
   await put(hymn);
   await choose([of(hymn, "B, A, G, G,")]);
   await p.keyboard.press("Backspace");
-  assert.match(
-    await docText(p),
-    /\[V:T\] B,2 \| z z z z \| B,2 C2/,
-    "the tenor's bar becomes rests",
-  );
+  assert.match(await docText(p), /\[V:T\] B,2 \| z4 \| B,2 C2/, "the tenor's bar becomes rests");
   await says("notice", /Rests in place of the notes, so V:T stays in step/);
   await p.waitForTimeout(1000);
   assert.equal(
@@ -6243,6 +6241,215 @@ console.log(
   await ctx.close();
   console.log(
     "Composer: selection hardening round 5: Backspace over a repeat, the score keeping its keys, marks placed by kind, no nested repeats, the Kesh's parts swapped, the chorale's voices in step, bars pasted after a part-bar selection, pasted and duplicated notes selected, tunes kept apart, the loop in sight: passed",
+  );
+}
+
+/* 35. Selection hardening, round 6: paste, lyrics and selections across voices. */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      if (view.state.doc.toString() !== x)
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    await p.waitForFunction((x) => x.includes(window.composer.scoreIndex()?.source ?? "\u0000"), t);
+    await p.waitForTimeout(400);
+    return p.evaluate(() => window.composer.geometry());
+  };
+  const choose = (list) =>
+    p.evaluate((list) => {
+      const view = window.composer.view;
+      const S = view.state.selection.constructor;
+      view.dispatch({ selection: S.create(list.map(([a, b]) => S.range(a, b))) });
+      view.focus();
+    }, list);
+  const of = (text, part, nth = 0) => {
+    let at = text.indexOf(part);
+    for (let n = 0; n < nth; n++) at = text.indexOf(part, at + 1);
+    return [at, at + part.length];
+  };
+  const settled = (was) =>
+    p.waitForFunction((w) => window.composer.view.state.doc.toString() !== w, was).catch(() => {});
+  const says = (id, pattern) =>
+    p.waitForFunction(
+      ([id, source]) => new RegExp(source).test(document.getElementById(id).textContent),
+      [id, pattern.source],
+    );
+  // The rule: Backspace over part of a bar leaves rests, said the first time only.
+  const plain = "X:1\nT:Rests\nM:4/4\nL:1/4\nK:C\nC D E F | G A B c |]\n";
+  await put(plain);
+  await choose([of(plain, "D E")]);
+  await p.keyboard.press("Backspace");
+  assert.match(
+    await docText(p),
+    /\nC z2 F \| G A B c \|\]\n/,
+    "part of a bar: rests as long, merged",
+  );
+  await says("notice", /Notes replaced by rests/);
+  await p.locator("#notice").getByRole("button", { name: "Dismiss" }).click();
+  let doc = await docText(p);
+  await choose([of(doc, "A B")]);
+  await p.keyboard.press("Backspace");
+  assert.match(await docText(p), /\| G z2 c \|\]/, "again: rests");
+  assert(
+    await p.evaluate(() => {
+      const notice = document.getElementById("notice");
+      return (
+        notice.hidden ||
+        notice.classList.contains("leaving") ||
+        !/Notes replaced by rests/.test(notice.textContent)
+      );
+    }),
+    "said only the first time",
+  );
+  // 1. The Kesh's B part moved before its A part by a click on A's first note.
+  const kesh =
+    "X:2\nT:Kesh\nM:6/8\nL:1/8\nK:G\n|:GAG GAB|ABA ABd|edd gdd|edB dBA|\nGAG GAB|ABA ABd|edd gdB|AGF G3:|\n|:BAB dBd|ege dBA|BAB dBG|ABA AGA|\nBAB dBd|ege dBd|gfg aga|bgf g3:|\n";
+  await put(kesh);
+  await choose([[kesh.indexOf("BAB dBd"), kesh.lastIndexOf("g3") + 2]]);
+  await p.keyboard.press("Control+x");
+  doc = await docText(p);
+  const geo = await p.evaluate(() => window.composer.geometry());
+  const first = geo.notes.sort((a, b) => a.start - b.start)[0];
+  await p.mouse.click(first.head + 3, first.y);
+  await p.keyboard.press("Control+v");
+  await settled(doc);
+  doc = await docText(p);
+  assert(doc.indexOf("BAB dBd") < doc.indexOf("GAG GAB"), "B now comes before A");
+  assert.match(doc, /bgf g3::GAG GAB/, "the B part's end and the A part's start join as ::");
+  // 3. In the chorale, Backspace over a text selection from the soprano into the tenor clears
+  // each voice's notes only; typing over it is refused.
+  const hymn =
+    "X:1\nT:Old Hundredth\nM:2/2\nL:1/4\n%%score (S A) (T B)\nV:S clef=treble\nV:A clef=treble\nV:T clef=bass\nV:B clef=bass\nK:G\n[V:S] G2 | G F E D | G2 A2 | B2 B2 |]\nw: All peo-ple that on earth do dwell,\n[V:A] D2 | D D C B, | D2 D2 | D2 D2 |]\n[V:T] B,2 | B, A, G, G, | B,2 C2 | B,2 G,2 |]\n[V:B] G,2 | G, D, E, G, | G,2 F,2 | G,2 G,2 |]\n";
+  await put(hymn);
+  await choose([[hymn.indexOf("B2 B2"), hymn.indexOf("B,2 C2")]]);
+  await p.keyboard.type("A");
+  await says("explain", /Typing replaces notes in one voice/);
+  assert.equal(await docText(p), hymn, "typing across voices is refused");
+  await p.keyboard.press("Backspace");
+  doc = await docText(p);
+  for (const kept of ["[V:A]", "[V:T]", "[V:B]", "w: All", "V:S clef=treble"])
+    assert(doc.includes(kept), `${kept} is kept`);
+  // 4. and 7. In the duet, a paste at a caret in one voice puts rests in the other; a two-voice
+  // copy on one note of the staff holding both pastes both.
+  const duet =
+    "X:1\nT:Duet\nM:2/4\nL:1/8\n%%score (1 2)\nK:D\n[V:1] d2 fd | ed cB |]\n[V:2] F2 AF | GF ED |]\n";
+  await put(duet);
+  await p.evaluate(() => navigator.clipboard.writeText("a2 a2|"));
+  await p.evaluate((at) => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: at } });
+    view.focus();
+  }, duet.indexOf("ed cB"));
+  await p.keyboard.press("Control+v");
+  await settled(duet);
+  doc = await docText(p);
+  assert.match(doc, /\[V:1\] d2 fd \| a2 a2\|ed cB/, "pasted in V:1");
+  assert.match(doc, /\[V:2\] F2 AF \|[^\n]*z4[^\n]*GF ED/, "a bar's rest in V:2, in step");
+  await says("notice", /rests in V:2 keep it in step/);
+  await put(duet);
+  await p.evaluate(() => navigator.clipboard.writeText("V:1\na2 a2|\nV:2\nA2 A2|\n"));
+  await p.evaluate((at) => {
+    const view = window.composer.view;
+    view.dispatch({ selection: { anchor: at } });
+    view.focus();
+  }, duet.indexOf("ed cB"));
+  await p.keyboard.press("Control+v");
+  await settled(duet);
+  doc = await docText(p);
+  assert.match(doc, /\[V:1\] d2 fd \| a2 a2\|ed cB/, "V:1's part");
+  assert.match(doc, /\[V:2\] F2 AF \| A2 A2\|GF ED/, "and V:2's, at the same point");
+  // 5. Nothing to paste: an empty clipboard over a note changes nothing.
+  await put(duet);
+  await p.evaluate(() => navigator.clipboard.writeText(""));
+  await choose([of(duet, "fd")]);
+  await p.keyboard.press("Control+v");
+  await p.waitForTimeout(300);
+  assert.equal(await docText(p), duet, "nothing pasted, nothing lost");
+  // 8. A deleted note's chord symbol stays, on its rest.
+  const lead = 'X:1\nT:Lead\nM:4/4\nL:1/4\nK:C\n"C"E E "G7"F F | "C"E4 |]\n';
+  await put(lead);
+  await choose([of(lead, '"G7"F')]);
+  await p.keyboard.press("Delete");
+  assert.match(await docText(p), /"C"E E "G7"z F \|/, "the chord symbol is on the rest");
+  // 9. Second voice: its first rest selected; a note typed shrinks the bar's rest.
+  const solo = "X:1\nT:Solo\nM:4/4\nL:1/8\n%%score 1\nK:C\nV:1\nc2 d2 e2 f2|g8|]\n";
+  await put(solo);
+  await menu("insert", "Second voice", p);
+  await settled(solo);
+  assert.deepEqual(
+    await p.evaluate(() => {
+      const view = window.composer.view;
+      return view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to);
+    }),
+    "z8",
+    "the first placeholder rest is selected",
+  );
+  await p.keyboard.type("c2");
+  await p.waitForFunction(() =>
+    /V:2 clef=bass\nc2z6 \| z8 \|/.test(window.composer.view.state.doc.toString()),
+  );
+  // 10. Transpose to key: the whole tune to F, its key signature with it.
+  const tune = 'X:1\nT:Up\nM:4/4\nL:1/4\nK:C\n"C"C E G c |]\n';
+  await put(tune);
+  await menu("edit", "Notes", p);
+  await p.getByRole("menuitem", { name: "Transpose to key…" }).click();
+  await p.locator("#transpose-dialog select").selectOption("F");
+  await p.locator("#transpose-dialog button.primary").click();
+  await p.waitForFunction(() =>
+    /K:F\n"F"F A c f \|\]/.test(window.composer.view.state.doc.toString()),
+  );
+  // 11. Escape in the decoration menu gives the keys back to the text.
+  await choose([of(tune.replace("K:C", "K:F"), "F A")]);
+  await p.keyboard.press("Alt+d");
+  await p.getByRole("menuitem").first().waitFor();
+  await p.keyboard.press("Escape");
+  assert(
+    await p.evaluate(() => window.composer.view.hasFocus),
+    "after Alt D then Escape, the text has the keys again",
+  );
+  // A selection of rests is said as rests.
+  const rests = "X:1\nT:Rests\nM:4/4\nL:1/4\nK:C\nC z z z |]\n";
+  await put(rests);
+  await choose([of(rests, "z z z")]);
+  await says("explain", /^3 rests selected/);
+  await ctx.close();
+  // 5. On a phone with only the score shown, Edit › Copy copies.
+  const phone = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  await phone.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(phone);
+  const q = await phone.newPage();
+  await q.goto(url);
+  await openExample("Ode to Joy", q);
+  await q.locator("#show-score").click();
+  await q.evaluate(() => {
+    const view = window.composer.view;
+    const doc = view.state.doc.toString();
+    const at = doc.indexOf("|", doc.indexOf("K:")) + 1;
+    view.dispatch({
+      selection: {
+        anchor: doc.indexOf(" ", at + 1) + 1,
+        head: doc.indexOf(" ", doc.indexOf(" ", at + 1) + 1),
+      },
+    });
+  });
+  await q.evaluate(() => navigator.clipboard.writeText("nothing yet"));
+  await menu("edit", "Copy", q);
+  await q.waitForFunction(async () => (await navigator.clipboard.readText()) !== "nothing yet");
+  await phone.close();
+  console.log(
+    "Composer: selection hardening round 6: rests where part of a bar goes (said once), the Kesh's parts moved by a click, the chorale across voices, the duet pasted in step, nothing to paste, chord symbols kept, a second voice typed over, Transpose to key, focus given back, rests counted, Copy on a phone: passed",
   );
 }
 

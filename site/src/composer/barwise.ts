@@ -702,6 +702,30 @@ export function cutPlan(
   );
   const resting: Picked[] = [];
   let voicesKept = false;
+  // Every run of whole bars that goes, first: a slur's ends are kept only when its pair stays,
+  // judged over all of them (its other end may be in another voice block's run; round 10).
+  const allRuns: Range[] = [];
+  for (const line of chains) {
+    const segments = segmentsOf(line, eventsOn(text, line, file)).filter(
+      (segment) => segment.tokens.length > 0,
+    );
+    const isWhole = (segment: Segment) =>
+      selected.some((range) => segment.to > range.from && segment.from < range.to) &&
+      segment.events.length > 0 &&
+      segment.events.every((at) => picked.has(at) && (!canGo || canGo.has(at)));
+    for (let at = 0; at < segments.length; at++) {
+      if (!isWhole(segments[at] as Segment)) continue;
+      let last = at;
+      while (last + 1 < segments.length && isWhole(segments[last + 1] as Segment)) last += 1;
+      const first = segments[at] as Segment;
+      const end = segments[last] as Segment;
+      allRuns.push({
+        from: first.open ? first.open.from : (first.tokens[0] as MusicToken).from,
+        to: end.close ? end.close.to : (end.tokens.at(-1) as MusicToken).to,
+      });
+      at = last;
+    }
+  }
   for (const line of chains) {
     // A bar of nothing (a line's end and the next line's start) joins the bars either side.
     const segments = segmentsOf(line, eventsOn(text, line, file)).filter(
@@ -764,7 +788,10 @@ export function cutPlan(
           if (token.kind === "inline-field" && keeper(token))
             fields.set(token.text.slice(1, 2), token.text);
           else if (keeper(token)) (leads(token) ? after : before).push(token.text);
-          else if (token.kind === "slur" && !inside(structure.slurs.get(token.from) ?? -1, [span]))
+          else if (
+            token.kind === "slur" &&
+            !inside(structure.slurs.get(token.from) ?? -1, [span, ...allRuns])
+          )
             (token.text === "(" ? after : before).push(token.text);
         }
       // Fields go on to the bar after; with no music after in the voice, they go (round 9).
@@ -787,7 +814,9 @@ export function cutPlan(
         const own = next
           .slice(0, head < 0 ? 0 : head)
           .some(({ token }) => token.kind === "decoration" && DYNAMIC_MARK.test(token.text));
-        if (head >= 0 && !own) after.push(level.text);
+        // On the note itself, after the fields opening its bar (`[L:1/4]!mf!C`; round 10).
+        const note = next[head]?.token;
+        if (note && !own) changes.push({ from: note.from, to: note.from, insert: level.text });
       }
       // A D.S. and its segno (and its coda) both in what goes: the jump goes with them.
       const marks = run
@@ -921,6 +950,12 @@ export function cutPlan(
     )
     .map((each) => each.event.from);
   changes.push(...lyricsFor(text, file, goneNotes, []));
+  // Rests left before a note whose syllable is * or _ take one each (abcjs gives them those).
+  for (const change of rests.changes)
+    if (change.to > change.from && /[zx]/.test(change.insert))
+      changes.push(
+        ...skipsForRest(text, file, change.to, (change.insert.match(/[zx]/g) ?? []).length),
+      );
   // Hairpins whole: an end moved onto a note left inside, or both ends gone.
   changes.push(
     ...hairpinsKept(
@@ -1586,6 +1621,7 @@ export function duplicate(
           text,
           file,
           notes.filter((each) => !each.event.rest).map((each) => each.event.from),
+          insertAt,
         ),
       );
     // The other voices sounding then get rests as long, at the same point, to stay in step.
@@ -1684,7 +1720,7 @@ export function duplicate(
 }
 
 /** The syllables of some notes, put again after the last one's (for their copy). */
-function lyricsAlong(text: string, file: FileIndex, notes: number[]): Change[] {
+function lyricsAlong(text: string, file: FileIndex, notes: number[], at?: number): Change[] {
   const first = notes[0];
   if (first === undefined) return [];
   const from = text.lastIndexOf("\n", first - 1) + 1;
@@ -1696,16 +1732,26 @@ function lyricsAlong(text: string, file: FileIndex, notes: number[]): Change[] {
   const indices = notes.map((each) => line.indexOf(each)).filter((each) => each >= 0);
   // Each verse brings its own syllables of those notes.
   const changes: Change[] = [];
+  // Where the copy goes in the music (after a tuplet the notes are in, say): its syllables go in
+  // after the notes before that place (round 10, item 9).
+  const before = at === undefined ? null : line.filter((each) => each < at).length;
   for (const verse of versesUnder(text, to)) {
     const slots = lyricSlots(text.slice(verse.from, verse.to), verse.from);
     const own = indices.map((index) => slots[index]).filter(Boolean) as Range[];
-    const last = own.at(-1);
-    if (!last) continue;
+    const last = before === null ? own.at(-1) : before > 0 ? slots[before - 1] : undefined;
+    if (!own.length) continue;
     // Syllables of one word stay joined by their hyphen.
     const words = own
       .map((slot) => text.slice(slot.from, slot.to).trim())
       .map((word, at, all) => (at < all.length - 1 && !/-$/.test(word) ? `${word} ` : word))
       .join("");
+    if (!last) {
+      // (At the line's start: first in the verse.)
+      const first = slots[0];
+      const place = first ? first.from : verse.from;
+      changes.push({ from: place, to: place, insert: `${words} ` });
+      continue;
+    }
     changes.push({
       from: last.to,
       to: last.to,
@@ -2023,6 +2069,38 @@ function restChanges(text: string, file: FileIndex, picked: Picked[]): RestPlan 
       unit: item.unit,
     });
   }
+  // When each event sounds, per voice: in a tune of several voices an over-full bar's time comes
+  // out only where every other voice loses it at the same point (round 10, item 7).
+  const when = new Map<number, { voice: string; start: number; end: number; spacer: boolean }>();
+  for (const [voice, list] of voices) {
+    let clock = 0;
+    for (const bar of list)
+      for (const event of bar.events) {
+        when.set(event.from, {
+          voice,
+          start: clock,
+          end: clock + event.length,
+          spacer: event.rest === "x",
+        });
+        clock += event.length;
+      }
+  }
+  const alone = voices.size < 2;
+  const together = (members: number[]) => {
+    const spans = members.map((at) => when.get(at)).filter((each) => each !== undefined);
+    const own = spans[0];
+    if (!own) return false;
+    const start = Math.min(...spans.map((each) => each.start));
+    const end = Math.max(...spans.map((each) => each.end));
+    return [...when.entries()].every(
+      ([from, other]) =>
+        other.voice === own.voice ||
+        other.spacer ||
+        other.end <= start + 1e-9 ||
+        other.start >= end - 1e-9 ||
+        chosen.has(from),
+    );
+  };
   const tupletOf = new Map<number, (typeof structure.tuplets)[number]>();
   for (const tuplet of structure.tuplets)
     for (const note of tuplet.notes) tupletOf.set(note, tuplet);
@@ -2151,7 +2229,8 @@ function restChanges(text: string, file: FileIndex, picked: Picked[]): RestPlan 
       let spare = full !== null ? Math.max(0, total - full) : 0;
       const gone = new Set<Unit>();
       for (const unit of units) {
-        if (spare <= eps || !unit.picked || unit.fixed) continue;
+        if (spare <= eps || !unit.picked || unit.fixed || !(alone || together(unit.members)))
+          continue;
         plan.overFull = true;
         if (unit.length <= spare + eps) {
           gone.add(unit);
@@ -3528,6 +3607,11 @@ export function lengthsInStep(
           ? `${label} would overfill bar ${bar.number} of V:${bar.voice}, out of step with the other voices: make room in the bar first, or select fewer notes.`
           : `${label} would overfill bar ${bar.number}: make room in the bar first, or select fewer notes.`,
       };
+    // A rest for the time given up that can't be written (a 3:2:4 tuplet halved): refused.
+    if (delta < -1e-9 && Math.abs(-delta * 64 - Math.round(-delta * 64)) > 1e-6)
+      return {
+        refused: `${label} here would leave a rest that can't be written (the tuplet's time halved): change the whole bar, or write the tuplet again.`,
+      };
     if (delta < -1e-9) {
       const last = own[own.length - 1] as Event;
       const span = selectedNotes(text, [{ from: last.from, to: last.from + 1 }], file)[0]?.span;
@@ -3548,6 +3632,7 @@ export function lengthsInStep(
         const index = out.indexOf(itself);
         out[index] = { ...itself, insert: `${itself.insert} ${written.join(" ")}` };
       } else out.push({ from: at, to: at, insert: ` ${written.join(" ")}` });
+      out.push(...skipsForRest(text, file, at, written.length));
       rests += 1;
     }
   }
@@ -3963,4 +4048,26 @@ export function lengthPartners(
       }
   }
   return out;
+}
+
+/**
+ * abcjs gives a verse's `*` or `_` to a rest in front of it (other syllables skip rests): a rest
+ * put in before a note whose syllable is `*` or `_` needs a `*` of its own, in every verse, so
+ * the syllables stay on their notes (round 10, item 8). `at` is where the rest goes.
+ */
+function skipsForRest(text: string, file: FileIndex, at: number, count = 1): Change[] {
+  const lineFrom = text.lastIndexOf("\n", at - 1) + 1;
+  const lineTo = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+  const notes = selectedNotes(text, [{ from: lineFrom, to: lineTo }], file)
+    .filter((each) => !each.event.rest && each.event.from >= lineFrom && each.event.from < lineTo)
+    .map((each) => each.event.from);
+  const index = notes.filter((note) => note < at).length;
+  const changes: Change[] = [];
+  for (const verse of versesUnder(text, lineTo)) {
+    const slots = lyricSlots(text.slice(verse.from, verse.to), verse.from);
+    const slot = slots[index];
+    if (slot && /^[*_]$/.test(text.slice(slot.from, slot.to)))
+      changes.push({ from: slot.from, to: slot.from, insert: "* ".repeat(count) });
+  }
+  return changes;
 }

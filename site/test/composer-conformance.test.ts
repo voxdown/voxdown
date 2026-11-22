@@ -274,7 +274,7 @@ for (const [name, text] of Object.entries(SCORES)) {
           const plan = lengthsInStep(text, file, changes, factor, name);
           if (!plan) continue;
           if ("refused" in plan) {
-            expect(plan.refused, at(label, range)).toMatch(/would overfill bar/);
+            expect(plan.refused, at(label, range)).toMatch(/would overfill bar|can.t be written/);
             continue;
           }
           const { after } = edit(text, plan.changes);

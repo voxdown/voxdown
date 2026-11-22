@@ -599,6 +599,19 @@ export function planPaste(
     }
     return { changes: withLyrics(text, file, changes), message: [plan.message, ...said].join(" ") };
   }
+  // Over music that reaches other lines (lyrics, fields, another voice's lines), with no plan
+  // for it: refused, never replaced as text (round 10, item 5's audit).
+  const across = (range: Range) => {
+    if (!text.slice(range.from, range.to).includes("\n")) return false;
+    if (!selectedNotes(text, [range], file).length) return false;
+    let line = text.lastIndexOf("\n", range.from - 1) + 1;
+    while (line < range.to) {
+      const end = text.indexOf("\n", line) < 0 ? text.length : text.indexOf("\n", line);
+      if (lineKind(text.slice(line, end), true) !== "music") return true;
+      line = end + 1;
+    }
+    return false;
+  };
   let targets = selected.length ? selected : ranges;
   const voices = new Set(selected.map((range) => voiceIn(text, file, range.from)));
   if (selected.length > 1 && voices.size > 1) {
@@ -645,6 +658,11 @@ export function planPaste(
     }
     const fitted = pasteKeepingBars(text, [range], insert, file, meter);
     if (fitted && "refused" in fitted) return fitted;
+    if (!fitted && across(range))
+      return {
+        refused:
+          "A paste goes over one voice's music: this selection reaches other lines. Select within one voice's music, or put the caret where the copy goes.",
+      };
     // (A clicked note made a caret is ours too: the editor's own paste would replace the note.)
     if (fitted || insert !== copy || at !== null) special = true;
     const done = placed(range, insert);

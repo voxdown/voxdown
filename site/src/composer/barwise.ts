@@ -154,6 +154,9 @@ function keptInside(
         (token.kind === "bar" ||
           keeper(token) ||
           leading(token) ||
+          // (A hairpin's ends stay, so it stays paired; round 10.)
+          (token.kind === "decoration" &&
+            (HAIRPIN_OPEN.test(token.text) || HAIRPIN_CLOSE.test(token.text))) ||
           (token.kind === "slur" && !inside(structure.slurs.get(token.from) ?? -1, selected)))
       )
         kept.push({ from: Math.max(token.from, range.from), to: Math.min(token.to, range.to) });
@@ -413,6 +416,14 @@ export function copyText(text: string, range: Range, file: FileIndex = indexFile
   const within = structure.tokens.filter(
     ({ token }) => token.from >= range.from && token.to <= range.to,
   );
+  // A hairpin's end whose other end isn't copied stays behind, as a slur's does (round 10).
+  const { pairs } = hairpinPairs(text, file, range.from);
+  for (const pair of pairs) {
+    const open = inside(pair.open.token.from, spans);
+    const close = inside(pair.close.token.from, spans);
+    if (open && !close) dropped.add(pair.open.token.from);
+    if (close && !open) dropped.add(pair.close.token.from);
+  }
   for (const { token } of within) {
     if (token.kind === "slur" && !inside(structure.slurs.get(token.from) ?? -1, spans))
       dropped.add(token.from);
@@ -987,7 +998,22 @@ function finishCut(
   said: string[],
 ): CutPlan {
   // The edit, then the caret in the text after it.
+  // (A mark two planners take out, a rest's and a hairpin's, goes once: a range taken twice
+  // would take what follows it.)
   const fine = changes
+    .sort((a, b) => a.from - b.from || b.to - a.to)
+    .filter(
+      (change, index, all) =>
+        change.to === change.from ||
+        change.insert !== "" ||
+        !all.some(
+          (other, at) =>
+            at < index &&
+            other.to > other.from &&
+            other.from <= change.from &&
+            other.to >= change.to,
+        ),
+    )
     .sort((a, b) => a.from - b.from || a.to - b.to)
     .map((change) => (change.insert ? change : { ...change, insert: apart(text, change) }));
   let after = text;
@@ -2327,7 +2353,7 @@ function lengthText(whole: number, unit: Fraction): string {
  * The selection, with the bars of spacer voices (`x` only) over the time that goes (round 9,
  * item 2): they go too, so every voice keeps in step.
  */
-function withSpacers(text: string, selected: Range[], file: FileIndex): Range[] {
+export function withSpacers(text: string, selected: Range[], file: FileIndex): Range[] {
   const go = timeCanGo(text, selected, file);
   if (!go?.size) return selected;
   const times = timed(text, file, (selected[0] as Range).from);
@@ -2379,6 +2405,62 @@ function timeCanGo(text: string, selected: Range[], file: FileIndex): Set<number
         (!spacer(other) || picked.has(other.from)),
     );
     if (over.every((other) => picked.has(other.from))) out.add(each.from);
+  }
+  // Time goes in whole bars only where every other voice sounding there loses whole bars at the
+  // same points: voices whose bar lines don't line up there (one with time added, say) keep their
+  // time, and rests are left (round 10).
+  const tune = file.tunes.find(
+    (each) => (selected[0] as Range).from >= each.from && (selected[0] as Range).from <= each.to,
+  );
+  if (!tune) return out;
+  type Bar = { voice: string; start: number; end: number; events: number[]; spacer: boolean };
+  const bars: Bar[] = [];
+  const open = new Map<string, Bar>();
+  const clocks = new Map<string, number>();
+  for (const item of tuneItems(text, tune, file)) {
+    const clock = clocks.get(item.voice) ?? 0;
+    let bar = open.get(item.voice);
+    if (item.type === "bar") {
+      if (bar?.events.length) open.delete(item.voice);
+      continue;
+    }
+    if (!bar) {
+      bar = { voice: item.voice, start: clock, end: clock, events: [], spacer: true };
+      open.set(item.voice, bar);
+      bars.push(bar);
+    }
+    const end = clock + item.duration.num / item.duration.den;
+    bar.events.push(item.from);
+    bar.end = end;
+    if (!spacer(item)) bar.spacer = false;
+    clocks.set(item.voice, end);
+  }
+  const eps = 1e-9;
+  const going = (bar: Bar) => bar.events.length > 0 && bar.events.every((at) => out.has(at));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const bar of bars) {
+      if (!going(bar)) continue;
+      const voices = new Set(bars.map((each) => each.voice));
+      for (const voice of voices) {
+        if (voice === bar.voice) continue;
+        const theirs = bars.filter(
+          (each) =>
+            each.voice === voice && each.start < bar.end - eps && each.end > bar.start + eps,
+        );
+        if (!theirs.length || theirs.every((each) => each.spacer && !going(each))) continue;
+        const aligned =
+          Math.abs((theirs[0] as Bar).start - bar.start) < eps &&
+          Math.abs((theirs.at(-1) as Bar).end - bar.end) < eps &&
+          theirs.every((each) => going(each) || each.spacer);
+        if (!aligned) {
+          for (const at of bar.events) out.delete(at);
+          changed = true;
+          break;
+        }
+      }
+    }
   }
   return out;
 }
@@ -3368,6 +3450,25 @@ export function overwriteForward(
       out += `${index && !together ? " " : ""}${item.text}`;
     });
     changes.push({ from, to, insert: out });
+  }
+  // A hairpin or slur with one end written over and the other not: the other end goes too, so
+  // nothing is left unpaired (round 10).
+  const replaced = changes.filter((change) => change.to > change.from);
+  const under = (at: number) => replaced.some((change) => at >= change.from && at < change.to);
+  for (const pair of hairpinPairs(text, file, range.from).pairs) {
+    const open = under(pair.open.token.from);
+    const close = under(pair.close.token.from);
+    if (open !== close) {
+      const left = open ? pair.close.token : pair.open.token;
+      changes.push({ from: left.from, to: left.to, insert: "" });
+    }
+  }
+  for (const [start, end] of structure.slurs) {
+    if (end < 0 || end < start) continue;
+    if (under(start) !== under(end)) {
+      const left = under(start) ? end : start;
+      changes.push({ from: left, to: left + 1, insert: "" });
+    }
   }
   const over = goneEvents.filter((each) => !each.rest && each.start >= selEnd - eps).length;
   const partly = tE > replaceEnd + eps;

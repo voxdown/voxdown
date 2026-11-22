@@ -221,3 +221,16 @@ describe("Codex's h10 fixtures, as regression tests", () => {
     expect(sang[index]).toBe("F:four/quatre");
   });
 });
+
+describe("what the seeded fuzz check found", () => {
+  it("a cut leaves a hairpin over spacers and a note as a bar of rest, not nothing", () => {
+    // (Moonlight, seed −1641564876: the rest's planner and the hairpin's both took out `!>(!`, and
+    // the second took the rest after it.)
+    const text =
+      "X:1\nM:C\nL:1/8\nV:1\nV:2\nV:3\nK:C\nV:1\nabcdefga | abcdefga | abcdefga |\nV:2\nx6 B2 | !<(!!<)!x8 | !>(!x6 !>)!B2 |\nV:3\nC8 | D8 | E8 |\n";
+    const from = text.indexOf("abcdefga");
+    const out = cutParts(text, [{ from, to: text.indexOf("C8") + 2 }]);
+    expect(out).toContain("V:1\nz8 | z8 |\nV:2\n!<(!!<)!x8 | x8 |\nV:3\nD8 | E8 |");
+    expect(bars(out)).toEqual([]);
+  });
+});

@@ -184,7 +184,7 @@ for (const [name, text] of Object.entries(SCORES)) {
         if ("refused" in plan) {
           // (A selection across other voices' lines is refused too: a paste replaces one voice.)
           expect(plan.refused, at(label, range)).toMatch(
-            /repeat|ending|end of the voice|tuplet|sounding across|two lines|multi-bar|several voices|broken rhythm/,
+            /repeat|ending|end of the voice|tuplet|sounding across|two lines|multi-bar|several voices|broken rhythm|other lines/,
           );
           continue;
         }

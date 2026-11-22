@@ -1075,30 +1075,38 @@ The pieces:
 
 ## Editing rules
 
-What each edit does to selected music, in tunes of one voice and of several ("multi-voice"); where nothing is said, both are alike. Reviewers and checks test against this (round 8).
+What each edit does to selected music, in tunes of one voice and of several ("multi-voice"); where nothing is said, both are alike. Reviewers and checks test against this: `test/composer-conformance.test.ts` runs it, rule by rule, and check-composer step 38 the cases that need the UI (round 9).
+
+**Time.** Each bar is measured by the meter and unit in force there (an inline `[M:]` or `[L:]` counts).
+
+| Edit | Time | A bar left short or over-full |
+|---|---|---|
+| Delete, Backspace, Cut; Paste over a selection; step entry over a selection; ½×/2×/dot | kept | never (refused instead) |
+| Typing over notes (the plain-text way of writing) | may change | said in the status ("Bar 3 now has 7 eighths, 6 expected"); F8 lists it |
+| Duplicate; Paste at a caret or on a bar's first note | added | said the same way |
 
 - **Delete, Backspace and Cut.** A caret deletes characters, as text does. Refused across two tunes.
-  - Whole bars go with their bar lines; the one left keeps the repeats and endings around them. A repeat's body with its 1st ending: the 2nd ending's bars play once (after the repeat, if some of its body stays). Any other cut across repeat signs or endings is refused, saying why.
-  - Multi-voice: time goes only where every voice sounding there is selected, as whole bars of each; everywhere else the notes become rests.
-  - Part of a bar: the notes become rests, merged by the beat or the bar. A cleared bar is one rest; a tuplet or `A>B` deleted whole is one rest of its real length; no half rest from beat 2 of 4/4; 6/8 goes in threes. Never merged across a tuplet left, a chord symbol, a dynamic, a text or a bar line. A spacer voice gets `x`.
-  - An over-full bar loses time first: notes go while the bar stays at least its length, and any shortfall is a rest.
-  - Kept: chord symbols, dynamics, `"_"`/`"^"` texts, fermatas, segno and coda (on the rest; a dynamic of bars cut goes to the next note). Hairpins stay paired. Verses lose the gone notes' syllables.
-- **Copy.** What is written, less marks that would be broken out of place; a whole last bar brings its bar line; several voices come under their `V:` lines.
+  - Only an attachment selected (a grace group, decoration, chord symbol or annotation): just it goes (`{g}a2` → `a2`), never the note.
+  - Whole bars go with their bar lines; the one left keeps the repeats and endings around them. A repeat's body with its 1st ending: the 2nd ending's bars play once (after the repeat, if some of its body stays). Any other cut across repeat signs or endings is refused, saying why. An inline `[M:]`/`[L:]` of those bars goes on to the next bar, or goes if nothing follows.
+  - Multi-voice: time goes only where every voice sounding there is selected, as whole bars of each (a spacer voice isn't sounding, and its bars go too); everywhere else the notes become rests.
+  - Part of a bar: the notes become rests, merged by the beat or the bar. A cleared bar is one rest; a tuplet or `A>B` deleted whole is one rest of its real length (a tuplet whose length can't be drawn keeps its bracket over rests); no half rest from beat 2 of 4/4; 6/8 goes in threes. Never merged across a tuplet left, a chord symbol, a mark or a bar line. A spacer voice gets `x`.
+  - An over-full bar loses time first: notes go (a whole tuplet as one) while the bar stays at least its length; any shortfall is a rest.
+  - Kept: chord symbols, dynamics, texts, fermatas, segno and coda (on the rest; a dynamic of bars cut goes to the next note). Hairpins and slurs stay paired: an end on a note that goes moves to the nearest note left inside; with fewer than two left, both go. Verses lose the gone notes' syllables.
+- **Copy.** What is written, less marks that would be broken out of place; a whole tuplet with its sign; a whole last bar brings its bar line; several voices come under their `V:` lines.
 - **Paste.**
-  - Over a selection (one note or more): it overwrites forward from the first selected note for the copy's length. Bar lines stay put, notes across them are tied, lengths can be drawn and are grouped by the beat. Notes after the copy stay; a note it partly covers keeps the rest of its time as a rest; the selection left becomes rests. Multi-voice: the other voices are untouched. Refused across a repeat sign or ending, past the voice's end, or splitting a tuplet.
-  - At a caret, or on a clicked note that starts its bar with whole bars: it goes in before it. Multi-voice: the other voices get rests as long.
-  - A copy of voices is decided once: at a bar's start each part is made whole bars, as many as the longest, and the other voices get rests; over notes it overwrites forward in each voice on that staff, from the same point.
-  - Several lines into a line with verses go in as one line; each verse gets the copy's syllables, or a `*` a note.
-- **Duplicate** (Ctrl+Shift+D): the selection again, after it (whole lines as new lines, with their verses). Multi-voice: the other voices get rests (spacers in a spacer voice). Refused across repeat signs, unless it's a whole repeat.
-- **Typing over notes.** One pitch over one note or chord re-pitches it, keeping its length, broken rhythm, tie, chord symbol and marks. Anything else replaces the notes, keeping bar lines, fields, jump marks, slur ends, and the first note's chord symbol and dynamic. Typing across voices is refused. In the score, a note letter says "Press Enter to edit in the text".
-- **Step entry** (MIDI): at a caret, it writes the step, with a bar line when the bar fills, tied over it. Over a selection, it writes forward as a paste of one note and selects the next note. With Keep, it re-pitches one selected note. Across voices it is refused.
-- **½×, 2× and dot.** Halved, the notes leave rests after them for the time given up; doubled or dotted past the bar's length, it's refused, naming the bar (and voice). The same in one voice and several.
-- **Decorations.**
-  - A dynamic goes on the first note of each voice: the same again takes it off, another replaces it.
-  - A hairpin goes from the first note to the last, per voice.
-  - Segno and coda go once, in the top voice, at the start; D.C., D.S. and Fine at the end.
-  - A fermata goes on the last note of each voice.
-  - Articulations go on every note, toggled, never doubled.
+  - Over a selection: it overwrites forward from the first selected note for the copy's length, in values that can be drawn, by the beat, tied over beats and bar lines. Notes after it stay; a note it partly covers keeps the rest of its time as a rest; the selection left becomes rests. Multi-voice: the other voices are untouched. Refused across a repeat sign or ending, past the voice's end, or splitting a tuplet or a broken rhythm. Multi-bar rests are the bars they stand for.
+  - At a caret, or on a clicked note that starts its bar (past its tuplet sign, slur start, graces and marks) with whole bars: it goes in before the bar. Multi-voice: the other voices get rests as long. A copied `Z2` goes in as its bars.
+  - A copy of voices is decided once: at a bar's start each part is made whole bars (barred again for this meter), as many as the longest, and the other voices get rests; over notes it overwrites forward in each voice on that staff from the same point, refused (saying so) when another voice holds a note across that point.
+  - Several lines into one music line with verses go in as one line; each verse gets the copy's syllables, or a `*` a note.
+- **Duplicate** (Ctrl+Shift+D): the selection again, after it, as Copy takes it (chord symbols and slurs included). Whole bars go in as bars; part of a bar goes in after the selection, the bar over-full. Multi-voice: each other voice gets rests once (spacers in a spacer voice). A whole repeat with all its endings is duplicated whole; otherwise refused across repeat signs.
+- **Typing over notes.** One pitch over one note or chord re-pitches it, keeping its length, broken rhythm, tie, chord symbol and marks. Anything else replaces the notes, keeping bar lines, fields, jump marks, slur ends, and the first note's chord symbol and dynamic. Refused when the ranges together are in more than one voice. In the score, a note letter says "Press Enter to edit in the text".
+- **Step entry** (MIDI): at a caret, the step with a bar line when the bar fills, tied over it. Over a selection, forward as a paste of one note, the next note then selected; with Keep, one selected note re-pitched. Refused across voices, or where nothing can be written, saying why.
+- **½×, 2× and dot.** A broken pair or a tuplet changes as a whole. Halved, the notes leave rests after them for the time given up; doubled or dotted past the bar's length, refused, naming the bar (and voice).
+- **Transpose.** Spelt for the key in force there (a `[K:]` counts); chord symbols and grace notes move too; later accidentals in the bar stay right.
+- **Ties and slurs.** Alt+T toggles ties, on a chord too (`[C-E-]2` off, never a second). A typed `(` toggles a slur over the selection.
+- **Decorations.** Every spelling is one mark (`!>!` is `!accent!`, `H` is `!fermata!`, `T` `!trill!`, …).
+  - Dynamics and hairpins go per staff: on a staff shared by voices (`%%score (1 2)`), the top selected voice only; separate staves each get their own. A dynamic goes on the first note; the same again takes it off, another replaces it. A hairpin goes first to last note: over the identical span it comes off, over one it crosses it replaces it.
+  - Segno and coda go once, in the top voice, at the start; D.C., D.S. and Fine at the end. A fermata goes on the last note of each voice. Articulations go on every note, toggled, never doubled.
 
 ## Selection hardening
 
@@ -1436,3 +1444,32 @@ The cheat sheet says so.
 - **Steps 34–36:** follow the refined rules (rests by the beat, later notes kept).
 
 **First view.** 712 KB, under its 720 KB check.
+
+### Round 9 fixes (after Codex 6.5 over 1,768 cases, Claude 6.5): the rules, conformed to
+
+The rule decisions are written into "Editing rules" above: dynamics and hairpins per staff; an attachment selected alone deletes alone; a table of which edits keep time and which say so when a bar changes length; part-bar Duplicate over-full; a hairpin over a crossing one replaces it; voiced overwrite refused over a sustained note; short rules for transpose, ties, slurs and orphaned fields.
+
+**The conformance sweep** (`test/composer-conformance.test.ts`, about 750 selections, 3 s) runs every rule over ten scores (the repository's trio, piano, song and ragged duet, and Codex's solo, inline duet, four voices with a spacer, MusicXML lyrics, repeat with endings, and Claude's mid-tune meters). It found and fixed: a slur end dropped inside a stretch of rests (a bar line lost), several lines pasted over several lines joined into one, overwrites splitting `A>B`, ½× on one note of a pair or tuplet, Copy losing a tuplet's sign, whole bars under a slur's end, an overwrite ignoring a bar's own `[L:]`, and step entry leaving verses off their notes.
+
+1. **Mid-tune meters:** every bar is measured by the meter and unit in force at its first note.
+2. **Spacer voices** don't hold time back, and their bars go too.
+3. **A paste on a bar's first note** looks past its tuplet sign, slur start, graces and marks, and goes in before the bar.
+4. **A copied `Z2`** goes in as its bars, never over the clicked note.
+5. **Duplicate** pads each other voice once per stretch of time.
+6. **½× on beamed notes:** a length change at a note's end belongs to that note only.
+7. **Typing across voices** is refused when the ranges together span more than one voice.
+8. **MIDI across voices** is refused the same way; other places are counted before the dispatch.
+9. **`|[1` written apart** is the bar line's ending, so a paste across it is refused.
+10. **Pasted lengths** are drawn by the beat everywhere (`notePieces`).
+11. **A whole repeat with endings** duplicates whole.
+12. **Mark aliases** are one mark (`!>!`/`!accent!` and the rest).
+13. **A paste or step over `Z`/`Zn`** writes its bars out first.
+14. **Slurs follow Delete**, as hairpins do.
+15. **Duplicate** keeps the chord symbol and slur, as Copy does.
+16. **An undrawable tuplet** keeps its bracket over rests.
+17. **Step entry that can't write** says why; Alt+T on `[C-E-]2` toggles the tie off.
+18. **A press within a head's width** takes that head.
+19. **Spacers** are never counted.
+
+**Browser checks.**
+- **Step 38:** typing and MIDI over two voices refused, a lone grace group deleted, a bar over-full after Duplicate said, a spacer not counted, and a drag from beside a triplet note.

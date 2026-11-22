@@ -2873,12 +2873,13 @@ export function overwriteForward(
     if (item.voice !== voice) continue;
     const bar = bars[bars.length - 1] as Bar;
     if (item.type === "bar") {
-      if (!bar.events.length && bar.after) {
-        // Bar lines side by side (`|` `[1`): one.
-        bar.after = {
-          from: bar.after.from,
+      // Bar lines side by side (`|` `[1`, written apart too): one, the bar before's.
+      const previous = !bar.events.length && !bar.after ? bars[bars.length - 2] : bar;
+      if (previous && !bar.events.length && previous.after) {
+        previous.after = {
+          from: previous.after.from,
           to: item.to,
-          text: text.slice(bar.after.from, item.to),
+          text: text.slice(previous.after.from, item.to),
         };
         continue;
       }

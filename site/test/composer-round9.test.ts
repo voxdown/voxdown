@@ -156,3 +156,15 @@ describe("multi-bar rests (items 4 and 13)", () => {
     expect(pasted(tune("C8 | Z2 | D8 |]"), "Z2", "E2")).toBe("C8 | E2 z2 z4 | z8 | D8 |]\n");
   });
 });
+
+describe("an ending written apart from its bar line (item 9)", () => {
+  it("|[1 refuses a paste across it, as |1 does", () => {
+    for (const bar of ["|[1", "|1"]) {
+      const text = tune(`C8 |: D8 | E8 ${bar} F8 :|[2 G8 || A8 |]`);
+      const from = text.indexOf("E8");
+      expect(planPaste(text, [{ from, to: from + 2 }], 0, "A16", null)).toMatchObject({
+        refused: expect.stringMatching(/repeat sign or an ending/),
+      });
+    }
+  });
+});

@@ -6623,6 +6623,140 @@ console.log(
   );
 }
 
+/* 37. Selection hardening, round 8: the editing rules as a musician judges them. */
+{
+  const fakeMidi = () => {
+    const input = { id: "fake-1", name: "Fake Keys 49", type: "input", state: "connected" };
+    const access = {
+      inputs: new Map([[input.id, input]]),
+      outputs: new Map(),
+      sysexEnabled: false,
+    };
+    navigator.requestMIDIAccess = async () => access;
+    const send = (bytes) => input.onmidimessage?.({ data: new Uint8Array(bytes) });
+    window.__midi = {
+      play: (notes) => {
+        for (const note of notes) send([0x90, note, 90]);
+        for (const note of notes) send([0x80, note, 0]);
+      },
+    };
+  };
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  watch(ctx);
+  await ctx.addInitScript(fakeMidi);
+  const p = await ctx.newPage();
+  await p.goto(url);
+  await openExample("Ode to Joy", p);
+  const put = async (t) => {
+    await p.evaluate((x) => {
+      const view = window.composer.view;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: x } });
+      view.dispatch({ selection: { anchor: 0 } });
+    }, t);
+    await p.waitForFunction((x) => x.includes(window.composer.scoreIndex()?.source ?? "\u0000"), t);
+    await p.waitForTimeout(400);
+  };
+  const choose = (list) =>
+    p.evaluate((list) => {
+      const view = window.composer.view;
+      const S = view.state.selection.constructor;
+      view.dispatch({ selection: S.create(list.map(([a, b]) => S.range(a, b))) });
+      view.focus();
+    }, list);
+  const of = (text, part) => [text.indexOf(part), text.indexOf(part) + part.length];
+  const changed = (was) =>
+    p.waitForFunction((w) => window.composer.view.state.doc.toString() !== w, was);
+  const ranges = () =>
+    p.evaluate(() =>
+      window.composer.view.state.selection.ranges.map((range) => [range.from, range.to]),
+    );
+  // 1. Tunes › Sort with a selection: never a crossed range, the next key replaces nothing more.
+  const book = "X:1\nT:Zebra\nK:C\nC D E F|]\n\nX:2\nT:Apple\nK:G\nG A B c|]\n";
+  await put(book);
+  await choose([of(book, "D E")]);
+  await menu("tunes", "Sort tunes…", p);
+  await p
+    .locator("#sort-tunes[open]")
+    .getByLabel("Title")
+    .check()
+    .catch(() => {});
+  await p.locator("#sort-tunes[open]").getByRole("button", { name: "Sort" }).click();
+  await changed(book);
+  for (const [from, to] of await ranges()) assert(from <= to, `no crossed range: ${from}–${to}`);
+  const sorted = await docText(p);
+  assert.match(sorted, /^X:1\nT:Apple|^X:2\nT:Apple/, sorted);
+  await p.keyboard.type("A");
+  assert.equal((await docText(p)).length, sorted.length + 1, "the next key types one letter");
+  // (a) A pitch typed over one note keeps its length and marks.
+  const one = 'X:1\nT:t\nM:4/4\nL:1/8\nK:C\n"Am"!f!G6 z2|]\n';
+  await put(one);
+  await choose([of(one, '"Am"!f!G6')]);
+  await p.keyboard.type("A");
+  await changed(one);
+  assert.match(await docText(p), /\n"Am"!f!A6 z2\|\]/, "re-pitched in place");
+  // 5. Melody search after an edit: F3 goes on to the next match, never outside the text.
+  const tune = "X:1\nT:t\nM:4/4\nL:1/4\nK:C\nC D E F | G F E D | C D E F | C D E F |]\n";
+  await put(tune);
+  await p.locator(".cm-content").focus();
+  await p.keyboard.press("Control+Shift+M");
+  await p.locator("#melody-query").fill("C D E F");
+  await p.waitForFunction(() =>
+    /3 matches/.test(document.querySelector(".melody-count")?.textContent ?? ""),
+  );
+  await p.locator(".melody-result").first().click();
+  await p.evaluate(() => {
+    const view = window.composer.view;
+    view.dispatch({ changes: { from: 0, to: 0, insert: "% a note\n" } });
+    const doc = view.state.doc.toString();
+    const at = doc.indexOf("C D E F");
+    view.dispatch({ changes: { from: at + 6, to: at + 7, insert: "G2" } });
+  });
+  await p.keyboard.press("F3");
+  const picked = await p.evaluate(() => {
+    const { state } = window.composer.view;
+    return state.sliceDoc(state.selection.main.from, state.selection.main.to);
+  });
+  assert.equal(picked, "C D E F", "F3 after the edit selects the next match, moved with the text");
+  await p.locator(".melody-close").click();
+  // 2. MIDI step entry over a selection: forward, the next note selected; across voices refused.
+  const steps =
+    "X:1\nT:Midi\nM:4/4\nL:1/8\n%%score (1 2)\nK:C\nV:1\nc2 d2 e2 f2 | g4 a4 |]\nV:2\nC4 E4 | G,4 C4 |]\n";
+  await put(steps);
+  await menu("play", "MIDI keyboard…", p);
+  await p.locator("#midi-panel").waitFor();
+  await p.getByLabel("Write it at the caret (step entry)").check();
+  await p.locator("#midi-panel").focus();
+  await p.keyboard.press("4");
+  await choose([of(steps, "g4 a4")]);
+  await p.evaluate(() => window.__midi.play([64]));
+  await changed(steps);
+  assert.match(
+    await docText(p),
+    /V:1\nc2 d2 e2 f2 \| E2 z2 z4 \|\]/,
+    "a quarter from g4: the selection left as rests, by the beat",
+  );
+  assert.equal(
+    await p.evaluate(() => {
+      const { state } = window.composer.view;
+      return state.sliceDoc(state.selection.main.from, state.selection.main.to);
+    }),
+    "z2",
+    "the next note selected",
+  );
+  const now = await docText(p);
+  await choose([[now.indexOf("a4 |]"), now.indexOf("C4 E4") + 5]]);
+  await p.evaluate(() => window.__midi.play([69]));
+  await p.waitForFunction(() =>
+    /writes in one voice/.test(document.querySelector(".midi-status")?.textContent ?? ""),
+  );
+  assert.equal(await docText(p), now, "no voices merged");
+  await ctx.close();
+  console.log(
+    "Composer: selection hardening round 8: Sort with a selection, a note re-pitched, melody results after an edit, MIDI steps over a selection: passed",
+  );
+}
+
 assert.deepEqual(errors, [], "no console errors");
 assert.deepEqual(external, [], "no request leaves the site");
 console.log("Composer: no console errors and no requests leaving the site: passed");

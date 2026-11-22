@@ -88,12 +88,16 @@ export function mapMelody(changes: Parameters<typeof mapMatches>[2], length: num
   }
   results = mapped.matches;
   current = mapped.current;
+  // (A row with the focus is drawn again: the focus stays in the panel, so F3 still steps.)
+  const focused = panel.contains(document.activeElement);
   const list = panel.querySelector(".melody-results");
   if (list) list.replaceChildren();
   shown = 0;
   showMore();
-  for (const [index, row] of [...panel.querySelectorAll(".melody-result")].entries())
+  const rows = [...panel.querySelectorAll<HTMLElement>(".melody-result")];
+  for (const [index, row] of rows.entries())
     row.setAttribute("aria-current", String(index === current));
+  if (focused) (rows[Math.max(0, current)] ?? panel).focus({ preventScroll: true });
   const count = panel.querySelector(".melody-count");
   if (count)
     count.textContent = results.length

@@ -620,7 +620,8 @@ export function cutPlan(
   ranges: Range[],
   file: FileIndex = indexFile(text),
 ): CutPlan | null {
-  const selected = ranges.filter((range) => range.to > range.from);
+  const asked = ranges.filter((range) => range.to > range.from);
+  let selected = asked;
   // (Across tunes: one at a time, each by its own meter and bars.)
   const tunes = new Set(
     selected.flatMap((range) =>
@@ -634,13 +635,15 @@ export function cutPlan(
       refused: `This selection is in ${tunes.size} tunes: delete or cut in one tune at a time.`,
     };
   if (!selected.length || !inMusic(text, selected, file)) return null;
+  // Spacer voices over the time that goes go too.
+  selected = withSpacers(text, selected, file);
   const structure = structureOf(text, file, (selected[0] as Range).from);
   // Some voices only, in a tune with several: rests, so the voices stay in step.
   const someVoices = restsInstead(text, selected, file);
   if (someVoices && "changes" in someVoices)
     return finishCut(
       text,
-      selected,
+      asked,
       file,
       someVoices.changes,
       [{ at: someVoices.caret, offset: 0 }],
@@ -900,7 +903,7 @@ export function cutPlan(
       rests.rested,
     ),
   );
-  return finishCut(text, selected, file, changes, carets, said);
+  return finishCut(text, asked, file, changes, carets, said);
 }
 
 /** A cut's edit made: the text after it, its emptied lines dropped, as one change and a caret. */
@@ -1832,6 +1835,8 @@ function restChanges(text: string, file: FileIndex, picked: Picked[]): RestPlan 
       bar = { events: [], meter: item.meter, first: true };
       bars.push(bar);
     }
+    // The meter in force for the bar is its first note's: a [M:] just after the bar line counts.
+    if (!bar.events.length) bar.meter = item.meter;
     const head = tokenizeMusic(text.slice(item.from, item.to), item.from).find(
       (token) => token.kind !== "space",
     );
@@ -1886,7 +1891,16 @@ function restChanges(text: string, file: FileIndex, picked: Picked[]): RestPlan 
         if (tuplet) {
           const all = tuplet.notes.every((note) => chosen.has(note));
           const own = bar.events.filter((each) => tuplet.notes.includes(each.from));
-          if (all && own.length === tuplet.notes.length && tuplet.notes[0] === event.from) {
+          // (Only when its real length can be drawn as rests; else its bracket stays over rests,
+          // `(3:2:4zzzz`.)
+          const real = own.reduce((sum, each) => sum + each.length, 0);
+          const drawn = Math.abs(real * 64 - Math.round(real * 64)) < 1e-6;
+          if (
+            drawn &&
+            all &&
+            own.length === tuplet.notes.length &&
+            tuplet.notes[0] === event.from
+          ) {
             const last = own[own.length - 1] as Event;
             units.push({
               from: tuplet.sign.from,
@@ -2057,6 +2071,37 @@ function lengthText(whole: number, unit: Fraction): string {
  * the voices stay in step. Null when every voice sounding there is selected (time can go).
  */
 /**
+ * The selection, with the bars of spacer voices (`x` only) over the time that goes (round 9,
+ * item 2): they go too, so every voice keeps in step.
+ */
+function withSpacers(text: string, selected: Range[], file: FileIndex): Range[] {
+  const go = timeCanGo(text, selected, file);
+  if (!go?.size) return selected;
+  const times = timed(text, file, (selected[0] as Range).from);
+  const spans = times
+    .filter((each) => go.has(each.from))
+    .map((each) => [each.start, each.end] as const)
+    .sort((a, b) => a[0] - b[0]);
+  const covered = (start: number, end: number) => {
+    let at = start;
+    for (const [from, to] of spans) if (from <= at + 1e-9 && to > at) at = Math.max(at, to);
+    return at >= end - 1e-9;
+  };
+  const extra = times
+    .filter(
+      (each) =>
+        !go.has(each.from) &&
+        /^x/.test(text.slice(each.from, each.to).trimStart()) &&
+        covered(each.start, each.end),
+    )
+    .map(
+      (each) =>
+        selectedNotes(text, [{ from: each.from, to: each.from + 1 }], file)[0]?.span ?? each,
+    );
+  return extra.length ? [...selected, ...extra] : selected;
+}
+
+/**
  * In a tune with several voices, the selected notes whose time can go: those where every voice
  * sounding then is selected too (each of its events over that time). Null with one voice (all).
  */
@@ -2069,10 +2114,16 @@ function timeCanGo(text: string, selected: Range[], file: FileIndex): Set<number
       .map((each) => each.event.from),
   );
   const out = new Set<number>();
+  // (A voice of spacers there isn't sounding: it never holds time back.)
+  const spacer = (event: { from: number; to: number }) =>
+    /^x/.test(text.slice(event.from, event.to).trimStart());
   for (const each of times) {
     if (!picked.has(each.from)) continue;
     const over = times.filter(
-      (other) => other.start < each.end - 1e-9 && other.end > each.start + 1e-9,
+      (other) =>
+        other.start < each.end - 1e-9 &&
+        other.end > each.start + 1e-9 &&
+        (!spacer(other) || picked.has(other.from)),
     );
     if (over.every((other) => picked.has(other.from))) out.add(each.from);
   }
@@ -3136,6 +3187,8 @@ export function lengthsInStep(
       continue;
     }
     const length = item.duration.num / item.duration.den;
+    // (The meter in force at the bar's first note: a [M:] after its bar line counts.)
+    if (!bar.events.length) bar.meter = item.meter;
     bar.events.push({ from: item.from, to: item.to, length, unit: item.unit });
     bar.total += length;
   }

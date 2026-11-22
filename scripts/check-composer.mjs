@@ -5521,9 +5521,9 @@ console.log(
   await changed(blocks);
   assert.match(
     await docText(p),
-    // (And, since round 8, V:2 rests as long: every voice in step.)
-    /\nV:1\ng a b c'\| e f g a\| ?c d e f\|g a b c'\|\nV:2\nz4 \| z4 \| ?C D E F/,
-    "at a V:1 caret: both of V:1's parts, in order",
+    // (Since round 10, item 14, every part goes in at a bar's start: V:2 takes its own, in step.)
+    /\nV:1\ng a b c'\| e f g a\| ?c d e f\|g a b c'\|\nV:2\nG A B c\| E F G A\| ?C D E F/,
+    "at a V:1 caret: both of V:1's parts, in order, and V:2's",
   );
   geo = await put(blocks);
   await p.evaluate(

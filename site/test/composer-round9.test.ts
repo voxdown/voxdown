@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { frac } from "../src/composer/abc";
 import { checkBars } from "../src/composer/barcheck";
-import { cutPlan, inOneVoice, lengthsInStep, noteStartsBar } from "../src/composer/barwise";
+import {
+  barsChanged,
+  cutPlan,
+  duplicate,
+  inOneVoice,
+  lengthsInStep,
+  noteStartsBar,
+} from "../src/composer/barwise";
 import { type Change, scaleLengths, toggleTies } from "../src/composer/commands";
 import { planPaste } from "../src/composer/paste";
 import { describePicked, selectedNotes } from "../src/composer/selected";
@@ -184,5 +191,40 @@ describe("a paste written by the beat, even inside one bar (item 10)", () => {
   });
   it("what keeps to the beat stays as written (a dotted quarter from beat 1)", () => {
     expect(over(tune("C2 D2 E2 F2 | G8 |]"), "C2", "A3")).toMatch(/^A3 z D? ?E2 F2|^A3 z E2 F2/);
+  });
+});
+
+describe("Duplicate (items 5, 11, 15, and the partial-bar rule)", () => {
+  const dup = (text: string, ranges: { from: number; to: number }[]) => {
+    const plan = duplicate(text, ranges);
+    if ("refused" in plan) throw new Error(plan.refused);
+    return { out: apply(text, plan.changes), said: plan.said.join(" ") };
+  };
+  it("two voices duplicated over a third: the third gets its rests once", () => {
+    const text =
+      "X:1\nT:t\nM:4/4\nL:1/4\n%%score 1 2 3\nK:C\nV:1\nC4 | D4 |]\nV:2\nE4 | F4 |]\nV:3\nx4 | x4 |]\n";
+    const { out } = dup(text, [at(text, "C4"), at(text, "E4")]);
+    expect(out).toContain("V:3\nx4 | x4 | x4 |]");
+    const file = indexFile(out);
+    expect(checkBars(out, file.tunes[0] as never, file)).toEqual([]);
+  });
+  it("a whole repeat with its endings is duplicated whole", () => {
+    const text = tune("|: D8 | E8 |[1 F8 :|[2 G8 |]");
+    const { out } = dup(text, [{ from: text.indexOf("D8"), to: text.indexOf("G8") + 2 }]);
+    expect(body(out)).toBe("|: D8 | E8 |[1 F8 :|[2 G8 |: D8 | E8 |[1 F8 :|[2 G8 |]\n");
+  });
+  it("its chord symbol and slur come with it, as Copy takes them", () => {
+    const text = tune('"D"(d2 f2) a4|"G"g8|]');
+    expect(body(dup(text, [{ from: text.indexOf('"D"'), to: text.indexOf("f2)") + 3 }]).out)).toBe(
+      '"D"(d2 f2) "D"(d2 f2) a4|"G"g8|]\n',
+    );
+  });
+  it("part of a bar goes in after it, the bar over-full, said", () => {
+    const text = tune("C2 D2 E2 F2 | G8 |]");
+    const { out } = dup(text, [at(text, "D2")]);
+    expect(body(out)).toBe("C2 D2 D2 E2 F2 | G8 |]\n");
+    expect(barsChanged(text, out, text.indexOf("D2"))).toBe(
+      "Bar 1 now has 10 eighths, 8 expected (M:4/4). F8 goes to it.",
+    );
   });
 });

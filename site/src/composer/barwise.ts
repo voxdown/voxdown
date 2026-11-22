@@ -1,14 +1,3 @@
-/**
- * Editing selected music bar by bar (loaded once the editor is in use). A selection never holds a
- * bar line at its ends; one inside it is kept by everything but Cut:
- * - typing over a selection, Backspace and Delete replace the notes only: bar lines (`|`, `|:`,
- *   `:|`, `|]`, `[1`) and line breaks stay;
- * - Cut (and Delete in the score) takes whole bars out with one of their bar lines, so no empty
- *   `||` is left, and only the notes of a bar it covers in part;
- * - Copy of whole bars copies their closing bar line too, so pasting brings whole bars;
- * - Paste fits the copy to the bars around it: a copy ending in a bar line pasted just before one
- *   doesn't double it, and a copy without bar lines over a selection with some keeps them.
- */
 import {
   type Fraction,
   type MusicToken,
@@ -22,6 +11,18 @@ import {
   parseUnit,
   tokenizeMusic,
 } from "./abc";
+/**
+ * Editing selected music bar by bar (loaded once the editor is in use). A selection never holds a
+ * bar line at its ends; one inside it is kept by everything but Cut:
+ * - typing over a selection, Backspace and Delete replace the notes only: bar lines (`|`, `|:`,
+ *   `:|`, `|]`, `[1`) and line breaks stay;
+ * - Cut (and Delete in the score) takes whole bars out with one of their bar lines, so no empty
+ *   `||` is left, and only the notes of a bar it covers in part;
+ * - Copy of whole bars copies their closing bar line too, so pasting brings whole bars;
+ * - Paste fits the copy to the bars around it: a copy ending in a bar line pasted just before one
+ *   doesn't double it, and a copy without bar lines over a selection with some keeps them.
+ */
+import { checkBars } from "./barcheck";
 import { keyLabel } from "./clip-convert";
 import { type Change, type Range, barAround, barLine, passagesOf } from "./commands";
 import { markOf } from "./playorder";
@@ -1320,7 +1321,35 @@ function notesSpan(text: string, range: Range, file: FileIndex): Range | null {
     from = token.to;
   }
   while (/[ \t]/.test(text[from] ?? "")) from += 1;
-  return { from, to: last.span.to };
+  // What the selection itself takes before its first note (a chord symbol, a slur's start, a
+  // mark) and after its last (a slur's end, a tie), as Copy does (round 9, item 15).
+  let to = last.span.to;
+  const lead = tokenizeMusic(text.slice(range.from, from), range.from);
+  if (
+    range.from < from &&
+    lead.every(
+      (token) =>
+        token.kind === "space" ||
+        token.kind === "chord-symbol" ||
+        token.kind === "annotation" ||
+        token.kind === "decoration" ||
+        (token.kind === "slur" && token.text === "("),
+    ) &&
+    !lead.some((token) => keeper(token))
+  )
+    from = (lead.find((token) => token.kind !== "space") ?? { from }).from;
+  const trail = tokenizeMusic(text.slice(to, range.to), to);
+  if (
+    range.to > to &&
+    trail.every(
+      (token) =>
+        token.kind === "space" ||
+        token.kind === "tie" ||
+        (token.kind === "slur" && token.text === ")"),
+    )
+  )
+    to = ([...trail].reverse().find((token) => token.kind !== "space") ?? { to }).to;
+  return { from, to };
 }
 
 /** The bar line a body of whole bars ends at (across a D.S. or Fine before it), or null. */
@@ -1375,7 +1404,50 @@ export function duplicate(
     ).map((each) => each.event.voice),
   );
   let refused: string | null = null;
+  // (Each other voice is given its rests once for a stretch of time, however many selected
+  // voices are duplicated over it; round 9, item 5.)
+  const padded = new Set<string>();
   const place = (body: Range, bodies: Range[]) => {
+    // A whole repeat with its endings, every note of it selected: copied whole after its last
+    // ending (round 9, item 11).
+    if (bodies.length === 1) {
+      const voice = selectedNotes(text, [body], file)[0]?.event.voice ?? "";
+      const chosenNotes = new Set(selectedNotes(text, [body], file).map((each) => each.event.from));
+      for (const region of repeatsOf(text, file, body.from, voice)) {
+        const inside = selectedNotes(text, [region], file).filter(
+          (each) => each.event.voice === voice,
+        );
+        const endsOnEnding = /[0-9]/.test(text.slice(region.from, region.to));
+        if (
+          !endsOnEnding ||
+          !inside.length ||
+          inside.some((each) => !chosenNotes.has(each.event.from)) ||
+          chosenNotes.size !== inside.length
+        )
+          continue;
+        const closing = tokenizeMusic(text.slice(region.from, region.to), region.from)
+          .filter((token) => token.kind === "bar")
+          .at(-1);
+        if (!closing) continue;
+        const opened = /^(\|:|::|:\|:)/.test(text.slice(region.from));
+        const copy = {
+          from: closing.from,
+          to: closing.from,
+          insert: `${opened ? "" : "|:"}${text.slice(region.from, closing.from)}`,
+        };
+        changes.push(copy);
+        copies.push(copy);
+        changes.push(
+          ...lyricsAlong(
+            text,
+            file,
+            inside.filter((each) => !each.event.rest).map((each) => each.event.from),
+          ),
+        );
+        said.push("The repeat duplicated whole, with its endings, after them.");
+        return;
+      }
+    }
     // Bars with a repeat's signs or an ending inside them aren't duplicated (their copy would
     // scramble the play order); a whole repeat is.
     for (const each of bodies) {
@@ -1488,7 +1560,11 @@ export function duplicate(
           .map((each) => each.voice),
       ),
     ].filter((voice) => !selectedVoices.has(voice));
-    for (const voice of others) {
+    const fresh = others.filter(
+      (voice) => !padded.has(`${voice}@${start.toFixed(6)}-${end.toFixed(6)}`),
+    );
+    for (const voice of fresh) padded.add(`${voice}@${start.toFixed(6)}-${end.toFixed(6)}`);
+    for (const voice of fresh) {
       const ending = times.find((each) => each.voice === voice && Math.abs(each.end - end) < 1e-9);
       if (!ending) {
         refused = `V:${voice} has a note sounding across where the copy would go: select that voice too, to duplicate in every voice.`;
@@ -1531,9 +1607,9 @@ export function duplicate(
         insert: bar ? `${gap}|${gap}${lengths.map(rest).join(" | ")}` : ` ${rest(end - start)}`,
       });
     }
-    if (others.length)
+    if (fresh.length)
       said.push(
-        `Duplicated in ${[...selectedVoices].map((voice) => `V:${voice}`).join(" and ")}; rests in ${others.map((voice) => `V:${voice}`).join(" and ")} keep ${others.length === 1 ? "it" : "them"} in step.`,
+        `Duplicated in ${[...selectedVoices].map((voice) => `V:${voice}`).join(" and ")}; rests in ${fresh.map((voice) => `V:${voice}`).join(" and ")} keep ${fresh.length === 1 ? "it" : "them"} in step.`,
       );
   };
   for (const passage of passages) {
@@ -3558,4 +3634,32 @@ export function barsOfRests(clip: string, unit: Fraction, meter: string, close =
       return out + line.slice(at);
     })
     .join("\n");
+}
+
+/**
+ * What an edit that may change a bar's length did to the bars (round 9's rule: typing over
+ * notes, Duplicate and a paste at a caret add or take time): the first bar now short or
+ * over-full that wasn't, said ("Bar 3 now has 7 eighths, 6 expected (M:6/8)"), for the status.
+ * Null when every bar is as long as before.
+ */
+export function barsChanged(before: string, after: string, at: number): string | null {
+  const issuesOf = (text: string) => {
+    const file = indexFile(text);
+    const tune = file.tunes.find((each) => at >= each.from && at <= each.to) ?? file.tunes[0];
+    return tune
+      ? checkBars(text, tune, file).filter(
+          (issue) => issue.kind === "long" || issue.kind === "short",
+        )
+      : [];
+  };
+  const was = new Set(
+    issuesOf(before).map((issue) => `${issue.voice}:${issue.bar}:${issue.detail}`),
+  );
+  const now = issuesOf(after).filter(
+    (issue) => !was.has(`${issue.voice}:${issue.bar}:${issue.detail}`),
+  );
+  const first = now[0];
+  if (!first) return null;
+  const more = now.length > 1 ? `, and ${now.length - 1} more` : "";
+  return `${first.message.replace(/^Bar (\d+) /, "Bar $1 now ")} F8 goes to it${more}.`;
 }

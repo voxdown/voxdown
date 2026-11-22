@@ -489,9 +489,16 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
     scrollIntoView: true,
     userEvent: "input.paste",
   });
-  if (plan.message) {
-    notice(plan.message, "success");
-    sayAloud(plan.message);
+  // (A paste that went in adds time: a bar left short or over-full is said; round 9.)
+  const bars = barwise?.barsChanged(
+    state.doc.toString(),
+    target.state.doc.toString(),
+    target.state.selection.main.head,
+  );
+  const message = [plan.message, bars].filter(Boolean).join(" ");
+  if (message) {
+    notice(message, bars ? undefined : "success");
+    sayAloud(message);
   }
   return true;
 }
@@ -1127,6 +1134,13 @@ function replaceMusic(target: EditorView, typed: string): boolean {
     scrollIntoView: true,
     userEvent: typed ? "input.type" : "delete.selection",
   });
+  // (Typing over notes may change the bar's length: said in the status; round 9.)
+  const bars = barwise.barsChanged(
+    doc,
+    target.state.doc.toString(),
+    target.state.selection.main.head,
+  );
+  if (bars) sayAboutSelection(bars);
   return true;
 }
 /** `"`, `[` or `{` typed over selected music: a chord symbol, a chord, grace notes (./barwise). */
@@ -3235,8 +3249,16 @@ function duplicateHere(plan: import("./barwise").DuplicatePlan): boolean {
     scrollIntoView: true,
   });
   rememberSelection(done);
+  const before = view.state.doc.toString();
   view.dispatch(done);
-  if (plan.said.length) notice(plan.said.join(" "), "success");
+  // (Duplicate adds time: a bar now over-full or short is said; round 9.)
+  const bars = barwise?.barsChanged(
+    before,
+    view.state.doc.toString(),
+    view.state.selection.main.head,
+  );
+  const said = [...plan.said, ...(bars ? [bars] : [])];
+  if (said.length) notice(said.join(" "), bars ? undefined : "success");
   return true;
 }
 function apply(changes: Change[], label: string, outward = true): boolean {

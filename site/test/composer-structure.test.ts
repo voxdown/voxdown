@@ -228,9 +228,10 @@ describe("a bar pasted over part of a bar (round 5, finding 7; round 7, finding 
     const at = tune.indexOf("G A");
     const plan = planPaste(tune, [{ from: at, to: at + 3 }], 0, "e f g|", null);
     if (!plan || "refused" in plan) throw new Error("no plan");
-    expect(apply(tune, plan.changes)).toBe(`${head}C D E|F e f|g z2|]\n`);
+    // (The notes after the copy's end stay: round 8, item 4.)
+    expect(apply(tune, plan.changes)).toBe(`${head}C D E|F e f|g c d|]\n`);
     expect(plan.message).toMatch(
-      /from its first note; it ran on over 3 more notes, replaced; rests fill the rest of the last bar/,
+      /^Pasted over the selection from its first note; it ran on over 1 more note, replaced\.$/,
     );
   });
 });

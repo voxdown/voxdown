@@ -2604,11 +2604,29 @@ type Piece = {
   text: string;
   /** In whole notes. */
   length: number;
-  /** A space after it in the copy (its beam ends). */
-  gap: boolean;
-  /** Written as two tied halves at a bar line: its parts (null when it can't be: a tuplet's). */
-  split: ((first: number, unit: Fraction) => [string, string]) | null;
+  /** A rest (never tied). */
+  rest: boolean;
+  /**
+   * Part of it, as long as given, written in values that can be drawn and tied (round 8, rule
+   * (c)): with its marks when it's the first part, its tie onward unless the last. Null where it
+   * can't be split (a tuplet's note, a broken rhythm's).
+   */
+  render: ((length: number, first: boolean, last: boolean, unit: Fraction) => string) | null;
+  /** Split already: what's left is rendered, not written as it was. */
+  cut?: boolean;
 };
+
+/** A length as plain or dotted values, largest first (5/8: a half and an eighth). */
+function drawable(length: number): number[] {
+  const out: number[] = [];
+  let left = length;
+  while (left > 1e-9) {
+    const value = VALUES.find((each) => each <= left + 1e-9) ?? left;
+    out.push(value);
+    left -= value;
+  }
+  return out;
+}
 
 function piecesOf(clip: string, unit: Fraction, meter: string): Piece[] | null {
   const body = clip
@@ -2639,21 +2657,18 @@ function piecesOf(clip: string, unit: Fraction, meter: string): Piece[] | null {
     const broken = own.some((token) => token.kind === "broken");
     const at = own.findIndex((token) => token.from >= item.from && token.kind !== "space");
     const lead = mini.slice(span.from, item.from);
-    let split: Piece["split"] = null;
+    let render: Piece["render"] = null;
     const first = own[at];
+    const isRest = first?.kind === "rest";
     if (!broken && !inTuplet.has(item.from) && first && !item.bars) {
+      // The pitch (or rest, or chord) and what follows it, to write at any length.
+      let head: string | null = null;
+      let tail = "";
       if (first.kind === "rest" && /^[zx]$/.test(first.text[0] ?? ""))
-        split = (part, u) => [
-          `${lead}${first.text[0]}${lengthText(part, u)}`,
-          `${first.text[0]}${lengthText(item.duration.num / item.duration.den - part, u)}`,
-        ];
+        head = first.text[0] as string;
       else if (first.kind === "note") {
-        const pitch = `${first.accidental}${first.letter}${first.octave}`;
-        const tail = mini.slice(first.to, span.to).replace(/^-/, "");
-        split = (part, u) => [
-          `${lead}${pitch}${lengthText(part, u)}-`,
-          `${pitch}${lengthText(item.duration.num / item.duration.den - part, u)}${tail}`,
-        ];
+        head = `${first.accidental}${first.letter}${first.octave}`;
+        tail = mini.slice(first.to, span.to).replace(/^-/, "");
       } else if (first.kind === "chord-open") {
         const close = own.find((token) => token.kind === "chord-close");
         const inner = own.filter(
@@ -2661,21 +2676,20 @@ function piecesOf(clip: string, unit: Fraction, meter: string): Piece[] | null {
             token.kind === "note" && token.from > first.from && close && token.to <= close.from,
         );
         if (close && inner.every((token) => token.kind === "note" && !token.length)) {
-          const chord = mini.slice(first.from, close.from + 1);
-          const tail = mini.slice(close.to, span.to).replace(/^-/, "");
-          split = (part, u) => [
-            `${lead}${chord}${lengthText(part, u)}-`,
-            `${chord}${lengthText(item.duration.num / item.duration.den - part, u)}${tail}`,
-          ];
+          head = mini.slice(first.from, close.from + 1);
+          tail = mini.slice(close.to, span.to).replace(/^-/, "");
         }
       }
+      if (head !== null) {
+        const sign = head;
+        render = (length, opening, last, u) => {
+          const parts = drawable(length).map((value) => `${sign}${lengthText(value, u)}`);
+          const joined = isRest ? parts.join(" ") : parts.join("- ");
+          return `${opening ? lead : ""}${joined}${isRest ? "" : last ? tail : "-"}`;
+        };
+      }
     }
-    pieces.push({
-      text,
-      length: item.duration.num / item.duration.den,
-      gap: /^[ \t|]/.test(mini.slice(span.to)) || span.to >= mini.length - 1,
-      split,
-    });
+    pieces.push({ text, length: item.duration.num / item.duration.den, rest: isRest, render });
   }
   return pieces;
 }
@@ -2772,15 +2786,19 @@ export function overwriteForward(
   const selEnd = endEvent.end;
   const t1 = t0 + total;
   const eps = 1e-9;
-  const reach = real.find((bar) => bar.start < t1 - eps && bar.end >= t1 - eps);
-  const tE = t1 > selEnd + eps ? reach?.end : selEnd;
-  if (tE === undefined || Number.isNaN(tE))
+  // What goes: the events from the first note until the copy and the selection both end; a note
+  // the copy only partly covers keeps the rest of its time as a rest. Notes after stay.
+  const replaceEnd = Math.max(t1, selEnd);
+  const voiceEnd = real.at(-1)?.end ?? 0;
+  if (replaceEnd > voiceEnd + eps)
     return {
       refused:
         "The copy runs past the end of the voice: paste it at the end to add bars, or select further back.",
     };
-  if (all.some((each) => Number.isNaN(each.end) && each.start >= t0 - eps && each.start < tE - eps))
+  const goneEvents = all.filter((each) => each.start >= t0 - eps && each.start < replaceEnd - eps);
+  if (goneEvents.some((each) => Number.isNaN(each.end)))
     return { refused: "The paste would run over a multi-bar rest: write its bars out first." };
+  const tE = Math.max(replaceEnd, ...goneEvents.map((each) => each.end));
   const windows = real.filter((bar) => bar.end > t0 + eps && bar.start < tE - eps);
   for (const bar of windows.slice(0, -1))
     if (bar.after && /[:0-9]/.test(bar.after.text))
@@ -2789,9 +2807,7 @@ export function overwriteForward(
           "The paste would run across a repeat sign or an ending: select up to it, or paste a shorter copy.",
       };
   const structure = structureOf(text, file, range.from);
-  const gone = new Set(
-    all.filter((each) => each.start >= t0 - eps && each.start < tE - eps).map((each) => each.from),
-  );
+  const gone = new Set(goneEvents.map((each) => each.from));
   if (
     structure.tuplets.some(
       ({ notes }) => notes.some((at) => gone.has(at)) && !notes.every((at) => gone.has(at)),
@@ -2806,10 +2822,18 @@ export function overwriteForward(
       .filter(({ notes }) => notes.length && notes.every((at) => gone.has(at)))
       .map(({ sign, notes }) => [notes[0] as number, sign.from]),
   );
+  // The voice's own rests: spacers in a spacer voice (rule (d)).
+  const restsThere = goneEvents.filter((each) => each.rest);
+  const letter =
+    restsThere.length &&
+    restsThere.every((each) => /^x/.test(text.slice(each.from, each.to).trimStart()))
+      ? "x"
+      : "z";
+  const beat = beatOf(reading.meter);
   const changes: Change[] = [];
   const queue = [...pieces];
   let time = t0;
-  let rests = false;
+  let filled = false;
   for (const bar of windows) {
     const own = bar.events.filter((each) => gone.has(each.from));
     if (!own.length) continue;
@@ -2823,43 +2847,80 @@ export function overwriteForward(
         refused: "The paste would run across a bar written over two lines: paste it bar by bar.",
       };
     const until = Math.min(bar.end, tE);
-    let out = "";
-    while (time < until - eps) {
-      const piece = queue[0];
-      if (!piece) {
-        out += `${restOf(until - time, reading.unit)} `;
-        rests = true;
-        time = until;
-        break;
-      }
+    // What the bar gets, each with its place in it (for grouping by the beat).
+    const items: { text: string; start: number; length: number; rest: boolean }[] = [];
+    while (time < until - eps && queue.length) {
+      const piece = queue[0] as Piece;
       if (time + piece.length <= until + eps) {
-        out += `${piece.text}${piece.gap ? " " : ""}`;
+        const written =
+          piece.cut && piece.render
+            ? piece.render(piece.length, false, true, reading.unit)
+            : piece.text;
+        items.push({
+          text: written,
+          start: time - bar.start,
+          length: piece.length,
+          rest: piece.rest,
+        });
         time += piece.length;
         queue.shift();
         continue;
       }
-      if (!piece.split)
+      if (!piece.render)
         return {
           refused:
             "A note of the copy would cross a bar line where it can't be tied over (in a tuplet or broken rhythm): paste where its bars meet the tune's.",
         };
-      const [head, rest] = piece.split(until - time, reading.unit);
-      out += head;
-      queue[0] = { ...piece, text: rest, length: piece.length - (until - time) };
+      const part = until - time;
+      items.push({
+        text: piece.render(part, !piece.cut, false, reading.unit),
+        start: time - bar.start,
+        length: part,
+        rest: piece.rest,
+      });
+      queue[0] = { ...piece, length: piece.length - part, cut: true };
       time = until;
     }
-    changes.push({ from, to, insert: out.replace(/[ \t]+$/, "") });
+    if (time < until - eps) {
+      // Rests for the selection left, or what's left of a note the copy partly covered.
+      const whole = Math.abs(time - bar.start) < eps && Math.abs(until - bar.end) < eps;
+      let at = time - bar.start;
+      for (const piece of restPieces(at, until - time, beat, whole)) {
+        items.push({
+          text: `${letter}${lengthText(piece, reading.unit)}`,
+          start: at,
+          length: piece,
+          rest: true,
+        });
+        at += piece;
+      }
+      filled = true;
+      time = until;
+    }
+    // Grouped by the beat: notes shorter than a beat within one beat are written together.
+    let out = "";
+    items.forEach((item, index) => {
+      const previous = items[index - 1];
+      const together =
+        previous &&
+        !previous.rest &&
+        !item.rest &&
+        previous.length < beat - eps &&
+        item.length < beat - eps &&
+        Math.floor((previous.start + eps) / beat) === Math.floor((item.start + eps) / beat);
+      out += `${index && !together ? " " : ""}${item.text}`;
+    });
+    changes.push({ from, to, insert: out });
   }
-  const over = all.filter(
-    (each) => gone.has(each.from) && !each.rest && each.start >= selEnd - eps,
-  ).length;
+  const over = goneEvents.filter((each) => !each.rest && each.start >= selEnd - eps).length;
+  const partly = tE > replaceEnd + eps;
   const several = new Set(timed(text, file, range.from).map((each) => each.voice)).size > 1;
   const said = [
     `Pasted over the selection from its first note${several ? ` in V:${voice}` : ""}`,
     over ? `it ran on over ${over} more note${over === 1 ? "" : "s"}, replaced` : "",
-    rests
-      ? t1 > selEnd + eps
-        ? "rests fill the rest of the last bar"
+    filled
+      ? partly
+        ? "a rest for the time left of the note it partly covered"
         : "rests fill the selection left"
       : "",
     several ? "the other voices are as they were" : "",

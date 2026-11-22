@@ -6200,10 +6200,10 @@ console.log(
   await settled(two);
   assert.match(
     await docText(p),
-    /\|g e e e\|e z3\|f e d c\|\]/,
+    /\|g e e e\|e b a g\|f e d c\|\]/,
     "forward from the first note, every bar its length",
   );
-  assert.deepEqual(await selected(), ["e e e", "e z3"], "the pasted notes are selected");
+  assert.deepEqual(await selected(), ["e e e", "e"], "the pasted notes are selected");
   // 10. Duplicate selects only the copy.
   await put(two);
   await choose([of(two, "c' b a g")]);
@@ -6575,9 +6575,9 @@ console.log(
   await changed(trio);
   assert.match(
     await docText(p),
-    /V:1\nc4 f2\|e4 g2\|f2 a2 c'2\|\nV:2\nA4 f2-\|f2 g2 z2\|c2 f2 a2\|/,
+    /V:1\nc4 f2\|e4 g2\|f2 a2 c'2\|\nV:2\nA4 f2-\|f2 g2 e2\|c2 f2 a2\|/,
   );
-  await says("notice", /ran on over 2 more notes, replaced/);
+  await says("notice", /ran on over 1 more note, replaced/);
   // 5. A two-voice copy on a clicked note of the duet (%%score after K:): both voices.
   const duet =
     'X:1\nT:Fiddle Duet\nM:2/4\nL:1/8\nK:D\n%%score (1 2)\nV:1 name="Fiddle 1"\nV:2 name="Fiddle 2"\n[V:1] d2 fd | ed cB | A2 FA | d4 :|\n[V:2] F2 AF | GF ED | C2 DC | D4 :|\n';

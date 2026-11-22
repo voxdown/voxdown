@@ -2,6 +2,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { cutPlan, repitch } from "../src/composer/barwise";
 import { caretAfter, sortChange } from "../src/composer/book";
+import { planPaste } from "../src/composer/paste";
 import { noCrossedRanges } from "../src/composer/selection-guard";
 import { indexFile } from "../src/composer/tunes";
 
@@ -124,5 +125,28 @@ describe("the over-full rule and tuplets (item 7)", () => {
     const text = tune("A B C D E|c4|]", "4/4", "1/4");
     const at = text.indexOf("A B ") + 4;
     expect(body(cutOf(text, at, at + 1))).toBe("A B D E|c4|]\n");
+  });
+});
+
+describe("overwrite writes what can be drawn, by the beat (rule c, item 4)", () => {
+  const pasteOver = (text: string, part: string, clip: string) => {
+    const from = text.indexOf(part);
+    const plan = planPaste(text, [{ from, to: from + part.length }], 0, clip, null);
+    if (!plan || "refused" in plan) throw new Error(plan ? plan.refused : "no plan");
+    return { out: body(apply(text, plan.changes)), message: plan.message };
+  };
+  it("a note across the bar line in drawable values, tied; the rest of a note partly covered, a rest", () => {
+    const { out } = pasteOver(tune("C2 D E F2 G2|A8|]"), "E F2", "c8");
+    expect(out).toBe("C2 D c4- c-|c3 z z4|]\n");
+  });
+  it("6/8 in threes", () => {
+    expect(pasteOver(tune("dAF DFA|dAF DFA|]", "6/8"), "d", "abcdef").out).toBe(
+      "abc def|dAF DFA|]\n",
+    );
+  });
+  it("notes after the copy's end stay (item 4)", () => {
+    const { out, message } = pasteOver(tune("C2 D2 E2 F2|G8|]"), "D2", "e2");
+    expect(out).toBe("C2 e2 E2 F2|G8|]\n");
+    expect(message).not.toMatch(/rest/);
   });
 });

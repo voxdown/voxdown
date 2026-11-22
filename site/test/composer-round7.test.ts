@@ -86,10 +86,11 @@ describe("a copy longer than the notes it's pasted over (finding 1)", () => {
     const plan = planPaste(trio, [{ from: at, to: at + 2 }], 0, "f4 g2|", null);
     if (!plan || "refused" in plan) throw new Error("no plan");
     const after = apply(trio, plan.changes);
-    expect(after).toContain("V:2\nA4 f2-|f2 g2 z2|c2 f2 a2|");
+    // (The note after the copy's end stays: round 8, item 4.)
+    expect(after).toContain("V:2\nA4 f2-|f2 g2 e2|c2 f2 a2|");
     expect(after).toContain("V:1\nc4 f2|e4 g2|f2 a2 c'2|");
     expect(plan.message).toMatch(
-      /from its first note in V:2; it ran on over 2 more notes, replaced; rests fill the rest of the last bar; the other voices are as they were/,
+      /from its first note in V:2; it ran on over 1 more note, replaced; the other voices are as they were/,
     );
   });
   it("across a repeat sign or an ending, refused, saying why", () => {

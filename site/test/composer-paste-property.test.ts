@@ -52,6 +52,32 @@ function barsOf(text: string) {
   }));
 }
 
+/** A voice's events with their times (in whole notes) and text. */
+function timesOf(text: string, voice: string) {
+  const file = indexFile(text);
+  let clock = 0;
+  const out: { from: number; start: number; end: number; text: string }[] = [];
+  for (const item of tuneItems(text, file.tunes[0] as never, file)) {
+    if (item.type !== "event" || item.voice !== voice) continue;
+    const end = clock + item.duration.num / item.duration.den;
+    out.push({ from: item.from, start: clock, end, text: text.slice(item.from, item.to) });
+    clock = end;
+  }
+  return out;
+}
+/** How long a copy lasts in a tune's meter and unit. */
+function lengthOf(clip: string, text: string): number {
+  const head = text.slice(0, text.indexOf("\nK:") + 1).replace(/^(V:|%%score).*\n/gm, "");
+  const mini = `${head}K:C\n${clip}\n`;
+  const file = indexFile(mini);
+  return tuneItems(mini, file.tunes[0] as never, file)
+    .filter((item) => item.type === "event")
+    .reduce(
+      (sum, item) => sum + (item.type === "event" ? item.duration.num / item.duration.den : 0),
+      0,
+    );
+}
+
 for (const name of ["trio", "piano", "song"]) {
   const text = read(name);
   const file = indexFile(text);
@@ -104,6 +130,27 @@ for (const name of ["trio", "piano", "song"]) {
                   );
                 if (/from its first note/.test(plan.message) && others.length)
                   expect(plan.message).toMatch(/the other voices are as they were/);
+                // Overwritten, every note after the copy's end (and the selection's) is as it
+                // was, at the same time (round 8, item 4).
+                if (/from its first note/.test(plan.message)) {
+                  const before = timesOf(text, voice);
+                  const afterTimes = timesOf(after, voice);
+                  const start = before.find((each) => each.from >= range.from)?.start ?? 0;
+                  const selEnd = Math.max(
+                    ...before.filter((each) => each.from < range.to).map((each) => each.end),
+                  );
+                  const end = Math.max(start + lengthOf(clip, text), selEnd);
+                  const later = (list: typeof before) =>
+                    list
+                      .filter((each) => each.start >= end - 1e-9)
+                      .map((each) => `${each.start.toFixed(4)} ${each.text}`);
+                  // (Less a note the copy only partly covered, now a rest and the rest of it.)
+                  const tail = later(before).filter((line) => later(afterTimes).includes(line));
+                  expect(
+                    later(before).length - tail.length,
+                    `${at}: a later note changed\n${after}`,
+                  ).toBe(0);
+                }
                 pasted += 1;
               }
           expect(pasted).toBeGreaterThan(0);

@@ -168,3 +168,21 @@ describe("an ending written apart from its bar line (item 9)", () => {
     }
   });
 });
+
+describe("a paste written by the beat, even inside one bar (item 10)", () => {
+  const over = (text: string, part: string, clip: string) => {
+    const from = text.indexOf(part);
+    const plan = planPaste(text, [{ from, to: from + part.length }], 0, clip, null);
+    if (!plan || "refused" in plan) throw new Error(plan ? plan.refused : "no plan");
+    return body(apply(text, plan.changes));
+  };
+  it("a 5/8 note is a half tied to an eighth", () => {
+    expect(over(tune("C2 D2 E2 F2 | G8 |]"), "C2", "A5")).toMatch(/^A4- A z F2 \| G8 \|\]/);
+  });
+  it("a half from beat 2 of 4/4 is two quarters, tied", () => {
+    expect(over(tune("C2 D2 E2 F2 | G8 |]"), "D2", "A4")).toBe("C2 A2- A2 F2 | G8 |]\n");
+  });
+  it("what keeps to the beat stays as written (a dotted quarter from beat 1)", () => {
+    expect(over(tune("C2 D2 E2 F2 | G8 |]"), "C2", "A3")).toMatch(/^A3 z D? ?E2 F2|^A3 z E2 F2/);
+  });
+});

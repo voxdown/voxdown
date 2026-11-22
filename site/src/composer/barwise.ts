@@ -2705,10 +2705,43 @@ type Piece = {
    * (c)): with its marks when it's the first part, its tie onward unless the last. Null where it
    * can't be split (a tuplet's note, a broken rhythm's).
    */
-  render: ((length: number, first: boolean, last: boolean, unit: Fraction) => string) | null;
+  render: ((parts: number[], first: boolean, last: boolean, unit: Fraction) => string) | null;
   /** Split already: what's left is rendered, not written as it was. */
   cut?: boolean;
 };
+
+/**
+ * A note's length from a place in its bar, in values notation programs would write (round 9):
+ * each plain or dotted, within one beat or from a beat, and in 4/4 and the like never across the
+ * middle of the bar unless from its start (a half from beat 2 is two quarters, tied).
+ */
+export function notePieces(at: number, length: number, beat: number, bar: number): number[] {
+  const eps = 1e-9;
+  const beats = Math.round(bar / beat);
+  const middle = beats >= 4 && beats % 2 === 0 ? bar / 2 : null;
+  const near = (x: number) => Math.abs(x - Math.round(x)) < 1e-6;
+  const pieces: number[] = [];
+  let position = at;
+  let left = length;
+  while (left > eps) {
+    const fits = VALUES.find((value) => {
+      if (value > left + eps) return false;
+      if (Math.floor((position + eps) / beat) === Math.floor((position + value - eps) / beat))
+        return true;
+      if (!near(position / beat)) return false;
+      return (
+        middle === null ||
+        position < eps ||
+        !(position < middle - eps && position + value > middle + eps)
+      );
+    });
+    const piece = fits ?? left;
+    pieces.push(piece);
+    position += piece;
+    left -= piece;
+  }
+  return pieces;
+}
 
 /** A length as plain or dotted values, largest first (5/8: a half and an eighth). */
 function drawable(length: number): number[] {
@@ -2776,8 +2809,8 @@ function piecesOf(clip: string, unit: Fraction, meter: string): Piece[] | null {
       }
       if (head !== null) {
         const sign = head;
-        render = (length, opening, last, u) => {
-          const parts = drawable(length).map((value) => `${sign}${lengthText(value, u)}`);
+        render = (chunks, opening, last, u) => {
+          const parts = chunks.map((value) => `${sign}${lengthText(value, u)}`);
           const joined = isRest ? parts.join(" ") : parts.join("- ");
           return `${opening ? lead : ""}${joined}${isRest ? "" : last ? tail : "-"}`;
         };
@@ -2985,9 +3018,15 @@ export function overwriteForward(
     while (time < until - eps && queue.length) {
       const piece = queue[0] as Piece;
       if (time + piece.length <= until + eps) {
+        // Written by the beat where it can be drawn (round 9, item 10): as it was when it keeps
+        // to the beat in one value, else in values tied (a 5/8 is a half and an eighth; a half
+        // from beat 2 of 4/4 is two quarters).
+        const chunks = piece.rest
+          ? restPieces(time - bar.start, piece.length, beat, false)
+          : notePieces(time - bar.start, piece.length, beat, bar.end - bar.start);
         const written =
-          piece.cut && piece.render
-            ? piece.render(piece.length, false, true, reading.unit)
+          piece.render && (piece.cut || chunks.length > 1)
+            ? piece.render(chunks, !piece.cut, true, reading.unit)
             : piece.text;
         items.push({
           text: written,
@@ -3005,8 +3044,11 @@ export function overwriteForward(
             "A note of the copy would cross a bar line where it can't be tied over (in a tuplet or broken rhythm): paste where its bars meet the tune's.",
         };
       const part = until - time;
+      const chunks = piece.rest
+        ? restPieces(time - bar.start, part, beat, false)
+        : notePieces(time - bar.start, part, beat, bar.end - bar.start);
       items.push({
-        text: piece.render(part, !piece.cut, false, reading.unit),
+        text: piece.render(chunks, !piece.cut, false, reading.unit),
         start: time - bar.start,
         length: part,
         rest: piece.rest,
@@ -3438,14 +3480,16 @@ function rebar(part: string, unit: Fraction, meter: string, full: number): strin
     const room = full - time;
     if (piece.length <= room + 1e-9) {
       const text =
-        piece.cut && piece.render ? piece.render(piece.length, false, true, unit) : piece.text;
+        piece.cut && piece.render
+          ? piece.render(drawable(piece.length), false, true, unit)
+          : piece.text;
       items.push({ text, start: time, length: piece.length, rest: piece.rest });
       time += piece.length;
       queue.shift();
     } else {
       if (!piece.render) return null;
       items.push({
-        text: piece.render(room, !piece.cut, false, unit),
+        text: piece.render(drawable(room), !piece.cut, false, unit),
         start: time,
         length: room,
         rest: piece.rest,

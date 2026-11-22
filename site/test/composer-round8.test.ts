@@ -139,7 +139,8 @@ describe("overwrite writes what can be drawn, by the beat (rule c, item 4)", () 
   };
   it("a note across the bar line in drawable values, tied; the rest of a note partly covered, a rest", () => {
     const { out } = pasteOver(tune("C2 D E F2 G2|A8|]"), "E F2", "c8");
-    expect(out).toBe("C2 D c4- c-|c3 z z4|]\n");
+    // (By the beat since round 9: an eighth to finish beat 2, then a half from beat 3.)
+    expect(out).toBe("C2 D c- c4-|c3 z z4|]\n");
   });
   it("6/8 in threes", () => {
     expect(pasteOver(tune("dAF DFA|dAF DFA|]", "6/8"), "d", "abcdef").out).toBe(

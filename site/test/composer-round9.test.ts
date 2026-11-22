@@ -134,3 +134,25 @@ describe("a paste on a bar's first note behind a tuplet, slur or grace goes in b
       );
     });
 });
+
+describe("multi-bar rests (items 4 and 13)", () => {
+  const pasted = (text: string, part: string, clip: string) => {
+    const from = text.indexOf(part);
+    const plan = planPaste(text, [{ from, to: from + part.length }], 0, clip, null);
+    if (!plan || "refused" in plan) throw new Error(plan ? plan.refused : "no plan");
+    return body(apply(text, plan.changes));
+  };
+  it("a copied Z2 on a bar's first note goes in as its two bars, the note kept", () => {
+    expect(pasted(tune("C2 D2 E2 F2 | G8 | A8 |]"), "G8", "Z2")).toBe(
+      "C2 D2 E2 F2 | z8 | z8 | G8 | A8 |]\n",
+    );
+  });
+  it("on a note mid-bar, after its bar", () => {
+    expect(pasted(tune("C2 D2 E2 F2 | G8 |]"), "D2", "Z|")).toMatch(
+      /^C2 D2 E2 F2 \|\s*z8 ?\|\s*G8 \|\]/,
+    );
+  });
+  it("a paste over Z2 writes over its first bar, the second left a bar of rest", () => {
+    expect(pasted(tune("C8 | Z2 | D8 |]"), "Z2", "E2")).toBe("C8 | E2 z2 z4 | z8 | D8 |]\n");
+  });
+});

@@ -17,6 +17,7 @@
  */
 import { lineKind, tokenizeMusic } from "./abc";
 import {
+  barsOfRests,
   insertsAtNote,
   joinedClip,
   lyricsFor,
@@ -504,10 +505,21 @@ export function planPaste(
   const changes: Change[] = [];
   let special = said.length > 0;
   for (const target of targets) {
-    const insert = fit(copy, target.from);
+    // Multi-bar rests in the copy: the bars they stand for, in this tune's meter (round 9).
+    const reading = readingAt(text, file, target.from);
+    const fitted0 = fit(copy, target.from);
+    const insert = reading ? barsOfRests(fitted0, reading.unit, reading.meter) : fitted0;
+    const onlyRests =
+      insert !== fitted0 && !/[A-Ga-g]/.test(insert.replace(/"[^"]*"|![^!]*!|^[A-Za-z]:.*$/gm, ""));
     // Over notes, the copy overwrites forward from the first (as MuseScore does); a single note
     // starting its bar takes whole bars in before it, as at a caret there.
-    const at = insertsAtNote(text, file, target, insert);
+    // (Rests standing for bars go in as bars, before the clicked note's bar or after it, never
+    // over the note.)
+    const clicked =
+      onlyRests && target.to > target.from
+        ? (selectedNotes(text, [target], file).find((each) => each.whole)?.span.from ?? null)
+        : null;
+    const at = clicked ?? insertsAtNote(text, file, target, insert);
     const range = at === null ? target : { from: at, to: at };
     const over =
       targets.length === 1 && at === null ? overwriteForward(text, file, range, insert) : null;

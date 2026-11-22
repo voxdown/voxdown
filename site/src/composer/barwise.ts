@@ -2802,6 +2802,7 @@ export function overwriteForward(
   file: FileIndex,
   range: Range,
   clip: string,
+  expand = true,
 ): { changes: Change[]; said: string } | { refused: string } | null {
   if (range.to <= range.from || !inMusic(text, [range], file)) return null;
   const picked = selectedNotes(text, [range], file).filter((each) => each.whole);
@@ -2811,6 +2812,43 @@ export function overwriteForward(
   const reading = readingAt(text, file, first.event.from);
   const tune = file.tunes.find((each) => range.from >= each.from && range.from <= each.to);
   if (!reading || !tune) return null;
+  // Multi-bar rests in the voice from here: written out as their bars, the overwrite worked out
+  // over those, then made one change of the text.
+  const multi = tuneItems(text, tune, file).filter(
+    (item) =>
+      item.type === "event" && item.voice === voice && item.bars && item.to > first.event.from - 1,
+  );
+  const overRest = picked.some((each) => multi.some((item) => item.from === each.event.from));
+  const plain =
+    expand && multi.length && !overRest ? overwriteForward(text, file, range, clip, false) : null;
+  if (plain && !("refused" in plain && /multi-bar rest/.test(plain.refused))) return plain;
+  if (multi.length && expand) {
+    let expanded = text;
+    let mapped = { ...range };
+    for (const item of [...multi].reverse()) {
+      const written = barsOfRests(
+        text.slice(item.from, item.to),
+        item.type === "event" ? item.unit : reading.unit,
+        item.meter,
+        false,
+      );
+      expanded = expanded.slice(0, item.from) + written + expanded.slice(item.to);
+      const shift = written.length - (item.to - item.from);
+      const one = written.indexOf(" |") < 0 ? written.length : written.indexOf(" |");
+      const map = (pos: number, end: boolean) =>
+        pos < item.from ? pos : pos >= item.to ? pos + shift : end ? item.from + one : item.from;
+      mapped = { from: map(mapped.from, false), to: map(mapped.to, true) };
+    }
+    const inner = overwriteForward(expanded, indexFile(expanded), mapped, clip, false);
+    if (!inner || "refused" in inner) return inner;
+    const after = [...inner.changes]
+      .sort((a, b) => b.from - a.from)
+      .reduce(
+        (out, change) => out.slice(0, change.from) + change.insert + out.slice(change.to),
+        expanded,
+      );
+    return { changes: [diffChange(text, after)], said: inner.said };
+  }
   const pieces = piecesOf(clip, reading.unit, reading.meter);
   if (!pieces) return null;
   const total = pieces.reduce((sum, piece) => sum + piece.length, 0);
@@ -3433,4 +3471,46 @@ export function inOneVoice(
 ): boolean {
   const selected = ranges.filter((range) => range.to > range.from);
   return new Set(selectedNotes(text, selected, file).map((each) => each.event.voice)).size <= 1;
+}
+
+/** One change, from the first character that differs to the last. */
+function diffChange(text: string, after: string): Change {
+  let start = 0;
+  while (start < text.length && start < after.length && text[start] === after[start]) start += 1;
+  let tail = 0;
+  while (
+    tail < text.length - start &&
+    tail < after.length - start &&
+    text[text.length - 1 - tail] === after[after.length - 1 - tail]
+  )
+    tail += 1;
+  return { from: start, to: text.length - tail, insert: after.slice(start, after.length - tail) };
+}
+
+/**
+ * Multi-bar rests written out as the bars they stand for (round 9, items 4 and 13): `Z3` in 4/4
+ * of eighths is `z8 | z8 | z8`, `X` is `x8`, so a paste or a step can go over them, and a copy of
+ * them goes in as bars.
+ */
+export function barsOfRests(clip: string, unit: Fraction, meter: string, close = true): string {
+  const length = meterLength(meter);
+  if (!length) return clip;
+  return clip
+    .split("\n")
+    .map((line) => {
+      if (/^[A-Za-z]:/.test(line)) return line;
+      let out = "";
+      let at = 0;
+      for (const token of tokenizeMusic(line, 0)) {
+        if (token.kind !== "rest" || !/^[ZX]$/.test(token.letter)) continue;
+        const count = Number(token.length) || 1;
+        const one = `${token.letter.toLowerCase()}${lengthText(length.num / length.den, unit)}`;
+        // (Bars, so a bar line after the last, when the line has none after it.)
+        const closed = close && !line.slice(token.to).trim() ? " |" : "";
+        out += `${line.slice(at, token.from)}${Array<string>(count).fill(one).join(" | ")}${closed}`;
+        at = token.to;
+      }
+      return out + line.slice(at);
+    })
+    .join("\n");
 }

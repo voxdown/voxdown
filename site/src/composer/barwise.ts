@@ -127,8 +127,24 @@ function inMusic(text: string, ranges: Range[], file: FileIndex): boolean {
  * What typing over a range keeps: bar lines, line breaks, inline fields and jump marks, and a
  * slur's end whose pair is outside the selection.
  */
-function keptInside(text: string, range: Range, structure: Structure, selected: Range[]): Range[] {
+function keptInside(
+  text: string,
+  range: Range,
+  structure: Structure,
+  selected: Range[],
+  typing = false,
+): Range[] {
   const kept: Range[] = [];
+  // Typing over notes: the first one's chord symbol and dynamic lead what's typed (round 7).
+  const firstNote = structure.tokens.find(
+    ({ token }) => token.from >= range.from && token.from < range.to && starts(token),
+  )?.token;
+  const leading = (token: MusicToken) =>
+    typing &&
+    firstNote !== undefined &&
+    token.to <= firstNote.from &&
+    (token.kind === "chord-symbol" ||
+      (token.kind === "decoration" && DYNAMIC_MARK.test(token.text)));
   for (const line of linesOf(text, range)) {
     for (const token of line.tokens)
       if (
@@ -136,6 +152,7 @@ function keptInside(text: string, range: Range, structure: Structure, selected: 
         token.from < range.to &&
         (token.kind === "bar" ||
           keeper(token) ||
+          leading(token) ||
           (token.kind === "slur" && !inside(structure.slurs.get(token.from) ?? -1, selected)))
       )
         kept.push({ from: Math.max(token.from, range.from), to: Math.min(token.to, range.to) });
@@ -168,7 +185,7 @@ export function replaceKeepingBars(
   const changes: Change[] = [];
   let any = false;
   for (const range of selected) {
-    const kept = keptInside(text, range, structure, selected);
+    const kept = keptInside(text, range, structure, selected, Boolean(insert));
     if (kept.length) any = true;
     const gaps: Range[] = [];
     let at = range.from;

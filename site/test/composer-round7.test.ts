@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { copyText, cutPlan, overBarLine } from "../src/composer/barwise";
+import { copyText, cutPlan, overBarLine, replaceKeepingBars } from "../src/composer/barwise";
 import { type Change, musicParts } from "../src/composer/commands";
 import { checkLyrics } from "../src/composer/lyriccheck";
 import { planPaste, sourceAt } from "../src/composer/paste";
@@ -177,5 +177,15 @@ describe("Transpose to key… on a section after a key change (finding 8)", () =
     const after = apply(tune, plan.changes);
     // (The key signature stays D: the new key's sharps are written.)
     expect(after).toContain('[K:D]|:"E"^gbg "B"af^d|');
+  });
+});
+
+describe("typing over a note keeps its chord symbol and dynamic (finding 11)", () => {
+  it("they lead what's typed", () => {
+    const tune = 'X:1\nT:t\nM:4/4\nL:1/4\nK:C\n"G"!f!C D E F|]\n';
+    const from = tune.indexOf('"G"');
+    const typed = replaceKeepingBars(tune, [{ from, to: tune.indexOf("C D") + 1 }], "E");
+    if (!typed || "refused" in typed) throw new Error("no plan");
+    expect(apply(tune, typed)).toContain('\n"G"!f!E D E F|]');
   });
 });

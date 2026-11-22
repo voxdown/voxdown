@@ -1588,6 +1588,15 @@ function explainCaret(update: ViewUpdate) {
   const explanation = view.state.selection.main.empty ? explainAt(position) : null;
   const status = $("explain");
   status.replaceChildren();
+  // Undo and redo say so (what the undone edit said no longer holds).
+  const back = update.transactions.find(
+    (transaction) => transaction.isUserEvent("undo") || transaction.isUserEvent("redo"),
+  );
+  if (back && update.docChanged)
+    statusNote = {
+      message: back.isUserEvent("undo") ? "Undone." : "Redone.",
+      selection: view.state.selection,
+    };
   // What a typed mark just did stays said while its selection does.
   if (statusNote?.selection.eq(view.state.selection)) {
     status.textContent = statusNote.message;
@@ -3039,6 +3048,21 @@ scoreScroll.addEventListener("keydown", (event) => {
     view.focus();
   } else if (event.key === "Escape") {
     view.dispatch({ selection: { anchor: view.state.selection.main.head } });
+    // The live region says what's there now, not the count that was selected.
+    lastSaid = null;
+    announceScore();
+  } else if (
+    !modified &&
+    event.key.length === 1 &&
+    /[A-Ga-gzZxX]/.test(event.key) &&
+    !event.repeat
+  ) {
+    // Notes are typed in the text.
+    event.preventDefault();
+    const hint = "Press Enter to edit in the text.";
+    $("explain").textContent = hint;
+    statusNote = { message: hint, selection: view.state.selection };
+    sayAloud(hint);
   }
 });
 

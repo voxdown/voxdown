@@ -3,9 +3,11 @@ import { frac } from "../src/composer/abc";
 import { checkBars } from "../src/composer/barcheck";
 import {
   barsChanged,
+  copyText,
   cutPlan,
   duplicate,
   inOneVoice,
+  lengthPartners,
   lengthsInStep,
   noteStartsBar,
   onlyAttachments,
@@ -258,5 +260,52 @@ describe("fields left by whole bars cut (rule)", () => {
       "A2 B2 c2 d2 | [L:1/4] B c d e | [M:2/4] f g |]\n",
     );
     expect(body(cut(text, [at(text, "B c d e")]).out)).toContain("[L:1/4] [M:2/4] f g |");
+  });
+});
+
+describe("found by the conformance sweep", () => {
+  it("a paste that would split a broken rhythm is refused, saying why", () => {
+    const text = tune("G2 A>B c2 d2 | e8 |]");
+    const from = text.indexOf("G2");
+    expect(planPaste(text, [{ from, to: text.indexOf("A>") + 1 }], 0, "c2 d", null)).toMatchObject({
+      refused: expect.stringMatching(/split a broken rhythm/),
+    });
+  });
+  it("½× on a note of a broken pair or a tuplet halves it whole", () => {
+    for (const [music, part, out] of [
+      ["G2 A>B c4 | e8 |]", "A", "G2 A/>B/ z c4 | e8 |]\n"],
+      ["(3cde f2 g4 | e8 |]", "d", "(3c/d/e/ z f2 g4 | e8 |]\n"],
+    ] as const) {
+      const text = tune(music);
+      const range = lengthPartners(text, [at(text, part)]);
+      const plan = lengthsInStep(
+        text,
+        indexFile(text),
+        scaleLengths(text, range, frac(1, 2)),
+        0.5,
+        "Halve",
+      );
+      if (!plan || "refused" in plan) throw new Error("no plan");
+      expect(body(apply(text, plan.changes))).toBe(out);
+    }
+  });
+  it("Copy of a tuplet's notes brings its sign", () => {
+    const text = tune("(3:2:2G4c2 d2c|]", "6/8");
+    expect(copyText(text, { from: text.indexOf("G4"), to: text.indexOf("c2") + 2 })).toBe(
+      "(3:2:2G4c2",
+    );
+  });
+  it("Duplicate of whole bars ending under a slur's end goes after it, every voice in step", () => {
+    const text = tune(
+      "V:1\nz d (B,>c) | z4 |]\nV:2\nz B (G,>A) | x4 |]",
+      "4/4",
+      "1/4",
+      "%%score (1 2)\n",
+    );
+    const plan = duplicate(text, [{ from: text.indexOf("z d"), to: text.indexOf("B,>c") + 4 }]);
+    if ("refused" in plan) throw new Error(plan.refused);
+    const out = apply(text, plan.changes);
+    expect(out).toContain("V:1\nz d (B,>c) | z d B,>c | z4 |]");
+    expect(out).toMatch(/V:2\nz B \(G,>A\) \| x4 \| x4 \|\]/);
   });
 });

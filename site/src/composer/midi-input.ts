@@ -14,6 +14,7 @@ import { type Fraction, frac, lineKind, mul, parseKey, value } from "./abc";
 import { barAt } from "./barcheck";
 import { inOneVoice, overwriteForward, repitchTo, replaceKeepingBars } from "./barwise";
 import { dockPanel, undockPanel } from "./dock";
+import { lyricsOfChanges } from "./paste";
 import { selectedNotes } from "./selected";
 import {
   STEP_LENGTHS,
@@ -224,7 +225,8 @@ function stepOver(
   if ("refused" in over) return over;
   // (The other places selected, counted before the step selects the next note.)
   const others = view.state.selection.ranges.filter((range) => range !== main && !range.empty);
-  const set = view.state.changes(over.changes);
+  // (The verses keep their syllables on their notes, as a paste's do.)
+  const set = view.state.changes(lyricsOfChanges(text, file, over.changes));
   const after = set.apply(view.state.doc).toString();
   const head = (over.changes[0]?.from ?? main.from) + written.length;
   // The next note in the voice, selected: the next step goes over it.

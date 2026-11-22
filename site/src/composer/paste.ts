@@ -445,7 +445,9 @@ export function planPaste(
   // Several music lines (and their verses) into a music line with verses: one line, the verses
   // given the copy's syllables, or a `*` a note.
   const target = ranges[main] ?? (ranges[0] as Range);
-  const joined = versed(text, file, target.from) ? joinedClip(copy) : null;
+  // (Into one music line: a selection of several lines, verses and all, takes the copy as it is.)
+  const oneLine = !text.slice(target.from, target.to).includes("\n");
+  const joined = oneLine && versed(text, file, target.from) ? joinedClip(copy) : null;
   if (joined) {
     const plan = planPaste(text, ranges, main, joined.music, source, file, staves);
     if (!plan) {
@@ -608,6 +610,11 @@ function relyric(text: string, file: FileIndex, changes: Change[], verses: strin
     return !line.startsWith("w:");
   });
   return withLyrics(text, file, music, verses);
+}
+
+/** A paste's (or a step's) changes, with the verses' syllables kept on their notes. */
+export function lyricsOfChanges(text: string, file: FileIndex, changes: Change[]): Change[] {
+  return withLyrics(text, file, changes);
 }
 
 function withLyrics(

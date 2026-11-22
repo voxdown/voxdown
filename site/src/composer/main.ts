@@ -3325,6 +3325,14 @@ function music(command: string): boolean {
     return true;
   }
   const { barLine, removeDots, scaleLengths, toggleSlur, toggleTies, transpose } = commands;
+  const partners = (given: Range[]) =>
+    barwise
+      ? barwise.lengthPartners(
+          text(),
+          commands?.resolveRanges(text(), given, fileIndex()) ?? given,
+          fileIndex(),
+        )
+      : given;
   const doc = text();
   const index = fileIndex();
   const list = ranges();
@@ -3337,12 +3345,13 @@ function music(command: string): boolean {
       return apply(transpose(doc, list, 12, index), "Octave");
     case "octave-down":
       return apply(transpose(doc, list, -12, index), "Octave");
+    // (A broken pair or a tuplet changes length whole: ./barwise lengthPartners.)
     case "double":
-      return lengths(scaleLengths(doc, list, frac(2), index), 2, "Double");
+      return lengths(scaleLengths(doc, partners(list), frac(2), index), 2, "Double");
     case "halve":
-      return lengths(scaleLengths(doc, list, frac(1, 2), index), 0.5, "Halve");
+      return lengths(scaleLengths(doc, partners(list), frac(1, 2), index), 0.5, "Halve");
     case "dot":
-      return lengths(scaleLengths(doc, list, frac(3, 2), index), 1.5, "Dot");
+      return lengths(scaleLengths(doc, partners(list), frac(3, 2), index), 1.5, "Dot");
     case "undot":
       return apply(removeDots(doc, list, index), "Remove dot");
     case "tie": {

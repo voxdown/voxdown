@@ -368,6 +368,18 @@ function splitTuplet(structure: Structure, spans: Range[]): boolean {
 export function copyText(text: string, range: Range, file: FileIndex = indexFile(text)): string {
   const written = text.slice(range.from, range.to);
   if (range.to <= range.from) return written;
+  // A tuplet whose notes are all in the range brings its sign, written just before it (round 9).
+  if (inMusic(text, [range], file)) {
+    const sign = structureOf(text, file, range.from).tuplets.find(
+      ({ sign: own, notes }) =>
+        own.from < range.from &&
+        notes.length > 0 &&
+        (notes[0] as number) >= range.from &&
+        notes.every((note) => note < range.to) &&
+        !text.slice(own.to, range.from).trim(),
+    );
+    if (sign) return copyText(text, { from: sign.sign.from, to: range.to }, file);
+  }
   if (!inMusic(text, [range], file)) {
     // Music lines with their verses (w: lines) between: each line's music as Copy takes it, the
     // verses as written.
@@ -914,6 +926,7 @@ export function cutPlan(
       (selected[0] as Range).from,
       [...removed, ...rests.vanished],
       rests.rested,
+      rests.changes.filter((change) => change.to > change.from),
     ),
   );
   return finishCut(text, asked, file, changes, carets, said);
@@ -1370,7 +1383,14 @@ function wholeBarsEnd(text: string, body: Range): MusicToken | null {
   const lead = tokens.filter((token) => token.to <= body.from);
   const opened = lead.map((token) => token.kind).lastIndexOf("bar");
   if (lead.slice(opened + 1).some((token) => starts(token))) return null;
-  const next = tokens.find((token) => token.from >= body.to && !(keeper(token) && !leads(token)));
+  // (Past a slur's end or a tie after the last note too: still the bar's end; round 9.)
+  const next = tokens.find(
+    (token) =>
+      token.from >= body.to &&
+      !(keeper(token) && !leads(token)) &&
+      !(token.kind === "slur" && token.text === ")") &&
+      token.kind !== "tie",
+  );
   return next?.kind === "bar" ? next : null;
 }
 
@@ -1506,8 +1526,13 @@ export function duplicate(
       insertAt = end;
       insert = `\n${text.slice(lineStart, end)}`;
     } else if (bar) {
-      const gap = /\s/.test(text[body.to] ?? "") ? " " : "";
-      insertAt = body.to;
+      // After a slur's end or tie that closes the bar's music, before its bar line.
+      const closing = tokenizeMusic(text.slice(body.to, bar.from), body.to).filter(
+        (token) => token.kind !== "space" && !keeper(token),
+      );
+      const end = closing.at(-1)?.to ?? body.to;
+      const gap = /\s/.test(text[end] ?? "") ? " " : "";
+      insertAt = end;
       insert = `${gap}|${gap}${written}`;
     } else {
       // After the tuplet the last note is in.
@@ -1583,7 +1608,16 @@ export function duplicate(
         return;
       }
       const after = selectedNotes(text, [{ from: ending.from, to: ending.from + 1 }], file)[0];
-      const at = after?.span.to ?? ending.to;
+      let at = after?.span.to ?? ending.to;
+      // (Past a slur's end or tie closing its bar, so the rests go after it, before the bar line.)
+      if (bar) {
+        const lineTo = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+        for (const token of tokenizeMusic(text.slice(at, lineTo), at)) {
+          if (token.kind === "space") continue;
+          if ((token.kind === "slur" && token.text === ")") || token.kind === "tie") at = token.to;
+          else break;
+        }
+      }
       const reading = readingAt(text, file, at);
       const unit = reading?.unit ?? frac(1, 8);
       const letter = restLetter(text, file, voice, at);
@@ -2253,7 +2287,14 @@ function restsInstead(text: string, selected: Range[], file: FileIndex): CutPlan
     ...changes,
     ...lyrics,
     ...hairpinsKept(text, file, (selected[0] as Range).from, rests.vanished, rests.rested),
-    ...slursKept(text, file, (selected[0] as Range).from, rests.vanished, rests.rested),
+    ...slursKept(
+      text,
+      file,
+      (selected[0] as Range).from,
+      rests.vanished,
+      rests.rested,
+      rests.changes.filter((change) => change.to > change.from),
+    ),
   ].sort((a, b) => a.from - b.from);
   return {
     changes: all,
@@ -2982,6 +3023,8 @@ export function overwriteForward(
     end: number;
     events: Event[];
     after?: { from: number; to: number; text: string };
+    /** The unit in force for the bar (an [L:] after its bar line counts): its notes' lengths. */
+    unit?: Fraction;
   };
   const bars: Bar[] = [{ start: 0, end: 0, events: [] }];
   let clock = 0;
@@ -3009,6 +3052,7 @@ export function overwriteForward(
       if (bar.events.length) bars.push({ start: clock, end: clock, events: [] });
       continue;
     }
+    if (!bar.events.length) bar.unit = item.unit;
     if (item.bars)
       bar.events.push({
         from: item.from,
@@ -3071,6 +3115,18 @@ export function overwriteForward(
     return {
       refused: "The paste would cut a tuplet in two: select all of its notes, or paste elsewhere.",
     };
+  // Nor a broken rhythm (`A>B`): its notes' lengths are each other's (round 9).
+  const ordered = all.filter((each) => each.span.to > each.span.from);
+  for (let index = 0; index + 1 < ordered.length; index++) {
+    const one = ordered[index] as Event;
+    const two = ordered[index + 1] as Event;
+    if (!/[<>]/.test(text.slice(one.to, one.span.to))) continue;
+    if (gone.has(one.from) !== gone.has(two.from))
+      return {
+        refused:
+          "The paste would split a broken rhythm (A>B): select both of its notes, or paste where it starts or after it.",
+      };
+  }
   // A tuplet replaced whole goes with its sign.
   const signs = new Map(
     structure.tuplets
@@ -3091,6 +3147,8 @@ export function overwriteForward(
   let filled = false;
   for (const bar of windows) {
     const own = bar.events.filter((each) => gone.has(each.from));
+    // (Each bar's notes in its own unit: an [L:] after its bar line counts; round 9.)
+    const unit = bar.unit ?? reading.unit;
     if (!own.length) continue;
     const from = Math.min(
       (own[0] as Event).span.from,
@@ -3115,7 +3173,7 @@ export function overwriteForward(
           : notePieces(time - bar.start, piece.length, beat, bar.end - bar.start);
         const written =
           piece.render && (piece.cut || chunks.length > 1)
-            ? piece.render(chunks, !piece.cut, true, reading.unit)
+            ? piece.render(chunks, !piece.cut, true, unit)
             : piece.text;
         items.push({
           text: written,
@@ -3137,7 +3195,7 @@ export function overwriteForward(
         ? restPieces(time - bar.start, part, beat, false)
         : notePieces(time - bar.start, part, beat, bar.end - bar.start);
       items.push({
-        text: piece.render(chunks, !piece.cut, false, reading.unit),
+        text: piece.render(chunks, !piece.cut, false, unit),
         start: time - bar.start,
         length: part,
         rest: piece.rest,
@@ -3151,7 +3209,7 @@ export function overwriteForward(
       let at = time - bar.start;
       for (const piece of restPieces(at, until - time, beat, whole)) {
         items.push({
-          text: `${letter}${lengthText(piece, reading.unit)}`,
+          text: `${letter}${lengthText(piece, unit)}`,
           start: at,
           length: piece,
           rest: true,
@@ -3689,9 +3747,13 @@ function slursKept(
   at: number,
   gone: Range[],
   rested: Set<number>,
+  rewritten: Range[] = [],
 ): Change[] {
   const structure = structureOf(text, file, at);
   const cut = (pos: number) => gone.some((range) => pos >= range.from && pos < range.to);
+  // (A slur's end inside a stretch the rests rewrite goes with it already.)
+  const inside = (token: MusicToken) =>
+    rewritten.some((range) => token.from >= range.from && token.to <= range.to);
   const tokens = structure.tokens;
   const changes: Change[] = [];
   for (const [open, close] of structure.slurs) {
@@ -3711,8 +3773,9 @@ function slursKept(
     );
     const left = notes.filter(({ token }) => !cut(token.from) && !rested.has(token.from));
     if (left.length === notes.length) continue;
-    const drop = (token: MusicToken) =>
-      changes.push({ from: token.from, to: token.to, insert: "" });
+    const drop = (token: MusicToken) => {
+      if (!inside(token)) changes.push({ from: token.from, to: token.to, insert: "" });
+    };
     if (left.length < 2) {
       drop(openToken.token);
       drop(closeToken.token);
@@ -3767,4 +3830,45 @@ export function onlyAttachments(text: string, ranges: Range[]): boolean {
       )
     );
   });
+}
+
+/**
+ * What ½×, 2× and a dot take with a note (round 9): a broken rhythm's other note (`A>B` changes
+ * length as a pair, so the ratio holds) and a tuplet's other notes (it changes as a whole, so
+ * its time stays one that can be written, and the rest for time given up goes after it).
+ */
+export function lengthPartners(
+  text: string,
+  ranges: Range[],
+  file: FileIndex = indexFile(text),
+): Range[] {
+  const out = [...ranges];
+  const picked = selectedNotes(text, ranges, file);
+  if (!picked.length) return out;
+  const structure = structureOf(text, file, (picked[0] as Picked).event.from);
+  for (const each of picked) {
+    if (/[<>]/.test(text.slice(each.event.to, each.span.to))) {
+      const next = selectedNotes(text, [{ from: each.span.to, to: each.span.to + 1 }], file).find(
+        (other) => other.event.from >= each.span.to,
+      );
+      if (next) out.push({ from: next.event.from, to: next.event.to });
+    }
+    const before = text.slice(0, each.span.from).replace(/\s+$/, "");
+    if (/[<>]$/.test(before)) {
+      const previous = selectedNotes(
+        text,
+        [{ from: before.length - 1, to: before.length }],
+        file,
+      )[0];
+      if (previous && previous.event.from < each.event.from)
+        out.push({ from: previous.event.from, to: previous.event.to });
+    }
+    const tuplet = structure.tuplets.find(({ notes }) => notes.includes(each.event.from));
+    if (tuplet)
+      for (const note of tuplet.notes) {
+        const one = selectedNotes(text, [{ from: note, to: note + 1 }], file)[0];
+        if (one) out.push({ from: one.event.from, to: one.event.to });
+      }
+  }
+  return out;
 }

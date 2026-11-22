@@ -1,0 +1,12 @@
+X:1
+T:Rules inline duet
+M:6/8
+L:1/8
+%%score (1 2)
+V:1
+V:2
+K:G
+[V:1] "G"GAB cde | (3def g2 a2 | [GB]3 A3 | B3 c3 :|
+w: one two three four five six sev en eight nine ten e lev en
+[V:2] D3 E3 | F3 G3 | A3 B3 | C3 D3 :|
+w: low one low two low three low four

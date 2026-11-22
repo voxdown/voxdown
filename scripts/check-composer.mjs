@@ -6433,20 +6433,44 @@ console.log(
   await q.goto(url);
   await openExample("Ode to Joy", q);
   await q.locator("#show-score").click();
-  await q.evaluate(() => {
-    const view = window.composer.view;
-    const doc = view.state.doc.toString();
-    const at = doc.indexOf("|", doc.indexOf("K:")) + 1;
-    view.dispatch({
-      selection: {
-        anchor: doc.indexOf(" ", at + 1) + 1,
-        head: doc.indexOf(" ", doc.indexOf(" ", at + 1) + 1),
-      },
-    });
+  // (Round 7: a note tapped first, as a musician does, and the clipboard's own text read back.)
+  const tapNote = async (index) => {
+    const point = await q
+      .locator("#score .abcjs-note")
+      .nth(index)
+      .evaluate((element) => {
+        const head = element.querySelector("path").getBoundingClientRect();
+        return { x: head.x + head.width / 2, y: head.y + head.height / 2 };
+      });
+    await q.touchscreen.tap(point.x, point.y);
+  };
+  await tapNote(2);
+  await q.waitForFunction(() => !window.composer.view.state.selection.main.empty);
+  const tapped = await q.evaluate(() => {
+    const { state } = window.composer.view;
+    return state.sliceDoc(state.selection.main.from, state.selection.main.to);
   });
   await q.evaluate(() => navigator.clipboard.writeText("nothing yet"));
   await menu("edit", "Copy", q);
   await q.waitForFunction(async () => (await navigator.clipboard.readText()) !== "nothing yet");
+  assert.equal(
+    (await q.evaluate(() => navigator.clipboard.readText())).trim(),
+    tapped.trim(),
+    "Edit › Copy after a tap copies the tapped note",
+  );
+  // Cut too: the note goes (a rest in its place), the clipboard has it.
+  const before = await docText(q);
+  await tapNote(3);
+  await q.waitForFunction(() => !window.composer.view.state.selection.main.empty);
+  const cutNote = await q.evaluate(() => {
+    const { state } = window.composer.view;
+    return state.sliceDoc(state.selection.main.from, state.selection.main.to);
+  });
+  await q.evaluate(() => navigator.clipboard.writeText("nothing yet"));
+  await menu("edit", "Cut", q);
+  await q.waitForFunction(async () => (await navigator.clipboard.readText()) !== "nothing yet");
+  assert.equal((await q.evaluate(() => navigator.clipboard.readText())).trim(), cutNote.trim());
+  assert.notEqual(await docText(q), before, "Edit › Cut after a tap cuts");
   await phone.close();
   console.log(
     "Composer: selection hardening round 6: rests where part of a bar goes (said once), the Kesh's parts moved by a click, the chorale across voices, the duet pasted in step, nothing to paste, chord symbols kept, a second voice typed over, Transpose to key, focus given back, rests counted, Copy on a phone: passed",

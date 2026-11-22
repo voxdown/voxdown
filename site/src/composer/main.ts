@@ -308,9 +308,15 @@ function tabHint() {
    (several voices copy under their V: lines, as with the keys). */
 const hasSelection = () => view.state.selection.ranges.some((range) => !range.empty);
 function clipboard(kind: "cut" | "copy") {
-  // With the text hidden (the score alone, on a phone), the editor can't take focus: the copy is
-  // written to the clipboard directly, from the same text the editor's handlers would put there.
-  if (!view.dom.offsetParent) {
+  // With the text hidden (the score alone, on a phone: display none, or visibility hidden), the
+  // editor can't take focus: the copy is written to the clipboard directly, from the same text
+  // the editor's handlers would put there. So too when focusing it doesn't give it the focus.
+  const hidden = !view.dom.offsetParent || getComputedStyle(view.dom).visibility !== "visible";
+  const back = document.activeElement;
+  if (!hidden) view.focus();
+  if (hidden || !view.hasFocus) {
+    if (back instanceof HTMLElement && back !== document.activeElement)
+      back.focus({ preventScroll: true });
     const copy = copyText(view.state);
     if (!copy) {
       notice("Select some music first: tap a note, or hold and drag.");
@@ -332,8 +338,6 @@ function clipboard(kind: "cut" | "copy") {
   }
   // The editor's own copy and cut handlers run, so voices keep their V: lines; focus goes back
   // where it was (the score keeps its keys: Delete, typing, arrows).
-  const back = document.activeElement;
-  view.focus();
   if (!document.execCommand(kind))
     notice(`Use ${shortcutLabel(kind === "cut" ? "Mod X" : "Mod C")} to ${kind} in this browser.`);
   if (back instanceof HTMLElement && back !== view.contentDOM && !view.contentDOM.contains(back))

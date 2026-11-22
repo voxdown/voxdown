@@ -1332,3 +1332,46 @@ The cheat sheet says so.
   - emptied verses after rests in some voices only (dropped).
 
 **First view.** 710 KB, under its 720 KB check. The musical commands (`commands.ts`) now load with the editing modules, not with the start screen.
+
+### Round 7 fixes (after the regression replay of rounds 5 and 6)
+
+**The over-full bar refinement (the owner's).** In an over-full bar, Delete and Backspace take time out: the notes simply go while the bar stays at least its length, and any shortfall becomes a rest (6/8 `|:dAFF DFA|` less the extra F is `dAF DFA`). Elsewhere, part of a bar still becomes rests, and whole bars still go.
+
+1. **Paste over notes overwrites forward** (MuseScore-style), in every tune:
+   - The copy overwrites from the selection's first note for as long as it lasts. The tune's bar lines stay where they are, and a note across one is tied over it.
+   - Notes it runs over past the selection are replaced, and the notice says how many.
+   - Rests fill what's left of the selection, or the rest of the last bar it reaches.
+   - In a tune with several voices, the others are untouched.
+   - Refused, saying why: across a repeat sign or ending, past the voice's end, or where it would split a tuplet.
+   - A single clicked note that starts its bar, with whole full bars, still takes them in before it (round 6).
+   - A property test (`test/composer-paste-property.test.ts`) pastes one to three bars from each voice over every note, and every two notes, of a trio, a piano piece and a song. Every voice keeps as many bars as the others, every bar keeps its length, the other voices are as they were, and no verse goes off its notes.
+2. **Copy and Cut on a phone after a tap.** With the score alone, the text is `visibility: hidden`, so the clipboard is written directly whenever the editor isn't visible or doesn't take the focus. The phone check taps a note and reads the clipboard back, for Copy and for Cut.
+3. **A copy of several lines into a line with verses** goes in as one line: its lines are joined with spaces, bar lines kept. Each verse gets the copy's own syllables, line after line, or a `*` per note. This holds after the final `|]` too. A Copy across music lines with verses between them copies each line's music by the bar rules. A caret inside a note pastes after it.
+4. **A text selection across inline-voice lines** (the hymn):
+   - Time goes only where every voice is selected, as whole bars of each; the rest become rests.
+   - Each `[V:]` stays first on its own line, and each bar line with its voice.
+   - The edit sweep has this case and its mirror.
+5. **Staff mates for a two-voice copy** come from the drawn score, or from `%%score` anywhere in the tune, after `K:` too (the duet). A clicked note that starts its bar takes the voiced bars in before it, in every voice.
+6. **Second voice placeholders.** A `|` typed at the end of a filled bar steps over the bar line that's there, and a space typed next to it isn't doubled. So `F2 A | G2 E |` leaves no empty bars.
+7. **A repeat's body and its 1st ending cut together:**
+   - If none of the body stays, the repeat goes and the 2nd ending's bars play once.
+   - If some of the body stays, the repeat stays and the 2nd ending's bars follow it (Morrison's).
+   - The refusal came from a note's length `3` being read as a 3rd ending.
+   - Play orders are checked.
+8. **Transpose to key…** on a section takes the dialog's key and the interval from the key in force at the selection's start.
+9. **Ctrl+Shift+D** is bound at the highest precedence, so the search's Ctrl+D (select next match) no longer takes it on a jig. Ctrl+D stays the search's.
+10. **Marks kept.**
+    - A note made a rest gives the rest its dynamic, its `"_"`/`"^"` texts, its fermata and the bar's marks.
+    - When whole bars go, the dynamic in force after them goes on to the next note.
+    - A hairpin end on a note that goes moves to the nearest note left inside the hairpin. If none is left, both ends go together.
+    - The sweep has a tune with marks. It checks that every hairpin is paired and every note is left at its dynamic.
+11. **Typing over a note** keeps its leading chord symbol and dynamic. A note letter pressed in the score says "Press Enter to edit in the text."
+12. **½×, 2× and dot in one voice of several.** Halving leaves a rest for the time given up. Doubling or dotting past the bar's length is refused, naming the bar and voice.
+13. **Assorted.**
+    - Delete or Cut across two tunes is refused as such: "This selection is in 2 tunes…". It no longer blames a repeat, and can no longer join the tunes.
+    - Escape in the score reads the live region again.
+    - Undo and redo say "Undone." / "Redone." in the status.
+
+**Browser checks:**
+- **Step 36:** Duplicate on a jig, the SR repeat's body and 1st ending deleted in the score, the score's typing hint and Escape, the hymn across a text delete, a paste overwriting forward, the duet's two voices on a clicked note, halved in step, Undone, and bar lines typed into a second voice.
+- **Step 35:** the phone check now taps a note first.

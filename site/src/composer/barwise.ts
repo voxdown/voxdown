@@ -76,9 +76,9 @@ function joinedBars(tokens: MusicToken[]): MusicToken[] {
   return out;
 }
 
-function segmentsOf(line: Line, events: number[]): Segment[] {
+function segmentsOf(given: Line, events: number[]): Segment[] {
   const segments: Segment[] = [];
-  line = { ...line, tokens: joinedBars(line.tokens) };
+  const line = { ...given, tokens: joinedBars(given.tokens) };
   let open: MusicToken | undefined;
   let from = line.from;
   const push = (to: number, close?: MusicToken) => {

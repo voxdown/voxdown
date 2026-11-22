@@ -97,3 +97,28 @@ describe("a copy longer than the notes it's pasted over (finding 1)", () => {
     });
   });
 });
+
+describe("a two-voice copy pasted on a clicked note of a shared staff (finding 5, Codex 2)", () => {
+  const duet =
+    'X:1\nT:Fiddle Duet\nM:2/4\nL:1/8\nK:D\n%%score (1 2)\nV:1 name="Fiddle 1"\nV:2 name="Fiddle 2"\n[V:1] d2 fd | ed cB | A2 FA | d4 :|\n[V:2] F2 AF | GF ED | C2 DC | D4 :|\n';
+  const clip = "V:1\ned cB |\nV:2\nGF ED |\n";
+  it("with %%score after K:, both voices, in step", () => {
+    const at = duet.indexOf("d4 :|");
+    const plan = planPaste(duet, [{ from: at, to: at + 2 }], 0, clip, null);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    const after = apply(duet, plan.changes);
+    expect(after).toContain("[V:1] d2 fd | ed cB | A2 FA | ed cB |d4 :|");
+    expect(after).toContain("[V:2] F2 AF | GF ED | C2 DC | GF ED |D4 :|");
+    expect(plan.message).toMatch(/V:2's on the same staff/);
+  });
+  it("without %%score, as the score draws the staves", () => {
+    const plain = duet.replace("%%score (1 2)\n", "");
+    const at = plain.indexOf("FA |") + 1;
+    const staves = () => ["1", "2"];
+    const plan = planPaste(plain, [{ from: at, to: at + 1 }], 0, clip, null, undefined, staves);
+    if (!plan || "refused" in plan) throw new Error("no plan");
+    const after = apply(plain, plan.changes);
+    expect(after).toContain("| A2 FA | ed cB | d4 :|");
+    expect(after).toContain("| C2 DC | GF ED | D4 :|");
+  });
+});

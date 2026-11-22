@@ -468,6 +468,7 @@ function pastePlanned(target: EditorView, pasted: string, sourceData = ""): bool
     pasted,
     source,
     target.state.field(fileIndexField),
+    drawnStaves,
   );
   if (!plan) return false;
   if ("refused" in plan) {
@@ -1636,6 +1637,18 @@ function barStatus(position: number): string | null {
 
 /* Rendering the score. */
 let scoreIndex: ScoreIndex | null = null;
+/** The voices drawn on a voice's staff, as the score drew them (for a paste of several voices). */
+const drawnStaves = (voice: string): string[] | null => {
+  const index = scoreIndex;
+  if (!index) return null;
+  const drawn = index.voices[index.tune.voices.findIndex((each) => each.id === voice)];
+  if (!drawn) return null;
+  return index.voices.flatMap((each, at) =>
+    each.staff === drawn.staff && index.tune.voices[at]
+      ? [(index.tune.voices[at] as { id: string }).id]
+      : [],
+  );
+};
 let timeline: Timeline | null = null;
 let renderGeneration = 0;
 let renderedKey = "";

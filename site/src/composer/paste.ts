@@ -96,6 +96,7 @@ export function pasteVoiced(
   ranges: Range[],
   copy: VoicedPart[],
   file: FileIndex = indexFile(text),
+  staves?: Staves,
 ): PastePlan {
   const parts = joinedParts(copy);
   const all = names(parts);
@@ -143,11 +144,14 @@ export function pasteVoiced(
       refused: `The copy has ${all} and the selection ${ranges.length} places in other voices: select one stretch in each voice to paste into, or click where to paste one voice.`,
     };
   }
-  const range = ranges[0] as Range;
-  if (!inMusic(text, file, range.from))
+  const given = ranges[0] as Range;
+  if (!inMusic(text, file, given.from))
     return {
       refused: `The copy has ${all}: click in a voice's music to paste it there, or select a place in each voice.`,
     };
+  // A clicked note starting its bar, with whole bars: they go in before it, as at a caret there.
+  const before = insertsAtNote(text, file, given, parts[0]?.text ?? "");
+  const range = before === null ? given : { from: before, to: before };
   const here = voiceIn(text, file, range.from);
   const tune = tuneOf(file, range.from);
   const voiced = Boolean(here) || (tune?.voices.length ?? 0) > 1;
@@ -164,7 +168,7 @@ export function pasteVoiced(
   const own = parts.find((part) => part.voice === here);
   if (own) {
     // A staff holding the copy's other voices too takes them, at the same point, in step.
-    const mates = tune ? staffMates(text, tune, here) : [here];
+    const mates = tune ? staffMates(text, tune, here, staves) : [here];
     const changes: Change[] = [{ ...range, insert: own.text }];
     const also: VoicedPart[] = [];
     for (const part of parts) {
@@ -197,9 +201,17 @@ export function pasteVoiced(
   };
 }
 
-/** The voices drawn on one staff with a voice, as %%score (or %%staves) groups them in (…). */
-function staffMates(text: string, tune: TuneInfo, voice: string): string[] {
-  const line = /^%%(?:score|staves)(.*)$/m.exec(text.slice(tune.from, tune.bodyFrom))?.[1] ?? "";
+/** The voices drawn on a voice's staff, by its id, as the drawn score has them (./score). */
+export type Staves = (voice: string) => string[] | null;
+
+/**
+ * The voices drawn on one staff with a voice: as the drawn score has them, else as %%score (or
+ * %%staves) groups them in (…), wherever in the tune it is (after K: too).
+ */
+function staffMates(text: string, tune: TuneInfo, voice: string, staves?: Staves): string[] {
+  const drawn = staves?.(voice);
+  if (drawn?.includes(voice) && drawn.length > 1) return drawn;
+  const line = /^%%(?:score|staves)(.*)$/m.exec(text.slice(tune.from, tune.to))?.[1] ?? "";
   for (const group of line.matchAll(/\(([^()]*)\)/g)) {
     const ids = (group[1] as string).split(/[\s|{}[\]]+/).filter(Boolean);
     if (ids.includes(voice)) return ids;
@@ -237,6 +249,7 @@ export function planPaste(
   clip: string,
   source: ClipSource | null,
   file: FileIndex = indexFile(text),
+  staves?: Staves,
 ): PastePlan | null {
   const copy = clip.replace(/\r\n?/g, "\n");
   const said: string[] = [];
@@ -285,7 +298,7 @@ export function planPaste(
   };
   if (parts) {
     const places = selected.length ? selected : [ranges[main] ?? (ranges[0] as Range)];
-    const plan = pasteVoiced(text, places, parts, file);
+    const plan = pasteVoiced(text, places, parts, file, staves);
     if ("refused" in plan) return plan;
     const changes: Change[] = [];
     for (const change of plan.changes) {

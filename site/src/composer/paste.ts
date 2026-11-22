@@ -218,7 +218,7 @@ export function pasteVoiced(
     if (decided)
       return {
         ...decided,
-        message: `${decided.message.replace(`V:${here}`, `V:${chosen.voice}'s part`)}${others.length ? ` The copy also had ${names(others)}.` : ""}`,
+        message: `${decided.message.replace(`V:${here}`, `V:${chosen.voice}'s part into V:${here}`)}${others.length ? ` The copy also had ${names(others)}.` : ""}`,
       };
   }
   return {

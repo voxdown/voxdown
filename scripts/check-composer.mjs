@@ -2447,8 +2447,9 @@ console.log(
   await page.keyboard.press("Control+Shift+z");
   assert.notEqual(await docText(), doc, "Ctrl Shift Z redoes from the score");
   await page.keyboard.press("Control+z");
-  await page.keyboard.press("Alt+BracketRight");
-  assert.notEqual(await docText(), doc, "Alt ] doubles from the score");
+  // (Halved, since 2× past the bar's length is refused in one voice too: round 8, rule (e).)
+  await page.keyboard.press("Alt+BracketLeft");
+  assert.notEqual(await docText(), doc, "Alt [ halves from the score");
   await page.keyboard.press("Control+z");
   assert.equal(await docText(), doc);
   assert(await focusedScore(), "the score keeps focus through editing keys");
@@ -4923,11 +4924,12 @@ console.log(
   // Round 6: the part of a bar taken (fed, d2fd) leaves rests, so every bar keeps its length;
   // the whole bar (cdeg fedc) goes, its repeat's end kept.
   for (const [keys, left] of [
-    [["Control+x"], "|:dfaf gz3:|"],
-    [["Delete"], "|:dfaf gz3:|"],
+    // (The rests by the beat: an eighth to finish beat 3, a quarter for beat 4; round 8.)
+    [["Control+x"], "|:dfaf gz z2:|"],
+    [["Delete"], "|:dfaf gz z2:|"],
     // Round 5: the text's Delete and Backspace are the score's Delete (one plan).
-    [["Enter", "Delete"], "|:dfaf gz3:|"],
-    [["Enter", "Backspace"], "|:dfaf gz3:|"],
+    [["Enter", "Delete"], "|:dfaf gz z2:|"],
+    [["Enter", "Backspace"], "|:dfaf gz z2:|"],
   ]) {
     await put(reel);
     await pull(...span);
@@ -5458,7 +5460,8 @@ console.log(
   await p.keyboard.press("Control+x");
   assert.match(
     await docText(p),
-    /\nc z3\|g a b c'\|[^\n]*\nV:2\nC z3\|G A B c\|/,
+    // (By the beat since round 8: a quarter rest on beat 2, a half on beats 3 and 4.)
+    /\nc z z2\|g a b c'\|[^\n]*\nV:2\nC z z2\|G A B c\|/,
     "Cut of part of a bar keeps its bar lines (round 6: rests in its notes' place)",
   );
   await p.keyboard.press("Control+z");
@@ -5517,7 +5520,8 @@ console.log(
   await changed(blocks);
   assert.match(
     await docText(p),
-    /\nV:1\ng a b c'\| e f g a\|c d e f\|g a b c'\|\n/,
+    // (And, since round 8, V:2 rests as long: every voice in step.)
+    /\nV:1\ng a b c'\| e f g a\| ?c d e f\|g a b c'\|\nV:2\nz4 \| z4 \| ?C D E F/,
     "at a V:1 caret: both of V:1's parts, in order",
   );
   geo = await put(blocks);
@@ -5666,7 +5670,7 @@ console.log(
   await statusSays(/in 2 voices/);
   await p.keyboard.press("Control+x");
   await p.keyboard.press("Control+z");
-  await statusSays(/^4 notes selected in 2 voices|^8 notes selected in 2 voices/);
+  await statusSays(/^(Undone\. )?(4|8) notes selected in 2 voices/);
   // 11. A selection across two tunes says so.
   geo = await put(tunes2);
   await choose([[tunes2.indexOf("g2"), tunes2.indexOf("E F")]]);
@@ -5706,15 +5710,16 @@ console.log(
   await p.getByLabel("Write it at the caret (step entry)").check();
   await choose([of(two, "c B A G"), of(two, "c' b a g")]);
   await p.evaluate(() => window.__midi.play([72]));
+  // (Since round 8: forward from the selection's first note, the selection left as rests.)
   await p.waitForFunction(() =>
-    /in place of the selected notes; the other place selected was left/.test(
+    /Wrote c\/ over the selection, from its first note; .*The other place selected was left/.test(
       document.querySelector(".midi-status")?.textContent ?? "",
     ),
   );
   doc = await docText(p);
   assert.match(
     doc,
-    /\nc d e f\|g a b c'\| ?c\/\|f e d c\|\]\n/,
+    /\nc d e f\|g a b c'\|c\/ z\/ z z2\|f e d c\|\]\n/,
     "V:1's bar 3 is the step, its bar lines kept",
   );
   assert.match(doc, /\|c B A G\|/, "V:2's place is left as it was");
@@ -5964,10 +5969,13 @@ console.log(
   await settled(three);
   assert.match(
     await docText(p),
-    /\nV:3 clef=bass\nz4\|z4\|C, D, E, F,\|z4\|/,
+    // (At a bar's start every voice keeps in step since round 8: V:1 and V:2 rest as long.)
+    /\nV:1\nc d e f\|g a b c'\|z4 \| c' b a g\|\n[\s\S]*\nV:3 clef=bass\nz4\|z4\|C, D, E, F,\| ?z4\|/,
     "the bass part goes into the bass voice",
   );
-  await noticeSays(/Pasted V:2's part; the copy also had V:1\./);
+  await noticeSays(
+    /Pasted V:2's part into V:3 as a whole bar here, in step;.* The copy also had V:1\./,
+  );
   // 7. Repeat over e…a goes to the bar lines; a triplet inside a triplet is refused.
   geo = await put(tunes.triplets);
   await choose([of(tunes.triplets, "e (3fga")]);
@@ -6361,7 +6369,7 @@ console.log(
   await p.keyboard.press("Control+v");
   await settled(duet);
   doc = await docText(p);
-  assert.match(doc, /\[V:1\] d2 fd \| a2 a2\|ed cB/, "pasted in V:1");
+  assert.match(doc, /\[V:1\] d2 fd \| a2 a2\| ?ed cB/, "pasted in V:1");
   assert.match(doc, /\[V:2\] F2 AF \|[^\n]*z4[^\n]*GF ED/, "a bar's rest in V:2, in step");
   await says("notice", /rests in V:2 keep it in step/);
   await put(duet);
@@ -6606,7 +6614,7 @@ console.log(
   assert.match(await docText(p), /V:1\nc d z2\|e4\|\]/);
   // 13. Undo says so, in place of what the edit said.
   await p.keyboard.press("Control+z");
-  await says("explain", /^Undone\.$/);
+  await says("explain", /^Undone\./);
   // 6. Bar lines typed into a second voice's placeholders: no bars of nothing.
   const solo = "X:1\nT:Solo\nM:4/4\nL:1/8\n%%score 1\nK:C\nV:1\nc2 d2 e2 f2|g8|]\n";
   await put(solo);

@@ -938,6 +938,8 @@ const MARK_NAMES = {
 } as const;
 /** A status message kept while the selection it describes stays as it is. */
 let statusNote: { message: string; selection: EditorSelection } | null = null;
+/** "Undone." said before the count of what's selected, while that selection stays. */
+let undoneNote: { message: string; selection: EditorSelection } | null = null;
 function sayAboutSelection(message: string) {
   statusNote = { message, selection: view.state.selection };
   $("explain").textContent = message;
@@ -1625,11 +1627,12 @@ function explainCaret(update: ViewUpdate) {
   const back = update.transactions.find(
     (transaction) => transaction.isUserEvent("undo") || transaction.isUserEvent("redo"),
   );
-  if (back && update.docChanged)
-    statusNote = {
-      message: back.isUserEvent("undo") ? "Undone." : "Redone.",
-      selection: view.state.selection,
-    };
+  if (back && update.docChanged) {
+    const message = back.isUserEvent("undo") ? "Undone." : "Redone.";
+    // (With music selected, said before what's selected: "Undone. 4 notes selected…".)
+    if (view.state.selection.main.empty) statusNote = { message, selection: view.state.selection };
+    else undoneNote = { message, selection: view.state.selection };
+  }
   // What a typed mark just did stays said while its selection does.
   if (statusNote?.selection.eq(view.state.selection)) {
     status.textContent = statusNote.message;
@@ -1657,7 +1660,9 @@ function explainCaret(update: ViewUpdate) {
       status.textContent = `${characters} ${characters === 1 ? "character" : "characters"} selected`;
       return;
     }
-    status.textContent = `${said.text} selected${where} · ${touch.matches ? "Tap More › Play selection to hear it" : `${shortcutLabel("Mod Alt Enter")} plays it`}`;
+    const undone = undoneNote?.selection.eq(view.state.selection) ? `${undoneNote.message} ` : "";
+    if (!undone) undoneNote = null;
+    status.textContent = `${undone}${said.text} selected${where} · ${touch.matches ? "Tap More › Play selection to hear it" : `${shortcutLabel("Mod Alt Enter")} plays it`}`;
     return;
   }
   // Music a blank line left outside its tune says so wherever the caret is in it.

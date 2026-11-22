@@ -152,8 +152,8 @@ function say(message: string) {
   context?.status(message);
 }
 
-/** The panel's length: "Keep" (-1) keeps a selected note's own; at a caret, an eighth. */
-const KEEP = -1;
+/** The panel's length: "Keep" keeps a selected note's own; at a caret, an eighth. */
+const KEEP = -2;
 function length(): Fraction {
   const base = (STEP_LENGTHS[lengthIndex] ?? STEP_LENGTHS[2])?.length ?? frac(1, 8);
   return dotted ? mul(base, frac(3, 2)) : base;
@@ -227,7 +227,14 @@ function stepOver(
     userEvent: "input.midi",
     scrollIntoView: true,
   });
-  return { said: `Wrote ${written} over the selection, from its first note; ${over.said}` };
+  const others = view.state.selection.ranges.filter((range) => range !== main && !range.empty);
+  const rest = over.said.replace(
+    /^Pasted over the selection from its first note( in V:\S+)?;? ?/,
+    "",
+  );
+  return {
+    said: `Wrote ${written} over the selection, from its first note${rest ? `; ${rest}` : "."}${others.length ? ` The other ${others.length === 1 ? "place" : "places"} selected ${others.length === 1 ? "was" : "were"} left as ${others.length === 1 ? "it was" : "they were"}.` : ""}`,
+  };
 }
 
 /**
@@ -592,9 +599,9 @@ function build() {
     );
     panel.addEventListener("keydown", (event) => {
       if ((event.target as HTMLElement).tagName === "SELECT") return;
-      const index =
-        event.key === "0" ? KEEP : STEP_LENGTHS.findIndex((step) => step.key === event.key);
-      if (index >= 0 || index === KEEP) {
+      const found = STEP_LENGTHS.findIndex((step) => step.key === event.key);
+      const index = event.key === "0" ? KEEP : found;
+      if (found >= 0 || event.key === "0") {
         event.preventDefault();
         lengthIndex = index;
         save({ length: index });

@@ -45,7 +45,7 @@ describe("pasting a copy of several voices", () => {
     const plain = pasteVoiced(three, [{ from: z, to: z }], voicedParts(copy) ?? []);
     expect("changes" in plain && plain.changes[0]?.insert).toBe("c d e f| ");
     expect("message" in plain && plain.message).toBe(
-      "Pasted V:1's part as a whole bar here, in step; rests in V:1 and V:2 for as long. The copy also had V:2.",
+      "Pasted V:1's part into V:3 as a whole bar here, in step; rests in V:1 and V:2 for as long. The copy also had V:2.",
     );
   });
   it("a voice selected in two places, with one part, takes it in the first, said so", () => {

@@ -5470,12 +5470,13 @@ console.log(
     { x: box(1, 0.75).head + 3, y: box(1, 0.75).y },
   );
   await p.keyboard.press("Enter");
+  // (Since round 9: typing writes in one voice; over a range in each of two voices it's refused.)
+  const beforeTyping = await docText(p);
   await p.keyboard.type("z4");
-  assert.match(
-    await docText(p),
-    /\nz4\|g a b c'\|[^\n]*\nV:2\nz4\|G A B c\|/,
-    "typing z4 over bar 1 keeps its bar lines",
+  await p.waitForFunction(() =>
+    /Typing replaces notes in one voice/.test(document.getElementById("explain").textContent),
   );
+  assert.equal(await docText(p), beforeTyping, "typing over two voices changes nothing");
   geo = await put(two);
   await choose([of(two, "g a b c'")]);
   await p.keyboard.press("Control+x");
@@ -5708,11 +5709,18 @@ console.log(
     /Listening to Fake Keys 49/.test(document.querySelector(".midi-status")?.textContent ?? ""),
   );
   await p.getByLabel("Write it at the caret (step entry)").check();
+  // (Since round 9: a range in each of two voices is refused, nothing written in either.)
   await choose([of(two, "c B A G"), of(two, "c' b a g")]);
   await p.evaluate(() => window.__midi.play([72]));
-  // (Since round 8: forward from the selection's first note, the selection left as rests.)
   await p.waitForFunction(() =>
-    /Wrote c\/ over the selection, from its first note; .*The other place selected was left/.test(
+    /writes in one voice/.test(document.querySelector(".midi-status")?.textContent ?? ""),
+  );
+  assert.equal(await docText(p), two, "nothing written across two voices");
+  // In one voice: forward from the selection's first note, the selection left as rests.
+  await choose([of(two, "c' b a g")]);
+  await p.evaluate(() => window.__midi.play([72]));
+  await p.waitForFunction(() =>
+    /Wrote c\/ over the selection, from its first note/.test(
       document.querySelector(".midi-status")?.textContent ?? "",
     ),
   );
@@ -5722,7 +5730,7 @@ console.log(
     /\nc d e f\|g a b c'\|c\/ z\/ z z2\|f e d c\|\]\n/,
     "V:1's bar 3 is the step, its bar lines kept",
   );
-  assert.match(doc, /\|c B A G\|/, "V:2's place is left as it was");
+  assert.match(doc, /\|c B A G\|/, "V:2 is as it was");
   await p
     .locator(".midi-close, #midi-panel button[aria-label^='Close']")
     .first()
